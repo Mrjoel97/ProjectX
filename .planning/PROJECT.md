@@ -55,7 +55,7 @@ A user speaks or types a goal and the system reliably plans it, executes it with
 ## Constraints
 
 - **Timeline**: Private beta in production in 4 weeks (target ~2026-08-05) — MVP must be one thin end-to-end slice with everything else staged
-- **Tech stack**: Code-first TypeScript monorepo — Next.js web app, Node service modules, Postgres, Redis, durable orchestration (Temporal/Inngest class), LLM gateway with caching/fallback — no UiPath licensing dependency
+- **Tech stack**: Code-first TypeScript monorepo — Next.js web app on a Convex backend (database, functions, realtime, vector search, scheduling), LLM gateway with caching/fallback, Python sidecar services (Presidio PII, graphify extraction) — no UiPath licensing dependency
 - **Budget**: Cost guardrails are a product feature and a build constraint — LLM cache and model downgrade must exist in v1
 - **Compliance**: Every request, redaction, model call, tool execution, and review action is logged and archived from day one — retrofitting audit trails is not acceptable
 - **Voice**: Live sessions hard-capped at 15 minutes; sessions end explicitly via End-session button
@@ -71,6 +71,11 @@ A user speaks or types a goal and the system reliably plans it, executes it with
 | User reviews own output in v1 | Solo persona; multi-reviewer RBAC deferred to enterprise milestone | — Pending |
 | Week-4 "production" = private beta | Invited users beyond owner; adds invite flow + per-user isolation, not billing | — Pending |
 | GSD + ponytail mandated in all build workflows | User requirement for tracked, documented, minimal-code process | — Pending |
+| Voice ships both modes in v1, staged (dictation ~W3, live session ~W4) | Identity feature is a hard beta requirement; staging de-risks the core pipeline | — Pending |
+| Prompt-optimization loop fully autonomous in v1 | Owner accepts reward-hacking risk for faster learning; mitigate with eval checks + rollback + kill switch | — Pending |
+| Brief→executable-plan conversion ships with the live session in v1 | User-specified flow: session end → brief → permission → plan enters pipeline | — Pending |
+| Convex replaces Postgres/Redis/Inngest as the data+orchestration plane | Owner decision (2026-07-09) after honest tradeoff review: velocity + built-in realtime valued over portability; Convex-focused stack re-research mandated before roadmap | — Pending |
+| Graphify at the core: dev-time codebase graph (always active) + ingestion-time extraction for the knowledge vault | User mandate; extraction stored in the data plane, never served from graphify files at request time | — Pending |
 
 ---
-*Last updated: 2026-07-08 after initialization*
+*Last updated: 2026-07-09 after data-plane decision (Convex) and graphify adoption*
