@@ -177,3 +177,26 @@ Phases with standard patterns (skip research-phase):
 ---
 *Research completed: 2026-07-08*
 *Ready for roadmap: yes*
+
+## Convex Revision (2026-07-09)
+
+The owner switched the data + orchestration plane from **Postgres + pgvector + Redis + Inngest** to **Convex**. Full re-derivation: `.planning/research/STACK-CONVEX.md` (supersedes STACK.md for the data/orchestration plane). Summary of what changed:
+
+**Replaced / dropped:**
+- **Inngest -> Convex Workflow component** (durable steps, exactly-once mutations, configurable action retries, `awaitEvent` human gates, `onComplete`). Do NOT keep Inngest alongside Convex.
+- **Postgres + Drizzle -> Convex DB** (document store + indexes + schema); **Redis -> Convex tables** (LLM cache) + **Rate Limiter component**; **pgvector -> Convex vector search + RAG component**.
+- **Better Auth -> Convex Auth** for the beta (data still in your DB, preserving the data-ownership rationale) + a manual `betaInvites` table. `@convex-dev/better-auth` (~0.10.x, pre-1.0) is the alternative if org/invitation plugins are wanted now. Clerk still rejected (external data hosting).
+
+**Kept (integration points move onto Convex actions):** Next.js 16.2, pnpm+Turborepo, Vercel AI SDK v6 + AI Gateway, OpenAI Realtime/WebRTC + gpt-4o-transcribe, Presidio (containerized), email adapters, Langfuse + OTel, Zod (bridged via `convex-helpers`). NEW: graphify Python sidecar; Convex Agent/RAG/Action-Retrier/Rate-Limiter components.
+
+**Wins:** reactive `useQuery` subscriptions make live pipeline status + review queue trivial (upgrade over polling); durable scheduled functions give a server-authoritative voice watchdog and Gmail token-refresh cron; RAG namespaces + a `customQuery` tenant wrapper harden multi-tenant isolation; SOC 2 Type II + HIPAA BAA + AES-256 available.
+
+**New limitations to design around (with mitigations in STACK-CONVEX.md):**
+- `awaitEvent` has **no built-in timeout** -> schedule a `review-timeout` event and race it (needed for review-timeout->escalation).
+- **No built-in dead-letter queue** -> insert failures into a `deadLetter` table in `onComplete`.
+- **No enforced immutable/append-only table** -> insert-only audit module + **scheduled export to S3 Object Lock (WORM)** for true audit immutability/retention.
+- **Vector ceilings:** 2048-dim cap (use `text-embedding-3-small` @1536, NOT 3-large @3072), <=256 results, only first 100k docs/table indexed, equality-only filters.
+- **No graph query language** -> model `graphNodes`/`graphEdges` tables with compound indexes; hop-capped iterative traversal (respect 4,096 index-read / 32k-scan tx limits).
+- **Lock-in** -> keep all domain logic in pure-TS `packages/*`; `convex/` stays a thin adapter; core components are pre-1.0 (pin versions).
+
+**Build order:** the 7-phase sequence is unchanged; Convex changes *what* Phase 1 builds (Convex project/schema, component wiring, Convex Auth + invite table, tenant-scoping wrapper, insert-only audit + WORM export stub, and the `awaitEvent`-timeout / `onComplete`-DLQ patterns established up front - the new "learning cost").
