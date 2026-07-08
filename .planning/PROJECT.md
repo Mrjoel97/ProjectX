@@ -1,0 +1,76 @@
+# Pikar-AI
+
+## What This Is
+
+Pikar-AI is a governed, agentic operating layer that turns scattered, unstructured input — voice, text, attachments — into planned, multi-step action that follows through across the user's tools, with built-in guardrails for cost, compliance, and quality, and that gets better over time. It targets every business size, but v1 serves the solopreneur: a 24/7 AI chief-of-staff they couldn't otherwise afford, delivered as a web app reaching private beta in 4 weeks.
+
+## Core Value
+
+A user speaks or types a goal and the system reliably plans it, executes it with guardrails (cost, PII, quality), lets the user approve/edit/reject before anything leaves the building, and follows through to real delivery (email) — with a full audit trail.
+
+## Requirements
+
+### Validated
+
+(None yet — ship to validate)
+
+### Active
+
+- [ ] Request intake via text, file attachments, and voice (recorded dictation → transcription)
+- [ ] Live bidirectional voice sessions with the Executive Agent (15-min cap, End-session button, transcript → structured markdown brief → knowledge vault; optional conversion to an executable step-by-step plan with user permission)
+- [ ] Knowledge vault: stored, indexed, groundable session briefs and documents; supports future continuation and reference
+- [ ] Executive Agent classification and planning (direct tool / sub-agent / direct-LLM routes, explicit invalid-route handling)
+- [ ] Attachment processing: classify → OCR / PDF extraction / audio transcription → merge into request context
+- [ ] Context grounding against the user's knowledge vault
+- [ ] PII scan and redaction producing safeText (explicit null/unknown failure handling)
+- [ ] Cost estimation, budget check, and model downgrade (explicit null/unknown failure handling)
+- [ ] LLM cache (safeTextHash lookup/store), primary generation, fallback generation on failure/timeout
+- [ ] Human review: user approves/edits/rejects the AI's output before delivery; edit/reject retry counters with escalation on threshold breach and review timeout handling
+- [ ] Final delivery via email through a provider-agnostic adapter (Gmail API and Microsoft Graph both supported)
+- [ ] Feedback capture; threshold breach triggers the prompt-optimization loop (self-improvement)
+- [ ] Telemetry: per-request tokens, cost, duration, decision counts, review outcome
+- [ ] Reusable audit logging and compliance archival of the full request trail
+- [ ] Dead-letter archive for failed/unhandled requests
+- [ ] Notifications for rejection, escalation, retry-limit breach, timeouts, dead-letter events
+- [ ] Private beta: invited users beyond the owner — signup/invite flow, per-user data isolation, basic onboarding
+
+### Out of Scope
+
+- UiPath platform (Apps, Action Center, Maestro BPMN) — user chose code-first stack; the BPMN document is the spec, not the runtime
+- Enterprise RBAC (Admin/Developer/EndUser roles) — staged for a later milestone; v1 has a single user role
+- Multi-reviewer / senior-reviewer human roles — solo user reviews own output in v1; escalation paths map to notifications + timeout defaults
+- Slack intake and multi-channel orchestration — startup/SME tier features, later milestone
+- Desktop/legacy RPA execution — no UiPath; browser/API tools only in v1
+- Public launch (billing, abuse protection, legal pages) — next milestone after private beta
+- Custom skills registry for third-party teams — enterprise-tier feature
+
+## Context
+
+- Original specification is a UiPath-vocabulary BPMN end-to-end orchestration document (intake → validation → enrichment → planning → execution → grounding → PII → cost → cache → LLM → review → feedback → archival). It defines 27 capabilities, ~15 child services, the data contracts to create (attachmentRefs, routingDecision, piiScanResult, costEstimateResult, llmResponse, reviewDecision, feedbackResult, telemetryPayload, notificationPayload, auditLogPayload, etc.), and a 20-scenario test matrix. It remains the canonical functional spec.
+- User mandate: everything tracked and documented with strict separation of concerns, so any engineer/team can onboard any module from its docs without talking to another team. Every service gets its own README, contract, and runbook.
+- Required workflow tools: GSD for all building workflows; ponytail plugin (minimal-code decision ladder) for code-generation discipline.
+- Resources on hand: LLM API key(s), cloud hosting account, Microsoft 365 and Google Workspace. No UiPath tenant.
+- Builder: solo owner + Claude Code.
+
+## Constraints
+
+- **Timeline**: Private beta in production in 4 weeks (target ~2026-08-05) — MVP must be one thin end-to-end slice with everything else staged
+- **Tech stack**: Code-first TypeScript monorepo — Next.js web app, Node service modules, Postgres, Redis, durable orchestration (Temporal/Inngest class), LLM gateway with caching/fallback — no UiPath licensing dependency
+- **Budget**: Cost guardrails are a product feature and a build constraint — LLM cache and model downgrade must exist in v1
+- **Compliance**: Every request, redaction, model call, tool execution, and review action is logged and archived from day one — retrofitting audit trails is not acceptable
+- **Voice**: Live sessions hard-capped at 15 minutes; sessions end explicitly via End-session button
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| Code-first stack, no UiPath | No enterprise licensing dependency; deployable in 4 weeks; BPMN doc becomes the spec | — Pending |
+| Solopreneur chief-of-staff as MVP slice | Single user role avoids RBAC scope; demonstrates core value end to end | — Pending |
+| Voice in MVP, two modes (dictation + live agent session) | Voice is the product's identity feature; user explicitly requires both modes | — Pending |
+| Email via provider-agnostic adapter (Gmail + MS Graph) | Multi-channel story real from day one; both accounts available | — Pending |
+| User reviews own output in v1 | Solo persona; multi-reviewer RBAC deferred to enterprise milestone | — Pending |
+| Week-4 "production" = private beta | Invited users beyond owner; adds invite flow + per-user isolation, not billing | — Pending |
+| GSD + ponytail mandated in all build workflows | User requirement for tracked, documented, minimal-code process | — Pending |
+
+---
+*Last updated: 2026-07-08 after initialization*
