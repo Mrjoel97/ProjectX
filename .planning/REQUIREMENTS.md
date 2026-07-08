@@ -108,13 +108,52 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmap) | | |
+| INTK-01 | Phase 2 | Pending |
+| INTK-02 | Phase 4 | Pending |
+| INTK-03 | Phase 4 | Pending |
+| INTK-04 | Phase 2 | Pending |
+| AGNT-01 | Phase 2 | Pending |
+| AGNT-02 | Phase 2 | Pending |
+| AGNT-03 | Phase 2 | Pending |
+| AGNT-04 | Phase 7 | Pending |
+| GRDL-01 | Phase 3 | Pending |
+| GRDL-02 | Phase 3 | Pending |
+| GRDL-03 | Phase 3 | Pending |
+| GRDL-04 | Phase 3 | Pending |
+| GRDL-05 | Phase 3 | Pending |
+| GRDL-06 | Phase 3 | Pending |
+| REVW-01 | Phase 2 | Pending |
+| REVW-02 | Phase 7 | Pending |
+| REVW-03 | Phase 7 | Pending |
+| DLVR-01 | Phase 2 | Pending |
+| DLVR-02 | Phase 9 | Pending |
+| DLVR-03 | Phase 2 | Pending |
+| VALT-01 | Phase 5 | Pending |
+| VALT-02 | Phase 5 | Pending |
+| VALT-03 | Phase 5 | Pending |
+| VALT-04 | Phase 5 | Pending |
+| VOIC-01 | Phase 6 | Pending |
+| VOIC-02 | Phase 6 | Pending |
+| VOIC-03 | Phase 6 | Pending |
+| VOIC-04 | Phase 6 | Pending |
+| IMPR-01 | Phase 8 | Pending |
+| IMPR-02 | Phase 8 | Pending |
+| IMPR-03 | Phase 8 | Pending |
+| OPSG-01 | Phase 2 | Pending |
+| OPSG-02 | Phase 1 | Pending |
+| OPSG-03 | Phase 7 | Pending |
+| OPSG-04 | Phase 1 | Pending |
+| OPSG-05 | Phase 7 | Pending |
+| BETA-01 | Phase 9 | Pending |
+| BETA-02 | Phase 9 | Pending |
+| BETA-03 | Phase 9 | Pending |
+| BETA-04 | Phase 2 | Pending |
 
 **Coverage:**
-- v1 requirements: 36 total
-- Mapped to phases: 0
-- Unmapped: 36 ⚠️ (roadmap pending)
+- v1 requirements: 40 total (NOTE: prior header said "36"; the file actually contains 40 distinct IDs — count corrected during roadmap creation)
+- Mapped to phases: 40
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-09 after Convex stack revision*
+*Last updated: 2026-07-09 after roadmap creation (traceability populated; count corrected 36→40)*
