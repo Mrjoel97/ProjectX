@@ -65,5 +65,10 @@
   "63": "deadLetter.ts",
   "64": "smokeAssert.ts",
   "65": "Architecture Patterns",
-  "66": "run-smoke-reviewgate.mjs"
+  "66": "run-smoke-reviewgate.mjs",
+  "67": "worm.test.ts",
+  "68": "wormCursor.ts",
+  "69": "crons.ts",
+  "70": "worm.ts",
+  "71": "run-smoke-worm.mjs"
 }

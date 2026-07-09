@@ -120,8 +120,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/allowlist.ts": {
-    "mtime": 1783626713.3605208,
-    "ast_hash": "d5655b03451150d444c108e34ae07d14",
+    "mtime": 1783629104.4302666,
+    "ast_hash": "2f6ebeac17a828d0284a36848f7c4447",
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/functions.ts": {
@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "packages/backend/package.json": {
-    "mtime": 1783627531.819222,
-    "ast_hash": "961b21fe25818921c400bf75840cd6eb",
+    "mtime": 1783629027.7530997,
+    "ast_hash": "a8bce7464b8108d869734e2fb2865c49",
     "semantic_hash": ""
   },
   "packages/backend/tsconfig.json": {
@@ -452,6 +452,31 @@
   ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md": {
     "mtime": 1783627679.8392744,
     "ast_hash": "9659dfeb0b6fb4ea45da20f4fa8cd2da",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/crons.ts": {
+    "mtime": 1783629010.9690351,
+    "ast_hash": "c4903e71008d4a40051e2fb1f3dff7f5",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/worm.test.ts": {
+    "mtime": 1783629111.0746007,
+    "ast_hash": "548a51c71e743641d3ab9f97e21d4a69",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/worm.ts": {
+    "mtime": 1783629096.9700558,
+    "ast_hash": "22f1a30d8e97034dec59747dcbaa660d",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/wormCursor.ts": {
+    "mtime": 1783629075.199826,
+    "ast_hash": "8606740c366c63937a7ef40d045ff002",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/run-smoke-worm.mjs": {
+    "mtime": 1783629026.0057733,
+    "ast_hash": "05cb0ae4aadfcbe1d573e377fa5474b4",
     "semantic_hash": ""
   }
 }

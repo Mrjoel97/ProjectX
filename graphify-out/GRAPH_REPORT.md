@@ -1,16 +1,16 @@
 # Graph Report - Pikar-Ai  (2026-07-09)
 
 ## Corpus Check
-- 89 files · ~59,961 words
+- 94 files · ~61,433 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 711 nodes · 664 edges · 67 communities (56 shown, 11 thin omitted)
+- 726 nodes · 674 edges · 72 communities (57 shown, 15 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4c81bda9`
+- Built from commit: `2d6ca424`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -69,6 +69,11 @@
 - deadLetter.ts
 - smokeAssert.ts
 - Architecture Patterns
+- worm.test.ts
+- wormCursor.ts
+- crons.ts
+- worm.ts
+- run-smoke-worm.mjs
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -88,7 +93,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (67 total, 11 thin omitted)
+## Communities (72 total, 15 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
 Cohesion: 0.04
@@ -116,7 +121,7 @@ Nodes (15): modules, activateSkill, loadSkill(), seedSkills, modules, modules, B
 
 ### Community 6 - "dependencies"
 Cohesion: 0.07
-Nodes (27): dependencies, convex, @convex-dev/action-retrier, @convex-dev/agent, @convex-dev/auth, @convex-dev/rag, @convex-dev/rate-limiter, @convex-dev/workflow (+19 more)
+Nodes (28): dependencies, convex, @convex-dev/action-retrier, @convex-dev/agent, @convex-dev/auth, @convex-dev/rag, @convex-dev/rate-limiter, @convex-dev/workflow (+20 more)
 
 ### Community 7 - "Implications for Roadmap"
 Cohesion: 0.08
@@ -262,16 +267,20 @@ Nodes (10): armTimeout, fireTimeout, reviewEventValidator, sendDecision, boom, f
 Cohesion: 0.12
 Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
 
+### Community 68 - "wormCursor.ts"
+Cohesion: 0.50
+Nodes (3): advanceCursor, auditSince, getCursor
+
 ## Knowledge Gaps
-- **497 isolated node(s):** `Intake & Enrichment`, `Executive Agent & Planning`, `Guardrails`, `Human Review & Delivery`, `Knowledge Vault` (+492 more)
+- **506 isolated node(s):** `crons`, `exportAudit`, `getCursor`, `auditSince`, `advanceCursor` (+501 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **11 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **What connects `Intake & Enrichment`, `Executive Agent & Planning`, `Guardrails` to the rest of the system?**
-  _500 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `crons`, `NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by`, `exportAudit` to the rest of the system?**
+  _509 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
   _Cohesion score 0.043478260869565216 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**

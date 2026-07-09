@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-06-PLAN.md (DLQ + awaitEvent-timeout race smoke patterns)
-last_updated: "2026-07-09T20:08:09.195Z"
-last_activity: 2026-07-09 — Completed 01-06 (DLQ + awaitEvent-timeout race smoke patterns, OPSG-04)
+stopped_at: Completed 01-07-PLAN.md (WORM export cron stub + cursor mechanics)
+last_updated: "2026-07-10T02:45:00.000Z"
+last_activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 1 of 9 (Foundation & Governance Substrate)
-Plan: 6 of 9 in current phase complete (01-01, 01-02, 01-03, 01-04, 01-05, 01-06)
-Status: Executing
-Last activity: 2026-07-09 — Completed 01-06 (DLQ + awaitEvent-timeout race smoke patterns, OPSG-04)
+Plan: 7 of 9 in current phase complete (01-01 … 01-07)
+Status: Executing — remaining 01-08, 01-09 are BOTH human checkpoints
+Last activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -73,6 +73,10 @@ Recent decisions affecting current work:
 - [Phase 01]: Audit is insert-only: single internalMutation write surface; immutability enforced by convention + static-scan test (OPSG-02)
 - [Phase 01]: Tenant scoping is unavoidable: tenantQuery/tenantMutation inject tenantId (=userId) from identity; enforced by biome noRestrictedImports + static importGuard test (SC-2)
 - [Phase 01]: Skills are immutable per version; change = new version row + activateSkill flip; rollback = re-activate a prior version. Seed body ships as a derived .ts constant (Convex cannot fs.read repo files) kept in sync with the canonical .md by a vitest assertion (SC-6)
+- [Phase 01]: Workflow `onComplete` result kind for a failed run is `"failed"`, NOT `"error"` (01-RESEARCH and the 01-06 plan both had this wrong). deadLetter.ts guards with `if (result.kind === "success") return;` so any future kind fails INTO the DLQ rather than silently past it (01-06)
+- [Phase 01]: Convex CLI crashes on exit teardown on Windows/Node24 (`UV_HANDLE_CLOSING`) returning a bogus exit code on BOTH success and failure paths. `scripts/smokeRun.mjs` judges pass/fail by matching the CLI failure banner in output; never trust `npx convex run` exit codes here (01-06)
+- [Phase 01]: A `"use node"` module may contain ONLY actions — DB-touching cursor helpers live in a separate module (wormCursor.ts) reached via ctx.runQuery/runMutation. Actions cannot use ctx.db (01-07)
+- [Phase 01]: WORM stub path must NOT advance the export cursor when WORM_BUCKET is unset — advancing would mark audit rows exported that never reached S3, a permanent hole in the compliance log. Phase 7 advances ONLY after a confirmed durable write (01-07)
 
 ### Pending Todos
 
@@ -86,6 +90,10 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-09T20:08:09.190Z
-Stopped at: Completed 01-06-PLAN.md (DLQ + awaitEvent-timeout race smoke patterns)
+Last session: 2026-07-10T02:45:00.000Z
+Stopped at: Completed 01-07-PLAN.md (WORM export cron stub + cursor mechanics)
 Resume file: None
+
+**Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
+pushes then stops the workpool, so async `onComplete`/scheduler steps never
+advance and the smoke scripts hang. See 01-06-SUMMARY.md.
