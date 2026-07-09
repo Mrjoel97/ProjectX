@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md (tenant-scoping substrate, SC-2)
-last_updated: "2026-07-09T09:58:58.442Z"
-last_activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
+stopped_at: Completed 01-04-PLAN.md (skills registry + loader, SC-6)
+last_updated: "2026-07-09T12:58:30.000Z"
+last_activity: 2026-07-09 — Completed 01-04 (versioned skills registry + loader; SC-6 met)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 3
-  percent: 22
+  completed_plans: 4
+  percent: 44
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 1 of 9 (Foundation & Governance Substrate)
-Plan: 3 of 9 in current phase complete (01-01, 01-02, 01-03)
+Plan: 4 of 9 in current phase complete (01-01, 01-02, 01-03, 01-04)
 Status: Executing
-Last activity: 2026-07-09 — Completed 01-02 (tenant-scoping substrate; SC-2 met)
+Last activity: 2026-07-09 — Completed 01-04 (versioned skills registry + loader; SC-6 met)
 
-Progress: [██░░░░░░░░] 22%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██░░░░░░░░] 22%
 | Phase 01 P01 | 13 | 3 tasks | 34 files |
 | Phase 01 P03 | 8 | 2 tasks | 7 files |
 | Phase 01 P02 | 18 | 3 tasks | 8 files |
+| Phase 01 P04 | 12 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ Recent decisions affecting current work:
 - [Phase 01]: TypeScript 7 removed baseUrl/non-relative paths; @pikar/* now resolves via pnpm workspace symlinks + package exports (no tsconfig paths)
 - [Phase 01]: Audit is insert-only: single internalMutation write surface; immutability enforced by convention + static-scan test (OPSG-02)
 - [Phase 01]: Tenant scoping is unavoidable: tenantQuery/tenantMutation inject tenantId (=userId) from identity; enforced by biome noRestrictedImports + static importGuard test (SC-2)
+- [Phase 01]: Skills are immutable per version; change = new version row + activateSkill flip; rollback = re-activate a prior version. Seed body ships as a derived .ts constant (Convex cannot fs.read repo files) kept in sync with the canonical .md by a vitest assertion (SC-6)
 
 ### Pending Todos
 
@@ -83,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-09T09:58:58.433Z
-Stopped at: Completed 01-02-PLAN.md (tenant-scoping substrate, SC-2)
+Last session: 2026-07-09T12:58:30.000Z
+Stopped at: Completed 01-04-PLAN.md (skills registry + loader, SC-6)
 Resume file: None
