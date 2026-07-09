@@ -35,7 +35,18 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The `awaitEvent`-timeout race pattern and the WORM (S3 Object Lock) export cron stub are demonstrated on a smoke-test workflow.
   5. Google OAuth verification paperwork (privacy policy, verified domain, homepage) is submitted in Week 1, and graphify (git hook + MCP) is active on the repository.
   6. A versioned skills registry (Convex `skills` table + loader contract) exists and the Executive Agent's seed skill document loads from it — no agent prompt is hardcoded (SkillOpt readiness, see research/SKILLOPT.md).
-**Plans**: TBD
+**Plans**: 9 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Monorepo scaffold, five-component wiring, schema, auth, test harness, boot-check, README/CLAUDE.md (Wave 1)
+- [ ] 01-02-PLAN.md — Tenant-scoping customQuery/customMutation wrapper + raw-builder ban + isolation tests (Wave 2)
+- [ ] 01-03-PLAN.md — Insert-only audit module + taxonomy package + immutability scan [OPSG-02] (Wave 2)
+- [ ] 01-04-PLAN.md — Versioned skills registry + loader + Executive Agent seed skill (Wave 2)
+- [ ] 01-05-PLAN.md — graphify install: git hook + MCP on the repo (Wave 2)
+- [ ] 01-06-PLAN.md — DLQ via onComplete + awaitEvent-timeout race smoke workflows [OPSG-04] (Wave 3)
+- [ ] 01-07-PLAN.md — WORM export cron stub + export cursor mechanics (Wave 3)
+- [ ] 01-08-PLAN.md — Public homepage + privacy policy + Vercel deploy + domain verification (Wave 3)
+- [ ] 01-09-PLAN.md — Google OAuth consent flow + demo video + Week-1 verification submission (Wave 4)
 
 ### Phase 2: Thin End-to-End Slice
 **Goal**: A user submits a typed goal and follows it all the way to a delivered email, approving it at a durable review gate, with the entire trail audited and visible live — the MVP spine that proves the core value proposition.
@@ -132,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Governance Substrate | 0/TBD | Not started | - |
+| 1. Foundation & Governance Substrate | 0/9 | Not started | - |
 | 2. Thin End-to-End Slice | 0/TBD | Not started | - |
 | 3. Guardrails | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
