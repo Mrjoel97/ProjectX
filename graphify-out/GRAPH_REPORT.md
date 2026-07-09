@@ -1,16 +1,16 @@
-# Graph Report - pikar-ai  (2026-07-09)
+# Graph Report - Pikar-Ai  (2026-07-09)
 
 ## Corpus Check
-- 79 files · ~55,246 words
+- 80 files · ~55,662 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 644 nodes · 600 edges · 60 communities (52 shown, 8 thin omitted)
+- 651 nodes · 606 edges · 61 communities (52 shown, 9 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `05dcb84d`
+- Built from commit: `1367dfb6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -63,6 +63,7 @@
 - Sidecars
 - next.config.ts
 - convex.config.ts
+- graphify
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -82,11 +83,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (60 total, 8 thin omitted)
+## Communities (61 total, 9 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
-Cohesion: 0.05
-Nodes (36): Alternatives Considered, Architecture Patterns, Code Examples, Core, Don't Hand-Roll, Metadata, Open Questions, Pattern 10: graphify on the repo (Windows 11) (+28 more)
+Cohesion: 0.06
+Nodes (31): Alternatives Considered, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions, Phase 1: Foundation & Governance Substrate - Research (+23 more)
 
 ### Community 1 - "package.json"
 Cohesion: 0.06
@@ -181,16 +182,16 @@ Cohesion: 0.18
 Nodes (10): Active, Constraints, Context, Core Value, Key Decisions, Out of Scope, Pikar-AI, Requirements (+2 more)
 
 ### Community 24 - "Pikar AI — Repository Conventions"
-Cohesion: 0.20
-Nodes (9): 1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter, 2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module, 3. The audit module is insert-only, 4. Audit and dead-letter payloads must be redaction-safe, 5. No hardcoded agent prompts — skills load from the registry, 6. Pinned pre-1.0 component versions must not be bumped casually, 7. Boot order, 8. Ponytail discipline — the laziest solution that works (MANDATED) (+1 more)
+Cohesion: 0.18
+Nodes (10): 1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter, 2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module, 3. The audit module is insert-only, 4. Audit and dead-letter payloads must be redaction-safe, 5. No hardcoded agent prompts — skills load from the registry, 6. Pinned pre-1.0 component versions must not be bumped casually, 7. Boot order, 8. Ponytail discipline — the laziest solution that works (MANDATED) (+2 more)
 
 ### Community 25 - "Project State"
 Cohesion: 0.20
 Nodes (9): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Pending Todos, Performance Metrics, Project Reference, Project State (+1 more)
 
 ### Community 26 - "Common Pitfalls"
-Cohesion: 0.22
-Nodes (9): Common Pitfalls, Pitfall 1: Component version drift vs. prior research, Pitfall 2: Tenant wrapper that's advisory, not unavoidable, Pitfall 3: Codegen-before-typecheck ordering breaks clean-clone boot, Pitfall 4: Raw payloads in audit/DLQ from day one (PITFALLS.md #8), Pitfall 5: Stale timeout events firing into later gates, Pitfall 6: `graphifyy` vs `graphify` package confusion, Pitfall 7: OAuth submission blocked on the demo video (+1 more)
+Cohesion: 0.14
+Nodes (14): Architecture Patterns, Pattern 10: graphify on the repo (Windows 11), Pattern 11: Google OAuth verification paperwork (Week 1), Pattern 1: Component wiring (`convex.config.ts`), Pattern 2: Tenant-scoping wrapper (`customQuery`/`customMutation`), Pattern 3: Convex Auth minimal setup, Pattern 4: Insert-only audit module (OPSG-02), Pattern 5: Dead-letter via `onComplete` (OPSG-04) (+6 more)
 
 ### Community 27 - "package.json"
 Cohesion: 0.25
@@ -217,8 +218,8 @@ Cohesion: 0.38
 Nodes (4): addItem, listItems, tenantMutation, tenantQuery
 
 ### Community 33 - "Pikar AI"
-Cohesion: 0.29
-Nodes (6): Clean-clone boot order (run verbatim), Common commands, Pikar AI, Repository layout, Secrets plane, Sidecars
+Cohesion: 0.20
+Nodes (9): Clean-clone boot order (run verbatim), Common commands, Dev tooling — build discipline & repo knowledge graph, graphify — repo knowledge graph (query before you read), Pikar AI, ponytail — minimal-code discipline, Repository layout, Secrets plane (+1 more)
 
 ### Community 34 - "layout.tsx"
 Cohesion: 0.40
@@ -245,24 +246,24 @@ Cohesion: 0.50
 Nodes (3): exclude, extends, include
 
 ## Knowledge Gaps
-- **451 isolated node(s):** `metadata`, `convex`, `nextConfig`, `name`, `version` (+446 more)
+- **455 isolated node(s):** `graphify-mcp`, `1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter`, `2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module`, `3. The audit module is insert-only`, `4. Audit and dead-letter payloads must be redaction-safe` (+450 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Phase 1: Foundation & Governance Substrate - Research` connect `Architecture Patterns` to `Common Pitfalls`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
-- **What connects `metadata`, `convex`, `nextConfig` to the rest of the system?**
-  _453 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `Architecture Patterns` connect `Common Pitfalls` to `Architecture Patterns`?**
+  _High betweenness centrality (0.002) - this node is a cross-community bridge._
+- **What connects `graphify-mcp`, `1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter`, `2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module` to the rest of the system?**
+  _457 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
-  _Cohesion score 0.05405405405405406 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
 - **Should `Architecture Research` be split into smaller, more focused modules?**
   _Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected._
 - **Should `biome.json` be split into smaller, more focused modules?**
   _Cohesion score 0.07142857142857142 - nodes in this community are weakly interconnected._
-- **Should `Stack Research — Convex Revision` be split into smaller, more focused modules?**
-  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._

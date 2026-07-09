@@ -1,7 +1,7 @@
 {
   ".claude/settings.json": {
-    "mtime": 1783608732.2770767,
-    "ast_hash": "0b06d7de13e4ee9dbe717cd53d09b99d",
+    "mtime": 1783609093.507849,
+    "ast_hash": "e73dea85865e9282240c0939ccc25615",
     "semantic_hash": ""
   },
   ".planning/config.json": {
@@ -375,13 +375,13 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1783608785.7469697,
-    "ast_hash": "363c6c4a48af2589923e23b574a374fd",
+    "mtime": 1783609093.4880612,
+    "ast_hash": "ef00bd8e0dab56ca405bce2b42277be4",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1783572369.8113608,
-    "ast_hash": "12117bbf67f819a9838d892c48ced33d",
+    "mtime": 1783609176.306031,
+    "ast_hash": "62c968913e827eae6c8e7fcd6082202b",
     "semantic_hash": ""
   },
   "packages/contracts/skills/executive-agent.classifier.md": {
@@ -402,6 +402,11 @@
   ".planning/research/SKILLOPT.md": {
     "mtime": 1783555216.0914412,
     "ast_hash": "e96823f87fafd896b90356354d8ea9f0",
+    "semantic_hash": ""
+  },
+  ".mcp.json": {
+    "mtime": 1783609070.0290291,
+    "ast_hash": "f74d3d0d1acddfa415cd404bb345781f",
     "semantic_hash": ""
   }
 }
