@@ -260,7 +260,7 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1783591261.6189342,
+    "mtime": 1783609365.5585616,
     "ast_hash": "d8d96d827e157b340c9721c35b368ff4",
     "semantic_hash": ""
   },
@@ -407,6 +407,11 @@
   ".mcp.json": {
     "mtime": 1783609070.0290291,
     "ast_hash": "f74d3d0d1acddfa415cd404bb345781f",
+    "semantic_hash": ""
+  },
+  ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md": {
+    "mtime": 1783609354.100125,
+    "ast_hash": "1f19fccf4504b899012fbfc22e1e3d70",
     "semantic_hash": ""
   }
 }

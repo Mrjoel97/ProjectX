@@ -4,6 +4,156 @@
   "graph": {},
   "nodes": [
     {
+      "label": "01-05-SUMMARY.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary",
+      "community": 61,
+      "norm_label": "01-05-summary.md"
+    },
+    {
+      "label": "Dependency graph",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph",
+      "community": 61,
+      "norm_label": "dependency graph"
+    },
+    {
+      "label": "Tech tracking",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking",
+      "community": 61,
+      "norm_label": "tech tracking"
+    },
+    {
+      "label": "Metrics",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L41",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics",
+      "community": 61,
+      "norm_label": "metrics"
+    },
+    {
+      "label": "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L46",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "community": 61,
+      "norm_label": "phase 01 / plan 05: graphify activation + ponytail discipline summary"
+    },
+    {
+      "label": "Performance",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L50",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance",
+      "community": 61,
+      "norm_label": "performance"
+    },
+    {
+      "label": "Accomplishments",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L57",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments",
+      "community": 61,
+      "norm_label": "accomplishments"
+    },
+    {
+      "label": "Task Commits",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits",
+      "community": 61,
+      "norm_label": "task commits"
+    },
+    {
+      "label": "Files Created/Modified",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L69",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified",
+      "community": 61,
+      "norm_label": "files created/modified"
+    },
+    {
+      "label": "Decisions Made",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L77",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made",
+      "community": 61,
+      "norm_label": "decisions made"
+    },
+    {
+      "label": "Deviations from Plan",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L80",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
+      "community": 61,
+      "norm_label": "deviations from plan"
+    },
+    {
+      "label": "Auto-fixed Issues",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L82",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues",
+      "community": 61,
+      "norm_label": "auto-fixed issues"
+    },
+    {
+      "label": "Issues Encountered",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L101",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered",
+      "community": 61,
+      "norm_label": "issues encountered"
+    },
+    {
+      "label": "User Setup Required",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L105",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required",
+      "community": 61,
+      "norm_label": "user setup required"
+    },
+    {
+      "label": "Next Phase Readiness",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L108",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness",
+      "community": 61,
+      "norm_label": "next phase readiness"
+    },
+    {
       "label": ".mcp.json",
       "file_type": "code",
       "source_file": ".mcp.json",
@@ -12,9 +162,9 @@
         "mcp_kind": "mcp_config_file"
       },
       "_origin": "ast",
-      "id": "mcp",
       "community": 60,
-      "norm_label": ".mcp.json"
+      "norm_label": ".mcp.json",
+      "id": "mcp"
     },
     {
       "label": "graphify",
@@ -25,9 +175,9 @@
         "mcp_kind": "mcp_server"
       },
       "_origin": "ast",
-      "id": "mcp_mcp_server_graphify",
       "community": 60,
-      "norm_label": "graphify"
+      "norm_label": "graphify",
+      "id": "mcp_mcp_server_graphify"
     },
     {
       "label": "graphify-mcp",
@@ -38,9 +188,9 @@
         "mcp_kind": "mcp_command"
       },
       "_origin": "ast",
-      "id": "mcp_command_graphify_mcp",
       "community": 60,
-      "norm_label": "graphify-mcp"
+      "norm_label": "graphify-mcp",
+      "id": "mcp_command_graphify_mcp"
     },
     {
       "label": "CLAUDE.md",
@@ -48,9 +198,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "claude",
       "community": 24,
-      "norm_label": "claude.md"
+      "norm_label": "claude.md",
+      "id": "claude"
     },
     {
       "label": "Pikar AI \u2014 Repository Conventions",
@@ -58,9 +208,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "claude_pikar_ai_repository_conventions",
       "community": 24,
-      "norm_label": "pikar ai \u2014 repository conventions"
+      "norm_label": "pikar ai \u2014 repository conventions",
+      "id": "claude_pikar_ai_repository_conventions"
     },
     {
       "label": "1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter",
@@ -68,9 +218,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L6",
       "_origin": "ast",
-      "id": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter",
       "community": 24,
-      "norm_label": "1. domain logic lives in pure-ts `packages/*`; `convex/` is a thin adapter"
+      "norm_label": "1. domain logic lives in pure-ts `packages/*`; `convex/` is a thin adapter",
+      "id": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
     },
     {
       "label": "2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module",
@@ -78,9 +228,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L14",
       "_origin": "ast",
-      "id": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module",
       "community": 24,
-      "norm_label": "2. raw `query`/`mutation`/`action` imports are banned outside the wrapper module"
+      "norm_label": "2. raw `query`/`mutation`/`action` imports are banned outside the wrapper module",
+      "id": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
     },
     {
       "label": "3. The audit module is insert-only",
@@ -88,9 +238,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "claude_3_the_audit_module_is_insert_only",
       "community": 24,
-      "norm_label": "3. the audit module is insert-only"
+      "norm_label": "3. the audit module is insert-only",
+      "id": "claude_3_the_audit_module_is_insert_only"
     },
     {
       "label": "4. Audit and dead-letter payloads must be redaction-safe",
@@ -98,9 +248,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L28",
       "_origin": "ast",
-      "id": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe",
       "community": 24,
-      "norm_label": "4. audit and dead-letter payloads must be redaction-safe"
+      "norm_label": "4. audit and dead-letter payloads must be redaction-safe",
+      "id": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
     },
     {
       "label": "5. No hardcoded agent prompts \u2014 skills load from the registry",
@@ -108,9 +258,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L35",
       "_origin": "ast",
-      "id": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry",
       "community": 24,
-      "norm_label": "5. no hardcoded agent prompts \u2014 skills load from the registry"
+      "norm_label": "5. no hardcoded agent prompts \u2014 skills load from the registry",
+      "id": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
     },
     {
       "label": "6. Pinned pre-1.0 component versions must not be bumped casually",
@@ -118,9 +268,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L41",
       "_origin": "ast",
-      "id": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually",
       "community": 24,
-      "norm_label": "6. pinned pre-1.0 component versions must not be bumped casually"
+      "norm_label": "6. pinned pre-1.0 component versions must not be bumped casually",
+      "id": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
     },
     {
       "label": "7. Boot order",
@@ -128,9 +278,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L47",
       "_origin": "ast",
-      "id": "claude_7_boot_order",
       "community": 24,
-      "norm_label": "7. boot order"
+      "norm_label": "7. boot order",
+      "id": "claude_7_boot_order"
     },
     {
       "label": "8. Ponytail discipline \u2014 the laziest solution that works (MANDATED)",
@@ -138,9 +288,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L54",
       "_origin": "ast",
-      "id": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated",
       "community": 24,
-      "norm_label": "8. ponytail discipline \u2014 the laziest solution that works (mandated)"
+      "norm_label": "8. ponytail discipline \u2014 the laziest solution that works (mandated)",
+      "id": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
     },
     {
       "label": "graphify",
@@ -148,9 +298,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L85",
       "_origin": "ast",
-      "id": "claude_graphify",
       "community": 24,
-      "norm_label": "graphify"
+      "norm_label": "graphify",
+      "id": "claude_graphify"
     },
     {
       "label": "README.md",
@@ -158,9 +308,9 @@
       "source_file": "README.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "readme",
       "community": 33,
-      "norm_label": "readme.md"
+      "norm_label": "readme.md",
+      "id": "readme"
     },
     {
       "label": "Pikar AI",
@@ -168,9 +318,9 @@
       "source_file": "README.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "readme_pikar_ai",
       "community": 33,
-      "norm_label": "pikar ai"
+      "norm_label": "pikar ai",
+      "id": "readme_pikar_ai"
     },
     {
       "label": "Repository layout",
@@ -178,9 +328,9 @@
       "source_file": "README.md",
       "source_location": "L12",
       "_origin": "ast",
-      "id": "readme_repository_layout",
       "community": 33,
-      "norm_label": "repository layout"
+      "norm_label": "repository layout",
+      "id": "readme_repository_layout"
     },
     {
       "label": "Clean-clone boot order (run verbatim)",
@@ -188,9 +338,9 @@
       "source_file": "README.md",
       "source_location": "L30",
       "_origin": "ast",
-      "id": "readme_clean_clone_boot_order_run_verbatim",
       "community": 33,
-      "norm_label": "clean-clone boot order (run verbatim)"
+      "norm_label": "clean-clone boot order (run verbatim)",
+      "id": "readme_clean_clone_boot_order_run_verbatim"
     },
     {
       "label": "Secrets plane",
@@ -198,9 +348,9 @@
       "source_file": "README.md",
       "source_location": "L59",
       "_origin": "ast",
-      "id": "readme_secrets_plane",
       "community": 33,
-      "norm_label": "secrets plane"
+      "norm_label": "secrets plane",
+      "id": "readme_secrets_plane"
     },
     {
       "label": "Sidecars",
@@ -208,9 +358,9 @@
       "source_file": "README.md",
       "source_location": "L73",
       "_origin": "ast",
-      "id": "readme_sidecars",
       "community": 33,
-      "norm_label": "sidecars"
+      "norm_label": "sidecars",
+      "id": "readme_sidecars"
     },
     {
       "label": "Common commands",
@@ -218,9 +368,9 @@
       "source_file": "README.md",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "readme_common_commands",
       "community": 33,
-      "norm_label": "common commands"
+      "norm_label": "common commands",
+      "id": "readme_common_commands"
     },
     {
       "label": "Dev tooling \u2014 build discipline & repo knowledge graph",
@@ -228,9 +378,9 @@
       "source_file": "README.md",
       "source_location": "L93",
       "_origin": "ast",
-      "id": "readme_dev_tooling_build_discipline_repo_knowledge_graph",
       "community": 33,
-      "norm_label": "dev tooling \u2014 build discipline & repo knowledge graph"
+      "norm_label": "dev tooling \u2014 build discipline & repo knowledge graph",
+      "id": "readme_dev_tooling_build_discipline_repo_knowledge_graph"
     },
     {
       "label": "ponytail \u2014 minimal-code discipline",
@@ -238,9 +388,9 @@
       "source_file": "README.md",
       "source_location": "L99",
       "_origin": "ast",
-      "id": "readme_ponytail_minimal_code_discipline",
       "community": 33,
-      "norm_label": "ponytail \u2014 minimal-code discipline"
+      "norm_label": "ponytail \u2014 minimal-code discipline",
+      "id": "readme_ponytail_minimal_code_discipline"
     },
     {
       "label": "graphify \u2014 repo knowledge graph (query before you read)",
@@ -248,9 +398,9 @@
       "source_file": "README.md",
       "source_location": "L111",
       "_origin": "ast",
-      "id": "readme_graphify_repo_knowledge_graph_query_before_you_read",
       "community": 33,
-      "norm_label": "graphify \u2014 repo knowledge graph (query before you read)"
+      "norm_label": "graphify \u2014 repo knowledge graph (query before you read)",
+      "id": "readme_graphify_repo_knowledge_graph_query_before_you_read"
     },
     {
       "label": "layout.tsx",
@@ -6527,6 +6677,146 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L41",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L46",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L101",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L108",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L50",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L64",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".mcp.json",
       "source_location": "L1",
@@ -6551,9 +6841,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude",
-      "target": "claude_pikar_ai_repository_conventions",
-      "confidence_score": 1.0
+      "target": "claude_pikar_ai_repository_conventions"
     },
     {
       "relation": "contains",
@@ -6561,9 +6851,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L6",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter",
-      "confidence_score": 1.0
+      "target": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
     },
     {
       "relation": "contains",
@@ -6571,9 +6861,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L14",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module",
-      "confidence_score": 1.0
+      "target": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
     },
     {
       "relation": "contains",
@@ -6581,9 +6871,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L22",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_3_the_audit_module_is_insert_only",
-      "confidence_score": 1.0
+      "target": "claude_3_the_audit_module_is_insert_only"
     },
     {
       "relation": "contains",
@@ -6591,9 +6881,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L28",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe",
-      "confidence_score": 1.0
+      "target": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
     },
     {
       "relation": "contains",
@@ -6601,9 +6891,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L35",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry",
-      "confidence_score": 1.0
+      "target": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
     },
     {
       "relation": "contains",
@@ -6611,9 +6901,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L41",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually",
-      "confidence_score": 1.0
+      "target": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
     },
     {
       "relation": "contains",
@@ -6621,9 +6911,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L47",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_7_boot_order",
-      "confidence_score": 1.0
+      "target": "claude_7_boot_order"
     },
     {
       "relation": "contains",
@@ -6631,9 +6921,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L54",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated",
-      "confidence_score": 1.0
+      "target": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
     },
     {
       "relation": "contains",
@@ -6641,9 +6931,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L85",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_pikar_ai_repository_conventions",
-      "target": "claude_graphify",
-      "confidence_score": 1.0
+      "target": "claude_graphify"
     },
     {
       "relation": "contains",
@@ -6651,9 +6941,9 @@
       "source_file": "README.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme",
-      "target": "readme_pikar_ai",
-      "confidence_score": 1.0
+      "target": "readme_pikar_ai"
     },
     {
       "relation": "contains",
@@ -6661,9 +6951,9 @@
       "source_file": "README.md",
       "source_location": "L30",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_clean_clone_boot_order_run_verbatim",
-      "confidence_score": 1.0
+      "target": "readme_clean_clone_boot_order_run_verbatim"
     },
     {
       "relation": "contains",
@@ -6671,9 +6961,9 @@
       "source_file": "README.md",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_common_commands",
-      "confidence_score": 1.0
+      "target": "readme_common_commands"
     },
     {
       "relation": "contains",
@@ -6681,9 +6971,9 @@
       "source_file": "README.md",
       "source_location": "L93",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_dev_tooling_build_discipline_repo_knowledge_graph",
-      "confidence_score": 1.0
+      "target": "readme_dev_tooling_build_discipline_repo_knowledge_graph"
     },
     {
       "relation": "contains",
@@ -6691,9 +6981,9 @@
       "source_file": "README.md",
       "source_location": "L12",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_repository_layout",
-      "confidence_score": 1.0
+      "target": "readme_repository_layout"
     },
     {
       "relation": "contains",
@@ -6701,9 +6991,9 @@
       "source_file": "README.md",
       "source_location": "L59",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_secrets_plane",
-      "confidence_score": 1.0
+      "target": "readme_secrets_plane"
     },
     {
       "relation": "contains",
@@ -6711,9 +7001,9 @@
       "source_file": "README.md",
       "source_location": "L73",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_pikar_ai",
-      "target": "readme_sidecars",
-      "confidence_score": 1.0
+      "target": "readme_sidecars"
     },
     {
       "relation": "contains",
@@ -6721,9 +7011,9 @@
       "source_file": "README.md",
       "source_location": "L111",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_dev_tooling_build_discipline_repo_knowledge_graph",
-      "target": "readme_graphify_repo_knowledge_graph_query_before_you_read",
-      "confidence_score": 1.0
+      "target": "readme_graphify_repo_knowledge_graph_query_before_you_read"
     },
     {
       "relation": "contains",
@@ -6731,9 +7021,9 @@
       "source_file": "README.md",
       "source_location": "L99",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "readme_dev_tooling_build_discipline_repo_knowledge_graph",
-      "target": "readme_ponytail_minimal_code_discipline",
-      "confidence_score": 1.0
+      "target": "readme_ponytail_minimal_code_discipline"
     },
     {
       "relation": "contains",
@@ -12619,5 +12909,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1367dfb6eafac1fa24f78ec5e934a90712a19c4c"
+  "built_at_commit": "a83da054d918d4bf2862506ce25e2886521c7d88"
 }

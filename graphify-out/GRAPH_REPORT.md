@@ -1,16 +1,16 @@
 # Graph Report - Pikar-Ai  (2026-07-09)
 
 ## Corpus Check
-- 80 files · ~55,662 words
+- 81 files · ~56,669 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 651 nodes · 606 edges · 61 communities (52 shown, 9 thin omitted)
+- 666 nodes · 620 edges · 62 communities (53 shown, 9 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1367dfb6`
+- Built from commit: `a83da054`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,6 +64,7 @@
 - next.config.ts
 - convex.config.ts
 - graphify
+- Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -83,7 +84,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (61 total, 9 thin omitted)
+## Communities (62 total, 9 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
 Cohesion: 0.06
@@ -245,8 +246,12 @@ Nodes (3): exclude, extends, include
 Cohesion: 0.50
 Nodes (3): exclude, extends, include
 
+### Community 61 - "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary"
+Cohesion: 0.13
+Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
+
 ## Knowledge Gaps
-- **455 isolated node(s):** `graphify-mcp`, `1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter`, `2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module`, `3. The audit module is insert-only`, `4. Audit and dead-letter payloads must be redaction-safe` (+450 more)
+- **467 isolated node(s):** `Dependency graph`, `Tech tracking`, `Metrics`, `Performance`, `Accomplishments` (+462 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -257,8 +262,8 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **Why does `Architecture Patterns` connect `Common Pitfalls` to `Architecture Patterns`?**
   _High betweenness centrality (0.002) - this node is a cross-community bridge._
-- **What connects `graphify-mcp`, `1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter`, `2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module` to the rest of the system?**
-  _457 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Dependency graph`, `Tech tracking`, `Metrics` to the rest of the system?**
+  _469 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
   _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
