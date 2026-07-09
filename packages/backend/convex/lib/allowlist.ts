@@ -18,6 +18,7 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "review.ts",
   "worm.ts",
   "smoke.ts",
+  "smokeAssert.ts",
   "auth.ts",
   "http.ts",
 ];

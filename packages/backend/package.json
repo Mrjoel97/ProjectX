@@ -7,7 +7,8 @@
     "dev": "convex dev",
     "codegen": "convex codegen",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:dlq": "node ./scripts/run-smoke-dlq.mjs"
   },
   "dependencies": {
     "@convex-dev/action-retrier": "0.3.1",
