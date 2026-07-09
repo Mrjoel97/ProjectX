@@ -25,3 +25,8 @@ next-env.d.ts
 # OS / editor
 .DS_Store
 *.log
+
+# graphify repo knowledge graph — commit graph.json (so the MCP works from a clean
+# clone) + the human-readable report; ignore regenerable caches and large HTML views.
+graphify-out/cache/
+graphify-out/*.html
