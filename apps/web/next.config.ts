@@ -1,0 +1,8 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // Source-export workspace packages are transpiled by Next (no build step in packages/*).
+  transpilePackages: ["@pikar/contracts", "@pikar/core"],
+};
+
+export default nextConfig;

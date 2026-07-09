@@ -1,0 +1,25 @@
+{
+  "name": "pikar-ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "boot:check": "node scripts/boot-check.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "turbo": "2.10.4",
+    "typescript": "^7.0.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp"]
+  }
+}
