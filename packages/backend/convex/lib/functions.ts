@@ -5,7 +5,8 @@
 // from the authenticated identity and can never be forgotten or spoofed.
 
 import { customCtx, customMutation, customQuery } from "convex-helpers/server/customFunctions";
-// biome-ignore lint/nursery/noRestrictedImports: this wrapper module is the sole sanctioned raw-builder import site.
+// This is the ONLY sanctioned raw-builder import site (biome noRestrictedImports
+// is turned off for this file via an override in biome.json).
 import { mutation, query } from "../_generated/server";
 
 /**

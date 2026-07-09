@@ -18,12 +18,41 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "./_generated/server": {
+                "importNames": ["query", "mutation"],
+                "message": "Raw query/mutation are banned. Import tenantQuery/tenantMutation from convex/lib/functions.ts (or use internalQuery/internalMutation for allow-listed internal modules)."
+              },
+              "../_generated/server": {
+                "importNames": ["query", "mutation"],
+                "message": "Raw query/mutation are banned. Import tenantQuery/tenantMutation from convex/lib/functions.ts (or use internalQuery/internalMutation for allow-listed internal modules)."
+              }
+            }
+          }
+        }
+      }
     }
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/backend/convex/lib/functions.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }
