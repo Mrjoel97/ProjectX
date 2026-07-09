@@ -64,7 +64,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **OPSG-01**: Per-request telemetry captures tokens, cost, duration, decision/retry counters, and review outcome
 - [x] **OPSG-02**: Every request, redaction, routing decision, model call, review action, and delivery is written to an insert-only audit log
 - [ ] **OPSG-03**: Completed request trails are exported on schedule to immutable (WORM) archival storage
-- [ ] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
+- [x] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
 - [ ] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
 
 ### Private Beta
@@ -142,7 +142,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPSG-01 | Phase 2 | Pending |
 | OPSG-02 | Phase 1 | Complete |
 | OPSG-03 | Phase 7 | Pending |
-| OPSG-04 | Phase 1 | Pending |
+| OPSG-04 | Phase 1 | Complete |
 | OPSG-05 | Phase 7 | Pending |
 | BETA-01 | Phase 9 | Pending |
 | BETA-02 | Phase 9 | Pending |
