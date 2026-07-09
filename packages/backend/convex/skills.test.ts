@@ -8,6 +8,9 @@ import schema from "./schema";
 import { loadSkill } from "./skills";
 
 // Register every convex module so internal.* function references resolve.
+// `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
+// lib (shared gap across all convex/*.test.ts files), so ignore the type here.
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob("./**/*.*s");
 
 const SKILL_NAME = "executive-agent.classifier";
