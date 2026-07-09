@@ -3,31 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md (audit insert-only, OPSG-02)
-last_updated: "2026-07-09T09:56:06.695Z"
+stopped_at: Completed 01-02-PLAN.md (tenant-scoping substrate, SC-2)
+last_updated: "2026-07-09T09:58:58.442Z"
 last_activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
+  completed_plans: 3
   percent: 22
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-07-09T04:49:38.612Z"
-last_activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
-progress:
-  [██░░░░░░░░] 22%
-  completed_phases: 0
-  total_plans: 9
-  completed_plans: 1
-  percent: 11
 ---
 
 # Project State
@@ -42,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 1 of 9 (Foundation & Governance Substrate)
-Plan: 1 of 9 in current phase (complete)
+Plan: 3 of 9 in current phase complete (01-01, 01-02, 01-03)
 Status: Executing
-Last activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
+Last activity: 2026-07-09 — Completed 01-02 (tenant-scoping substrate; SC-2 met)
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [██░░░░░░░░] 22%
 
 ## Performance Metrics
 
@@ -68,6 +52,7 @@ Progress: [█░░░░░░░░░] 11%
 *Updated after each plan completion*
 | Phase 01 P01 | 13 | 3 tasks | 34 files |
 | Phase 01 P03 | 8 | 2 tasks | 7 files |
+| Phase 01 P02 | 18 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -84,6 +69,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Source-export packages/* (no build step) resolve through Convex esbuild + Next transpilePackages; proven via @pikar/contracts import in convex/schema.ts
 - [Phase 01]: TypeScript 7 removed baseUrl/non-relative paths; @pikar/* now resolves via pnpm workspace symlinks + package exports (no tsconfig paths)
 - [Phase 01]: Audit is insert-only: single internalMutation write surface; immutability enforced by convention + static-scan test (OPSG-02)
+- [Phase 01]: Tenant scoping is unavoidable: tenantQuery/tenantMutation inject tenantId (=userId) from identity; enforced by biome noRestrictedImports + static importGuard test (SC-2)
 
 ### Pending Todos
 
@@ -97,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-09T09:56:05.055Z
-Stopped at: Completed 01-03-PLAN.md (audit insert-only, OPSG-02)
+Last session: 2026-07-09T09:58:58.433Z
+Stopped at: Completed 01-02-PLAN.md (tenant-scoping substrate, SC-2)
 Resume file: None
