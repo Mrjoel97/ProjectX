@@ -4,14 +4,1014 @@
   "graph": {},
   "nodes": [
     {
+      "label": "REQUIREMENTS.md",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_requirements",
+      "community": 15,
+      "norm_label": "requirements.md"
+    },
+    {
+      "label": "Requirements: Pikar-AI",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_requirements_requirements_pikar_ai",
+      "community": 15,
+      "norm_label": "requirements: pikar-ai"
+    },
+    {
+      "label": "v1 Requirements",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "planning_requirements_v1_requirements",
+      "community": 15,
+      "norm_label": "v1 requirements"
+    },
+    {
+      "label": "Intake & Enrichment",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "planning_requirements_intake_enrichment",
+      "community": 15,
+      "norm_label": "intake & enrichment"
+    },
+    {
+      "label": "Executive Agent & Planning",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "planning_requirements_executive_agent_planning",
+      "community": 15,
+      "norm_label": "executive agent & planning"
+    },
+    {
+      "label": "Guardrails",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L24",
+      "_origin": "ast",
+      "id": "planning_requirements_guardrails",
+      "community": 15,
+      "norm_label": "guardrails"
+    },
+    {
+      "label": "Human Review & Delivery",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L33",
+      "_origin": "ast",
+      "id": "planning_requirements_human_review_delivery",
+      "community": 15,
+      "norm_label": "human review & delivery"
+    },
+    {
+      "label": "Knowledge Vault",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L42",
+      "_origin": "ast",
+      "id": "planning_requirements_knowledge_vault",
+      "community": 15,
+      "norm_label": "knowledge vault"
+    },
+    {
+      "label": "Live Voice Sessions",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L49",
+      "_origin": "ast",
+      "id": "planning_requirements_live_voice_sessions",
+      "community": 15,
+      "norm_label": "live voice sessions"
+    },
+    {
+      "label": "Self-Improvement",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L56",
+      "_origin": "ast",
+      "id": "planning_requirements_self_improvement",
+      "community": 15,
+      "norm_label": "self-improvement"
+    },
+    {
+      "label": "Governance & Operations",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L62",
+      "_origin": "ast",
+      "id": "planning_requirements_governance_operations",
+      "community": 15,
+      "norm_label": "governance & operations"
+    },
+    {
+      "label": "Private Beta",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "planning_requirements_private_beta",
+      "community": 15,
+      "norm_label": "private beta"
+    },
+    {
+      "label": "v2 Requirements",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L77",
+      "_origin": "ast",
+      "id": "planning_requirements_v2_requirements",
+      "community": 15,
+      "norm_label": "v2 requirements"
+    },
+    {
+      "label": "Expansion",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L81",
+      "_origin": "ast",
+      "id": "planning_requirements_expansion",
+      "community": 15,
+      "norm_label": "expansion"
+    },
+    {
+      "label": "Out of Scope",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L90",
+      "_origin": "ast",
+      "id": "planning_requirements_out_of_scope",
+      "community": 15,
+      "norm_label": "out of scope"
+    },
+    {
+      "label": "Traceability",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L105",
+      "_origin": "ast",
+      "id": "planning_requirements_traceability",
+      "community": 15,
+      "norm_label": "traceability"
+    },
+    {
+      "label": "STATE.md",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_state",
+      "community": 25,
+      "norm_label": "state.md"
+    },
+    {
+      "label": "Project State",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "planning_state_project_state",
+      "community": 25,
+      "norm_label": "project state"
+    },
+    {
+      "label": "Project Reference",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "planning_state_project_reference",
+      "community": 25,
+      "norm_label": "project reference"
+    },
+    {
+      "label": "Current Position",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L26",
+      "_origin": "ast",
+      "id": "planning_state_current_position",
+      "community": 25,
+      "norm_label": "current position"
+    },
+    {
+      "label": "Performance Metrics",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L35",
+      "_origin": "ast",
+      "id": "planning_state_performance_metrics",
+      "community": 25,
+      "norm_label": "performance metrics"
+    },
+    {
+      "label": "Accumulated Context",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L59",
+      "_origin": "ast",
+      "id": "planning_state_accumulated_context",
+      "community": 25,
+      "norm_label": "accumulated context"
+    },
+    {
+      "label": "Decisions",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L61",
+      "_origin": "ast",
+      "id": "planning_state_decisions",
+      "community": 25,
+      "norm_label": "decisions"
+    },
+    {
+      "label": "Pending Todos",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L77",
+      "_origin": "ast",
+      "id": "planning_state_pending_todos",
+      "community": 25,
+      "norm_label": "pending todos"
+    },
+    {
+      "label": "Blockers/Concerns",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L81",
+      "_origin": "ast",
+      "id": "planning_state_blockers_concerns",
+      "community": 25,
+      "norm_label": "blockers/concerns"
+    },
+    {
+      "label": "Session Continuity",
+      "file_type": "document",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L87",
+      "_origin": "ast",
+      "id": "planning_state_session_continuity",
+      "community": 25,
+      "norm_label": "session continuity"
+    },
+    {
+      "label": "01-06-SUMMARY.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary",
+      "community": 65,
+      "norm_label": "01-06-summary.md"
+    },
+    {
+      "label": "Dependency graph",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_dependency_graph",
+      "community": 65,
+      "norm_label": "dependency graph"
+    },
+    {
+      "label": "Tech tracking",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_tech_tracking",
+      "community": 65,
+      "norm_label": "tech tracking"
+    },
+    {
+      "label": "Metrics",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L53",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_metrics",
+      "community": 65,
+      "norm_label": "metrics"
+    },
+    {
+      "label": "Phase 01 Plan 06: DLQ + awaitEvent-Timeout Race Smoke Patterns Summary",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L58",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "community": 65,
+      "norm_label": "phase 01 plan 06: dlq + awaitevent-timeout race smoke patterns summary"
+    },
+    {
+      "label": "Performance",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L62",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_performance",
+      "community": 65,
+      "norm_label": "performance"
+    },
+    {
+      "label": "Accomplishments",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L69",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_accomplishments",
+      "community": 65,
+      "norm_label": "accomplishments"
+    },
+    {
+      "label": "Task Commits",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L75",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_task_commits",
+      "community": 65,
+      "norm_label": "task commits"
+    },
+    {
+      "label": "Files Created/Modified",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L82",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_files_created_modified",
+      "community": 65,
+      "norm_label": "files created/modified"
+    },
+    {
+      "label": "Research Open Question 1 \u2014 empirical answer (stale sendEvent when no step awaits)",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L92",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_research_open_question_1_empirical_answer_stale_sendevent_when_no_step_awaits",
+      "community": 65,
+      "norm_label": "research open question 1 \u2014 empirical answer (stale sendevent when no step awaits)"
+    },
+    {
+      "label": "Decisions Made",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L96",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_decisions_made",
+      "community": 65,
+      "norm_label": "decisions made"
+    },
+    {
+      "label": "Deviations from Plan",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L101",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_deviations_from_plan",
+      "community": 65,
+      "norm_label": "deviations from plan"
+    },
+    {
+      "label": "Auto-fixed Issues",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L103",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_auto_fixed_issues",
+      "community": 65,
+      "norm_label": "auto-fixed issues"
+    },
+    {
+      "label": "Issues Encountered",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L125",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_issues_encountered",
+      "community": 65,
+      "norm_label": "issues encountered"
+    },
+    {
+      "label": "User Setup Required",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L128",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_user_setup_required",
+      "community": 65,
+      "norm_label": "user setup required"
+    },
+    {
+      "label": "Next Phase Readiness",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L131",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_next_phase_readiness",
+      "community": 65,
+      "norm_label": "next phase readiness"
+    },
+    {
+      "label": "Self-Check: PASSED",
+      "file_type": "document",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L139",
+      "_origin": "ast",
+      "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_self_check_passed",
+      "community": 65,
+      "norm_label": "self-check: passed"
+    },
+    {
+      "label": "review.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "review.ts",
+      "id": "packages_backend_convex_review"
+    },
+    {
+      "label": "reviewEventValidator",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "revieweventvalidator",
+      "id": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "label": "armTimeout",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "armtimeout",
+      "id": "packages_backend_convex_review_armtimeout"
+    },
+    {
+      "label": "fireTimeout",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L41",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "firetimeout",
+      "id": "packages_backend_convex_review_firetimeout"
+    },
+    {
+      "label": "sendDecision",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L62",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "senddecision",
+      "id": "packages_backend_convex_review_senddecision"
+    },
+    {
+      "label": "smoke.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "smoke.ts",
+      "id": "packages_backend_convex_smoke"
+    },
+    {
+      "label": "boom",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "boom",
+      "id": "packages_backend_convex_smoke_boom"
+    },
+    {
+      "label": "failingPipeline",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L26",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "failingpipeline",
+      "id": "packages_backend_convex_smoke_failingpipeline"
+    },
+    {
+      "label": "runFailingPipeline",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "runfailingpipeline",
+      "id": "packages_backend_convex_smoke_runfailingpipeline"
+    },
+    {
+      "label": "recordReviewOutcome",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L55",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "recordreviewoutcome",
+      "id": "packages_backend_convex_smoke_recordreviewoutcome"
+    },
+    {
+      "label": "reviewGate",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L72",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "reviewgate",
+      "id": "packages_backend_convex_smoke_reviewgate"
+    },
+    {
+      "label": "startReviewGate",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L91",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "startreviewgate",
+      "id": "packages_backend_convex_smoke_startreviewgate"
+    },
+    {
+      "label": "smokeAssert.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 64,
+      "norm_label": "smokeassert.ts",
+      "id": "packages_backend_convex_smokeassert"
+    },
+    {
+      "label": "assertDeadLetter",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 64,
+      "norm_label": "assertdeadletter",
+      "id": "packages_backend_convex_smokeassert_assertdeadletter"
+    },
+    {
+      "label": "assertReviewOutcome",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L33",
+      "_origin": "ast",
+      "community": 64,
+      "norm_label": "assertreviewoutcome",
+      "id": "packages_backend_convex_smokeassert_assertreviewoutcome"
+    },
+    {
+      "label": "package.json",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "package.json",
+      "id": "packages_backend_package"
+    },
+    {
+      "label": "name",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L2",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "name",
+      "id": "packages_backend_package_name"
+    },
+    {
+      "label": "version",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "version",
+      "id": "packages_backend_package_version"
+    },
+    {
+      "label": "private",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "private",
+      "id": "packages_backend_package_private"
+    },
+    {
+      "label": "type",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "type",
+      "id": "packages_backend_package_type"
+    },
+    {
+      "label": "scripts",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "scripts",
+      "id": "packages_backend_package_scripts"
+    },
+    {
+      "label": "dev",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "dev",
+      "id": "packages_backend_package_scripts_dev"
+    },
+    {
+      "label": "codegen",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "codegen",
+      "id": "packages_backend_package_scripts_codegen"
+    },
+    {
+      "label": "typecheck",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L9",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "typecheck",
+      "id": "packages_backend_package_scripts_typecheck"
+    },
+    {
+      "label": "test",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "test",
+      "id": "packages_backend_package_scripts_test"
+    },
+    {
+      "label": "smoke:dlq",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L11",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "smoke:dlq",
+      "id": "packages_backend_package_scripts_smoke_dlq"
+    },
+    {
+      "label": "smoke:reviewgate",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "smoke:reviewgate",
+      "id": "packages_backend_package_scripts_smoke_reviewgate"
+    },
+    {
+      "label": "dependencies",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "dependencies",
+      "id": "packages_backend_package_dependencies"
+    },
+    {
+      "label": "@convex-dev/action-retrier",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/action-retrier",
+      "id": "packages_backend_package_dependencies_convex_dev_action_retrier"
+    },
+    {
+      "label": "@convex-dev/agent",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L16",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/agent",
+      "id": "packages_backend_package_dependencies_convex_dev_agent"
+    },
+    {
+      "label": "@convex-dev/auth",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L17",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/auth",
+      "id": "packages_backend_package_dependencies_convex_dev_auth"
+    },
+    {
+      "label": "@convex-dev/rag",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/rag",
+      "id": "packages_backend_package_dependencies_convex_dev_rag"
+    },
+    {
+      "label": "@convex-dev/rate-limiter",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L19",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/rate-limiter",
+      "id": "packages_backend_package_dependencies_convex_dev_rate_limiter"
+    },
+    {
+      "label": "@convex-dev/workflow",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@convex-dev/workflow",
+      "id": "packages_backend_package_dependencies_convex_dev_workflow"
+    },
+    {
+      "label": "@pikar/contracts",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L21",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@pikar/contracts",
+      "id": "packages_backend_package_dependencies_pikar_contracts"
+    },
+    {
+      "label": "@pikar/core",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@pikar/core",
+      "id": "packages_backend_package_dependencies_pikar_core"
+    },
+    {
+      "label": "convex",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "convex",
+      "id": "packages_backend_package_dependencies_convex"
+    },
+    {
+      "label": "convex-helpers",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L24",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "convex-helpers",
+      "id": "packages_backend_package_dependencies_convex_helpers"
+    },
+    {
+      "label": "devDependencies",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L26",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "devdependencies",
+      "id": "packages_backend_package_devdependencies"
+    },
+    {
+      "label": "@edge-runtime/vm",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L27",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@edge-runtime/vm",
+      "id": "packages_backend_package_devdependencies_edge_runtime_vm"
+    },
+    {
+      "label": "@types/node",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "@types/node",
+      "id": "packages_backend_package_devdependencies_types_node"
+    },
+    {
+      "label": "convex-test",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L29",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "convex-test",
+      "id": "packages_backend_package_devdependencies_convex_test"
+    },
+    {
+      "label": "vitest",
+      "file_type": "code",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L30",
+      "_origin": "ast",
+      "community": 6,
+      "norm_label": "vitest",
+      "id": "packages_backend_package_devdependencies_vitest"
+    },
+    {
+      "label": "run-smoke-reviewgate.mjs",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/run-smoke-reviewgate.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 66,
+      "norm_label": "run-smoke-reviewgate.mjs",
+      "id": "packages_backend_scripts_run_smoke_reviewgate"
+    },
+    {
+      "label": "deadLetter.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 63,
+      "norm_label": "deadletter.ts",
+      "id": "packages_backend_convex_deadletter"
+    },
+    {
+      "label": "onPipelineComplete",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 63,
+      "norm_label": "onpipelinecomplete",
+      "id": "packages_backend_convex_deadletter_onpipelinecomplete"
+    },
+    {
+      "label": "allowlist.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "allowlist.ts",
+      "id": "packages_backend_convex_lib_allowlist"
+    },
+    {
+      "label": "RAW_BUILDER_ALLOWLIST",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "raw_builder_allowlist",
+      "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
+    },
+    {
+      "label": "NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by",
+      "file_type": "rationale",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L9",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by",
+      "id": "packages_backend_convex_lib_allowlist_rationale_9"
+    },
+    {
+      "label": "run-smoke-dlq.mjs",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/run-smoke-dlq.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "run-smoke-dlq.mjs",
+      "id": "packages_backend_scripts_run_smoke_dlq"
+    },
+    {
+      "label": "smokeRun.mjs",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "smokerun.mjs",
+      "id": "packages_backend_scripts_smokerun"
+    },
+    {
+      "label": "backendDir",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "backenddir",
+      "id": "packages_backend_scripts_smokerun_backenddir"
+    },
+    {
+      "label": "convexBin",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L16",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "convexbin",
+      "id": "packages_backend_scripts_smokerun_convexbin"
+    },
+    {
+      "label": "invoke()",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L21",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "invoke()",
+      "id": "packages_backend_scripts_smokerun_invoke"
+    },
+    {
+      "label": "must()",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L34",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "must()",
+      "id": "packages_backend_scripts_smokerun_must"
+    },
+    {
+      "label": "pollPass()",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L44",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "pollpass()",
+      "id": "packages_backend_scripts_smokerun_pollpass"
+    },
+    {
+      "label": "IMPORTANT: on Windows + Node 24 the convex CLI process can crash during exit",
+      "file_type": "rationale",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 26,
+      "norm_label": "important: on windows + node 24 the convex cli process can crash during exit",
+      "id": "packages_backend_scripts_smokerun_rationale_5"
+    },
+    {
       "label": "01-05-SUMMARY.md",
       "file_type": "document",
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary",
       "community": 61,
-      "norm_label": "01-05-summary.md"
+      "norm_label": "01-05-summary.md",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary"
     },
     {
       "label": "Dependency graph",
@@ -19,9 +1019,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L7",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph",
       "community": 61,
-      "norm_label": "dependency graph"
+      "norm_label": "dependency graph",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph"
     },
     {
       "label": "Tech tracking",
@@ -29,9 +1029,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L19",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking",
       "community": 61,
-      "norm_label": "tech tracking"
+      "norm_label": "tech tracking",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking"
     },
     {
       "label": "Metrics",
@@ -39,9 +1039,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L41",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics",
       "community": 61,
-      "norm_label": "metrics"
+      "norm_label": "metrics",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics"
     },
     {
       "label": "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary",
@@ -49,9 +1049,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L46",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
       "community": 61,
-      "norm_label": "phase 01 / plan 05: graphify activation + ponytail discipline summary"
+      "norm_label": "phase 01 / plan 05: graphify activation + ponytail discipline summary",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary"
     },
     {
       "label": "Performance",
@@ -59,9 +1059,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L50",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance",
       "community": 61,
-      "norm_label": "performance"
+      "norm_label": "performance",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance"
     },
     {
       "label": "Accomplishments",
@@ -69,9 +1069,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L57",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments",
       "community": 61,
-      "norm_label": "accomplishments"
+      "norm_label": "accomplishments",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments"
     },
     {
       "label": "Task Commits",
@@ -79,9 +1079,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L64",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits",
       "community": 61,
-      "norm_label": "task commits"
+      "norm_label": "task commits",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits"
     },
     {
       "label": "Files Created/Modified",
@@ -89,9 +1089,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L69",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified",
       "community": 61,
-      "norm_label": "files created/modified"
+      "norm_label": "files created/modified",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified"
     },
     {
       "label": "Decisions Made",
@@ -99,9 +1099,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L77",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made",
       "community": 61,
-      "norm_label": "decisions made"
+      "norm_label": "decisions made",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made"
     },
     {
       "label": "Deviations from Plan",
@@ -109,9 +1109,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L80",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
       "community": 61,
-      "norm_label": "deviations from plan"
+      "norm_label": "deviations from plan",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan"
     },
     {
       "label": "Auto-fixed Issues",
@@ -119,9 +1119,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues",
       "community": 61,
-      "norm_label": "auto-fixed issues"
+      "norm_label": "auto-fixed issues",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues"
     },
     {
       "label": "Issues Encountered",
@@ -129,9 +1129,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L101",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered",
       "community": 61,
-      "norm_label": "issues encountered"
+      "norm_label": "issues encountered",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered"
     },
     {
       "label": "User Setup Required",
@@ -139,9 +1139,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L105",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required",
       "community": 61,
-      "norm_label": "user setup required"
+      "norm_label": "user setup required",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required"
     },
     {
       "label": "Next Phase Readiness",
@@ -149,9 +1149,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L108",
       "_origin": "ast",
-      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness",
       "community": 61,
-      "norm_label": "next phase readiness"
+      "norm_label": "next phase readiness",
+      "id": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness"
     },
     {
       "label": ".mcp.json",
@@ -1673,36 +2673,6 @@
       "id": "packages_backend_convex_index_retrier"
     },
     {
-      "label": "allowlist.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "allowlist.ts",
-      "id": "packages_backend_convex_lib_allowlist"
-    },
-    {
-      "label": "RAW_BUILDER_ALLOWLIST",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "raw_builder_allowlist",
-      "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
-    },
-    {
-      "label": "NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by",
-      "file_type": "rationale",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L9",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by",
-      "id": "packages_backend_convex_lib_allowlist_rationale_9"
-    },
-    {
       "label": "functions.ts",
       "file_type": "code",
       "source_file": "packages/backend/convex/lib/functions.ts",
@@ -2001,266 +2971,6 @@
       "community": 12,
       "norm_label": "exclude",
       "id": "packages_backend_convex_tsconfig_exclude"
-    },
-    {
-      "label": "package.json",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "package.json",
-      "id": "packages_backend_package"
-    },
-    {
-      "label": "name",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L2",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "name",
-      "id": "packages_backend_package_name"
-    },
-    {
-      "label": "version",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L3",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "version",
-      "id": "packages_backend_package_version"
-    },
-    {
-      "label": "private",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L4",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "private",
-      "id": "packages_backend_package_private"
-    },
-    {
-      "label": "type",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L5",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "type",
-      "id": "packages_backend_package_type"
-    },
-    {
-      "label": "scripts",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "scripts",
-      "id": "packages_backend_package_scripts"
-    },
-    {
-      "label": "dev",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "dev",
-      "id": "packages_backend_package_scripts_dev"
-    },
-    {
-      "label": "codegen",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L8",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "codegen",
-      "id": "packages_backend_package_scripts_codegen"
-    },
-    {
-      "label": "typecheck",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L9",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "typecheck",
-      "id": "packages_backend_package_scripts_typecheck"
-    },
-    {
-      "label": "test",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "test",
-      "id": "packages_backend_package_scripts_test"
-    },
-    {
-      "label": "dependencies",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L12",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "dependencies",
-      "id": "packages_backend_package_dependencies"
-    },
-    {
-      "label": "@convex-dev/action-retrier",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L13",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/action-retrier",
-      "id": "packages_backend_package_dependencies_convex_dev_action_retrier"
-    },
-    {
-      "label": "@convex-dev/agent",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/agent",
-      "id": "packages_backend_package_dependencies_convex_dev_agent"
-    },
-    {
-      "label": "@convex-dev/auth",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L15",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/auth",
-      "id": "packages_backend_package_dependencies_convex_dev_auth"
-    },
-    {
-      "label": "@convex-dev/rag",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L16",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/rag",
-      "id": "packages_backend_package_dependencies_convex_dev_rag"
-    },
-    {
-      "label": "@convex-dev/rate-limiter",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/rate-limiter",
-      "id": "packages_backend_package_dependencies_convex_dev_rate_limiter"
-    },
-    {
-      "label": "@convex-dev/workflow",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@convex-dev/workflow",
-      "id": "packages_backend_package_dependencies_convex_dev_workflow"
-    },
-    {
-      "label": "@pikar/contracts",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L19",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@pikar/contracts",
-      "id": "packages_backend_package_dependencies_pikar_contracts"
-    },
-    {
-      "label": "@pikar/core",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L20",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@pikar/core",
-      "id": "packages_backend_package_dependencies_pikar_core"
-    },
-    {
-      "label": "convex",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L21",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "convex",
-      "id": "packages_backend_package_dependencies_convex"
-    },
-    {
-      "label": "convex-helpers",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L22",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "convex-helpers",
-      "id": "packages_backend_package_dependencies_convex_helpers"
-    },
-    {
-      "label": "devDependencies",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "devdependencies",
-      "id": "packages_backend_package_devdependencies"
-    },
-    {
-      "label": "@edge-runtime/vm",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L25",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@edge-runtime/vm",
-      "id": "packages_backend_package_devdependencies_edge_runtime_vm"
-    },
-    {
-      "label": "@types/node",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L26",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "@types/node",
-      "id": "packages_backend_package_devdependencies_types_node"
-    },
-    {
-      "label": "convex-test",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L27",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "convex-test",
-      "id": "packages_backend_package_devdependencies_convex_test"
-    },
-    {
-      "label": "vitest",
-      "file_type": "code",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L28",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "vitest",
-      "id": "packages_backend_package_devdependencies_vitest"
     },
     {
       "label": "tsconfig.json",
@@ -3473,166 +4183,6 @@
       "id": "planning_project_key_decisions"
     },
     {
-      "label": "REQUIREMENTS.md",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "requirements.md",
-      "id": "planning_requirements"
-    },
-    {
-      "label": "Requirements: Pikar-AI",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "requirements: pikar-ai",
-      "id": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "label": "v1 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "v1 requirements",
-      "id": "planning_requirements_v1_requirements"
-    },
-    {
-      "label": "Intake & Enrichment",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "intake & enrichment",
-      "id": "planning_requirements_intake_enrichment"
-    },
-    {
-      "label": "Executive Agent & Planning",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "executive agent & planning",
-      "id": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "label": "Guardrails",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "guardrails",
-      "id": "planning_requirements_guardrails"
-    },
-    {
-      "label": "Human Review & Delivery",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "human review & delivery",
-      "id": "planning_requirements_human_review_delivery"
-    },
-    {
-      "label": "Knowledge Vault",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "knowledge vault",
-      "id": "planning_requirements_knowledge_vault"
-    },
-    {
-      "label": "Live Voice Sessions",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L49",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "live voice sessions",
-      "id": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "label": "Self-Improvement",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L56",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "self-improvement",
-      "id": "planning_requirements_self_improvement"
-    },
-    {
-      "label": "Governance & Operations",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L62",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "governance & operations",
-      "id": "planning_requirements_governance_operations"
-    },
-    {
-      "label": "Private Beta",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "private beta",
-      "id": "planning_requirements_private_beta"
-    },
-    {
-      "label": "v2 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L77",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "v2 requirements",
-      "id": "planning_requirements_v2_requirements"
-    },
-    {
-      "label": "Expansion",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L81",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "expansion",
-      "id": "planning_requirements_expansion"
-    },
-    {
-      "label": "Out of Scope",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L90",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "out of scope",
-      "id": "planning_requirements_out_of_scope"
-    },
-    {
-      "label": "Traceability",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "traceability",
-      "id": "planning_requirements_traceability"
-    },
-    {
       "label": "ROADMAP.md",
       "file_type": "document",
       "source_file": ".planning/ROADMAP.md",
@@ -3781,106 +4331,6 @@
       "community": 19,
       "norm_label": "progress",
       "id": "planning_roadmap_progress"
-    },
-    {
-      "label": "STATE.md",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "state.md",
-      "id": "planning_state"
-    },
-    {
-      "label": "Project State",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "project state",
-      "id": "planning_state_project_state"
-    },
-    {
-      "label": "Project Reference",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L19",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "project reference",
-      "id": "planning_state_project_reference"
-    },
-    {
-      "label": "Current Position",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L26",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "current position",
-      "id": "planning_state_current_position"
-    },
-    {
-      "label": "Performance Metrics",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L35",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "performance metrics",
-      "id": "planning_state_performance_metrics"
-    },
-    {
-      "label": "Accumulated Context",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L58",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "accumulated context",
-      "id": "planning_state_accumulated_context"
-    },
-    {
-      "label": "Decisions",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L60",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "decisions",
-      "id": "planning_state_decisions"
-    },
-    {
-      "label": "Pending Todos",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L76",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "pending todos",
-      "id": "planning_state_pending_todos"
-    },
-    {
-      "label": "Blockers/Concerns",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L80",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "blockers/concerns",
-      "id": "planning_state_blockers_concerns"
-    },
-    {
-      "label": "Session Continuity",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L86",
-      "_origin": "ast",
-      "community": 25,
-      "norm_label": "session continuity",
-      "id": "planning_state_session_continuity"
     },
     {
       "label": "01-01-PLAN.md",
@@ -4678,7 +5128,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "architecture patterns",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_architecture_patterns"
     },
@@ -4688,7 +5138,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "recommended project structure",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_recommended_project_structure"
     },
@@ -4698,7 +5148,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L121",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 1: component wiring (`convex.config.ts`)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_1_component_wiring_convex_config_ts"
     },
@@ -4708,7 +5158,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 2: tenant-scoping wrapper (`customquery`/`custommutation`)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_2_tenant_scoping_wrapper_customquery_custommutation"
     },
@@ -4718,7 +5168,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L190",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 3: convex auth minimal setup",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_3_convex_auth_minimal_setup"
     },
@@ -4728,7 +5178,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L194",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 4: insert-only audit module (opsg-02)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_4_insert_only_audit_module_opsg_02"
     },
@@ -4738,7 +5188,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L224",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 5: dead-letter via `oncomplete` (opsg-04)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_5_dead_letter_via_oncomplete_opsg_04"
     },
@@ -4748,7 +5198,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L258",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 6: awaitevent-timeout race (issue #177 workaround)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_6_awaitevent_timeout_race_issue_177_workaround"
     },
@@ -4758,7 +5208,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L291",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 7: worm export cron stub",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_7_worm_export_cron_stub"
     },
@@ -4768,7 +5218,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L312",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 8: versioned skills registry + loader (success criterion #6)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_8_versioned_skills_registry_loader_success_criterion_6"
     },
@@ -4778,7 +5228,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L333",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 9: deployment envs + vercel",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_9_deployment_envs_vercel"
     },
@@ -4788,7 +5238,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L341",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 10: graphify on the repo (windows 11)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_10_graphify_on_the_repo_windows_11"
     },
@@ -4798,7 +5248,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L358",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "pattern 11: google oauth verification paperwork (week 1)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_11_google_oauth_verification_paperwork_week_1"
     },
@@ -4808,7 +5258,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L370",
       "_origin": "ast",
-      "community": 26,
+      "community": 0,
       "norm_label": "sidecar host decision (document in phase 1 readme; no deployment yet)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_sidecar_host_decision_document_in_phase_1_readme_no_deployment_yet"
     },
@@ -6677,12 +7127,991 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "planning_requirements",
+      "target": "planning_requirements_requirements_pikar_ai",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L90",
+      "weight": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_out_of_scope",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_traceability",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_v1_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_v2_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L17",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_executive_agent_planning",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_governance_operations",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L24",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_guardrails",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_human_review_delivery",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_intake_enrichment",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L42",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_knowledge_vault",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_live_voice_sessions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L70",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_private_beta",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L56",
+      "weight": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_self_improvement",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L81",
+      "weight": 1.0,
+      "source": "planning_requirements_v2_requirements",
+      "target": "planning_requirements_expansion",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L17",
+      "weight": 1.0,
+      "source": "planning_state",
+      "target": "planning_state_project_state",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L59",
+      "weight": 1.0,
+      "source": "planning_state_project_state",
+      "target": "planning_state_accumulated_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L26",
+      "weight": 1.0,
+      "source": "planning_state_project_state",
+      "target": "planning_state_current_position",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "planning_state_project_state",
+      "target": "planning_state_performance_metrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "planning_state_project_state",
+      "target": "planning_state_project_reference",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L87",
+      "weight": 1.0,
+      "source": "planning_state_project_state",
+      "target": "planning_state_session_continuity",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L81",
+      "weight": 1.0,
+      "source": "planning_state_accumulated_context",
+      "target": "planning_state_blockers_concerns",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L61",
+      "weight": 1.0,
+      "source": "planning_state_accumulated_context",
+      "target": "planning_state_decisions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/STATE.md",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "planning_state_accumulated_context",
+      "target": "planning_state_pending_todos",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_dependency_graph",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_metrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L58",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_tech_tracking",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_accomplishments",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L96",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_decisions_made",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L101",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_deviations_from_plan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_files_created_modified",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L125",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_issues_encountered",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L131",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_next_phase_readiness",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_performance",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L92",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_research_open_question_1_empirical_answer_stale_sendevent_when_no_step_awaits",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L139",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_self_check_passed",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L75",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_task_commits",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L128",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_phase_01_plan_06_dlq_awaitevent_timeout_race_smoke_patterns_summary",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_user_setup_required",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
+      "source_location": "L103",
+      "weight": 1.0,
+      "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_deviations_from_plan",
+      "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_auto_fixed_issues",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_armtimeout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_firetimeout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L62",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_senddecision"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_review"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_boom"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_failingpipeline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L55",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_recordreviewoutcome"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L72",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_reviewgate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_runfailingpipeline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L91",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_startreviewgate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smokeassert",
+      "target": "packages_backend_convex_smokeassert_assertdeadletter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L33",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smokeassert",
+      "target": "packages_backend_convex_smokeassert_assertreviewoutcome"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_dependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_devdependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_name"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_private"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_scripts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_type"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package",
+      "target": "packages_backend_package_version"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_codegen"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_dev"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L11",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_smoke_dlq"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_smoke_reviewgate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_test"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L9",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_scripts",
+      "target": "packages_backend_package_scripts_typecheck"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L23",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_action_retrier"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_agent"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_auth"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_rag"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_rate_limiter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_dev_workflow"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L24",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_convex_helpers"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_pikar_contracts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_dependencies",
+      "target": "packages_backend_package_dependencies_pikar_core"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L29",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_devdependencies",
+      "target": "packages_backend_package_devdependencies_convex_test"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L27",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_devdependencies",
+      "target": "packages_backend_package_devdependencies_edge_runtime_vm"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_devdependencies",
+      "target": "packages_backend_package_devdependencies_types_node"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/package.json",
+      "source_location": "L30",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_package_devdependencies",
+      "target": "packages_backend_package_devdependencies_vitest"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_deadletter",
+      "target": "packages_backend_convex_deadletter_onpipelinecomplete"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/importGuard.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_importguard_test",
+      "target": "packages_backend_convex_lib_allowlist"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_lib_allowlist",
+      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_lib_allowlist_rationale_9",
+      "target": "packages_backend_convex_lib_allowlist"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/importGuard.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_importguard_test",
+      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/run-smoke-dlq.mjs",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_run_smoke_dlq",
+      "target": "packages_backend_scripts_smokerun"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/run-smoke-dlq.mjs",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_run_smoke_dlq",
+      "target": "packages_backend_scripts_smokerun_must"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/run-smoke-dlq.mjs",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_run_smoke_dlq",
+      "target": "packages_backend_scripts_smokerun_pollpass"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun",
+      "target": "packages_backend_scripts_smokerun_backenddir"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun",
+      "target": "packages_backend_scripts_smokerun_convexbin"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun",
+      "target": "packages_backend_scripts_smokerun_invoke"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun",
+      "target": "packages_backend_scripts_smokerun_must"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun",
+      "target": "packages_backend_scripts_smokerun_pollpass"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun_rationale_5",
+      "target": "packages_backend_scripts_smokerun"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun_must",
+      "target": "packages_backend_scripts_smokerun_invoke"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/scripts/smokeRun.mjs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_scripts_smokerun_pollpass",
+      "target": "packages_backend_scripts_smokerun_invoke"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_dependency_graph"
     },
     {
       "relation": "contains",
@@ -6690,9 +8119,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L41",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_metrics"
     },
     {
       "relation": "contains",
@@ -6700,9 +8129,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L46",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary"
     },
     {
       "relation": "contains",
@@ -6710,9 +8139,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L19",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_tech_tracking"
     },
     {
       "relation": "contains",
@@ -6720,9 +8149,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L57",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_accomplishments"
     },
     {
       "relation": "contains",
@@ -6730,9 +8159,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L77",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_decisions_made"
     },
     {
       "relation": "contains",
@@ -6740,9 +8169,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L80",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan"
     },
     {
       "relation": "contains",
@@ -6750,9 +8179,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L69",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_files_created_modified"
     },
     {
       "relation": "contains",
@@ -6760,9 +8189,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L101",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_issues_encountered"
     },
     {
       "relation": "contains",
@@ -6770,9 +8199,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L108",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_next_phase_readiness"
     },
     {
       "relation": "contains",
@@ -6780,9 +8209,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L50",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_performance"
     },
     {
       "relation": "contains",
@@ -6790,9 +8219,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_task_commits"
     },
     {
       "relation": "contains",
@@ -6800,9 +8229,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L105",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_phase_01_plan_05_graphify_activation_ponytail_discipline_summary",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_user_setup_required"
     },
     {
       "relation": "contains",
@@ -6810,9 +8239,9 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_05_summary_deviations_from_plan",
-      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues",
-      "confidence_score": 1.0
+      "target": "planning_phases_01_foundation_governance_substrate_01_05_summary_auto_fixed_issues"
     },
     {
       "relation": "contains",
@@ -8187,28 +9616,6 @@
       "target": "packages_backend_convex_importguard_test_sources"
     },
     {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/importGuard.test.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_importguard_test",
-      "target": "packages_backend_convex_lib_allowlist"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/importGuard.test.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_importguard_test",
-      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/index.ts",
@@ -8227,26 +9634,6 @@
       "confidence_score": 1.0,
       "source": "packages_backend_convex_index",
       "target": "packages_backend_convex_index_workflow"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_lib_allowlist",
-      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
-    },
-    {
-      "relation": "rationale_for",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L9",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_lib_allowlist_rationale_9",
-      "target": "packages_backend_convex_lib_allowlist"
     },
     {
       "relation": "contains",
@@ -8630,256 +10017,6 @@
       "confidence_score": 1.0,
       "source": "packages_backend_convex_tsconfig_compileroptions",
       "target": "packages_backend_convex_tsconfig_compileroptions_target"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L12",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_dependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_devdependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_name"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L4",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_private"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_scripts"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_type"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L3",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package",
-      "target": "packages_backend_package_version"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L8",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_scripts",
-      "target": "packages_backend_package_scripts_codegen"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_scripts",
-      "target": "packages_backend_package_scripts_dev"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_scripts",
-      "target": "packages_backend_package_scripts_test"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L9",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_scripts",
-      "target": "packages_backend_package_scripts_typecheck"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L21",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_action_retrier"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_agent"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L15",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_auth"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L16",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_rag"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_rate_limiter"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_dev_workflow"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L22",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_convex_helpers"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L19",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_pikar_contracts"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L20",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_dependencies",
-      "target": "packages_backend_package_dependencies_pikar_core"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L27",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_devdependencies",
-      "target": "packages_backend_package_devdependencies_convex_test"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L25",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_devdependencies",
-      "target": "packages_backend_package_devdependencies_edge_runtime_vm"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_devdependencies",
-      "target": "packages_backend_package_devdependencies_types_node"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/package.json",
-      "source_location": "L28",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_package_devdependencies",
-      "target": "packages_backend_package_devdependencies_vitest"
     },
     {
       "relation": "contains",
@@ -9970,156 +11107,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements",
-      "target": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L90",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_out_of_scope"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_traceability"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v1_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L77",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v2_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L62",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_governance_operations"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_guardrails"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_human_review_delivery"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_intake_enrichment"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_knowledge_vault"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L49",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_private_beta"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L56",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_self_improvement"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L81",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v2_requirements",
-      "target": "planning_requirements_expansion"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -10256,96 +11243,6 @@
       "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
       "target": "planning_roadmap_phase_9_private_beta_productionization"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state",
-      "target": "planning_state_project_state"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L58",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_accumulated_context"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_current_position"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L35",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_performance_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L19",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_project_reference"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L86",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_session_continuity"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L80",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_blockers_concerns"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L60",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_decisions"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L76",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_pending_todos"
     },
     {
       "relation": "contains",
@@ -12909,5 +13806,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "a83da054d918d4bf2862506ce25e2886521c7d88"
+  "built_at_commit": "4c81bda9a1e000fb4fdfcb76b9092f9b2bf7c20c"
 }

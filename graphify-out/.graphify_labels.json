@@ -60,5 +60,10 @@
   "58": "01-08-PLAN.md",
   "59": "01-09-PLAN.md",
   "60": "graphify",
-  "61": "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary"
+  "61": "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary",
+  "62": "smoke.ts",
+  "63": "deadLetter.ts",
+  "64": "smokeAssert.ts",
+  "65": "Architecture Patterns",
+  "66": "run-smoke-reviewgate.mjs"
 }

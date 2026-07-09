@@ -1,16 +1,16 @@
 # Graph Report - Pikar-Ai  (2026-07-09)
 
 ## Corpus Check
-- 81 files · ~56,669 words
+- 89 files · ~59,961 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 666 nodes · 620 edges · 62 communities (53 shown, 9 thin omitted)
+- 711 nodes · 664 edges · 67 communities (56 shown, 11 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a83da054`
+- Built from commit: `4c81bda9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -65,6 +65,10 @@
 - convex.config.ts
 - graphify
 - Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary
+- smoke.ts
+- deadLetter.ts
+- smokeAssert.ts
+- Architecture Patterns
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -73,10 +77,10 @@
 4. `Phase 1: Foundation & Governance Substrate - Research` - 13 edges
 5. `Critical Pitfalls` - 13 edges
 6. `Stack Research — Convex Revision` - 13 edges
-7. `Phase 1 Plan 01: Foundation & Governance Substrate Summary` - 11 edges
-8. `Phase 1 Plan 2: Tenant-Scoping Substrate Summary` - 11 edges
-9. `Phase 1 Plan 03: Insert-Only Audit Module Summary` - 11 edges
-10. `Phase 1 Plan 4: Skills Registry & Loader Summary` - 11 edges
+7. `Phase 01 Plan 06: DLQ + awaitEvent-Timeout Race Smoke Patterns Summary` - 12 edges
+8. `Phase 1 Plan 01: Foundation & Governance Substrate Summary` - 11 edges
+9. `Phase 1 Plan 2: Tenant-Scoping Substrate Summary` - 11 edges
+10. `Phase 1 Plan 03: Insert-Only Audit Module Summary` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - None detected - all connections are within the same source files.
@@ -84,11 +88,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (62 total, 9 thin omitted)
+## Communities (67 total, 11 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
-Cohesion: 0.06
-Nodes (31): Alternatives Considered, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions, Phase 1: Foundation & Governance Substrate - Research (+23 more)
+Cohesion: 0.04
+Nodes (45): Alternatives Considered, Architecture Patterns, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions (+37 more)
 
 ### Community 1 - "package.json"
 Cohesion: 0.06
@@ -111,8 +115,8 @@ Cohesion: 0.10
 Nodes (15): modules, activateSkill, loadSkill(), seedSkills, modules, modules, Brand, CONTRACTS_PACKAGE_NAME (+7 more)
 
 ### Community 6 - "dependencies"
-Cohesion: 0.08
-Nodes (25): dependencies, convex, @convex-dev/action-retrier, @convex-dev/agent, @convex-dev/auth, @convex-dev/rag, @convex-dev/rate-limiter, @convex-dev/workflow (+17 more)
+Cohesion: 0.07
+Nodes (27): dependencies, convex, @convex-dev/action-retrier, @convex-dev/agent, @convex-dev/auth, @convex-dev/rag, @convex-dev/rate-limiter, @convex-dev/workflow (+19 more)
 
 ### Community 7 - "Implications for Roadmap"
 Cohesion: 0.08
@@ -191,8 +195,8 @@ Cohesion: 0.20
 Nodes (9): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Pending Todos, Performance Metrics, Project Reference, Project State (+1 more)
 
 ### Community 26 - "Common Pitfalls"
-Cohesion: 0.14
-Nodes (14): Architecture Patterns, Pattern 10: graphify on the repo (Windows 11), Pattern 11: Google OAuth verification paperwork (Week 1), Pattern 1: Component wiring (`convex.config.ts`), Pattern 2: Tenant-scoping wrapper (`customQuery`/`customMutation`), Pattern 3: Convex Auth minimal setup, Pattern 4: Insert-only audit module (OPSG-02), Pattern 5: Dead-letter via `onComplete` (OPSG-04) (+6 more)
+Cohesion: 0.39
+Nodes (6): backendDir, convexBin, invoke(), must(), pollPass(), IMPORTANT: on Windows + Node 24 the convex CLI process can crash during exit
 
 ### Community 27 - "package.json"
 Cohesion: 0.25
@@ -250,25 +254,33 @@ Nodes (3): exclude, extends, include
 Cohesion: 0.13
 Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
 
+### Community 62 - "smoke.ts"
+Cohesion: 0.18
+Nodes (10): armTimeout, fireTimeout, reviewEventValidator, sendDecision, boom, failingPipeline, recordReviewOutcome, reviewGate (+2 more)
+
+### Community 65 - "Architecture Patterns"
+Cohesion: 0.12
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
+
 ## Knowledge Gaps
-- **467 isolated node(s):** `Dependency graph`, `Tech tracking`, `Metrics`, `Performance`, `Accomplishments` (+462 more)
+- **497 isolated node(s):** `Intake & Enrichment`, `Executive Agent & Planning`, `Guardrails`, `Human Review & Delivery`, `Knowledge Vault` (+492 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **11 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Phase 1: Foundation & Governance Substrate - Research` connect `Architecture Patterns` to `Common Pitfalls`?**
-  _High betweenness centrality (0.004) - this node is a cross-community bridge._
-- **Why does `Architecture Patterns` connect `Common Pitfalls` to `Architecture Patterns`?**
-  _High betweenness centrality (0.002) - this node is a cross-community bridge._
-- **What connects `Dependency graph`, `Tech tracking`, `Metrics` to the rest of the system?**
-  _469 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Intake & Enrichment`, `Executive Agent & Planning`, `Guardrails` to the rest of the system?**
+  _500 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
-  _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.043478260869565216 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
 - **Should `Architecture Research` be split into smaller, more focused modules?**
   _Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected._
 - **Should `biome.json` be split into smaller, more focused modules?**
   _Cohesion score 0.07142857142857142 - nodes in this community are weakly interconnected._
+- **Should `Stack Research — Convex Revision` be split into smaller, more focused modules?**
+  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
+- **Should `skills.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.10153846153846154 - nodes in this community are weakly interconnected._

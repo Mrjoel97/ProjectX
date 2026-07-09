@@ -65,7 +65,7 @@
     "semantic_hash": ""
   },
   "packages/backend/.convex/local/default/config.json": {
-    "mtime": 1783572211.985318,
+    "mtime": 1783627019.5611858,
     "ast_hash": "de9e9f5cb8657f33d8729ddc7b6e3b62",
     "semantic_hash": ""
   },
@@ -120,8 +120,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/allowlist.ts": {
-    "mtime": 1783590728.475273,
-    "ast_hash": "44c90006d21630ffb1fc85b0897e42ae",
+    "mtime": 1783626713.3605208,
+    "ast_hash": "d5655b03451150d444c108e34ae07d14",
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/functions.ts": {
@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "packages/backend/package.json": {
-    "mtime": 1783572279.755756,
-    "ast_hash": "eb4b161023deb6167f7a02ccd19b4b1e",
+    "mtime": 1783627531.819222,
+    "ast_hash": "961b21fe25818921c400bf75840cd6eb",
     "semantic_hash": ""
   },
   "packages/backend/tsconfig.json": {
@@ -255,18 +255,18 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1783590943.993328,
-    "ast_hash": "b8764e0c1ef8bfe75450be235ad03281",
+    "mtime": 1783627726.4223914,
+    "ast_hash": "a72a8255ae995a9c331baa32de9a5202",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1783609365.5585616,
+    "mtime": 1783627726.2191231,
     "ast_hash": "d8d96d827e157b340c9721c35b368ff4",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1783591253.3481283,
-    "ast_hash": "4281b0cc70920344c69feb10a5172450",
+    "mtime": 1783627715.4178371,
+    "ast_hash": "a003cce0f653eb0d927235a8565b71e3",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -412,6 +412,46 @@
   ".planning/phases/01-foundation-governance-substrate/01-05-SUMMARY.md": {
     "mtime": 1783609354.100125,
     "ast_hash": "1f19fccf4504b899012fbfc22e1e3d70",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/deadLetter.ts": {
+    "mtime": 1783626653.630376,
+    "ast_hash": "fe848ffd7f6a315ff12eb8f0c567e2f4",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/review.ts": {
+    "mtime": 1783627250.2321267,
+    "ast_hash": "2b5a97f6af64bc9e1a6f79daac508e4b",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/smoke.ts": {
+    "mtime": 1783627505.0724523,
+    "ast_hash": "c2253c17f77b59b3f0ac55ee5a604f69",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/smokeAssert.ts": {
+    "mtime": 1783627520.2404165,
+    "ast_hash": "fb6a596d260cfd69eb456171c1751cfb",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/run-smoke-dlq.mjs": {
+    "mtime": 1783626738.7244308,
+    "ast_hash": "b960462bfade06227cd17f9a0e9a507f",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/run-smoke-reviewgate.mjs": {
+    "mtime": 1783626751.0429435,
+    "ast_hash": "8abf216a7f6e7794afa39da1a380242d",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/smokeRun.mjs": {
+    "mtime": 1783627258.6270359,
+    "ast_hash": "55045ebe83de64035eb4708ea0218ff8",
+    "semantic_hash": ""
+  },
+  ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md": {
+    "mtime": 1783627679.8392744,
+    "ast_hash": "9659dfeb0b6fb4ea45da20f4fa8cd2da",
     "semantic_hash": ""
   }
 }
