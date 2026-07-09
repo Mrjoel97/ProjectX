@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
+stopped_at: Completed 01-03-PLAN.md (audit insert-only, OPSG-02)
+last_updated: "2026-07-09T09:56:06.695Z"
+last_activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
+progress:
+  total_phases: 9
+  completed_phases: 0
+  total_plans: 9
+  completed_plans: 2
+  percent: 22
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
 stopped_at: Completed 01-01-PLAN.md
 last_updated: "2026-07-09T04:49:38.612Z"
 last_activity: 2026-07-09 — Completed 01-01 (monorepo + Convex backend substrate; SC-1 met)
 progress:
-  total_phases: 9
+  [██░░░░░░░░] 22%
   completed_phases: 0
   total_plans: 9
   completed_plans: 1
@@ -51,6 +67,7 @@ Progress: [█░░░░░░░░░] 11%
 
 *Updated after each plan completion*
 | Phase 01 P01 | 13 | 3 tasks | 34 files |
+| Phase 01 P03 | 8 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -66,6 +83,7 @@ Recent decisions affecting current work:
 - [Self-improvement]: Prompt-optimization loop is autonomous in v1 but eval-gated with rollback + kill switch (Phase 8).
 - [Phase 01]: Source-export packages/* (no build step) resolve through Convex esbuild + Next transpilePackages; proven via @pikar/contracts import in convex/schema.ts
 - [Phase 01]: TypeScript 7 removed baseUrl/non-relative paths; @pikar/* now resolves via pnpm workspace symlinks + package exports (no tsconfig paths)
+- [Phase 01]: Audit is insert-only: single internalMutation write surface; immutability enforced by convention + static-scan test (OPSG-02)
 
 ### Pending Todos
 
@@ -79,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-09T04:49:06.509Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-07-09T09:56:05.055Z
+Stopped at: Completed 01-03-PLAN.md (audit insert-only, OPSG-02)
 Resume file: None
