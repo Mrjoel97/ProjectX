@@ -34,6 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Any state change appends to the insert-only audit module (no update/delete functions exist), and a deliberately failed smoke-test workflow lands in the dead-letter table via `onComplete`.
   4. The `awaitEvent`-timeout race pattern and the WORM (S3 Object Lock) export cron stub are demonstrated on a smoke-test workflow.
   5. Google OAuth verification paperwork (privacy policy, verified domain, homepage) is submitted in Week 1, and graphify (git hook + MCP) is active on the repository.
+  6. A versioned skills registry (Convex `skills` table + loader contract) exists and the Executive Agent's seed skill document loads from it — no agent prompt is hardcoded (SkillOpt readiness, see research/SKILLOPT.md).
 **Plans**: TBD
 
 ### Phase 2: Thin End-to-End Slice
@@ -104,7 +105,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 
 ### Phase 8: Self-Improvement
-**Goal**: The system learns from real feedback and improves its own prompts under automated evaluation guardrails with instant rollback — sequenced last because the loop is meaningless until review/feedback data has accumulated.
+**Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop — see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback — sequenced last because the loop is meaningless until review/feedback data has accumulated.
 **Depends on**: Phase 7 (needs delivered-response feedback and a stable pipeline)
 **Requirements**: IMPR-01, IMPR-02, IMPR-03
 **Success Criteria** (what must be TRUE):

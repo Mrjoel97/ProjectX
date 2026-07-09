@@ -76,6 +76,7 @@ A user speaks or types a goal and the system reliably plans it, executes it with
 | Brief→executable-plan conversion ships with the live session in v1 | User-specified flow: session end → brief → permission → plan enters pipeline | — Pending |
 | Convex replaces Postgres/Redis/Inngest as the data+orchestration plane | Owner decision (2026-07-09) after honest tradeoff review: velocity + built-in realtime valued over portability; Convex-focused stack re-research mandated before roadmap | — Pending |
 | Graphify at the core: dev-time codebase graph (always active) + ingestion-time extraction for the knowledge vault | User mandate; extraction stored in the data plane, never served from graphify files at request time | — Pending |
+| SkillOpt (microsoft/SkillOpt) is the core skills setup + optimization layer | User mandate (2026-07-09): all agent prompts live as versioned skill docs in a Convex skills registry from Phase 1; Phase 8 optimizes them via SkillOpt's held-out-validation loop (satisfies IMPR-02's eval gate with peer-reviewed machinery) | — Pending |
 
 ---
 *Last updated: 2026-07-09 after data-plane decision (Convex) and graphify adoption*
