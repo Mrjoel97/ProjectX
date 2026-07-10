@@ -67,6 +67,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
 - [ ] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
 - [ ] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
+- [ ] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
 
 ### Private Beta
 
@@ -146,6 +147,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPSG-04 | Phase 1 | Complete |
 | OPSG-05 | Phase 7 | Pending |
 | OPSG-06 | Phase 2 | Pending |
+| OPSG-07 | Phase 2 | Pending |
 | BETA-01 | Phase 9 | Pending |
 | BETA-02 | Phase 9 | Pending |
 | BETA-03 | Phase 9 | Pending |

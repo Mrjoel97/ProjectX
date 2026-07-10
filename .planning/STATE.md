@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-07-PLAN.md (WORM export cron stub + cursor mechanics)
+stopped_at: Phase 01 closed with 01-08 Tasks 2-3 and 01-09 deferred to Phase 9 (blocked on legal entity). Next -> /gsd:plan-phase 02
 last_updated: "2026-07-10T02:45:00.000Z"
-last_activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
+last_activity: 2026-07-10 — 01-08 Task 1 done (homepage + GDPR privacy + Terms); deploy/OAuth deferred to Phase 9; OPSG-06/07 added
 progress:
   total_phases: 9
   completed_phases: 0
@@ -83,6 +83,11 @@ Recent decisions affecting current work:
 - [Phase 02]: `@convex-dev/aggregate` implements OPSG-01 counters. `audit` is append-only and unbounded, so a `.collect()`-based count eventually exceeds Convex read limits and HARD-FAILS rather than degrading
 - [Phase 03]: `@convex-dev/action-cache` implements GRDL-04 (not a new requirement — GRDL-04 already specified a tenant-namespaced cache). Cache key MUST include `tenantId` alongside `safeTextHash`: action-cache keys on the action's args, so omitting tenantId serves one tenant's LLM response to another — a cross-tenant leak, not a cache miss
 - [Auth]: STAY on `@convex-dev/auth` for v1. RBAC is EXPN-03 and teams are EXPN-06, both deferred; PROJECT.md: "v1 has a single user role", and BETA-01 already names Convex Auth. Clerk's org/RBAC feature set is the $300/mo Business plan and adds a platform (contra the consolidation goal); Better Auth is the natural in-Convex path IF EXPN-03/06 ever land. Convex Auth is beta (0.0.94) and Convex now promotes Better Auth — revisit at EXPN-03, not before. Migration cost is bounded because tenantQuery/tenantMutation already isolate the rest of the codebase from the identity provider
+
+- [Sequencing]: Google OAuth verification (01-09) and the public deploy (01-08 Tasks 2–3) are DEFERRED to Phase 9. Verification reads a privacy policy that must name a real data controller, and no legal entity exists yet — so the 2–4 week clock cannot start regardless of whether we deploy. Gmail **Testing mode** (100 test users, sensitive scopes permitted unverified, 7-day token expiry) carries Phases 2–8. Phase 2 SC-5 already assumed this ("a Gmail token nearing its 7-day expiry prompts the user to re-auth"). Deploying now would publish a ToS naming "[LEGAL ENTITY — NOT YET FORMED]" for zero gain
+- [Ops]: `convex deployment token create <name> --deployment prod --save-env <path>` mints a production deploy key from the CLI — deploy keys are NOT dashboard-only. `--save-env` writes it to a file so the secret never transits an agent's context. The key currently in `.env` is a `preview:` key (prefix names team:project); a production key's prefix names a deployment
+- [Ops]: Background `convex dev` / `next start` do not survive a session compaction. A blank page at :3111 or `insights` reporting "local backend isn't running" means the process died, not that the code broke. `convex dev` also reports a bogus non-zero exit on Windows/Node24 — check `curl 127.0.0.1:3210/version` instead of trusting the exit code (same class of bug as the smokeRun.mjs workaround)
+- [Phase 02]: OPSG-07 added — a dead-letter write must surface to the operator without database inspection. OPSG-05's full notification matrix stays in Phase 7, but the DLQ starts collecting failures in Phase 2, and a failure nobody sees is a failure nobody fixes
 
 ### Pending Todos
 

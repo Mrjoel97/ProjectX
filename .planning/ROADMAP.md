@@ -33,25 +33,26 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Every write flows through the `customQuery`/`customMutation` tenant wrapper — a query that omits `tenantId` scope cannot be written.
   3. Any state change appends to the insert-only audit module (no update/delete functions exist), and a deliberately failed smoke-test workflow lands in the dead-letter table via `onComplete`.
   4. The `awaitEvent`-timeout race pattern and the WORM (S3 Object Lock) export cron stub are demonstrated on a smoke-test workflow.
-  5. Google OAuth verification paperwork (privacy policy, verified domain, homepage) is submitted in Week 1, and graphify (git hook + MCP) is active on the repository.
+  5. ~~Google OAuth verification paperwork (privacy policy, verified domain, homepage) is submitted in Week 1~~ — **DEFERRED to Phase 9.** The homepage, privacy policy and Terms are written (01-08 Task 1). Submission is blocked on forming a legal entity: Google's review reads a privacy policy that must name a real data controller. Gmail **Testing mode** (100 test users, sensitive scopes permitted, 7-day token expiry — already anticipated by Phase 2 SC-5) carries Phases 2–8 with no verified domain and no public site. Verification's 2–4 week clock therefore blocks Phase 9 (private beta), not Phase 2. graphify (git hook + MCP) is active on the repository.
   6. A versioned skills registry (Convex `skills` table + loader contract) exists and the Executive Agent's seed skill document loads from it — no agent prompt is hardcoded (SkillOpt readiness, see research/SKILLOPT.md).
 **Plans**: 9 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Monorepo scaffold, five-component wiring, schema, auth, test harness, boot-check, README/CLAUDE.md (Wave 1)
-- [ ] 01-02-PLAN.md — Tenant-scoping customQuery/customMutation wrapper + raw-builder ban + isolation tests (Wave 2)
-- [ ] 01-03-PLAN.md — Insert-only audit module + taxonomy package + immutability scan [OPSG-02] (Wave 2)
-- [ ] 01-04-PLAN.md — Versioned skills registry + loader + Executive Agent seed skill (Wave 2)
-- [ ] 01-05-PLAN.md — graphify install: git hook + MCP on the repo (Wave 2)
-- [ ] 01-06-PLAN.md — DLQ via onComplete + awaitEvent-timeout race smoke workflows [OPSG-04] (Wave 3)
-- [ ] 01-07-PLAN.md — WORM export cron stub + export cursor mechanics (Wave 3)
-- [ ] 01-08-PLAN.md — Public homepage + privacy policy + Vercel deploy + domain verification (Wave 3)
-- [ ] 01-09-PLAN.md — Google OAuth consent flow + demo video + Week-1 verification submission (Wave 4)
+- [x] 01-01-PLAN.md — Monorepo scaffold, five-component wiring, schema, auth, test harness, boot-check, README/CLAUDE.md (Wave 1)
+- [x] 01-02-PLAN.md — Tenant-scoping customQuery/customMutation wrapper + raw-builder ban + isolation tests (Wave 2)
+- [x] 01-03-PLAN.md — Insert-only audit module + taxonomy package + immutability scan [OPSG-02] (Wave 2)
+- [x] 01-04-PLAN.md — Versioned skills registry + loader + Executive Agent seed skill (Wave 2)
+- [x] 01-05-PLAN.md — graphify install: git hook + MCP on the repo (Wave 2)
+- [x] 01-06-PLAN.md — DLQ via onComplete + awaitEvent-timeout race smoke workflows [OPSG-04] (Wave 3)
+- [x] 01-07-PLAN.md — WORM export cron stub + export cursor mechanics (Wave 3)
+- [~] 01-08-PLAN.md — Task 1 DONE (homepage + privacy + Terms, all static, build-green). Tasks 2–3 (Vercel deploy, domain + Search Console) **DEFERRED to Phase 9** — blocked on legal entity, and unnecessary for Phases 2–8 (Wave 3)
+- [ ] 01-09-PLAN.md — Google OAuth consent flow + demo video + verification submission — **DEFERRED to Phase 9.** Cannot submit: verification reads a privacy policy that must name a real data controller (Wave 4)
 
 ### Phase 2: Thin End-to-End Slice
 **Goal**: A user submits a typed goal and follows it all the way to a delivered email, approving it at a durable review gate, with the entire trail audited and visible live — the MVP spine that proves the core value proposition.
 **Depends on**: Phase 1
-**Requirements**: INTK-01, INTK-04, AGNT-01, AGNT-02, AGNT-03, REVW-01, DLVR-01, DLVR-03, OPSG-01, OPSG-06, BETA-04
+**Requirements**: INTK-01, INTK-04, AGNT-01, AGNT-02, AGNT-03, REVW-01, DLVR-01, DLVR-03, OPSG-01, OPSG-06, OPSG-07, BETA-04
+**Gmail runs in Testing mode**: 100 test users, `gmail.send` permitted unverified (users see an "unverified app" warning), and refresh tokens expire after 7 days — which is exactly what SC-5 below already anticipates. No verified domain, no public site, no legal entity required for this phase.
 **Components**: `@convex-dev/migrations` (OPSG-06 — adopt BEFORE the first schema change, not after); `@convex-dev/aggregate` for OPSG-01 counters — the `audit` table is append-only and unbounded, so any `.collect()`-based count will eventually exceed Convex read limits and hard-fail rather than degrade.
 **Success Criteria** (what must be TRUE):
   1. User submits a text request (with optional attachment upload) and watches its pipeline status and review queue update in real time via reactive `useQuery` subscriptions — no refresh.
