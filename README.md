@@ -36,8 +36,14 @@ pnpm install
 # 2. Create the Convex dev deployment + generate convex/_generated/
 #    (first run does --configure and requires a free Convex login: `npx convex login`)
 cd packages/backend
-npx convex dev            # leave running; writes CONVEX_DEPLOYMENT to .env.local
-                          #  and NEXT_PUBLIC_CONVEX_URL to apps/web/.env.local
+npx convex dev            # leave running; writes CONVEX_DEPLOYMENT and CONVEX_URL
+                          #  to packages/backend/.env.local
+
+# 2b. The web app needs that URL under its own name, in its own .env.local.
+#     `convex dev` does NOT do this for you in a monorepo. Without it,
+#     `pnpm build` fails at prerender: "No address provided to ConvexReactClient".
+cd ../../apps/web
+echo "NEXT_PUBLIC_CONVEX_URL=$(grep '^CONVEX_URL=' ../../packages/backend/.env.local | cut -d= -f2-)" > .env.local
 
 # 3. In a second terminal, from the repo root, start everything
 pnpm dev
