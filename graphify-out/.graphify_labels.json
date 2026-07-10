@@ -70,5 +70,8 @@
   "68": "wormCursor.ts",
   "69": "crons.ts",
   "70": "worm.ts",
-  "71": "run-smoke-worm.mjs"
+  "71": "run-smoke-worm.mjs",
+  "72": "Phase 01 Plan 07: WORM Export Cron Stub Summary",
+  "73": "Architecture Patterns",
+  "74": "providers.tsx"
 }

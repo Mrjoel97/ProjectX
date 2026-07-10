@@ -1,16 +1,16 @@
-# Graph Report - Pikar-Ai  (2026-07-09)
+# Graph Report - Pikar-Ai  (2026-07-10)
 
 ## Corpus Check
-- 94 files · ~61,433 words
+- 96 files · ~63,820 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 726 nodes · 674 edges · 72 communities (57 shown, 15 thin omitted)
+- 744 nodes · 689 edges · 75 communities (57 shown, 18 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2d6ca424`
+- Built from commit: `4fadfa26`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,6 +61,7 @@
 - index.ts
 - tenant.ts
 - Sidecars
+- page.tsx
 - next.config.ts
 - convex.config.ts
 - graphify
@@ -74,6 +75,9 @@
 - crons.ts
 - worm.ts
 - run-smoke-worm.mjs
+- Phase 01 Plan 07: WORM Export Cron Stub Summary
+- Architecture Patterns
+- providers.tsx
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -93,11 +97,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (72 total, 15 thin omitted)
+## Communities (75 total, 18 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
-Cohesion: 0.04
-Nodes (45): Alternatives Considered, Architecture Patterns, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions (+37 more)
+Cohesion: 0.06
+Nodes (31): Alternatives Considered, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions, Phase 1: Foundation & Governance Substrate - Research (+23 more)
 
 ### Community 1 - "package.json"
 Cohesion: 0.06
@@ -137,7 +141,7 @@ Nodes (23): Alternatives Considered, Auth: Better Auth (over Auth.js / Clerk), C
 
 ### Community 10 - "dependencies"
 Cohesion: 0.09
-Nodes (21): dependencies, convex, next, @pikar/contracts, @pikar/core, react, react-dom, zod (+13 more)
+Nodes (22): dependencies, convex, next, @pikar/contracts, @pikar/core, react, react-dom, zod (+14 more)
 
 ### Community 11 - "result.ts"
 Cohesion: 0.13
@@ -231,10 +235,6 @@ Nodes (4): addItem, listItems, tenantMutation, tenantQuery
 Cohesion: 0.20
 Nodes (9): Clean-clone boot order (run verbatim), Common commands, Dev tooling — build discipline & repo knowledge graph, graphify — repo knowledge graph (query before you read), Pikar AI, ponytail — minimal-code discipline, Repository layout, Secrets plane (+1 more)
 
-### Community 34 - "layout.tsx"
-Cohesion: 0.40
-Nodes (3): metadata, convex, Providers()
-
 ### Community 35 - "importGuard.test.ts"
 Cohesion: 0.40
 Nodes (3): sources, NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by, RAW_BUILDER_ALLOWLIST
@@ -271,25 +271,33 @@ Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 Cohesion: 0.50
 Nodes (3): advanceCursor, auditSince, getCursor
 
+### Community 72 - "Phase 01 Plan 07: WORM Export Cron Stub Summary"
+Cohesion: 0.13
+Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
+
+### Community 73 - "Architecture Patterns"
+Cohesion: 0.14
+Nodes (14): Architecture Patterns, Pattern 10: graphify on the repo (Windows 11), Pattern 11: Google OAuth verification paperwork (Week 1), Pattern 1: Component wiring (`convex.config.ts`), Pattern 2: Tenant-scoping wrapper (`customQuery`/`customMutation`), Pattern 3: Convex Auth minimal setup, Pattern 4: Insert-only audit module (OPSG-02), Pattern 5: Dead-letter via `onComplete` (OPSG-04) (+6 more)
+
 ## Knowledge Gaps
-- **506 isolated node(s):** `crons`, `exportAudit`, `getCursor`, `auditSince`, `advanceCursor` (+501 more)
+- **521 isolated node(s):** `metadata`, `metadata`, `structuredData`, `name`, `version` (+516 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **What connects `crons`, `NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by`, `exportAudit` to the rest of the system?**
-  _509 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `Phase 1: Foundation & Governance Substrate - Research` connect `Architecture Patterns` to `Architecture Patterns`?**
+  _High betweenness centrality (0.003) - this node is a cross-community bridge._
+- **Why does `Architecture Patterns` connect `Architecture Patterns` to `Architecture Patterns`?**
+  _High betweenness centrality (0.002) - this node is a cross-community bridge._
+- **What connects `metadata`, `metadata`, `structuredData` to the rest of the system?**
+  _524 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
-  _Cohesion score 0.043478260869565216 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
 - **Should `Architecture Research` be split into smaller, more focused modules?**
   _Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected._
 - **Should `biome.json` be split into smaller, more focused modules?**
   _Cohesion score 0.07142857142857142 - nodes in this community are weakly interconnected._
-- **Should `Stack Research — Convex Revision` be split into smaller, more focused modules?**
-  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
-- **Should `skills.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.10153846153846154 - nodes in this community are weakly interconnected._
