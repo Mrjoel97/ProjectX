@@ -60,7 +60,18 @@ Plans:
   3. An approved response is delivered to a real inbox via Gmail (Testing mode); an invalid/unauthenticated request is rejected with a notification and an auditable "Request Rejected — Validation Failed" outcome.
   4. An unknown/invalid routing value is sent to the dead-letter store instead of silently defaulting.
   5. Every request produces telemetry (tokens, cost, duration, decision counts, review outcome) and a full audit trail, and a Gmail token nearing its 7-day expiry prompts the user to re-auth before it breaks.
-**Plans**: TBD
+**Plans**: 9 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Migrations + aggregate components, +5 tables, first migration, audit aggregate wiring (Wave 1)
+- [ ] 02-02-PLAN.md — routingDecision contract + two seeded skills + LLM route/draft action via AI Gateway (Wave 2)
+- [ ] 02-03-PLAN.md — Submit mutation + INTK-04 validation + requests queries + in-app notifications (Wave 2)
+- [ ] 02-04-PLAN.md — Review-gate decision union + attempt-suffixed event + write-once telemetry (Wave 2)
+- [ ] 02-05-PLAN.md — Gmail gmail.modify OAuth connect flow + token storage + REST send + token-age cron (Wave 2)
+- [ ] 02-06-PLAN.md — Pipeline workflow spine + operator dead-letter surface + full-spine/DLQ smoke (Wave 3)
+- [ ] 02-07-PLAN.md — Google sign-in + Next.js auth wiring + app shell + persistent DLQ badge + privacy edit (Wave 4)
+- [ ] 02-08-PLAN.md — Submit form + attachment picker + live requests list (Wave 5)
+- [ ] 02-09-PLAN.md — Review queue + collapsed gate + ops page + connect-gmail + reconnect banner (Wave 5)
 
 ### Phase 3: Guardrails
 **Goal**: Every request passes cost, PII, and quality guardrails before any external model call, and runaway spend is structurally impossible — governance as a shipped product feature, slotted into the existing pipeline steps.
@@ -147,7 +158,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
-| 2. Thin End-to-End Slice | 0/TBD | Not started | - |
+| 2. Thin End-to-End Slice | 0/9 | Not started | - |
 | 3. Guardrails | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
