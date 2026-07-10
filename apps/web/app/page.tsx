@@ -4,7 +4,7 @@ import { CONTACT, SITE } from "./legal";
 export const metadata: Metadata = {
   title: "Pikar AI — nothing sends without your approval",
   description:
-    "Speak or type a goal. Pikar AI plans it, runs it under cost and privacy guardrails, holds it for your approval, then delivers — and writes every step to a log it cannot edit.",
+    "Speak or type a goal. Pikar AI plans it, holds it for your approval, then executes it autonomously under cost and privacy guardrails — reporting every stage and writing each step to a log it cannot edit.",
   alternates: { canonical: SITE },
 };
 
@@ -43,7 +43,7 @@ const structuredData = {
       operatingSystem: "Web",
       url: SITE,
       description:
-        "Turns a spoken or typed goal into a planned, guardrailed, human-approved workflow that delivers real output by email, with a full audit trail.",
+        "Turns a spoken or typed goal into a planned, guardrailed workflow that you approve once and Pikar then executes autonomously — connecting to your tools, reporting each stage, and writing every action to an append-only audit log.",
       author: { "@type": "Organization", name: "Pikar AI" },
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
@@ -75,11 +75,11 @@ export default function Home() {
           <div>
             <p className="eyebrow">Human approval required</p>
             <h1>
-              Your AI drafts it. <em>You</em> release it.
+              It plans and executes. <em>You</em> hold the gate.
             </h1>
             <p className="lede">
-              Say what you want done. Pikar plans it, runs it behind guardrails, and stops
-              at the gate — until you approve.
+              Say what you want done. Pikar plans it, shows you the plan, and runs it end to
+              end once you approve — reporting every step, and stopping the moment you say so.
             </p>
             <div className="cta-row">
               <a className="cta" href={`mailto:${CONTACT}?subject=Pikar%20AI%20access`}>
@@ -144,17 +144,18 @@ export default function Home() {
               <div>
                 <strong>It stops at the gate</strong>
                 <p>
-                  You approve, edit, or reject. Nothing reaches the outside world without
-                  your explicit sign-off.
+                  You see the plan before it runs. Approve, edit, or reject — nothing
+                  executes without your explicit sign-off.
                 </p>
               </div>
             </li>
             <li>
               <div>
-                <strong>Pikar delivers</strong>
+                <strong>Pikar runs it, and reports</strong>
                 <p>
-                  The approved email sends on your behalf, and every step is written to an
-                  append-only log.
+                  Approved steps execute on your behalf. You are notified as each completes,
+                  every action is written to an append-only log, and you can halt it at any
+                  time.
                 </p>
               </div>
             </li>
@@ -165,17 +166,17 @@ export default function Home() {
           <h2>What it will not do</h2>
           <div className="grid-3">
             <div>
-              <h3>Send without you</h3>
+              <h3>Start without you</h3>
               <p>
-                Pikar drafts; you decide. There is no autonomous send, and no setting that
-                enables one.
+                Pikar shows you the plan and waits. Nothing runs until you approve it, and
+                you can halt a running automation at any time.
               </p>
             </div>
             <div>
-              <h3>Read your mail</h3>
+              <h3>Delete your email</h3>
               <p>
-                Pikar requests one Gmail permission — the one that sends. It cannot read,
-                search, or list your inbox.
+                Pikar can read, draft, send, and organise. It cannot permanently delete a
+                message — we never ask Google for that permission.
               </p>
             </div>
             <div>

@@ -69,6 +69,11 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
 - [ ] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
 
+### Discoverability
+
+- [x] **DISC-01**: Every public page emits valid JSON-LD structured data. No field is fabricated — `aggregateRating`, `review`, and `logo` stay absent until genuine ratings and a crawlable logo exist, because inventing them earns a Google manual action
+- [x] **DISC-02**: The site is crawlable and machine-readable: `robots.txt` (allowing AI crawlers), `sitemap.xml` listing every public route, canonical URLs, and `/llms.txt` so agents that browse the web can understand what Pikar is. **Every new public page must be added to `app/sitemap.ts`** — a page absent from the sitemap may never be crawled
+
 ### Private Beta
 
 - [ ] **BETA-01**: New users can sign up only with a valid invite code (Convex Auth)
@@ -148,6 +153,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPSG-05 | Phase 7 | Pending |
 | OPSG-06 | Phase 2 | Pending |
 | OPSG-07 | Phase 2 | Pending |
+| DISC-01 | Phase 1 | Complete |
+| DISC-02 | Phase 1 | Complete |
 | BETA-01 | Phase 9 | Pending |
 | BETA-02 | Phase 9 | Pending |
 | BETA-03 | Phase 9 | Pending |

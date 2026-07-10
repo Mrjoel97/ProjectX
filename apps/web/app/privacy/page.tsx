@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: "Privacy Policy — Pikar AI",
   description:
-    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.send scope, and your rights under the GDPR.",
+    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.modify scope, and your rights under the GDPR.",
   alternates: { canonical: `${SITE}/privacy` },
 };
 
@@ -60,7 +60,9 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Google user data.</strong> If you connect a Google account, the OAuth tokens that
-          permit us to send email as you. See section 4.
+          permit our agents to act on your mailbox, and the content of the messages they read in
+          order to do so. This necessarily includes personal data about the people who write to
+          you. See section 4.
         </li>
         <li>
           <strong>Operational records.</strong> An append-only audit log of actions taken on your
@@ -110,34 +112,74 @@ export default function Privacy() {
 
       <h2>4. Google user data</h2>
       <p>
-        Pikar requests the <code>gmail.send</code> scope, and only that Gmail scope. We use it for
-        exactly one purpose: to send an email that you have explicitly reviewed and approved in the
-        application.
+        If you choose to connect a Google account, Pikar requests the <code>gmail.modify</code>{" "}
+        scope. Google classifies this as a <strong>restricted</strong> scope, because it grants wide
+        access to your mailbox. We want to be direct about what that means:
+      </p>
+      <p>
+        <strong>
+          Our agents can read the email in your mailbox, draft and send messages as you, and
+          organise your mail with labels.
+        </strong>{" "}
+        That access is what allows Pikar to act as an assistant rather than a text box. We do not
+        pretend otherwise.
       </p>
       <ul>
         <li>
-          <strong>We do not read your mailbox.</strong> The <code>gmail.send</code> scope does not
-          grant the ability to read, search, or list your messages, and we do not request any scope
-          that does.
+          <strong>You grant access once, deliberately.</strong> Nothing is accessed until you
+          connect the account through Google&rsquo;s own consent screen. We ask once, not repeatedly,
+          so that the assistant can work without interrupting you — and you can withdraw that
+          access at any time (section 10). Before connecting, our access to your mailbox is zero.
         </li>
         <li>
-          <strong>We never send without your approval.</strong> Every outbound message is presented
-          to you first. Nothing is sent automatically.
+          <strong>We cannot permanently delete your email.</strong> Deletion requires the{" "}
+          <code>https://mail.google.com/</code> scope. We do not request it, and therefore cannot
+          use it.
         </li>
         <li>
-          <strong>How it is stored.</strong> OAuth tokens are held in our Convex database, encrypted
-          at rest by the platform, and scoped so they are accessible only to your account.
+          <strong>You approve the automation before it runs.</strong> Pikar presents a plan of what
+          it intends to do. Work begins only after you approve that plan, and you are notified as it
+          proceeds. You can stop it.
         </li>
         <li>
-          <strong>How it is shared.</strong> We do not sell Google user data, and we do not transfer
-          it to third parties, except as strictly necessary to send the message you approved, or
-          where required by law.
+          <strong>What we do with message content.</strong> We read messages to understand context,
+          to draft replies, and to carry out the work you approved. Message content is processed for
+          that purpose and is not retained beyond what is needed to do it.
+        </li>
+        <li>
+          <strong>It reaches our AI provider.</strong> To draft or summarise, message content is
+          sent to the large-language-model provider named in section 7, under contractual terms that
+          forbid retaining it or training on it.
+        </li>
+        <li>
+          <strong>It never reaches our audit log.</strong> The append-only log records references,
+          identifiers, hashes and counts — never the content of your messages. See section 9.
+        </li>
+        <li>
+          <strong>How tokens are stored.</strong> OAuth tokens are held in our Convex database,
+          encrypted at rest by the platform, and scoped so they are accessible only to your account.
+        </li>
+        <li>
+          <strong>We do not sell it,</strong> and we do not transfer it to third parties except the
+          processors in section 7, or where required by law.
         </li>
         <li>
           <strong>We do not use it to train models.</strong> Google user data is never used to
-          develop, improve, or train generalised AI or machine-learning models.
+          develop, improve, or train generalised AI or machine-learning models. Google&rsquo;s
+          policies prohibit this for restricted-scope data, and so do we.
         </li>
       </ul>
+      <p>
+        Because <code>gmail.modify</code> is a restricted scope, Pikar is additionally subject to an
+        independent annual security assessment under Google&rsquo;s requirements.
+      </p>
+      <p>
+        <strong>A note about other people.</strong> Your mailbox contains messages written by people
+        who have no relationship with Pikar. When you connect your account, you instruct us to
+        process their personal data on your behalf. You are responsible for having a lawful basis to
+        do so. We process it only to serve you, never to build profiles, and never for any purpose
+        of our own.
+      </p>
 
       <h2>5. Limited Use</h2>
       <p>
@@ -153,11 +195,23 @@ export default function Privacy() {
 
       <h2>6. Automated decision-making</h2>
       <p>
-        Pikar uses AI models to plan tasks and draft content. It does <strong>not</strong> make
-        decisions producing legal or similarly significant effects about you by automated means
-        alone. Every action that leaves the system — in particular, every email — requires your
-        explicit human approval before it is carried out. You are therefore not subject to a
-        decision based solely on automated processing within the meaning of Article 22 GDPR.
+        Pikar uses AI models to plan tasks, read context, and draft content, and it then carries
+        that work out autonomously. This is the point of the product. We want you to understand
+        precisely where the human sits.
+      </p>
+      <p>
+        <strong>You approve the plan before it runs.</strong> Pikar shows you what it intends to do.
+        Nothing executes until you approve, you are notified as each stage completes, and you can
+        halt a running automation at any time. Individual steps within an approved plan are carried
+        out automatically — that is what you approved.
+      </p>
+      <p>
+        Pikar does not make decisions producing legal or similarly significant effects about you by
+        automated means alone, within the meaning of Article 22 GDPR: a human — you — authorises
+        each automation, and retains the ability to intervene and to obtain an explanation of what
+        was done, from the audit log. If we ever introduce processing that would fall within
+        Article 22, we will tell you before it begins and provide the safeguards that Article
+        requires.
       </p>
 
       <h2>7. Who we share data with</h2>
@@ -176,12 +230,15 @@ export default function Privacy() {
           <strong>Amazon Web Services</strong> — immutable archival storage of the audit log.
         </li>
         <li>
-          <strong>Google</strong> — delivery of the emails you approve, via the Gmail API.
+          <strong>Google</strong> — reading, organising, and sending mail in your connected mailbox,
+          via the Gmail API.
         </li>
         <li>
-          <strong>[LLM PROVIDER — TBD]</strong> — generation of drafts and plans from your
-          instructions. This provider is not yet selected; this policy will be updated to name it
-          before any such processing begins.
+          <strong>[LLM PROVIDER — TBD]</strong> — generation of plans, summaries, and drafts. This
+          provider receives the content of messages our agents read. It will be selected only on
+          terms that forbid retention and forbid training on your data, as Google&rsquo;s
+          restricted-scope policy requires. This provider is not yet selected; this policy will be
+          updated to name it before any such processing begins.
         </li>
       </ul>
       <p>

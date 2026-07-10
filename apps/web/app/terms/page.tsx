@@ -74,9 +74,15 @@ export default function Terms() {
 
       <h2>4. What the service does</h2>
       <p>
-        You give Pikar a goal. It plans the work, runs it under cost and content guardrails, and
-        presents the result to you. Nothing is delivered to anyone outside the system until you
-        approve it. Each step is written to an append-only audit log.
+        You give Pikar a goal. It plans the work and presents that plan to you. Once you approve it,
+        Pikar carries the plan out autonomously under cost and content guardrails, notifies you as
+        stages complete, and writes every step to an append-only audit log. You can halt a running
+        automation at any time.
+      </p>
+      <p>
+        If you connect a Google account, Pikar&rsquo;s agents can read your email, draft and send
+        messages as you, and organise your mail. You grant this once, through Google&rsquo;s consent
+        screen, and may revoke it at any time. Pikar cannot permanently delete your email.
       </p>
 
       <h2>5. AI-generated output</h2>
@@ -94,11 +100,15 @@ export default function Terms() {
 
       <h2>6. Email sent through your Google account</h2>
       <p>
-        If you connect a Google account, Pikar sends approved messages using the{" "}
-        <code>gmail.send</code> permission. Those messages are sent <strong>from your mailbox, as
-        you</strong>. In law and in fact, <strong>you are the sender.</strong>
+        If you connect a Google account, Pikar acts on your mailbox using the{" "}
+        <code>gmail.modify</code> permission. Messages it sends leave <strong>from your mailbox, as
+        you</strong>. In law and in fact, <strong>you are the sender</strong> — including messages
+        sent autonomously as part of an automation you approved.
       </p>
-      <p>You are solely responsible for every message you approve, and you agree that you will not use Pikar to send:</p>
+      <p>
+        You are solely responsible for every message sent from your account through Pikar, and you
+        agree that you will not use Pikar to send:
+      </p>
       <ul>
         <li>
           unsolicited bulk or commercial email, or any message that breaches applicable

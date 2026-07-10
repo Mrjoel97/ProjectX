@@ -1,0 +1,26 @@
+# Pikar AI
+
+> A governed agentic AI operating layer. You state a goal in plain language; Pikar plans it,
+> shows you the plan, and — once you approve — executes it autonomously under cost and privacy
+> guardrails, reporting each stage and writing every action to an append-only audit log.
+
+Pikar AI is an AI chief of staff for solopreneurs and small teams. Its distinguishing property is
+governance: a human approves the plan before any work runs, guardrails (cost ceilings, PII
+redaction, quality checks) execute before any external model call, and every action is recorded in
+a log that cannot be edited or deleted.
+
+With the user's explicit one-time consent, Pikar's agents connect to the user's tools — beginning
+with Gmail, where they can read, draft, send, and organise mail. Pikar never requests permission to
+permanently delete email.
+
+## Pages
+
+- [Home](https://pikar-ai.com/): What Pikar AI is, how it works, and the guarantees it makes.
+- [Privacy Policy](https://pikar-ai.com/privacy): How data is collected, used, stored and shared,
+  including Google user data and GDPR rights.
+- [Terms of Service](https://pikar-ai.com/terms): Terms governing use, including responsibility for
+  messages sent through a connected account.
+
+## Contact
+
+joel@pikar-ai.com
