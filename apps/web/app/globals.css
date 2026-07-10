@@ -1,0 +1,87 @@
+/* ponytail: hand-rolled minimal styles, no component library (plan 01-08 says so).
+   Upgrade path: swap for Tailwind/shadcn when the app UI lands in a later phase. */
+
+:root {
+  --fg: #14151a;
+  --muted: #5b6070;
+  --bg: #ffffff;
+  --accent: #2f5bd8;
+  --rule: #e4e6ec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #eceef3;
+    --muted: #a0a6b6;
+    --bg: #0f1116;
+    --accent: #8aa6ff;
+    --rule: #262a35;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 2rem;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 5vw, 2.6rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 2rem 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin: 0 0 2rem;
+}
+
+ol,
+ul {
+  padding-left: 1.25rem;
+}
+
+li {
+  margin: 0.35rem 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+footer a {
+  margin-right: 1rem;
+}
+
+.updated {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0;
+}
