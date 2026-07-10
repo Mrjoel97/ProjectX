@@ -492,6 +492,19 @@ a {
   margin: 0 0 2rem;
 }
 
+/* Draft banner on /privacy and /terms. Renders only while app/legal.ts still holds
+   unresolved placeholders, and disappears on its own once they are filled in.
+   --held-text (not --held) because this sits on light paper: see the contrast note
+   at the top of this file. */
+.notice {
+  border-left: 3px solid var(--held-text);
+  background: color-mix(in srgb, var(--held-text) 7%, transparent);
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 2.5rem;
+  font-size: 0.94rem;
+  color: var(--ink);
+}
+
 /* ---------- footer ---------- */
 
 .foot {

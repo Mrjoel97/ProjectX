@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-
-const SITE = "https://pikar-ai.com";
-const CONTACT = "joel@pikar-ai.com";
+import { CONTACT, SITE } from "./legal";
 
 export const metadata: Metadata = {
   title: "Pikar AI — nothing sends without your approval",
@@ -215,6 +213,7 @@ export default function Home() {
 
         <footer className="foot">
           <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
           <span className="spacer">&copy; {new Date().getFullYear()} Pikar AI</span>
         </footer>
