@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 01 closed with 01-08 Tasks 2-3 and 01-09 deferred to Phase 9 (blocked on legal entity). Next -> /gsd:plan-phase 02
-last_updated: "2026-07-10T02:45:00.000Z"
-last_activity: 2026-07-10 — 01-08 Task 1 done (homepage + GDPR privacy + Terms); deploy/OAuth deferred to Phase 9; OPSG-06/07 added
+stopped_at: "Phase 2 context gathered (43 decisions, 9 areas). Next -> /gsd:plan-phase 2"
+last_updated: "2026-07-10T15:08:52.197Z"
+last_activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 78
 ---
 
@@ -107,9 +107,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10T02:45:00.000Z
-Stopped at: Completed 01-07-PLAN.md (WORM export cron stub + cursor mechanics)
-Resume file: None
+Last session: 2026-07-10T15:08:52.187Z
+Stopped at: Phase 2 context gathered (43 decisions, 9 areas). Next -> /gsd:plan-phase 2
+Resume file: .planning/phases/02-thin-end-to-end-slice/02-CONTEXT.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
