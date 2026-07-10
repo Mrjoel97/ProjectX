@@ -51,7 +51,8 @@ Plans:
 ### Phase 2: Thin End-to-End Slice
 **Goal**: A user submits a typed goal and follows it all the way to a delivered email, approving it at a durable review gate, with the entire trail audited and visible live — the MVP spine that proves the core value proposition.
 **Depends on**: Phase 1
-**Requirements**: INTK-01, INTK-04, AGNT-01, AGNT-02, AGNT-03, REVW-01, DLVR-01, DLVR-03, OPSG-01, BETA-04
+**Requirements**: INTK-01, INTK-04, AGNT-01, AGNT-02, AGNT-03, REVW-01, DLVR-01, DLVR-03, OPSG-01, OPSG-06, BETA-04
+**Components**: `@convex-dev/migrations` (OPSG-06 — adopt BEFORE the first schema change, not after); `@convex-dev/aggregate` for OPSG-01 counters — the `audit` table is append-only and unbounded, so any `.collect()`-based count will eventually exceed Convex read limits and hard-fail rather than degrade.
 **Success Criteria** (what must be TRUE):
   1. User submits a text request (with optional attachment upload) and watches its pipeline status and review queue update in real time via reactive `useQuery` subscriptions — no refresh.
   2. User sees the Executive Agent's routing decision and step plan before anything runs, and can approve, edit, or reject the generated response.
@@ -64,6 +65,7 @@ Plans:
 **Goal**: Every request passes cost, PII, and quality guardrails before any external model call, and runaway spend is structurally impossible — governance as a shipped product feature, slotted into the existing pipeline steps.
 **Depends on**: Phase 2
 **Requirements**: GRDL-01, GRDL-02, GRDL-03, GRDL-04, GRDL-05, GRDL-06
+**Components**: `@convex-dev/action-cache` implements GRDL-04. The cache key MUST include `tenantId` alongside `safeTextHash` — action-cache keys on the action's args, so omitting `tenantId` would serve one tenant's LLM response to another. That is a cross-tenant data leak, not a cache miss. GRDL-02 additionally forbids raw PII in the key, hence hashing `safeText` rather than keying on it.
 **Success Criteria** (what must be TRUE):
   1. Every request is PII-scanned and redacted to `safeText` before any external model call, and an unknown/null scan result fails closed (request stops rather than proceeding).
   2. No raw PII appears in any log, telemetry record, or cache key — redaction always precedes logging (redact-then-log ordering enforced as a step contract).
@@ -143,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Governance Substrate | 0/9 | Not started | - |
+| 1. Foundation & Governance Substrate | 7/9 | In progress | - |
 | 2. Thin End-to-End Slice | 0/TBD | Not started | - |
 | 3. Guardrails | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
