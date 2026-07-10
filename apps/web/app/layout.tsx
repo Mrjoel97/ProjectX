@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Pikar AI",
+  metadataBase: new URL("https://pikar-ai.com"),
+  title: { default: "Pikar AI", template: "%s" },
   description: "Governed agentic AI operating layer",
 };
 
