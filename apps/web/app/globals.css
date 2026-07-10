@@ -1,87 +1,540 @@
-/* ponytail: hand-rolled minimal styles, no component library (plan 01-08 says so).
-   Upgrade path: swap for Tailwind/shadcn when the app UI lands in a later phase. */
+/* Pikar AI — "custody & clearance".
+   The subject's world is: a draft is HELD, stamped, RELEASED, and appended to a
+   log that cannot be edited. Amber is spent in exactly one place: the gate.
+   ponytail: hand-rolled, no component library. Upgrade path: adopt a design
+   system only once the authed app UI needs one (later phase). */
 
 :root {
-  --fg: #14151a;
-  --muted: #5b6070;
-  --bg: #ffffff;
-  --accent: #2f5bd8;
-  --rule: #e4e6ec;
+  --paper: #f2f3f5;
+  --ink: #0e1419;
+  --ink-soft: #55606c;
+  --glass: #16202b;
+  --glass-line: #2b3a4a;
+  --held: #f0a22e;
+  /* Amber has ~1.9:1 on light paper — fails WCAG even for large text. On the dark
+     --glass panel it is fine. So text-on-paper uses a darkened amber (~4.6:1);
+     --held stays for marks on dark surfaces only. */
+  --held-text: #8f5406;
+  --released: #3e9e75;
+  --rule: #d8dbe0;
+
+  --step: clamp(1rem, 0.6rem + 1.4vw, 1.5rem);
+  --shell: 68rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fg: #eceef3;
-    --muted: #a0a6b6;
-    --bg: #0f1116;
-    --accent: #8aa6ff;
-    --rule: #262a35;
+    --paper: #0b0f14;
+    --ink: #e7eaee;
+    --ink-soft: #8c96a3;
+    --glass: #121b25;
+    --glass-line: #2b3a4a;
+    --rule: #232a33;
+    /* On the dark page the bright amber already clears contrast — use it directly. */
+    --held-text: #f0a22e;
   }
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  max-width: 44rem;
-  margin: 0 auto;
-  padding: 3rem 1.25rem 2rem;
-}
-
-h1 {
-  font-size: clamp(1.9rem, 5vw, 2.6rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.75rem;
-}
-
-h2 {
-  font-size: 1.15rem;
-  margin: 2rem 0 0.5rem;
-  letter-spacing: -0.01em;
-}
-
-.lede {
-  font-size: 1.15rem;
-  color: var(--muted);
-  margin: 0 0 2rem;
-}
-
-ol,
-ul {
-  padding-left: 1.25rem;
-}
-
-li {
-  margin: 0.35rem 0;
+:focus-visible {
+  outline: 2px solid var(--held-text);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 a {
-  color: var(--accent);
+  color: inherit;
 }
 
-footer {
-  margin-top: 3rem;
-  padding-top: 1.25rem;
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--step);
+}
+
+/* ---------- eyebrow: a real status label, not decoration ---------- */
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 1.25rem;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--released);
+  flex: none;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+  padding: clamp(3rem, 8vw, 6rem) 0 clamp(2.5rem, 6vw, 4.5rem);
+}
+
+@media (min-width: 62rem) {
+  .hero {
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: center;
+    gap: 4rem;
+  }
+}
+
+.hero h1 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(2.4rem, 1.2rem + 4.4vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  margin: 0 0 1.25rem;
+  text-wrap: balance;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--held-text);
+}
+
+.lede {
+  font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.25rem);
+  color: var(--ink-soft);
+  max-width: 34ch;
+  margin: 0 0 2rem;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.cta {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.85rem 1.4rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  transition: transform 120ms ease;
+}
+
+.cta:hover {
+  transform: translateY(-1px);
+}
+
+.cta-ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
+/* ---------- signature: THE GATE ---------- */
+
+.gate {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+  color: #cfd7e0;
+  box-shadow: 0 24px 60px -32px rgb(14 20 25 / 55%);
+}
+
+.gate-head {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7b8899;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* the draft being held */
+.draft {
+  position: relative;
+  background: #1e2a37;
+  border: 1px solid var(--glass-line);
+  padding: 1rem 1rem 0.9rem;
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.draft-to {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: #7b8899;
+  margin: 0 0 0.4rem;
+}
+
+.draft-body {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #dbe2ea;
+}
+
+/* the stamp: presses down once, then stays */
+.stamp {
+  position: absolute;
+  right: 0.75rem;
+  bottom: -0.7rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  padding: 0.3rem 0.6rem;
+  color: var(--held);
+  border: 1.5px solid var(--held);
+  background: var(--glass);
+  transform: rotate(-3deg);
+  animation: press 420ms cubic-bezier(0.3, 1.5, 0.4, 1) 900ms both;
+}
+
+/* the gate line itself — amber while holding, green once released */
+.gate-line {
+  height: 2px;
+  margin: 0.9rem 0 0.4rem;
+  background: var(--held);
+  transform-origin: left;
+  animation: open 600ms ease 1500ms both;
+}
+
+.gate-status {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--held);
+  animation: settle 400ms ease 1800ms both;
+}
+
+/* the appended audit line — the whole point */
+.gate-audit {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: #6f8b7d;
+  border-top: 1px dashed var(--glass-line);
+  padding-top: 0.7rem;
+  margin-top: 0.2rem;
+  animation: append 500ms ease 2100ms both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes press {
+  0% {
+    opacity: 0;
+    transform: rotate(-3deg) scale(1.6);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-3deg) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-3deg) scale(1);
+  }
+}
+
+@keyframes open {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(1);
+    background: var(--released);
+  }
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+    color: var(--released);
+  }
+}
+
+@keyframes append {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- sections ---------- */
+
+.section {
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0;
   border-top: 1px solid var(--rule);
-  color: var(--muted);
-  font-size: 0.9rem;
 }
 
-footer a {
-  margin-right: 1rem;
+.section h2 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2rem);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0 0 2rem;
+}
+
+/* steps: numbered because the ORDER carries meaning —
+   guardrails run before approval; approval precedes delivery. */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+  display: grid;
+  gap: 0;
+}
+
+.steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 1rem;
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.steps li:first-child {
+  border-top: 0;
+}
+
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  padding-top: 0.35rem;
+}
+
+.steps strong {
+  font-weight: 600;
+  display: block;
+}
+
+.steps p {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+}
+
+/* guarantees: NOT numbered — no order, no sequence */
+.grid-3 {
+  display: grid;
+  gap: 1.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 48rem) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.grid-3 h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.4rem;
+}
+
+.grid-3 p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+/* ---------- ledger: refs, ids and counts only — never content ---------- */
+
+.ledger {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  padding: 1.25rem;
+  overflow-x: auto;
+}
+
+.ledger-head {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 0.9rem;
+}
+
+.ledger table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 34rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: #9fb0c0;
+}
+
+.ledger td {
+  padding: 0.32rem 1rem 0.32rem 0;
+  white-space: nowrap;
+}
+
+.ledger tr td:first-child {
+  color: #64748b;
+}
+
+.ledger .ev {
+  color: #cfd7e0;
+}
+
+.ledger .ok {
+  color: var(--released);
+}
+
+.ledger-note {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  margin: 0.9rem 0 0;
+}
+
+/* ---------- prose (privacy policy) ---------- */
+
+.prose {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 4rem) var(--step) 2rem;
+}
+
+.prose h1 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0 0 0.5rem;
+}
+
+.prose h2 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.12rem;
+  letter-spacing: -0.015em;
+  margin: 2.25rem 0 0.5rem;
+}
+
+.prose code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.86em;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  padding: 0.1em 0.35em;
+}
+
+/* Link text matches body text, so the underline is the ONLY affordance marking a
+   link — it must be clearly visible, not a faint tint. */
+.prose a {
+  color: var(--ink);
+  text-decoration-color: var(--held-text);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.prose ul {
+  padding-left: 1.1rem;
+}
+
+.prose li {
+  margin: 0.4rem 0;
 }
 
 .updated {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin-top: 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 2rem;
+}
+
+/* ---------- footer ---------- */
+
+.foot {
+  border-top: 1px solid var(--rule);
+  padding: 2rem 0 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.foot a {
+  color: var(--ink);
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}
+
+.foot .spacer {
+  margin-left: auto;
+}
+
+/* ---------- quality floor ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .draft,
+  .stamp,
+  .gate-line,
+  .gate-status,
+  .gate-audit {
+    animation: none;
+  }
+
+  .gate-line {
+    background: var(--released);
+  }
+
+  .gate-status {
+    color: var(--released);
+  }
+
+  .cta {
+    transition: none;
+  }
 }

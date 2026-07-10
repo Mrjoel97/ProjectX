@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <main>
+    <main className="prose">
       <h1>Privacy Policy</h1>
       <p className="updated">Effective {EFFECTIVE}</p>
 
@@ -117,9 +117,10 @@ export default function Privacy() {
         <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
-      <footer>
+      <footer className="foot">
         <a href="/">Home</a>
-        <p>&copy; {new Date().getFullYear()} Pikar AI</p>
+        <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
+        <span className="spacer">&copy; {new Date().getFullYear()} Pikar AI</span>
       </footer>
     </main>
   );
