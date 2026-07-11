@@ -23,6 +23,9 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "smokeAssert.ts",
   "auth.ts",
   "http.ts",
+  // Gmail token store + delivery readers (internalQuery/internalMutation + two
+  // tenantQueries). Internal-only surfaces around the crown-jewel refresh tokens.
+  "gmailAuth.ts",
   // Migration runner (component's runner) + the workflow/status stub (workflow.define
   // + internalMutation, not tenant wrappers). Both are internal-only.
   "migrations.ts",
