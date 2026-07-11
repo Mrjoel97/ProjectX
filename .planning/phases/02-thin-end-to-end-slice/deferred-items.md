@@ -53,3 +53,11 @@ baseline after 02-05. Two notes:
   circular pattern — **still deferred** (pre-existing, out of 02-05's scope). The proven
   fix is now in-repo (see `llm.ts`): annotate the workflow handler return types. A cleanup
   plan can apply it plus the `vite/client` reference and the whole gate goes green.
+
+## 02-06 execution — pre-existing typecheck failures (out of scope)
+
+Confirmed present at baseline (HEAD 77ca77d) BEFORE any 02-06 change; my changes add zero new errors:
+- `convex/*.test.ts` (audit, importGuard, tenant, worm): `ImportMeta.glob` not in the Convex tsconfig lib, plus `'row' possibly undefined` / implicit-any. Known shared gap (skills.test.ts documents it); only skills.test.ts carries the `@ts-expect-error` suppression.
+- `convex/smoke.ts`: circular `internal`-graph inference collapses `runFailingPipeline`/`startReviewGate` to `any` (guidelines §96). STATE already flags smoke.ts as the deferred instance of this pattern. Remedy when addressed: add explicit handler return-type annotations (`Promise<{...}>`), as done for llm.ts/gmail.ts in 02-05.
+
+Neither blocks `npx convex run` (dev-deployment bundling, not tsc) so Task 3 smoke is unaffected.
