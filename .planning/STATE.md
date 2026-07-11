@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-07-11T15:49:03.229Z"
-last_activity: 2026-07-11 — Completed 02-05 (Gmail delivery integration; DLVR-01 + DLVR-03)
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-07-11T16:11:10.195Z"
+last_activity: 2026-07-11 — Completed 02-06 (pipeline spine + operator DLQ; AGNT-03, OPSG-07, REVW-01, DLVR-01/03, OPSG-01)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 18
-  completed_plans: 13
-  percent: 67
+  completed_plans: 14
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 2 of 9 (Thin End-to-End Slice)
-Plan: 5 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05)
-Status: Executing — 02-05 done (Gmail delivery: gmail.modify OAuth connect flow, tenant-scoped refresh-token store, use-node send with on-demand refresh + Gmail REST, awaiting_reauth token-death net, daily near-expiry cron). Remaining: 02-06 pipeline wiring (ties intake → route → draft → review gate → gmail.send → telemetry). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-05 (Gmail delivery integration; DLVR-01 + DLVR-03)
+Plan: 6 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05, 02-06)
+Status: Executing — 02-06 done (pipeline spine: pipelineWorkflow sequences route→draft→review gate w/ regenerate loop→Gmail delivery, status staged at each stage; failed terminal owned at deadLetter.onComplete = status=failed + one failed telemetry row; both AGNT-03 mis-routes dead-letter distinctly; tenant-scoped operator DLQ surface newCount/listNew/markResolved; full-spine + AGNT-03 DLQ smoke pass live via a SMOKE::route offline sentinel). Remaining in Phase 2: 02-07, 02-08, 02-09. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-06 (pipeline spine + operator DLQ; AGNT-03, OPSG-07, REVW-01, DLVR-01/03, OPSG-01)
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███████░░░] 67%
 | Phase 02 P03 | 8 | 3 tasks | 5 files |
 | Phase 02 P02 | 28 | 3 tasks | 11 files |
 | Phase 02 P05 | 30 | 3 tasks | 4 files |
+| Phase 02 P06 | 35 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] LLM output/domain schemas (routingSchema, draftSchema) live in @pikar/contracts so the use-node convex adapter stays zod-free and thin (CLAUDE.md §1); draftSchema in contracts/drafting.ts, not inline in llm.ts
 - [Phase 02]: [Phase 02] Gmail delivery: use-node send (gmail.ts) refreshes the access token on demand + POSTs the Gmail REST send; a dead/refresh-failed token routes to awaiting_reauth WITHOUT throwing (preserves the approved draft, resolves the 7-day expiry race for the user), and message id is recorded as an audit ref (refs only)
 - [Phase 02]: [Phase 02] A new use-node action module joining the internal graph can tip sibling use-node actions past TS's circular-inference limit (gmail.ts tipped llm.ts to any); fix is explicit return-type annotations on the actions + runQuery results (Convex guidelines §96) — same remedy applies to the still-deferred smoke.ts pattern
+- [Phase 02]: [Phase 02] Pipeline spine (02-06): one pipelineWorkflow sequences route→draft→review gate (regenerate loop)→Gmail delivery, staging requests.status at each stage; delivery uses step.runAction + workpool default retries (a workflow handler has no scheduler ctx for retrier.run), gmail.send's discriminated result drives sent-vs-awaiting_reauth
+- [Phase 02]: [Phase 02] Failed terminal (OPSG-01) owned at the single onComplete choke point: deadLetter.onPipelineComplete patches requests.status=failed + inserts one failed telemetry row (redaction-safe, idempotent) so a mis-route never hangs at routing; both AGNT-03 reasons (unknown_route vs route_not_implemented) dead-letter distinctly
+- [Phase 02]: [Phase 02] SMOKE::route goal sentinel in llm.route/draft forces routes deterministically offline (local backend has no AI_GATEWAY_API_KEY); keeps the REAL pipeline (gate/delivery/DLQ/telemetry) in the smoke loop with zero duplication — remove once a mock-gateway smoke exists
 
 ### Pending Todos
 
@@ -119,8 +123,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T15:48:17.896Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-07-11T16:10:49.149Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

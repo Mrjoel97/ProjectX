@@ -32,7 +32,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Human Review & Delivery
 
-- [ ] **REVW-01**: User reviews every generated response and can approve, edit, or reject it before delivery
+- [x] **REVW-01**: User reviews every generated response and can approve, edit, or reject it before delivery
 - [ ] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [ ] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
@@ -67,7 +67,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
 - [ ] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
 - [x] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
-- [ ] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
+- [x] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
 
 ### Discoverability
 
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRDL-04 | Phase 3 | Pending |
 | GRDL-05 | Phase 3 | Pending |
 | GRDL-06 | Phase 3 | Pending |
-| REVW-01 | Phase 2 | Pending |
+| REVW-01 | Phase 2 | Complete |
 | REVW-02 | Phase 7 | Pending |
 | REVW-03 | Phase 7 | Pending |
 | DLVR-01 | Phase 2 | Complete |
@@ -152,7 +152,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPSG-04 | Phase 1 | Complete |
 | OPSG-05 | Phase 7 | Pending |
 | OPSG-06 | Phase 2 | Complete |
-| OPSG-07 | Phase 2 | Pending |
+| OPSG-07 | Phase 2 | Complete |
 | DISC-01 | Phase 1 | Complete |
 | DISC-02 | Phase 1 | Complete |
 | BETA-01 | Phase 9 | Pending |
