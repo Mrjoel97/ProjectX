@@ -35,9 +35,9 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **REVW-01**: User reviews every generated response and can approve, edit, or reject it before delivery
 - [ ] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [ ] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
-- [ ] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
+- [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
 - [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter
-- [ ] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
+- [x] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
 
 ### Knowledge Vault
 
@@ -132,9 +132,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REVW-01 | Phase 2 | Pending |
 | REVW-02 | Phase 7 | Pending |
 | REVW-03 | Phase 7 | Pending |
-| DLVR-01 | Phase 2 | Pending |
+| DLVR-01 | Phase 2 | Complete |
 | DLVR-02 | Phase 9 | Pending |
-| DLVR-03 | Phase 2 | Pending |
+| DLVR-03 | Phase 2 | Complete |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
 | VALT-03 | Phase 5 | Pending |

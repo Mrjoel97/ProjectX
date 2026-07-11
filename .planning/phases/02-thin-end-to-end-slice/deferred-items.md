@@ -41,3 +41,15 @@ now scans both new modules (no raw-builder imports).
 **Re-confirmed in 02-02:** stashed 02-02 Task-3's new `llm.ts` (+ contracts
 `drafting.ts`) and re-ran typecheck — identical 18-error set with or without them.
 `llm.ts`/`drafting.ts` introduce zero new type errors.
+
+**Re-confirmed in 02-05:** net-zero — the whole-tree gate is back to the same 18-error
+baseline after 02-05. Two notes:
+- 02-05's new `gmail.ts` (a second `"use node"` action module reaching `internal.gmailAuth`)
+  pushed `llm.ts`'s `route`/`draft` actions past TS's circular-inference limit (12 new
+  TS7022/7023). This was **FIXED in-plan** (commit `5d567e7`), not deferred: explicit
+  return-type annotations on `gmail.send` + `llm.ts` handlers/`runQuery` results per
+  Convex guidelines §96. This is the documented remedy for the exact `smoke.ts` pattern below.
+- `smoke.ts` (35/37/39/93/95/97) still carries the identical self-referential workflow
+  circular pattern — **still deferred** (pre-existing, out of 02-05's scope). The proven
+  fix is now in-repo (see `llm.ts`): annotate the workflow handler return types. A cleanup
+  plan can apply it plus the `vite/client` reference and the whole gate goes green.

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-11T15:39:31.032Z"
-last_activity: "2026-07-11 — Completed 02-02 (Executive Agent LLM surface: routingSchema+parseRouting, executive-router/email-drafter skills, llm.ts route+draft via AI Gateway)"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-07-11T15:49:03.229Z"
+last_activity: 2026-07-11 — Completed 02-05 (Gmail delivery integration; DLVR-01 + DLVR-03)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 18
-  completed_plans: 12
+  completed_plans: 13
   percent: 67
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 Phase: 2 of 9 (Thin End-to-End Slice)
 Plan: 5 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05)
-Status: Executing — 02-02 done (Executive Agent LLM surface: routingSchema+parseRouting, executive-router/email-drafter skills seeded, llm.ts route+draft via AI Gateway). Remaining Wave-2/3: 02-06 pipeline wiring + downstream. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-02 (Executive Agent LLM surface: routingSchema+parseRouting, two seeded skills, llm.ts route+draft actions through the Vercel AI Gateway)
+Status: Executing — 02-05 done (Gmail delivery: gmail.modify OAuth connect flow, tenant-scoped refresh-token store, use-node send with on-demand refresh + Gmail REST, awaiting_reauth token-death net, daily near-expiry cron). Remaining: 02-06 pipeline wiring (ties intake → route → draft → review gate → gmail.send → telemetry). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-05 (Gmail delivery integration; DLVR-01 + DLVR-03)
 
 Progress: [███████░░░] 67%
 
@@ -58,6 +58,7 @@ Progress: [███████░░░] 67%
 | Phase 02 P01 | 65 | 3 tasks | 11 files |
 | Phase 02 P03 | 8 | 3 tasks | 5 files |
 | Phase 02 P02 | 28 | 3 tasks | 11 files |
+| Phase 02 P05 | 30 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Rejection is redaction-safe: audit request.rejected payload is reason+counts+SHA-256 goalHash, never raw goal/recipient (CLAUDE.md §4); correlationId minted server-side
 - [Phase 02]: [Phase 02] Executive Agent LLM surface: routingSchema+parseRouting put AGNT-03 no-silent-default in the type system (unknown_route thrown, never defaulted); llm.ts route/draft load prompts from the skills registry and call generateObject through the Vercel AI Gateway (bare string model id, no provider import)
 - [Phase 02]: [Phase 02] LLM output/domain schemas (routingSchema, draftSchema) live in @pikar/contracts so the use-node convex adapter stays zod-free and thin (CLAUDE.md §1); draftSchema in contracts/drafting.ts, not inline in llm.ts
+- [Phase 02]: [Phase 02] Gmail delivery: use-node send (gmail.ts) refreshes the access token on demand + POSTs the Gmail REST send; a dead/refresh-failed token routes to awaiting_reauth WITHOUT throwing (preserves the approved draft, resolves the 7-day expiry race for the user), and message id is recorded as an audit ref (refs only)
+- [Phase 02]: [Phase 02] A new use-node action module joining the internal graph can tip sibling use-node actions past TS's circular-inference limit (gmail.ts tipped llm.ts to any); fix is explicit return-type annotations on the actions + runQuery results (Convex guidelines §96) — same remedy applies to the still-deferred smoke.ts pattern
 
 ### Pending Todos
 
@@ -116,8 +119,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T15:39:16.234Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-07-11T15:48:17.896Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
