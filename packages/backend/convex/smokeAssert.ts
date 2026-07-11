@@ -3,6 +3,7 @@
 // smoke scripts poll these, since workflow completion is asynchronous).
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
+import { migrations } from "./migrations";
 
 /** OPSG-04: a failing pipeline produced a deadLetters row + a deadletter.written audit. */
 export const assertDeadLetter = internalQuery({
@@ -55,5 +56,25 @@ export const assertReviewOutcome = internalQuery({
       }
     }
     return { ok: true };
+  },
+});
+
+/** OPSG-06: the first migration ran and recorded a completed (success) state. */
+export const assertMigrationRan = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const [status] = await migrations.getStatus(ctx, {
+      migrations: ["migrations:backfillRequestDefaults"],
+      limit: 1,
+    });
+    if (!status) {
+      throw new Error("backfillRequestDefaults has no recorded state — the migration never ran");
+    }
+    if (status.state !== "success" || !status.isDone) {
+      throw new Error(
+        `migration not complete: state=${status.state} isDone=${status.isDone} processed=${status.processed}`,
+      );
+    }
+    return { ok: true, name: status.name, processed: status.processed, state: status.state };
   },
 });

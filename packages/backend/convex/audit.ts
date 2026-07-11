@@ -10,7 +10,8 @@
 // CLAUDE.md rule 4). Redaction must happen BEFORE calling log().
 import type { AuditPayload } from "@pikar/contracts/audit";
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { auditCounts } from "./aggregates";
 
 export const log = internalMutation({
   args: {
@@ -24,7 +25,7 @@ export const log = internalMutation({
   },
   handler: async (ctx, args) => {
     const payload: AuditPayload = args.payload;
-    await ctx.db.insert("audit", {
+    const id = await ctx.db.insert("audit", {
       tenantId: args.tenantId,
       correlationId: args.correlationId,
       eventType: args.eventType,
@@ -32,5 +33,28 @@ export const log = internalMutation({
       payload,
       ts: Date.now(),
     });
+    // OPSG-01: this is the SOLE audit insert surface, so counting the aggregate here
+    // covers the invariant without Triggers. Still insert-only (CLAUDE.md §3) — the
+    // aggregate mirrors inserts, it never mutates an audit row.
+    const doc = await ctx.db.get(id);
+    if (doc) await auditCounts.insert(ctx, doc);
+  },
+});
+
+// OPSG-01 read side: count a tenant's audit rows in O(log n) — never a .collect() scan.
+export const countAudit = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => auditCounts.count(ctx, { namespace: tenantId }),
+});
+
+// One-time reconciliation for pre-existing dev rows the aggregate never saw: clear
+// then re-insert every audit row so counts match the table. Idempotent.
+export const backfillAuditCounts = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await auditCounts.clearAll(ctx);
+    const rows = await ctx.db.query("audit").collect();
+    for (const row of rows) await auditCounts.insert(ctx, row);
+    return { reinserted: rows.length };
   },
 });
