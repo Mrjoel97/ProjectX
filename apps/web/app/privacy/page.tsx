@@ -224,7 +224,9 @@ export default function Privacy() {
           <strong>Convex</strong> — application backend and database.
         </li>
         <li>
-          <strong>Vercel</strong> — hosting of this website and the application interface.
+          <strong>Vercel</strong> — hosting of this website and the application interface, and its
+          AI Gateway, which routes our model requests to the provider below. The AI Gateway
+          transmits message content in order to route it; it does not retain or train on it.
         </li>
         <li>
           <strong>Amazon Web Services</strong> — immutable archival storage of the audit log.
@@ -234,11 +236,10 @@ export default function Privacy() {
           via the Gmail API.
         </li>
         <li>
-          <strong>[LLM PROVIDER — TBD]</strong> — generation of plans, summaries, and drafts. This
-          provider receives the content of messages our agents read. It will be selected only on
-          terms that forbid retention and forbid training on your data, as Google&rsquo;s
-          restricted-scope policy requires. This provider is not yet selected; this policy will be
-          updated to name it before any such processing begins.
+          <strong>OpenAI</strong> — generation of plans, summaries, and drafts. Reached through
+          Vercel&rsquo;s AI Gateway (above), OpenAI receives the content of messages our agents
+          read in order to produce them. We use it only under API terms that forbid retention and
+          forbid training on your data, as Google&rsquo;s restricted-scope policy requires.
         </li>
       </ul>
       <p>
