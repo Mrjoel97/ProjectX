@@ -61,12 +61,12 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Governance & Operations
 
-- [ ] **OPSG-01**: Per-request telemetry captures tokens, cost, duration, decision/retry counters, and review outcome
+- [x] **OPSG-01**: Per-request telemetry captures tokens, cost, duration, decision/retry counters, and review outcome
 - [x] **OPSG-02**: Every request, redaction, routing decision, model call, review action, and delivery is written to an insert-only audit log
 - [ ] **OPSG-03**: Completed request trails are exported on schedule to immutable (WORM) archival storage
 - [x] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
 - [ ] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
-- [ ] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
+- [x] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
 - [ ] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
 
 ### Discoverability
@@ -146,12 +146,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IMPR-01 | Phase 8 | Pending |
 | IMPR-02 | Phase 8 | Pending |
 | IMPR-03 | Phase 8 | Pending |
-| OPSG-01 | Phase 2 | Pending |
+| OPSG-01 | Phase 2 | Complete |
 | OPSG-02 | Phase 1 | Complete |
 | OPSG-03 | Phase 7 | Pending |
 | OPSG-04 | Phase 1 | Complete |
 | OPSG-05 | Phase 7 | Pending |
-| OPSG-06 | Phase 2 | Pending |
+| OPSG-06 | Phase 2 | Complete |
 | OPSG-07 | Phase 2 | Pending |
 | DISC-01 | Phase 1 | Complete |
 | DISC-02 | Phase 1 | Complete |

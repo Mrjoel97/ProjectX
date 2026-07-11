@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 2 context gathered (43 decisions, 9 areas). Next -> /gsd:plan-phase 2"
-last_updated: "2026-07-10T15:08:52.197Z"
-last_activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
+stopped_at: "Completed 02-01-PLAN.md (data substrate: components + 5 tables + migration + audit aggregate)"
+last_updated: "2026-07-11T10:57:59.334Z"
+last_activity: "2026-07-11 — Completed 02-01 (Phase-2 data substrate: components + 5 tables + migration + audit aggregate)"
 progress:
   total_phases: 9
   completed_phases: 0
-  total_plans: 9
-  completed_plans: 8
-  percent: 78
+  total_plans: 18
+  completed_plans: 9
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** A user speaks or types a goal and the system reliably plans it, executes it with guardrails (cost, PII, quality), lets the user approve/edit/reject before anything leaves the building, and follows through to real delivery (email) — with a full audit trail.
-**Current focus:** Phase 1 — Foundation & Governance Substrate
+**Current focus:** Phase 2 — Thin End-to-End Slice
 
 ## Current Position
 
-Phase: 1 of 9 (Foundation & Governance Substrate)
-Plan: 7 of 9 in current phase complete (01-01 … 01-07)
-Status: Executing — remaining 01-08, 01-09 are BOTH human checkpoints
-Last activity: 2026-07-10 — Completed 01-07 (WORM export cron stub + cursor mechanics, SC-4 WORM half)
+Phase: 2 of 9 (Thin End-to-End Slice)
+Plan: 1 of 9 in current phase complete (02-01)
+Status: Executing — 02-01 done (data substrate); next is Wave-2 (02-02 …). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-01 (Phase-2 data substrate: components + 5 tables + migration + audit aggregate)
 
-Progress: [████████░░] 78%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [████████░░] 78%
 | Phase 01 P02 | 18 | 3 tasks | 8 files |
 | Phase 01 P04 | 12 | 2 tasks | 5 files |
 | Phase 01 P06 | 35 | 2 tasks | 9 files |
+| Phase 02 P01 | 65 | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Recent decisions affecting current work:
 - [PRODUCT — approval granularity]: Approval moved from per-delivery to **per-plan**. The user approves the plan, then Pikar executes autonomously, notifies on stage completion, and can be halted. REVW-01 ("approve/edit/reject the generated response") must be re-read in this light before Phase 2 planning
 - [LEGAL — restricted scope]: Google's restricted-scope policy forbids using that data to train/improve generalised AI models. The Phase-3 LLM provider MUST therefore be contracted on zero-retention / no-training terms. This is now a hard constraint on provider selection, not a preference. Message content reaching an LLM provider must also be disclosed in the privacy policy processor list (it is)
 - [LEGAL — third-party data]: Reading the mailbox means processing personal data of people who never agreed to anything with Pikar. The privacy policy places the lawful basis on the user (they instruct us to process it on their behalf). Worth a lawyer's eye — it is the single most exposed GDPR claim in the document
+- [Phase 02]: [Phase 02] audit.log is the SOLE aggregate insert site — TableAggregate mirrored there covers OPSG-01 counting without Triggers; countAudit returns O(log n) with no .collect()
+- [Phase 02]: [Phase 02] Migration harness proven live (OPSG-06): backfillRequestDefaults ran and recorded state=success; assertMigrationRan checks via migrations.getStatus by name. A migration that has never run is a migration that does not work
 
 ### Pending Todos
 
@@ -107,9 +110,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-10T15:08:52.187Z
-Stopped at: Phase 2 context gathered (43 decisions, 9 areas). Next -> /gsd:plan-phase 2
-Resume file: .planning/phases/02-thin-end-to-end-slice/02-CONTEXT.md
+Last session: 2026-07-11T10:57:12.609Z
+Stopped at: Completed 02-01-PLAN.md (data substrate: components + 5 tables + migration + audit aggregate)
+Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
