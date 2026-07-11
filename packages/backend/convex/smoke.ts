@@ -35,7 +35,11 @@ export const failingPipeline = workflow.define({
 /** Entry point: start the failing workflow, routing onComplete to the DLQ. */
 export const runFailingPipeline = internalMutation({
   args: { correlationId: v.optional(v.string()) },
-  handler: async (ctx, { correlationId }) => {
+  // Explicit return type: returning workflow.start's result (which references
+  // internal.smoke.*) otherwise makes this module's api type self-referential →
+  // TS7022 the moment a typechecked consumer (apps/web) imports the generated api
+  // (Convex guidelines §96). WorkflowId widens to string.
+  handler: async (ctx, { correlationId }): Promise<{ correlationId: string; workflowId: string }> => {
     const cid = correlationId ?? `smoke-dlq-${crypto.randomUUID()}`;
     const workflowId = await workflow.start(
       ctx,
@@ -93,7 +97,10 @@ export const reviewGate = workflow.define({
 /** Entry point: start a review gate; the caller drives decision vs. timeout. */
 export const startReviewGate = internalMutation({
   args: { correlationId: v.optional(v.string()), timeoutMs: v.optional(v.number()) },
-  handler: async (ctx, { correlationId, timeoutMs }) => {
+  handler: async (
+    ctx,
+    { correlationId, timeoutMs },
+  ): Promise<{ correlationId: string; workflowId: string }> => {
     const cid = correlationId ?? `smoke-review-${crypto.randomUUID()}`;
     const workflowId = await workflow.start(ctx, internal.smoke.reviewGate, {
       correlationId: cid,

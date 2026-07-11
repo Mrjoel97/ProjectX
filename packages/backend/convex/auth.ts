@@ -1,7 +1,12 @@
-import { Password } from "@convex-dev/auth/providers/Password";
+import Google from "@auth/core/providers/google";
 import { convexAuth } from "@convex-dev/auth/server";
 
-// Password provider ONLY for the single-owner beta. Invite gating is Phase 9.
+// Google is the sign-in provider for the beta. The front door asks for ONLY
+// `openid email profile` — identity, nothing more. The restricted `gmail.modify`
+// scope is a separate, later, explicit consent (the /connect-gmail flow, plan 02-05):
+// signing in must never silently hand an agent your mailbox.
+// auth.ts stays on the raw-builder allowlist (CLAUDE.md §2) — convexAuth wires the
+// generated query/mutation/action itself.
 export const { auth, signIn, signOut, store } = convexAuth({
-  providers: [Password],
+  providers: [Google({ authorization: { params: { scope: "openid email profile" } } })],
 });

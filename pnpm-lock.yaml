@@ -20,6 +20,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@auth/core':
+        specifier: 0.41.2
+        version: 0.41.2
+      '@convex-dev/auth':
+        specifier: 0.0.94
+        version: 0.0.94(@auth/core@0.41.2)(convex@1.42.1(react@19.2.7))(react@19.2.7)
+      '@pikar/backend':
+        specifier: workspace:*
+        version: link:../../packages/backend
       '@pikar/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -59,6 +68,9 @@ importers:
 
   packages/backend:
     dependencies:
+      '@auth/core':
+        specifier: 0.41.2
+        version: 0.41.2
       '@convex-dev/action-retrier':
         specifier: 0.3.1
         version: 0.3.1(convex@1.42.1(react@19.2.7))

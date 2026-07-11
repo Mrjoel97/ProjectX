@@ -1,6 +1,7 @@
 "use client";
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
+import { ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
 
 // NEXT_PUBLIC_CONVEX_URL must exist in apps/web/.env.local. `npx convex dev` does NOT
@@ -9,6 +10,9 @@ import type { ReactNode } from "react";
 // fails at prerender without it, even for pages that never call Convex.
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+// ConvexAuthNextjsProvider replaces the bare ConvexProvider: it feeds the auth token
+// (managed by the server provider + middleware) into every Convex call, so tenantQuery
+// gets an identity. The server half lives in layout.tsx.
 export function Providers({ children }: { children: ReactNode }) {
-  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+  return <ConvexAuthNextjsProvider client={convex}>{children}</ConvexAuthNextjsProvider>;
 }
