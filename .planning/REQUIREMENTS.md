@@ -9,10 +9,10 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Intake & Enrichment
 
-- [ ] **INTK-01**: User can submit a request as text with optional file attachments
+- [x] **INTK-01**: User can submit a request as text with optional file attachments
 - [ ] **INTK-02**: Attachments are classified (image/PDF/audio/document) and OCR'd/extracted/transcribed, with results merged into the request context
 - [ ] **INTK-03**: User can dictate a request by voice (record → transcribe → same request pipeline)
-- [ ] **INTK-04**: Requests are validated and authenticated; invalid requests are rejected with a notification and an auditable "Request Rejected — Validation Failed" outcome
+- [x] **INTK-04**: Requests are validated and authenticated; invalid requests are rejected with a notification and an auditable "Request Rejected — Validation Failed" outcome
 
 ### Executive Agent & Planning
 
@@ -115,10 +115,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INTK-01 | Phase 2 | Pending |
+| INTK-01 | Phase 2 | Complete |
 | INTK-02 | Phase 4 | Pending |
 | INTK-03 | Phase 4 | Pending |
-| INTK-04 | Phase 2 | Pending |
+| INTK-04 | Phase 2 | Complete |
 | AGNT-01 | Phase 2 | Pending |
 | AGNT-02 | Phase 2 | Pending |
 | AGNT-03 | Phase 2 | Pending |

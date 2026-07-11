@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 02-01-PLAN.md (data substrate: components + 5 tables + migration + audit aggregate)"
-last_updated: "2026-07-11T10:57:59.334Z"
-last_activity: "2026-07-11 — Completed 02-01 (Phase-2 data substrate: components + 5 tables + migration + audit aggregate)"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-07-11T15:17:11.691Z"
+last_activity: "2026-07-11 — Completed 02-03 (intake trust boundary: pure validateSubmit + submit mutation + upload URL + requests queries + in-app notifications)"
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 18
-  completed_plans: 9
-  percent: 50
+  completed_plans: 10
+  percent: 56
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 2 of 9 (Thin End-to-End Slice)
-Plan: 1 of 9 in current phase complete (02-01)
-Status: Executing — 02-01 done (data substrate); next is Wave-2 (02-02 …). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-01 (Phase-2 data substrate: components + 5 tables + migration + audit aggregate)
+Plan: 2 of 9 in current phase complete (02-01, 02-03)
+Status: Executing — 02-03 done (intake trust boundary: validateSubmit + submit + notifications). Wave-2 continues (02-02, 02-04, 02-05). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-03 (intake trust boundary: pure validateSubmit + submit mutation + upload URL + requests queries + in-app notifications)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 56%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████░░░░░] 50%
 | Phase 01 P04 | 12 | 2 tasks | 5 files |
 | Phase 01 P06 | 35 | 2 tasks | 9 files |
 | Phase 02 P01 | 65 | 3 tasks | 11 files |
+| Phase 02 P03 | 8 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Recent decisions affecting current work:
 - [LEGAL — third-party data]: Reading the mailbox means processing personal data of people who never agreed to anything with Pikar. The privacy policy places the lawful basis on the user (they instruct us to process it on their behalf). Worth a lawyer's eye — it is the single most exposed GDPR claim in the document
 - [Phase 02]: [Phase 02] audit.log is the SOLE aggregate insert site — TableAggregate mirrored there covers OPSG-01 counting without Triggers; countAudit returns O(log n) with no .collect()
 - [Phase 02]: [Phase 02] Migration harness proven live (OPSG-06): backfillRequestDefaults ran and recorded state=success; assertMigrationRan checks via migrations.getStatus by name. A migration that has never run is a migration that does not work
+- [Phase 02]: [Phase 02] Intake trust boundary: validateSubmit is pure/tested and runs BEFORE workflow.start; recipient is the explicit validated To: field, never model-derived (INTK-04)
+- [Phase 02]: [Phase 02] Rejection is redaction-safe: audit request.rejected payload is reason+counts+SHA-256 goalHash, never raw goal/recipient (CLAUDE.md §4); correlationId minted server-side
 
 ### Pending Todos
 
@@ -110,8 +113,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T10:57:12.609Z
-Stopped at: Completed 02-01-PLAN.md (data substrate: components + 5 tables + migration + audit aggregate)
+Last session: 2026-07-11T15:16:36.300Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

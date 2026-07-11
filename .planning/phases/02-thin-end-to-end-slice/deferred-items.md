@@ -30,3 +30,10 @@ reference and annotate `smoke.ts`, then this whole gate goes green.
 re-ran typecheck — identical error set (only `smoke.ts` line numbers shifted by the
 added comments). 02-04 introduced zero new type errors. Its behavioral check is the
 `run-smoke-reviewgate.mjs` dev-deployment smoke (both gates PASS).
+
+**Re-confirmed in 02-03:** stashed 02-03's new `requests.ts`/`notifications.ts` and
+re-ran typecheck — identical (superset) error set. 02-03 introduced zero new type
+errors. The real function typecheck is green: `npx convex codegen` runs the Convex
+TypeScript pass (via `convex/tsconfig.json`, which resolves the vite/`import.meta.glob`
+types) and exits 0. `pnpm --filter @pikar/backend test importGuard` is also green and
+now scans both new modules (no raw-builder imports).
