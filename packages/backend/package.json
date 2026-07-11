@@ -7,10 +7,11 @@
     "./api": "./convex/_generated/api.js"
   },
   "scripts": {
-    "dev": "convex dev",
+    "dev": "convex dev --run skills:seedSkills",
     "codegen": "convex codegen",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "seed": "node ./scripts/run-seed.mjs",
     "smoke:dlq": "node ./scripts/run-smoke-dlq.mjs",
     "smoke:pipeline": "node ./scripts/run-smoke-pipeline.mjs",
     "smoke:reviewgate": "node ./scripts/run-smoke-reviewgate.mjs",

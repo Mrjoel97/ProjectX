@@ -62,6 +62,23 @@ pnpm boot:check          # pnpm install -> npx convex codegen -> pnpm typecheck
 
 ---
 
+## Skill registry seed (required — the pipeline fails closed without it)
+
+Agent prompts are versioned rows in the `skills` table, not hardcoded (CLAUDE.md §5).
+Routing calls `loadSkill("executive-router")`, which **fails closed** — an unseeded
+deployment dead-letters EVERY request with `NO_ACTIVE_SKILL: executive-router`.
+
+- **Local dev:** the `dev` script runs `convex dev --run skills:seedSkills`, so `pnpm dev`
+  seeds automatically after each push. Nothing to do.
+- **Production / any fresh deploy:** `npx convex deploy` does **not** run functions. After it,
+  seed once (idempotent — safe to re-run):
+
+  ```bash
+  pnpm --filter @pikar/backend seed      # runs skills:seedSkills + verifies executive-router is active
+  ```
+
+---
+
 ## Secrets plane
 
 Two separate secret stores — never mix them:
@@ -89,10 +106,11 @@ Action Retrier. Each sidecar's URL is a Convex env var (`PRESIDIO_URL`, `GRAPHIF
 
 | Command            | What it does                                        |
 | ------------------ | --------------------------------------------------- |
-| `pnpm dev`         | Run web + Convex dev together (turbo)               |
+| `pnpm dev`         | Run web + Convex dev together (turbo); auto-seeds skills |
 | `pnpm typecheck`   | Typecheck every package                             |
 | `pnpm test`        | Run tests (convex-test via vitest, no watch mode)   |
 | `pnpm boot:check`  | Clean-boot gate: install -> codegen -> typecheck    |
+| `pnpm --filter @pikar/backend seed` | Seed the agent skill registry (post-deploy) |
 
 ---
 
