@@ -4,304 +4,684 @@
   "graph": {},
   "nodes": [
     {
-      "label": "layout.tsx",
+      "label": "gmailAuth.ts",
       "file_type": "code",
-      "source_file": "apps/web/app/layout.tsx",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "apps_web_app_layout",
-      "community": 34,
-      "norm_label": "layout.tsx"
+      "id": "packages_backend_convex_gmailauth",
+      "community": 39,
+      "norm_label": "gmailauth.ts"
     },
     {
-      "label": "metadata",
+      "label": "hmacHex()",
       "file_type": "code",
-      "source_file": "apps/web/app/layout.tsx",
-      "source_location": "L6",
-      "_origin": "ast",
-      "id": "apps_web_app_layout_metadata",
-      "community": 34,
-      "norm_label": "metadata"
-    },
-    {
-      "label": "RootLayout()",
-      "file_type": "code",
-      "source_file": "apps/web/app/layout.tsx",
-      "source_location": "L12",
-      "_origin": "ast",
-      "id": "apps_web_app_layout_rootlayout",
-      "community": 34,
-      "norm_label": "rootlayout()"
-    },
-    {
-      "label": "page.tsx",
-      "file_type": "code",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "apps_web_app_page",
-      "community": 46,
-      "norm_label": "page.tsx"
-    },
-    {
-      "label": "metadata",
-      "file_type": "code",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L6",
-      "_origin": "ast",
-      "id": "apps_web_app_page_metadata",
-      "community": 46,
-      "norm_label": "metadata"
-    },
-    {
-      "label": "structuredData",
-      "file_type": "code",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L18",
-      "_origin": "ast",
-      "id": "apps_web_app_page_structureddata",
-      "community": 46,
-      "norm_label": "structureddata"
-    },
-    {
-      "label": "Home()",
-      "file_type": "code",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L55",
-      "_origin": "ast",
-      "id": "apps_web_app_page_home",
-      "community": 46,
-      "norm_label": "home()"
-    },
-    {
-      "label": "package.json",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "apps_web_package",
-      "community": 10,
-      "norm_label": "package.json"
-    },
-    {
-      "label": "name",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L2",
-      "_origin": "ast",
-      "id": "apps_web_package_name",
-      "community": 10,
-      "norm_label": "name"
-    },
-    {
-      "label": "version",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L3",
-      "_origin": "ast",
-      "id": "apps_web_package_version",
-      "community": 10,
-      "norm_label": "version"
-    },
-    {
-      "label": "private",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L4",
-      "_origin": "ast",
-      "id": "apps_web_package_private",
-      "community": 10,
-      "norm_label": "private"
-    },
-    {
-      "label": "type",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L5",
-      "_origin": "ast",
-      "id": "apps_web_package_type",
-      "community": 10,
-      "norm_label": "type"
-    },
-    {
-      "label": "scripts",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L6",
-      "_origin": "ast",
-      "id": "apps_web_package_scripts",
-      "community": 10,
-      "norm_label": "scripts"
-    },
-    {
-      "label": "dev",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L7",
-      "_origin": "ast",
-      "id": "apps_web_package_scripts_dev",
-      "community": 10,
-      "norm_label": "dev"
-    },
-    {
-      "label": "build",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L8",
-      "_origin": "ast",
-      "id": "apps_web_package_scripts_build",
-      "community": 10,
-      "norm_label": "build"
-    },
-    {
-      "label": "start",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L9",
-      "_origin": "ast",
-      "id": "apps_web_package_scripts_start",
-      "community": 10,
-      "norm_label": "start"
-    },
-    {
-      "label": "typecheck",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L10",
-      "_origin": "ast",
-      "id": "apps_web_package_scripts_typecheck",
-      "community": 10,
-      "norm_label": "typecheck"
-    },
-    {
-      "label": "dependencies",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L12",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies",
-      "community": 10,
-      "norm_label": "dependencies"
-    },
-    {
-      "label": "@pikar/contracts",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L13",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_pikar_contracts",
-      "community": 10,
-      "norm_label": "@pikar/contracts"
-    },
-    {
-      "label": "@pikar/core",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L14",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_pikar_core",
-      "community": 10,
-      "norm_label": "@pikar/core"
-    },
-    {
-      "label": "convex",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L15",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_convex",
-      "community": 10,
-      "norm_label": "convex"
-    },
-    {
-      "label": "next",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L16",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_next",
-      "community": 10,
-      "norm_label": "next"
-    },
-    {
-      "label": "react",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L17",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_react",
-      "community": 10,
-      "norm_label": "react"
-    },
-    {
-      "label": "react-dom",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L18",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_react_dom",
-      "community": 10,
-      "norm_label": "react-dom"
-    },
-    {
-      "label": "zod",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L19",
-      "_origin": "ast",
-      "id": "apps_web_package_dependencies_zod",
-      "community": 10,
-      "norm_label": "zod"
-    },
-    {
-      "label": "devDependencies",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "id": "apps_web_package_devdependencies",
-      "community": 10,
-      "norm_label": "devdependencies"
+      "id": "packages_backend_convex_gmailauth_hmachex",
+      "community": 39,
+      "norm_label": "hmachex()"
     },
     {
-      "label": "@types/node",
+      "label": "requireEnv()",
       "file_type": "code",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L35",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_requireenv",
+      "community": 39,
+      "norm_label": "requireenv()"
+    },
+    {
+      "label": "buildAuthorizeUrl()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L42",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_buildauthorizeurl",
+      "community": 39,
+      "norm_label": "buildauthorizeurl()"
+    },
+    {
+      "label": "verifyState()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L58",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_verifystate",
+      "community": 39,
+      "norm_label": "verifystate()"
+    },
+    {
+      "label": "store",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L74",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_store",
+      "community": 39,
+      "norm_label": "store"
+    },
+    {
+      "label": "getTokens",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L93",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_gettokens",
+      "community": 39,
+      "norm_label": "gettokens"
+    },
+    {
+      "label": "updateAccess",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L103",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_updateaccess",
+      "community": 39,
+      "norm_label": "updateaccess"
+    },
+    {
+      "label": "getForDelivery",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L119",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_getfordelivery",
+      "community": 39,
+      "norm_label": "getfordelivery"
+    },
+    {
+      "label": "gmailStatus",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L137",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_gmailstatus",
+      "community": 39,
+      "norm_label": "gmailstatus"
+    },
+    {
+      "label": "gmailConnectUrl",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L149",
+      "_origin": "ast",
+      "id": "packages_backend_convex_gmailauth_gmailconnecturl",
+      "community": 39,
+      "norm_label": "gmailconnecturl"
+    },
+    {
+      "label": "http.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "packages_backend_convex_http",
+      "community": 39,
+      "norm_label": "http.ts"
+    },
+    {
+      "label": "http",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "packages_backend_convex_http_http",
+      "community": 39,
+      "norm_label": "http"
+    },
+    {
+      "label": "allowlist.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "packages_backend_convex_lib_allowlist",
+      "community": 35,
+      "norm_label": "allowlist.ts"
+    },
+    {
+      "label": "RAW_BUILDER_ALLOWLIST",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L14",
+      "_origin": "ast",
+      "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist",
+      "community": 35,
+      "norm_label": "raw_builder_allowlist"
+    },
+    {
+      "label": "NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by",
+      "file_type": "rationale",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "packages_backend_convex_lib_allowlist_rationale_9",
+      "community": 35,
+      "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by"
+    },
+    {
+      "label": "tokenExpiry.ts",
+      "file_type": "code",
+      "source_file": "packages/core/src/tokenExpiry.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "packages_core_src_tokenexpiry",
+      "community": 87,
+      "norm_label": "tokenexpiry.ts"
+    },
+    {
+      "label": "isExpiringSoon()",
+      "file_type": "code",
+      "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "apps_web_package_devdependencies_types_node",
-      "community": 10,
-      "norm_label": "@types/node"
+      "id": "packages_core_src_tokenexpiry_isexpiringsoon",
+      "community": 87,
+      "norm_label": "isexpiringsoon()"
     },
     {
-      "label": "@types/react",
+      "label": "isDead()",
       "file_type": "code",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/core/src/tokenExpiry.ts",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "packages_core_src_tokenexpiry_isdead",
+      "community": 87,
+      "norm_label": "isdead()"
+    },
+    {
+      "label": "skills.test.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "skills.test.ts",
+      "id": "packages_backend_convex_skills_test"
+    },
+    {
+      "label": "modules",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L16",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "modules",
+      "id": "packages_backend_convex_skills_test_modules"
+    },
+    {
+      "label": "lf()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "lf()",
+      "id": "packages_backend_convex_skills_test_lf"
+    },
+    {
+      "label": "skills.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "skills.ts",
+      "id": "packages_backend_convex_skills"
+    },
+    {
+      "label": "loadSkill()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "loadskill()",
+      "id": "packages_backend_convex_skills_loadskill"
+    },
+    {
+      "label": "getActiveSkill",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L50",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "getactiveskill",
+      "id": "packages_backend_convex_skills_getactiveskill"
+    },
+    {
+      "label": "activateSkill",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L60",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "activateskill",
+      "id": "packages_backend_convex_skills_activateskill"
+    },
+    {
+      "label": "seedSkills",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L98",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "seedskills",
+      "id": "packages_backend_convex_skills_seedskills"
+    },
+    {
+      "label": "email-drafter.md",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 85,
+      "norm_label": "email-drafter.md",
+      "id": "packages_contracts_skills_email_drafter"
+    },
+    {
+      "label": "Email Drafter (v1)",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 85,
+      "norm_label": "email drafter (v1)",
+      "id": "packages_contracts_skills_email_drafter_email_drafter_v1"
+    },
+    {
+      "label": "Inputs",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 85,
+      "norm_label": "inputs",
+      "id": "packages_contracts_skills_email_drafter_inputs"
+    },
+    {
+      "label": "Output contract",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 85,
+      "norm_label": "output contract",
+      "id": "packages_contracts_skills_email_drafter_output_contract"
+    },
+    {
+      "label": "Drafting principles",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L21",
+      "_origin": "ast",
+      "community": 85,
+      "norm_label": "drafting principles",
+      "id": "packages_contracts_skills_email_drafter_drafting_principles"
+    },
+    {
+      "label": "executive-router.md",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "executive-router.md",
+      "id": "packages_contracts_skills_executive_router"
+    },
+    {
+      "label": "Executive Agent \u2014 Router (v1)",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "executive agent \u2014 router (v1)",
+      "id": "packages_contracts_skills_executive_router_executive_agent_router_v1"
+    },
+    {
+      "label": "Routes",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "routes",
+      "id": "packages_contracts_skills_executive_router_routes"
+    },
+    {
+      "label": "Step plan",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "step plan",
+      "id": "packages_contracts_skills_executive_router_step_plan"
+    },
+    {
+      "label": "Decision principles",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "decision principles",
+      "id": "packages_contracts_skills_executive_router_decision_principles"
+    },
+    {
+      "label": "Output contract",
+      "file_type": "document",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L39",
+      "_origin": "ast",
+      "community": 84,
+      "norm_label": "output contract",
+      "id": "packages_contracts_skills_executive_router_output_contract"
+    },
+    {
+      "label": "skill.ts",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "skill.ts",
+      "id": "packages_contracts_src_skill"
+    },
+    {
+      "label": "LoadedSkill",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L9",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "loadedskill",
+      "id": "packages_contracts_src_skill_loadedskill"
+    },
+    {
+      "label": "SkillLoader",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "apps_web_package_devdependencies_types_react",
-      "community": 10,
-      "norm_label": "@types/react"
+      "community": 5,
+      "norm_label": "skillloader",
+      "id": "packages_contracts_src_skill_skillloader"
     },
     {
-      "label": "@types/react-dom",
+      "label": "NO_ACTIVE_SKILL_ERROR",
       "file_type": "code",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L29",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "no_active_skill_error",
+      "id": "packages_contracts_src_skill_no_active_skill_error"
+    },
+    {
+      "label": "NO_SUCH_SKILL_VERSION_ERROR",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L32",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "no_such_skill_version_error",
+      "id": "packages_contracts_src_skill_no_such_skill_version_error"
+    },
+    {
+      "label": "EXECUTIVE_AGENT_CLASSIFIER_SKILL",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "executive_agent_classifier_skill",
+      "id": "packages_contracts_src_skill_executive_agent_classifier_skill"
+    },
+    {
+      "label": "EXECUTIVE_ROUTER_SKILL",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L39",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "executive_router_skill",
+      "id": "packages_contracts_src_skill_executive_router_skill"
+    },
+    {
+      "label": "EMAIL_DRAFTER_SKILL",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L42",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "email_drafter_skill",
+      "id": "packages_contracts_src_skill_email_drafter_skill"
+    },
+    {
+      "label": "emailDrafter.ts",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skills/emailDrafter.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "emaildrafter.ts",
+      "id": "packages_contracts_src_skills_emaildrafter"
+    },
+    {
+      "label": "executiveRouter.ts",
+      "file_type": "code",
+      "source_file": "packages/contracts/src/skills/executiveRouter.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "executiverouter.ts",
+      "id": "packages_contracts_src_skills_executiverouter"
+    },
+    {
+      "label": "telemetry.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 82,
+      "norm_label": "telemetry.ts",
+      "id": "packages_backend_convex_telemetry"
+    },
+    {
+      "label": "terminalOutcome",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 82,
+      "norm_label": "terminaloutcome",
+      "id": "packages_backend_convex_telemetry_terminaloutcome"
+    },
+    {
+      "label": "writeTerminal",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L39",
+      "_origin": "ast",
+      "community": 82,
+      "norm_label": "writeterminal",
+      "id": "packages_backend_convex_telemetry_writeterminal"
+    },
+    {
+      "label": "REQUIREMENTS.md",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "requirements.md",
+      "id": "planning_requirements"
+    },
+    {
+      "label": "Requirements: Pikar-AI",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "requirements: pikar-ai",
+      "id": "planning_requirements_requirements_pikar_ai"
+    },
+    {
+      "label": "v1 Requirements",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "v1 requirements",
+      "id": "planning_requirements_v1_requirements"
+    },
+    {
+      "label": "Intake & Enrichment",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "intake & enrichment",
+      "id": "planning_requirements_intake_enrichment"
+    },
+    {
+      "label": "Executive Agent & Planning",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L17",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "executive agent & planning",
+      "id": "planning_requirements_executive_agent_planning"
+    },
+    {
+      "label": "Guardrails",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "apps_web_package_devdependencies_types_react_dom",
-      "community": 10,
-      "norm_label": "@types/react-dom"
+      "community": 15,
+      "norm_label": "guardrails",
+      "id": "planning_requirements_guardrails"
     },
     {
-      "label": "typescript",
-      "file_type": "code",
-      "source_file": "apps/web/package.json",
-      "source_location": "L25",
+      "label": "Human Review & Delivery",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L33",
       "_origin": "ast",
-      "id": "apps_web_package_devdependencies_typescript",
-      "community": 10,
-      "norm_label": "typescript"
+      "community": 15,
+      "norm_label": "human review & delivery",
+      "id": "planning_requirements_human_review_delivery"
+    },
+    {
+      "label": "Knowledge Vault",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L42",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "knowledge vault",
+      "id": "planning_requirements_knowledge_vault"
+    },
+    {
+      "label": "Live Voice Sessions",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L49",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "live voice sessions",
+      "id": "planning_requirements_live_voice_sessions"
+    },
+    {
+      "label": "Self-Improvement",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L56",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "self-improvement",
+      "id": "planning_requirements_self_improvement"
+    },
+    {
+      "label": "Governance & Operations",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L62",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "governance & operations",
+      "id": "planning_requirements_governance_operations"
+    },
+    {
+      "label": "Discoverability",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L72",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "discoverability",
+      "id": "planning_requirements_discoverability"
+    },
+    {
+      "label": "Private Beta",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L77",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "private beta",
+      "id": "planning_requirements_private_beta"
+    },
+    {
+      "label": "v2 Requirements",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L84",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "v2 requirements",
+      "id": "planning_requirements_v2_requirements"
+    },
+    {
+      "label": "Expansion",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L88",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "expansion",
+      "id": "planning_requirements_expansion"
+    },
+    {
+      "label": "Out of Scope",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L97",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "out of scope",
+      "id": "planning_requirements_out_of_scope"
+    },
+    {
+      "label": "Traceability",
+      "file_type": "document",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L112",
+      "_origin": "ast",
+      "community": 15,
+      "norm_label": "traceability",
+      "id": "planning_requirements_traceability"
     },
     {
       "label": "STATE.md",
@@ -357,7 +737,7 @@
       "label": "Accumulated Context",
       "file_type": "document",
       "source_file": ".planning/STATE.md",
-      "source_location": "L59",
+      "source_location": "L61",
       "_origin": "ast",
       "community": 25,
       "norm_label": "accumulated context",
@@ -367,7 +747,7 @@
       "label": "Decisions",
       "file_type": "document",
       "source_file": ".planning/STATE.md",
-      "source_location": "L61",
+      "source_location": "L63",
       "_origin": "ast",
       "community": 25,
       "norm_label": "decisions",
@@ -377,7 +757,7 @@
       "label": "Pending Todos",
       "file_type": "document",
       "source_file": ".planning/STATE.md",
-      "source_location": "L81",
+      "source_location": "L104",
       "_origin": "ast",
       "community": 25,
       "norm_label": "pending todos",
@@ -387,7 +767,7 @@
       "label": "Blockers/Concerns",
       "file_type": "document",
       "source_file": ".planning/STATE.md",
-      "source_location": "L85",
+      "source_location": "L108",
       "_origin": "ast",
       "community": 25,
       "norm_label": "blockers/concerns",
@@ -397,11 +777,811 @@
       "label": "Session Continuity",
       "file_type": "document",
       "source_file": ".planning/STATE.md",
-      "source_location": "L91",
+      "source_location": "L114",
       "_origin": "ast",
       "community": 25,
       "norm_label": "session continuity",
       "id": "planning_state_session_continuity"
+    },
+    {
+      "label": "02-03-SUMMARY.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "02-03-summary.md",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary"
+    },
+    {
+      "label": "Dependency graph",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "dependency graph",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_dependency_graph"
+    },
+    {
+      "label": "Tech tracking",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "tech tracking",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_tech_tracking"
+    },
+    {
+      "label": "Metrics",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L48",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "metrics",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_metrics"
+    },
+    {
+      "label": "Phase 2 Plan 03: Intake Trust Boundary Summary",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L53",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "phase 2 plan 03: intake trust boundary summary",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary"
+    },
+    {
+      "label": "What Was Built",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L60",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "what was built",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_what_was_built"
+    },
+    {
+      "label": "Verification",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L80",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "verification",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_verification"
+    },
+    {
+      "label": "Deviations from Plan",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L87",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "deviations from plan",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_deviations_from_plan"
+    },
+    {
+      "label": "Out-of-scope (logged, not fixed)",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L89",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "out-of-scope (logged, not fixed)",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_out_of_scope_logged_not_fixed"
+    },
+    {
+      "label": "Self-Check: PASSED",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L101",
+      "_origin": "ast",
+      "community": 79,
+      "norm_label": "self-check: passed",
+      "id": "planning_phases_02_thin_end_to_end_slice_02_03_summary_self_check_passed"
+    },
+    {
+      "label": "deferred-items.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/deferred-items.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 73,
+      "norm_label": "deferred-items.md",
+      "id": "planning_phases_02_thin_end_to_end_slice_deferred_items"
+    },
+    {
+      "label": "Phase 02 \u2014 Deferred Items",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/deferred-items.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 73,
+      "norm_label": "phase 02 \u2014 deferred items",
+      "id": "planning_phases_02_thin_end_to_end_slice_deferred_items_phase_02_deferred_items"
+    },
+    {
+      "label": "Pre-existing `tsc --noEmit` failures in backend test files (found during 02-01, Task 1)",
+      "file_type": "document",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/deferred-items.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 73,
+      "norm_label": "pre-existing `tsc --noemit` failures in backend test files (found during 02-01, task 1)",
+      "id": "planning_phases_02_thin_end_to_end_slice_deferred_items_pre_existing_tsc_noemit_failures_in_backend_test_files_found_during_02_01_task_1"
+    },
+    {
+      "label": "buildTelemetry.ts",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "buildtelemetry.ts",
+      "id": "packages_core_src_buildtelemetry"
+    },
+    {
+      "label": "ReviewOutcome",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L17",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "reviewoutcome",
+      "id": "packages_core_src_buildtelemetry_reviewoutcome"
+    },
+    {
+      "label": "LlmUsage",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "llmusage",
+      "id": "packages_core_src_buildtelemetry_llmusage"
+    },
+    {
+      "label": "TerminalOutcome",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L27",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "terminaloutcome",
+      "id": "packages_core_src_buildtelemetry_terminaloutcome"
+    },
+    {
+      "label": "TelemetryRow",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L39",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "telemetryrow",
+      "id": "packages_core_src_buildtelemetry_telemetryrow"
+    },
+    {
+      "label": "buildTelemetry()",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L50",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "buildtelemetry()",
+      "id": "packages_core_src_buildtelemetry_buildtelemetry"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "packages/core/src/index.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 80,
+      "norm_label": "index.ts",
+      "id": "packages_core_src_index"
+    },
+    {
+      "label": "tokenExpiry.test.ts",
+      "file_type": "code",
+      "source_file": "packages/core/src/tokenExpiry.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 78,
+      "norm_label": "tokenexpiry.test.ts",
+      "id": "packages_core_src_tokenexpiry_test"
+    },
+    {
+      "label": "requests.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "requests.ts",
+      "id": "packages_backend_convex_requests"
+    },
+    {
+      "label": "contentHash()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "contenthash()",
+      "id": "packages_backend_convex_requests_contenthash"
+    },
+    {
+      "label": "generateUploadUrl",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "generateuploadurl",
+      "id": "packages_backend_convex_requests_generateuploadurl"
+    },
+    {
+      "label": "attachmentArg",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L33",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "attachmentarg",
+      "id": "packages_backend_convex_requests_attachmentarg"
+    },
+    {
+      "label": "submit",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L45",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "submit",
+      "id": "packages_backend_convex_requests_submit"
+    },
+    {
+      "label": "list",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L126",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "list",
+      "id": "packages_backend_convex_requests_list"
+    },
+    {
+      "label": "get",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L145",
+      "_origin": "ast",
+      "community": 77,
+      "norm_label": "get",
+      "id": "packages_backend_convex_requests_get"
+    },
+    {
+      "label": "notifications.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 76,
+      "norm_label": "notifications.ts",
+      "id": "packages_backend_convex_notifications"
+    },
+    {
+      "label": "list",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 76,
+      "norm_label": "list",
+      "id": "packages_backend_convex_notifications_list"
+    },
+    {
+      "label": "markRead",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L25",
+      "_origin": "ast",
+      "community": 76,
+      "norm_label": "markread",
+      "id": "packages_backend_convex_notifications_markread"
+    },
+    {
+      "label": "notify",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L38",
+      "_origin": "ast",
+      "community": 76,
+      "norm_label": "notify",
+      "id": "packages_backend_convex_notifications_notify"
+    },
+    {
+      "label": "buildTelemetry.test.ts",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 75,
+      "norm_label": "buildtelemetry.test.ts",
+      "id": "packages_core_src_buildtelemetry_test"
+    },
+    {
+      "label": "OPSG01_KEYS",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.test.ts",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 75,
+      "norm_label": "opsg01_keys",
+      "id": "packages_core_src_buildtelemetry_test_opsg01_keys"
+    },
+    {
+      "label": "usage()",
+      "file_type": "code",
+      "source_file": "packages/core/src/buildTelemetry.test.ts",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 75,
+      "norm_label": "usage()",
+      "id": "packages_core_src_buildtelemetry_test_usage"
+    },
+    {
+      "label": "review.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "review.ts",
+      "id": "packages_backend_convex_review"
+    },
+    {
+      "label": "reviewDecisionValidator",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L26",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "reviewdecisionvalidator",
+      "id": "packages_backend_convex_review_reviewdecisionvalidator"
+    },
+    {
+      "label": "reviewEventValidator",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L34",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "revieweventvalidator",
+      "id": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "label": "eventName()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L49",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "eventname()",
+      "id": "packages_backend_convex_review_eventname"
+    },
+    {
+      "label": "armTimeout",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L53",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "armtimeout",
+      "id": "packages_backend_convex_review_armtimeout"
+    },
+    {
+      "label": "fireTimeout",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L73",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "firetimeout",
+      "id": "packages_backend_convex_review_firetimeout"
+    },
+    {
+      "label": "sendDecision",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L92",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "senddecision",
+      "id": "packages_backend_convex_review_senddecision"
+    },
+    {
+      "label": "smoke.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "smoke.ts",
+      "id": "packages_backend_convex_smoke"
+    },
+    {
+      "label": "boom",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "boom",
+      "id": "packages_backend_convex_smoke_boom"
+    },
+    {
+      "label": "failingPipeline",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L26",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "failingpipeline",
+      "id": "packages_backend_convex_smoke_failingpipeline"
+    },
+    {
+      "label": "runFailingPipeline",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "runfailingpipeline",
+      "id": "packages_backend_convex_smoke_runfailingpipeline"
+    },
+    {
+      "label": "recordReviewOutcome",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L55",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "recordreviewoutcome",
+      "id": "packages_backend_convex_smoke_recordreviewoutcome"
+    },
+    {
+      "label": "reviewGate",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L72",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "reviewgate",
+      "id": "packages_backend_convex_smoke_reviewgate"
+    },
+    {
+      "label": "startReviewGate",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L93",
+      "_origin": "ast",
+      "community": 62,
+      "norm_label": "startreviewgate",
+      "id": "packages_backend_convex_smoke_startreviewgate"
+    },
+    {
+      "label": "run-smoke-reviewgate.mjs",
+      "file_type": "code",
+      "source_file": "packages/backend/scripts/run-smoke-reviewgate.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 66,
+      "norm_label": "run-smoke-reviewgate.mjs",
+      "id": "packages_backend_scripts_run_smoke_reviewgate"
+    },
+    {
+      "label": "layout.tsx",
+      "file_type": "code",
+      "source_file": "apps/web/app/layout.tsx",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 34,
+      "norm_label": "layout.tsx",
+      "id": "apps_web_app_layout"
+    },
+    {
+      "label": "metadata",
+      "file_type": "code",
+      "source_file": "apps/web/app/layout.tsx",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 34,
+      "norm_label": "metadata",
+      "id": "apps_web_app_layout_metadata"
+    },
+    {
+      "label": "RootLayout()",
+      "file_type": "code",
+      "source_file": "apps/web/app/layout.tsx",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 34,
+      "norm_label": "rootlayout()",
+      "id": "apps_web_app_layout_rootlayout"
+    },
+    {
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 46,
+      "norm_label": "page.tsx",
+      "id": "apps_web_app_page"
+    },
+    {
+      "label": "metadata",
+      "file_type": "code",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 46,
+      "norm_label": "metadata",
+      "id": "apps_web_app_page_metadata"
+    },
+    {
+      "label": "structuredData",
+      "file_type": "code",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 46,
+      "norm_label": "structureddata",
+      "id": "apps_web_app_page_structureddata"
+    },
+    {
+      "label": "Home()",
+      "file_type": "code",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L55",
+      "_origin": "ast",
+      "community": 46,
+      "norm_label": "home()",
+      "id": "apps_web_app_page_home"
+    },
+    {
+      "label": "package.json",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "package.json",
+      "id": "apps_web_package"
+    },
+    {
+      "label": "name",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L2",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "name",
+      "id": "apps_web_package_name"
+    },
+    {
+      "label": "version",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "version",
+      "id": "apps_web_package_version"
+    },
+    {
+      "label": "private",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "private",
+      "id": "apps_web_package_private"
+    },
+    {
+      "label": "type",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L5",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "type",
+      "id": "apps_web_package_type"
+    },
+    {
+      "label": "scripts",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "scripts",
+      "id": "apps_web_package_scripts"
+    },
+    {
+      "label": "dev",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "dev",
+      "id": "apps_web_package_scripts_dev"
+    },
+    {
+      "label": "build",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "build",
+      "id": "apps_web_package_scripts_build"
+    },
+    {
+      "label": "start",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L9",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "start",
+      "id": "apps_web_package_scripts_start"
+    },
+    {
+      "label": "typecheck",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "typecheck",
+      "id": "apps_web_package_scripts_typecheck"
+    },
+    {
+      "label": "dependencies",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "dependencies",
+      "id": "apps_web_package_dependencies"
+    },
+    {
+      "label": "@pikar/contracts",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L13",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "@pikar/contracts",
+      "id": "apps_web_package_dependencies_pikar_contracts"
+    },
+    {
+      "label": "@pikar/core",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "@pikar/core",
+      "id": "apps_web_package_dependencies_pikar_core"
+    },
+    {
+      "label": "convex",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "convex",
+      "id": "apps_web_package_dependencies_convex"
+    },
+    {
+      "label": "next",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L16",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "next",
+      "id": "apps_web_package_dependencies_next"
+    },
+    {
+      "label": "react",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L17",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "react",
+      "id": "apps_web_package_dependencies_react"
+    },
+    {
+      "label": "react-dom",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "react-dom",
+      "id": "apps_web_package_dependencies_react_dom"
+    },
+    {
+      "label": "zod",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L19",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "zod",
+      "id": "apps_web_package_dependencies_zod"
+    },
+    {
+      "label": "devDependencies",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L21",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "devdependencies",
+      "id": "apps_web_package_devdependencies"
+    },
+    {
+      "label": "@types/node",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "@types/node",
+      "id": "apps_web_package_devdependencies_types_node"
+    },
+    {
+      "label": "@types/react",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "@types/react",
+      "id": "apps_web_package_devdependencies_types_react"
+    },
+    {
+      "label": "@types/react-dom",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L24",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "@types/react-dom",
+      "id": "apps_web_package_devdependencies_types_react_dom"
+    },
+    {
+      "label": "typescript",
+      "file_type": "code",
+      "source_file": "apps/web/package.json",
+      "source_location": "L25",
+      "_origin": "ast",
+      "community": 10,
+      "norm_label": "typescript",
+      "id": "apps_web_package_devdependencies_typescript"
     },
     {
       "label": "01-07-SUMMARY.md",
@@ -572,36 +1752,6 @@
       "community": 69,
       "norm_label": "crons",
       "id": "packages_backend_convex_crons_crons"
-    },
-    {
-      "label": "allowlist.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "allowlist.ts",
-      "id": "packages_backend_convex_lib_allowlist"
-    },
-    {
-      "label": "RAW_BUILDER_ALLOWLIST",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "raw_builder_allowlist",
-      "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
-    },
-    {
-      "label": "NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by",
-      "file_type": "rationale",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L9",
-      "_origin": "ast",
-      "community": 35,
-      "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by",
-      "id": "packages_backend_convex_lib_allowlist_rationale_9"
     },
     {
       "label": "worm.ts",
@@ -1014,166 +2164,6 @@
       "id": "packages_backend_convex_worm_test_src"
     },
     {
-      "label": "REQUIREMENTS.md",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "requirements.md",
-      "id": "planning_requirements"
-    },
-    {
-      "label": "Requirements: Pikar-AI",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "requirements: pikar-ai",
-      "id": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "label": "v1 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "v1 requirements",
-      "id": "planning_requirements_v1_requirements"
-    },
-    {
-      "label": "Intake & Enrichment",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "intake & enrichment",
-      "id": "planning_requirements_intake_enrichment"
-    },
-    {
-      "label": "Executive Agent & Planning",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "executive agent & planning",
-      "id": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "label": "Guardrails",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "guardrails",
-      "id": "planning_requirements_guardrails"
-    },
-    {
-      "label": "Human Review & Delivery",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "human review & delivery",
-      "id": "planning_requirements_human_review_delivery"
-    },
-    {
-      "label": "Knowledge Vault",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "knowledge vault",
-      "id": "planning_requirements_knowledge_vault"
-    },
-    {
-      "label": "Live Voice Sessions",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L49",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "live voice sessions",
-      "id": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "label": "Self-Improvement",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L56",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "self-improvement",
-      "id": "planning_requirements_self_improvement"
-    },
-    {
-      "label": "Governance & Operations",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L62",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "governance & operations",
-      "id": "planning_requirements_governance_operations"
-    },
-    {
-      "label": "Private Beta",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "private beta",
-      "id": "planning_requirements_private_beta"
-    },
-    {
-      "label": "v2 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L77",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "v2 requirements",
-      "id": "planning_requirements_v2_requirements"
-    },
-    {
-      "label": "Expansion",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L81",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "expansion",
-      "id": "planning_requirements_expansion"
-    },
-    {
-      "label": "Out of Scope",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L90",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "out of scope",
-      "id": "planning_requirements_out_of_scope"
-    },
-    {
-      "label": "Traceability",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "_origin": "ast",
-      "community": 15,
-      "norm_label": "traceability",
-      "id": "planning_requirements_traceability"
-    },
-    {
       "label": "01-06-SUMMARY.md",
       "file_type": "document",
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
@@ -1344,126 +2334,6 @@
       "id": "planning_phases_01_foundation_governance_substrate_01_06_summary_self_check_passed"
     },
     {
-      "label": "review.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "review.ts",
-      "id": "packages_backend_convex_review"
-    },
-    {
-      "label": "reviewEventValidator",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L22",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "revieweventvalidator",
-      "id": "packages_backend_convex_review_revieweventvalidator"
-    },
-    {
-      "label": "armTimeout",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L28",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "armtimeout",
-      "id": "packages_backend_convex_review_armtimeout"
-    },
-    {
-      "label": "fireTimeout",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L41",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "firetimeout",
-      "id": "packages_backend_convex_review_firetimeout"
-    },
-    {
-      "label": "sendDecision",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L62",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "senddecision",
-      "id": "packages_backend_convex_review_senddecision"
-    },
-    {
-      "label": "smoke.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "smoke.ts",
-      "id": "packages_backend_convex_smoke"
-    },
-    {
-      "label": "boom",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "boom",
-      "id": "packages_backend_convex_smoke_boom"
-    },
-    {
-      "label": "failingPipeline",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L26",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "failingpipeline",
-      "id": "packages_backend_convex_smoke_failingpipeline"
-    },
-    {
-      "label": "runFailingPipeline",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L35",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "runfailingpipeline",
-      "id": "packages_backend_convex_smoke_runfailingpipeline"
-    },
-    {
-      "label": "recordReviewOutcome",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L55",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "recordreviewoutcome",
-      "id": "packages_backend_convex_smoke_recordreviewoutcome"
-    },
-    {
-      "label": "reviewGate",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L72",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "reviewgate",
-      "id": "packages_backend_convex_smoke_reviewgate"
-    },
-    {
-      "label": "startReviewGate",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L91",
-      "_origin": "ast",
-      "community": 62,
-      "norm_label": "startreviewgate",
-      "id": "packages_backend_convex_smoke_startreviewgate"
-    },
-    {
       "label": "smokeAssert.ts",
       "file_type": "code",
       "source_file": "packages/backend/convex/smokeAssert.ts",
@@ -1492,16 +2362,6 @@
       "community": 64,
       "norm_label": "assertreviewoutcome",
       "id": "packages_backend_convex_smokeassert_assertreviewoutcome"
-    },
-    {
-      "label": "run-smoke-reviewgate.mjs",
-      "file_type": "code",
-      "source_file": "packages/backend/scripts/run-smoke-reviewgate.mjs",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 66,
-      "norm_label": "run-smoke-reviewgate.mjs",
-      "id": "packages_backend_scripts_run_smoke_reviewgate"
     },
     {
       "label": "deadLetter.ts",
@@ -2778,7 +3638,7 @@
       "source_file": "packages/backend/convex/audit.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "audit.test.ts",
       "id": "packages_backend_convex_audit_test"
     },
@@ -2788,7 +3648,7 @@
       "source_file": "packages/backend/convex/audit.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "modules",
       "id": "packages_backend_convex_audit_test_modules"
     },
@@ -2858,7 +3718,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 88,
       "norm_label": "auth.ts",
       "id": "packages_backend_convex_auth"
     },
@@ -2868,7 +3728,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 39,
+      "community": 88,
       "norm_label": "{ auth, signin, signout, store }",
       "id": "packages_backend_convex_auth_auth_signin_signout_store"
     },
@@ -2921,26 +3781,6 @@
       "community": 32,
       "norm_label": "listitems",
       "id": "packages_backend_convex_demo_listitems"
-    },
-    {
-      "label": "http.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 39,
-      "norm_label": "http.ts",
-      "id": "packages_backend_convex_http"
-    },
-    {
-      "label": "http",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L4",
-      "_origin": "ast",
-      "community": 39,
-      "norm_label": "http",
-      "id": "packages_backend_convex_http_http"
     },
     {
       "label": "importGuard.test.ts",
@@ -3048,79 +3888,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "schema.ts",
       "id": "packages_backend_convex_schema"
-    },
-    {
-      "label": "skills.test.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "skills.test.ts",
-      "id": "packages_backend_convex_skills_test"
-    },
-    {
-      "label": "modules",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "modules",
-      "id": "packages_backend_convex_skills_test_modules"
-    },
-    {
-      "label": "lf()",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L20",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "lf()",
-      "id": "packages_backend_convex_skills_test_lf"
-    },
-    {
-      "label": "skills.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "skills.ts",
-      "id": "packages_backend_convex_skills"
-    },
-    {
-      "label": "loadSkill()",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "loadskill()",
-      "id": "packages_backend_convex_skills_loadskill"
-    },
-    {
-      "label": "activateSkill",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L47",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "activateskill",
-      "id": "packages_backend_convex_skills_activateskill"
-    },
-    {
-      "label": "seedSkills",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L84",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "seedskills",
-      "id": "packages_backend_convex_skills_seedskills"
     },
     {
       "label": "tenant.test.ts",
@@ -3128,7 +3898,7 @@
       "source_file": "packages/backend/convex/tenant.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "tenant.test.ts",
       "id": "packages_backend_convex_tenant_test"
     },
@@ -3138,7 +3908,7 @@
       "source_file": "packages/backend/convex/tenant.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "modules",
       "id": "packages_backend_convex_tenant_test_modules"
     },
@@ -3568,7 +4338,7 @@
       "source_file": "packages/contracts/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "index.ts",
       "id": "packages_contracts_src_index"
     },
@@ -3578,7 +4348,7 @@
       "source_file": "packages/contracts/src/index.ts",
       "source_location": "L10",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "contracts_package_name",
       "id": "packages_contracts_src_index_contracts_package_name"
     },
@@ -3588,69 +4358,9 @@
       "source_file": "packages/contracts/src/index.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "brand",
       "id": "packages_contracts_src_index_brand"
-    },
-    {
-      "label": "skill.ts",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "skill.ts",
-      "id": "packages_contracts_src_skill"
-    },
-    {
-      "label": "LoadedSkill",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L9",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "loadedskill",
-      "id": "packages_contracts_src_skill_loadedskill"
-    },
-    {
-      "label": "SkillLoader",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L23",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "skillloader",
-      "id": "packages_contracts_src_skill_skillloader"
-    },
-    {
-      "label": "NO_ACTIVE_SKILL_ERROR",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L29",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "no_active_skill_error",
-      "id": "packages_contracts_src_skill_no_active_skill_error"
-    },
-    {
-      "label": "NO_SUCH_SKILL_VERSION_ERROR",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L32",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "no_such_skill_version_error",
-      "id": "packages_contracts_src_skill_no_such_skill_version_error"
-    },
-    {
-      "label": "EXECUTIVE_AGENT_CLASSIFIER_SKILL",
-      "file_type": "code",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L35",
-      "_origin": "ast",
-      "community": 5,
-      "norm_label": "executive_agent_classifier_skill",
-      "id": "packages_contracts_src_skill_executive_agent_classifier_skill"
     },
     {
       "label": "executiveAgentClassifier.ts",
@@ -3658,7 +4368,7 @@
       "source_file": "packages/contracts/src/skills/executiveAgentClassifier.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 86,
       "norm_label": "executiveagentclassifier.ts",
       "id": "packages_contracts_src_skills_executiveagentclassifier"
     },
@@ -3668,7 +4378,7 @@
       "source_file": "packages/contracts/src/tenant.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "tenant.ts",
       "id": "packages_contracts_src_tenant"
     },
@@ -3678,7 +4388,7 @@
       "source_file": "packages/contracts/src/tenant.ts",
       "source_location": "L10",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "tenantid",
       "id": "packages_contracts_src_tenant_tenantid"
     },
@@ -3688,7 +4398,7 @@
       "source_file": "packages/contracts/src/tenant.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "tenant_field",
       "id": "packages_contracts_src_tenant_tenant_field"
     },
@@ -3698,7 +4408,7 @@
       "source_file": "packages/contracts/src/tenant.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 5,
+      "community": 83,
       "norm_label": "astenantid()",
       "id": "packages_contracts_src_tenant_astenantid"
     },
@@ -3823,16 +4533,6 @@
       "id": "packages_core_package_scripts_typecheck"
     },
     {
-      "label": "index.ts",
-      "file_type": "code",
-      "source_file": "packages/core/src/index.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "index.ts",
-      "id": "packages_core_src_index"
-    },
-    {
       "label": "logger.ts",
       "file_type": "code",
       "source_file": "packages/core/src/logger.ts",
@@ -3928,7 +4628,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "result.ts",
       "id": "packages_core_src_result"
     },
@@ -3938,7 +4638,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "ok",
       "id": "packages_core_src_result_ok"
     },
@@ -3948,7 +4648,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "err",
       "id": "packages_core_src_result_err"
     },
@@ -3958,7 +4658,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "result",
       "id": "packages_core_src_result_result"
     },
@@ -3968,7 +4668,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "isok()",
       "id": "packages_core_src_result_isok"
     },
@@ -3978,7 +4678,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "iserr()",
       "id": "packages_core_src_result_iserr"
     },
@@ -3988,7 +4688,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 11,
+      "community": 81,
       "norm_label": "unwrap()",
       "id": "packages_core_src_result_unwrap"
     },
@@ -5458,7 +6158,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "architecture patterns",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_architecture_patterns"
     },
@@ -5468,7 +6168,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "recommended project structure",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_recommended_project_structure"
     },
@@ -5478,7 +6178,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L121",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 1: component wiring (`convex.config.ts`)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_1_component_wiring_convex_config_ts"
     },
@@ -5488,7 +6188,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 2: tenant-scoping wrapper (`customquery`/`custommutation`)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_2_tenant_scoping_wrapper_customquery_custommutation"
     },
@@ -5498,7 +6198,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L190",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 3: convex auth minimal setup",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_3_convex_auth_minimal_setup"
     },
@@ -5508,7 +6208,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L194",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 4: insert-only audit module (opsg-02)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_4_insert_only_audit_module_opsg_02"
     },
@@ -5518,7 +6218,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L224",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 5: dead-letter via `oncomplete` (opsg-04)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_5_dead_letter_via_oncomplete_opsg_04"
     },
@@ -5528,7 +6228,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L258",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 6: awaitevent-timeout race (issue #177 workaround)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_6_awaitevent_timeout_race_issue_177_workaround"
     },
@@ -5538,7 +6238,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L291",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 7: worm export cron stub",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_7_worm_export_cron_stub"
     },
@@ -5548,7 +6248,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L312",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 8: versioned skills registry + loader (success criterion #6)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_8_versioned_skills_registry_loader_success_criterion_6"
     },
@@ -5558,7 +6258,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L333",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 9: deployment envs + vercel",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_9_deployment_envs_vercel"
     },
@@ -5568,7 +6268,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L341",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 10: graphify on the repo (windows 11)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_10_graphify_on_the_repo_windows_11"
     },
@@ -5578,7 +6278,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L358",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "pattern 11: google oauth verification paperwork (week 1)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_pattern_11_google_oauth_verification_paperwork_week_1"
     },
@@ -5588,7 +6288,7 @@
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-RESEARCH.md",
       "source_location": "L370",
       "_origin": "ast",
-      "community": 73,
+      "community": 0,
       "norm_label": "sidecar host decision (document in phase 1 readme; no deployment yet)",
       "id": "planning_phases_01_foundation_governance_substrate_01_research_sidecar_host_decision_document_in_phase_1_readme_no_deployment_yet"
     },
@@ -7457,272 +8157,783 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/layout.tsx",
-      "source_location": "L6",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L42",
       "weight": 1.0,
-      "source": "apps_web_app_layout",
-      "target": "apps_web_app_layout_metadata",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_buildauthorizeurl",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/layout.tsx",
-      "source_location": "L12",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L119",
       "weight": 1.0,
-      "source": "apps_web_app_layout",
-      "target": "apps_web_app_layout_rootlayout",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_getfordelivery",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L55",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L93",
       "weight": 1.0,
-      "source": "apps_web_app_page",
-      "target": "apps_web_app_page_home",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_gettokens",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L6",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L149",
       "weight": 1.0,
-      "source": "apps_web_app_page",
-      "target": "apps_web_app_page_metadata",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_gmailconnecturl",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/page.tsx",
-      "source_location": "L18",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L137",
       "weight": 1.0,
-      "source": "apps_web_app_page",
-      "target": "apps_web_app_page_structureddata",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_gmailstatus",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L12",
-      "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_dependencies",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L21",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_devdependencies",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_hmachex",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L2",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L35",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_name",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_requireenv",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L4",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L74",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_private",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_store",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L6",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L103",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_scripts",
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_updateaccess",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L58",
+      "weight": 1.0,
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_gmailauth_verifystate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/http.ts",
       "source_location": "L5",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_type",
+      "source": "packages_backend_convex_http",
+      "target": "packages_backend_convex_gmailauth",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L3",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L52",
       "weight": 1.0,
-      "source": "apps_web_package",
-      "target": "apps_web_package_version",
+      "source": "packages_backend_convex_gmailauth_buildauthorizeurl",
+      "target": "packages_backend_convex_gmailauth_hmachex",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L8",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L63",
       "weight": 1.0,
-      "source": "apps_web_package_scripts",
-      "target": "apps_web_package_scripts_build",
+      "source": "packages_backend_convex_gmailauth_verifystate",
+      "target": "packages_backend_convex_gmailauth_hmachex",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "packages_backend_convex_gmailauth_buildauthorizeurl",
+      "target": "packages_backend_convex_gmailauth_requireenv",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L63",
+      "weight": 1.0,
+      "source": "packages_backend_convex_gmailauth_verifystate",
+      "target": "packages_backend_convex_gmailauth_requireenv",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L5",
+      "weight": 1.0,
+      "source": "packages_backend_convex_http",
+      "target": "packages_backend_convex_gmailauth_verifystate",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/http.ts",
       "source_location": "L7",
       "weight": 1.0,
-      "source": "apps_web_package_scripts",
-      "target": "apps_web_package_scripts_dev",
+      "source": "packages_backend_convex_http",
+      "target": "packages_backend_convex_http_http",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "imports_from",
+      "context": "import",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L9",
+      "source_file": "packages/backend/convex/importGuard.test.ts",
+      "source_location": "L2",
       "weight": 1.0,
-      "source": "apps_web_package_scripts",
-      "target": "apps_web_package_scripts_start",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_importguard_test",
+      "target": "packages_backend_convex_lib_allowlist"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L10",
-      "weight": 1.0,
-      "source": "apps_web_package_scripts",
-      "target": "apps_web_package_scripts_typecheck",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L15",
-      "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_convex",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L16",
-      "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_next",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_pikar_contracts",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
       "source_location": "L14",
       "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_pikar_core",
+      "source": "packages_backend_convex_lib_allowlist",
+      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "rationale_for",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L17",
+      "source_file": "packages/backend/convex/lib/allowlist.ts",
+      "source_location": "L9",
       "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_react",
+      "source": "packages_backend_convex_lib_allowlist_rationale_9",
+      "target": "packages_backend_convex_lib_allowlist",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "imports",
+      "context": "import",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L18",
+      "source_file": "packages/backend/convex/importGuard.test.ts",
+      "source_location": "L2",
       "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_react_dom",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_importguard_test",
+      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L19",
+      "source_file": "packages/core/src/tokenExpiry.ts",
+      "source_location": "L31",
       "weight": 1.0,
-      "source": "apps_web_package_dependencies",
-      "target": "apps_web_package_dependencies_zod",
+      "source": "packages_core_src_tokenexpiry",
+      "target": "packages_core_src_tokenexpiry_isdead",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L22",
       "weight": 1.0,
-      "source": "apps_web_package_devdependencies",
-      "target": "apps_web_package_devdependencies_types_node",
+      "source": "packages_core_src_tokenexpiry",
+      "target": "packages_core_src_tokenexpiry_isexpiringsoon",
       "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_backend_convex_skills"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_backend_convex_skills_loadskill"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_backend_convex_skills_test_lf"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_backend_convex_skills_test_modules"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_contracts_src_skills_emaildrafter"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.test.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills_test",
+      "target": "packages_contracts_src_skills_executiverouter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L60",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_skills_activateskill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L50",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_skills_getactiveskill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_skills_loadskill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L98",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_skills_seedskills"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_email_drafter_skill"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_executive_agent_classifier_skill"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_executive_router_skill"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_loadedskill"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_no_active_skill_error"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skill_no_such_skill_version_error"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skills_emaildrafter"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_contracts_src_skills_executiverouter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_email_drafter",
+      "target": "packages_contracts_skills_email_drafter_email_drafter_v1"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_email_drafter_email_drafter_v1",
+      "target": "packages_contracts_skills_email_drafter_drafting_principles"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_email_drafter_email_drafter_v1",
+      "target": "packages_contracts_skills_email_drafter_inputs"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/email-drafter.md",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_email_drafter_email_drafter_v1",
+      "target": "packages_contracts_skills_email_drafter_output_contract"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_executive_router",
+      "target": "packages_contracts_skills_executive_router_executive_agent_router_v1"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_executive_router_executive_agent_router_v1",
+      "target": "packages_contracts_skills_executive_router_decision_principles"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_executive_router_executive_agent_router_v1",
+      "target": "packages_contracts_skills_executive_router_output_contract"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_executive_router_executive_agent_router_v1",
+      "target": "packages_contracts_skills_executive_router_routes"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/skills/executive-router.md",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_skills_executive_router_executive_agent_router_v1",
+      "target": "packages_contracts_skills_executive_router_step_plan"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L42",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_email_drafter_skill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_executive_agent_classifier_skill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_executive_router_skill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_loadedskill"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L29",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_no_active_skill_error"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
+      "source_location": "L32",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_no_such_skill_version_error"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L23",
       "weight": 1.0,
-      "source": "apps_web_package_devdependencies",
-      "target": "apps_web_package_devdependencies_types_react",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "packages_contracts_src_skill",
+      "target": "packages_contracts_src_skill_skillloader"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_telemetry",
+      "target": "packages_backend_convex_telemetry_terminaloutcome"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_telemetry",
+      "target": "packages_backend_convex_telemetry_writeterminal"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements",
+      "target": "planning_requirements_requirements_pikar_ai"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L97",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_out_of_scope"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L112",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_traceability"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_v1_requirements"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L84",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_requirements_pikar_ai",
+      "target": "planning_requirements_v2_requirements"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L72",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_discoverability"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_executive_agent_planning"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L62",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_governance_operations"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
       "source_location": "L24",
       "weight": 1.0,
-      "source": "apps_web_package_devdependencies",
-      "target": "apps_web_package_devdependencies_types_react_dom",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_guardrails"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/package.json",
-      "source_location": "L25",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L33",
       "weight": 1.0,
-      "source": "apps_web_package_devdependencies",
-      "target": "apps_web_package_devdependencies_typescript",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_human_review_delivery"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_intake_enrichment"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L42",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_knowledge_vault"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L49",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_live_voice_sessions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L77",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_private_beta"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L56",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v1_requirements",
+      "target": "planning_requirements_self_improvement"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/REQUIREMENTS.md",
+      "source_location": "L88",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_requirements_v2_requirements",
+      "target": "planning_requirements_expansion"
     },
     {
       "relation": "contains",
@@ -7738,7 +8949,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": ".planning/STATE.md",
-      "source_location": "L59",
+      "source_location": "L61",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "planning_state_project_state",
@@ -7778,7 +8989,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": ".planning/STATE.md",
-      "source_location": "L91",
+      "source_location": "L114",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "planning_state_project_state",
@@ -7788,7 +8999,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": ".planning/STATE.md",
-      "source_location": "L85",
+      "source_location": "L108",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
@@ -7798,7 +9009,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": ".planning/STATE.md",
-      "source_location": "L61",
+      "source_location": "L63",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
@@ -7808,11 +9019,704 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": ".planning/STATE.md",
-      "source_location": "L81",
+      "source_location": "L104",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
       "target": "planning_state_pending_todos"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_dependency_graph"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L48",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_metrics"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L53",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_tech_tracking"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L87",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_deviations_from_plan"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L101",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_self_check_passed"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L80",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_verification"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L60",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary_phase_2_plan_03_intake_trust_boundary_summary",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_what_was_built"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
+      "source_location": "L89",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_02_03_summary_deviations_from_plan",
+      "target": "planning_phases_02_thin_end_to_end_slice_02_03_summary_out_of_scope_logged_not_fixed"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/deferred-items.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_deferred_items",
+      "target": "planning_phases_02_thin_end_to_end_slice_deferred_items_phase_02_deferred_items"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/02-thin-end-to-end-slice/deferred-items.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_02_thin_end_to_end_slice_deferred_items_phase_02_deferred_items",
+      "target": "planning_phases_02_thin_end_to_end_slice_deferred_items_pre_existing_tsc_noemit_failures_in_backend_test_files_found_during_02_01_task_1"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L50",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry",
+      "target": "packages_core_src_buildtelemetry_buildtelemetry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry",
+      "target": "packages_core_src_buildtelemetry_llmusage"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry",
+      "target": "packages_core_src_buildtelemetry_reviewoutcome"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry",
+      "target": "packages_core_src_buildtelemetry_telemetryrow"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.ts",
+      "source_location": "L27",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry",
+      "target": "packages_core_src_buildtelemetry_terminaloutcome"
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/index.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_index",
+      "target": "packages_core_src_buildtelemetry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L33",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_attachmentarg"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_contenthash"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_generateuploadurl"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L145",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_get"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L126",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_list"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L45",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_requests_submit"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_notifications",
+      "target": "packages_backend_convex_notifications_list"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L25",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_notifications",
+      "target": "packages_backend_convex_notifications_markread"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L38",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_notifications",
+      "target": "packages_backend_convex_notifications_notify"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.test.ts",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry_test",
+      "target": "packages_core_src_buildtelemetry_test_opsg01_keys"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/core/src/buildTelemetry.test.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_core_src_buildtelemetry_test",
+      "target": "packages_core_src_buildtelemetry_test_usage"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L53",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_armtimeout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L49",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_eventname"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L73",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_firetimeout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_reviewdecisionvalidator"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L34",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L92",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_review_senddecision"
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_review"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_review_revieweventvalidator"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_boom"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_failingpipeline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L55",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_recordreviewoutcome"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L72",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_reviewgate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_runfailingpipeline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L93",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_smoke_startreviewgate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/layout.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_app_layout",
+      "target": "apps_web_app_layout_metadata"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/layout.tsx",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_app_layout",
+      "target": "apps_web_app_layout_rootlayout"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L55",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_app_page",
+      "target": "apps_web_app_page_home"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_app_page",
+      "target": "apps_web_app_page_metadata"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/page.tsx",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_app_page",
+      "target": "apps_web_app_page_structureddata"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_dependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_devdependencies"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_name"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_private"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_scripts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_type"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package",
+      "target": "apps_web_package_version"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_scripts",
+      "target": "apps_web_package_scripts_build"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_scripts",
+      "target": "apps_web_package_scripts_dev"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L9",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_scripts",
+      "target": "apps_web_package_scripts_start"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_scripts",
+      "target": "apps_web_package_scripts_typecheck"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_convex"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_next"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_pikar_contracts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_pikar_core"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_react"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_react_dom"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_dependencies",
+      "target": "apps_web_package_dependencies_zod"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_devdependencies",
+      "target": "apps_web_package_devdependencies_types_node"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L23",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_devdependencies",
+      "target": "apps_web_package_devdependencies_types_react"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L24",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_devdependencies",
+      "target": "apps_web_package_devdependencies_types_react_dom"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/package.json",
+      "source_location": "L25",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "apps_web_package_devdependencies",
+      "target": "apps_web_package_devdependencies_typescript"
     },
     {
       "relation": "contains",
@@ -7963,48 +9867,6 @@
       "confidence_score": 1.0,
       "source": "packages_backend_convex_crons",
       "target": "packages_backend_convex_crons_crons"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/importGuard.test.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_importguard_test",
-      "target": "packages_backend_convex_lib_allowlist"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_lib_allowlist",
-      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
-    },
-    {
-      "relation": "rationale_for",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/lib/allowlist.ts",
-      "source_location": "L9",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_lib_allowlist_rationale_9",
-      "target": "packages_backend_convex_lib_allowlist"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/importGuard.test.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_importguard_test",
-      "target": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
     },
     {
       "relation": "contains",
@@ -8369,156 +10231,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements",
-      "target": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L90",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_out_of_scope"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_traceability"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v1_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L77",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v2_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L62",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_governance_operations"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_guardrails"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_human_review_delivery"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_intake_enrichment"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_knowledge_vault"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L49",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_private_beta"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L56",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_self_improvement"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L81",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v2_requirements",
-      "target": "planning_requirements_expansion"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
       "source_location": "L7",
       "weight": 1.0,
@@ -8675,128 +10387,6 @@
       "confidence_score": 1.0,
       "source": "planning_phases_01_foundation_governance_substrate_01_06_summary_deviations_from_plan",
       "target": "planning_phases_01_foundation_governance_substrate_01_06_summary_auto_fixed_issues"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L28",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_review",
-      "target": "packages_backend_convex_review_armtimeout"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L41",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_review",
-      "target": "packages_backend_convex_review_firetimeout"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L22",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_review",
-      "target": "packages_backend_convex_review_revieweventvalidator"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L62",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_review",
-      "target": "packages_backend_convex_review_senddecision"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_review"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_review_revieweventvalidator"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_boom"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_failingpipeline"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L55",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_recordreviewoutcome"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L72",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_reviewgate"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L35",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_runfailingpipeline"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L91",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_smoke_startreviewgate"
     },
     {
       "relation": "contains",
@@ -10090,17 +11680,6 @@
       "target": "packages_backend_convex_auth_auth_signin_signout_store"
     },
     {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_auth"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/convex.config.ts",
@@ -10162,16 +11741,6 @@
       "confidence_score": 1.0,
       "source": "packages_backend_convex_demo",
       "target": "packages_backend_convex_lib_functions_tenantquery"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L4",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_http_http"
     },
     {
       "relation": "contains",
@@ -10269,172 +11838,12 @@
       "relation": "imports_from",
       "context": "import",
       "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_backend_convex_schema"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/tenant.test.ts",
       "source_location": "L4",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "packages_backend_convex_tenant_test",
       "target": "packages_backend_convex_schema"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L8",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_backend_convex_skills"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L8",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_backend_convex_skills_loadskill"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L20",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_backend_convex_skills_test_lf"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_backend_convex_skills_test_modules"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.test.ts",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills_test",
-      "target": "packages_contracts_src_skills_executiveagentclassifier"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L47",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_backend_convex_skills_activateskill"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_backend_convex_skills_loadskill"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L84",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_backend_convex_skills_seedskills"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skill"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skill_executive_agent_classifier_skill"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skill_loadedskill"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skill_no_active_skill_error"
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skill_no_such_skill_version_error"
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L16",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_contracts_src_skills_executiveagentclassifier"
     },
     {
       "relation": "contains",
@@ -10861,56 +12270,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L35",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_contracts_src_skill",
-      "target": "packages_contracts_src_skill_executive_agent_classifier_skill"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L9",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_contracts_src_skill",
-      "target": "packages_contracts_src_skill_loadedskill"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L29",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_contracts_src_skill",
-      "target": "packages_contracts_src_skill_no_active_skill_error"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L32",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_contracts_src_skill",
-      "target": "packages_contracts_src_skill_no_such_skill_version_error"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/contracts/src/skill.ts",
-      "source_location": "L23",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_contracts_src_skill",
-      "target": "packages_contracts_src_skill_skillloader"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "packages/contracts/src/tenant.ts",
       "source_location": "L16",
       "weight": 1.0,
@@ -11037,28 +12396,6 @@
       "confidence_score": 1.0,
       "source": "packages_core_package_scripts",
       "target": "packages_core_package_scripts_typecheck"
-    },
-    {
-      "relation": "re_exports",
-      "context": "export",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/core/src/index.ts",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_core_src_index",
-      "target": "packages_core_src_logger"
-    },
-    {
-      "relation": "re_exports",
-      "context": "export",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/core/src/index.ts",
-      "source_location": "L1",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "packages_core_src_index",
-      "target": "packages_core_src_result"
     },
     {
       "relation": "contains",
@@ -14384,5 +15721,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "4fadfa26ae14f7a883b3230e8267ff1c1cb038b1"
+  "built_at_commit": "638c316e5e91c8fdc12b7e110d6430855f88d93a"
 }

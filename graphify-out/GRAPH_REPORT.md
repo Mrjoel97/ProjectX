@@ -1,16 +1,16 @@
-# Graph Report - Pikar-Ai  (2026-07-10)
+# Graph Report - Pikar-Ai  (2026-07-11)
 
 ## Corpus Check
-- 96 files · ~63,820 words
+- 181 files · ~138,176 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 744 nodes · 689 edges · 75 communities (57 shown, 18 thin omitted)
+- 814 nodes · 752 edges · 89 communities (68 shown, 21 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4fadfa26`
+- Built from commit: `638c316e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -78,6 +78,17 @@
 - Phase 01 Plan 07: WORM Export Cron Stub Summary
 - Architecture Patterns
 - providers.tsx
+- buildTelemetry.test.ts
+- notifications.ts
+- requests.ts
+- Architecture Patterns
+- buildTelemetry.ts
+- result.ts
+- telemetry.ts
+- tenant.ts
+- Executive Agent — Router (v1)
+- Email Drafter (v1)
+- auth.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 14 edges
@@ -87,9 +98,9 @@
 5. `Critical Pitfalls` - 13 edges
 6. `Stack Research — Convex Revision` - 13 edges
 7. `Phase 01 Plan 06: DLQ + awaitEvent-Timeout Race Smoke Patterns Summary` - 12 edges
-8. `Phase 1 Plan 01: Foundation & Governance Substrate Summary` - 11 edges
-9. `Phase 1 Plan 2: Tenant-Scoping Substrate Summary` - 11 edges
-10. `Phase 1 Plan 03: Insert-Only Audit Module Summary` - 11 edges
+8. `v1 Requirements` - 11 edges
+9. `Phase 1 Plan 01: Foundation & Governance Substrate Summary` - 11 edges
+10. `Phase 1 Plan 2: Tenant-Scoping Substrate Summary` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - None detected - all connections are within the same source files.
@@ -97,11 +108,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (75 total, 18 thin omitted)
+## Communities (89 total, 21 thin omitted)
 
 ### Community 0 - "Architecture Patterns"
-Cohesion: 0.06
-Nodes (31): Alternatives Considered, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions, Phase 1: Foundation & Governance Substrate - Research (+23 more)
+Cohesion: 0.04
+Nodes (45): Alternatives Considered, Architecture Patterns, Code Examples, Common Pitfalls, Core, Don't Hand-Roll, Metadata, Open Questions (+37 more)
 
 ### Community 1 - "package.json"
 Cohesion: 0.06
@@ -120,8 +131,8 @@ Cohesion: 0.07
 Nodes (26): 10. Rate limiting / cost kill-switch, 1. Orchestration: Convex Workflow component (replaces Inngest), 2. Auth: Convex Auth (replaces Better Auth for the beta), 3. Vector search + GraphRAG modeling, 4. Realtime UX (subscriptions), 5. Python sidecars + file storage, 6. Audit / compliance, 7. Scheduled functions (watchdog + token refresh) (+18 more)
 
 ### Community 5 - "skills.ts"
-Cohesion: 0.10
-Nodes (15): modules, activateSkill, loadSkill(), seedSkills, modules, modules, Brand, CONTRACTS_PACKAGE_NAME (+7 more)
+Cohesion: 0.17
+Nodes (12): activateSkill, getActiveSkill, loadSkill(), seedSkills, modules, EMAIL_DRAFTER_SKILL, EXECUTIVE_AGENT_CLASSIFIER_SKILL, EXECUTIVE_ROUTER_SKILL (+4 more)
 
 ### Community 6 - "dependencies"
 Cohesion: 0.07
@@ -144,8 +155,8 @@ Cohesion: 0.09
 Nodes (22): dependencies, convex, next, @pikar/contracts, @pikar/core, react, react-dom, zod (+14 more)
 
 ### Community 11 - "result.ts"
-Cohesion: 0.13
-Nodes (7): createLogger(), LogFields, Logger, LogLevel, Err, Ok, Result
+Cohesion: 0.28
+Nodes (4): createLogger(), LogFields, Logger, LogLevel
 
 ### Community 12 - "compilerOptions"
 Cohesion: 0.12
@@ -161,7 +172,7 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 15 - "v1 Requirements"
 Cohesion: 0.12
-Nodes (15): Executive Agent & Planning, Expansion, Governance & Operations, Guardrails, Human Review & Delivery, Intake & Enrichment, Knowledge Vault, Live Voice Sessions (+7 more)
+Nodes (16): Discoverability, Executive Agent & Planning, Expansion, Governance & Operations, Guardrails, Human Review & Delivery, Intake & Enrichment, Knowledge Vault (+8 more)
 
 ### Community 16 - "Feature Research"
 Cohesion: 0.12
@@ -247,6 +258,10 @@ Nodes (4): Decision principles, Executive Agent — Request Classifier (v1), Out
 Cohesion: 0.40
 Nodes (3): backend, NOTE: `convex codegen` requires a configured deployment (CONVEX_DEPLOYMENT in, root
 
+### Community 39 - "auth.ts"
+Cohesion: 0.22
+Nodes (11): buildAuthorizeUrl(), getForDelivery, getTokens, gmailConnectUrl, gmailStatus, hmacHex(), requireEnv(), store (+3 more)
+
 ### Community 40 - "tsconfig.json"
 Cohesion: 0.50
 Nodes (3): exclude, extends, include
@@ -260,8 +275,8 @@ Cohesion: 0.13
 Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
 
 ### Community 62 - "smoke.ts"
-Cohesion: 0.18
-Nodes (10): armTimeout, fireTimeout, reviewEventValidator, sendDecision, boom, failingPipeline, recordReviewOutcome, reviewGate (+2 more)
+Cohesion: 0.15
+Nodes (11): armTimeout, fireTimeout, reviewDecisionValidator, reviewEventValidator, sendDecision, boom, failingPipeline, recordReviewOutcome (+3 more)
 
 ### Community 65 - "Architecture Patterns"
 Cohesion: 0.12
@@ -275,29 +290,57 @@ Nodes (3): advanceCursor, auditSince, getCursor
 Cohesion: 0.13
 Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
 
-### Community 73 - "Architecture Patterns"
-Cohesion: 0.14
-Nodes (14): Architecture Patterns, Pattern 10: graphify on the repo (Windows 11), Pattern 11: Google OAuth verification paperwork (Week 1), Pattern 1: Component wiring (`convex.config.ts`), Pattern 2: Tenant-scoping wrapper (`customQuery`/`customMutation`), Pattern 3: Convex Auth minimal setup, Pattern 4: Insert-only audit module (OPSG-02), Pattern 5: Dead-letter via `onComplete` (OPSG-04) (+6 more)
+### Community 76 - "notifications.ts"
+Cohesion: 0.50
+Nodes (3): list, markRead, notify
+
+### Community 77 - "requests.ts"
+Cohesion: 0.29
+Nodes (5): attachmentArg, generateUploadUrl, get, list, submit
+
+### Community 79 - "Architecture Patterns"
+Cohesion: 0.20
+Nodes (9): Dependency graph, Deviations from Plan, Metrics, Out-of-scope (logged, not fixed), Phase 2 Plan 03: Intake Trust Boundary Summary, Self-Check: PASSED, Tech tracking, Verification (+1 more)
+
+### Community 80 - "buildTelemetry.ts"
+Cohesion: 0.29
+Nodes (4): LlmUsage, ReviewOutcome, TelemetryRow, TerminalOutcome
+
+### Community 81 - "result.ts"
+Cohesion: 0.29
+Nodes (3): Err, Ok, Result
+
+### Community 83 - "tenant.ts"
+Cohesion: 0.20
+Nodes (6): modules, modules, Brand, CONTRACTS_PACKAGE_NAME, TENANT_FIELD, TenantId
+
+### Community 84 - "Executive Agent — Router (v1)"
+Cohesion: 0.33
+Nodes (5): Decision principles, Executive Agent — Router (v1), Output contract, Routes, Step plan
+
+### Community 85 - "Email Drafter (v1)"
+Cohesion: 0.40
+Nodes (4): Drafting principles, Email Drafter (v1), Inputs, Output contract
 
 ## Knowledge Gaps
-- **521 isolated node(s):** `metadata`, `metadata`, `structuredData`, `name`, `version` (+516 more)
+- **560 isolated node(s):** `store`, `getTokens`, `updateAccess`, `getForDelivery`, `gmailStatus` (+555 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Phase 1: Foundation & Governance Substrate - Research` connect `Architecture Patterns` to `Architecture Patterns`?**
-  _High betweenness centrality (0.003) - this node is a cross-community bridge._
-- **Why does `Architecture Patterns` connect `Architecture Patterns` to `Architecture Patterns`?**
-  _High betweenness centrality (0.002) - this node is a cross-community bridge._
-- **What connects `metadata`, `metadata`, `structuredData` to the rest of the system?**
-  _524 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `store`, `getTokens`, `updateAccess` to the rest of the system?**
+  _563 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Architecture Patterns` be split into smaller, more focused modules?**
-  _Cohesion score 0.0625 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.043478260869565216 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
 - **Should `Architecture Research` be split into smaller, more focused modules?**
   _Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected._
 - **Should `biome.json` be split into smaller, more focused modules?**
   _Cohesion score 0.07142857142857142 - nodes in this community are weakly interconnected._
+- **Should `Stack Research — Convex Revision` be split into smaller, more focused modules?**
+  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
+- **Should `dependencies` be split into smaller, more focused modules?**
+  _Cohesion score 0.06896551724137931 - nodes in this community are weakly interconnected._

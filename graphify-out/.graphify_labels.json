@@ -73,5 +73,19 @@
   "71": "run-smoke-worm.mjs",
   "72": "Phase 01 Plan 07: WORM Export Cron Stub Summary",
   "73": "Architecture Patterns",
-  "74": "providers.tsx"
+  "74": "providers.tsx",
+  "75": "buildTelemetry.test.ts",
+  "76": "notifications.ts",
+  "77": "requests.ts",
+  "78": "tokenExpiry.test.ts",
+  "79": "Architecture Patterns",
+  "80": "buildTelemetry.ts",
+  "81": "result.ts",
+  "82": "telemetry.ts",
+  "83": "tenant.ts",
+  "84": "Executive Agent — Router (v1)",
+  "85": "Email Drafter (v1)",
+  "86": "executiveAgentClassifier.ts",
+  "87": "tokenExpiry.ts",
+  "88": "auth.ts"
 }
