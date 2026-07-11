@@ -7,6 +7,6 @@ import { convexAuth } from "@convex-dev/auth/server";
 // signing in must never silently hand an agent your mailbox.
 // auth.ts stays on the raw-builder allowlist (CLAUDE.md §2) — convexAuth wires the
 // generated query/mutation/action itself.
-export const { auth, signIn, signOut, store } = convexAuth({
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [Google({ authorization: { params: { scope: "openid email profile" } } })],
 });
