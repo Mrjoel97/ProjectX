@@ -1,7 +1,7 @@
 # Requirements: Pikar-AI
 
 **Defined:** 2026-07-09
-**Core Value:** A user speaks or types a goal and the system reliably plans it, executes it with guardrails (cost, PII, quality), lets the user approve/edit/reject before anything leaves the building, and follows through to real delivery (email) — with a full audit trail.
+**Core Value:** A user speaks or types a goal and the system reliably plans it, shows the plan for a single approval before anything leaves the building (approve once → hands-off governed execution, with stage notifications and a halt control), executes it with guardrails (cost, PII, quality), and follows through to real delivery (email) — with a full audit trail. *(Approval granularity moved to per-plan 2026-07-10.)*
 
 ## v1 Requirements
 
@@ -32,12 +32,20 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Human Review & Delivery
 
-- [x] **REVW-01**: User reviews every generated response and can approve, edit, or reject it before delivery
+- [x] **REVW-01**: User reviews and can approve, edit, or reject **at a single plan-level gate before execution** — approve once, then hands-off governed execution with stage notifications and a halt control. *(Redefined 2026-07-10 from per-response review. Phase 2 shipped the interim per-response gate — mechanics smoke-tested; the plan-level gate ships with the cockpit, Phase 3.1, whose manual checkpoint carries the end-user verification.)*
 - [ ] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [ ] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
 - [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter
 - [x] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
+
+### Email Cockpit
+
+*Added 2026-07-12 from the approved Email Chat Cockpit design (`.planning/design/email-chat-cockpit.md`). Slice 1 (Phase 3.1) reshapes INTK-01 / AGNT-02 / REVW-01 / DLVR-01 UX and mints no new ID; slices 2–4 are new capabilities.*
+
+- [ ] **CKPT-01**: Agent can search/read the user's connected mailbox (via the already-granted `gmail.modify` scope) to surface people and context into the guided conversation — scoped to the requesting user only, with reads audited as refs/ids/counts (never raw message content), and nothing sent as a side effect of reading
+- [ ] **CKPT-02**: Agent can generate a document and attach it to an outgoing email within an approved plan, flowing through the same governed send (audit, telemetry, DLQ) — distinct from INTK-02, which is *inbound* attachment ingestion
+- [ ] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
 
 ### Knowledge Vault
 
@@ -135,6 +143,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DLVR-01 | Phase 2 | Complete |
 | DLVR-02 | Phase 9 | Pending |
 | DLVR-03 | Phase 2 | Complete |
+| CKPT-01 | Phase 3.2 | Pending |
+| CKPT-02 | Phase 3.3 | Pending |
+| CKPT-03 | Phase 3.4 | Pending |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
 | VALT-03 | Phase 5 | Pending |
@@ -161,10 +172,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
-- v1 requirements: 40 total (NOTE: prior header said "36"; the file actually contains 40 distinct IDs — count corrected during roadmap creation)
-- Mapped to phases: 40
+- v1 requirements: **43 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED)
+- Mapped to phases: 43
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-09 after roadmap creation (traceability populated; count corrected 36→40)*
+*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43*

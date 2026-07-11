@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-07-PLAN.md
-last_updated: "2026-07-11T16:25:06.122Z"
-last_activity: 2026-07-11 — Completed 02-07 (authenticated surface; OPSG-07, BETA-04)
+stopped_at: Phase 2 closed — 02-08/02-09 superseded by Phase 3.1 cockpit
+last_updated: "2026-07-12T00:00:00.000Z"
+last_activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09 (UI retired by cockpit)
 progress:
-  total_phases: 9
+  total_phases: 13
   completed_phases: 0
   total_plans: 18
   completed_plans: 15
@@ -20,15 +20,15 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-07-09)
 
-**Core value:** A user speaks or types a goal and the system reliably plans it, executes it with guardrails (cost, PII, quality), lets the user approve/edit/reject before anything leaves the building, and follows through to real delivery (email) — with a full audit trail.
+**Core value:** A user speaks or types a goal and the system reliably plans it, shows the plan for a single approval before anything leaves the building (approve once → hands-off governed execution, notify + halt), executes it with guardrails (cost, PII, quality), and follows through to real delivery (email) — with a full audit trail. *(Per-plan approval, 2026-07-10.)*
 **Current focus:** Phase 2 — Thin End-to-End Slice
 
 ## Current Position
 
-Phase: 2 of 9 (Thin End-to-End Slice)
-Plan: 7 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05, 02-06, 02-07)
-Status: Executing — 02-07 done (authenticated surface: Convex Auth swapped Password→Google [openid email profile only; gmail.modify stays in the separate /connect-gmail flow]; Next.js wired via ConvexAuthNextjsServerProvider + client provider + default-deny middleware.ts gating all non-public routes to /signin; authenticated (app) shell with nav + persistent OPSG-07 dead-letter badge bound to a live deadLetters.newCount query; /signin + /dashboard pages; @pikar/backend/api exposed as the web app's first Convex client surface; privacy policy now names Vercel AI Gateway + OpenAI as active processors). Remaining in Phase 2: 02-08, 02-09. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-07 (authenticated surface; OPSG-07, BETA-04)
+Phase: 2 of 9 closed for forward progress → next is Phase 3 (Guardrails), then the cockpit (3.1)
+Plan: 02-01…02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 (not verified, not deleted)
+Status: Phase 2 backend spine COMPLETE (routing, drafting, review-gate mechanics, Gmail delivery, DLQ, telemetry, audit, migrations, aggregate) — unblocks Phase 3. The interim submit-form + review-queue UI shipped ad-hoc but is superseded by the Email Chat Cockpit: the `/submit` form and `/review` queue-gate are retired UX (kept on disk, retired later), while `/connect-gmail` (cockpit prerequisite), the ops page (OPSG-07), and `ReconnectBanner` (DLVR-03) SURVIVE and are reused by the cockpit. Phase 2 SC-1 (submit + live status) and SC-2 (see-plan + approve/edit/reject) end-user verification is reassigned to Phase 3.1's manual checkpoint. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09
 
 Progress: [████████░░] 83%
 
@@ -112,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Failed terminal (OPSG-01) owned at the single onComplete choke point: deadLetter.onPipelineComplete patches requests.status=failed + inserts one failed telemetry row (redaction-safe, idempotent) so a mis-route never hangs at routing; both AGNT-03 reasons (unknown_route vs route_not_implemented) dead-letter distinctly
 - [Phase 02]: [Phase 02] SMOKE::route goal sentinel in llm.route/draft forces routes deterministically offline (local backend has no AI_GATEWAY_API_KEY); keeps the REAL pipeline (gate/delivery/DLQ/telemetry) in the smoke loop with zero duplication — remove once a mock-gateway smoke exists
 - [Phase 02]: [Phase 02] Web imports the Convex api via a @pikar/backend/api package export (source-export, added to transpilePackages) — the web app's first Convex client surface; being the first typechecked consumer of the generated api forced the deferred smoke.ts workflow.start self-reference fix (explicit handler return types, TS7022)
+- [PRD — re-baseline 2026-07-12]: PROJECT.md + REQUIREMENTS.md re-baselined to absorb the three 2026-07-10/11 scope decisions they had drifted from: (1) core-value + REVW-01 redefined to per-PLAN approval; (2) `gmail.modify` restricted-scope constraints (annual CASA, zero-retention LLM contract) added to PRD Constraints; (3) cockpit named in PRD Active requirements + CKPT-01/02/03 minted for slices 2–4 (mapped to Phases 3.2/3.3/3.4 in traceability and roadmap). Also: Python-sidecar assumption removed from the PRD stack (none built; Phase 3 PII approach is an open decision), Key Decisions outcomes recorded (were all "Pending"), requirement count closed at 43. **Process rule going forward: any [PRODUCT]/[LEGAL] decision logged here must name the PRD/REQUIREMENTS line it amends in the same entry, or the decision isn't done**
+- [Cockpit — supersede 02-08/09, 2026-07-12]: 02-08 (submit form) + 02-09 (review queue/gate/ops/connect-gmail/reconnect) code already existed on disk (built ad-hoc during auth work), never got SUMMARY files or their blocking human-verify checkpoints. Rather than finish+verify UX the cockpit retires, they are SUPERSEDED by Phase 3.1. RETIRED UX: `/submit` form, `/review` queue + collapsed gate (cockpit approves at the PLAN, not a mid-run gate). SURVIVES & reused by cockpit (do NOT delete): `/connect-gmail` (prerequisite), ops page (OPSG-07), `ReconnectBanner` (DLVR-03) — verified real (markResolved/buildAuthorizeUrl/awaiting_reauth present). Nothing deleted now (design: retired pages "Kept, retired later"). Phase 2 backend spine complete → unblocks Phase 3. SC-1/SC-2 end-user verification reassigned to 3.1's manual checkpoint
+- [Cockpit — roadmap 2026-07-12]: Email Chat Cockpit slices registered as decimal phases **3.1 Cockpit Core, 3.2 Inbox Reading, 3.3 Attachment Generation, 3.4 Per-Recipient Personalization** (INSERTED after Phase 3, before Phase 4 — zero renumber of existing 4–9). Sequenced AFTER Guardrails; the cockpit REPLACES Phase 2's /submit form + /review queue UX while reusing the governed backend spine unchanged. Slice 1 reshapes INTK-01/AGNT-02/REVW-01/DLVR-01 UX (no new v1 ID); slices 2–4 are new capabilities with no prior v1 ID (formal REQUIREMENTS.md IDs are a follow-up if wanted). Source: `.planning/design/email-chat-cockpit.md`. total_phases 9→13
 - [Phase 02]: [Phase 02] Google is the Convex Auth sign-in provider (from @auth/core/providers/google — Convex Auth ships none); front-door scope is openid email profile ONLY, gmail.modify stays in the separate /connect-gmail flow. Authenticated shell lives under the (app) route group behind a default-deny middleware; dashboard at /dashboard (the group root would collide with the public / marketing page)
 
 ### Pending Todos
@@ -120,8 +123,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Requirement count discrepancy:** REQUIREMENTS.md header says "36 v1 requirements" but the file contains 40 distinct IDs. Roadmap maps all 40; traceability corrected to 40. Confirm the intended count.
-- **External clock (OAuth):** Google `gmail.send` verification (2–4 weeks, uncontrollable) must have paperwork submitted in Week 1 (Phase 1); beta ships on Testing-mode (100-user cap, 7-day token expiry handled).
+- ~~**Requirement count discrepancy**~~ **CLOSED 2026-07-12:** count corrected 36→40 during roadmap creation; +3 CKPT IDs minted for cockpit slices 2–4 → **43 v1 requirements**, all mapped.
+- **External clock (OAuth — updated 2026-07-12):** verification is now for `gmail.modify`, a **restricted** scope: 2–4+ week review PLUS an annual CASA third-party security assessment (~$500–4,500/yr) — longer than the old `gmail.send` sensitive-scope path. Cannot start until a legal entity exists (the reviewed privacy policy must name a real data controller) — deferred to Phase 9. Phases 2–8 run on Testing mode (100-user cap, 7-day token expiry handled). The LLM provider must be on zero-retention/no-training terms before restricted-scope data flows to it (hard Phase 3 constraint).
 - **Pre-1.0 Convex components:** Workflow 0.2.x, Agent/RAG/Auth 0.x — pin versions; expect API churn.
 
 ## Session Continuity

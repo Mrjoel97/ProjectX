@@ -15,6 +15,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Foundation & Governance Substrate** - Convex/Next.js monorepo, tenant scoping, insert-only audit, DLQ + timeout patterns, graphify, OAuth paperwork started
 - [ ] **Phase 2: Thin End-to-End Slice** - Text request → plan → human review → Gmail delivery → live status + full audit trail
 - [ ] **Phase 3: Guardrails** - PII redaction, cost estimate/downgrade, tenant-namespaced cache, fallback, rate-limit + cost kill-switch
+- [ ] **Phase 3.1: Cockpit Core** (INSERTED) - Two-pane chat cockpit: guided slot-filling conversation → single plan-approval → hands-off multi-recipient governed send → live per-recipient report; reuses the Phase 2 engine, retires the /submit form + /review queue
+- [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
+- [ ] **Phase 3.3: Attachment Generation** (INSERTED) - Agent generates a document and attaches it to an outgoing email
+- [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog → durable brief → optional executable plan
@@ -60,18 +64,20 @@ Plans:
   3. An approved response is delivered to a real inbox via Gmail (Testing mode); an invalid/unauthenticated request is rejected with a notification and an auditable "Request Rejected — Validation Failed" outcome.
   4. An unknown/invalid routing value is sent to the dead-letter store instead of silently defaulting.
   5. Every request produces telemetry (tokens, cost, duration, decision counts, review outcome) and a full audit trail, and a Gmail token nearing its 7-day expiry prompts the user to re-auth before it breaks.
-**Plans**: 9 plans
+**Plans**: 9 plans (02-01→02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 — see note below)
 
 Plans:
-- [ ] 02-01-PLAN.md — Migrations + aggregate components, +5 tables, first migration, audit aggregate wiring (Wave 1)
-- [ ] 02-02-PLAN.md — routingDecision contract + two seeded skills + LLM route/draft action via AI Gateway (Wave 2)
-- [ ] 02-03-PLAN.md — Submit mutation + INTK-04 validation + requests queries + in-app notifications (Wave 2)
-- [ ] 02-04-PLAN.md — Review-gate decision union + attempt-suffixed event + write-once telemetry (Wave 2)
-- [ ] 02-05-PLAN.md — Gmail gmail.modify OAuth connect flow + token storage + REST send + token-age cron (Wave 2)
-- [ ] 02-06-PLAN.md — Pipeline workflow spine + operator dead-letter surface + full-spine/DLQ smoke (Wave 3)
-- [ ] 02-07-PLAN.md — Google sign-in + Next.js auth wiring + app shell + persistent DLQ badge + privacy edit (Wave 4)
-- [ ] 02-08-PLAN.md — Submit form + attachment picker + live requests list (Wave 5)
-- [ ] 02-09-PLAN.md — Review queue + collapsed gate + ops page + connect-gmail + reconnect banner (Wave 5)
+- [x] 02-01-PLAN.md — Migrations + aggregate components, +5 tables, first migration, audit aggregate wiring (Wave 1)
+- [x] 02-02-PLAN.md — routingDecision contract + two seeded skills + LLM route/draft action via AI Gateway (Wave 2)
+- [x] 02-03-PLAN.md — Submit mutation + INTK-04 validation + requests queries + in-app notifications (Wave 2)
+- [x] 02-04-PLAN.md — Review-gate decision union + attempt-suffixed event + write-once telemetry (Wave 2)
+- [x] 02-05-PLAN.md — Gmail gmail.modify OAuth connect flow + token storage + REST send + token-age cron (Wave 2)
+- [x] 02-06-PLAN.md — Pipeline workflow spine + operator dead-letter surface + full-spine/DLQ smoke (Wave 3)
+- [x] 02-07-PLAN.md — Google sign-in + Next.js auth wiring + app shell + persistent DLQ badge + privacy edit (Wave 4)
+- [~] 02-08-PLAN.md — Submit form + attachment picker + live requests list — **SUPERSEDED by Phase 3.1 (2026-07-12).** Code shipped ad-hoc (files on disk), but the `/submit` form is the retired UX the cockpit replaces; the human-verify checkpoint was NOT run and SC-1 end-user verification is reassigned to 3.1. `AttachmentPicker` + live-list patterns carry forward into the cockpit composer/report (Wave 5)
+- [~] 02-09-PLAN.md — Review queue + collapsed gate + ops page + connect-gmail + reconnect banner — **SUPERSEDED (partial) by Phase 3.1 (2026-07-12).** RETIRED: the `/review` queue + collapsed gate (the cockpit approves at the PLAN, not a mid-run gate). SURVIVES & reused by the cockpit: `/connect-gmail` (prerequisite), the ops page (OPSG-07), and `ReconnectBanner` (DLVR-03) — do NOT delete these. Human-verify checkpoint NOT run; SC-2 reassigned to 3.1 (Wave 5)
+
+**02-08/02-09 supersession (2026-07-12):** Per the approved Email Chat Cockpit design, the manual submit-form + review-queue UX is replaced by the Phase 3.1 cockpit rather than finished and verified here. Nothing is deleted now (design: retired pages are "Kept, retired later"). Phase 2's **backend spine is complete** (routing, drafting, review-gate mechanics, Gmail delivery, DLQ, telemetry, audit, migrations, aggregate) and unblocks Phase 3; the user-facing verification of SC-1 (submit + live status) and SC-2 (see-plan + approve/edit/reject) moves to Phase 3.1's manual checkpoint, where the real cockpit UX is exercised end to end.
 
 ### Phase 3: Guardrails
 **Goal**: Every request passes cost, PII, and quality guardrails before any external model call, and runaway spend is structurally impossible — governance as a shipped product feature, slotted into the existing pipeline steps.
@@ -84,6 +90,49 @@ Plans:
   3. Over-budget requests (estimated from `safeText`) automatically downgrade to a cheaper model, and a per-user rate limit plus a cost kill-switch hard-stop runaway spend; unknown/null cost results fail closed.
   4. Two different users submitting identical redacted input receive isolated, tenant-namespaced cache entries, and a cache hit returns without a model call.
   5. A primary model failure or timeout transparently triggers fallback generation.
+**Plans**: TBD
+
+### Phase 3.1: Cockpit Core (INSERTED)
+**Goal**: The manual `/submit` form + `/review` queue are replaced by a conversational two-pane cockpit — a guided slot-filling conversation assembles a PLAN, the user approves once, and execution fans out hands-off to multiple recipients through the existing governed engine (Gmail, audit, telemetry, DLQ, tenant scoping, durable workflows), with a live per-recipient report.
+**Depends on**: Phase 3 (governed engine + guardrails complete); reuses Phase 2 delivery/audit/telemetry/DLQ primitives unchanged
+**Requirements**: Reshapes INTK-01, AGNT-02, REVW-01, DLVR-01 UX (approval moves to the PLAN before execution); no new v1 requirement ID — the governance backend is reused, not rebuilt
+**Design**: `.planning/design/email-chat-cockpit.md` (slice 1). Groundwork Connect-Gmail infinite-loading fix landed in commit `18c8442`.
+**Success Criteria** (what must be TRUE):
+  1. `/dashboard/workspace` renders a two-pane cockpit (chat ~30% / workspace ~70%) with a draggable, per-user-persisted divider (min ~20% each pane).
+  2. A pure, tested `emailIntent` module (`packages/core`) tracks slots (recipients, subject, body intent, optional attachment); the agent asks only for what is missing, one topic at a time; an invalid email re-asks only that one and nothing is ever sent on an assumption.
+  3. For >1 recipient the agent asks individual-copies (safe default) vs group-email; a PLAN card shows recipients + mode + subject + body preview + steps before a single Approve.
+  4. Approve triggers `executePlan` → a lean `deliverApprovedPlan` durable workflow that fans out per recipient over the existing `gmail.send` + retrier + audit + telemetry + DLQ; approval is idempotent (double-approve sends once) and zero sends occur before Approve.
+  5. A REPORT card fills per recipient live (status + message id + audit link); one recipient failing dead-letters that row while the rest still send; no raw email content lands in any audit/DLQ payload.
+**Plans**: TBD
+
+### Phase 3.2: Inbox Reading (INSERTED)
+**Goal**: The agent can search and read the connected mailbox to find people and context, so a request can reference real recipients and prior threads instead of only user-typed input.
+**Depends on**: Phase 3.1 (cockpit + guided conversation)
+**Requirements**: CKPT-01 (minted 2026-07-12; the `gmail.modify` read scope is already granted in Phase 2)
+**Design**: `.planning/design/email-chat-cockpit.md` (slice 2)
+**Success Criteria** (what must be TRUE):
+  1. The agent searches/reads the user's mailbox via the already-granted `gmail.modify` scope, scoped to the requesting user only.
+  2. Mailbox reads surface people/context into the guided conversation (e.g. resolving a recipient from prior correspondence) without sending anything.
+  3. Read access is audited with refs/ids/counts only — no raw message content in any audit/DLQ payload.
+**Plans**: TBD
+
+### Phase 3.3: Attachment Generation (INSERTED)
+**Goal**: The agent can generate a document and attach it to an outgoing email, so a plan can deliver produced artifacts, not just body text.
+**Depends on**: Phase 3.1 (plan/draft artifacts + send fan-out)
+**Requirements**: CKPT-02 (minted 2026-07-12; distinct from INTK-02, which is inbound attachment ingestion)
+**Design**: `.planning/design/email-chat-cockpit.md` (slice 3)
+**Success Criteria** (what must be TRUE):
+  1. The agent generates a document artifact and attaches it to the outgoing email within a plan.
+  2. The generated attachment flows through the same governed send (Gmail + audit + telemetry + DLQ) and appears on the PLAN/REPORT cards.
+**Plans**: TBD
+
+### Phase 3.4: Per-Recipient Personalization (INSERTED)
+**Goal**: A multi-recipient send can tailor wording per recipient, moving beyond slice-1 same-content-to-all while keeping the single plan-approval gate.
+**Depends on**: Phase 3.1 (multi-recipient fan-out); Phase 3.2 (inbox context strengthens personalization)
+**Requirements**: CKPT-03 (minted 2026-07-12)
+**Success Criteria** (what must be TRUE):
+  1. For a multi-recipient plan, each recipient can receive individually tailored wording, shown per recipient on the PLAN card before the single Approve.
+  2. Personalized content passes the same PII/cost/review guardrails and per-recipient audit/telemetry as same-content sends.
 **Plans**: TBD
 
 ### Phase 4: Attachment & Voice-Dictation Intake
@@ -153,13 +202,17 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 → 4 → 5 → 6 → 7 → 8 → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
-| 2. Thin End-to-End Slice | 0/9 | Not started | - |
+| 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
 | 3. Guardrails | 0/TBD | Not started | - |
+| 3.1 Cockpit Core (INSERTED) | 0/TBD | Not started | - |
+| 3.2 Inbox Reading (INSERTED) | 0/TBD | Not started | - |
+| 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
+| 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
