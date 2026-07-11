@@ -91,7 +91,14 @@ Plans:
   3. Over-budget requests (estimated from `safeText`) automatically downgrade to a cheaper model, and a per-user rate limit plus a cost kill-switch hard-stop runaway spend; unknown/null cost results fail closed.
   4. Two different users submitting identical redacted input receive isolated, tenant-namespaced cache entries, and a cache hit returns without a model call.
   5. A primary model failure or timeout transparently triggers fallback generation.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Pure domain logic: @pikar/cost (estimate/downgrade/price, fail-closed) + isFallbackEligible classifier + SafeText brand (Wave 1)
+- [ ] 03-02-PLAN.md — Platform prep: action-cache 0.3.1 exact-pin install, safeText/safeTextHash schema rails + guardrailConfig, scanning/blocked statuses + blocked telemetry outcome (Wave 1)
+- [ ] 03-03-PLAN.md — Guard choke point: guardrails.ts (kill switch, scan→persist, cost→model choice, daily-spend window) + per-user submit rate limit [GRDL-01/03/06] (Wave 2)
+- [ ] 03-04-PLAN.md — Rewire llm.ts (fail-closed safeText reader, tenant-namespaced cache, cheap-model fallback) + pipeline guard step/blocked terminal/priced spend + GRDL-02 static scan (Wave 3)
+- [ ] 03-05-PLAN.md — smoke:guardrails integration suite (no-raw-PII, cache isolation/hit, fallback, kill switch, budget, rate limit) + phase gate (Wave 4)
 
 ### Phase 3.1: Cockpit Core (INSERTED)
 **Goal**: The manual `/submit` form + `/review` queue are replaced by a conversational two-pane cockpit — a guided slot-filling conversation assembles a PLAN, the user approves once, and execution fans out hands-off to multiple recipients through the existing governed engine (Gmail, audit, telemetry, DLQ, tenant scoping, durable workflows), with a live per-recipient report.
@@ -209,7 +216,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 �
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
 | 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
-| 3. Guardrails | 0/TBD | Not started | - |
+| 3. Guardrails | 0/5 | Planned | - |
 | 3.1 Cockpit Core (INSERTED) | 0/TBD | Not started | - |
 | 3.2 Inbox Reading (INSERTED) | 0/TBD | Not started | - |
 | 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
