@@ -7,6 +7,7 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import { workflow } from "./index";
@@ -99,5 +100,49 @@ export const startReviewGate = internalMutation({
       timeoutMs: timeoutMs ?? 8000,
     });
     return { correlationId: cid, workflowId };
+  },
+});
+
+// --- Pattern 3 (02-06): drive the REAL pipeline spine end-to-end -------------
+// Seeds a real `requests` row and starts internal.pipeline.pipelineWorkflow with
+// the same onComplete-DLQ + redaction-safe (requestId ref) context as
+// requests.submit. The goal carries the llm.ts SMOKE::route sentinel so the spine
+// runs deterministically offline (no LLM key on the local backend):
+//   route=direct_tool/direct_llm → gate (script approves) → delivery → awaiting_reauth
+//     (tenant "smoke" has no Gmail token) or sent (if one exists) + telemetry.
+//   route=sub_agent → pipeline throws route_not_implemented → DLQ (AGNT-03).
+//   route=unknown  → llm.route throws unknown_route → DLQ (AGNT-03).
+// Both DLQ paths exercise the failed-terminal wiring (status=failed + failed telemetry).
+
+export const seedPipeline = internalMutation({
+  args: {
+    correlationId: v.string(),
+    route: v.union(
+      v.literal("direct_llm"),
+      v.literal("direct_tool"),
+      v.literal("sub_agent"),
+      v.literal("unknown"),
+    ),
+  },
+  handler: async (ctx, { correlationId, route }): Promise<{ requestId: Id<"requests"> }> => {
+    const requestId = await ctx.db.insert("requests", {
+      tenantId: "smoke",
+      correlationId,
+      goal: `SMOKE::route=${route}:: thank a colleague`,
+      recipient: "smoke@example.com",
+      status: "submitted",
+      attachmentRefs: [],
+      createdAt: Date.now(),
+    });
+    await workflow.start(
+      ctx,
+      internal.pipeline.pipelineWorkflow,
+      { correlationId, requestId, tenantId: "smoke" },
+      {
+        onComplete: internal.deadLetter.onPipelineComplete,
+        context: { tenantId: "smoke", correlationId, payload: { correlationId, requestId } },
+      },
+    );
+    return { requestId };
   },
 });

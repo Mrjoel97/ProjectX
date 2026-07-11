@@ -59,6 +59,73 @@ export const assertReviewOutcome = internalQuery({
   },
 });
 
+/**
+ * 02-06 full spine: the pipeline reached a delivery outcome. No Gmail token for
+ * tenant "smoke" → `awaiting_reauth` (the automatable half of DLVR-01/03); a token
+ * present → `sent` with exactly one `sent` telemetry row.
+ */
+export const assertPipelineDelivered = internalQuery({
+  args: { correlationId: v.string() },
+  handler: async (ctx, { correlationId }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "awaiting_reauth" && req.status !== "sent") {
+      throw new Error(`pipeline ${correlationId} at "${req.status}", expected awaiting_reauth|sent`);
+    }
+    if (req.status === "sent") {
+      const tel = await ctx.db
+        .query("telemetry")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+        .first();
+      if (!tel || tel.reviewOutcome !== "sent") {
+        throw new Error(`no sent telemetry row for ${correlationId}`);
+      }
+    }
+    return { ok: true, status: req.status };
+  },
+});
+
+/**
+ * AGNT-03 + OPSG-01: a mis-route dead-lettered under the DISTINCT reason AND the
+ * request reached the `failed` terminal (status=failed + one failed telemetry row) —
+ * proving it no longer hangs at "routing".
+ */
+export const assertDeadLetterReason = internalQuery({
+  args: { correlationId: v.string(), reason: v.string() },
+  handler: async (ctx, { correlationId, reason }) => {
+    const news = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    const row = news.find((r) => r.correlationId === correlationId);
+    if (!row) throw new Error(`no new deadLetters row for ${correlationId}`);
+    if (!row.error.includes(reason)) {
+      throw new Error(`deadLetters reason for ${correlationId}: "${row.error}" !~ "${reason}"`);
+    }
+
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "failed") {
+      throw new Error(`request ${correlationId} at "${req.status}", expected failed (no-stuck-status)`);
+    }
+
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!tel || tel.reviewOutcome !== "failed") {
+      throw new Error(`no failed telemetry row for ${correlationId}`);
+    }
+    return { ok: true, reason: row.error };
+  },
+});
+
 /** OPSG-06: the first migration ran and recorded a completed (success) state. */
 export const assertMigrationRan = internalQuery({
   args: {},

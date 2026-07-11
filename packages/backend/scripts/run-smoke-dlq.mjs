@@ -11,4 +11,18 @@ must("smoke:runFailingPipeline", { correlationId: cid });
 console.log("[smoke:dlq] polling for deadLetters row + deadletter.written audit...");
 await pollPass("smokeAssert:assertDeadLetter", { correlationId: cid });
 
+// AGNT-03: the two mis-route paths through the REAL pipeline must dead-letter under
+// DISTINCT reasons AND drive the request to the `failed` terminal (status=failed +
+// one failed telemetry row — proving no request hangs at "routing", OPSG-01).
+for (const [route, reason] of [
+  ["unknown", "unknown_route"],
+  ["sub_agent", "route_not_implemented"],
+]) {
+  const c = `smoke-agnt03-${route}-${randomUUID()}`;
+  console.log(`[smoke:dlq] AGNT-03 ${route} -> ${reason} (cid=${c})`);
+  must("smoke:seedPipeline", { correlationId: c, route });
+  await pollPass("smokeAssert:assertDeadLetterReason", { correlationId: c, reason });
+  console.log(`[smoke:dlq] AGNT-03 ${route} PASSED (distinct reason + failed terminal)`);
+}
+
 console.log("[smoke:dlq] PASSED");

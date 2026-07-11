@@ -22,6 +22,26 @@ import { internalAction } from "./_generated/server";
 /** Single model knob so GRDL-03/05 (Phase 3) can vary the model in one place. */
 const MODEL = "openai/gpt-4o-mini";
 
+// ── Smoke seam ──────────────────────────────────────────────────────────────
+// A dev-deployment smoke must drive the REAL spine deterministically and offline
+// (no AI_GATEWAY_API_KEY on the local backend, and a real model can't be forced
+// onto sub_agent/unknown to exercise both AGNT-03 DLQ paths). A goal that begins
+// with `SMOKE::route=<value>::` short-circuits the model call with a fixed route/
+// draft — a sentinel no real goal carries. It degrades only the caller's OWN
+// request (forces its route); no cross-tenant effect.
+// ponytail: content sentinel, not an env flag — keeps the seam per-request and
+// out of shared deployment config. Remove once a mock-gateway smoke exists.
+type Route = RoutingDecision["route"];
+const SMOKE_ROUTES: readonly Route[] = ["direct_llm", "direct_tool", "sub_agent"];
+function parseSmokeRoute(goal: string): Route | "unknown" | null {
+  const m = goal.match(/^SMOKE::route=([a-z_]+)::/);
+  if (!m) return null;
+  return SMOKE_ROUTES.includes(m[1] as Route) ? (m[1] as Route) : "unknown";
+}
+// Cast: the telemetry consumer reads only inputTokens/outputTokens; the SDK's
+// LanguageModelUsage detail fields are irrelevant to a zero-cost smoke route.
+const ZERO_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 } as unknown as GenUsage;
+
 // `usage` shape lifted straight from the AI SDK's own return — version-independent, and
 // (paired with the handler return annotations below) keeps these actions out of the
 // `internal`-graph circular inference that sibling "use node" modules push past TS's limit.
@@ -51,6 +71,17 @@ export const route = internalAction({
     // second near-identical request reader. Add a dedicated getGoal query only if the
     // two shapes ever diverge.
     const goal = req.subject;
+
+    // Smoke seam: force a deterministic route (unknown throws the same reason the
+    // real parse-fail path throws, so AGNT-03 dead-letters identically).
+    const forced = parseSmokeRoute(goal);
+    if (forced === "unknown") throw new Error("unknown_route");
+    if (forced) {
+      return {
+        routing: { route: forced, steps: [{ n: 1, description: "smoke" }], rationale: "smoke" },
+        usage: ZERO_USAGE,
+      };
+    }
 
     const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EXECUTIVE_ROUTER_SKILL,
@@ -88,6 +119,11 @@ export const draft = internalAction({
     );
     if (!req) throw new Error(`llm.draft: request ${requestId} not found`);
     const goal = req.subject;
+
+    // Smoke seam: a forced route returns a fixed draft (no model call).
+    if (parseSmokeRoute(goal)) {
+      return { subject: "Smoke Subject", body: `Smoke draft for ${requestId}`, usage: ZERO_USAGE };
+    }
 
     const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EMAIL_DRAFTER_SKILL,

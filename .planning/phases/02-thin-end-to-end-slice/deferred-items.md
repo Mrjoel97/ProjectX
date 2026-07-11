@@ -61,3 +61,11 @@ Confirmed present at baseline (HEAD 77ca77d) BEFORE any 02-06 change; my changes
 - `convex/smoke.ts`: circular `internal`-graph inference collapses `runFailingPipeline`/`startReviewGate` to `any` (guidelines §96). STATE already flags smoke.ts as the deferred instance of this pattern. Remedy when addressed: add explicit handler return-type annotations (`Promise<{...}>`), as done for llm.ts/gmail.ts in 02-05.
 
 Neither blocks `npx convex run` (dev-deployment bundling, not tsc) so Task 3 smoke is unaffected.
+
+## 02-06 execution — pre-existing test failure (out of scope)
+
+`convex/audit.test.ts > audit.log inserts exactly one row that round-trips` fails with
+`Component "auditCounts" is not registered. Call "t.registerComponent"`. Confirmed identical at
+baseline 77ca77d (02-05) — the aggregate (`@convex-dev/aggregate`) component isn't registered in
+that test's convex-test harness. Untouched by 02-06. Fix: add `t.registerComponent("auditCounts", ...)`
+in audit.test.ts (or a shared test setup) when the aggregate harness is addressed.
