@@ -82,7 +82,10 @@ export default function Home() {
               end once you approve — reporting every step, and stopping the moment you say so.
             </p>
             <div className="cta-row">
-              <a className="cta" href={`mailto:${CONTACT}?subject=Pikar%20AI%20access`}>
+              <a className="cta" href="/signin">
+                Sign in
+              </a>
+              <a className="cta cta-ghost" href={`mailto:${CONTACT}?subject=Pikar%20AI%20access`}>
                 Request access
               </a>
               <a className="cta cta-ghost" href="#how">
