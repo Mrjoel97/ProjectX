@@ -36,9 +36,17 @@ function base64Url(s: string): string {
     .replace(/=+$/, "");
 }
 
+// Explicit return type: keeps `send` out of the internal-graph type-inference cycle.
+// Inferring it from the body forces resolution of `internal.{pipeline,gmailAuth,audit}`,
+// which (with llm.ts's actions doing the same) tips TS past its circular-inference limit
+// and collapses sibling actions to `any` (Convex guidelines §96).
+type SendResult =
+  | { delivered: false; reason: "not_connected" | "refresh_failed" }
+  | { delivered: true; messageId: string };
+
 export const send = internalAction({
   args: { requestId: v.id("requests") },
-  handler: async (ctx, { requestId }) => {
+  handler: async (ctx, { requestId }): Promise<SendResult> => {
     const req = await ctx.runQuery(internal.gmailAuth.getForDelivery, { requestId });
     if (!req) throw new Error(`gmail.send: request ${requestId} not found`);
 
