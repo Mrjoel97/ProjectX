@@ -1,6 +1,8 @@
 /* Auth surface — the teal design system (distinct from the amber marketing theme).
    Scoped under .auth-split so it never touches the existing /, /privacy, /terms pages.
-   Tokens sampled from the reference: teal-900 frame, teal-600 action, teal-400 glow. */
+   Tokens sampled from the reference: teal-900 frame, teal-600 action, teal-400 glow.
+   Sized to fit ONE viewport with no page scroll — spacing is deliberately compact and
+   the panel scrolls internally only as a last resort on very short screens. */
 
 .auth-split {
   --t900: #0b4f4a;
@@ -15,9 +17,10 @@
   --ink2: #48635e;
   --panel-text: #eaf6f3;
 
-  min-height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
+  overflow: hidden;
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
@@ -31,10 +34,11 @@
 .auth-aside {
   background: #ffffff;
   color: var(--ink);
-  padding: clamp(1.75rem, 3vw, 3rem);
+  padding: clamp(1.5rem, 3vw, 2.75rem);
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
+  overflow: hidden;
 }
 
 @media (max-width: 60rem) {
@@ -67,14 +71,14 @@
 .auth-aside-mid {
   margin: auto 0;
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
   max-width: 32rem;
 }
 
 .auth-headline {
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 800;
-  font-size: clamp(2rem, 1.1rem + 2.8vw, 3.1rem);
+  font-size: clamp(1.9rem, 1.1rem + 2.6vw, 3rem);
   line-height: 1.02;
   letter-spacing: -0.03em;
   margin: 0;
@@ -93,7 +97,7 @@
 
 .auth-features {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.75rem;
 }
 
 .auth-feature {
@@ -103,13 +107,13 @@
   background: #fff;
   border: 1px solid #eef2f1;
   border-radius: 1rem;
-  padding: 1rem 1.15rem;
+  padding: 0.8rem 1.1rem;
   box-shadow: 0 14px 34px -24px rgba(11, 46, 42, 0.4);
 }
 
 .auth-feature-ic {
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 0.8rem;
   background: var(--t50);
   color: var(--t600);
@@ -141,9 +145,11 @@
   position: relative;
   display: grid;
   place-items: center;
-  padding: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(1rem, 3vh, 2rem) clamp(1.5rem, 4vw, 3rem);
   background: linear-gradient(150deg, var(--t900) 0%, var(--t800) 48%, var(--t700) 100%);
-  overflow: hidden;
+  /* clip the decorative glow horizontally; allow vertical scroll only as a last resort */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .auth-panel::before {
@@ -164,7 +170,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1.5rem;
-  padding: clamp(1.5rem, 3vw, 2.25rem);
+  padding: clamp(1.25rem, 2.5vh, 1.9rem) clamp(1.4rem, 3vw, 2.1rem);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.6);
@@ -173,13 +179,13 @@
 }
 
 .auth-badge {
-  width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 1rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 0.9rem;
   background: rgba(255, 255, 255, 0.12);
   display: grid;
   place-items: center;
-  margin: 0 auto 0.9rem;
+  margin: 0 auto 0.6rem;
   color: #fff;
 }
 
@@ -187,7 +193,7 @@
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 800;
   text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.45rem;
   margin: 0;
   color: #fff;
 }
@@ -195,20 +201,20 @@
 .auth-tagline {
   text-align: center;
   color: rgba(234, 246, 243, 0.68);
-  margin: 0.25rem 0 1.5rem;
+  margin: 0.2rem 0 1.1rem;
   font-size: 0.9rem;
 }
 
 .auth-field {
-  margin-bottom: 1rem;
+  margin-bottom: 0.7rem;
 }
 
 .auth-label {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: rgba(234, 246, 243, 0.88);
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.3rem;
 }
 
 .auth-input-wrap {
@@ -230,8 +236,8 @@
   width: 100%;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 0.75rem;
-  padding: 0.8rem 2.6rem;
+  border-radius: 0.7rem;
+  padding: 0.62rem 2.5rem;
   color: #fff;
   font-size: 0.95rem;
   font-family: inherit;
@@ -267,12 +273,12 @@
 
 .auth-submit {
   width: 100%;
-  margin-top: 0.4rem;
+  margin-top: 0.3rem;
   background: #fff;
   color: var(--t900);
   border: 0;
-  border-radius: 0.75rem;
-  padding: 0.85rem;
+  border-radius: 0.7rem;
+  padding: 0.72rem;
   font-weight: 700;
   font-size: 0.98rem;
   font-family: inherit;
@@ -303,7 +309,7 @@
   color: rgba(234, 246, 243, 0.5);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
-  margin: 1.25rem 0;
+  margin: 0.85rem 0;
 }
 
 .auth-or::before,
@@ -319,8 +325,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #fff;
-  border-radius: 0.75rem;
-  padding: 0.8rem;
+  border-radius: 0.7rem;
+  padding: 0.7rem;
   font-weight: 600;
   font-size: 0.95rem;
   font-family: inherit;
@@ -340,7 +346,7 @@
   text-align: center;
   color: rgba(234, 246, 243, 0.7);
   font-size: 0.88rem;
-  margin: 1.25rem 0 0;
+  margin: 0.85rem 0 0;
 }
 
 .auth-switch a {
@@ -358,9 +364,9 @@
   border: 1px solid rgba(248, 113, 113, 0.4);
   color: #fecaca;
   border-radius: 0.6rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.55rem 0.8rem;
   font-size: 0.85rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.8rem;
 }
 
 .auth-panel :focus-visible {
