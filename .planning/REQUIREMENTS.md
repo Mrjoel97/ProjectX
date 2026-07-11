@@ -79,7 +79,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **BETA-01**: New users can sign up only with a valid invite code (Convex Auth)
 - [ ] **BETA-02**: All data — requests, vault, cache, audit, telemetry — is isolated per user across every table and index
 - [ ] **BETA-03**: A new user reaches their first delivered result within minutes via a guided conversational onboarding
-- [ ] **BETA-04**: User sees live pipeline status and their review queue update in real time (Convex subscriptions)
+- [x] **BETA-04**: User sees live pipeline status and their review queue update in real time (Convex subscriptions)
 
 ## v2 Requirements
 
@@ -158,7 +158,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-01 | Phase 9 | Pending |
 | BETA-02 | Phase 9 | Pending |
 | BETA-03 | Phase 9 | Pending |
-| BETA-04 | Phase 2 | Pending |
+| BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 40 total (NOTE: prior header said "36"; the file actually contains 40 distinct IDs — count corrected during roadmap creation)

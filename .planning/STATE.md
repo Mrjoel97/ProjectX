@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-07-11T16:11:10.195Z"
-last_activity: 2026-07-11 — Completed 02-06 (pipeline spine + operator DLQ; AGNT-03, OPSG-07, REVW-01, DLVR-01/03, OPSG-01)
+stopped_at: Completed 02-07-PLAN.md
+last_updated: "2026-07-11T16:25:06.122Z"
+last_activity: 2026-07-11 — Completed 02-07 (authenticated surface; OPSG-07, BETA-04)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 18
-  completed_plans: 14
-  percent: 78
+  completed_plans: 15
+  percent: 83
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 2 of 9 (Thin End-to-End Slice)
-Plan: 6 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05, 02-06)
-Status: Executing — 02-06 done (pipeline spine: pipelineWorkflow sequences route→draft→review gate w/ regenerate loop→Gmail delivery, status staged at each stage; failed terminal owned at deadLetter.onComplete = status=failed + one failed telemetry row; both AGNT-03 mis-routes dead-letter distinctly; tenant-scoped operator DLQ surface newCount/listNew/markResolved; full-spine + AGNT-03 DLQ smoke pass live via a SMOKE::route offline sentinel). Remaining in Phase 2: 02-07, 02-08, 02-09. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-06 (pipeline spine + operator DLQ; AGNT-03, OPSG-07, REVW-01, DLVR-01/03, OPSG-01)
+Plan: 7 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05, 02-06, 02-07)
+Status: Executing — 02-07 done (authenticated surface: Convex Auth swapped Password→Google [openid email profile only; gmail.modify stays in the separate /connect-gmail flow]; Next.js wired via ConvexAuthNextjsServerProvider + client provider + default-deny middleware.ts gating all non-public routes to /signin; authenticated (app) shell with nav + persistent OPSG-07 dead-letter badge bound to a live deadLetters.newCount query; /signin + /dashboard pages; @pikar/backend/api exposed as the web app's first Convex client surface; privacy policy now names Vercel AI Gateway + OpenAI as active processors). Remaining in Phase 2: 02-08, 02-09. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-07 (authenticated surface; OPSG-07, BETA-04)
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [████████░░] 78%
 | Phase 02 P02 | 28 | 3 tasks | 11 files |
 | Phase 02 P05 | 30 | 3 tasks | 4 files |
 | Phase 02 P06 | 35 | 3 tasks | 10 files |
+| Phase 02 P07 | 35 | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Pipeline spine (02-06): one pipelineWorkflow sequences route→draft→review gate (regenerate loop)→Gmail delivery, staging requests.status at each stage; delivery uses step.runAction + workpool default retries (a workflow handler has no scheduler ctx for retrier.run), gmail.send's discriminated result drives sent-vs-awaiting_reauth
 - [Phase 02]: [Phase 02] Failed terminal (OPSG-01) owned at the single onComplete choke point: deadLetter.onPipelineComplete patches requests.status=failed + inserts one failed telemetry row (redaction-safe, idempotent) so a mis-route never hangs at routing; both AGNT-03 reasons (unknown_route vs route_not_implemented) dead-letter distinctly
 - [Phase 02]: [Phase 02] SMOKE::route goal sentinel in llm.route/draft forces routes deterministically offline (local backend has no AI_GATEWAY_API_KEY); keeps the REAL pipeline (gate/delivery/DLQ/telemetry) in the smoke loop with zero duplication — remove once a mock-gateway smoke exists
+- [Phase 02]: [Phase 02] Web imports the Convex api via a @pikar/backend/api package export (source-export, added to transpilePackages) — the web app's first Convex client surface; being the first typechecked consumer of the generated api forced the deferred smoke.ts workflow.start self-reference fix (explicit handler return types, TS7022)
+- [Phase 02]: [Phase 02] Google is the Convex Auth sign-in provider (from @auth/core/providers/google — Convex Auth ships none); front-door scope is openid email profile ONLY, gmail.modify stays in the separate /connect-gmail flow. Authenticated shell lives under the (app) route group behind a default-deny middleware; dashboard at /dashboard (the group root would collide with the public / marketing page)
 
 ### Pending Todos
 
@@ -123,8 +126,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T16:10:49.149Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-07-11T16:24:27.963Z
+Stopped at: Completed 02-07-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
