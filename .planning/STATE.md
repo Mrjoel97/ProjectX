@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-07-11T15:17:11.691Z"
-last_activity: "2026-07-11 — Completed 02-03 (intake trust boundary: pure validateSubmit + submit mutation + upload URL + requests queries + in-app notifications)"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-07-11T15:39:31.032Z"
+last_activity: "2026-07-11 — Completed 02-02 (Executive Agent LLM surface: routingSchema+parseRouting, executive-router/email-drafter skills, llm.ts route+draft via AI Gateway)"
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 18
-  completed_plans: 10
-  percent: 56
+  completed_plans: 12
+  percent: 67
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 2 of 9 (Thin End-to-End Slice)
-Plan: 2 of 9 in current phase complete (02-01, 02-03)
-Status: Executing — 02-03 done (intake trust boundary: validateSubmit + submit + notifications). Wave-2 continues (02-02, 02-04, 02-05). Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
-Last activity: 2026-07-11 — Completed 02-03 (intake trust boundary: pure validateSubmit + submit mutation + upload URL + requests queries + in-app notifications)
+Plan: 5 of 9 in current phase complete (02-01, 02-02, 02-03, 02-04, 02-05)
+Status: Executing — 02-02 done (Executive Agent LLM surface: routingSchema+parseRouting, executive-router/email-drafter skills seeded, llm.ts route+draft via AI Gateway). Remaining Wave-2/3: 02-06 pipeline wiring + downstream. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
+Last activity: 2026-07-11 — Completed 02-02 (Executive Agent LLM surface: routingSchema+parseRouting, two seeded skills, llm.ts route+draft actions through the Vercel AI Gateway)
 
-Progress: [██████░░░░] 56%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [██████░░░░] 56%
 | Phase 01 P06 | 35 | 2 tasks | 9 files |
 | Phase 02 P01 | 65 | 3 tasks | 11 files |
 | Phase 02 P03 | 8 | 3 tasks | 5 files |
+| Phase 02 P02 | 28 | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Migration harness proven live (OPSG-06): backfillRequestDefaults ran and recorded state=success; assertMigrationRan checks via migrations.getStatus by name. A migration that has never run is a migration that does not work
 - [Phase 02]: [Phase 02] Intake trust boundary: validateSubmit is pure/tested and runs BEFORE workflow.start; recipient is the explicit validated To: field, never model-derived (INTK-04)
 - [Phase 02]: [Phase 02] Rejection is redaction-safe: audit request.rejected payload is reason+counts+SHA-256 goalHash, never raw goal/recipient (CLAUDE.md §4); correlationId minted server-side
+- [Phase 02]: [Phase 02] Executive Agent LLM surface: routingSchema+parseRouting put AGNT-03 no-silent-default in the type system (unknown_route thrown, never defaulted); llm.ts route/draft load prompts from the skills registry and call generateObject through the Vercel AI Gateway (bare string model id, no provider import)
+- [Phase 02]: [Phase 02] LLM output/domain schemas (routingSchema, draftSchema) live in @pikar/contracts so the use-node convex adapter stays zod-free and thin (CLAUDE.md §1); draftSchema in contracts/drafting.ts, not inline in llm.ts
 
 ### Pending Todos
 
@@ -113,8 +116,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T15:16:36.300Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-07-11T15:39:16.234Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

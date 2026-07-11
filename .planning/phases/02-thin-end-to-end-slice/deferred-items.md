@@ -37,3 +37,7 @@ errors. The real function typecheck is green: `npx convex codegen` runs the Conv
 TypeScript pass (via `convex/tsconfig.json`, which resolves the vite/`import.meta.glob`
 types) and exits 0. `pnpm --filter @pikar/backend test importGuard` is also green and
 now scans both new modules (no raw-builder imports).
+
+**Re-confirmed in 02-02:** stashed 02-02 Task-3's new `llm.ts` (+ contracts
+`drafting.ts`) and re-ran typecheck — identical 18-error set with or without them.
+`llm.ts`/`drafting.ts` introduce zero new type errors.
