@@ -4,6 +4,8 @@ import agent from "@convex-dev/agent/convex.config.js";
 import rag from "@convex-dev/rag/convex.config.js";
 import rateLimiter from "@convex-dev/rate-limiter/convex.config.js";
 import actionRetrier from "@convex-dev/action-retrier/convex.config.js";
+import migrations from "@convex-dev/migrations/convex.config.js";
+import aggregate from "@convex-dev/aggregate/convex.config.js";
 
 const app = defineApp();
 
@@ -13,5 +15,11 @@ app.use(agent);
 app.use(rag);
 app.use(rateLimiter);
 app.use(actionRetrier);
+
+// Phase-2 components (OPSG-06, OPSG-01). Registered BEFORE the first schema
+// change so codegen emits components.migrations + components.auditCounts before
+// any plan file imports them. Pinned exact — do not bump casually (CLAUDE.md §6).
+app.use(migrations);
+app.use(aggregate, { name: "auditCounts" });
 
 export default app;

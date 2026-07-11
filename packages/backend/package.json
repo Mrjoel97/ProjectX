@@ -15,12 +15,15 @@
   "dependencies": {
     "@convex-dev/action-retrier": "0.3.1",
     "@convex-dev/agent": "0.6.4",
+    "@convex-dev/aggregate": "0.2.2",
     "@convex-dev/auth": "0.0.94",
+    "@convex-dev/migrations": "0.3.5",
     "@convex-dev/rag": "0.7.5",
     "@convex-dev/rate-limiter": "0.3.2",
     "@convex-dev/workflow": "0.4.4",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
+    "ai": "7.0.20",
     "convex": "1.42.1",
     "convex-helpers": "0.1.120"
   },
