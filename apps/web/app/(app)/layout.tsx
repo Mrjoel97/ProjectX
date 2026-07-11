@@ -5,6 +5,7 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ReconnectBanner } from "./_components/ReconnectBanner";
 
 // The authenticated shell. Nav targets Submit/Requests/Review/Ops/Connect Gmail land in
 // plans 02-08/09 — the links exist now, the pages arrive with them.
@@ -76,6 +77,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           Sign out
         </button>
       </header>
+      <ReconnectBanner />
       <main style={{ flex: 1, padding: "1.5rem" }}>{children}</main>
     </div>
   );
