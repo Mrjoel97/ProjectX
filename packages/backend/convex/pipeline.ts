@@ -3,9 +3,9 @@
 // transitioning requests.status at every observable stage and writing exactly
 // one OPSG-01 telemetry row at each terminal (sent | rejected | expired).
 //
-// A thrown route (unknown_route / route_not_implemented) fails the workflow →
-// onComplete (result.kind "failed") → deadLetter.onPipelineComplete, which owns
-// the `failed` terminal (status + telemetry). No silent default — AGNT-03.
+// A thrown route (unknown_route, from a parse fail inside llm.route) fails the
+// workflow → onComplete (result.kind "failed") → deadLetter.onPipelineComplete,
+// which owns the `failed` terminal (status + telemetry). No silent default — AGNT-03.
 //
 // pipeline.ts is on the raw-builder allowlist (internalMutation, not a tenant
 // wrapper — the workflow carries no client identity).
@@ -80,20 +80,23 @@ export const pipelineWorkflow = workflow.define({
         },
       });
 
-    // 1. ROUTE — throws unknown_route (parse fail, inside llm.route) or
-    //    route_not_implemented (sub_agent) → onComplete → distinct DLQ reasons (AGNT-03).
+    // 1. ROUTE — throws unknown_route (parse fail, inside llm.route) → onComplete →
+    //    DLQ reason (AGNT-03: never a silent default).
     // ponytail: the GRDL-01 redact step (Phase 3) slots in AHEAD of llm.route here.
     await setStatusStep("routing");
     const { routing, usage: routeUsage } = await step.runAction(internal.llm.route, { requestId });
     usages.push(toUsage(routeUsage));
-    if (routing.route === "sub_agent") throw new Error("route_not_implemented");
+    // direct_llm and sub_agent both produce their draft via the LLM (sub_agent is the
+    // email specialist — same draft → review → send spine in this thin slice); direct_tool
+    // uses the user's goal verbatim. Every route still passes through the review gate.
+    const draftsViaLLM = routing.route === "direct_llm" || routing.route === "sub_agent";
     // Persist the route so the review gate can show it read-only (AGNT-02).
     await step.runMutation(internal.pipeline.saveDraft, { requestId, route: routing.route });
 
-    // 2. DRAFT — direct_llm drafts via the LLM; direct_tool uses the user's verbatim
-    //    goal as the draft but STILL gates it (REVW-01 reviews every response).
+    // 2. DRAFT — direct_llm & sub_agent draft via the LLM; direct_tool uses the user's
+    //    verbatim goal as the draft but STILL gates it (REVW-01 reviews every response).
     await setStatusStep("drafting");
-    if (routing.route === "direct_llm") {
+    if (draftsViaLLM) {
       const { body, usage } = await step.runAction(internal.llm.draft, { requestId });
       usages.push(toUsage(usage));
       await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: body });
@@ -137,7 +140,7 @@ export const pipelineWorkflow = workflow.define({
       if (evt.decision === "regenerate" && attempt < MAX_REGENERATE) {
         // ponytail: the regenerate instruction is not yet threaded into llm.draft (its
         // prompt is the goal); Phase 3 wires instruction + redaction into the draft step.
-        if (routing.route === "direct_llm") {
+        if (draftsViaLLM) {
           const { body, usage } = await step.runAction(internal.llm.draft, { requestId });
           usages.push(toUsage(usage));
           await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: body });

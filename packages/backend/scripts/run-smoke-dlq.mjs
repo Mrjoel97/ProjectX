@@ -11,12 +11,12 @@ must("smoke:runFailingPipeline", { correlationId: cid });
 console.log("[smoke:dlq] polling for deadLetters row + deadletter.written audit...");
 await pollPass("smokeAssert:assertDeadLetter", { correlationId: cid });
 
-// AGNT-03: the two mis-route paths through the REAL pipeline must dead-letter under
-// DISTINCT reasons AND drive the request to the `failed` terminal (status=failed +
-// one failed telemetry row — proving no request hangs at "routing", OPSG-01).
+// AGNT-03: a mis-route through the REAL pipeline must dead-letter (never a silent
+// default) AND drive the request to the `failed` terminal (status=failed + one failed
+// telemetry row — proving no request hangs at "routing", OPSG-01). sub_agent is now an
+// implemented route (draft → review → send), so unknown_route is the mis-route case.
 for (const [route, reason] of [
   ["unknown", "unknown_route"],
-  ["sub_agent", "route_not_implemented"],
 ]) {
   const c = `smoke-agnt03-${route}-${randomUUID()}`;
   console.log(`[smoke:dlq] AGNT-03 ${route} -> ${reason} (cid=${c})`);
