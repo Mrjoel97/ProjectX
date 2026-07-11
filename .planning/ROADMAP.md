@@ -83,6 +83,7 @@ Plans:
 **Goal**: Every request passes cost, PII, and quality guardrails before any external model call, and runaway spend is structurally impossible — governance as a shipped product feature, slotted into the existing pipeline steps.
 **Depends on**: Phase 2
 **Requirements**: GRDL-01, GRDL-02, GRDL-03, GRDL-04, GRDL-05, GRDL-06
+**PII engine (decided 2026-07-12)**: pure-TS `packages/pii` — `scanText` (email/card+Luhn/SSN/phone → stable placeholders, fail-closed Result) exists and is tested; Phase 3 wires it ahead of the marked `ponytail:` slots in `llm.ts` route/draft. Design record + open tensions (names-in-prose, cache-collision semantics, fail-closed UX): `.planning/design/pii-engine.md`.
 **Components**: `@convex-dev/action-cache` implements GRDL-04. The cache key MUST include `tenantId` alongside `safeTextHash` — action-cache keys on the action's args, so omitting `tenantId` would serve one tenant's LLM response to another. That is a cross-tenant data leak, not a cache miss. GRDL-02 additionally forbids raw PII in the key, hence hashing `safeText` rather than keying on it.
 **Success Criteria** (what must be TRUE):
   1. Every request is PII-scanned and redacted to `safeText` before any external model call, and an unknown/null scan result fails closed (request stops rather than proceeding).

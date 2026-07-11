@@ -140,6 +140,16 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
 
+  packages/pii:
+    dependencies:
+      '@pikar/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
 packages:
 
   '@ai-sdk/gateway@3.0.145':
