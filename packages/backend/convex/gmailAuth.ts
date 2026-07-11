@@ -8,6 +8,7 @@
 // ONLY by internal functions, NEVER returned to a client query, and NEVER placed in an
 // audit payload (CLAUDE.md §4). `gmailStatus` exposes booleans/timestamps only.
 import { v } from "convex/values";
+import { isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "@pikar/core/tokenExpiry";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
@@ -128,6 +129,42 @@ export const getForDelivery = internalQuery({
       subject: r.goal,
       body: r.editedBody ?? r.draft ?? "",
     };
+  },
+});
+
+// ── Proactive expiry scan (DLVR-03, driven by the daily cron in crons.ts) ──────────
+
+/**
+ * Flag tokens within ~24h of their 7-day refresh expiry into an in-app "Reconnect
+ * Gmail" notification — BEFORE delivery breaks. The refresh clock starts at
+ * `_creationTime` (a fresh consent deletes+re-inserts the row, so it always reflects
+ * the last connect). In-app only, deliberately NOT email: an expiry alert must not
+ * depend on the mail path it reports on (CONTEXT).
+ *
+ * ponytail: full-table scan + no per-day dedup — one row per tenant at beta scale, and a
+ * daily cron flags at most ~once inside a 24h window. Add a `by_expiry` index + a
+ * "last_notified" guard if tenant count or noise ever justifies it.
+ *
+ * ponytail: inserts the notification row directly rather than routing through
+ * `notifications.notify` — importing `internal` here creates a gmailAuth⇄internal type
+ * cycle that collapses llm.ts's inference (Convex circular-type limitation, guidelines
+ * §96). Route through notify once OPSG-05 adds channel dispatch and the cycle is broken.
+ */
+export const flagExpiringTokens = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    for (const row of await ctx.db.query("gmailTokens").collect()) {
+      const refreshExpiresAt = row._creationTime + REFRESH_TOKEN_TTL_MS;
+      if (!isExpiringSoon(refreshExpiresAt, now)) continue;
+      await ctx.db.insert("notifications", {
+        tenantId: row.tenantId,
+        kind: "gmail_reconnect",
+        message: "Your Gmail connection is about to expire — reconnect to keep delivery running.",
+        read: false,
+        createdAt: now,
+      });
+    }
   },
 });
 
