@@ -23,4 +23,8 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   "smokeAssert.ts",
   "auth.ts",
   "http.ts",
+  // Migration runner (component's runner) + the workflow/status stub (workflow.define
+  // + internalMutation, not tenant wrappers). Both are internal-only.
+  "migrations.ts",
+  "pipeline.ts",
 ];
