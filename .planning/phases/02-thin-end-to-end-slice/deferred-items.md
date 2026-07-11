@@ -25,3 +25,8 @@ files 02-01 created or modified.
 **Why deferred:** scope boundary — 02-01 only auto-fixes issues its own changes cause,
 and it caused none of these. A follow-up cleanup plan should add the `vite/client`
 reference and annotate `smoke.ts`, then this whole gate goes green.
+
+**Re-confirmed in 02-04:** stashed 02-04's review.ts/smoke.ts/smoke-script edits and
+re-ran typecheck — identical error set (only `smoke.ts` line numbers shifted by the
+added comments). 02-04 introduced zero new type errors. Its behavioral check is the
+`run-smoke-reviewgate.mjs` dev-deployment smoke (both gates PASS).

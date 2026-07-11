@@ -13,7 +13,7 @@ console.log(`[smoke:reviewgate] gate A / decision (cid=${cidA})`);
 // Long timeout so it can only fire if cancellation fails.
 must("smoke:startReviewGate", { correlationId: cidA, timeoutMs: 60000 });
 // Retry until the gate has armed (pendingTimeouts row exists), then decide.
-await pollPass("review:sendDecision", { correlationId: cidA, decision: "approve" });
+await pollPass("review:sendDecision", { correlationId: cidA, attempt: 0, decision: "approve" });
 await pollPass("smokeAssert:assertReviewOutcome", { correlationId: cidA, expected: "decision" });
 console.log("[smoke:reviewgate] gate A PASSED (decision branch + timeout canceled)");
 

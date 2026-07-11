@@ -72,13 +72,15 @@ export const recordReviewOutcome = internalMutation({
 export const reviewGate = workflow.define({
   args: { correlationId: v.string(), timeoutMs: v.number() },
   handler: async (step, { correlationId, timeoutMs }): Promise<null> => {
+    // Smoke drives a single gate iteration — attempt 0 (no regenerate loop here).
     await step.runMutation(internal.review.armTimeout, {
       workflowId: step.workflowId,
       correlationId,
       timeoutMs,
+      attempt: 0,
     });
     const evt = await step.awaitEvent({
-      name: `review:${correlationId}`,
+      name: `review:${correlationId}:0`,
       validator: reviewEventValidator,
     });
     const branch = evt.kind === "timeout" ? "timeout" : "decision";
