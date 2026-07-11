@@ -2,7 +2,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
+import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 import { loadSkill } from "./skills";
@@ -109,15 +111,15 @@ describe("skills registry loader + activation", () => {
 });
 
 describe("no hardcoded agent prompts in convex/", () => {
-  test("seed constant equals the canonical markdown source (no drift)", () => {
+  test.each([
+    ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
+    ["executive-router.md", executiveRouterSkillBody],
+    ["email-drafter.md", emailDrafterSkillBody],
+  ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
     const mdPath = fileURLToPath(
-      new URL(
-        "../../contracts/skills/executive-agent.classifier.md",
-        import.meta.url,
-      ),
+      new URL(`../../contracts/skills/${file}`, import.meta.url),
     );
-    const md = readFileSync(mdPath, "utf8");
-    expect(lf(executiveAgentClassifierSkillBody)).toBe(lf(md));
+    expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
   });
 
   test("no long inline prompt string literals live in convex/ source", () => {
@@ -141,7 +143,11 @@ describe("no hardcoded agent prompts in convex/", () => {
     walk(convexDir);
 
     // Match double-quoted, single-quoted, and backtick string literals.
-    const stringLiteral = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/gs;
+    // ponytail: a JS/TS '…'/"…" literal cannot span a raw newline, so bar newlines
+    // from those two branches — otherwise an apostrophe in a comment ("the user's
+    // goal") is read as a multi-line string and false-flags the file. Only the
+    // backtick branch spans lines (that IS how a real hardcoded prompt would look).
+    const stringLiteral = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 
     const offenders: string[] = [];
     for (const file of sourceFiles) {

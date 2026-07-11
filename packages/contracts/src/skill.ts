@@ -34,3 +34,9 @@ export const NO_SUCH_SKILL_VERSION_ERROR = "NO_SUCH_SKILL_VERSION" as const;
 /** Registry name of the seed Executive Agent classifier skill (seeds AGNT-01). */
 export const EXECUTIVE_AGENT_CLASSIFIER_SKILL =
   "executive-agent.classifier" as const;
+
+/** Registry name of the Executive Agent router skill (AGNT-01/02/03). */
+export const EXECUTIVE_ROUTER_SKILL = "executive-router" as const;
+
+/** Registry name of the email drafter skill (AGNT-02). */
+export const EMAIL_DRAFTER_SKILL = "email-drafter" as const;

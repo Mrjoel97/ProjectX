@@ -8,13 +8,17 @@
 
 import { v } from "convex/values";
 import {
+  EMAIL_DRAFTER_SKILL,
   EXECUTIVE_AGENT_CLASSIFIER_SKILL,
+  EXECUTIVE_ROUTER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
   type LoadedSkill,
 } from "@pikar/contracts/skill";
+import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
-import { internalMutation, type QueryCtx } from "./_generated/server";
+import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -38,6 +42,15 @@ export async function loadSkill(
 
   return { body: row.body, version: row.version, skillId: row._id };
 }
+
+/**
+ * internalQuery wrapper over loadSkill so "use node" actions (which cannot touch
+ * ctx.db) reach the active skill body via ctx.runQuery. Fails closed like loadSkill.
+ */
+export const getActiveSkill = internalQuery({
+  args: { name: v.string() },
+  handler: (ctx, { name }) => loadSkill(ctx, name),
+});
 
 /**
  * The ONE permitted status mutation. Within a single mutation it archives the
@@ -76,31 +89,36 @@ export const activateSkill = internalMutation({
 });
 
 /**
- * Idempotent seed of the Executive Agent classifier skill (v1, active). The
- * body originates from the registry-bound markdown source (via the derived
- * constant) — no agent prompt is hardcoded here. Skips if the name already
- * exists.
+ * Idempotent seed of the Phase-2 agent skills (each v1, active). Bodies
+ * originate from the registry-bound markdown sources (via the derived
+ * constants) — no agent prompt is hardcoded here. Each name is inserted only if
+ * absent, so re-running seeds nothing twice and never mutates an existing row
+ * (immutable-per-version).
  */
 export const seedSkills = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const existing = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) =>
-        q.eq("name", EXECUTIVE_AGENT_CLASSIFIER_SKILL),
-      )
-      .first();
+    const seeds = [
+      { name: EXECUTIVE_AGENT_CLASSIFIER_SKILL, body: executiveAgentClassifierSkillBody },
+      { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
+      { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
+    ];
 
-    if (existing !== null) {
-      return;
+    for (const { name, body } of seeds) {
+      const existing = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .first();
+
+      if (existing !== null) continue;
+
+      await ctx.db.insert("skills", {
+        name,
+        version: 1,
+        body,
+        status: "active",
+        createdAt: Date.now(),
+      });
     }
-
-    await ctx.db.insert("skills", {
-      name: EXECUTIVE_AGENT_CLASSIFIER_SKILL,
-      version: 1,
-      body: executiveAgentClassifierSkillBody,
-      status: "active",
-      createdAt: Date.now(),
-    });
   },
 });
