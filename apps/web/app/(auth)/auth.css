@@ -143,9 +143,10 @@
 /* ---------- right: teal panel + auth card ---------- */
 .auth-panel {
   position: relative;
-  display: grid;
-  place-items: center;
-  padding: clamp(1rem, 3vh, 2rem) clamp(1.5rem, 4vw, 3rem);
+  /* flex + margin:auto on the card centers it when it fits and, unlike place-items:center,
+     keeps the whole card reachable (never clips the top/bottom) if it ever must scroll. */
+  display: flex;
+  padding: clamp(0.75rem, 2vh, 1.75rem) clamp(1.5rem, 4vw, 3rem);
   background: linear-gradient(150deg, var(--t900) 0%, var(--t800) 48%, var(--t700) 100%);
   /* clip the decorative glow horizontally; allow vertical scroll only as a last resort */
   overflow-x: hidden;
@@ -166,11 +167,12 @@
 
 .auth-card {
   position: relative;
-  width: min(26rem, 100%);
+  margin: auto;
+  width: min(24rem, 100%);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1.5rem;
-  padding: clamp(1.25rem, 2.5vh, 1.9rem) clamp(1.4rem, 3vw, 2.1rem);
+  border-radius: 1.4rem;
+  padding: clamp(1rem, 2vh, 1.6rem) clamp(1.3rem, 3vw, 1.9rem);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.6);
@@ -179,13 +181,13 @@
 }
 
 .auth-badge {
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 0.9rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
   background: rgba(255, 255, 255, 0.12);
   display: grid;
   place-items: center;
-  margin: 0 auto 0.6rem;
+  margin: 0 auto clamp(0.4rem, 1vh, 0.6rem);
   color: #fff;
 }
 
@@ -193,7 +195,7 @@
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 800;
   text-align: center;
-  font-size: 1.45rem;
+  font-size: 1.35rem;
   margin: 0;
   color: #fff;
 }
@@ -201,12 +203,12 @@
 .auth-tagline {
   text-align: center;
   color: rgba(234, 246, 243, 0.68);
-  margin: 0.2rem 0 1.1rem;
-  font-size: 0.9rem;
+  margin: 0.15rem 0 clamp(0.6rem, 1.4vh, 1rem);
+  font-size: 0.88rem;
 }
 
 .auth-field {
-  margin-bottom: 0.7rem;
+  margin-bottom: clamp(0.4rem, 1vh, 0.68rem);
 }
 
 .auth-label {
@@ -237,9 +239,9 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 0.7rem;
-  padding: 0.62rem 2.5rem;
+  padding: clamp(0.5rem, 1.1vh, 0.62rem) 2.5rem;
   color: #fff;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-family: inherit;
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -309,7 +311,7 @@
   color: rgba(234, 246, 243, 0.5);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
-  margin: 0.85rem 0;
+  margin: clamp(0.55rem, 1.3vh, 0.85rem) 0;
 }
 
 .auth-or::before,
@@ -346,7 +348,7 @@
   text-align: center;
   color: rgba(234, 246, 243, 0.7);
   font-size: 0.88rem;
-  margin: 0.85rem 0 0;
+  margin: clamp(0.55rem, 1.3vh, 0.85rem) 0 0;
 }
 
 .auth-switch a {
