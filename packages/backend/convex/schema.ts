@@ -62,6 +62,10 @@ export default defineSchema({
     workflowId: v.string(),
     correlationId: v.string(),
     scheduledId: v.string(),
+    // The gate's attempt suffix — the review wrapper reads it to fire the decision
+    // at the authoritative gate (client-supplied attempt could skew after a regenerate
+    // and silently lose the decision). Optional: pre-02-09 rows carry none (treated as 0).
+    attempt: v.optional(v.number()),
   })
     .index("by_workflow", ["workflowId"])
     .index("by_correlation", ["correlationId"]),
@@ -82,6 +86,9 @@ export default defineSchema({
     correlationId: v.string(),
     goal: v.string(),
     recipient: v.string(),
+    // The Executive Router's decision, persisted so the review gate can show it
+    // read-only (AGNT-02 — the user sees the route before anything runs).
+    route: v.optional(v.string()),
     draft: v.optional(v.string()),
     editedBody: v.optional(v.string()),
     rejectReason: v.optional(v.string()),

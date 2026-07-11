@@ -32,7 +32,9 @@ export const REQUEST_STATUS = v.union(
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 // ponytail: MAX_REGENERATE cap is Phase-7 REVW-02's upgrade path (per-tenant policy).
-const MAX_REGENERATE = 3;
+// Exported so the review UI stops offering "Ask for changes" at the cap — past it, a
+// `regenerate` decision falls through the loop to delivery (an unapproved send).
+export const MAX_REGENERATE = 3;
 
 /** One accumulated LLM usage (route/draft/regenerate) for the OPSG-01 row. */
 type Usage = { inputTokens: number; outputTokens: number; costUsd: number };
@@ -85,6 +87,8 @@ export const pipelineWorkflow = workflow.define({
     const { routing, usage: routeUsage } = await step.runAction(internal.llm.route, { requestId });
     usages.push(toUsage(routeUsage));
     if (routing.route === "sub_agent") throw new Error("route_not_implemented");
+    // Persist the route so the review gate can show it read-only (AGNT-02).
+    await step.runMutation(internal.pipeline.saveDraft, { requestId, route: routing.route });
 
     // 2. DRAFT — direct_llm drafts via the LLM; direct_tool uses the user's verbatim
     //    goal as the draft but STILL gates it (REVW-01 reviews every response).
@@ -177,12 +181,14 @@ export const setStatus = internalMutation({
 export const saveDraft = internalMutation({
   args: {
     requestId: v.id("requests"),
+    route: v.optional(v.string()),
     draft: v.optional(v.string()),
     editedBody: v.optional(v.string()),
     rejectReason: v.optional(v.string()),
   },
-  handler: async (ctx, { requestId, draft, editedBody, rejectReason }) => {
-    const patch: { draft?: string; editedBody?: string; rejectReason?: string } = {};
+  handler: async (ctx, { requestId, route, draft, editedBody, rejectReason }) => {
+    const patch: { route?: string; draft?: string; editedBody?: string; rejectReason?: string } = {};
+    if (route !== undefined) patch.route = route;
     if (draft !== undefined) patch.draft = draft;
     if (editedBody !== undefined) patch.editedBody = editedBody;
     if (rejectReason !== undefined) patch.rejectReason = rejectReason;

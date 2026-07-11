@@ -65,7 +65,7 @@ export const armTimeout = internalMutation({
       internal.review.fireTimeout,
       { workflowId, correlationId, attempt },
     );
-    await ctx.db.insert("pendingTimeouts", { workflowId, correlationId, scheduledId });
+    await ctx.db.insert("pendingTimeouts", { workflowId, correlationId, scheduledId, attempt });
   },
 });
 

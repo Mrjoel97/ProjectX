@@ -14,7 +14,8 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { workflow } from "./index";
-import { REQUEST_STATUS } from "./pipeline";
+import { MAX_REGENERATE, REQUEST_STATUS } from "./pipeline";
+import { reviewDecisionValidator } from "./review";
 
 /** SHA-256 hex — a redaction-safe fingerprint of the goal for the audit payload. */
 async function contentHash(s: string): Promise<string> {
@@ -141,6 +142,48 @@ export const list = tenantQuery({
   },
 });
 
+/**
+ * The client-facing review gate action (REVW-01). `review.sendDecision` is internal
+ * (it resumes a workflow), so the browser never calls it directly (CLAUDE.md §2) — this
+ * thin tenantMutation validates the caller owns the correlationId, then delegates.
+ *
+ * `attempt` is NOT client-supplied: the gate's live pendingTimeouts row carries the
+ * authoritative attempt suffix. A client that guessed the attempt (stale after a
+ * regenerate) would fire into a dead event name and silently lose the decision.
+ */
+export const submitDecision = tenantMutation({
+  args: {
+    correlationId: v.string(),
+    decision: reviewDecisionValidator,
+    editedText: v.optional(v.string()),
+    instruction: v.optional(v.string()),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, { correlationId, decision, editedText, instruction, reason }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .unique();
+    if (!req || req.tenantId !== ctx.tenantId) throw new Error("request not found");
+
+    const pending = await ctx.db
+      .query("pendingTimeouts")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!pending) throw new Error("no live review gate for this request");
+
+    await ctx.runMutation(internal.review.sendDecision, {
+      correlationId,
+      attempt: pending.attempt ?? 0,
+      decision,
+      editedText,
+      instruction,
+      reason,
+    });
+    return { ok: true as const };
+  },
+});
+
 /** One request, tenant-scoped (ctx.db.get bypasses scope — the check is load-bearing). */
 export const get = tenantQuery({
   args: { requestId: v.id("requests") },
@@ -148,5 +191,25 @@ export const get = tenantQuery({
     const row = await ctx.db.get(requestId);
     if (!row || row.tenantId !== ctx.tenantId) return null;
     return row;
+  },
+});
+
+/**
+ * The review gate's read model: the request (route/plan/recipient/draft) plus the LIVE
+ * regenerate attempt so the UI can hide "Ask for changes" at the cap. Past the cap a
+ * `regenerate` decision falls through the workflow loop to delivery (an unapproved send),
+ * so `canRegenerate` is a safety gate, not just cosmetics.
+ */
+export const reviewGate = tenantQuery({
+  args: { requestId: v.id("requests") },
+  handler: async (ctx, { requestId }) => {
+    const request = await ctx.db.get(requestId);
+    if (!request || request.tenantId !== ctx.tenantId) return null;
+    const pending = await ctx.db
+      .query("pendingTimeouts")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", request.correlationId))
+      .first();
+    const attempt = pending?.attempt ?? 0;
+    return { request, attempt, canRegenerate: attempt < MAX_REGENERATE };
   },
 });
