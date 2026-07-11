@@ -1,8 +1,8 @@
 ---
 phase: 2
 slug: thin-end-to-end-slice
-status: draft
-nyquist_compliant: false
+status: ready
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-10
 ---
@@ -46,31 +46,36 @@ tier and command; the planner MUST attach each row to the task that delivers it.
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | 0 | OPSG-06 | smoke | `npx convex run migrations:run '{fn:"migrations:backfillRequestDefaults"}'` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | AGNT-01, AGNT-03 | unit | `pnpm --filter @pikar/backend test routing` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | INTK-01, INTK-04 | unit | `pnpm --filter @pikar/backend test submitValidation` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | AGNT-02 | unit | `pnpm --filter @pikar/backend test routing` (step-plan shape) | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | REVW-01 | smoke | `pnpm --filter @pikar/backend smoke:reviewgate` (extend existing) | ⚠️ extend | ⬜ pending |
-| TBD | TBD | TBD | AGNT-03 | smoke | `node scripts/run-smoke-dlq.mjs` (extend) | ⚠️ extend | ⬜ pending |
-| TBD | TBD | TBD | DLVR-01, DLVR-03 | smoke | `node scripts/run-smoke-pipeline.mjs` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | OPSG-01 | unit | `pnpm --filter @pikar/backend test telemetry` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | OPSG-07 | unit | `pnpm --filter @pikar/backend test deadLetterQuery` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | BETA-04 | manual + unit | query-shape assertion in unit; reactivity verified in UI | manual-only | ⬜ pending |
+| 02-01 T3 | 02-01 | 1 | OPSG-06 | smoke | `node scripts/run-smoke-migration.mjs` | ❌ W1 | ⬜ pending |
+| 02-02 T1 | 02-02 | 2 | AGNT-01, AGNT-03 | unit | `pnpm --filter @pikar/backend test routing` | ❌ W2 | ⬜ pending |
+| 02-03 T1 | 02-03 | 2 | INTK-01, INTK-04 | unit | `pnpm --filter @pikar/backend test validateSubmit` | ❌ W2 | ⬜ pending |
+| 02-02 T1 | 02-02 | 2 | AGNT-02 | unit | `pnpm --filter @pikar/backend test routing` (step-plan shape) | ❌ W2 | ⬜ pending |
+| 02-04 T1 | 02-04 | 2 | REVW-01 | smoke | `pnpm --filter @pikar/backend smoke:reviewgate` (extend existing) | ⚠️ extend | ⬜ pending |
+| 02-06 T3 | 02-06 | 3 | AGNT-03 | smoke | `node scripts/run-smoke-dlq.mjs` (extend) | ⚠️ extend | ⬜ pending |
+| 02-06 T3 | 02-06 | 3 | DLVR-01, DLVR-03 | smoke | `node scripts/run-smoke-pipeline.mjs` | ❌ W3 | ⬜ pending |
+| 02-04 T2 | 02-04 | 2 | OPSG-01 | unit | `pnpm --filter @pikar/backend test buildTelemetry` | ❌ W2 | ⬜ pending |
+| 02-06 T2 | 02-06 | 3 | OPSG-07 | unit | `pnpm --filter @pikar/backend test deadLetters` | ❌ W3 | ⬜ pending |
+| 02-09 T1 | 02-08/09 | 5 | BETA-04 | manual + unit | query-shape assertion in unit; reactivity verified in UI | manual-only | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky · File Exists ❌ Wn = created in that wave*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] Component install + registration — `pnpm --filter @pikar/backend add @convex-dev/migrations@0.3.5 @convex-dev/aggregate@0.2.2`, register in `convex.config.ts`, then `npx convex dev` codegen. **Blocks everything**, and per OPSG-06 must land *before* the first schema change.
-- [ ] `convex/routing.test.ts` — routing Zod schema valid/invalid → AGNT-01, AGNT-02, AGNT-03
-- [ ] `convex/submitValidation.test.ts` — the five INTK-04 rejection checks → INTK-01, INTK-04
-- [ ] `convex/telemetry.test.ts` — terminal-row builder completeness → OPSG-01
-- [ ] `convex/deadLetterQuery.test.ts` — `status="new"` count + mark-resolved → OPSG-07
-- [ ] `scripts/run-smoke-pipeline.mjs` — full spine (route → gate → send) + `awaiting_reauth` path → DLVR-01, DLVR-03, REVW-01
-- [ ] Extend `scripts/run-smoke-dlq.mjs` with the two AGNT-03 route paths (unknown route, `sub_agent`)
-- [ ] Extend `smoke:reviewgate` with the 4-member decision union + attempt-suffixed event name
+> **No separate blocking "Wave 0."** These test-first items are distributed as inline `tdd`
+> tasks inside their owning feature plans (see the map above for the exact plan/task); the
+> substrate install lands in Wave 1 (02-01) ahead of the first schema change per OPSG-06. The
+> checklist below is the coverage contract — each item is owned by the plan named at its right.
+
+- [ ] Component install + registration — `@convex-dev/migrations@0.3.5 @convex-dev/aggregate@0.2.2` in `convex.config.ts`, then codegen → **02-01 T1** (Wave 1). Per OPSG-06 must land *before* the first schema change.
+- [ ] `convex/routing.test.ts` — routing Zod schema valid/invalid → AGNT-01, AGNT-02, AGNT-03 → **02-02 T1**
+- [ ] `convex/validateSubmit.test.ts` — the five INTK-04 rejection checks → INTK-01, INTK-04 → **02-03 T1**
+- [ ] `convex/buildTelemetry.test.ts` — terminal-row builder completeness → OPSG-01 → **02-04 T2**
+- [ ] `convex/deadLetters.test.ts` — `status="new"` count + mark-resolved → OPSG-07 → **02-06 T2**
+- [ ] `scripts/run-smoke-pipeline.mjs` — full spine (route → gate → send) + `awaiting_reauth` path → DLVR-01, DLVR-03, REVW-01 → **02-06 T3**
+- [ ] Extend `scripts/run-smoke-dlq.mjs` with the two AGNT-03 route paths (unknown route, `sub_agent`) → **02-06 T3**
+- [ ] Extend `smoke:reviewgate` with the 4-member decision union + attempt-suffixed event name → **02-04 T1**
 
 ---
 
@@ -86,11 +91,11 @@ tier and command; the planner MUST attach each row to the task that delivers it.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (distributed as inline `tdd` tasks — see map)
+- [x] No watch-mode flags (`vitest run`, not `vitest`)
+- [x] Feedback latency < 30s (unit tier)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** verified by gsd-plan-checker 2026-07-11 (goal-backward pass; 1 blocker + 2 warnings fixed).
