@@ -42,18 +42,18 @@ planned: 2026-07-12
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 01-T1 SafeText brand | 03-01 | 1 | GRDL-02 | unit (existing suite) | `pnpm --filter @pikar/pii test && pnpm --filter @pikar/pii typecheck` | ✅ scan.test.ts | ⬜ pending |
 | 01-T2 @pikar/cost | 03-01 | 1 | GRDL-03 | unit (TDD, in-task) | `pnpm --filter @pikar/cost test` | created in task | ⬜ pending |
-| 01-T3 isFallbackEligible | 03-01 | 1 | GRDL-05 | unit (TDD, in-task) | `pnpm --filter @pikar/backend test -- fallback` | created in task | ⬜ pending |
+| 01-T3 isFallbackEligible | 03-01 | 1 | GRDL-05 | unit (TDD, in-task; lives in @pikar/core per CLAUDE.md §1) | `pnpm --filter @pikar/core test -- fallback` | created in task | ⬜ pending |
 | 02-T1 action-cache install | 03-02 | 1 | GRDL-04 | exact-pin check + typecheck | `node -e "…pin check…" && pnpm --filter @pikar/backend typecheck` | n/a (script) | ⬜ pending |
 | 02-T2 schema rails | 03-02 | 1 | GRDL-01 | typecheck + regression | `pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/backend test` | ✅ existing suite | ⬜ pending |
 | 02-T3 blocked outcome | 03-02 | 1 | GRDL-01 | unit (TDD, in-task) | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend typecheck` | ✅ buildTelemetry.test.ts | ⬜ pending |
 | 03-T1 limiter/config/readers | 03-03 | 2 | GRDL-06 | typecheck | `pnpm --filter @pikar/backend typecheck` | n/a | ⬜ pending |
-| 03-T2 guardrails.prepare | 03-03 | 2 | GRDL-01, GRDL-03, GRDL-06 | convex-test (TDD, in-task; fail-closed branches — component happy-path deferred to 05-T2 per research caveat) | `pnpm --filter @pikar/backend test -- guardrails` | created in task | ⬜ pending |
+| 03-T2 guardrails.prepare + preCall | 03-03 | 2 | GRDL-01, GRDL-03, GRDL-06 | convex-test (TDD, in-task; prepare + preCall fail-closed branches — component happy-path and the preCall budget branch deferred to 05-T2 per research caveat) | `pnpm --filter @pikar/backend test -- guardrails` | created in task | ⬜ pending |
 | 03-T3 submit rate limit | 03-03 | 2 | GRDL-06 | regression + typecheck (limiter behavior lands in 05-T2 smoke) | `pnpm --filter @pikar/backend test && pnpm --filter @pikar/backend typecheck` | ✅ existing suite | ⬜ pending |
-| 04-T1 uncached actions + fallback | 03-04 | 3 | GRDL-01, GRDL-05 | unit | `pnpm --filter @pikar/backend test -- fallback` | from 01-T3 | ⬜ pending |
+| 04-T1 uncached actions + fallback | 03-04 | 3 | GRDL-01, GRDL-05 | unit | `pnpm --filter @pikar/core test -- fallback` | from 01-T3 | ⬜ pending |
 | 04-T2 cache wrappers + static scan | 03-04 | 3 | GRDL-02, GRDL-04 | static-scan test (in-task, mirrors auditImmutability.test.ts) | `pnpm --filter @pikar/backend test -- llmRedaction` | created in task | ⬜ pending |
 | 04-T3 pipeline wiring | 03-04 | 3 | GRDL-01, GRDL-02, GRDL-03 | typecheck + full suite + smoke regression | `pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/backend test && pnpm --filter @pikar/backend smoke:pipeline` | ✅ run-smoke-pipeline.mjs | ⬜ pending |
 | 05-T1 seeds + assertions | 03-05 | 4 | GRDL-02, GRDL-04, GRDL-05, GRDL-06 | typecheck + regression | `pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/backend test` | n/a | ⬜ pending |
-| 05-T2 smoke:guardrails + phase gate | 03-05 | 4 | GRDL-02, GRDL-04, GRDL-05, GRDL-06 | dev-deployment smoke (banner-judged, never exit codes) | `pnpm --filter @pikar/backend smoke:guardrails && pnpm --filter @pikar/backend smoke:pipeline` | created in task | ⬜ pending |
+| 05-T2 smoke:guardrails + phase gate (incl. mid-flight preCall blocked path) | 03-05 | 4 | GRDL-02, GRDL-04, GRDL-05, GRDL-06 | dev-deployment smoke (banner-judged, never exit codes) | `pnpm --filter @pikar/backend smoke:guardrails && pnpm --filter @pikar/backend smoke:pipeline` | created in task | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
