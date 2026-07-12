@@ -100,7 +100,7 @@ describe("emailIntent — SC2/SC3 slot-filling brain", () => {
     expect(s.recipients).toEqual(["A@B.com", "c@d.com"]);
   });
 
-  test("validator reuse: same bad-email table as validateSubmit is rejected", () => {
+  test("validator reuse: has-@-malformed AND empty stay rejected; a no-@ token is now a name", () => {
     const res = applyAnswer(emptyIntent, {
       slot: "recipients",
       value: ["a@b", "@b.com", "a@.com", "", "nope"],
@@ -108,7 +108,95 @@ describe("emailIntent — SC2/SC3 slot-filling brain", () => {
     expect(res.ok).toBe(false);
     expect(res.state.recipients).toEqual([]);
     if (!res.ok) {
-      expect(res.rejected.invalid).toEqual(["a@b", "@b.com", "a@.com", "", "nope"]);
+      // has-@-but-malformed cases AND the empty string bounce to rejected (unchanged classification)
+      expect(res.rejected.invalid).toEqual(["a@b", "@b.com", "a@.com", ""]);
     }
+    // the no-@ token is NOT rejected — it is a name to resolve
+    expect(res.state.rejected).toEqual(["a@b", "@b.com", "a@.com", ""]);
+    expect(res.state.pendingResolution).toEqual([{ name: "nope" }]);
+  });
+
+  test('empty/whitespace segment → rejected, NEVER a pendingResolution "name"', () => {
+    const res = applyAnswer(emptyIntent, { slot: "recipients", value: ["", "   "] });
+    expect(res.ok).toBe(false);
+    expect(res.state.recipients).toEqual([]);
+    expect(res.state.pendingResolution).toBeUndefined();
+    if (!res.ok) expect(res.rejected.invalid).toEqual(["", "   "]);
+  });
+
+  test('no-@ token "Sarah" → pendingResolution (a name), blocks ready, asks resolve_recipients', () => {
+    const res = applyAnswer(emptyIntent, { slot: "recipients", value: ["Sarah"] });
+    expect(res.ok).toBe(true);
+    expect(res.state.recipients).toEqual([]);
+    expect(res.state.pendingResolution).toEqual([{ name: "Sarah" }]);
+    // resolve_recipients surfaces BEFORE ask_subject
+    expect(nextQuestion(res.state)).toEqual({ kind: "resolve_recipients", names: ["Sarah"] });
+    // multi-word names stay ONE segment (tokenizer lives in cockpit.ts)
+    const multi = applyAnswer(emptyIntent, { slot: "recipients", value: ["Sarah Chen"] });
+    expect(multi.state.pendingResolution).toEqual([{ name: "Sarah Chen" }]);
+  });
+
+  test("group word (case-insensitive) → groupDeferred, distinct defer_group signal, never resolved", () => {
+    for (const g of ["team", "Everyone", "ALL", "staff", "group", "everybody"]) {
+      const res = applyAnswer(emptyIntent, { slot: "recipients", value: [g] });
+      expect(res.ok).toBe(true);
+      expect(res.state.groupDeferred).toEqual([g]);
+      expect(res.state.pendingResolution).toBeUndefined(); // NOT a name
+      expect(nextQuestion(res.state)).toEqual({ kind: "defer_group", groups: [g] });
+    }
+  });
+
+  test("mixed name + valid email: name pends, valid HELD in pendingValid (not recipients)", () => {
+    const res = applyAnswer(emptyIntent, {
+      slot: "recipients",
+      value: ["Sarah", "bob@x.com"],
+    });
+    expect(res.ok).toBe(true);
+    expect(res.state.recipients).toEqual([]); // valid NOT committed while a name is unresolved
+    expect(res.state.pendingResolution).toEqual([{ name: "Sarah" }]);
+    expect(res.state.pendingValid).toEqual(["bob@x.com"]);
+    expect(nextQuestion(res.state).kind).toBe("resolve_recipients");
+  });
+
+  test("resolve answer folds picks + pendingValid into recipients, clears pending, sets greetingName", () => {
+    const held = applyAnswer(emptyIntent, {
+      slot: "recipients",
+      value: ["Sarah", "bob@x.com"],
+    }).state;
+    const done = applyAnswer(held, {
+      slot: "resolution",
+      picks: [{ name: "Sarah", address: "sarah@acme.com", displayName: "Sarah Chen" }],
+    });
+    expect(done.ok).toBe(true);
+    // picks + held pendingValid folded (deduped) into recipients
+    expect(done.state.recipients).toEqual(["bob@x.com", "sarah@acme.com"]);
+    expect(done.state.pendingResolution).toBeUndefined();
+    expect(done.state.pendingValid).toBeUndefined();
+    // FIRST pick's displayName drives the greeting
+    expect(done.state.greetingName).toBe("Sarah Chen");
+    // pending cleared → advances to the next required slot
+    expect(nextQuestion(done.state)).toEqual({ kind: "ask_subject" });
+  });
+
+  test("pendingResolution blocks ready just like a pending rejection", () => {
+    const s: EmailIntentState = {
+      recipients: ["a@b.com"],
+      subject: "S",
+      bodyIntent: "B",
+      pendingResolution: [{ name: "Sarah" }],
+    };
+    expect(nextQuestion(s)).not.toEqual({ kind: "ready" });
+    expect(nextQuestion(s).kind).toBe("resolve_recipients");
+  });
+
+  test("turn of ONLY valid emails keeps the direct path (no pendingValid, no card)", () => {
+    const res = applyAnswer(emptyIntent, {
+      slot: "recipients",
+      value: ["a@b.com", "c@d.com"],
+    });
+    expect(res.ok).toBe(true);
+    expect(res.state.recipients).toEqual(["a@b.com", "c@d.com"]);
+    expect(res.state.pendingValid).toBeUndefined();
+    expect(res.state.pendingResolution).toBeUndefined();
   });
 });
