@@ -11,6 +11,7 @@ import { ReconnectBanner } from "./_components/ReconnectBanner";
 // plans 02-08/09 — the links exist now, the pages arrive with them.
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/workspace", label: "Workspace" },
   { href: "/submit", label: "Submit" },
   { href: "/requests", label: "Requests" },
   { href: "/review", label: "Review queue" },
