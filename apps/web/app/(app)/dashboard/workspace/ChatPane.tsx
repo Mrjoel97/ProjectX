@@ -52,9 +52,18 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
     { initialNumItems: 30 },
   );
   // Minimal live activity chip off the plan status (SC2 "Drafting…/Sending/Sent" feedback).
+  // Candidates parked on the row = a name-resolution read is in flight → surface the pick prompt
+  // first (it only exists during "collecting", before any status milestone).
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
-  const activity =
-    plan?.status === "delivering" ? "Sending…" : plan?.status === "done" ? "Sent ✓" : plan?.status === "proposed" ? "Plan ready — review it →" : null;
+  const activity = plan?.candidates?.length
+    ? "Searching your mailbox… pick a contact →"
+    : plan?.status === "delivering"
+      ? "Sending…"
+      : plan?.status === "done"
+        ? "Sent ✓"
+        : plan?.status === "proposed"
+          ? "Plan ready — review it →"
+          : null;
 
   async function onSend() {
     const t = text.trim();
