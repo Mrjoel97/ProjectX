@@ -130,6 +130,17 @@ export const getSafeTextByHash = internalQuery({
   },
 });
 
+/** Persist the latest ALREADY-SCANNED regenerate instruction (content plane — the
+ *  raw goal + safeText already live on this row). The draft wrapper scans the raw
+ *  instruction and hands the redacted text here so draftUncached can recover it by
+ *  hash-deterministic row lookup (getSafeTextByHash.lastInstruction). */
+export const saveInstruction = internalMutation({
+  args: { requestId: v.id("requests"), safeInstruction: v.string() },
+  handler: async (ctx, { requestId, safeInstruction }) => {
+    await ctx.db.patch(requestId, { lastInstruction: safeInstruction });
+  },
+});
+
 /** Mid-flight re-check (GRDL-03/06): kill switch FIRST (component-free branch),
  *  then the global daily-spend window. Governed stops RETURN — SAME contract as
  *  `prepare`, NEVER a throw: the llm wrapper propagates `{ ok: false }` and the
