@@ -20,14 +20,23 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
 import { EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
-import { isFallbackEligible } from "@pikar/core";
+import {
+  type RecipientEdit,
+  applyRecipientEdit,
+  buildRecipientView,
+  isFallbackEligible,
+  rankCandidates,
+} from "@pikar/core";
 import { CHEAP_MODEL, DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { generateObject } from "ai";
+import { generateObject, jsonSchema, tool } from "ai";
+import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
 import { components, internal } from "./_generated/api";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { contentHash } from "./lib/hash";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -335,6 +344,230 @@ export const draftCockpit = internalAction({
       });
       return { subject: object.subject, body: object.body };
     }
+  },
+});
+
+// ── Cockpit Executive-Agent tool set (AGNT-01/02) ────────────────────────────
+// The governed tools the loop (Plan 04) hands to generateText. Each tool is a THIN wrapper
+// over the primitive it governs — the tool IS the enforcement boundary. Structural facts
+// (which addresses are valid, which recipient sits at #index) are resolved/validated HERE
+// from the row + the pure @pikar/core reducers, NEVER trusted from the model. Redaction runs
+// before the drafting sub-call; the recipient view the model reasons over is index+label only
+// (raw addresses are substituted server-side inside removeRecipient). No generateText loop yet.
+// ponytail: no abstraction layer — each tool is a thin `execute` closure over an existing
+// primitive; the shared plan-row read is one helper.
+
+// The plan-row fields the tools read. Explicit so the runQuery result never resolves through
+// the `internal` graph (guidelines §96 circular-inference cliff, as the sibling actions do).
+type PlanRow = {
+  tenantId: string;
+  recipients?: string[];
+  subject?: string;
+  body?: string;
+  mode?: "individual" | "group";
+  greetingName?: string;
+};
+
+/**
+ * Format the current plan state for the model (Plan 04 feeds this into the loop each turn).
+ * Recipients render as the index+label view from buildRecipientView — an address NEVER appears
+ * (§2-D: the raw email does not reach the model). Pure — takes the row, returns a string.
+ */
+export function buildAgentContext(plan: {
+  recipients?: string[];
+  subject?: string;
+  body?: string;
+  mode?: "individual" | "group";
+}): string {
+  const view = buildRecipientView((plan.recipients ?? []).map((address) => ({ address })));
+  const recipients = view.length
+    ? view.map((r) => `  #${r.index}: ${r.label}`).join("\n")
+    : "  (none yet)";
+  return [
+    "Current email plan:",
+    "Recipients (reason about these by #index only):",
+    recipients,
+    `Subject: ${plan.subject ?? "(not set)"}`,
+    `Body drafted: ${plan.body ? "yes" : "no"}`,
+    `Send mode: ${plan.mode ?? "(not set)"}`,
+  ].join("\n");
+}
+
+/**
+ * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
+ * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
+ * 04 hands this set to generateText — Plan 03 ships them as independently testable wrappers.
+ */
+export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: string, planId: Id<"plans">) {
+  const readPlan = async (): Promise<PlanRow> => {
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    if (!plan || plan.tenantId !== tenantId) throw new Error("cockpit: plan row missing"); // no cross-tenant
+    return plan;
+  };
+
+  // add | set share the bounce/patch shape; remove differs (index → server-side address).
+  const editRecipients = async (edit: RecipientEdit): Promise<string> => {
+    const plan = await readPlan();
+    const result = applyRecipientEdit(plan.recipients ?? [], edit);
+    if (!result.ok) {
+      // Bounce at the boundary — do NOT patch; hand the rejected tokens back so the agent re-asks.
+      return `Rejected (not applied): ${result.rejected.join(", ")}. The recipient list is unchanged.`;
+    }
+    await ctx.runMutation(internal.plans.patchPlan, { planId, recipients: result.recipients });
+    return `Recipients updated — ${result.recipients.length} on the list.`;
+  };
+
+  return {
+    resolveContacts: tool({
+      description:
+        "Look up a named person in the user's mailbox to find their email address. Use for a NAME (not a typed address). Returns matching contacts by label for the user to pick — you never see the address.",
+      inputSchema: jsonSchema<{ name: string }>({
+        type: "object",
+        properties: { name: { type: "string", description: "The person's name to look up." } },
+        required: ["name"],
+        additionalProperties: false,
+      }),
+      execute: async ({ name }): Promise<string> => {
+        // correlationId = planId: a stable ref for the refs-only mailbox.searched audit (§4).
+        const res = await ctx.runAction(internal.gmail.search, { tenantId, name, correlationId: planId });
+        if (!res.ok) {
+          // Read-time auth failure: light the reconnect banner AND fall back to asking (never dead-end).
+          await ctx.runMutation(internal.notifications.notify, {
+            tenantId,
+            kind: "gmail_reconnect",
+            message: "I couldn't read your mailbox — reconnect Gmail so I can look up contacts.",
+          });
+          return `I couldn't read the mailbox to look up "${name}". Ask the user for the email address directly.`;
+        }
+        const matches = rankCandidates(name, res.records);
+        if (matches.length === 0) return `No contacts matched "${name}". Ask the user for the email address directly.`;
+        // Hold the candidates on the content plane so the ResolutionCard renders; the human picks a
+        // chip → resolveRecipients folds the real address in (the model never sees it).
+        await ctx.runMutation(internal.plans.writeCandidates, { planId, candidates: [{ name, matches }], pendingValid: [] });
+        // refs-only summary: counts + display-name LABELS, never an address (§2-D / §4).
+        const labels = matches.map((m, i) => `#${i + 1} ${m.displayName ?? "(no name)"}`).join(", ");
+        return `Found ${matches.length} contact(s) for "${name}": ${labels}. The user will pick one — do not guess the address.`;
+      },
+    }),
+    addRecipients: tool({
+      description: "Add one or more explicit, user-provided email addresses. Invalid addresses are rejected, not added.",
+      inputSchema: jsonSchema<{ addresses: string[] }>({
+        type: "object",
+        properties: { addresses: { type: "array", items: { type: "string" }, description: "Explicit email addresses the user typed." } },
+        required: ["addresses"],
+        additionalProperties: false,
+      }),
+      execute: ({ addresses }): Promise<string> => editRecipients({ op: "add", addresses }),
+    }),
+    setRecipients: tool({
+      description: "Replace the entire recipient list with these explicit email addresses. Invalid addresses are rejected.",
+      inputSchema: jsonSchema<{ addresses: string[] }>({
+        type: "object",
+        properties: { addresses: { type: "array", items: { type: "string" } } },
+        required: ["addresses"],
+        additionalProperties: false,
+      }),
+      execute: ({ addresses }): Promise<string> => editRecipients({ op: "set", addresses }),
+    }),
+    removeRecipient: tool({
+      description:
+        "Remove the recipient at the given 1-based #index (as shown in the plan). You never handle the address — the server resolves the index to it.",
+      inputSchema: jsonSchema<{ index: number }>({
+        type: "object",
+        properties: { index: { type: "number", description: "1-based index of the recipient to remove." } },
+        required: ["index"],
+        additionalProperties: false,
+      }),
+      execute: ({ index }): Promise<string> => editRecipients({ op: "remove", index }),
+    }),
+    setSubject: tool({
+      description: "Set the email subject line.",
+      inputSchema: jsonSchema<{ subject: string }>({
+        type: "object",
+        properties: { subject: { type: "string" } },
+        required: ["subject"],
+        additionalProperties: false,
+      }),
+      execute: async ({ subject }): Promise<string> => {
+        await ctx.runMutation(internal.plans.patchPlan, { planId, subject });
+        return "Subject set.";
+      },
+    }),
+    setMode: tool({
+      description: "Set how multiple recipients are addressed: individually (a separate email each) or as one group thread.",
+      inputSchema: jsonSchema<{ mode: "individual" | "group" }>({
+        type: "object",
+        properties: { mode: { type: "string", enum: ["individual", "group"] } },
+        required: ["mode"],
+        additionalProperties: false,
+      }),
+      execute: async ({ mode }): Promise<string> => {
+        await ctx.runMutation(internal.plans.patchPlan, { planId, mode });
+        return `Send mode set to ${mode}.`;
+      },
+    }),
+    draftBody: tool({
+      description: "Draft the email body from a plain-language description of what to say. The draft is stored on the plan.",
+      inputSchema: jsonSchema<{ intent: string }>({
+        type: "object",
+        properties: { intent: { type: "string", description: "What the email should say, in plain language." } },
+        required: ["intent"],
+        additionalProperties: false,
+      }),
+      execute: async ({ intent }): Promise<string> => {
+        // Redact BEFORE the drafting model sees anything (GRDL-01/02, CLAUDE.md §4). Fail closed.
+        const scan = scanText(intent);
+        if (!scan.ok) throw new Error("cockpit: body-intent scan failed");
+        const safeText = scan.value.safeText;
+        const plan = await readPlan();
+        const draft: { subject: string; body: string } = await ctx.runAction(internal.llm.draftCockpit, {
+          tenantId,
+          safeText,
+          safeTextHash: await contentHash(safeText),
+          greetingName: plan.greetingName, // resolved display name ONLY (SC3 — never a header hint)
+        });
+        // bodyIntent is content-plane (never a log — §4); body is the drafted wording.
+        await ctx.runMutation(internal.plans.patchPlan, { planId, bodyIntent: intent, body: draft.body });
+        return "Body drafted and saved to the plan.";
+      },
+    }),
+    proposePlan: tool({
+      description: "Propose the finished plan for the user to review and Approve. Call only once recipients, subject, and a drafted body are all set.",
+      inputSchema: jsonSchema<Record<string, never>>({ type: "object", properties: {}, additionalProperties: false }),
+      execute: async (): Promise<string> => {
+        const plan = await readPlan();
+        const recipients = plan.recipients ?? [];
+        // Structural facts come from the ROW, never from model args (DECISION #2).
+        await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
+          planId,
+          recipients,
+          mode: recipients.length > 1 ? (plan.mode ?? "individual") : "individual",
+          subject: plan.subject ?? "",
+          body: plan.body ?? "",
+        });
+        return "Plan proposed — the user can now review and Approve it.";
+      },
+    }),
+  };
+}
+
+/**
+ * Test-support shim (convex-test cannot fabricate an action ctx): build the tool set with a live
+ * ctx and invoke one tool by name. Exercises the REAL primitives offline via SMOKE::. Not used in
+ * production — Plan 04's generateText loop is the real caller.
+ * ponytail: test-only, but it must live in this "use node" module — the tools close over an action
+ * ctx a query/mutation test ctx cannot provide. Remove if the loop lands a testable seam.
+ */
+export const __invokeCockpitTool = internalAction({
+  args: { tenantId: v.string(), planId: v.id("plans"), toolName: v.string(), input: v.any() },
+  handler: async (ctx, { tenantId, planId, toolName, input }): Promise<string> => {
+    const tools = buildCockpitTools(ctx, tenantId, planId) as unknown as Record<
+      string,
+      { execute: (i: unknown, o: unknown) => Promise<string> }
+    >;
+    const t = tools[toolName];
+    if (!t) throw new Error(`unknown cockpit tool: ${toolName}`);
+    return await t.execute(input, { toolCallId: "test", messages: [] });
   },
 });
 

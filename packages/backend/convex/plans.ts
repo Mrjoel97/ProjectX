@@ -10,7 +10,7 @@
 // workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
 // PINNED plan lifecycle (schema.ts): collecting → proposed → approved → delivering → done.
@@ -110,6 +110,16 @@ export const clearCandidates = internalMutation({
   handler: async (ctx, { planId }) => {
     await ctx.db.patch(planId, { candidates: undefined, pendingValid: undefined });
   },
+});
+
+/**
+ * Read one plan row by id (internal). The cockpit Executive-Agent tools (llm.ts) run in the
+ * "use node" action with a planId and no ctx.db — they read the row through this. Internal-only;
+ * the tool re-checks tenantId against the row before use (no cross-tenant read).
+ */
+export const getById = internalQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => await ctx.db.get(planId),
 });
 
 /** The tenant's plans row for a thread → feeds the PLAN + DRAFT cards (by_thread). */
