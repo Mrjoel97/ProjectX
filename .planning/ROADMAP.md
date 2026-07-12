@@ -94,11 +94,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Pure domain logic: @pikar/cost (estimate/downgrade/price, fail-closed) + isFallbackEligible classifier + SafeText brand (Wave 1)
-- [ ] 03-02-PLAN.md — Platform prep: action-cache 0.3.1 exact-pin install, safeText/safeTextHash schema rails + guardrailConfig, scanning/blocked statuses + blocked telemetry outcome (Wave 1)
-- [ ] 03-03-PLAN.md — Guard choke point: guardrails.ts (kill switch, scan→persist, cost→model choice, daily-spend window) + per-user submit rate limit [GRDL-01/03/06] (Wave 2)
-- [ ] 03-04-PLAN.md — Rewire llm.ts (fail-closed safeText reader, tenant-namespaced cache, cheap-model fallback) + pipeline guard step/blocked terminal/priced spend + GRDL-02 static scan (Wave 3)
-- [ ] 03-05-PLAN.md — smoke:guardrails integration suite (no-raw-PII, cache isolation/hit, fallback, kill switch, budget, rate limit) + phase gate (Wave 4)
+- [x] 03-01-PLAN.md — Pure domain logic: @pikar/cost (estimate/downgrade/price, fail-closed) + isFallbackEligible classifier + SafeText brand (Wave 1)
+- [x] 03-02-PLAN.md — Platform prep: action-cache 0.3.1 exact-pin install, safeText/safeTextHash schema rails + guardrailConfig, scanning/blocked statuses + blocked telemetry outcome (Wave 1)
+- [x] 03-03-PLAN.md — Guard choke point: guardrails.ts (kill switch, scan→persist, cost→model choice, daily-spend window) + per-user submit rate limit [GRDL-01/03/06] (Wave 2)
+- [x] 03-04-PLAN.md — Rewire llm.ts (fail-closed safeText reader, tenant-namespaced cache, cheap-model fallback) + pipeline guard step/blocked terminal/priced spend + GRDL-02 static scan (Wave 3)
+- [x] 03-05-PLAN.md — smoke:guardrails integration suite (no-raw-PII, cache isolation/hit, fallback, kill switch, budget, rate limit) + phase gate (Wave 4)
 
 ### Phase 3.1: Cockpit Core (INSERTED)
 **Goal**: The manual `/submit` form + `/review` queue are replaced by a conversational two-pane cockpit — a guided slot-filling conversation assembles a PLAN, the user approves once, and execution fans out hands-off to multiple recipients through the existing governed engine (Gmail, audit, telemetry, DLQ, tenant scoping, durable workflows), with a live per-recipient report.
