@@ -21,7 +21,7 @@ import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
 import { EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
 import { isFallbackEligible } from "@pikar/core";
-import { CHEAP_MODEL } from "@pikar/cost";
+import { CHEAP_MODEL, DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { generateObject } from "ai";
 import { v } from "convex/values";
@@ -259,6 +259,70 @@ export const draftUncached = internalAction({
       });
       await auditCalled(CHEAP_MODEL);
       return { subject: object.subject, body: object.body, usage, generatedAt: Date.now() };
+    }
+  },
+});
+
+/**
+ * Cockpit body draft (DECISION #2 — the LLM is used ONLY for the body wording).
+ * Lives INSIDE llm.ts because it is the ONLY "use node" module (RESEARCH §6 — a second
+ * node module re-triggers the TS circular-inference cliff). Unlike draftUncached it takes
+ * ALREADY-REDACTED text directly ({ tenantId, safeText, safeTextHash }) instead of a
+ * requests-row hash: the guided chat has no per-turn requests row (RESEARCH-agent §6).
+ *
+ * REDACTION CONTRACT: the CALLER (plan 07) scans the body-intent via guardrails.prepare/
+ * scanText and passes `safeText` — no raw PII reaches the model or any log (GRDL-01/02,
+ * CLAUDE.md §4). The drafter body loads from the registry (no hardcoded prompt — §5).
+ * SMOKE:: short-circuits to a deterministic offline draft (no model call — the E2E path);
+ * else DEFAULT_MODEL → CHEAP_MODEL fallback. Returns { subject, body } only — the
+ * recipient is never model-derived (drafting.ts).
+ */
+export const draftCockpit = internalAction({
+  args: { tenantId: v.string(), safeText: v.string(), safeTextHash: v.string() },
+  handler: async (
+    ctx,
+    { safeText, safeTextHash },
+  ): Promise<{ subject: string; body: string }> => {
+    // Load the drafter FIRST (no hardcoded prompt — CLAUDE.md §5); fails closed
+    // (throws NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
+    const skill: { body: string; version: number } = await ctx.runQuery(
+      internal.skills.getActiveSkill,
+      { name: EMAIL_DRAFTER_SKILL },
+    );
+    const smoke = parseSmoke(safeText);
+
+    // ponytail: no audit/telemetry here. draftCockpit has no thread/correlationId (only the
+    // safeTextHash) — the CALLER (plan 07) owns the conversation's correlation and records
+    // llm.called/cost with it. Writing nothing keeps the draft path redaction-safe by
+    // construction (nothing raw can leak to a log because it emits no log). Add a usage
+    // return + caller-side telemetry when plan 07 needs OPSG-01 counts for chat drafts.
+    try {
+      if (smoke) {
+        // failPrimary throws INTO the catch so the real fallback path runs; else offline draft.
+        if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        return { subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}` };
+      }
+      const { object } = await generateObject({
+        model: DEFAULT_MODEL,
+        schema: draftSchema,
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 1,
+      });
+      return { subject: object.subject, body: object.body };
+    } catch (e) {
+      if (!isFallbackEligible(e)) throw e;
+      if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback" };
+      const { object } = await generateObject({
+        model: CHEAP_MODEL,
+        schema: draftSchema,
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      return { subject: object.subject, body: object.body };
     }
   },
 });
