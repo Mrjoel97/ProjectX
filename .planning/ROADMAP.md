@@ -117,7 +117,7 @@ Plans:
   - [ ] 03.1-03-PLAN.md — Pure emailIntent slot-filling module + tests (packages/core, TDD) (Wave 1)
   - [x] 03.1-04-PLAN.md — deliverApprovedPlan fan-out workflow + deadLetterRecipient + smoke:fanout (Wave 2) ✓ 2026-07-12
   - [ ] 03.1-05-PLAN.md — Cockpit page shell + resizable divider + SC1 E2E specs (Wave 2)
-  - [ ] 03.1-06-PLAN.md — plans adapter (byThread + REPORT projection) + cockpitDraft in llm.ts (Wave 2)
+  - [x] 03.1-06-PLAN.md — plans adapter (byThread + REPORT projection) + cockpitDraft in llm.ts (Wave 2) ✓ 2026-07-12
   - [ ] 03.1-07-PLAN.md — Agent thread + proposeEmailPlan + executePlan approve gate (idempotent) (Wave 3)
   - [ ] 03.1-08-PLAN.md — PLAN/DRAFT/REPORT cards + chat pane wired to live queries (Wave 4)
   - [ ] 03.1-09-PLAN.md — E2E integration + governance redaction + Connect-Gmail verify + human checkpoint (Wave 5)
