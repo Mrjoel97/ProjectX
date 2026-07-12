@@ -115,7 +115,7 @@ Plans:
   - [x] 03.1-01-PLAN.md — Backend contracts: plans table + planId on requests + pinned status enum + tenantAction wrapper (Wave 1) ✓ 2026-07-12
   - [ ] 03.1-02-PLAN.md — Frontend + E2E harness: @convex-dev/agent@0.6.4 in apps/web, teal tokens, Playwright install (Wave 1)
   - [ ] 03.1-03-PLAN.md — Pure emailIntent slot-filling module + tests (packages/core, TDD) (Wave 1)
-  - [ ] 03.1-04-PLAN.md — deliverApprovedPlan fan-out workflow + deadLetterRecipient + smoke:fanout (Wave 2)
+  - [x] 03.1-04-PLAN.md — deliverApprovedPlan fan-out workflow + deadLetterRecipient + smoke:fanout (Wave 2) ✓ 2026-07-12
   - [ ] 03.1-05-PLAN.md — Cockpit page shell + resizable divider + SC1 E2E specs (Wave 2)
   - [ ] 03.1-06-PLAN.md — plans adapter (byThread + REPORT projection) + cockpitDraft in llm.ts (Wave 2)
   - [ ] 03.1-07-PLAN.md — Agent thread + proposeEmailPlan + executePlan approve gate (idempotent) (Wave 3)
