@@ -89,7 +89,7 @@ when assessing blast radius). Couplings graphify cannot see:
 - `pnpm --filter @pikar/core test` — slot ordering, invalid-email re-ask, never-ready-early
 - `pnpm --filter @pikar/backend test` — approve-gate invariants, `parseAnswer`, redaction static scan
 - `pnpm --filter @pikar/backend smoke:fanout` — needs a running `convex dev` + seeded skills; proves fan-out isolation, one-terminal-per-recipient, no raw PII in any log plane
-- Playwright E2E (needs `convex dev` non-`--once` + `next dev` on :3111, signed-in via `auth.setup.ts`; see `apps/web/e2e/README.md`): `pnpm exec playwright test cockpit-report` (full chat→plan→approve→report over `SMOKE::`), `connect-gmail`, `cockpit-render`, `cockpit-split`
+- Playwright E2E (needs `convex dev` non-`--once` + `next dev` on :3111, signed-in via `auth.setup.ts`; see `apps/web/e2e/README.md`): `pnpm exec playwright test cockpit-report` (full chat→plan→approve→report over `SMOKE::`), `cockpit-resolve` (name→resolution card→pick→PLAN over `SMOKE::`, nothing sent), `connect-gmail`, `cockpit-render`, `cockpit-split`
 - Manual-only: a real Gmail send (the E2E harness user has a stale token, so sends settle at `awaiting_reauth` by design; see `03.1-VALIDATION.md`)
 
 ## Operational notes
