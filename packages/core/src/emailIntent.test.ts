@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   applyAnswer,
+  applyRecipientEdit,
+  buildRecipientView,
   type EmailIntentState,
   emptyIntent,
   type HeaderRecord,
@@ -265,5 +267,69 @@ describe("rankCandidates — dedupe + rank contacts from header metadata", () =>
       from: `p${i}@x.com`,
     }));
     expect(rankCandidates("p", recs).length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("buildRecipientView — index+label projection (§2-D: no raw address reaches the model)", () => {
+  test("recipient WITH a display name → label is the name; never contains an address", () => {
+    const view = buildRecipientView([{ address: "sarah@x.com", displayName: "Sarah Chen" }]);
+    expect(view).toEqual([{ index: 1, label: "Sarah Chen" }]);
+    for (const r of view) expect(r.label).not.toContain("@");
+  });
+
+  test("recipient WITHOUT a display name → neutral '#<index> (no name)' placeholder, index preserved", () => {
+    const view = buildRecipientView([
+      { address: "a@x.com", displayName: "Alice" },
+      { address: "bob@y.com" },
+    ]);
+    expect(view).toEqual([
+      { index: 1, label: "Alice" },
+      { index: 2, label: "#2 (no name)" },
+    ]);
+    for (const r of view) expect(r.label).not.toContain("@");
+  });
+
+  test("empty recipients → empty view", () => {
+    expect(buildRecipientView([])).toEqual([]);
+  });
+});
+
+describe("applyRecipientEdit — add/remove/set with validation bounce + index resolution", () => {
+  test("add valid → appended, deduped case-insensitively", () => {
+    const res = applyRecipientEdit(["a@x.com"], { op: "add", addresses: ["b@y.com"] });
+    expect(res).toEqual({ ok: true, recipients: ["a@x.com", "b@y.com"] });
+
+    const dupe = applyRecipientEdit(["a@x.com"], { op: "add", addresses: ["A@X.com"] });
+    expect(dupe).toEqual({ ok: true, recipients: ["a@x.com"] });
+  });
+
+  test("add invalid → recipients unchanged, address bounces (never enters recipients)", () => {
+    const res = applyRecipientEdit(["a@x.com"], { op: "add", addresses: ["bad@"] });
+    expect(res).toEqual({ ok: false, recipients: ["a@x.com"], rejected: ["bad@"] });
+  });
+
+  test("add mixed → valid appended, invalid bounced", () => {
+    const res = applyRecipientEdit([], { op: "add", addresses: ["good@z.com", "bad@"] });
+    expect(res).toEqual({ ok: false, recipients: ["good@z.com"], rejected: ["bad@"] });
+  });
+
+  test("remove by 1-based index → resolves the right recipient", () => {
+    const res = applyRecipientEdit(["a@x.com", "b@y.com"], { op: "remove", index: 1 });
+    expect(res).toEqual({ ok: true, recipients: ["b@y.com"] });
+  });
+
+  test("remove out of range → bounce, recipients unchanged (never a silent no-op send)", () => {
+    const res = applyRecipientEdit(["a@x.com", "b@y.com"], { op: "remove", index: 5 });
+    expect(res).toEqual({ ok: false, recipients: ["a@x.com", "b@y.com"], rejected: ["#5"] });
+  });
+
+  test("set valid → replaces recipients wholesale", () => {
+    const res = applyRecipientEdit(["a@x.com"], { op: "set", addresses: ["c@d.com"] });
+    expect(res).toEqual({ ok: true, recipients: ["c@d.com"] });
+  });
+
+  test("set with an invalid member → bounces that member, does NOT replace with the bad address", () => {
+    const res = applyRecipientEdit(["a@x.com"], { op: "set", addresses: ["c@d.com", "bad@"] });
+    expect(res).toEqual({ ok: false, recipients: ["c@d.com"], rejected: ["bad@"] });
   });
 });
