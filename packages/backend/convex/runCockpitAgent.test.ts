@@ -1,0 +1,136 @@
+// @vitest-environment node
+//
+// Mock-model loop integration coverage for the Executive-Agent tool-loop (Plan 04, AGNT-01/02).
+// A LanguageModel is not Convex-serializable, so the mock is built INSIDE the action from a
+// scripted array of doGenerate results (via the __runCockpitAgentWithScript shim) and handed to the
+// REAL governed loop (runAgentLoop) — no gateway. Proves the Nyquist truths deterministically:
+//   #1 a scripted conversational edit sequence mutates the plans row to a correct `proposed` state,
+//   #3 a kill-switch stop yields a paused reply and writes NO deadLetters row (never a DLQ),
+//   #5 recordSpend consumes the daily-spend window on non-zero usage + an eligible failure falls
+//      back to CHEAP_MODEL.
+import { convexTest } from "convex-test";
+import { expect, test } from "vitest";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import schema from "./schema";
+// recordSpend drives the rate-limiter component (reserve into the daily-spend window); register it
+// (relative import — the package blocks the deep specifier) so the REAL guardrail path runs under
+// convex-test instead of throwing "component not registered".
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+
+// A SMOKE:: body-intent survives redaction and short-circuits draftCockpit offline (no gateway).
+const SMOKE_BODY = "SMOKE::route=direct_llm:: say a friendly hello";
+type T = ReturnType<typeof convexTest>;
+
+async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  await t.mutation(internal.skills.seedSkills, {}); // cockpit-agent + email-drafter active seeds
+  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  return { t, planId };
+}
+
+const readPlan = (t: T, planId: Id<"plans">) => t.run((ctx) => ctx.db.get(planId));
+
+// ── Scripted mock doGenerate results (LanguageModelV4 provider shape) ─────────
+const provUsage = (input: number, output: number) => ({
+  inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: output, text: output, reasoning: 0 },
+});
+const toolStep = (toolName: string, input: unknown) => ({
+  content: [{ type: "tool-call", toolCallId: `c-${toolName}`, toolName, input: JSON.stringify(input) }],
+  finishReason: { unified: "tool-calls", raw: "tool-calls" },
+  usage: provUsage(0, 0),
+  warnings: [],
+});
+const textStep = (text: string, input = 0, output = 0) => ({
+  content: [{ type: "text", text }],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: provUsage(input, output),
+  warnings: [],
+});
+
+test("mock loop: a scripted edit sequence drives the plan to a correct `proposed` state", async () => {
+  const { t, planId } = await setup();
+
+  // Script: addRecipients → setSubject → draftBody → proposePlan → final assistant text.
+  // The final step reports huge usage so recordSpend reserves > the daily budget (assert below).
+  const reply = await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      toolStep("addRecipients", { addresses: ["bob@example.com", "alice@example.com"] }),
+      toolStep("setSubject", { subject: "Project sync" }),
+      toolStep("draftBody", { intent: SMOKE_BODY }),
+      toolStep("proposePlan", {}),
+      textStep("Your plan is ready — review and Approve.", 1_000_000, 10_000_000),
+    ],
+  });
+
+  expect(reply).toEqual({ reply: "Your plan is ready — review and Approve." });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.status).toBe("proposed"); // conversational edits reached a proposed plan (truth #1)
+  expect(plan?.recipients).toEqual(["bob@example.com", "alice@example.com"]);
+  expect(plan?.subject).toBe("Project sync");
+  expect(plan?.body).toBeTruthy(); // a draft landed on the row
+
+  // recordSpend consumed the daily-spend window: the priced huge usage (> $5) drove it negative,
+  // so the next preCall fails closed (truth #5 — recordSpend runs with the reasoning call's usage).
+  const pre = await t.mutation(internal.guardrails.preCall, {});
+  expect(pre).toEqual({ ok: false, reason: "daily_budget_exhausted" });
+});
+
+test("mock loop: a remove edit resolves the 1-based index (the right recipient remains)", async () => {
+  const { t, planId } = await setup();
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      toolStep("addRecipients", { addresses: ["bob@example.com", "alice@example.com"] }),
+      toolStep("removeRecipient", { index: 1 }), // remove #1 (bob) by INDEX only
+      textStep("Removed the first recipient.", 0, 0),
+    ],
+  });
+
+  expect((await readPlan(t, planId))?.recipients).toEqual(["alice@example.com"]);
+});
+
+test("kill-switch: runCockpitAgent returns a paused reply + blocked, and writes NO deadLetters", async () => {
+  const { t, planId } = await setup();
+  await t.run(async (ctx) => {
+    await ctx.db.insert("guardrailConfig", { killSwitch: true, budgetUsdPerRequest: 0.05, updatedAt: Date.now() });
+  });
+
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    text: "add bob@example.com",
+  });
+
+  expect(res.blocked).toBe("kill_switch");
+  expect(res.reply).toMatch(/paus/i); // conversational stop, not an error
+  // A governed stop is NEVER a DLQ failure (truth #3).
+  const dlq = await t.run((ctx) => ctx.db.query("deadLetters").collect());
+  expect(dlq).toHaveLength(0);
+});
+
+test("fallback: an eligible primary failure retries on the CHEAP model", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    failPrimary: true, // primary model throws a TimeoutError (isFallbackEligible)
+    primary: [],
+    fallback: [textStep("Recovered on the cheap model.", 0, 0)],
+  });
+
+  expect(reply).toEqual({ reply: "Recovered on the cheap model." });
+});
