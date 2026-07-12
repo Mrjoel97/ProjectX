@@ -2,7 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import type { FunctionReturnType } from "convex/server";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -148,6 +148,101 @@ function ReportCard({ planId }: { planId: PlanId }) {
   );
 }
 
+type ContactMatch = NonNullable<Plan["candidates"]>[number]["matches"][number];
+
+// A resolved contact hint (USER-only display — never sent to the LLM, CLAUDE.md §4).
+function matchHint(m: ContactMatch): string {
+  const parts = [`${m.count} msg${m.count === 1 ? "" : "s"}`];
+  if (m.lastDateMs) parts.push(new Date(m.lastDateMs).toLocaleDateString());
+  return parts.join(", ");
+}
+
+function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
+  const resolve = useAction(api.cockpit.resolveRecipients);
+  const candidates = plan.candidates ?? [];
+  const pendingValid = plan.pendingValid ?? [];
+  const [busy, setBusy] = useState(false);
+  // Selection = one address per name. Single-match sections pre-select their only chip, but the
+  // "Use these contacts" click is still required to confirm (a name→address is an inference).
+  const [picked, setPicked] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const c of candidates) {
+      const [only] = c.matches;
+      if (c.matches.length === 1 && only) init[c.name] = only.address;
+    }
+    return init;
+  });
+
+  const allPicked = candidates.every((c) => picked[c.name]);
+
+  async function useContacts() {
+    if (busy || !allPicked) return;
+    setBusy(true);
+    try {
+      const picks = candidates.flatMap((c) => {
+        const address = picked[c.name];
+        if (!address) return [];
+        const m = c.matches.find((x) => x.address === address);
+        return [{ name: c.name, address, displayName: m?.displayName }];
+      });
+      await resolve({ threadId, picks });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={box}>
+      <div style={label}>PICK A CONTACT</div>
+      {candidates.map((c) => (
+        <div key={c.name} style={{ margin: "0.5rem 0" }}>
+          <div style={{ ...dim, fontWeight: 600, marginBottom: "0.3rem" }}>{c.name}</div>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            {c.matches.map((m) => {
+              const sel = picked[c.name] === m.address;
+              return (
+                <button
+                  key={m.address}
+                  type="button"
+                  onClick={() => setPicked((p) => ({ ...p, [c.name]: m.address }))}
+                  style={{
+                    ...chip,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    borderColor: sel ? "var(--teal-600)" : "#e5e5e5",
+                    background: sel ? "var(--teal-50, #f0fdfa)" : "var(--canvas, #f1f5f9)",
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{m.displayName ?? m.address}</span>
+                  <span style={dim}> · {m.address} · {matchHint(m)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {pendingValid.length > 0 && (
+        <div style={{ margin: "0.5rem 0" }}>
+          <div style={{ ...dim, fontWeight: 600, marginBottom: "0.3rem" }}>Already valid</div>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            {pendingValid.map((a) => (
+              <span key={a} style={{ ...chip, borderColor: "var(--teal-600)", background: "var(--teal-50, #f0fdfa)" }}>{a}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        disabled={busy || !allPicked}
+        onClick={() => void useContacts()}
+        style={{ ...btn, marginTop: "0.5rem", background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600, opacity: allPicked ? 1 : 0.5 }}
+      >
+        {busy ? "Resolving…" : "Use these contacts"}
+      </button>
+    </div>
+  );
+}
+
 /** Reads the thread's single plan row and dispatches PLAN / DRAFT / REPORT cards. */
 export function CardList({ threadId }: { threadId?: string }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -158,9 +253,13 @@ export function CardList({ threadId }: { threadId?: string }) {
 
   const hasDraft = Boolean(plan.body) || Boolean(plan.subject);
   const reporting = plan.status === "delivering" || plan.status === "done";
+  // Resolution happens during "collecting", BEFORE the PLAN — render the pick card whenever the
+  // cockpit has parked candidates and the plan hasn't been proposed/delivered yet.
+  const resolving = Boolean(plan.candidates?.length) && plan.status !== "proposed" && !reporting;
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
+      {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {plan.status === "proposed" && <PlanCard plan={plan} />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
