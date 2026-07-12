@@ -24,10 +24,10 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 ### Guardrails
 
 - [x] **GRDL-01**: Every request is PII-scanned and redacted to safeText before any external model call; unknown/null scan results fail closed
-- [ ] **GRDL-02**: Pipeline enforces redact-then-log ordering — no raw PII in logs, telemetry, or cache keys
-- [ ] **GRDL-03**: Cost is estimated from safeText and checked against budget; over-budget requests downgrade to a cheaper model; unknown/null results fail closed
+- [x] **GRDL-02**: Pipeline enforces redact-then-log ordering — no raw PII in logs, telemetry, or cache keys
+- [x] **GRDL-03**: Cost is estimated from safeText and checked against budget; over-budget requests downgrade to a cheaper model; unknown/null results fail closed
 - [x] **GRDL-04**: LLM responses are cached keyed on tenant-namespaced safeTextHash; cache hits return without a model call
-- [ ] **GRDL-05**: Primary LLM generation failure or timeout triggers fallback generation
+- [x] **GRDL-05**: Primary LLM generation failure or timeout triggers fallback generation
 - [x] **GRDL-06**: Per-user rate limiting and a cost kill-switch cap runaway spend
 
 ### Human Review & Delivery
@@ -132,10 +132,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGNT-03 | Phase 2 | Complete |
 | AGNT-04 | Phase 7 | Pending |
 | GRDL-01 | Phase 3 | Complete |
-| GRDL-02 | Phase 3 | Pending |
-| GRDL-03 | Phase 3 | Pending |
+| GRDL-02 | Phase 3 | Complete |
+| GRDL-03 | Phase 3 | Complete |
 | GRDL-04 | Phase 3 | Complete |
-| GRDL-05 | Phase 3 | Pending |
+| GRDL-05 | Phase 3 | Complete |
 | GRDL-06 | Phase 3 | Complete |
 | REVW-01 | Phase 2 | Complete |
 | REVW-02 | Phase 7 | Pending |
