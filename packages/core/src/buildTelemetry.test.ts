@@ -40,7 +40,7 @@ describe("buildTelemetry (OPSG-01 terminal row builder)", () => {
   });
 
   test("every terminal outcome yields a row with all OPSG-01 keys present", () => {
-    for (const reviewOutcome of ["sent", "rejected", "expired", "failed"] as const) {
+    for (const reviewOutcome of ["sent", "rejected", "expired", "failed", "blocked"] as const) {
       const row = buildTelemetry({
         reviewOutcome,
         durationMs: 10,
@@ -55,8 +55,8 @@ describe("buildTelemetry (OPSG-01 terminal row builder)", () => {
     }
   });
 
-  test("a no-LLM outcome (rejected/expired) yields explicit nulls, not missing keys", () => {
-    for (const reviewOutcome of ["rejected", "expired"] as const) {
+  test("a no-LLM outcome (rejected/expired/blocked) yields explicit nulls, not missing keys", () => {
+    for (const reviewOutcome of ["rejected", "expired", "blocked"] as const) {
       const row = buildTelemetry({
         reviewOutcome,
         durationMs: 5,
