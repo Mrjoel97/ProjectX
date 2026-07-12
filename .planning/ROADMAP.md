@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Guardrails** - PII redaction, cost estimate/downgrade, tenant-namespaced cache, fallback, rate-limit + cost kill-switch
 - [ ] **Phase 3.1: Cockpit Core** (INSERTED) - Two-pane chat cockpit: guided slot-filling conversation → single plan-approval → hands-off multi-recipient governed send → live per-recipient report; reuses the Phase 2 engine, retires the /submit form + /review queue
 - [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
+- [ ] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
 - [ ] **Phase 3.3: Attachment Generation** (INSERTED) - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 — `.planning/design/scheduled-send.md`)
@@ -141,6 +142,17 @@ Plans:
 - [ ] 03.2-04-PLAN.md — Cockpit resolution wiring: comma/"and" tokenizer, search→rank→card, resolveRecipients, greetingName, redaction tests (Wave 2)
 - [ ] 03.2-05-PLAN.md — Resolution card + "Searching…" chip + cockpit-resolve E2E (Wave 3)
 - [ ] 03.2-06-PLAN.md — Playbook + watch.json update (§9) + CKPT-01 human-verify (Wave 4)
+
+### Phase 03.2.1: Agent-Driven Cockpit (INSERTED)
+
+**Goal:** Replace the deterministic `emailIntent` FSM cockpit with an Executive Agent governed tool-loop (`generateText` + tools in `llm.ts`) so the conversation is flexible ("remove Bob", "make it more formal, add Jane") while every governance invariant survives — human Approve gate stays a mutation (never a tool), redaction-before-draft, refs-only logs, and structural facts are never model-invented (validated/resolved at the tool boundary). Clean cutover (FSM deleted).
+**Requirements**: AGNT-01, AGNT-02 (reshaped — the Executive Agent finally becomes a real reasoning tool-loop instead of an inert message store; no new v1 ID)
+**Depends on:** Phase 3.2 (inbox-read primitives become agent tools). **Blocks Phase 3.3** — attachment generation builds on the agent engine, so this must land first.
+**Design record:** `.planning/design/agent-driven-cockpit.md`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 03.2.1 to break down)
 
 ### Phase 3.3: Attachment Generation (INSERTED)
 **Goal**: The agent can generate a document and attach it to an outgoing email, so a plan can deliver produced artifacts, not just body text.

@@ -160,6 +160,10 @@ Recent decisions affecting current work:
 - [Phase 03.2]: 03.2-06 (phase close): cockpit playbook Last verified → 03.2-06 (§9 blessing of the phase's watched-file changes); new invariant — the sole mailbox.searched audit ({queryHash,resultCount}) is emitted by gmail.search so cockpit.ts stays audit.log-free; gmail.ts already watch-protected under cockpit.md (no duplicate edit). CKPT-01 human-verified on the live backend: a real name resolved a real contact, folded into the PLAN, draft greeted "Hi <name>," and NOTHING sent on read (SC2/SC3). Phase 3.2 inbox-reading COMPLETE (6/6).
 - [Phase 03.2]: 03.2-05: resolution card UI landed — ResolutionCard (chip-section per unresolved name + pendingValid row) calls resolveRecipients on pick, dispatched during collecting before proposed; 'Searching your mailbox…' chip off plan.candidates; cockpit-resolve E2E proves name->card->pick->PLAN over SMOKE:: with nothing sent; SMOKE draft now honors greetingName so 'Hi <name>' is verifiable offline; cockpit-report recipients comma-separated for the new tokenizer
 
+### Roadmap Evolution
+
+- Phase 03.2.1 (Agent-Driven Cockpit) inserted after Phase 3.2, before Phase 3.3 (2026-07-12). Reshapes the cockpit from the deterministic `emailIntent` FSM to an Executive Agent governed tool-loop (Approach A + §2-D index/label reasoning + clean cutover). Reshapes AGNT-01/AGNT-02 (no new ID). Blocks 3.3 (attachment builds on the agent engine). Design: `.planning/design/agent-driven-cockpit.md`. Vision capabilities #2 (campaign approval) + #3 (standing pre-authorized rules) deferred to a later milestone.
+
 ### Pending Todos
 
 None yet.
