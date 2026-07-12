@@ -1,14 +1,25 @@
-// The Phase-2 spine (02-06): one durable workflow sequencing
-//   route → draft → review gate (regenerate loop) → Gmail delivery,
-// transitioning requests.status at every observable stage and writing exactly
-// one OPSG-01 telemetry row at each terminal (sent | rejected | expired).
+// The governed spine (02-06 + 03-04): one durable workflow sequencing
+//   guard (scan→kill-switch→budget) → route → draft → review gate (regenerate loop)
+//   → Gmail delivery,
+// transitioning requests.status at every observable stage and writing exactly one
+// OPSG-01 telemetry row at each terminal (sent | rejected | expired | blocked).
 //
-// A thrown route (unknown_route, from a parse fail inside llm.route) fails the
-// workflow → onComplete (result.kind "failed") → deadLetter.onPipelineComplete,
-// which owns the `failed` terminal (status + telemetry). No silent default — AGNT-03.
+// GRDL-01/03: `guardrails.prepare` runs BEFORE any model step. A guard rejection
+// (prepare OR a mid-flight preCall stop surfaced by the llm wrappers) ends in the
+// governed `blocked` terminal — status + guardrail.blocked audit + notification +
+// blocked telemetry — never a silent proceed and never a DLQ throw.
+//
+// A thrown route (unknown_route, from a parse fail inside llm.route) still fails the
+// workflow → onComplete (result.kind "failed") → deadLetter.onPipelineComplete, which
+// owns the `failed` terminal (status + telemetry). No silent default — AGNT-03.
+//
+// LLM steps run with { retry: false }: the retry budget lives in ONE layer (SDK
+// maxRetries:1 + one CHEAP_MODEL fallback inside the action), killing the
+// 12-calls-per-draft multiplication trap. Delivery keeps the workpool default.
 //
 // pipeline.ts is on the raw-builder allowlist (internalMutation, not a tenant
 // wrapper — the workflow carries no client identity).
+import { priceUsage } from "@pikar/cost";
 import { workflow } from "./index";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -40,13 +51,37 @@ export const MAX_REGENERATE = 3;
 
 /** One accumulated LLM usage (route/draft/regenerate) for the OPSG-01 row. */
 type Usage = { inputTokens: number; outputTokens: number; costUsd: number };
-// ponytail: costUsd is 0 until GRDL-03 (Phase 3) prices tokens in one place; the AI
-// SDK usage carries only token counts today.
-const toUsage = (u: { inputTokens?: number; outputTokens?: number }): Usage => ({
-  inputTokens: u?.inputTokens ?? 0,
-  outputTokens: u?.outputTokens ?? 0,
-  costUsd: 0,
-});
+// GRDL-03: real costUsd from priceUsage of the actual SDK usage; 0 on a cache hit
+// (GRDL-04 — a hit spent nothing).
+const toUsage = (
+  u: { inputTokens?: number; outputTokens?: number } | undefined,
+  model: string,
+  cacheHit: boolean,
+): Usage => {
+  const priced = priceUsage(model, u ?? {});
+  // ponytail: model ids come from our own PRICING keys, so Err is unreachable; coalesce 0
+  // over throwing in a replayed handler.
+  return {
+    inputTokens: u?.inputTokens ?? 0,
+    outputTokens: u?.outputTokens ?? 0,
+    costUsd: cacheHit ? 0 : priced.ok ? priced.value : 0,
+  };
+};
+
+/** The prepare/preCall governed-stop reasons → operator-facing labels (INTK-04 mirror). */
+type BlockReason =
+  | "kill_switch"
+  | "pii_scan_failed"
+  | "cost_estimate_failed"
+  | "over_budget"
+  | "daily_budget_exhausted";
+const LABELS: Record<BlockReason, string> = {
+  kill_switch: "cost kill-switch is on",
+  pii_scan_failed: "PII scan failed",
+  cost_estimate_failed: "over budget",
+  over_budget: "over budget",
+  daily_budget_exhausted: "daily budget exhausted",
+};
 
 export const pipelineWorkflow = workflow.define({
   args: { correlationId: v.string(), requestId: v.id("requests"), tenantId: v.string() },
@@ -69,7 +104,7 @@ export const pipelineWorkflow = workflow.define({
         payload: { requestId }, // ref only — redaction-safe (CLAUDE.md §4)
       });
     // Write-once terminal telemetry from the accumulated outcome (idempotent by cid).
-    const writeTelemetry = (reviewOutcome: "sent" | "rejected" | "expired") =>
+    const writeTelemetry = (reviewOutcome: "sent" | "rejected" | "expired" | "blocked") =>
       step.runMutation(internal.telemetry.writeTerminal, {
         requestId,
         correlationId,
@@ -82,12 +117,77 @@ export const pipelineWorkflow = workflow.define({
         },
       });
 
-    // 1. ROUTE — throws unknown_route (parse fail, inside llm.route) → onComplete →
-    //    DLQ reason (AGNT-03: never a silent default).
-    // ponytail: the GRDL-01 redact step (Phase 3) slots in AHEAD of llm.route here.
+    // The ONE governed blocked terminal — prepare AND every mid-flight preCall stop end here
+    // (status + guardrail.blocked audit + notify + blocked telemetry). A governed stop, NOT a throw.
+    const stopBlocked = async (reason: BlockReason) => {
+      await setStatusStep("blocked");
+      await step.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId,
+        eventType: "guardrail.blocked",
+        actor: "system",
+        payload: { requestId, reason }, // refs + reason only (CLAUDE.md §4)
+      });
+      await step.runMutation(internal.notifications.notify, {
+        tenantId,
+        kind: "guardrail.blocked",
+        requestId,
+        message: `Request stopped — ${LABELS[reason]}`,
+      });
+      await writeTelemetry("blocked");
+    };
+
+    // 0. GUARD — scan → kill-switch → budget/model, BEFORE any model call (GRDL-01/03).
+    await setStatusStep("scanning");
+    const guard = await step.runMutation(internal.guardrails.prepare, { requestId });
+    if (!guard.ok) {
+      await stopBlocked(guard.reason);
+      return null; // governed stop, NOT a throw
+    }
+    const { model, safeTextHash, piiCounts } = guard;
+    await step.runMutation(internal.audit.log, {
+      tenantId,
+      correlationId,
+      eventType: "request.redacted",
+      actor: "system",
+      payload: { requestId, piiCounts, safeTextHash }, // counts + hash only
+    });
+
+    // Consume a real model call's spend + emit the SC-4 cache-hit observable. Hits spent
+    // nothing, so recordSpend (zero-skip) leaves the budget untouched.
+    const recordLlm = async (
+      usage: { inputTokens?: number; outputTokens?: number } | undefined,
+      cacheHit: boolean,
+      stage: "route" | "draft",
+    ) => {
+      const u = toUsage(usage, model, cacheHit);
+      usages.push(u);
+      await step.runMutation(internal.guardrails.recordSpend, { costUsd: u.costUsd });
+      if (cacheHit) {
+        await step.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId,
+          eventType: "llm.cache_hit",
+          actor: "system",
+          payload: { requestId, safeTextHash, model, stage },
+        });
+      }
+    };
+
+    // 1. ROUTE — retry:false; a mid-flight preCall stop returns `blocked` → SAME governed
+    //    terminal (never the DLQ). unknown_route still THROWS inside the wrapper → DLQ (AGNT-03).
     await setStatusStep("routing");
-    const { routing, usage: routeUsage } = await step.runAction(internal.llm.route, { requestId });
-    usages.push(toUsage(routeUsage));
+    const routeRes = await step.runAction(
+      internal.llm.route,
+      { tenantId, requestId, safeTextHash, model },
+      { retry: false },
+    );
+    if (routeRes.blocked) {
+      await stopBlocked(routeRes.blocked);
+      return null;
+    }
+    const { routing, usage: routeUsage, cacheHit: routeCacheHit } = routeRes;
+    await recordLlm(routeUsage, routeCacheHit, "route");
     // direct_llm and sub_agent both produce their draft via the LLM (sub_agent is the
     // email specialist — same draft → review → send spine in this thin slice); direct_tool
     // uses the user's goal verbatim. Every route still passes through the review gate.
@@ -99,9 +199,17 @@ export const pipelineWorkflow = workflow.define({
     //    verbatim goal as the draft but STILL gates it (REVW-01 reviews every response).
     await setStatusStep("drafting");
     if (draftsViaLLM) {
-      const { body, usage } = await step.runAction(internal.llm.draft, { requestId });
-      usages.push(toUsage(usage));
-      await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: body });
+      const res = await step.runAction(
+        internal.llm.draft,
+        { tenantId, requestId, safeTextHash, model },
+        { retry: false },
+      );
+      if (res.blocked) {
+        await stopBlocked(res.blocked);
+        return null;
+      }
+      await recordLlm(res.usage, res.cacheHit, "draft");
+      await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: res.body });
     } else {
       await step.runMutation(internal.pipeline.useVerbatimDraft, { requestId });
     }
@@ -140,12 +248,22 @@ export const pipelineWorkflow = workflow.define({
       }
 
       if (evt.decision === "regenerate" && attempt < MAX_REGENERATE) {
-        // ponytail: the regenerate instruction is not yet threaded into llm.draft (its
-        // prompt is the goal); Phase 3 wires instruction + redaction into the draft step.
         if (draftsViaLLM) {
-          const { body, usage } = await step.runAction(internal.llm.draft, { requestId });
-          usages.push(toUsage(usage));
-          await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: body });
+          // force:true so an identical-args fetch cannot hand back the byte-identical draft
+          // the user just asked to change (Pitfall 2); instruction is threaded + redacted +
+          // hashed into the cache key inside the wrapper. A mid-flight budget drain here is
+          // exactly the preCall path → SAME blocked terminal.
+          const res = await step.runAction(
+            internal.llm.draft,
+            { tenantId, requestId, safeTextHash, model, instruction: evt.instruction, force: true },
+            { retry: false },
+          );
+          if (res.blocked) {
+            await stopBlocked(res.blocked);
+            return null;
+          }
+          await recordLlm(res.usage, res.cacheHit, "draft");
+          await step.runMutation(internal.pipeline.saveDraft, { requestId, draft: res.body });
         }
         regenerateCount++;
         attempt++;
