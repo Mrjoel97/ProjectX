@@ -25,17 +25,19 @@ describe("emailIntent — SC2/SC3 slot-filling brain", () => {
   });
 
   test("invalid-email re-ask: invalid bounces in rejected, valid kept, nextQuestion re-asks only that one", () => {
+    // "nope@x" is malformed (has @, no dotted domain) so it stays the rejected re-ask path — a bare
+    // "nope" (no @) is now classified as a NAME, so a has-@ malformed token exercises this branch.
     const res = applyAnswer(emptyIntent, {
       slot: "recipients",
-      value: ["ok@x.com", "nope"],
+      value: ["ok@x.com", "nope@x"],
     });
     expect(res).toEqual({
       ok: false,
-      state: { recipients: ["ok@x.com"], rejected: ["nope"] },
-      rejected: { slot: "recipients", invalid: ["nope"] },
+      state: { recipients: ["ok@x.com"], rejected: ["nope@x"] },
+      rejected: { slot: "recipients", invalid: ["nope@x"] },
     });
     // caller re-asks ONLY the invalid one
-    expect(nextQuestion(res.state)).toEqual({ kind: "reask_recipient", invalid: "nope" });
+    expect(nextQuestion(res.state)).toEqual({ kind: "reask_recipient", invalid: "nope@x" });
 
     // supplying a valid replacement clears the rejection and advances
     const fixed = applyAnswer(res.state, { slot: "recipients", value: ["fixed@x.com"] });
