@@ -18,6 +18,15 @@
   --released: #3e9e75;
   --rule: #d8dbe0;
 
+  /* ---------- teal cockpit palette (Email Chat Cockpit, email-chat-cockpit.md §Layout) ----------
+     WCAG caveat (RESEARCH-ui §5): --teal-600 on white is ~2.9:1 — use it for button
+     fills / white-text CTAs, NOT small teal body text. */
+  --teal-900: #0b4f4a; /* left rail / dark frame */
+  --teal-600: #009689; /* primary action: send, active tab, Approve, CTAs */
+  --teal-400: #40cad0; /* highlight / logo / glow */
+  --canvas: #f8fafc; /* app canvas / panels */
+  --card: #ffffff; /* cards & bubbles */
+
   --step: clamp(1rem, 0.6rem + 1.4vw, 1.5rem);
   --shell: 68rem;
 }
