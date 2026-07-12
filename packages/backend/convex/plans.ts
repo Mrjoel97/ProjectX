@@ -1,0 +1,111 @@
+// Cockpit plan/draft content-plane adapter (CLAUDE.md §1: thin adapter; §4: raw
+// content — recipients/subject/body — lives HERE, never in an audit/DLQ payload).
+//
+// DECISION #1: the `plans` table is the plan/draft content plane; the REPORT is a
+// LIVE PROJECTION over the fan-out `requests` rows (by_plan), NOT a patched report[]
+// array and NOT a writer. Reactivity of requests.status + the gmail.sent audit insert
+// makes the report fill live per recipient — this module writes no report field.
+//
+// Writers are internal (called by the agent action / executePlan / the fan-out
+// workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
+// REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
+import { v } from "convex/values";
+import { internalMutation } from "./_generated/server";
+import { tenantQuery } from "./lib/functions";
+
+// PINNED plan lifecycle (schema.ts): collecting → proposed → approved → delivering → done.
+const PLAN_STATUS = v.union(
+  v.literal("collecting"),
+  v.literal("proposed"),
+  v.literal("approved"),
+  v.literal("delivering"),
+  v.literal("done"),
+);
+
+/**
+ * Create the single `plans` row for a thread (the agent creates it on first turn).
+ * Starts at "collecting" with empty recipients; returns planId for the conversation to patch.
+ */
+export const insertPlan = internalMutation({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }) =>
+    await ctx.db.insert("plans", {
+      tenantId,
+      threadId,
+      status: "collecting",
+      recipients: [],
+      createdAt: Date.now(),
+    }),
+});
+
+/**
+ * Patch slot fields as the guided conversation fills them and when the draft lands
+ * (status → "proposed"). Only supplied fields are written (undefined = untouched).
+ */
+export const patchPlan = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    recipients: v.optional(v.array(v.string())),
+    mode: v.optional(v.union(v.literal("individual"), v.literal("group"))),
+    subject: v.optional(v.string()),
+    bodyIntent: v.optional(v.string()),
+    body: v.optional(v.string()),
+    status: v.optional(PLAN_STATUS),
+  },
+  handler: async (ctx, { planId, ...patch }) => {
+    // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
+    const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
+    await ctx.db.patch(planId, fields);
+  },
+});
+
+/** Terminal/CAS-friendly status setter (executePlan → approved; fan-out → done). */
+export const setPlanStatus = internalMutation({
+  args: { planId: v.id("plans"), status: PLAN_STATUS },
+  handler: async (ctx, { planId, status }) => {
+    await ctx.db.patch(planId, { status });
+  },
+});
+
+/** The tenant's plans row for a thread → feeds the PLAN + DRAFT cards (by_thread). */
+export const byThread = tenantQuery({
+  args: { threadId: v.string() },
+  handler: async (ctx, { threadId }) =>
+    await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
+      .unique(),
+});
+
+/**
+ * The LIVE REPORT projection (DECISION #1 / RESEARCH-delivery §3). Reads every
+ * `requests` row for planId (by_plan, tenant-guarded) and, for each, joins its
+ * `gmail.sent` audit (by_correlation) to surface the delivered messageId. No report[]
+ * array is stored; requests.status + the audit insert make this fill live per recipient.
+ */
+export const reportForPlan = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const rows = await ctx.db
+      .query("requests")
+      .withIndex("by_plan", (q) => q.eq("planId", planId))
+      .collect();
+
+    const report = [];
+    for (const r of rows) {
+      if (r.tenantId !== ctx.tenantId) continue; // never leak another tenant's row
+      const sent = await ctx.db
+        .query("audit")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", r.correlationId))
+        .filter((q) => q.eq(q.field("eventType"), "gmail.sent"))
+        .first();
+      report.push({
+        recipient: r.recipient,
+        status: r.status,
+        correlationId: r.correlationId,
+        messageId: (sent?.payload as { messageId?: string } | undefined)?.messageId ?? null,
+      });
+    }
+    return report;
+  },
+});
