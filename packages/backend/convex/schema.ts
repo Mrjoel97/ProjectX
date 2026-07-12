@@ -92,16 +92,23 @@ export default defineSchema({
     draft: v.optional(v.string()),
     editedBody: v.optional(v.string()),
     rejectReason: v.optional(v.string()),
-    // The 11 observable pipeline stages (kept in sync with pipeline.ts REQUEST_STATUS).
+    // Guardrail redaction output (content plane, like goal/draft). Written by
+    // guardrails.prepare (plan 03-03/04); optional — no backfill/migration.
+    safeText: v.optional(v.string()), // redacted goal
+    safeTextHash: v.optional(v.string()), // SHA-256 hex of safeText — the cache-key member
+    lastInstruction: v.optional(v.string()), // scanned (redacted) latest regenerate instruction (03-04)
+    // The 13 observable pipeline stages (kept in sync with pipeline.ts REQUEST_STATUS).
     status: v.union(
       v.literal("submitted"),
       v.literal("routing"),
+      v.literal("scanning"),
       v.literal("drafting"),
       v.literal("awaiting_review"),
       v.literal("approved"),
       v.literal("delivering"),
       v.literal("sent"),
       v.literal("rejected"),
+      v.literal("blocked"),
       v.literal("expired"),
       v.literal("failed"),
       v.literal("awaiting_reauth"),
@@ -111,7 +118,9 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
-    .index("by_correlation", ["correlationId"]),
+    .index("by_correlation", ["correlationId"])
+    // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
+    .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"]),
 
   // File metadata only — the agent sees filename/mimeType/size, never contents.
   // `extracted` is filled by Phase 4 (INTK-02). requestId set after the request insert.
@@ -161,6 +170,16 @@ export default defineSchema({
     scope: v.string(),
     updatedAt: v.number(),
   }).index("by_tenant", ["tenantId"]),
+
+  // ── Phase-3 guardrail plane ────────────────────────────────────────────────
+  // GRDL-06 kill switch + per-request budget. SINGLE row, upserted by
+  // guardrails.setKillSwitch; read with .first() (≤1 row — no index needed).
+  // Default-on-read: a missing row means switch OFF (zero seed, no migration).
+  guardrailConfig: defineTable({
+    killSwitch: v.boolean(),
+    budgetUsdPerRequest: v.number(),
+    updatedAt: v.number(),
+  }),
 
   // Demo table used by plan 02's cross-tenant negative test.
   demoItems: defineTable({

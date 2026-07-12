@@ -15,16 +15,18 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { reviewEventValidator } from "./review";
 
-// The 11-member requests.status union (kept in sync with schema.ts).
+// The 13-member requests.status union (kept in sync with schema.ts).
 export const REQUEST_STATUS = v.union(
   v.literal("submitted"),
   v.literal("routing"),
+  v.literal("scanning"),
   v.literal("drafting"),
   v.literal("awaiting_review"),
   v.literal("approved"),
   v.literal("delivering"),
   v.literal("sent"),
   v.literal("rejected"),
+  v.literal("blocked"),
   v.literal("expired"),
   v.literal("failed"),
   v.literal("awaiting_reauth"),
