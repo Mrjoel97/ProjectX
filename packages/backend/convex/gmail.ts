@@ -13,9 +13,12 @@ import { v } from "convex/values";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { contentHash } from "./lib/hash";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+// messages.list (`?q=`) + per-id messages.get (`/<id>?format=metadata`) share this base.
+const MESSAGES_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
 // The ONE token-refresh root — both send() and search() call it (root-cause discipline,
 // CLAUDE.md ladder rung 2). Reads the tenant's stored tokens, POSTs the refresh_token grant,
@@ -132,5 +135,108 @@ export const send = internalAction({
       payload: { requestId, messageId: sent.id },
     });
     return { delivered: true, messageId: sent.id };
+  },
+});
+
+// ── Headers-only mailbox read (CKPT-01 / SC1) ──────────────────────────────────────
+//
+// A RAW header record straight off `messages.get?format=metadata`. Mirrors @pikar/core's
+// shape but is defined LOCALLY (no cross-package import) so gmail.ts stays a thin fetch
+// adapter (CLAUDE.md §1) — parsing/dedupe/ranking is the pure @pikar/core job Plan 04 composes.
+type HeaderRecord = { from?: string; to?: string; cc?: string; subject?: string; date?: string };
+
+// Explicit return type (guidelines §96) — never inferred through the internal graph, or a
+// sibling action (send/draftCockpit) collapses to `any`.
+type SearchResult =
+  | { ok: true; records: HeaderRecord[] }
+  | { ok: false; reason: "not_connected" | "reauth" };
+
+const META_HEADERS = ["From", "To", "Cc", "Subject", "Date"] as const;
+
+/** Quote a name containing whitespace for a Gmail `from:`/`to:` operator ("Sarah Chen"). */
+function gq(name: string): string {
+  return /\s/.test(name) ? `"${name}"` : name;
+}
+
+/** Map a message's metadata headers into a HeaderRecord (headers only — no body ever leaves Google). */
+function toHeaderRecord(headers: { name: string; value: string }[]): HeaderRecord {
+  const pick = (h: string) => headers.find((x) => x.name.toLowerCase() === h.toLowerCase())?.value;
+  return { from: pick("From"), to: pick("To"), cc: pick("Cc"), subject: pick("Subject"), date: pick("Date") };
+}
+
+/**
+ * Search the requesting user's mailbox for correspondence with `name` and return RAW header
+ * records (From/To/Cc/Subject/Date) — HEADERS ONLY, bodies are NEVER fetched (`format=metadata`,
+ * never full/raw). Scoped to the tenant via `freshAccessToken` (tenant-keyed token read). Nothing
+ * is ever sent as a side effect of reading (CKPT-01). Each search writes exactly one refs-only
+ * `mailbox.searched` audit event ({ queryHash, resultCount } — no names/addresses/subjects, §4/SC3).
+ * A read-time token failure returns a reauth signal WITHOUT throwing (the caller lights the banner
+ * + falls back to asking). Ranking/dedupe of these records is Plan 04's pure @pikar/core job.
+ */
+export const search = internalAction({
+  args: { tenantId: v.string(), name: v.string(), correlationId: v.string() },
+  handler: async (ctx, { tenantId, name, correlationId }): Promise<SearchResult> => {
+    // ONE refs-only audit event per search — shared by the SMOKE + live paths so a search is
+    // recorded exactly once (CLAUDE.md §4 / SC3: queryHash + count only, never the name itself).
+    const audit = async (resultCount: number) =>
+      ctx.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId,
+        eventType: "mailbox.searched",
+        actor: "system",
+        payload: { queryHash: await contentHash(name), resultCount },
+      });
+
+    // Deterministic offline fixture — real names never start with the sentinel, so this carries
+    // no real PII. Lets the resolution E2E/smoke run with no live mailbox (Plan 04/05 drive it).
+    if (name.startsWith("SMOKE::")) {
+      const records: HeaderRecord[] = [
+        { from: "Sarah Smoke <sarah@example.com>", subject: "Invoice", date: "Mon, 01 Jan 2024 10:00:00 +0000" },
+        { from: "Sara Test <sara@example.org>", subject: "Hello", date: "Tue, 02 Jan 2024 09:00:00 +0000" },
+      ];
+      await audit(records.length);
+      return { ok: true, records };
+    }
+
+    const access = await freshAccessToken(ctx, tenantId);
+    if (!access.ok) {
+      // Not connected → caller gates on it; any refresh failure → reauth. Never throw, never
+      // dead-end: the caller lights the ReconnectBanner and falls back to asking for the address.
+      return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
+    }
+
+    // `from:`/`to:` scope the match to correspondents, not body text (more precise than bare q=name).
+    const base = `(from:${gq(name)} OR to:${gq(name)})`;
+    const list = async (withWindow: boolean): Promise<{ id: string }[]> => {
+      const q = withWindow ? `${base} newer_than:1y` : base;
+      const res = await fetch(`${MESSAGES_ENDPOINT}?maxResults=20&q=${encodeURIComponent(q)}`, {
+        headers: { Authorization: `Bearer ${access.token}` },
+      });
+      const body = (await res.json()) as { messages?: { id: string }[] };
+      return body.messages ?? [];
+    };
+
+    // Zero-match widens ONCE: drop the 12-month window and re-list a single time. Still empty →
+    // records:[] (the caller falls back to asking).
+    let messages = await list(true);
+    if (messages.length === 0) messages = await list(false);
+
+    // Headers ONLY — format=metadata, NEVER full/raw (that pulls the body, inflating the GDPR
+    // surface). ponytail: Promise.all over the ~20-message cap is well within the 6,000 units/min
+    // per-user budget; a p-limit is the upgrade only if the cap ever rises (research Open-Q 2).
+    const records: HeaderRecord[] = await Promise.all(
+      messages.map(async ({ id }) => {
+        const res = await fetch(
+          `${MESSAGES_ENDPOINT}/${id}?format=metadata` +
+            META_HEADERS.map((h) => `&metadataHeaders=${h}`).join(""),
+          { headers: { Authorization: `Bearer ${access.token}` } },
+        );
+        const msg = (await res.json()) as { payload?: { headers?: { name: string; value: string }[] } };
+        return toHeaderRecord(msg.payload?.headers ?? []);
+      }),
+    );
+
+    await audit(messages.length);
+    return { ok: true, records };
   },
 });
