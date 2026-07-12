@@ -108,6 +108,7 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost),
-  then `node scripts/extract-convex-edges.mjs` — rebuilds drop the injected Convex cross-module
-  edges (`internal.*`/`api.*` references), and without them the delivery spine is invisible in
-  the graph. A SessionStart hook also re-injects them each session.
+  then `node scripts/extract-convex-edges.mjs` — the graph fixup. Rebuilds drop its work: injected
+  Convex cross-module edges (`internal.*`/`api.*` — without them the delivery spine is invisible),
+  per-table nodes with `db_read`/`db_write` edges (schema blast-radius queries), and removal of
+  `.planning//.claude//config` noise nodes. A SessionStart hook also re-runs it each session.

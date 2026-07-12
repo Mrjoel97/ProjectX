@@ -1,11 +1,16 @@
 #!/usr/bin/env node
-// Inject Convex cross-module edges into graphify-out/graph.json.
-// Graphify's AST extraction only sees `import` statements, but Convex crosses module
-// boundaries through generated objects (`ctx.runMutation(internal.plans.insertPlan)`,
-// `useQuery(api.plans.byThread)`, `workflow.start(...)`) — without this, the delivery
-// spine is invisible in the graph. Idempotent: safe to run any time.
-// ponytail: rebuilds (`graphify update .`) rewrite graph.json and drop these edges —
-// re-run this script afterwards (a SessionStart hook also re-injects each session).
+// Graph fixup for graphify-out/graph.json — three passes:
+//  1. DE-NOISE: drop .planning/ markdown and root config-manifest nodes so queries,
+//     god-nodes, and communities reflect code, not documents.
+//  2. CONVEX EDGES: inject `calls` edges for internal.*/api.* references — Convex
+//     crosses modules via generated objects, invisible to AST import extraction.
+//  3. TABLE EDGES: create a node per defineTable in schema.ts and inject
+//     read/write edges from every ctx.db.query("t")/insert("t") call site.
+// Idempotent: safe to run any time.
+// ponytail: rebuilds (`graphify update .`) rewrite graph.json and drop all of this —
+// re-run this script afterwards (a SessionStart hook also re-runs it each session).
+// Static limit: ctx.db.patch/delete take ids, not table names — those sites carry no
+// table edge; the read edge from the preceding query usually covers the file anyway.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,13 +28,33 @@ if (!existsSync(GRAPH)) process.exit(0);
 const raw = readFileSync(GRAPH, "utf8");
 const g = JSON.parse(raw);
 
-// Index existing nodes so injected edges reuse graphify's own ids — no slug guessing.
+// --- pass 1: de-noise -------------------------------------------------------
+const NOISE_BASENAME =
+  /^(package(-lock)?\.json|tsconfig[^/]*\.json|biome\.json|turbo\.json|pnpm-(lock|workspace)\.yaml)$/;
+const isNoise = (n) => {
+  const f = n.source_file || "";
+  return (
+    f.startsWith(".planning/") ||
+    f === "CLAUDE.md" ||
+    f.includes(".claude/") || // agent-tooling skills/config markdown, not product code
+    NOISE_BASENAME.test(f.split("/").pop())
+  );
+};
+const dropped = new Set(g.nodes.filter(isNoise).map((n) => n.id));
+if (dropped.size) {
+  g.nodes = g.nodes.filter((n) => !dropped.has(n.id));
+  g.links = g.links.filter((l) => !dropped.has(l.source) && !dropped.has(l.target));
+}
+
+// --- index remaining nodes so injected edges reuse graphify's own ids --------
 const symbolId = new Map(); // "<source_file>|<norm_label>" -> id
 const fileId = new Map(); //   "<source_file>" -> id of the file node itself
 const nodeFile = new Map(); // id -> source_file (to skip intra-file self-references)
+const nodeIds = new Set();
 for (const n of g.nodes) {
   symbolId.set(`${n.source_file}|${(n.norm_label || n.label || "").toLowerCase()}`, n.id);
   nodeFile.set(n.id, n.source_file);
+  nodeIds.add(n.id);
   if (n.label === (n.source_file || "").split("/").pop()) fileId.set(n.source_file, n.id);
 }
 
@@ -48,7 +73,56 @@ for (const root of ["packages/backend/convex", "apps/web"]) {
 }
 
 const existing = new Set(g.links.map((l) => `${l.source}>${l.target}>${l.relation}`));
-let added = 0;
+const addLink = (source, target, relation, context, source_file, line) => {
+  const sig = `${source}>${target}>${relation}`;
+  if (existing.has(sig)) return 0;
+  existing.add(sig);
+  g.links.push({
+    relation,
+    confidence: "EXTRACTED",
+    source_file,
+    source_location: `L${line}`,
+    weight: 1,
+    context,
+    confidence_score: 1,
+    source,
+    target,
+  });
+  return 1;
+};
+const lineAt = (text, idx) => text.slice(0, idx).split("\n").length;
+
+// --- pass 3 setup: table nodes from schema.ts --------------------------------
+const SCHEMA = "packages/backend/convex/schema.ts";
+const tableId = new Map(); // table name -> node id
+if (existsSync(SCHEMA)) {
+  const text = readFileSync(SCHEMA, "utf8");
+  const schemaFileId = fileId.get(SCHEMA);
+  const community = g.nodes.find((n) => n.id === schemaFileId)?.community ?? 0;
+  for (const m of text.matchAll(/^\s*(\w+):\s*defineTable\(/gm)) {
+    const name = m[1];
+    const id = `packages_backend_convex_schema_${name.toLowerCase()}_table`;
+    tableId.set(name, id);
+    if (!nodeIds.has(id)) {
+      g.nodes.push({
+        label: `${name} (table)`,
+        file_type: "code",
+        source_file: SCHEMA,
+        source_location: `L${lineAt(text, m.index)}`,
+        _origin: "convex_table",
+        id,
+        community,
+        norm_label: `${name} (table)`,
+      });
+      nodeIds.add(id);
+    }
+    if (schemaFileId) addLink(schemaFileId, id, "contains", undefined, SCHEMA, lineAt(text, m.index));
+  }
+}
+
+// --- passes 2 + 3: scan call sites -------------------------------------------
+let convexEdges = 0;
+let tableEdges = 0;
 const unresolved = new Set();
 for (const f of files) {
   const srcId = fileId.get(f);
@@ -57,36 +131,32 @@ for (const f of files) {
   for (const m of text.matchAll(/\b(?:internal|api)\.([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\b/g)) {
     const [, mod, fn] = m;
     const modFile = `packages/backend/convex/${mod}.ts`;
-    const targetId =
-      symbolId.get(`${modFile}|${fn.toLowerCase()}`) || fileId.get(modFile);
-    if (!targetId) {
+    const target = symbolId.get(`${modFile}|${fn.toLowerCase()}`) || fileId.get(modFile);
+    if (!target) {
       unresolved.add(`${mod}.${fn}`);
       continue;
     }
-    if (nodeFile.get(targetId) === f) continue; // intra-file ref; `contains` covers it
-    const sig = `${srcId}>${targetId}>calls`;
-    if (existing.has(sig)) continue;
-    existing.add(sig);
-    const line = text.slice(0, m.index).split("\n").length;
-    g.links.push({
-      relation: "calls",
-      confidence: "EXTRACTED",
-      source_file: f,
-      source_location: `L${line}`,
-      weight: 1,
-      context: "convex_ref",
-      confidence_score: 1,
-      source: srcId,
-      target: targetId,
-    });
-    added++;
+    if (nodeFile.get(target) === f) continue; // intra-file ref; `contains` covers it
+    convexEdges += addLink(srcId, target, "calls", "convex_ref", f, lineAt(text, m.index));
+  }
+  for (const m of text.matchAll(/ctx\.db\.(query|insert)\(\s*["'](\w+)["']/g)) {
+    const [, op, table] = m;
+    const target = tableId.get(table);
+    if (!target) continue;
+    tableEdges += addLink(
+      srcId,
+      target,
+      "references",
+      op === "insert" ? "db_write" : "db_read",
+      f,
+      lineAt(text, m.index)
+    );
   }
 }
 
-if (added > 0) {
-  writeFileSync(GRAPH, JSON.stringify(g, null, raw.includes('\n  "') ? 2 : 0));
-}
+writeFileSync(GRAPH, JSON.stringify(g, null, raw.includes('\n  "') ? 2 : 0));
 console.log(
-  `convex-edges: +${added} edges from ${files.length} files` +
+  `graph-fixup: -${dropped.size} noise nodes | +${convexEdges} convex edges | ` +
+    `+${tableEdges} table edges (${tableId.size} tables)` +
     (unresolved.size ? ` | unresolved: ${[...unresolved].join(", ")}` : "")
 );
