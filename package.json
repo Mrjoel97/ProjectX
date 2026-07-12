@@ -12,6 +12,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:e2e": "pnpm --filter @pikar/web test:e2e",
     "boot:check": "node scripts/boot-check.mjs"
   },
   "devDependencies": {
