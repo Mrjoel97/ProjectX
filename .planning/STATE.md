@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: "Completed 03.2.1-02-PLAN.md (recipient tool-internals: buildRecipientView + applyRecipientEdit, pure @pikar/core, TDD green)"
-last_updated: "2026-07-12T21:04:35.785Z"
+stopped_at: Completed 03.2.1-03-PLAN.md
+last_updated: "2026-07-12T21:27:48.635Z"
 last_activity: "2026-07-12 — Phase 3.2 Wave 4: 03.2-06 executed (cockpit playbook read-path docs + gmail.ts watch confirmed; CKPT-01 real mailbox read human-verified, zero sends). Phase 3.2 COMPLETE (6/6)."
 progress:
   total_phases: 15
   completed_phases: 3
   total_plans: 44
-  completed_plans: 37
+  completed_plans: 38
   percent: 92
 ---
 
@@ -25,7 +25,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.2.1 (Agent-Driven Cockpit) — Wave 1 IN PROGRESS. Plan 01 of 6 COMPLETE. Reshapes the cockpit from the deterministic `emailIntent` FSM to an Executive Agent governed tool-loop (Approach A + index/label reasoning). Phase 3.2 (Inbox Reading) COMPLETE (6/6). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Phase: 3.2.1 (Agent-Driven Cockpit) — Wave 2 IN PROGRESS. Plans 01, 02, 03 of 6 COMPLETE. Reshapes the cockpit from the deterministic `emailIntent` FSM to an Executive Agent governed tool-loop (Approach A + index/label reasoning). Phase 3.2 (Inbox Reading) COMPLETE (6/6). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Plan: 03.2.1-03 COMPLETE (Wave 2 — the governed Executive-Agent tool set, AGNT-01/AGNT-02). `llm.ts` (the ONLY use-node module) now exports `buildCockpitTools(ctx, tenantId, planId)` — eight AI-SDK `tool()` closures, each a THIN wrapper preserving its primitive's governance: `resolveContacts`→`gmail.search`+`rankCandidates`+`writeCandidates` (returns display-name LABELS only, NO address; holds candidates for the ResolutionCard), `addRecipients`/`setRecipients`/`removeRecipient`→`applyRecipientEdit`+`patchPlan` (invalid bounces at the boundary and NEVER patches; remove takes a 1-based `#index` ONLY, address substituted server-side), `setSubject`/`setMode`→`patchPlan`, `draftBody`→`scanText`(fail-closed)→`draftCockpit`+`patchPlan` (redaction PRECEDES the draft), `proposePlan`→`proposeEmailPlan` (structural facts read from the ROW, never model args). `buildAgentContext(plan)` formats the model-facing state via `buildRecipientView` (index+label, address-free §2-D). No `generateText` loop yet (Plan 04). DEVIATIONS: (Rule 3) added `internal.plans.getById` — the tools read the row by id from the node action (byThread needs identity+threadId); (Rule 1) moved the pre-existing `draftCockpit`-block end marker in llmRedaction.test.ts to `buildAgentContext` (the tool set now sits before `route` and legitimately mentions `matches`). Chose `jsonSchema<T>()` for tool inputs (no zod dep added). Per-tool tests (`cockpitTools.test.ts`, 4) drive tools via the `__invokeCockpitTool` shim against REAL primitives offline (SMOKE::), registering the `auditCounts` aggregate component so `gmail.search`'s audit path runs; `llmRedaction.test.ts` +2 static scans (index/label context, redact-before-draft). Backend 83/84 green (audit.test.ts pre-existing red — same auditCounts-unregistered issue, logged to deferred-items.md, NOT a regression); source typecheck clean. cockpit.md §9 playbook updated same-turn (tool-set invariant + Last verified → 03.2.1-03). Commits 6f8c9b3 (feat), fff6b16 (test), f9cbd11 (test). NEXT: Plan 04 builds the `generateText` tool-loop that hands `buildCockpitTools` + `buildAgentContext` + the `cockpit-agent` skill body to the model.
 Plan: 03.2.1-01 COMPLETE (Wave 1 — the cockpit-agent registry seed, AGNT-01). Authored `packages/contracts/skills/cockpit-agent.md` — the Executive Agent tool-loop system prompt: drive an email-composition conversation by calling governed tools; recipients reasoned about by index/label ONLY (`#1: Bob`), raw addresses never shown/echoed; NEVER invent an address (`resolveContacts` for a named person, `addRecipients` for an explicit typed+validated addr); collect subject/body → `draftBody` → `proposePlan`; on missing info/tool error ASK one focused question (no loop); NEVER claim a send (send = separate human Approve). Wired exactly like router/drafter: `COCKPIT_AGENT_SKILL` name const + byte-identical derived `cockpitAgentSkillBody` + `seedSkills` v1 row + `test.each` drift row + active-seed assertion (10/10 skills.test.ts green). §9 skill-registry.md playbook updated same-turn (Current skills += cockpit-agent, Last verified → 03.2.1-01; hook clear). No hardcoded prompt in convex source (§5). Commits c0847e9 (feat) + a6d5681 (test). No deviations. NEXT: remaining Phase 3.2.1 plans (02–06) build the Executive Agent tool-loop that loads this prompt.
 Prior Phase 3.2: 03.2-06 COMPLETE (Wave 4 — phase close: §9 playbook + watch + CKPT-01 human-verify). `docs/playbooks/cockpit.md` Last verified bumped to 03.2-06 (blesses the phase's accumulated watched-file changes so the §9 Stop hook clears); added the "search audit lives in gmail.ts so cockpit.ts stays audit.log-free" invariant (sole `mailbox.searched` refs-only `{queryHash,resultCount}`); noted the mailbox.searched redaction assertion in How to verify. `watch.json` ALREADY registered `packages/backend/convex/gmail.ts` under cockpit.md (prior wave) — verified valid + present, no duplicate edit (ponytail). CKPT-01 human-verify APPROVED against the live backend (:3210/:3211, functions pushed, skills seeded): a real correspondent's first name → "Searching your mailbox…" chip → resolution card listed the real contact → pick folded the real address into the PLAN → draft opened "Hi <name>," → NOTHING sent as a side effect of reading. Read path (gmail.search headers-only + rankCandidates + resolution card + resolveRecipients) verified end-to-end over a real mailbox (SC2/SC3). CKPT-01 confirmed genuinely human-verified (was code-complete-marked since 03.2-02). Commit 4348527 (playbook). NEXT: orchestrator runs verify_phase_goal + marks Phase 3.2 complete; then /gsd:verify-work across Phases 3/3.1/3.2.
 Plan: 03.2-06 COMPLETE (Wave 4 — phase close: §9 playbook + watch + CKPT-01 human-verify). `docs/playbooks/cockpit.md` Last verified bumped to 03.2-06 (blesses the phase's accumulated watched-file changes so the §9 Stop hook clears); added the "search audit lives in gmail.ts so cockpit.ts stays audit.log-free" invariant (sole `mailbox.searched` refs-only `{queryHash,resultCount}`); noted the mailbox.searched redaction assertion in How to verify. `watch.json` ALREADY registered `packages/backend/convex/gmail.ts` under cockpit.md (prior wave) — verified valid + present, no duplicate edit (ponytail). CKPT-01 human-verify APPROVED against the live backend (:3210/:3211, functions pushed, skills seeded): a real correspondent's first name → "Searching your mailbox…" chip → resolution card listed the real contact → pick folded the real address into the PLAN → draft opened "Hi <name>," → NOTHING sent as a side effect of reading. Read path (gmail.search headers-only + rankCandidates + resolution card + resolveRecipients) verified end-to-end over a real mailbox (SC2/SC3). CKPT-01 confirmed genuinely human-verified (was code-complete-marked since 03.2-02). Commit 4348527 (playbook). NEXT: orchestrator runs verify_phase_goal + marks Phase 3.2 complete; then /gsd:verify-work across Phases 3/3.1/3.2.
@@ -91,6 +92,7 @@ Progress: [█████████░] 92%
 | Phase 03.2 P06 | 4 | 2 tasks | 1 files |
 | Phase 03.2.1 P01 | 3 | 2 tasks | 6 files |
 | Phase 03.2.1 P02 | 4 | 2 tasks | 2 files |
+| Phase 03.2.1 P03 | 18 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -165,6 +167,7 @@ Recent decisions affecting current work:
 - [Phase 03.2]: 03.2-05: resolution card UI landed — ResolutionCard (chip-section per unresolved name + pendingValid row) calls resolveRecipients on pick, dispatched during collecting before proposed; 'Searching your mailbox…' chip off plan.candidates; cockpit-resolve E2E proves name->card->pick->PLAN over SMOKE:: with nothing sent; SMOKE draft now honors greetingName so 'Hi <name>' is verifiable offline; cockpit-report recipients comma-separated for the new tokenizer
 - [Phase 03.2.1]: [Phase 03.2.1] 03.2.1-01: cockpit-agent system prompt seeded to the skill registry (v1, active) — the Executive Agent tool-loop (Plans 03-04) loads its reasoning prompt at runtime, never hardcoded (§5). Prompt reasons over recipients by index/label only (#1: Bob), never invents/echoes an address, splits recipient tools (resolveContacts by name vs addRecipients for a validated typed addr), asks ONE question on missing info/tool error (no loop), and never claims a send (send = separate human Approve). Mirrors router/drafter: canonical .md + byte-identical derived .ts + seedSkills row + static-sync test.
 - [Phase 03.2.1]: 03.2.1-02: pure recipient tool-internals in @pikar/core — buildRecipientView projects recipients to index+label rows whose label never contains the address (§2-D enforcement point: raw email never reaches the model), applyRecipientEdit is a plain add/remove/set reducer that bounces invalid addresses via the shared isValidEmail (never enters recipients) and resolves remove by 1-based index (out-of-range bounces, never a silent no-op send); Plan 03 Convex tools wrap both verbatim. 100%-sampled tests, 59 core green.
+- [Phase 03.2.1]: 03.2.1-03: buildCockpitTools + buildAgentContext in llm.ts — the governed Executive-Agent tool set. Each tool wraps one primitive and IS the enforcement boundary: invalid address bounces in applyRecipientEdit (no patch on bounce), removeRecipient resolves a 1-based #index server-side, draftBody scanText-redacts BEFORE draftCockpit, proposePlan reads structural facts from the ROW not model args, buildAgentContext emits the buildRecipientView index+label view (address-free, §2-D). Tools read the row via new internal.plans.getById (byThread needs identity+threadId; tools have planId). jsonSchema<T>() for tool inputs (no zod dep added). Per-tool tests via __invokeCockpitTool shim + auditCounts component registered so gmail.search's real audit path runs offline. AGNT-01/AGNT-02.
 
 ### Roadmap Evolution
 
@@ -182,8 +185,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T21:04:20.543Z
-Stopped at: Completed 03.2.1-02-PLAN.md (recipient tool-internals: buildRecipientView + applyRecipientEdit, pure @pikar/core, TDD green)
+Last session: 2026-07-12T21:27:30.368Z
+Stopped at: Completed 03.2.1-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
