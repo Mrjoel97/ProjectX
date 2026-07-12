@@ -30,6 +30,12 @@
             "type": "command",
             "command": "node \"$(git rev-parse --show-toplevel)/scripts/check-playbooks.mjs\" baseline",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/extract-convex-edges.mjs\"",
+            "timeout": 30,
+            "async": true
           }
         ]
       }
