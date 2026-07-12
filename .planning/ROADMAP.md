@@ -119,7 +119,7 @@ Plans:
   - [x] 03.1-05-PLAN.md — Cockpit page shell + resizable divider + SC1 E2E specs (Wave 2) ✓ 2026-07-12
   - [x] 03.1-06-PLAN.md — plans adapter (byThread + REPORT projection) + cockpitDraft in llm.ts (Wave 2) ✓ 2026-07-12
   - [x] 03.1-07-PLAN.md — Agent thread + proposeEmailPlan + executePlan approve gate (idempotent) (Wave 3) ✓ 2026-07-12
-  - [ ] 03.1-08-PLAN.md — PLAN/DRAFT/REPORT cards + chat pane wired to live queries (Wave 4)
+  - [x] 03.1-08-PLAN.md — PLAN/DRAFT/REPORT cards + chat pane wired to live queries (Wave 4) ✓ 2026-07-12
   - [ ] 03.1-09-PLAN.md — E2E integration + governance redaction + Connect-Gmail verify + human checkpoint (Wave 5)
 
 ### Phase 3.2: Inbox Reading (INSERTED)
@@ -226,7 +226,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 �
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
 | 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
 | 3. Guardrails | 0/5 | Planned | - |
-| 3.1 Cockpit Core (INSERTED) | 1/9 | In Progress (Wave 0 contracts done) | 2026-07-12 |
+| 3.1 Cockpit Core (INSERTED) | 8/9 | In Progress (Waves 1–4 done; Wave 5 E2E + human checkpoint next) | 2026-07-12 |
 | 3.2 Inbox Reading (INSERTED) | 0/TBD | Not started | - |
 | 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
