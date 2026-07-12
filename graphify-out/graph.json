@@ -4,94 +4,384 @@
   "graph": {},
   "nodes": [
     {
+      "label": "cockpit.md",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit",
+      "community": 7,
+      "norm_label": "cockpit.md"
+    },
+    {
+      "label": "Playbook: Email Chat Cockpit",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "community": 7,
+      "norm_label": "playbook: email chat cockpit"
+    },
+    {
+      "label": "Purpose",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_purpose",
+      "community": 7,
+      "norm_label": "purpose"
+    },
+    {
+      "label": "Key files",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_key_files",
+      "community": 7,
+      "norm_label": "key files"
+    },
+    {
+      "label": "Dependencies & blast radius",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L37",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_dependencies_blast_radius",
+      "community": 7,
+      "norm_label": "dependencies & blast radius"
+    },
+    {
+      "label": "Data flow",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L47",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_data_flow",
+      "community": 7,
+      "norm_label": "data flow"
+    },
+    {
+      "label": "Invariants \u2014 what must never break",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L58",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_invariants_what_must_never_break",
+      "community": 7,
+      "norm_label": "invariants \u2014 what must never break"
+    },
+    {
+      "label": "How to change safely",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_how_to_change_safely",
+      "community": 7,
+      "norm_label": "how to change safely"
+    },
+    {
+      "label": "How to verify",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L77",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_how_to_verify",
+      "community": 7,
+      "norm_label": "how to verify"
+    },
+    {
+      "label": "Operational notes",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L85",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_operational_notes",
+      "community": 7,
+      "norm_label": "operational notes"
+    },
+    {
+      "label": "Known gaps & deferred work",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L91",
+      "_origin": "ast",
+      "id": "docs_playbooks_cockpit_known_gaps_deferred_work",
+      "community": 7,
+      "norm_label": "known gaps & deferred work"
+    },
+    {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "claude.md",
+      "id": "claude"
+    },
+    {
+      "label": "Pikar AI \u2014 Repository Conventions",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "pikar ai \u2014 repository conventions",
+      "id": "claude_pikar_ai_repository_conventions"
+    },
+    {
+      "label": "1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "1. domain logic lives in pure-ts `packages/*`; `convex/` is a thin adapter",
+      "id": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
+    },
+    {
+      "label": "2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "2. raw `query`/`mutation`/`action` imports are banned outside the wrapper module",
+      "id": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
+    },
+    {
+      "label": "3. The audit module is insert-only",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "3. the audit module is insert-only",
+      "id": "claude_3_the_audit_module_is_insert_only"
+    },
+    {
+      "label": "4. Audit and dead-letter payloads must be redaction-safe",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "4. audit and dead-letter payloads must be redaction-safe",
+      "id": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
+    },
+    {
+      "label": "5. No hardcoded agent prompts \u2014 skills load from the registry",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "5. no hardcoded agent prompts \u2014 skills load from the registry",
+      "id": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
+    },
+    {
+      "label": "6. Pinned pre-1.0 component versions must not be bumped casually",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L41",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "6. pinned pre-1.0 component versions must not be bumped casually",
+      "id": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
+    },
+    {
+      "label": "7. Boot order",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L47",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "7. boot order",
+      "id": "claude_7_boot_order"
+    },
+    {
+      "label": "8. Ponytail discipline \u2014 the laziest solution that works (MANDATED)",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L54",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "8. ponytail discipline \u2014 the laziest solution that works (mandated)",
+      "id": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
+    },
+    {
+      "label": "9. Playbooks and ADRs are part of definition-of-done",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L85",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "9. playbooks and adrs are part of definition-of-done",
+      "id": "claude_9_playbooks_and_adrs_are_part_of_definition_of_done"
+    },
+    {
+      "label": "graphify",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "_origin": "ast",
+      "community": 0,
+      "norm_label": "graphify",
+      "id": "claude_graphify"
+    },
+    {
       "label": "extract-convex-edges.mjs",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges",
       "community": 68,
-      "norm_label": "extract-convex-edges.mjs"
+      "norm_label": "extract-convex-edges.mjs",
+      "id": "scripts_extract_convex_edges"
     },
     {
       "label": "raw",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L23",
+      "source_location": "L28",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_raw",
       "community": 68,
-      "norm_label": "raw"
+      "norm_label": "raw",
+      "id": "scripts_extract_convex_edges_raw"
     },
     {
       "label": "g",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L24",
+      "source_location": "L29",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_g",
       "community": 68,
-      "norm_label": "g"
+      "norm_label": "g",
+      "id": "scripts_extract_convex_edges_g"
+    },
+    {
+      "label": "isNoise()",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L34",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "isnoise()",
+      "id": "scripts_extract_convex_edges_isnoise"
+    },
+    {
+      "label": "dropped",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L43",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "dropped",
+      "id": "scripts_extract_convex_edges_dropped"
     },
     {
       "label": "symbolId",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L27",
+      "source_location": "L50",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_symbolid",
       "community": 68,
-      "norm_label": "symbolid"
+      "norm_label": "symbolid",
+      "id": "scripts_extract_convex_edges_symbolid"
     },
     {
       "label": "fileId",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L28",
+      "source_location": "L51",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_fileid",
       "community": 68,
-      "norm_label": "fileid"
+      "norm_label": "fileid",
+      "id": "scripts_extract_convex_edges_fileid"
     },
     {
       "label": "nodeFile",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L29",
+      "source_location": "L52",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_nodefile",
       "community": 68,
-      "norm_label": "nodefile"
+      "norm_label": "nodefile",
+      "id": "scripts_extract_convex_edges_nodefile"
+    },
+    {
+      "label": "nodeIds",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L53",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "nodeids",
+      "id": "scripts_extract_convex_edges_nodeids"
     },
     {
       "label": "files",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L36",
+      "source_location": "L61",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_files",
       "community": 68,
-      "norm_label": "files"
+      "norm_label": "files",
+      "id": "scripts_extract_convex_edges_files"
     },
     {
       "label": "existing",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L50",
+      "source_location": "L75",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_existing",
       "community": 68,
-      "norm_label": "existing"
+      "norm_label": "existing",
+      "id": "scripts_extract_convex_edges_existing"
+    },
+    {
+      "label": "addLink()",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L76",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "addlink()",
+      "id": "scripts_extract_convex_edges_addlink"
+    },
+    {
+      "label": "lineAt()",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L93",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "lineat()",
+      "id": "scripts_extract_convex_edges_lineat"
+    },
+    {
+      "label": "tableId",
+      "file_type": "code",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L97",
+      "_origin": "ast",
+      "community": 68,
+      "norm_label": "tableid",
+      "id": "scripts_extract_convex_edges_tableid"
     },
     {
       "label": "unresolved",
       "file_type": "code",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L52",
+      "source_location": "L126",
       "_origin": "ast",
-      "id": "scripts_extract_convex_edges_unresolved",
       "community": 68,
-      "norm_label": "unresolved"
+      "norm_label": "unresolved",
+      "id": "scripts_extract_convex_edges_unresolved"
     },
     {
       "label": "check-playbooks.mjs",
@@ -234,23 +524,23 @@
       "id": "docs_readme_docs"
     },
     {
-      "label": "`playbooks/` — one per feature/subsystem",
+      "label": "`playbooks/` \u2014 one per feature/subsystem",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L6",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`playbooks/` — one per feature/subsystem",
+      "norm_label": "`playbooks/` \u2014 one per feature/subsystem",
       "id": "docs_readme_playbooks_one_per_feature_subsystem"
     },
     {
-      "label": "`decisions/` — Architecture Decision Records (ADRs)",
+      "label": "`decisions/` \u2014 Architecture Decision Records (ADRs)",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L40",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`decisions/` — architecture decision records (adrs)",
+      "norm_label": "`decisions/` \u2014 architecture decision records (adrs)",
       "id": "docs_readme_decisions_architecture_decision_records_adrs"
     },
     {
@@ -259,7 +549,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "001-convex-data-orchestration-plane.md",
       "id": "docs_decisions_001_convex_data_orchestration_plane"
     },
@@ -269,7 +559,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "adr-001: convex as the data + orchestration plane, with thin adapters over pure-ts packages",
       "id": "docs_decisions_001_convex_data_orchestration_plane_adr_001_convex_as_the_data_orchestration_plane_with_thin_adapters_over_pure_ts_packages"
     },
@@ -279,7 +569,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "context",
       "id": "docs_decisions_001_convex_data_orchestration_plane_context"
     },
@@ -289,7 +579,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "decision",
       "id": "docs_decisions_001_convex_data_orchestration_plane_decision"
     },
@@ -299,7 +589,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "alternatives rejected",
       "id": "docs_decisions_001_convex_data_orchestration_plane_alternatives_rejected"
     },
@@ -309,7 +599,7 @@
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 232,
+      "community": 8,
       "norm_label": "consequences",
       "id": "docs_decisions_001_convex_data_orchestration_plane_consequences"
     },
@@ -494,13 +784,13 @@
       "id": "docs_playbooks_template_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/TEMPLATE.md",
       "source_location": "L27",
       "_origin": "ast",
       "community": 235,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_template_invariants_what_must_never_break"
     },
     {
@@ -604,13 +894,13 @@
       "id": "docs_playbooks_audit_dead_letter_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
       "source_location": "L43",
       "_origin": "ast",
       "community": 233,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_audit_dead_letter_invariants_what_must_never_break"
     },
     {
@@ -652,116 +942,6 @@
       "community": 233,
       "norm_label": "known gaps & deferred work",
       "id": "docs_playbooks_audit_dead_letter_known_gaps_deferred_work"
-    },
-    {
-      "label": "cockpit.md",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "cockpit.md",
-      "id": "docs_playbooks_cockpit"
-    },
-    {
-      "label": "Playbook: Email Chat Cockpit",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "playbook: email chat cockpit",
-      "id": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
-    },
-    {
-      "label": "Purpose",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "purpose",
-      "id": "docs_playbooks_cockpit_purpose"
-    },
-    {
-      "label": "Key files",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L15",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "key files",
-      "id": "docs_playbooks_cockpit_key_files"
-    },
-    {
-      "label": "Dependencies & blast radius",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L37",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "dependencies & blast radius",
-      "id": "docs_playbooks_cockpit_dependencies_blast_radius"
-    },
-    {
-      "label": "Data flow",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L47",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "data flow",
-      "id": "docs_playbooks_cockpit_data_flow"
-    },
-    {
-      "label": "Invariants — what must never break",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L58",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "invariants — what must never break",
-      "id": "docs_playbooks_cockpit_invariants_what_must_never_break"
-    },
-    {
-      "label": "How to change safely",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "how to change safely",
-      "id": "docs_playbooks_cockpit_how_to_change_safely"
-    },
-    {
-      "label": "How to verify",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L77",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "how to verify",
-      "id": "docs_playbooks_cockpit_how_to_verify"
-    },
-    {
-      "label": "Operational notes",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L85",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "operational notes",
-      "id": "docs_playbooks_cockpit_operational_notes"
-    },
-    {
-      "label": "Known gaps & deferred work",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L91",
-      "_origin": "ast",
-      "community": 232,
-      "norm_label": "known gaps & deferred work",
-      "id": "docs_playbooks_cockpit_known_gaps_deferred_work"
     },
     {
       "label": "skill-registry.md",
@@ -824,13 +1004,13 @@
       "id": "docs_playbooks_skill_registry_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/skill-registry.md",
       "source_location": "L40",
       "_origin": "ast",
       "community": 232,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_skill_registry_invariants_what_must_never_break"
     },
     {
@@ -1559,7 +1739,7 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L388",
       "_origin": "ast",
-      "community": 171,
+      "community": 170,
       "norm_label": "draft",
       "id": "packages_backend_convex_llm_draft"
     },
@@ -1899,7 +2079,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 176,
+      "community": 6,
       "norm_label": "deadletter.ts",
       "id": "packages_backend_convex_deadletter"
     },
@@ -1909,7 +2089,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 176,
+      "community": 6,
       "norm_label": "onpipelinecomplete",
       "id": "packages_backend_convex_deadletter_onpipelinecomplete"
     },
@@ -1919,7 +2099,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 176,
+      "community": 6,
       "norm_label": "deadletterrecipient",
       "id": "packages_backend_convex_deadletter_deadletterrecipient"
     },
@@ -1929,7 +2109,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 170,
+      "community": 2,
       "norm_label": "deliverapprovedplan.ts",
       "id": "packages_backend_convex_deliverapprovedplan"
     },
@@ -1939,7 +2119,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 170,
+      "community": 2,
       "norm_label": "deliverapprovedplan",
       "id": "packages_backend_convex_deliverapprovedplan_deliverapprovedplan"
     },
@@ -1949,7 +2129,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 170,
+      "community": 2,
       "norm_label": "markplandone",
       "id": "packages_backend_convex_deliverapprovedplan_markplandone"
     },
@@ -1999,7 +2179,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 170,
+      "community": 2,
       "norm_label": "send",
       "id": "packages_backend_convex_gmail_send"
     },
@@ -2019,7 +2199,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "layout.tsx",
       "id": "apps_web_app_app_layout"
     },
@@ -2029,7 +2209,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "nav",
       "id": "apps_web_app_app_layout_nav"
     },
@@ -2039,7 +2219,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "deadletterbadge()",
       "id": "apps_web_app_app_layout_deadletterbadge"
     },
@@ -2049,7 +2229,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "shell()",
       "id": "apps_web_app_app_layout_shell"
     },
@@ -2059,7 +2239,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L93",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "appshell()",
       "id": "apps_web_app_app_layout_appshell"
     },
@@ -2069,7 +2249,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L109",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "authgate()",
       "id": "apps_web_app_app_layout_authgate"
     },
@@ -2349,7 +2529,7 @@
       "source_file": "packages/core/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 2,
       "norm_label": "index.ts",
       "id": "packages_core_src_index"
     },
@@ -2559,7 +2739,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L295",
       "_origin": "ast",
-      "community": 170,
+      "community": 2,
       "norm_label": "setstatus",
       "id": "packages_backend_convex_pipeline_setstatus"
     },
@@ -2589,7 +2769,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "guardrails.ts",
       "id": "packages_backend_convex_guardrails"
     },
@@ -2599,7 +2779,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "ratelimiter",
       "id": "packages_backend_convex_guardrails_ratelimiter"
     },
@@ -2609,7 +2789,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "default_config",
       "id": "packages_backend_convex_guardrails_default_config"
     },
@@ -2619,7 +2799,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "getconfig()",
       "id": "packages_backend_convex_guardrails_getconfig"
     },
@@ -2629,7 +2809,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "setkillswitch",
       "id": "packages_backend_convex_guardrails_setkillswitch"
     },
@@ -2639,7 +2819,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "prepare",
       "id": "packages_backend_convex_guardrails_prepare"
     },
@@ -2649,7 +2829,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L114",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "getsafetextbyhash",
       "id": "packages_backend_convex_guardrails_getsafetextbyhash"
     },
@@ -2659,7 +2839,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L137",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "saveinstruction",
       "id": "packages_backend_convex_guardrails_saveinstruction"
     },
@@ -2669,7 +2849,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L149",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "precall",
       "id": "packages_backend_convex_guardrails_precall"
     },
@@ -2679,7 +2859,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L166",
       "_origin": "ast",
-      "community": 171,
+      "community": 3,
       "norm_label": "recordspend",
       "id": "packages_backend_convex_guardrails_recordspend"
     },
@@ -2758,7 +2938,7 @@
       "source_file": "apps/web/app/(app)/_components/ReconnectBanner.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "reconnectbanner.tsx",
       "id": "apps_web_app_app_components_reconnectbanner"
     },
@@ -2768,7 +2948,7 @@
       "source_file": "apps/web/app/(app)/_components/ReconnectBanner.tsx",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "reconnectbanner()",
       "id": "apps_web_app_app_components_reconnectbanner_reconnectbanner"
     },
@@ -2838,7 +3018,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_requests_page"
     },
@@ -2848,7 +3028,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "status_color",
       "id": "apps_web_app_app_requests_page_status_color"
     },
@@ -2858,7 +3038,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "statuspill()",
       "id": "apps_web_app_app_requests_page_statuspill"
     },
@@ -2868,7 +3048,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "requests()",
       "id": "apps_web_app_app_requests_page_requests"
     },
@@ -2878,7 +3058,7 @@
       "source_file": "apps/web/app/(app)/review/[id]/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_review_id_page"
     },
@@ -2888,7 +3068,7 @@
       "source_file": "apps/web/app/(app)/review/[id]/page.tsx",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "mode",
       "id": "apps_web_app_app_review_id_page_mode"
     },
@@ -2898,7 +3078,7 @@
       "source_file": "apps/web/app/(app)/review/[id]/page.tsx",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "box",
       "id": "apps_web_app_app_review_id_page_box"
     },
@@ -2908,7 +3088,7 @@
       "source_file": "apps/web/app/(app)/review/[id]/page.tsx",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "btn",
       "id": "apps_web_app_app_review_id_page_btn"
     },
@@ -2918,7 +3098,7 @@
       "source_file": "apps/web/app/(app)/review/[id]/page.tsx",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "reviewgate()",
       "id": "apps_web_app_app_review_id_page_reviewgate"
     },
@@ -2928,7 +3108,7 @@
       "source_file": "apps/web/app/(app)/review/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_review_page"
     },
@@ -2938,7 +3118,7 @@
       "source_file": "apps/web/app/(app)/review/page.tsx",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "reviewqueue()",
       "id": "apps_web_app_app_review_page_reviewqueue"
     },
@@ -3648,7 +3828,7 @@
       "source_file": "packages/backend/convex/audit.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 176,
+      "community": 6,
       "norm_label": "log",
       "id": "packages_backend_convex_audit_log"
     },
@@ -3768,7 +3948,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "crons.ts",
       "id": "packages_backend_convex_crons"
     },
@@ -3778,7 +3958,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "crons",
       "id": "packages_backend_convex_crons_crons"
     },
@@ -3828,7 +4008,7 @@
       "source_file": "packages/backend/convex/deadLetters.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 103,
+      "community": 217,
       "norm_label": "newcount",
       "id": "packages_backend_convex_deadletters_newcount"
     },
@@ -3978,7 +4158,7 @@
       "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L153",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "flagexpiringtokens",
       "id": "packages_backend_convex_gmailauth_flagexpiringtokens"
     },
@@ -4098,7 +4278,7 @@
       "source_file": "packages/backend/convex/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "index.ts",
       "id": "packages_backend_convex_index"
     },
@@ -4108,7 +4288,7 @@
       "source_file": "packages/backend/convex/index.ts",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "workflow",
       "id": "packages_backend_convex_index_workflow"
     },
@@ -4118,7 +4298,7 @@
       "source_file": "packages/backend/convex/index.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "retrier",
       "id": "packages_backend_convex_index_retrier"
     },
@@ -4158,7 +4338,7 @@
       "source_file": "packages/backend/convex/lib/hash.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "hash.ts",
       "id": "packages_backend_convex_lib_hash"
     },
@@ -4168,7 +4348,7 @@
       "source_file": "packages/backend/convex/lib/hash.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "contenthash()",
       "id": "packages_backend_convex_lib_hash_contenthash"
     },
@@ -4228,7 +4408,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "list",
       "id": "packages_backend_convex_notifications_list"
     },
@@ -4248,7 +4428,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 170,
+      "community": 217,
       "norm_label": "notify",
       "id": "packages_backend_convex_notifications_notify"
     },
@@ -4258,7 +4438,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "requests.ts",
       "id": "packages_backend_convex_requests"
     },
@@ -4278,7 +4458,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "attachmentarg",
       "id": "packages_backend_convex_requests_attachmentarg"
     },
@@ -4298,7 +4478,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L147",
       "_origin": "ast",
-      "community": 108,
+      "community": 217,
       "norm_label": "list",
       "id": "packages_backend_convex_requests_list"
     },
@@ -4308,7 +4488,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L174",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "submitdecision",
       "id": "packages_backend_convex_requests_submitdecision"
     },
@@ -4318,7 +4498,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L208",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "get",
       "id": "packages_backend_convex_requests_get"
     },
@@ -4328,7 +4508,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L223",
       "_origin": "ast",
-      "community": 77,
+      "community": 39,
       "norm_label": "reviewgate",
       "id": "packages_backend_convex_requests_reviewgate"
     },
@@ -4338,7 +4518,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "review.ts",
       "id": "packages_backend_convex_review"
     },
@@ -4348,7 +4528,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "reviewdecisionvalidator",
       "id": "packages_backend_convex_review_reviewdecisionvalidator"
     },
@@ -4358,7 +4538,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "revieweventvalidator",
       "id": "packages_backend_convex_review_revieweventvalidator"
     },
@@ -4368,7 +4548,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "eventname()",
       "id": "packages_backend_convex_review_eventname"
     },
@@ -4378,7 +4558,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "armtimeout",
       "id": "packages_backend_convex_review_armtimeout"
     },
@@ -4388,7 +4568,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L73",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "firetimeout",
       "id": "packages_backend_convex_review_firetimeout"
     },
@@ -4398,7 +4578,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L92",
       "_origin": "ast",
-      "community": 96,
+      "community": 39,
       "norm_label": "senddecision",
       "id": "packages_backend_convex_review_senddecision"
     },
@@ -4488,7 +4668,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 2,
       "norm_label": "telemetry.ts",
       "id": "packages_backend_convex_telemetry"
     },
@@ -4498,7 +4678,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 11,
+      "community": 2,
       "norm_label": "terminaloutcome",
       "id": "packages_backend_convex_telemetry_terminaloutcome"
     },
@@ -4508,7 +4688,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 11,
+      "community": 2,
       "norm_label": "writeterminal",
       "id": "packages_backend_convex_telemetry_writeterminal"
     },
@@ -4578,7 +4758,7 @@
       "source_file": "packages/backend/convex/worm.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "worm.ts",
       "id": "packages_backend_convex_worm"
     },
@@ -4588,7 +4768,7 @@
       "source_file": "packages/backend/convex/worm.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "exportaudit",
       "id": "packages_backend_convex_worm_exportaudit"
     },
@@ -4598,7 +4778,7 @@
       "source_file": "packages/backend/convex/wormCursor.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "wormcursor.ts",
       "id": "packages_backend_convex_wormcursor"
     },
@@ -4608,7 +4788,7 @@
       "source_file": "packages/backend/convex/wormCursor.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "getcursor",
       "id": "packages_backend_convex_wormcursor_getcursor"
     },
@@ -4618,7 +4798,7 @@
       "source_file": "packages/backend/convex/wormCursor.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "auditsince",
       "id": "packages_backend_convex_wormcursor_auditsince"
     },
@@ -4628,7 +4808,7 @@
       "source_file": "packages/backend/convex/wormCursor.ts",
       "source_location": "L44",
       "_origin": "ast",
-      "community": 190,
+      "community": 1,
       "norm_label": "advancecursor",
       "id": "packages_backend_convex_wormcursor_advancecursor"
     },
@@ -5128,7 +5308,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "buildtelemetry.test.ts",
       "id": "packages_core_src_buildtelemetry_test"
     },
@@ -5138,7 +5318,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "opsg01_keys",
       "id": "packages_core_src_buildtelemetry_test_opsg01_keys"
     },
@@ -5148,7 +5328,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "usage()",
       "id": "packages_core_src_buildtelemetry_test_usage"
     },
@@ -5158,7 +5338,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "buildtelemetry.ts",
       "id": "packages_core_src_buildtelemetry"
     },
@@ -5168,7 +5348,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "reviewoutcome",
       "id": "packages_core_src_buildtelemetry_reviewoutcome"
     },
@@ -5178,7 +5358,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "llmusage",
       "id": "packages_core_src_buildtelemetry_llmusage"
     },
@@ -5188,7 +5368,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "terminaloutcome",
       "id": "packages_core_src_buildtelemetry_terminaloutcome"
     },
@@ -5198,7 +5378,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L40",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "telemetryrow",
       "id": "packages_core_src_buildtelemetry_telemetryrow"
     },
@@ -5208,7 +5388,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L51",
       "_origin": "ast",
-      "community": 11,
+      "community": 4,
       "norm_label": "buildtelemetry()",
       "id": "packages_core_src_buildtelemetry_buildtelemetry"
     },
@@ -5763,13 +5943,13 @@
       "id": "packages_pii_src_scan_scantext"
     },
     {
-      "label": "NOTE: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
+      "label": "NOTE: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
       "file_type": "rationale",
       "source_file": "packages/pii/src/scan.ts",
       "source_location": "L56",
       "_origin": "ast",
       "community": 155,
-      "norm_label": "note: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
+      "norm_label": "note: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
       "id": "packages_pii_src_scan_rationale_56"
     },
     {
@@ -5873,13 +6053,13 @@
       "id": "readme_clean_clone_boot_order_run_verbatim"
     },
     {
-      "label": "Skill registry seed (required — the pipeline fails closed without it)",
+      "label": "Skill registry seed (required \u2014 the pipeline fails closed without it)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L65",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "skill registry seed (required — the pipeline fails closed without it)",
+      "norm_label": "skill registry seed (required \u2014 the pipeline fails closed without it)",
       "id": "readme_skill_registry_seed_required_the_pipeline_fails_closed_without_it"
     },
     {
@@ -5913,33 +6093,33 @@
       "id": "readme_common_commands"
     },
     {
-      "label": "Dev tooling — build discipline & repo knowledge graph",
+      "label": "Dev tooling \u2014 build discipline & repo knowledge graph",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L117",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "dev tooling — build discipline & repo knowledge graph",
+      "norm_label": "dev tooling \u2014 build discipline & repo knowledge graph",
       "id": "readme_dev_tooling_build_discipline_repo_knowledge_graph"
     },
     {
-      "label": "ponytail — minimal-code discipline",
+      "label": "ponytail \u2014 minimal-code discipline",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L123",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "ponytail — minimal-code discipline",
+      "norm_label": "ponytail \u2014 minimal-code discipline",
       "id": "readme_ponytail_minimal_code_discipline"
     },
     {
-      "label": "graphify — repo knowledge graph (query before you read)",
+      "label": "graphify \u2014 repo knowledge graph (query before you read)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L135",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "graphify — repo knowledge graph (query before you read)",
+      "norm_label": "graphify \u2014 repo knowledge graph (query before you read)",
       "id": "readme_graphify_repo_knowledge_graph_query_before_you_read"
     },
     {
@@ -8733,13 +8913,13 @@
       "id": "packages_contracts_skills_executive_agent_classifier"
     },
     {
-      "label": "Executive Agent — Request Classifier (v1)",
+      "label": "Executive Agent \u2014 Request Classifier (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-agent.classifier.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "norm_label": "executive agent — request classifier (v1)",
+      "norm_label": "executive agent \u2014 request classifier (v1)",
       "id": "packages_contracts_skills_executive_agent_classifier_executive_agent_request_classifier_v1"
     },
     {
@@ -8783,13 +8963,13 @@
       "id": "packages_contracts_skills_executive_router"
     },
     {
-      "label": "Executive Agent — Router (v1)",
+      "label": "Executive Agent \u2014 Router (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-router.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 84,
-      "norm_label": "executive agent — router (v1)",
+      "norm_label": "executive agent \u2014 router (v1)",
       "id": "packages_contracts_skills_executive_router_executive_agent_router_v1"
     },
     {
@@ -8868,9 +9048,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L14",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_audit_table",
-      "community": 168,
-      "norm_label": "audit (table)"
+      "community": 31,
+      "norm_label": "audit (table)",
+      "id": "packages_backend_convex_schema_audit_table"
     },
     {
       "label": "deadLetters (table)",
@@ -8878,9 +9058,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L26",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_deadletters_table",
-      "community": 168,
-      "norm_label": "deadLetters (table)"
+      "community": 6,
+      "norm_label": "deadletters (table)",
+      "id": "packages_backend_convex_schema_deadletters_table"
     },
     {
       "label": "skills (table)",
@@ -8888,9 +9068,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L42",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_skills_table",
       "community": 168,
-      "norm_label": "skills (table)"
+      "norm_label": "skills (table)",
+      "id": "packages_backend_convex_schema_skills_table"
     },
     {
       "label": "pendingTimeouts (table)",
@@ -8898,9 +9078,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L60",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_pendingtimeouts_table",
-      "community": 168,
-      "norm_label": "pendingTimeouts (table)"
+      "community": 39,
+      "norm_label": "pendingtimeouts (table)",
+      "id": "packages_backend_convex_schema_pendingtimeouts_table"
     },
     {
       "label": "exportCursors (table)",
@@ -8908,9 +9088,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L73",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_exportcursors_table",
-      "community": 168,
-      "norm_label": "exportCursors (table)"
+      "community": 1,
+      "norm_label": "exportcursors (table)",
+      "id": "packages_backend_convex_schema_exportcursors_table"
     },
     {
       "label": "requests (table)",
@@ -8918,9 +9098,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L83",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_requests_table",
-      "community": 168,
-      "norm_label": "requests (table)"
+      "community": 228,
+      "norm_label": "requests (table)",
+      "id": "packages_backend_convex_schema_requests_table"
     },
     {
       "label": "plans (table)",
@@ -8928,9 +9108,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L132",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_plans_table",
-      "community": 168,
-      "norm_label": "plans (table)"
+      "community": 228,
+      "norm_label": "plans (table)",
+      "id": "packages_backend_convex_schema_plans_table"
     },
     {
       "label": "attachments (table)",
@@ -8938,9 +9118,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L156",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_attachments_table",
       "community": 168,
-      "norm_label": "attachments (table)"
+      "norm_label": "attachments (table)",
+      "id": "packages_backend_convex_schema_attachments_table"
     },
     {
       "label": "telemetry (table)",
@@ -8948,9 +9128,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L168",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_telemetry_table",
-      "community": 168,
-      "norm_label": "telemetry (table)"
+      "community": 2,
+      "norm_label": "telemetry (table)",
+      "id": "packages_backend_convex_schema_telemetry_table"
     },
     {
       "label": "notifications (table)",
@@ -8958,9 +9138,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L183",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_notifications_table",
-      "community": 168,
-      "norm_label": "notifications (table)"
+      "community": 217,
+      "norm_label": "notifications (table)",
+      "id": "packages_backend_convex_schema_notifications_table"
     },
     {
       "label": "gmailTokens (table)",
@@ -8968,9 +9148,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L194",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_gmailtokens_table",
       "community": 168,
-      "norm_label": "gmailTokens (table)"
+      "norm_label": "gmailtokens (table)",
+      "id": "packages_backend_convex_schema_gmailtokens_table"
     },
     {
       "label": "guardrailConfig (table)",
@@ -8978,9 +9158,9 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L207",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_guardrailconfig_table",
       "community": 168,
-      "norm_label": "guardrailConfig (table)"
+      "norm_label": "guardrailconfig (table)",
+      "id": "packages_backend_convex_schema_guardrailconfig_table"
     },
     {
       "label": "demoItems (table)",
@@ -8988,91 +9168,362 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L214",
       "_origin": "convex_table",
-      "id": "packages_backend_convex_schema_demoitems_table",
-      "community": 168,
-      "norm_label": "demoItems (table)"
+      "community": 217,
+      "norm_label": "demoitems (table)",
+      "id": "packages_backend_convex_schema_demoitems_table"
     }
   ],
   "links": [
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L50",
-      "weight": 1,
-      "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_existing",
-      "confidence_score": 1
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit",
+      "target": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_data_flow",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_dependencies_blast_radius",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L70",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_how_to_change_safely",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_how_to_verify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L58",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_invariants_what_must_never_break",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_key_files",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_known_gaps_deferred_work",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L85",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_operational_notes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_purpose",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude",
+      "target": "claude_pikar_ai_repository_conventions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_3_the_audit_module_is_insert_only"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
       "source_location": "L28",
-      "weight": 1,
-      "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_fileid",
-      "confidence_score": 1
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_7_boot_order"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L54",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L85",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_9_playbooks_and_adrs_are_part_of_definition_of_done"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_graphify"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L36",
-      "weight": 1,
+      "source_location": "L76",
+      "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_files",
-      "confidence_score": 1
+      "target": "scripts_extract_convex_edges_addlink"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L24",
-      "weight": 1,
+      "source_location": "L43",
+      "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_g",
-      "confidence_score": 1
+      "target": "scripts_extract_convex_edges_dropped"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L75",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_existing"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_fileid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L61",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_files"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/extract-convex-edges.mjs",
       "source_location": "L29",
-      "weight": 1,
+      "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_nodefile",
-      "confidence_score": 1
+      "target": "scripts_extract_convex_edges_g"
+    },
+    {
+      "relation": "indirect_call",
+      "confidence": "INFERRED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "context": "argument",
+      "confidence_score": 0.5,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_isnoise"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L23",
-      "weight": 1,
+      "source_location": "L93",
+      "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_raw",
-      "confidence_score": 1
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "scripts/extract-convex-edges.mjs",
-      "source_location": "L27",
-      "weight": 1,
-      "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_symbolid",
-      "confidence_score": 1
+      "target": "scripts_extract_convex_edges_lineat"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/extract-convex-edges.mjs",
       "source_location": "L52",
-      "weight": 1,
+      "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_extract_convex_edges",
-      "target": "scripts_extract_convex_edges_unresolved",
-      "confidence_score": 1
+      "target": "scripts_extract_convex_edges_nodefile"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L53",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_nodeids"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_raw"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L50",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_symbolid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L97",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_tableid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/extract-convex-edges.mjs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_extract_convex_edges",
+      "target": "scripts_extract_convex_edges_unresolved"
     },
     {
       "relation": "contains",
@@ -9225,16 +9676,6 @@
       "target": "docs_decisions_001_convex_data_orchestration_plane_adr_001_convex_as_the_data_orchestration_plane_with_thin_adapters_over_pure_ts_packages"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L4",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit",
-      "target": "docs_decisions_001_convex_data_orchestration_plane"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/decisions/001-convex-data-orchestration-plane.md",
@@ -9343,16 +9784,6 @@
       "confidence_score": 1,
       "source": "docs_decisions_003_skill_registry_for_prompts",
       "target": "docs_decisions_003_skill_registry_for_prompts_adr_003_all_llm_prompts_live_in_a_versioned_skills_registry_never_in_source"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L4",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit",
-      "target": "docs_decisions_003_skill_registry_for_prompts"
     },
     {
       "relation": "references",
@@ -9603,106 +10034,6 @@
       "confidence_score": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_purpose"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit",
-      "target": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L47",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_data_flow"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L37",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_dependencies_blast_radius"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L70",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_how_to_change_safely"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L77",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_how_to_verify"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L58",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_invariants_what_must_never_break"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L15",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_key_files"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L91",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_known_gaps_deferred_work"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L85",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_operational_notes"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L6",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_purpose"
     },
     {
       "relation": "contains",
@@ -10292,6 +10623,17 @@
       "target": "packages_backend_convex_plans_patchplan"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L277",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.test.ts",
@@ -10675,6 +11017,28 @@
       "target": "packages_backend_convex_review_armtimeout"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L213",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L145",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/smoke.ts",
@@ -10783,6 +11147,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_smoke",
       "target": "packages_backend_convex_smoke_startreviewgate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L53",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smokeassert",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
     },
     {
       "relation": "contains",
@@ -11004,6 +11379,28 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_deadletter",
       "target": "packages_backend_convex_deadletter_onpipelinecomplete"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L32",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_deadletter",
+      "target": "packages_backend_convex_schema_deadletters_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L78",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_deadletter",
+      "target": "packages_backend_convex_schema_telemetry_table"
     },
     {
       "relation": "calls",
@@ -11389,6 +11786,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_setplanstatus"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/plans.ts",
+      "source_location": "L32",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_plans",
+      "target": "packages_backend_convex_schema_plans_table"
     },
     {
       "relation": "imports_from",
@@ -11784,6 +12192,136 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_guardrails_test",
       "target": "packages_backend_convex_schema"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L156",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_attachments_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L14",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L26",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_deadletters_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L214",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_demoitems_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L73",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_exportcursors_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L194",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_gmailtokens_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L207",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_guardrailconfig_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L183",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_notifications_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L60",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L132",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L83",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L42",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_skills_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L168",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_telemetry_table"
     },
     {
       "relation": "imports_from",
@@ -12328,6 +12866,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_guardrails",
       "target": "packages_backend_convex_guardrails_setkillswitch"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/guardrails.ts",
+      "source_location": "L35",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_guardrails",
+      "target": "packages_backend_convex_schema_guardrailconfig_table"
     },
     {
       "relation": "imports_from",
@@ -13770,6 +14319,17 @@
       "target": "packages_backend_convex_audit_log"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/audit.ts",
+      "source_location": "L28",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_audit",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
       "relation": "imports_from",
       "context": "import",
       "confidence": "EXTRACTED",
@@ -13966,6 +14526,17 @@
       "target": "packages_backend_convex_demo_listitems"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/demo.ts",
+      "source_location": "L12",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_demo",
+      "target": "packages_backend_convex_schema_demoitems_table"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmailAuth.ts",
@@ -14074,6 +14645,28 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_gmailauth",
       "target": "packages_backend_convex_gmailauth_verifystate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L89",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_schema_gmailtokens_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L160",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_schema_notifications_table"
     },
     {
       "relation": "imports_from",
@@ -14433,6 +15026,17 @@
       "target": "packages_backend_convex_notifications_notify"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L46",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_notifications",
+      "target": "packages_backend_convex_schema_notifications_table"
+    },
+    {
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/requests.ts",
@@ -14547,6 +15151,28 @@
       "target": "packages_backend_convex_review_senddecision"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L113",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_schema_attachments_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L99",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/review.ts",
@@ -14605,6 +15231,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_review",
       "target": "packages_backend_convex_review_senddecision"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L68",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
     },
     {
       "relation": "imports_from",
@@ -14680,6 +15317,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_skills_test",
       "target": "packages_contracts_src_skills_executiverouter"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L115",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_schema_skills_table"
     },
     {
       "relation": "contains",
@@ -14832,6 +15480,17 @@
       "target": "packages_contracts_src_skills_executiverouter"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L59",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_telemetry",
+      "target": "packages_backend_convex_schema_telemetry_table"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/telemetry.ts",
@@ -14944,6 +15603,28 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_worm",
       "target": "packages_backend_convex_wormcursor_getcursor"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/wormCursor.ts",
+      "source_location": "L35",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_wormcursor",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/wormCursor.ts",
+      "source_location": "L52",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_wormcursor",
+      "target": "packages_backend_convex_schema_exportcursors_table"
     },
     {
       "relation": "contains",
@@ -19325,358 +20006,8 @@
       "confidence_score": 1,
       "source": "sidecars_readme_sidecars",
       "target": "sidecars_readme_planned_sidecars"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L14",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_audit_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L26",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_deadletters_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L42",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_skills_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L60",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_pendingtimeouts_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L73",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_exportcursors_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L83",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_requests_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L132",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_plans_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L156",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_attachments_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L168",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_telemetry_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L183",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_notifications_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L194",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_gmailtokens_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L207",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_guardrailconfig_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/schema.ts",
-      "source_location": "L214",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_schema",
-      "target": "packages_backend_convex_schema_demoitems_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/audit.ts",
-      "source_location": "L28",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_audit",
-      "target": "packages_backend_convex_schema_audit_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/cockpit.ts",
-      "source_location": "L277",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_cockpit",
-      "target": "packages_backend_convex_schema_requests_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/deadLetter.ts",
-      "source_location": "L32",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_deadletter",
-      "target": "packages_backend_convex_schema_deadletters_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/deadLetter.ts",
-      "source_location": "L78",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_deadletter",
-      "target": "packages_backend_convex_schema_telemetry_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/demo.ts",
-      "source_location": "L12",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_demo",
-      "target": "packages_backend_convex_schema_demoitems_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/gmailAuth.ts",
-      "source_location": "L89",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_gmailauth",
-      "target": "packages_backend_convex_schema_gmailtokens_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/gmailAuth.ts",
-      "source_location": "L160",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_gmailauth",
-      "target": "packages_backend_convex_schema_notifications_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/guardrails.ts",
-      "source_location": "L35",
-      "weight": 1,
-      "context": "db_read",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_guardrails",
-      "target": "packages_backend_convex_schema_guardrailconfig_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/notifications.ts",
-      "source_location": "L46",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_notifications",
-      "target": "packages_backend_convex_schema_notifications_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/plans.ts",
-      "source_location": "L32",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_plans",
-      "target": "packages_backend_convex_schema_plans_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/requests.ts",
-      "source_location": "L99",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_requests",
-      "target": "packages_backend_convex_schema_requests_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/requests.ts",
-      "source_location": "L113",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_requests",
-      "target": "packages_backend_convex_schema_attachments_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/review.ts",
-      "source_location": "L68",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_review",
-      "target": "packages_backend_convex_schema_pendingtimeouts_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/skills.ts",
-      "source_location": "L115",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_skills",
-      "target": "packages_backend_convex_schema_skills_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L145",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_schema_requests_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L213",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_schema_plans_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smokeAssert.ts",
-      "source_location": "L53",
-      "weight": 1,
-      "context": "db_read",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_smokeassert",
-      "target": "packages_backend_convex_schema_pendingtimeouts_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/telemetry.ts",
-      "source_location": "L59",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_telemetry",
-      "target": "packages_backend_convex_schema_telemetry_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/wormCursor.ts",
-      "source_location": "L35",
-      "weight": 1,
-      "context": "db_read",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_wormcursor",
-      "target": "packages_backend_convex_schema_audit_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/wormCursor.ts",
-      "source_location": "L52",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_wormcursor",
-      "target": "packages_backend_convex_schema_exportcursors_table"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "c4e3b32b2ddaf1050f0c6e42d82b5180bd403cdb"
+  "built_at_commit": "66059698f2f9bde36d819b625461418d8fef4887"
 }
