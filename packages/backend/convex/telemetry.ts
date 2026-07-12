@@ -21,6 +21,8 @@ const terminalOutcome = v.object({
     v.literal("rejected"),
     v.literal("expired"),
     v.literal("failed"),
+    // Governed guardrail stop (GRDL-01) — a first-class fail-closed terminal.
+    v.literal("blocked"),
   ),
   durationMs: v.number(),
   decisionCounts: v.record(v.string(), v.number()),

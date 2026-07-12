@@ -13,8 +13,9 @@
  * silent 0 that reads as "measured, was zero".
  */
 
-/** The terminal states that produce exactly one telemetry row. */
-export type ReviewOutcome = "sent" | "rejected" | "expired" | "failed";
+/** The terminal states that produce exactly one telemetry row. `blocked` is a
+ *  governed guardrail stop — a first-class fail-closed terminal (GRDL-01), no LLM ran. */
+export type ReviewOutcome = "sent" | "rejected" | "expired" | "failed" | "blocked";
 
 /** One LLM call's usage — route, draft, and each regenerate contribute one. */
 export interface LlmUsage {
