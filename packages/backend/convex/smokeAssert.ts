@@ -175,6 +175,24 @@ export const assertBlocked = internalQuery({
   },
 });
 
+/** Non-consuming "parked at the review gate" probe. The mid-flight budget test needs
+ *  request A settled at awaiting_review BEFORE draining the window (so a regenerate
+ *  hits the preCall path, not prepare) — sendDecision would consume the gate. */
+export const assertAtReview = internalQuery({
+  args: { correlationId: v.string() },
+  handler: async (ctx, { correlationId }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "awaiting_review") {
+      throw new Error(`request ${correlationId} at "${req.status}", not yet awaiting_review`);
+    }
+    return { ok: true };
+  },
+});
+
 /** GRDL-01/02: the request was redacted — safeText + hash written, every expected
  *  placeholder present, and a request.redacted audit row carries piiCounts. Returns
  *  safeTextHash (the cache-key + audit correlation for the count/needle assertions). */

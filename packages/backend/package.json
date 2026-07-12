@@ -13,6 +13,7 @@
     "test": "vitest run",
     "seed": "node ./scripts/run-seed.mjs",
     "smoke:dlq": "node ./scripts/run-smoke-dlq.mjs",
+    "smoke:guardrails": "node ./scripts/run-smoke-guardrails.mjs",
     "smoke:pipeline": "node ./scripts/run-smoke-pipeline.mjs",
     "smoke:reviewgate": "node ./scripts/run-smoke-reviewgate.mjs",
     "smoke:worm": "node ./scripts/run-smoke-worm.mjs"
