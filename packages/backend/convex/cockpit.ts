@@ -11,7 +11,7 @@
 // plan.status (proposed→approved) makes a double-approve send once and guarantees zero sends
 // before Approve. It is the SOLE `workflow.start(deliverApprovedPlan)` call site (the
 // grep-able zero-sends-before-Approve invariant, RESEARCH-delivery §5).
-import { Agent } from "@convex-dev/agent";
+import { Agent, listMessages } from "@convex-dev/agent";
 import {
   type Answer,
   type EmailIntentState,
@@ -21,13 +21,14 @@ import {
 } from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
-import { tenantAction, tenantMutation } from "./lib/functions";
+import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 
 // No hardcoded `instructions` prompt (CLAUDE.md §5): the ONLY LLM call is the body draft, which
 // loads the email-drafter body from the skills registry (internal.llm.draftCockpit). Deterministic
@@ -193,6 +194,27 @@ export const sendCockpitMessage = tenantAction({
     });
     await say(questionText(next));
     return { threadId: tid };
+  },
+});
+
+/**
+ * Paginated thread-message list for the cockpit chat pane (feeds @convex-dev/agent/react
+ * `useThreadMessages`). The agent thread is a message store only (DECISION #2), so the guided
+ * questions + the "review and Approve" copy are the saved assistant turns surfaced here.
+ * Tenant-guarded: a thread is only listable when the tenant owns its (tenant-scoped) plans row —
+ * no cross-tenant read of another owner's conversation.
+ * ponytail: static list (no `streamArgs`/`syncStreams`) — token streaming is a later upgrade
+ * via `useUIMessages`/`vStreamArgs` (research §4), matching the deterministic no-LLM control here.
+ */
+export const listThreadMessages = tenantQuery({
+  args: { threadId: v.string(), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { threadId, paginationOpts }) => {
+    const owns = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
+      .unique();
+    if (!owns) return { page: [], isDone: true, continueCursor: "" };
+    return await listMessages(ctx, components.agent, { threadId, paginationOpts });
   },
 });
 
