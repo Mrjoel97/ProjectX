@@ -260,13 +260,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1783884847.6351228,
-    "ast_hash": "4b440b3553998cd2dd74d9f438f06e2d",
+    "mtime": 1783888724.473179,
+    "ast_hash": "9695626a76e6ab79fda2c7b81ae26bb4",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1783884847.650751,
-    "ast_hash": "02d53ae096590114855cfb713c368c57",
+    "mtime": 1783887701.660641,
+    "ast_hash": "ded036a828dd43ba2f78c3f8879f2fd0",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1842,6 +1842,56 @@
   ".planning/phases/03.2-inbox-reading/03.2-VERIFICATION.md": {
     "mtime": 1783884815.1708171,
     "ast_hash": "a1fc31f7ceb2f4db6fe45f3b3c177226",
+    "semantic_hash": ""
+  },
+  ".planning/design/agent-driven-cockpit.md": {
+    "mtime": 1783887242.8503025,
+    "ast_hash": "f147dda704a6c4ef66d96c6c44013b95",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-CONTEXT.md": {
+    "mtime": 1783887867.7437396,
+    "ast_hash": "5da7c012c850a685fdb829152f6ee297",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-RESEARCH.md": {
+    "mtime": 1783887838.5822191,
+    "ast_hash": "bd385b2a95c2d18b775bbb05fefc3d6c",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-VALIDATION.md": {
+    "mtime": 1783889328.5836344,
+    "ast_hash": "ec72ef9c8c36585e77d7cb1d2f2cec7b",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-01-PLAN.md": {
+    "mtime": 1783889297.2280061,
+    "ast_hash": "0826a4c4d7a4e022a4de5eed80c2d02a",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-02-PLAN.md": {
+    "mtime": 1783888435.8742495,
+    "ast_hash": "f81606ac337ced334c98717ff2b54369",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-03-PLAN.md": {
+    "mtime": 1783888498.132713,
+    "ast_hash": "73d2437aec6cf2b01b60db86f4d5f772",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-04-PLAN.md": {
+    "mtime": 1783888555.76764,
+    "ast_hash": "304fc9c550bf3f66c7689a83d6251894",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-05-PLAN.md": {
+    "mtime": 1783888612.0269425,
+    "ast_hash": "48ef9117d5cbd487a3544c15e2740674",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-06-PLAN.md": {
+    "mtime": 1783889313.1806448,
+    "ast_hash": "33eacb608f6c39d0affc543bc08ed744",
     "semantic_hash": ""
   }
 }
