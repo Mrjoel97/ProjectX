@@ -2,11 +2,15 @@
   "_unassigned": [],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
+    "apps/web/app/(app)/connect-gmail/",
     "apps/web/e2e/",
     "packages/backend/convex/cockpit.ts",
     "packages/backend/convex/plans.ts",
     "packages/backend/convex/deliverApprovedPlan.ts",
     "packages/backend/convex/llm.ts",
+    "packages/backend/convex/gmail.ts",
+    "packages/backend/convex/gmailAuth.ts",
+    "packages/backend/convex/http.ts",
     "packages/core/src/emailIntent.ts",
     "packages/backend/scripts/run-smoke-fanout.mjs"
   ],

@@ -51,6 +51,18 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/check-playbooks.mjs\" check",
+            "timeout": 30,
+            "statusMessage": "Checking playbook freshness"
+          }
+        ]
+      }
     ]
   }
 }

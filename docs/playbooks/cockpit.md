@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-12 against 193b611 (llm.ts gateway-debug probe reviewed: no invariant affected)
+> Last verified: 2026-07-12 against 60e4ff2 (Phase 3.2 Wave 1: needs_resolution seam + candidate store + gmail.search absorbed; gmail/OAuth surface added to watch)
 > Build history: `.planning/phases/03.1-cockpit-core/` (numbered `03.1-NN-PLAN.md` docs, `03.1-VALIDATION.md`, `deferred-items.md`) · Design: `.planning/design/email-chat-cockpit.md` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -22,12 +22,16 @@ Frontend (`apps/web/app/(app)/dashboard/workspace/`):
 
 Backend (`packages/backend/convex/`):
 - `cockpit.ts` — orchestration seam: `cockpitAgent`, `sendCockpitMessage` (guided turn), `parseAnswer` (pure), `proposeEmailPlan`, `executePlan` (the human approve gate), `listThreadMessages`
-- `plans.ts` — content-plane adapter: `insertPlan` / `patchPlan` / `setPlanStatus` (internal), `byThread`, `reportForPlan` (live REPORT projection)
+- `plans.ts` — content-plane adapter: `insertPlan` / `patchPlan` / `setPlanStatus` (internal), `byThread`, `reportForPlan` (live REPORT projection); 3.2: `writeCandidates` / `clearCandidates` — the TRANSIENT contact-candidate store (`candidates` / `pendingValid` / `greetingName`, all optional plan fields)
 - `deliverApprovedPlan.ts` — the sole delivery workflow; per-recipient fan-out with try/catch isolation
-- `llm.ts` → `draftCockpit` — the ONLY `"use node"` module; loads the `email-drafter` skill; `SMOKE::` offline short-circuit
+- `llm.ts` → `draftCockpit` — loads the `email-drafter` skill; `SMOKE::` offline short-circuit
+- `gmail.ts` (`"use node"`) — `send` (delivery) and 3.2's `search` (headers-only inbox read: `messages.list` + `format=metadata`, bodies never fetched); both share the single `freshAccessToken` refresh root
+- `gmailAuth.ts` + `http.ts` `/gmail/callback` — the one-consent `gmail.modify` OAuth flow (state-token mint/verify, token store); callback bounces the browser back to the app, never dead-ends on the Convex site origin
 - `schema.ts` — `plans` table (`by_thread`), `requests.planId` + `by_plan` index
 
-Pure core: `packages/core/src/emailIntent.ts` — `nextQuestion` / `applyAnswer` slot logic.
+Frontend prerequisite: `apps/web/app/(app)/connect-gmail/page.tsx` — the consent entry page (cockpit composer is gated on `gmailStatus`).
+
+Pure core: `packages/core/src/emailIntent.ts` — `nextQuestion` / `applyAnswer` slot logic; 3.2: `needs_resolution` seam (a no-`@` recipients segment is FLAGGED as `pendingResolution`, never resolved by an LLM tool-loop), `parseAddress` / `rankCandidates` header helpers deliberately co-located here (a sibling file would escape this playbook's watch).
 
 Tests: `packages/backend/convex/cockpit.test.ts`, `packages/core/src/emailIntent.test.ts`,
 `packages/backend/convex/llmRedaction.test.ts`, `apps/web/e2e/cockpit-report.spec.ts`,
@@ -63,7 +67,9 @@ when assessing blast radius). Couplings graphify cannot see:
 - **Zero sends before Approve**: `gmail.send` is called only inside `deliverApprovedPlan`, which is started only by `executePlan`. Tested in `cockpit.test.ts`.
 - **Per-recipient correlationId**, server-minted, never client-supplied — a shared cid collapses audit/telemetry/DLQ isolation (telemetry is write-once per cid). Exercised by `smoke:fanout`.
 - **Redaction (CLAUDE.md §4)**: recipients/subject/body live only in content-plane `plans`/`requests`; audit/DLQ/telemetry payloads carry refs only. Enforced statically by `llmRedaction.test.ts`; at runtime by `assertNoRawPiiFanout` in `smoke:fanout`.
-- **Single `"use node"` module**: `draftCockpit` must stay inside `llm.ts`; a second node module re-triggers a TS circular-inference cliff (see `03.1-RESEARCH*.md` §6).
+- **No NEW `"use node"` modules**: `draftCockpit` stays inside `llm.ts`, `search` stays inside `gmail.ts` (the two pre-existing node modules); adding another re-triggers a TS circular-inference cliff (see `03.1-RESEARCH*.md` §6; Convex guidelines §96).
+- **Contacts are transient (3.2)**: `candidates`/`pendingValid` are held on the plan row only between search and pick — `clearCandidates` unsets BOTH on pick ("no contacts cache at rest" is structural); `greetingName` alone survives to the draft turn. Candidate payloads live on the content plane only and are NEVER audited (CLAUDE.md §4); the sole search audit is refs-only `mailbox.searched {queryHash, resultCount}`.
+- **Inbox reads are headers-only (3.2)**: `gmail.search` fetches `format=metadata` (From/To/Cc/Subject/Date) — message bodies never leave Gmail; read-time auth failure returns `{ok:false, reason}` WITHOUT throwing (a dead token is a reauth prompt, not a DLQ entry).
 - **`SMOKE::` sentinel** (`SMOKE::route=<route>::`, parsed in `llm.ts`): deterministic offline draft path used by all E2E; contains no PII and must survive redaction verbatim.
 - **Tenant wrappers only** (CLAUDE.md §2): all cockpit functions use `tenantQuery`/`tenantMutation`/`tenantAction`. Enforced by biome + `importGuard.test.ts`.
 
@@ -89,6 +95,8 @@ when assessing blast radius). Couplings graphify cannot see:
 - Divider position persists per-browser (localStorage), not cross-device
 
 ## Known gaps & deferred work
+
+- Phase 3.2 Wave 1 shipped the SEAM pieces only (core `needs_resolution` states, `plans` candidate store, `gmail.search`); the wiring that connects them (cockpit calls `writeCandidates(rankCandidates(...))`, renders the resolution card, folds the pick) lands in 03.2 plans 04–06 — until then `pendingResolution` states are reachable in core but the cockpit never produces them
 
 - Attachments: `AttachmentPicker` uploads only; wiring storageIds into the plan is deferred (Phase 4, INTK-02)
 - DraftCard has no inline editor — edits arrive as new guided-conversation turns
