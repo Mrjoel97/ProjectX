@@ -199,6 +199,69 @@ function setOrDrop<K extends "rejected" | "groupDeferred" | "pendingResolution" 
   else delete state[key];
 }
 
+// ─── Pure agent tool-internals (Plan 03 Convex tools wrap these verbatim) ─────────────────────────
+// The §2-D enforcement point: the agent reasons over index+label ONLY, and a bad address bounces
+// at the trust boundary before it can enter recipients. Pure — no Convex/Gmail import.
+
+/** One row of the recipient view the agent reasons over: a 1-based index and an address-free label. */
+export interface RecipientViewRow {
+  index: number;
+  label: string;
+}
+
+/**
+ * Project recipients into an index+label view. The label is the `displayName` when present, else a
+ * neutral `"#<index> (no name)"` placeholder — it MUST NOT contain the address (§2-D: a raw email
+ * never reaches the model). Index is 1-based; order preserved.
+ */
+export function buildRecipientView(
+  recipients: readonly { address: string; displayName?: string }[],
+): RecipientViewRow[] {
+  return recipients.map((r, i) => {
+    const index = i + 1;
+    return { index, label: r.displayName ?? `#${index} (no name)` };
+  });
+}
+
+/** One recipient-list edit the agent's tool applies. `index` on remove is 1-based. */
+export type RecipientEdit =
+  | { op: "add"; addresses: string[] }
+  | { op: "remove"; index: number }
+  | { op: "set"; addresses: string[] };
+
+/** Result of an edit: `ok` when nothing bounced; else recipients hold the accepted subset + rejected. */
+export type RecipientEditResult =
+  | { ok: true; recipients: string[] }
+  | { ok: false; recipients: string[]; rejected: string[] };
+
+/**
+ * Apply one add/remove/set edit to a recipient list. Validation is the ONE shared `isValidEmail`
+ * regex — an invalid address bounces into `rejected` and NEVER enters recipients (the trust
+ * boundary). Add/set dedupe case-insensitively. Remove resolves the 1-based index against the
+ * current array; out-of-range returns a `"#<index>"` bounce (never a silent no-op into a send).
+ * ponytail: plain reducer over `string[]` — no state-machine coupling; the tool reads the plans
+ * row, calls this, patches back.
+ */
+export function applyRecipientEdit(
+  recipients: readonly string[],
+  edit: RecipientEdit,
+): RecipientEditResult {
+  if (edit.op === "remove") {
+    if (edit.index < 1 || edit.index > recipients.length) {
+      return { ok: false, recipients: [...recipients], rejected: [`#${edit.index}`] };
+    }
+    return { ok: true, recipients: recipients.filter((_, i) => i + 1 !== edit.index) };
+  }
+  // add | set: validate each, bounce the invalid, dedupe the valid.
+  const valid: string[] = [];
+  const rejected: string[] = [];
+  for (const a of edit.addresses) (isValidEmail(a) ? valid : rejected).push(a);
+  const base = edit.op === "add" ? recipients : [];
+  const next = dedupeAppend(base, valid);
+  if (rejected.length > 0) return { ok: false, recipients: next, rejected };
+  return { ok: true, recipients: next };
+}
+
 // ─── Pure contact-resolution helpers (Plan 04 cockpit composes these) ────────────────────────────
 // Co-located in this file — NOT a sibling module — so they stay under the cockpit.md §9 playbook
 // watch (a new packages/core/src/*.ts would trip the Stop hook). No Convex/Gmail import here either.
