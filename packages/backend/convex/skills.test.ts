@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
@@ -31,6 +32,15 @@ describe("skills registry loader + activation", () => {
     expect(loaded.body.length).toBeGreaterThan(0);
     expect(typeof loaded.skillId).toBe("string");
     expect(loaded.skillId.length).toBeGreaterThan(0);
+  });
+
+  test("seedSkills seeds cockpit-agent as an active v1 body", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    const loaded = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
+    expect(loaded.version).toBe(1);
+    expect(loaded.body.length).toBeGreaterThan(0);
   });
 
   test("loadSkill fails closed (throws) when no active skill exists", async () => {
@@ -115,6 +125,7 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
     ["executive-router.md", executiveRouterSkillBody],
     ["email-drafter.md", emailDrafterSkillBody],
+    ["cockpit-agent.md", cockpitAgentSkillBody],
   ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
     const mdPath = fileURLToPath(
       new URL(`../../contracts/skills/${file}`, import.meta.url),
