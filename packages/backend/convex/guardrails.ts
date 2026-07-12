@@ -82,7 +82,7 @@ export const prepare = internalMutation({
     const cfg = await getConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
 
-    // Destructure ONLY safeText + counts — `entities` is raw PII and must never
+    // Destructure ONLY safeText + counts — the scan's raw-PII field must never
     // appear in this file (CLAUDE.md §4; the 03-04 static scan enforces it).
     const scan = scanText(req.goal);
     if (!scan.ok) return { ok: false, reason: "pii_scan_failed" };
