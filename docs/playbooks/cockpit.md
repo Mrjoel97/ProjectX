@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-12 against c577890
+> Last verified: 2026-07-12 against 6cd71b1 (llm.ts gateway-debug probe reviewed: no invariant affected)
 > Build history: `.planning/phases/03.1-cockpit-core/` (numbered `03.1-NN-PLAN.md` docs, `03.1-VALIDATION.md`, `deferred-items.md`) · Design: `.planning/design/email-chat-cockpit.md` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
