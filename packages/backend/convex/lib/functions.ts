@@ -4,10 +4,15 @@
 // and write MUST go through tenantQuery/tenantMutation so `tenantId` is injected
 // from the authenticated identity and can never be forgotten or spoofed.
 
-import { customCtx, customMutation, customQuery } from "convex-helpers/server/customFunctions";
+import {
+  customAction,
+  customCtx,
+  customMutation,
+  customQuery,
+} from "convex-helpers/server/customFunctions";
 // This is the ONLY sanctioned raw-builder import site (biome noRestrictedImports
 // is turned off for this file via an override in biome.json).
-import { mutation, query } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 
 /**
  * Resolve the tenant scope from the authenticated identity. Fails closed:
@@ -29,5 +34,15 @@ export const tenantQuery = customQuery(
 /** Tenant-scoped mutation builder. ctx gains `tenantId`. */
 export const tenantMutation = customMutation(
   mutation,
+  customCtx(async (ctx) => ({ tenantId: await requireTenant(ctx) })),
+);
+
+/**
+ * Tenant-scoped action builder. ctx gains `tenantId`. The agent runs in an
+ * action; the cockpit's public agent action is its sole consumer, so raw
+ * `action` stays import-banned outside this file (CLAUDE.md §2).
+ */
+export const tenantAction = customAction(
+  action,
   customCtx(async (ctx) => ({ tenantId: await requireTenant(ctx) })),
 );

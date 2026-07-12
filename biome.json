@@ -25,12 +25,12 @@
           "options": {
             "paths": {
               "./_generated/server": {
-                "importNames": ["query", "mutation"],
-                "message": "Raw query/mutation are banned. Import tenantQuery/tenantMutation from convex/lib/functions.ts (or use internalQuery/internalMutation for allow-listed internal modules)."
+                "importNames": ["query", "mutation", "action"],
+                "message": "Raw query/mutation/action are banned. Import tenantQuery/tenantMutation/tenantAction from convex/lib/functions.ts (or use internalQuery/internalMutation/internalAction for allow-listed internal modules)."
               },
               "../_generated/server": {
-                "importNames": ["query", "mutation"],
-                "message": "Raw query/mutation are banned. Import tenantQuery/tenantMutation from convex/lib/functions.ts (or use internalQuery/internalMutation for allow-listed internal modules)."
+                "importNames": ["query", "mutation", "action"],
+                "message": "Raw query/mutation/action are banned. Import tenantQuery/tenantMutation/tenantAction from convex/lib/functions.ts (or use internalQuery/internalMutation/internalAction for allow-listed internal modules)."
               }
             }
           }
