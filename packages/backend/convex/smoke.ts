@@ -184,6 +184,76 @@ export const resetDailySpend = internalMutation({
   },
 });
 
+// --- 03.1-04: fan-out delivery smoke ----------------------------------------
+// convex-test cannot run component-backed workflows, so this dev-deployment smoke IS
+// the test for deliverApprovedPlan (SC4 fan-out + SC5 isolation/redaction). Tenant
+// "smoke" has NO Gmail token → each send returns { delivered:false, not_connected } →
+// the row holds at awaiting_reauth (the automatable half; a real send needs human OAuth
+// — see 03.1-VALIDATION manual row). This proves the loop reaches every recipient. ONE
+// recipient's goal starts with the SMOKE::fail sentinel → gmail.send throws terminally
+// → the try/catch dead-letters THAT row in isolation while the rest still reach.
+
+/** Seed a plan + one `requests` row per recipient, then start deliverApprovedPlan. */
+export const seedFanout = internalMutation({
+  args: {
+    correlationIds: v.array(v.string()),
+    recipients: v.array(v.string()), // parallel to correlationIds — each row's To:
+    failIndex: v.number(), // this row's goal gets the SMOKE::fail throw sentinel
+    subjectNeedle: v.string(), // embedded in goal → must NEVER appear in a log plane
+    bodyNeedle: v.string(), // embedded in draft → must NEVER appear in a log plane
+  },
+  handler: async (
+    ctx,
+    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle },
+  ): Promise<{ planId: Id<"plans"> }> => {
+    if (recipients.length !== correlationIds.length) {
+      throw new Error("seedFanout: recipients/correlationIds length mismatch");
+    }
+    const now = Date.now();
+    const planId = await ctx.db.insert("plans", {
+      tenantId: "smoke",
+      threadId: `smoke-fanout-${crypto.randomUUID()}`,
+      status: "approved",
+      createdAt: now,
+    });
+    const requestIds: Id<"requests">[] = [];
+    for (let i = 0; i < correlationIds.length; i++) {
+      const correlationId = correlationIds[i];
+      const recipient = recipients[i];
+      if (correlationId === undefined || recipient === undefined) {
+        throw new Error(`seedFanout: missing row ${i}`);
+      }
+      requestIds.push(
+        await ctx.db.insert("requests", {
+          tenantId: "smoke",
+          correlationId,
+          // SMOKE:: draft body means no LLM key is needed (delivery never routes/drafts).
+          goal: `${i === failIndex ? "SMOKE::fail " : ""}${subjectNeedle} #${i}`,
+          recipient,
+          draft: `SMOKE:: ${bodyNeedle} #${i}`,
+          status: "approved",
+          attachmentRefs: [],
+          planId,
+          createdAt: now,
+        }),
+      );
+    }
+    const planCid = `smoke-fanout-plan-${crypto.randomUUID()}`;
+    await workflow.start(
+      ctx,
+      internal.deliverApprovedPlan.deliverApprovedPlan,
+      { planId, tenantId: "smoke", requestIds, correlationIds },
+      {
+        // Catch-all only — with per-row try/catch the workflow returns success, so this
+        // archives nothing (correct). payload carries the planId ref only (CLAUDE.md §4).
+        onComplete: internal.deadLetter.onPipelineComplete,
+        context: { tenantId: "smoke", correlationId: planCid, payload: { planId } },
+      },
+    );
+    return { planId };
+  },
+});
+
 /** GRDL-06: prove the submit token bucket (capacity 5) rejects the 6th consume.
  *  Uses a random synthetic key so it never poisons a real tenant, and resets it
  *  after. The submit-form wiring itself is verified by test/typecheck in 03-03. */

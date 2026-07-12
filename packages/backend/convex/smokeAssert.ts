@@ -309,6 +309,135 @@ export const assertFallback = internalQuery({
   },
 });
 
+// ── 03.1-04 fan-out delivery assertions (SC4/SC5) ────────────────────────────
+
+/** SC4: every non-failure recipient row reached a delivery outcome (awaiting_reauth
+ *  offline, or sent with a token) — the fan-out loop touched all of them. */
+export const assertFanoutReachedAll = internalQuery({
+  args: { correlationIds: v.array(v.string()), failCid: v.string() },
+  handler: async (ctx, { correlationIds, failCid }) => {
+    let reached = 0;
+    for (const cid of correlationIds) {
+      if (cid === failCid) continue;
+      const req = await ctx.db
+        .query("requests")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .first();
+      if (!req) throw new Error(`fanout: no request for ${cid}`);
+      if (req.status !== "awaiting_reauth" && req.status !== "sent") {
+        throw new Error(`fanout recipient ${cid} at "${req.status}", expected awaiting_reauth|sent`);
+      }
+      reached++;
+    }
+    return { ok: true, reached };
+  },
+});
+
+/** SC5 isolation: the ONE forced-failure row dead-lettered (deadLetters + deadletter.written
+ *  audit + status=failed + one failed telemetry row) WHILE no sibling dead-lettered. */
+export const assertRecipientDeadLettered = internalQuery({
+  args: { correlationId: v.string(), siblingCids: v.array(v.string()) },
+  handler: async (ctx, { correlationId, siblingCids }) => {
+    const news = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    const row = news.find((r) => r.correlationId === correlationId);
+    if (!row) throw new Error(`no deadLetters row for forced-fail ${correlationId}`);
+    if (!row.error.includes("SMOKE_FAILURE")) {
+      throw new Error(`deadLetters error missing SMOKE_FAILURE: ${row.error}`);
+    }
+
+    const audits = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    if (!audits.some((a) => a.eventType === "deadletter.written")) {
+      throw new Error(`no deadletter.written audit for ${correlationId}`);
+    }
+
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "failed") {
+      throw new Error(`forced-fail ${correlationId} at "${req.status}", expected failed`);
+    }
+
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!tel || tel.reviewOutcome !== "failed") {
+      throw new Error(`no failed telemetry row for ${correlationId}`);
+    }
+
+    // The isolation assertion: a sibling's send failing would collapse per-recipient
+    // isolation — none of them may have dead-lettered.
+    for (const sib of siblingCids) {
+      if (news.some((r) => r.correlationId === sib)) {
+        throw new Error(`isolation breach: sibling ${sib} dead-lettered alongside ${correlationId}`);
+      }
+    }
+    return { ok: true };
+  },
+});
+
+/** SC4 idempotency: each recipient has at most ONE terminal telemetry row (write-once —
+ *  a step replay never doubles it). The double-approve CAS lives in executePlan (plan 07). */
+export const assertFanoutIdempotent = internalQuery({
+  args: { correlationIds: v.array(v.string()) },
+  handler: async (ctx, { correlationIds }) => {
+    for (const cid of correlationIds) {
+      const tels = await ctx.db
+        .query("telemetry")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .collect();
+      if (tels.length > 1) {
+        throw new Error(`recipient ${cid} has ${tels.length} telemetry rows — terminal not write-once`);
+      }
+    }
+    return { ok: true };
+  },
+});
+
+/** SC5 redaction: NO raw email content (subject/body/recipient) in any audit/DLQ/telemetry
+ *  row for the fan-out. Scans by each recipient cid; needle values are never echoed (index
+ *  only) so this assertion cannot itself leak. */
+export const assertNoRawPiiFanout = internalQuery({
+  args: { correlationIds: v.array(v.string()), needles: v.array(v.string()) },
+  handler: async (ctx, { correlationIds, needles }) => {
+    const cidSet = new Set(correlationIds);
+    const dls = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    const blobs: string[] = [];
+    for (const cid of correlationIds) {
+      const audits = await ctx.db
+        .query("audit")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .collect();
+      for (const a of audits) blobs.push(JSON.stringify(a));
+      const tel = await ctx.db
+        .query("telemetry")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .first();
+      if (tel) blobs.push(JSON.stringify(tel));
+    }
+    for (const r of dls) if (cidSet.has(r.correlationId)) blobs.push(JSON.stringify(r));
+
+    for (let n = 0; n < needles.length; n++) {
+      const needle = needles[n];
+      if (needle && blobs.some((b) => b.includes(needle))) {
+        throw new Error(`RAW PII leak: needle #${n} found in a fan-out log plane`);
+      }
+    }
+    return { ok: true, scanned: blobs.length };
+  },
+});
+
 /** OPSG-06: the first migration ran and recorded a completed (success) state. */
 export const assertMigrationRan = internalQuery({
   args: {},
