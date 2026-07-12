@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-12 against 60e4ff2 (Phase 3.2 Wave 1: needs_resolution seam + candidate store + gmail.search absorbed; gmail/OAuth surface added to watch)
+> Last verified: 2026-07-12 against 03.2-04 (Phase 3.2 Wave 2: resolution turn WIRED — cockpit runs `gmail.search`→`rankCandidates`→`writeCandidates` on an unresolved name, `resolveRecipients` folds the pick, `greetingName` threads to the drafter; DECISION #2 preserved, one LLM call)
 > Build history: `.planning/phases/03.1-cockpit-core/` (numbered `03.1-NN-PLAN.md` docs, `03.1-VALIDATION.md`, `deferred-items.md`) · Design: `.planning/design/email-chat-cockpit.md` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -21,10 +21,10 @@ Frontend (`apps/web/app/(app)/dashboard/workspace/`):
 - `SplitPane.tsx` — native resizable split (a11y separator, ≥20% clamp, localStorage persist)
 
 Backend (`packages/backend/convex/`):
-- `cockpit.ts` — orchestration seam: `cockpitAgent`, `sendCockpitMessage` (guided turn), `parseAnswer` (pure), `proposeEmailPlan`, `executePlan` (the human approve gate), `listThreadMessages`
+- `cockpit.ts` — orchestration seam: `cockpitAgent`, `sendCockpitMessage` (guided turn — 3.2: runs the resolution turn on an unresolved name), `parseAnswer` (pure — 3.2: comma/"and" segmentation so a multi-word NAME stays whole), `toIntentState` (projects the transient candidate fields), `advance` (shared draft/propose tail), `resolveRecipients` (folds a contact pick), `proposeEmailPlan`, `executePlan` (the human approve gate), `listThreadMessages`
 - `plans.ts` — content-plane adapter: `insertPlan` / `patchPlan` / `setPlanStatus` (internal), `byThread`, `reportForPlan` (live REPORT projection); 3.2: `writeCandidates` / `clearCandidates` — the TRANSIENT contact-candidate store (`candidates` / `pendingValid` / `greetingName`, all optional plan fields)
 - `deliverApprovedPlan.ts` — the sole delivery workflow; per-recipient fan-out with try/catch isolation
-- `llm.ts` → `draftCockpit` — loads the `email-drafter` skill; `SMOKE::` offline short-circuit
+- `llm.ts` → `draftCockpit` — loads the `email-drafter` skill; `SMOKE::` offline short-circuit; 3.2: optional `greetingName` arg (the resolved display name ONLY — never a header hint) prepends a "Hi <name>," greeting instruction
 - `gmail.ts` (`"use node"`) — `send` (delivery) and 3.2's `search` (headers-only inbox read: `messages.list` + `format=metadata`, bodies never fetched); both share the single `freshAccessToken` refresh root
 - `gmailAuth.ts` + `http.ts` `/gmail/callback` — the one-consent `gmail.modify` OAuth flow (state-token mint/verify, token store); callback bounces the browser back to the app, never dead-ends on the Convex site origin
 - `schema.ts` — `plans` table (`by_thread`), `requests.planId` + `by_plan` index
@@ -52,6 +52,7 @@ when assessing blast radius). Couplings graphify cannot see:
 
 1. ChatPane → `sendCockpitMessage`. First turn mints a `threadId` (`cockpitAgent.createThread`) and inserts ONE `plans` row at status `collecting`; threadId returns → page state → shared with CardList.
 2. Each turn: `parseAnswer(nextQuestion(state), text)` maps free text to a typed answer for the slot last asked; `applyAnswer` (pure core) folds it in; `patchPlan` persists. Invalid recipients are never stored — valids persist, first bad address is re-asked.
+2a. **Resolution turn (3.2)**: a recipients segment with no `@` becomes `pendingResolution` (a NAME). Before any draft, `sendCockpitMessage` runs `internal.gmail.search` per name (BEFORE proposing — no LLM tool-loop, DECISION #2), ranks the raw headers via `rankCandidates` (`@pikar/core`), and `writeCandidates` persists them transiently; a "pick a contact" message is saved. A read-time auth failure → `notify(gmail_reconnect)` + a fall-back ask (never dead-ends). Zero matches after `gmail.search`'s one widen → ask for the address directly. The pick comes back via `resolveRecipients` → `applyAnswer({slot:"resolution"})` folds held `pendingValid` + picked addresses into recipients, captures `greetingName`, `clearCandidates` wipes on pick, then the shared `advance` tail runs. Re-resolution ("the other Sarah") is a normal recipients turn.
 3. Not ready → deterministic assistant question saved to the thread; no card yet.
 4. Ready → `scanText(bodyIntent)` redacts (fail-closed) → `draftCockpit` produces the body (the ONLY LLM call) → `proposeEmailPlan` flips plan → `proposed`.
 5. CardList reactively (`api.plans.byThread`) shows PlanCard + DraftCard.
@@ -70,6 +71,8 @@ when assessing blast radius). Couplings graphify cannot see:
 - **No NEW `"use node"` modules**: `draftCockpit` stays inside `llm.ts`, `search` stays inside `gmail.ts` (the two pre-existing node modules); adding another re-triggers a TS circular-inference cliff (see `03.1-RESEARCH*.md` §6; Convex guidelines §96).
 - **Contacts are transient (3.2)**: `candidates`/`pendingValid` are held on the plan row only between search and pick — `clearCandidates` unsets BOTH on pick ("no contacts cache at rest" is structural); `greetingName` alone survives to the draft turn. Candidate payloads live on the content plane only and are NEVER audited (CLAUDE.md §4); the sole search audit is refs-only `mailbox.searched {queryHash, resultCount}`.
 - **Inbox reads are headers-only (3.2)**: `gmail.search` fetches `format=metadata` (From/To/Cc/Subject/Date) — message bodies never leave Gmail; read-time auth failure returns `{ok:false, reason}` WITHOUT throwing (a dead token is a reauth prompt, not a DLQ entry).
+- **The drafter gets the display name ONLY (3.2, SC3)**: `draftCockpit`'s single mailbox-derived arg is `greetingName`; header hints (`lastSubject`/`lastDateMs`/`count`/raw `matches`) MUST NOT reach the LLM. Enforced statically by `llmRedaction.test.ts` (a scoped scan of the `draftCockpit` code surface).
+- **Search before draft, no LLM tool-loop (3.2, DECISION #2)**: name resolution is a deterministic `gmail.search`→`rankCandidates` turn the cockpit runs itself; the LLM is still invoked exactly once (the body draft). The resolution turn happens BEFORE `proposeEmailPlan`.
 - **`SMOKE::` sentinel** (`SMOKE::route=<route>::`, parsed in `llm.ts`): deterministic offline draft path used by all E2E; contains no PII and must survive redaction verbatim.
 - **Tenant wrappers only** (CLAUDE.md §2): all cockpit functions use `tenantQuery`/`tenantMutation`/`tenantAction`. Enforced by biome + `importGuard.test.ts`.
 
@@ -96,7 +99,7 @@ when assessing blast radius). Couplings graphify cannot see:
 
 ## Known gaps & deferred work
 
-- Phase 3.2 Wave 1 shipped the SEAM pieces only (core `needs_resolution` states, `plans` candidate store, `gmail.search`); the wiring that connects them (cockpit calls `writeCandidates(rankCandidates(...))`, renders the resolution card, folds the pick) lands in 03.2 plans 04–06 — until then `pendingResolution` states are reachable in core but the cockpit never produces them
+- Phase 3.2 Wave 2 (03.2-04) wired the resolution BACKEND (search→rank→candidates→`resolveRecipients` fold→`greetingName`); the resolution CARD UI (renders off `plans.candidates`, calls `api.cockpit.resolveRecipients`) lands in 03.2-05. Until then `resolveRecipients` is callable but no UI drives it — the E2E path uses the `SMOKE::` search fixture in `gmail.ts`
 
 - Attachments: `AttachmentPicker` uploads only; wiring storageIds into the plan is deferred (Phase 4, INTK-02)
 - DraftCard has no inline editor — edits arrive as new guided-conversation turns

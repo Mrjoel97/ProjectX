@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.2-01-PLAN.md (needs_resolution seam + parse/rank helpers)
-last_updated: "2026-07-12T17:05:20.684Z"
+stopped_at: Completed 03.2-04-PLAN.md (cockpit name-resolution turn + resolveRecipients + greetingName)
+last_updated: "2026-07-12T17:29:09.820Z"
 last_activity: "2026-07-12 — Phase 3.1 Wave 2: 03.1-05 executed (cockpit /dashboard/workspace two-pane shell + resizable a11y divider + SC1 E2E specs)"
 progress:
   total_phases: 13
   completed_phases: 2
   total_plans: 38
-  completed_plans: 32
+  completed_plans: 33
   percent: 91
 ---
 
@@ -25,7 +25,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.2 (Inbox Reading) — Wave 1 in progress (03.2-01 + 03.2-02 executed, 2/6 plans). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Phase: 3.2 (Inbox Reading) — Wave 1 COMPLETE (01/02/03) + Wave 2 in progress (03.2-04 executed, 4/6 plans). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Plan: 03.2-04 COMPLETE (Wave 2 — the cockpit name-resolution turn WIRED, CKPT-01/SC2/SC3). `parseAnswer` recipients now segment on comma/"and" ONLY (intra-segment spaces preserved → a multi-word NAME "Sarah Chen" stays whole for Gmail resolution; space-separated emails are an ACCEPTED break → one malformed segment that bounces to the re-ask, asserted by a regression test). `resolve_recipients`/`defer_group` added to the parseAnswer switch (map to a recipients answer — re-resolution / declined-group-provide-address; ALSO restored switch exhaustiveness Plan 01 broke by growing NextQuestion = a latent backend typecheck fix). `toIntentState` (now EXPORTED) projects candidates→pendingResolution + pendingValid + greetingName so the resolution card persists across turns + the greeting survives to draft. `sendCockpitMessage` runs the RESOLVE TURN on a no-@ NAME BEFORE any draft (DECISION #2, one LLM call, no tool-loop): per-name `internal.gmail.search` → `rankCandidates` (@pikar/core) → `internal.plans.writeCandidates`, then a "pick a contact" message. Read-auth failure ({ok:false}) → `internal.notifications.notify(gmail_reconnect)` + fall back to asking (never dead-ends); zero-match-after-widen also asks. `resolveRecipients` (tenantAction, explicit Promise<{threadId}> return type §96) folds the pick via applyAnswer(resolution) → recipients (held pendingValid + picked, deduped) + greetingName, patchPlan, `clearCandidates` (wipe-on-pick), then the shared `advance` tail (extracted, explicit return type) → draft/propose. `draftCockpit` gained optional `greetingName` → prepends "Hi <name>," greeting (display name ONLY, SC3 — never lastSubject/lastDateMs/count/matches). Governance: llmRedaction asserts mailbox.searched payload is exactly {queryHash,resultCount} + draftCockpit surface carries greetingName only; cockpit.test covers the resolve fold (toIntentState+applyAnswer) + clearCandidates wipe. 75/76 backend tests green (audit.test.ts pre-existing red — auditCounts unregistered), 49/49 core green; cockpit.ts/llm.ts typecheck clean (15 remaining tsc errors all pre-existing test-file noise, verified by stash). Commits 0f6c501/3ea1983 (task1 test→feat), e53ce9f (task2), e10de0a (task3). DEVIATIONS (Rule 1/3): comma-mixed test retargeted to a malformed-@ token (no-@ is now a NAME); parseAnswer exhaustiveness restored; static drafter test strips its own doc comment. NEXT: 03.2-05 renders the resolution CARD (reads plans.candidates, calls api.cockpit.resolveRecipients on a pick) + cockpit-resolve E2E over the SMOKE:: search fixture.
 Plan: 03.2-01 COMPLETE (Wave 1 — the PURE needs_resolution seam + contact-resolution helpers, CKPT-01/SC2). Extended `@pikar/core` emailIntent (no Convex/Gmail import): a no-`@` recipients segment becomes `pendingResolution` (a NAME the cockpit resolves via Gmail — core only FLAGS, DECISION #2 preserved: no LLM tool-loop); 5-step classification (empty/whitespace→rejected FIRST as defense-in-depth, valid, has-@-malformed→rejected, group word team/everyone/all/staff/group/everybody→`groupDeferred`, else→name). `pendingValid` HOLDS same-turn valid addresses while a name is unresolved (uniform combined card — a turn of only-valid keeps the direct path). New `resolution` Answer folds picks + pendingValid into recipients (deduped) + sets `greetingName` from the first pick + clears pending. `nextQuestion`: reask → resolve_recipients → defer_group → ask_subject; pendingResolution blocks ready. Pure `parseAddress` (Name<addr>/quoted/bare→lowercased {displayName?,address}, else null) + `rankCandidates` (parse From/To/Cc, dedupe by lowercased address, count freq, most-recent date/subject, sort count-then-recency, cap 5) co-located IN emailIntent.ts (NOT a sibling file → stays under cockpit.md §9 watch) + `ContactMatch`/`NameCandidates`/`HeaderRecord` exported from `@pikar/core`. 49 core tests green, typecheck + biome clean. Commits 73bc563/cc11e9e (task1 test→feat), 6ac8521/acb4b0e (task2 test→feat). DEVIATION (Rule 1): retargeted the pre-existing invalid-email-reask test's bad token "nope"→"nope@x" (a bare "nope" is now a NAME, not a rejection — the plan's "leave untouched" was self-contradictory with the classification it mandates). Pairs with 03.2-02's transient candidate store: Plan 04 calls writeCandidates(rankCandidates(...)) + folds the resolution Answer.
 Plan: 03.2-02 COMPLETE (Wave 1 — the TRANSIENT candidate-holding store behind the name-resolution card). `plans` table gains three OPTIONAL fields (no migration, Pitfall-7): `candidates` (array of {name, matches:[{address, displayName?, lastSubject?, lastDateMs?, count}]} — mirrors @pikar/core ContactMatch as a Convex validator; lastSubject is a USER-only hint, never sent to the LLM), `pendingValid` (same-turn valid addrs awaiting the uniform confirm), `greetingName` (resolved display name → drafter greeting). All content-plane only, NEVER audited (CLAUDE.md §4). plans.ts gains two internalMutations: `writeCandidates({planId, candidates, pendingValid})` (cockpit calls after a search) and `clearCandidates({planId})` (patches BOTH transient fields to undefined = wipe-on-pick → "no contacts cache at rest" is structural; deliberately leaves greetingName so it survives to the draft turn). `patchPlan` args extended with `greetingName` so the resolve path persists the greeting through the existing drop-undefined patch. Shared `CANDIDATES` validator const avoids duplicating the nested shape. Commits 169c8cc (schema) + 0d5374e (plans). Tests green: llmRedaction (5, plans.ts still emits no audit/DLQ), cockpitDraft (3), cockpit (8). CKPT-01 marked. Pre-existing audit.test.ts red (auditCounts unregistered) left untouched — out of scope. NEXT: remaining Phase 3.2 plans (01/03/04/05/06 across waves); Plan 04/05 consume writeCandidates/clearCandidates + read candidates off the byThread row.
 Prior: Phase 3.1 ALL PLANS EXECUTED (01–09, Waves 1–5). Ready for /gsd:verify-work.
@@ -81,6 +82,7 @@ Progress: [█████████░] 91%
 | Phase 03.2 P02 | 3 | 2 tasks | 2 files |
 | Phase 03.2 P03 | 20 | 2 tasks | 1 files |
 | Phase 03.2 P01 | 20 | 2 tasks | 2 files |
+| Phase 03.2 P04 | 35 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -150,6 +152,7 @@ Recent decisions affecting current work:
 - [Phase 03.2]: [Phase 03.2] plans-row gains transient candidate store (candidates/pendingValid/greetingName, all optional → no migration); writeCandidates holds fetched contacts on the content plane, clearCandidates unsets both on pick (wipe-on-pick = 'no contacts cache at rest'), greetingName survives to the draft turn; candidate shape mirrors @pikar/core ContactMatch as a Convex validator (never audited, §4)
 - [Phase 03.2]: [Phase 03.2] 03-03: internal.gmail.search added INSIDE gmail.ts (never a 2nd node module — guidelines §96 circular-inference cliff); extracted freshAccessToken as the ONE token-refresh root (send+search share it); headers-only (messages.list + format=metadata, bodies never fetched); returns RAW HeaderRecords (parse/rank is Plan 04's pure @pikar/core job — no @pikar/core import here); read-time auth failure returns {ok:false,reason:reauth|not_connected} WITHOUT throwing; one refs-only mailbox.searched audit {queryHash,resultCount} on SMOKE + live paths (§4/SC3); SMOKE:: offline fixture drives Plan 04/05
 - [Phase 03.2]: [Phase 03.2] 03-01 needs_resolution seam: a no-@ recipients segment becomes pendingResolution (a name the cockpit resolves via Gmail — core only FLAGS, DECISION #2 no LLM tool-loop); empty/whitespace guarded FIRST to rejected; group words deferred (groupDeferred/defer_group); pendingValid holds same-turn valid addresses while a name is unresolved (uniform card); resolution Answer folds picks+pendingValid into recipients + sets greetingName. Pure parseAddress + rankCandidates (dedupe by lowercased address, count-then-recency, cap 5) co-located IN emailIntent.ts (not a sibling file → stays under cockpit.md §9 watch) + ContactMatch/NameCandidates/HeaderRecord exported from @pikar/core. 49 core tests green.
+- [Phase 03.2]: [Phase 03.2] 03-04 wired the deterministic name-resolution turn: cockpit runs gmail.search->rankCandidates->writeCandidates on a no-@ recipients NAME BEFORE any draft (DECISION #2, one LLM call, no tool-loop); resolveRecipients tenantAction folds a pick, clearCandidates wipes on pick, greetingName threads the resolved display name ONLY into draftCockpit's 'Hi <name>,' greeting (SC3 - no header hints); read-auth failure notifies gmail_reconnect + asks (never dead-ends); parseAnswer segments recipients on comma/'and' so a multi-word NAME stays whole (space-separated emails = accepted break).
 
 ### Pending Todos
 
@@ -163,8 +166,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T17:05:20.676Z
-Stopped at: Completed 03.2-01-PLAN.md (needs_resolution seam + parse/rank helpers)
+Last session: 2026-07-12T17:28:54.095Z
+Stopped at: Completed 03.2-04-PLAN.md (cockpit name-resolution turn + resolveRecipients + greetingName)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
