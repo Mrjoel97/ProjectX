@@ -12,18 +12,12 @@
 import { validateSubmit } from "@pikar/core/validateSubmit";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { rateLimiter } from "./guardrails";
+import { contentHash } from "./lib/hash";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { workflow } from "./index";
 import { MAX_REGENERATE, REQUEST_STATUS } from "./pipeline";
 import { reviewDecisionValidator } from "./review";
-
-/** SHA-256 hex — a redaction-safe fingerprint of the goal for the audit payload. */
-async function contentHash(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 /** Upload-first: client PUTs each file to this URL, then submits the storageIds. */
 export const generateUploadUrl = tenantMutation({

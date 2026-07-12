@@ -30,6 +30,8 @@
     "@convex-dev/workflow": "0.4.4",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
+    "@pikar/cost": "workspace:*",
+    "@pikar/pii": "workspace:*",
     "ai": "7.0.20",
     "convex": "1.42.1",
     "convex-helpers": "0.1.120"
