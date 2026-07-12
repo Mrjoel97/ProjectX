@@ -16,14 +16,17 @@
 // uncached actions carry the model in their args (guardrails.prepare chose it), fall
 // back to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced
 // action cache (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
 import { EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
 import { isFallbackEligible } from "@pikar/core";
 import { CHEAP_MODEL } from "@pikar/cost";
+import { scanText } from "@pikar/pii";
 import { generateObject } from "ai";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { createHash } from "node:crypto";
+import { components, internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
@@ -65,6 +68,32 @@ type GenUsage = Awaited<ReturnType<typeof generateObject>>["usage"];
 // The redacted-text reader's shape (the ONLY text source — GRDL-01). Explicit so the
 // runQuery result never resolves through the `internal` graph (guidelines §96).
 type SafeRead = { safeText: string; lastInstruction: string | null };
+
+// ── Tenant-namespaced read-through caches (GRDL-04) ──────────────────────────
+// Keyed on the uncached action's args ({tenantId, safeTextHash, model, skillVersion
+// [, instructionHash]}) — hash only, never text, never requestId. `name` is part of the
+// key: bump the suffix to invalidate wholesale. A registry rollback changes skillVersion,
+// so a cached draft can never outlive the skill body that produced it (CLAUDE.md §5).
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const routeCache = new ActionCache(components.actionCache, {
+  action: internal.llm.routeUncached,
+  name: "route-v1",
+  ttl: SEVEN_DAYS_MS,
+});
+const draftCache = new ActionCache(components.actionCache, {
+  action: internal.llm.draftUncached,
+  name: "draft-v1",
+  ttl: SEVEN_DAYS_MS,
+});
+
+// The wrapper return unions: a governed preCall stop propagates as DATA (never a throw),
+// landing the pipeline in the SAME blocked terminal a prepare stop gets.
+type RouteResult =
+  | { blocked: "kill_switch" | "daily_budget_exhausted" }
+  | { blocked: null; routing: RoutingDecision; usage: GenUsage; cacheHit: boolean };
+type DraftResult =
+  | { blocked: "kill_switch" | "daily_budget_exhausted" }
+  | { blocked: null; subject: string; body: string; usage: GenUsage; cacheHit: boolean };
 
 /**
  * Classify the request goal into a routing decision + step plan (AGNT-01/02). The args
@@ -231,5 +260,112 @@ export const draftUncached = internalAction({
       await auditCalled(CHEAP_MODEL);
       return { subject: object.subject, body: object.body, usage, generatedAt: Date.now() };
     }
+  },
+});
+
+// ── Pipeline-facing wrappers (the only route/draft the pipeline calls) ────────
+// Each: read redacted text → sentinel-first short-circuit → preCall governed gate →
+// cache fetch → timestamp-inferred hit flag.
+
+/**
+ * Route wrapper (AGNT-01/02 + GRDL-03/04). Sentinel-first (Pitfall 5): a default
+ * SMOKE sentinel short-circuits BEFORE preCall + cache, so a drained dev budget or a
+ * stale cache entry can never break smoke:pipeline. Otherwise preCall gates, then the
+ * cache fetch keys on {tenantId, safeTextHash, model, skillVersion}.
+ */
+export const route = internalAction({
+  args: {
+    tenantId: v.string(),
+    requestId: v.id("requests"),
+    safeTextHash: v.string(),
+    model: v.string(),
+  },
+  handler: async (ctx, { tenantId, safeTextHash, model }): Promise<RouteResult> => {
+    const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
+      tenantId,
+      safeTextHash,
+    });
+    const smoke = parseSmoke(safeText);
+    if (smoke && !smoke.cache) {
+      if (smoke.route === "unknown") throw new Error("unknown_route");
+      return {
+        blocked: null,
+        routing: { route: smoke.route, steps: [{ n: 1, description: "smoke" }], rationale: "smoke" },
+        usage: ZERO_USAGE,
+        cacheHit: false,
+      };
+    }
+
+    const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
+      name: EXECUTIVE_ROUTER_SKILL,
+    });
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, {});
+    if (!pre.ok) return { blocked: pre.reason };
+
+    const tStart = Date.now();
+    const value: { routing: RoutingDecision; usage: GenUsage; generatedAt: number } =
+      await routeCache.fetch(ctx, { tenantId, safeTextHash, model, skillVersion: skill.version });
+    // An entry created before this fetch began was served from cache; a miss generates
+    // DURING the fetch so generatedAt > tStart.
+    // ponytail: timestamp inference — swap to the component's native hit signal if the
+    // installed .d.ts ever exposes one (0.3.1 does not).
+    const cacheHit = value.generatedAt < tStart;
+    return { blocked: null, routing: value.routing, usage: value.usage, cacheHit };
+  },
+});
+
+/**
+ * Draft wrapper (AGNT-02 + GRDL-02/04). Same shape plus an optional regenerate
+ * instruction (scanned fail-closed, persisted, hashed into the cache key) and `force`
+ * to bypass the cache on regenerate (an identical-args fetch would hand back the exact
+ * draft the user just asked to change — Pitfall 2).
+ */
+export const draft = internalAction({
+  args: {
+    tenantId: v.string(),
+    requestId: v.id("requests"),
+    safeTextHash: v.string(),
+    model: v.string(),
+    instruction: v.optional(v.string()),
+    force: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { tenantId, requestId, safeTextHash, model, instruction, force }): Promise<DraftResult> => {
+    const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
+      tenantId,
+      safeTextHash,
+    });
+    const smoke = parseSmoke(safeText);
+    if (smoke && !smoke.cache) {
+      return { blocked: null, subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}`, usage: ZERO_USAGE, cacheHit: false };
+    }
+
+    const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
+      name: EMAIL_DRAFTER_SKILL,
+    });
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, {});
+    if (!pre.ok) return { blocked: pre.reason };
+
+    const args: {
+      tenantId: string;
+      safeTextHash: string;
+      model: string;
+      skillVersion: number;
+      instructionHash?: string;
+    } = { tenantId, safeTextHash, model, skillVersion: skill.version };
+    if (instruction) {
+      const scan = scanText(instruction);
+      if (!scan.ok) throw new Error("guardrails: instruction_scan_failed"); // fail closed, content-free
+      const safeInstruction = scan.value.safeText;
+      args.instructionHash = createHash("sha256").update(safeInstruction).digest("hex");
+      await ctx.runMutation(internal.guardrails.saveInstruction, { requestId, safeInstruction });
+    }
+
+    const tStart = Date.now();
+    const value: { subject: string; body: string; usage: GenUsage; generatedAt: number } =
+      await draftCache.fetch(ctx, args, force ? { force: true } : undefined);
+    const cacheHit = value.generatedAt < tStart;
+    return { blocked: null, subject: value.subject, body: value.body, usage: value.usage, cacheHit };
   },
 });

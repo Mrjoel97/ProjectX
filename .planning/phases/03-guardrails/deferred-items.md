@@ -40,3 +40,12 @@ isolation, as do @pikar/pii, @pikar/cost, and @pikar/core. The failure only surf
 `turbo run typecheck` (TypeScript 7.0.2 / tsgo) — a turbo→tsc argument-passing quirk, not a
 type error. `@pikar/audit` was untouched by 03-01. Investigate the turbo `typecheck` task
 wiring when convenient.
+
+## Deferred (found during 03-04)
+
+- **audit.test.ts pre-existing failure** — `audit.log inserts exactly one row that round-trips`
+  throws `Component "auditCounts" is not registered. Call "t.registerComponent"`. The
+  convex-test harness in audit.test.ts never registers the `auditCounts` aggregate
+  component (added in Phase 02). Unrelated to 03-04 (no change to audit.ts / audit.test.ts
+  / aggregates.ts). Fix: add `t.registerComponent("auditCounts", ...)` in that test's setup.
+  Out of scope — belongs to whoever owns the aggregate test harness.
