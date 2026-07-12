@@ -45,6 +45,32 @@ export const submit = tenantMutation({
   },
   handler: async (ctx, { goal, recipient, attachments }) => {
     const correlationId = crypto.randomUUID();
+
+    // Per-user submit rate limit (GRDL-06) — BEFORE validateSubmit and any insert,
+    // so the (N+1)th rapid submit is rejected immediately with an auditable outcome
+    // and NO workflow starts. Token bucket 20/hr capacity 5 = steady rate + small burst.
+    const rl = await rateLimiter.limit(ctx, "submitRequest", { key: ctx.tenantId });
+    if (!rl.ok) {
+      // Mirror the INTK-04 rejection branch: redaction-safe audit + notification, no workflow.
+      await ctx.runMutation(internal.audit.log, {
+        tenantId: ctx.tenantId,
+        correlationId,
+        eventType: "request.rejected",
+        actor: ctx.tenantId,
+        payload: {
+          reason: "rate_limited",
+          retryAfterMs: rl.retryAfter ?? null,
+          goalHash: await contentHash(goal),
+        },
+      });
+      await ctx.runMutation(internal.notifications.notify, {
+        tenantId: ctx.tenantId,
+        kind: "request.rejected",
+        message: "Request Rejected — Rate Limited",
+      });
+      return { ok: false as const, reason: "rate_limited" };
+    }
+
     const result = validateSubmit({ goal, recipient, attachments });
 
     if (!result.ok) {
