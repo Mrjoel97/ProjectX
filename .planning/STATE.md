@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.2-03-PLAN.md (gmail.search headers-only read)
-last_updated: "2026-07-12T17:01:08.799Z"
+stopped_at: Completed 03.2-01-PLAN.md (needs_resolution seam + parse/rank helpers)
+last_updated: "2026-07-12T17:05:20.684Z"
 last_activity: "2026-07-12 — Phase 3.1 Wave 2: 03.1-05 executed (cockpit /dashboard/workspace two-pane shell + resizable a11y divider + SC1 E2E specs)"
 progress:
   total_phases: 13
   completed_phases: 2
   total_plans: 38
-  completed_plans: 31
+  completed_plans: 32
   percent: 91
 ---
 
@@ -25,7 +25,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.2 (Inbox Reading) — Wave 1 in progress (03.2-02 executed, 1/6 plans). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Phase: 3.2 (Inbox Reading) — Wave 1 in progress (03.2-01 + 03.2-02 executed, 2/6 plans). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Plan: 03.2-01 COMPLETE (Wave 1 — the PURE needs_resolution seam + contact-resolution helpers, CKPT-01/SC2). Extended `@pikar/core` emailIntent (no Convex/Gmail import): a no-`@` recipients segment becomes `pendingResolution` (a NAME the cockpit resolves via Gmail — core only FLAGS, DECISION #2 preserved: no LLM tool-loop); 5-step classification (empty/whitespace→rejected FIRST as defense-in-depth, valid, has-@-malformed→rejected, group word team/everyone/all/staff/group/everybody→`groupDeferred`, else→name). `pendingValid` HOLDS same-turn valid addresses while a name is unresolved (uniform combined card — a turn of only-valid keeps the direct path). New `resolution` Answer folds picks + pendingValid into recipients (deduped) + sets `greetingName` from the first pick + clears pending. `nextQuestion`: reask → resolve_recipients → defer_group → ask_subject; pendingResolution blocks ready. Pure `parseAddress` (Name<addr>/quoted/bare→lowercased {displayName?,address}, else null) + `rankCandidates` (parse From/To/Cc, dedupe by lowercased address, count freq, most-recent date/subject, sort count-then-recency, cap 5) co-located IN emailIntent.ts (NOT a sibling file → stays under cockpit.md §9 watch) + `ContactMatch`/`NameCandidates`/`HeaderRecord` exported from `@pikar/core`. 49 core tests green, typecheck + biome clean. Commits 73bc563/cc11e9e (task1 test→feat), 6ac8521/acb4b0e (task2 test→feat). DEVIATION (Rule 1): retargeted the pre-existing invalid-email-reask test's bad token "nope"→"nope@x" (a bare "nope" is now a NAME, not a rejection — the plan's "leave untouched" was self-contradictory with the classification it mandates). Pairs with 03.2-02's transient candidate store: Plan 04 calls writeCandidates(rankCandidates(...)) + folds the resolution Answer.
 Plan: 03.2-02 COMPLETE (Wave 1 — the TRANSIENT candidate-holding store behind the name-resolution card). `plans` table gains three OPTIONAL fields (no migration, Pitfall-7): `candidates` (array of {name, matches:[{address, displayName?, lastSubject?, lastDateMs?, count}]} — mirrors @pikar/core ContactMatch as a Convex validator; lastSubject is a USER-only hint, never sent to the LLM), `pendingValid` (same-turn valid addrs awaiting the uniform confirm), `greetingName` (resolved display name → drafter greeting). All content-plane only, NEVER audited (CLAUDE.md §4). plans.ts gains two internalMutations: `writeCandidates({planId, candidates, pendingValid})` (cockpit calls after a search) and `clearCandidates({planId})` (patches BOTH transient fields to undefined = wipe-on-pick → "no contacts cache at rest" is structural; deliberately leaves greetingName so it survives to the draft turn). `patchPlan` args extended with `greetingName` so the resolve path persists the greeting through the existing drop-undefined patch. Shared `CANDIDATES` validator const avoids duplicating the nested shape. Commits 169c8cc (schema) + 0d5374e (plans). Tests green: llmRedaction (5, plans.ts still emits no audit/DLQ), cockpitDraft (3), cockpit (8). CKPT-01 marked. Pre-existing audit.test.ts red (auditCounts unregistered) left untouched — out of scope. NEXT: remaining Phase 3.2 plans (01/03/04/05/06 across waves); Plan 04/05 consume writeCandidates/clearCandidates + read candidates off the byThread row.
 Prior: Phase 3.1 ALL PLANS EXECUTED (01–09, Waves 1–5). Ready for /gsd:verify-work.
 Plan: 03.1-09 COMPLETE (Wave 5 — E2E integration + human verification). Automated: `cockpit-report.spec.ts` drives chat → guided slot-fill (2 recipients → subject → body → mode) → PLAN card → ONE Approve → live per-recipient REPORT fills to `awaiting_reauth` over the offline `SMOKE::route=direct_llm::` path (SC4/SC5), double-approve no-op asserted; `connect-gmail.spec.ts` confirms /connect-gmail + workspace gate resolve to a bounded state (18c8442 fix verified by observation, auth gate NOT re-touched); `llmRedaction.test.ts` extended with 2 cockpit-plane assertions (cockpit.ts/plans.ts emit no audit/DLQ/telemetry, executePlan workflow.start payload refs-only, §4). Commits 77414ec + 1bfff20. Task 3 human-verify APPROVED: REAL multi-recipient Gmail delivery works, PLAN→single-Approve gating held (nothing sent before Approve, no double-send), divider clamps ~20% + persists across reload — reassigned Phase-2 SC-1/SC-2 satisfied, and the previously-deferred live-green E2E run is now covered by the real send. REVW-01/DLVR-01/INTK-01 marked complete. NEXT: /gsd:verify-work for Phase 3.1 (full suite: pnpm test + smoke:fanout + regression smoke:pipeline/guardrails + playwright).
@@ -79,6 +80,7 @@ Progress: [█████████░] 91%
 | Phase 03.1 P09 | 50 | 3 tasks | 3 files |
 | Phase 03.2 P02 | 3 | 2 tasks | 2 files |
 | Phase 03.2 P03 | 20 | 2 tasks | 1 files |
+| Phase 03.2 P01 | 20 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -147,6 +149,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: [Phase 03.1] 03-06 wave-2 plans adapter + draft seam: plans.ts is a thin content-plane adapter (insertPlan/patchPlan/setPlanStatus internal writers + byThread/reportForPlan tenant-scoped reactive readers). reportForPlan is a LIVE PROJECTION (DECISION #1) — reads requests by_plan, joins each row's gmail.sent audit by correlationId for messageId; NO report[] array, NO report writer. draftCockpit added INSIDE llm.ts (still the correct home; NOT a second use-node module): loads email-drafter from the registry (fails closed unseeded), SMOKE:: returns deterministic offline draft (no model call), DEFAULT→CHEAP fallback kept. DECISION: draftCockpit writes NO audit/telemetry itself (it has only safeTextHash, no thread/correlationId) — the caller (plan 07) owns correlation-scoped logging; makes the draft path redaction-safe by construction AND sidesteps a pre-existing harness limit (convex-test 0.0.54 needs explicit t.registerComponent for the auditCounts aggregate, which no test does → any audit.log path throws; audit.test.ts silently red since the Phase-2 aggregate). AGNT-02/DLVR-01 NOT marked complete — this is the data + draft SEAM; reqs land when 07/08 wire the conversation + cards. Commits 2309a0f (plans.ts) + 90b5381 (draftCockpit+test); content verified in HEAD (sibling 03-04 commit 3ab9c58 interleaved — parallel wave).
 - [Phase 03.2]: [Phase 03.2] plans-row gains transient candidate store (candidates/pendingValid/greetingName, all optional → no migration); writeCandidates holds fetched contacts on the content plane, clearCandidates unsets both on pick (wipe-on-pick = 'no contacts cache at rest'), greetingName survives to the draft turn; candidate shape mirrors @pikar/core ContactMatch as a Convex validator (never audited, §4)
 - [Phase 03.2]: [Phase 03.2] 03-03: internal.gmail.search added INSIDE gmail.ts (never a 2nd node module — guidelines §96 circular-inference cliff); extracted freshAccessToken as the ONE token-refresh root (send+search share it); headers-only (messages.list + format=metadata, bodies never fetched); returns RAW HeaderRecords (parse/rank is Plan 04's pure @pikar/core job — no @pikar/core import here); read-time auth failure returns {ok:false,reason:reauth|not_connected} WITHOUT throwing; one refs-only mailbox.searched audit {queryHash,resultCount} on SMOKE + live paths (§4/SC3); SMOKE:: offline fixture drives Plan 04/05
+- [Phase 03.2]: [Phase 03.2] 03-01 needs_resolution seam: a no-@ recipients segment becomes pendingResolution (a name the cockpit resolves via Gmail — core only FLAGS, DECISION #2 no LLM tool-loop); empty/whitespace guarded FIRST to rejected; group words deferred (groupDeferred/defer_group); pendingValid holds same-turn valid addresses while a name is unresolved (uniform card); resolution Answer folds picks+pendingValid into recipients + sets greetingName. Pure parseAddress + rankCandidates (dedupe by lowercased address, count-then-recency, cap 5) co-located IN emailIntent.ts (not a sibling file → stays under cockpit.md §9 watch) + ContactMatch/NameCandidates/HeaderRecord exported from @pikar/core. 49 core tests green.
 
 ### Pending Todos
 
@@ -160,8 +163,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T17:01:08.765Z
-Stopped at: Completed 03.2-03-PLAN.md (gmail.search headers-only read)
+Last session: 2026-07-12T17:05:20.676Z
+Stopped at: Completed 03.2-01-PLAN.md (needs_resolution seam + parse/rank helpers)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
