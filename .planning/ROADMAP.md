@@ -131,7 +131,15 @@ Plans:
   1. The agent searches/reads the user's mailbox via the already-granted `gmail.modify` scope, scoped to the requesting user only.
   2. Mailbox reads surface people/context into the guided conversation (e.g. resolving a recipient from prior correspondence) without sending anything.
   3. Read access is audited with refs/ids/counts only — no raw message content in any audit/DLQ payload.
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves (planned 2026-07-12)
+
+Plans:
+- [ ] 03.2-01-PLAN.md — Pure emailIntent: needs_resolution state + name/group detection + parseAddress/rankCandidates (Wave 1)
+- [ ] 03.2-02-PLAN.md — Transient plans.candidates/pendingValid/greetingName + writeCandidates/clearCandidates (Wave 1)
+- [ ] 03.2-03-PLAN.md — gmail.ts headers-only search action + freshAccessToken + SMOKE fixture + mailbox.searched audit (Wave 1)
+- [ ] 03.2-04-PLAN.md — Cockpit resolution wiring: comma/"and" tokenizer, search→rank→card, resolveRecipients, greetingName, redaction tests (Wave 2)
+- [ ] 03.2-05-PLAN.md — Resolution card + "Searching…" chip + cockpit-resolve E2E (Wave 3)
+- [ ] 03.2-06-PLAN.md — Playbook + watch.json update (§9) + CKPT-01 human-verify (Wave 4)
 
 ### Phase 3.3: Attachment Generation (INSERTED)
 **Goal**: The agent can generate a document and attach it to an outgoing email, so a plan can deliver produced artifacts, not just body text.
@@ -227,7 +235,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 �
 | 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
 | 3. Guardrails | 0/5 | Planned | - |
 | 3.1 Cockpit Core (INSERTED) | 8/9 | In Progress (Waves 1–4 done; Wave 5 E2E + human checkpoint next) | 2026-07-12 |
-| 3.2 Inbox Reading (INSERTED) | 0/TBD | Not started | - |
+| 3.2 Inbox Reading (INSERTED) | 0/6 | Planned (4 waves) | - |
 | 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
