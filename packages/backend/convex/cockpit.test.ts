@@ -9,7 +9,7 @@
 import { applyAnswer, emptyIntent } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { parseAnswer, toIntentState } from "./cockpit";
 import schema from "./schema";
 
@@ -196,5 +196,51 @@ describe("toIntentState projection (transient resolution fields survive across t
     const state = toIntentState({ recipients: ["a@x.com"], subject: "Hi" });
     expect(state.pendingResolution).toBeUndefined();
     expect(state.pendingValid).toBeUndefined();
+  });
+});
+
+describe("resolve fold (the pick path resolveRecipients rides on)", () => {
+  // resolveRecipients itself reaches cockpitAgent.saveMessage (the agent component convex-test
+  // does not load here — same limit as sendCockpitMessage), so drive the fold at the seam:
+  // toIntentState projection + applyAnswer(resolution) is exactly what the action folds.
+  test("applyAnswer(resolution) folds held pendingValid + picks and sets greetingName", () => {
+    const state = toIntentState({
+      recipients: [],
+      pendingValid: ["bob@y.com"],
+      candidates: [
+        { name: "Sarah", matches: [{ address: "sarah@x.com", displayName: "Sarah Chen", count: 3 }] },
+      ],
+    });
+    const result = applyAnswer(state, {
+      slot: "resolution",
+      picks: [{ name: "Sarah", address: "sarah@x.com", displayName: "Sarah Chen" }],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.state.recipients).toEqual(["bob@y.com", "sarah@x.com"]); // held + picked, deduped
+    expect(result.state.greetingName).toBe("Sarah Chen");
+    expect(result.state.pendingResolution).toBeUndefined();
+    expect(result.state.pendingValid).toBeUndefined();
+  });
+
+  // The DB half of wipe-on-pick is a plain internalMutation (no components) → driveable here.
+  test("clearCandidates wipes both transient fields; greetingName survives to the draft turn", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "collecting",
+        recipients: [],
+        candidates: [{ name: "Sarah", matches: [{ address: "sarah@x.com", count: 1 }] }],
+        pendingValid: ["bob@y.com"],
+        greetingName: "Sarah Chen",
+        createdAt: Date.now(),
+      }),
+    );
+    await t.mutation(internal.plans.clearCandidates, { planId });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.candidates).toBeUndefined();
+    expect(plan?.pendingValid).toBeUndefined();
+    expect(plan?.greetingName).toBe("Sarah Chen");
   });
 });

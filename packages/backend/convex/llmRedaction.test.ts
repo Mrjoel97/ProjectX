@@ -61,6 +61,42 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   }
 });
 
+// ── 03.2-04: the read-side (mailbox search) audit + drafter greeting stay refs-only (SC3) ────────
+
+test("gmail.ts mailbox.searched audit payload is refs-only ({ queryHash, resultCount })", () => {
+  // The ONLY new read-side audit (Plan 03) records that a search happened — a hash of the name +
+  // a count, NEVER the name/address/subject/messageId itself (CLAUDE.md §4 / SC3).
+  const src = readSource("gmail.ts");
+  const m = src.match(/eventType:\s*["']mailbox\.searched["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "mailbox.searched audit payload not found").not.toBeNull();
+  const payload = m![1];
+  expect(payload).toMatch(/queryHash/);
+  expect(payload).toMatch(/resultCount/);
+  // queryHash: contentHash(name) is a HASH of the name (refs-only) — strip the wrapper, then the
+  // remaining payload must carry NO raw mailbox field.
+  const stripped = payload.replace(/contentHash\([^)]*\)/g, "HASH");
+  expect(stripped, `mailbox.searched payload leaks a raw field: ${payload}`).not.toMatch(
+    /\b(name|address|subject|messageId|from|to|cc)\b/,
+  );
+});
+
+test("draftCockpit receives NO mailbox header hints — greetingName is the only mailbox-derived arg", () => {
+  // The resolved display NAME reaches the drafter for the greeting; header hints (subject/date/
+  // count/the raw matches) must NEVER reach the LLM (SC3). Scope to the draftCockpit block.
+  const src = readSource("llm.ts");
+  const start = src.indexOf("export const draftCockpit");
+  const rest = src.slice(start);
+  const end = rest.indexOf("export const route");
+  // Strip line comments — the invariant is about the CODE surface, not prose that documents the
+  // forbidden fields by name (which is itself useful).
+  const draftBlock = (end >= 0 ? rest.slice(0, end) : rest).replace(/\/\/[^\n]*/g, "");
+  expect(draftBlock).toMatch(/greetingName/); // the one allowed mailbox-derived field
+  expect(draftBlock, "draftCockpit references a mailbox header hint").not.toMatch(
+    /lastSubject|lastDateMs|matches/,
+  );
+  expect(draftBlock, "draftCockpit references a header count").not.toMatch(/\bcount\b/);
+});
+
 test("cockpit's only delivery-audit crossing (workflow.start context payload) carries refs only", () => {
   // executePlan hands a `context.payload` to the fan-out's onComplete audit trail. It MUST be a
   // ref ({ planId }) — never the raw subject/body/recipient/bodyIntent/draft/goal — or the
