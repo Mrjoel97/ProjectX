@@ -82,6 +82,23 @@ file — no frameworks/fixtures). Trivial one-liners need no test.
 
 Review commands: `/ponytail-review`, `/ponytail-audit`, `/ponytail-debt`, `/ponytail-gain`.
 
+## 9. Playbooks and ADRs are part of definition-of-done
+
+`docs/playbooks/` holds one playbook per feature/subsystem (invariants, how to change
+safely, how to verify, operations); `docs/decisions/` holds immutable ADRs. Before
+changing a subsystem that has a playbook, read it. A change that touches a playbook's
+subsystem updates the playbook in the same commit/phase (and bumps its `Last verified`
+line). A new significant architectural decision gets a new ADR; ADRs are never edited
+after acceptance — supersede with a new one. See `docs/README.md`.
+
+This is enforced by a Stop hook (`scripts/check-playbooks.mjs` + `docs/playbooks/watch.json`):
+finishing a turn with code changed under a playbook's watched paths but the playbook
+untouched is blocked, and so is finishing with new code files under `packages/`/`apps/`
+that no playbook covers (resolve by extending an existing `watch.json` entry, creating a
+playbook from `docs/playbooks/TEMPLATE.md` and registering it, or acknowledging the path
+under `"_unassigned"`). New playbooks must register their watched path prefixes in
+`watch.json` or the hook cannot protect them.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

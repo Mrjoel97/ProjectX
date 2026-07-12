@@ -1,0 +1,30 @@
+{
+  "_unassigned": [],
+  "cockpit.md": [
+    "apps/web/app/(app)/dashboard/workspace/",
+    "apps/web/e2e/",
+    "packages/backend/convex/cockpit.ts",
+    "packages/backend/convex/plans.ts",
+    "packages/backend/convex/deliverApprovedPlan.ts",
+    "packages/backend/convex/llm.ts",
+    "packages/core/src/emailIntent.ts",
+    "packages/backend/scripts/run-smoke-fanout.mjs"
+  ],
+  "audit-dead-letter.md": [
+    "packages/backend/convex/audit.ts",
+    "packages/backend/convex/deadLetter.ts",
+    "packages/backend/convex/deadLetters.ts",
+    "packages/backend/convex/worm.ts",
+    "packages/backend/convex/wormCursor.ts",
+    "packages/backend/convex/crons.ts",
+    "packages/contracts/src/audit.ts",
+    "packages/pii/"
+  ],
+  "skill-registry.md": [
+    "packages/backend/convex/skills.ts",
+    "packages/contracts/src/skill.ts",
+    "packages/contracts/src/skills/",
+    "packages/contracts/skills/",
+    "packages/backend/scripts/run-seed.mjs"
+  ]
+}

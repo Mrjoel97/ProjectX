@@ -22,6 +22,29 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-playbooks.mjs baseline",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-playbooks.mjs check",
+            "timeout": 30,
+            "statusMessage": "Checking playbook freshness"
+          }
+        ]
+      }
     ]
   }
 }
