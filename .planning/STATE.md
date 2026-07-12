@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.2-02-PLAN.md (transient candidate fields + writers)
-last_updated: "2026-07-12T16:54:43.701Z"
-last_activity: "2026-07-12 — Phase 3.2 Wave 1: 03.2-02 executed (transient candidate fields on plans + writeCandidates/clearCandidates)"
+stopped_at: Completed 03.2-03-PLAN.md (gmail.search headers-only read)
+last_updated: "2026-07-12T17:01:08.799Z"
+last_activity: "2026-07-12 — Phase 3.1 Wave 2: 03.1-05 executed (cockpit /dashboard/workspace two-pane shell + resizable a11y divider + SC1 E2E specs)"
 progress:
   total_phases: 13
   completed_phases: 2
   total_plans: 38
-  completed_plans: 30
-  percent: 79
+  completed_plans: 31
+  percent: 91
 ---
 
 # Project State
@@ -78,6 +78,7 @@ Progress: [█████████░] 91%
 | Phase 03.1 P01 | 6 | 2 tasks | 3 files |
 | Phase 03.1 P09 | 50 | 3 tasks | 3 files |
 | Phase 03.2 P02 | 3 | 2 tasks | 2 files |
+| Phase 03.2 P03 | 20 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: [Phase 03.1] 03-02 wave-0 cockpit scaffolding: @convex-dev/agent@0.6.4 pinned into apps/web (matches backend, unlocks @convex-dev/agent/react chat hooks); teal cockpit CSS vars in globals.css (amber intact, inline-style+CSS-var discipline, no Tailwind); Playwright 1.61.1 installed as repo's first UI E2E harness (testDir e2e, chromium, baseURL :3111, reuseExistingServer against live convex-dev+next per SMOKE:: convention). Parallel wave-1 executors share one git index — Task 1 landed inside sibling 03-03's commit 137415a; content verified correct in HEAD.
 - [Phase 03.1]: [Phase 03.1] 03-06 wave-2 plans adapter + draft seam: plans.ts is a thin content-plane adapter (insertPlan/patchPlan/setPlanStatus internal writers + byThread/reportForPlan tenant-scoped reactive readers). reportForPlan is a LIVE PROJECTION (DECISION #1) — reads requests by_plan, joins each row's gmail.sent audit by correlationId for messageId; NO report[] array, NO report writer. draftCockpit added INSIDE llm.ts (still the correct home; NOT a second use-node module): loads email-drafter from the registry (fails closed unseeded), SMOKE:: returns deterministic offline draft (no model call), DEFAULT→CHEAP fallback kept. DECISION: draftCockpit writes NO audit/telemetry itself (it has only safeTextHash, no thread/correlationId) — the caller (plan 07) owns correlation-scoped logging; makes the draft path redaction-safe by construction AND sidesteps a pre-existing harness limit (convex-test 0.0.54 needs explicit t.registerComponent for the auditCounts aggregate, which no test does → any audit.log path throws; audit.test.ts silently red since the Phase-2 aggregate). AGNT-02/DLVR-01 NOT marked complete — this is the data + draft SEAM; reqs land when 07/08 wire the conversation + cards. Commits 2309a0f (plans.ts) + 90b5381 (draftCockpit+test); content verified in HEAD (sibling 03-04 commit 3ab9c58 interleaved — parallel wave).
 - [Phase 03.2]: [Phase 03.2] plans-row gains transient candidate store (candidates/pendingValid/greetingName, all optional → no migration); writeCandidates holds fetched contacts on the content plane, clearCandidates unsets both on pick (wipe-on-pick = 'no contacts cache at rest'), greetingName survives to the draft turn; candidate shape mirrors @pikar/core ContactMatch as a Convex validator (never audited, §4)
+- [Phase 03.2]: [Phase 03.2] 03-03: internal.gmail.search added INSIDE gmail.ts (never a 2nd node module — guidelines §96 circular-inference cliff); extracted freshAccessToken as the ONE token-refresh root (send+search share it); headers-only (messages.list + format=metadata, bodies never fetched); returns RAW HeaderRecords (parse/rank is Plan 04's pure @pikar/core job — no @pikar/core import here); read-time auth failure returns {ok:false,reason:reauth|not_connected} WITHOUT throwing; one refs-only mailbox.searched audit {queryHash,resultCount} on SMOKE + live paths (§4/SC3); SMOKE:: offline fixture drives Plan 04/05
 
 ### Pending Todos
 
@@ -158,8 +160,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T16:54:43.270Z
-Stopped at: Completed 03.2-02-PLAN.md (transient candidate fields + writers)
+Last session: 2026-07-12T17:01:08.765Z
+Stopped at: Completed 03.2-03-PLAN.md (gmail.search headers-only read)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
