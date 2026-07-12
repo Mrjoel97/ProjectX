@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.1-03-PLAN.md
-last_updated: "2026-07-12T03:52:04.736Z"
+stopped_at: Completed 03.1-01-PLAN.md
+last_updated: "2026-07-12T03:53:32.769Z"
 last_activity: "2026-07-12 — Phase 3 execution complete: 03-05 guardrails phase gate green (smoke:guardrails + smoke:pipeline)"
 progress:
   total_phases: 13
   completed_phases: 1
   total_plans: 32
-  completed_plans: 21
+  completed_plans: 23
   percent: 87
 ---
 
@@ -66,6 +66,8 @@ Progress: [█████████░] 87%
 | Phase 03 P04 | 12 | 3 tasks | 4 files |
 | Phase 03 P05 | 35 | 2 tasks | 4 files |
 | Phase 03.1 P03 | 6 | 2 tasks | 4 files |
+| Phase 03.1 P02 | 7 | 3 tasks | 5 files |
+| Phase 03.1 P01 | 6 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -129,6 +131,7 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03] 03-04 closed the LLM choke point: llm.ts reads redacted text ONLY via getSafeTextByHash (getForDelivery/.goal removed, static-scan enforced GRDL-01/02); route/draft wrappers front the tenant-namespaced action cache (key = tenantId/safeTextHash/model/skillVersion[/instructionHash], hash-only) with sentinel-first short-circuit + preCall governed gate + timestamp-inferred cacheHit; real fallback to CHEAP_MODEL in-action (audited by error NAME only); pipeline runs prepare BEFORE route, routes prepare+mid-flight-preCall stops to ONE governed blocked terminal (never DLQ), records priced spend per real call, LLM steps retry:false
 - [Phase 03]: [Phase 03] 03-05 phase gate green: smoke:guardrails proves (live dev deployment) action-cache tenant isolation + model-free hit (llm.called draft-row count oracle), real primary-failure fallback, kill-switch + daily-budget governed stops on BOTH prepare and mid-flight preCall paths (one blocked terminal, never DLQ), submit-limiter rejection, and zero raw PII across audit/deadLetters/telemetry; smoke:pipeline regression still passes
 - [Phase 03.1]: [Phase 03.1] emailIntent is the pure SC2/SC3 next-question brain (no send path, no Convex import); invalid recipients bounce in rejected and are never stored; isValidEmail promoted to one shared regex (validateSubmit + emailIntent); ask_mode only when >1 recipient; attachmentIntent never gates ready
+- [Phase 03.1]: [Phase 03.1] 03-02 wave-0 cockpit scaffolding: @convex-dev/agent@0.6.4 pinned into apps/web (matches backend, unlocks @convex-dev/agent/react chat hooks); teal cockpit CSS vars in globals.css (amber intact, inline-style+CSS-var discipline, no Tailwind); Playwright 1.61.1 installed as repo's first UI E2E harness (testDir e2e, chromium, baseURL :3111, reuseExistingServer against live convex-dev+next per SMOKE:: convention). Parallel wave-1 executors share one git index — Task 1 landed inside sibling 03-03's commit 137415a; content verified correct in HEAD.
 
 ### Pending Todos
 
@@ -142,8 +145,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T03:52:04.725Z
-Stopped at: Completed 03.1-03-PLAN.md
+Last session: 2026-07-12T03:53:13.640Z
+Stopped at: Completed 03.1-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
