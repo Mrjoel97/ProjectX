@@ -50,6 +50,13 @@ export const send = internalAction({
     const req = await ctx.runQuery(internal.gmailAuth.getForDelivery, { requestId });
     if (!req) throw new Error(`gmail.send: request ${requestId} not found`);
 
+    // ponytail: SMOKE::fail sentinel — deterministic offline terminal throw for the fan-out
+    // isolation smoke (mirrors llm.ts's fail=primary). The message carries no PII, and real
+    // rows never start with it. Remove with the other SMOKE seams once a mock-Gmail smoke exists.
+    if (req.subject.startsWith("SMOKE::fail")) {
+      throw new Error("SMOKE_FAILURE: forced fan-out send failure");
+    }
+
     const token = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: req.tenantId });
     if (!token) {
       // Never connected / disconnected — preserve the draft, prompt reconnect.

@@ -90,3 +90,74 @@ export const onPipelineComplete = internalMutation({
     });
   },
 });
+
+// Per-recipient dead-letter (DLVR-01 / SC5). The fan-out workflow (deliverApprovedPlan)
+// catches a recipient whose send throws terminally and calls this to archive JUST that
+// row, then continues the loop — isolation. Mirrors onPipelineComplete's three per-request
+// writes (deadLetters row + deadletter.written audit + failed status + one failed telemetry
+// row), keyed by the recipient's OWN correlationId. Payloads carry the requestId ref ONLY —
+// never recipient/subject/body (CLAUDE.md §4).
+//
+// ponytail: converges with onPipelineComplete's per-request terminal writes; unify the two
+// if @convex-dev/workflow ever exposes a per-step completion hook (today onComplete only
+// fires for the whole workflow, and per-row isolation needs the loop to continue).
+export const deadLetterRecipient = internalMutation({
+  args: {
+    tenantId: v.string(),
+    requestId: v.id("requests"),
+    correlationId: v.string(),
+    workflowId: v.optional(v.string()),
+    error: v.string(),
+  },
+  handler: async (ctx, { tenantId, requestId, correlationId, workflowId, error }) => {
+    await ctx.db.insert("deadLetters", {
+      tenantId,
+      correlationId,
+      workflowId: workflowId ?? "",
+      payload: { requestId }, // ref only — redaction-safe (CLAUDE.md §4)
+      error,
+      status: "new",
+      createdAt: Date.now(),
+    });
+
+    await ctx.runMutation(internal.audit.log, {
+      tenantId,
+      correlationId,
+      eventType: "deadletter.written",
+      actor: "system",
+      payload: { requestId, status: "new" }, // refs/flags only
+    });
+
+    await ctx.db.patch(requestId, { status: "failed" });
+
+    // Idempotent by correlationId: a replayed catch never doubles the terminal row.
+    const existing = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (existing) return;
+    const request = await ctx.db.get(requestId);
+    if (!request) return;
+
+    const row = buildTelemetry({
+      reviewOutcome: "failed",
+      durationMs: Date.now() - request._creationTime,
+      decisionCounts: {},
+      regenerateCount: 0,
+      usages: [], // no LLM ran → tokens/cost null → 0
+    });
+    await ctx.db.insert("telemetry", {
+      tenantId: request.tenantId,
+      correlationId,
+      requestId,
+      tokensIn: row.tokensIn ?? 0,
+      tokensOut: row.tokensOut ?? 0,
+      costUsd: row.costUsd ?? 0,
+      durationMs: row.durationMs,
+      decisionCounts: row.decisionCounts,
+      regenerateCount: row.regenerateCount,
+      reviewOutcome: row.reviewOutcome,
+      createdAt: Date.now(),
+    });
+  },
+});
