@@ -14,17 +14,19 @@
 import { Agent, listMessages } from "@convex-dev/agent";
 import {
   type Answer,
+  type ContactMatch,
   type EmailIntentState,
   type NextQuestion,
   applyAnswer,
   nextQuestion,
+  rankCandidates,
 } from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { paginationOptsValidator } from "convex/server";
+import { type GenericActionCtx, paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
@@ -55,6 +57,11 @@ export function parseAnswer(prior: NextQuestion, text: string): Answer | null {
   switch (prior.kind) {
     case "ask_recipients":
     case "reask_recipient":
+    // resolve_recipients/defer_group: a free-text reply while a card/decline is showing is a
+    // NEW recipients turn — a re-resolution ("no, the other Sarah") or the explicit addresses
+    // for a declined group. The card's own PICK folds through `resolveRecipients` instead.
+    case "resolve_recipients":
+    case "defer_group":
       // Segment on comma / the word "and" ONLY — intra-segment spaces stay so a multi-word
       // NAME ("Sarah Chen") survives as one token for Gmail resolution.
       // ponytail: accepted behavior break (Pitfall 3) — space-separated emails
@@ -96,7 +103,7 @@ export function toIntentState(plan: {
   subject?: string;
   bodyIntent?: string;
   mode?: "individual" | "group";
-  candidates?: { name: string }[];
+  candidates?: { name: string; matches?: readonly ContactMatch[] }[];
   pendingValid?: string[];
   greetingName?: string;
 }): EmailIntentState {
@@ -131,6 +138,60 @@ function questionText(q: NextQuestion): string {
     case "ready":
       return "Here's your plan — review and Approve.";
   }
+}
+
+// The action ctx both cockpit actions carry (GenericActionCtx + the injected tenantId). Typed
+// concretely so the shared helpers never resolve their internal-graph calls through TS's
+// circular-inference cliff (guidelines §96 — same remedy as the explicit handler return types).
+type CockpitCtx = GenericActionCtx<DataModel> & { tenantId: string };
+
+/** Save one assistant turn (the agent thread is a message store only — DECISION #2). */
+function assistantSay(ctx: CockpitCtx, tid: string, content: string) {
+  return cockpitAgent.saveMessage(ctx, {
+    threadId: tid,
+    message: { role: "assistant", content },
+    skipEmbeddings: true,
+  });
+}
+
+/**
+ * Shared advance tail (reused by `sendCockpitMessage` + `resolveRecipients`): ask the next
+ * question, or — when every required slot is filled — redact the body-intent (fail-closed),
+ * draft the body (the SOLE LLM call), and propose the PLAN. Explicit return type keeps the
+ * internal.llm.draftCockpit reference out of TS's circular-inference cliff (guidelines §96).
+ */
+async function advance(
+  ctx: CockpitCtx,
+  tid: string,
+  planId: Id<"plans">,
+  state: EmailIntentState,
+): Promise<{ threadId: string }> {
+  const next = nextQuestion(state);
+  if (next.kind !== "ready") {
+    await assistantSay(ctx, tid, questionText(next));
+    return { threadId: tid };
+  }
+  // ready → redact the body-intent BEFORE the model sees it (GRDL-01/02, CLAUDE.md §4),
+  // draft the body (the SOLE LLM call), then propose the PLAN (status → proposed).
+  const scan = scanText(state.bodyIntent ?? "");
+  if (!scan.ok) throw new Error("cockpit: body-intent scan failed"); // fail closed, content-free
+  const safeText = scan.value.safeText;
+  const draft = await ctx.runAction(internal.llm.draftCockpit, {
+    tenantId: ctx.tenantId,
+    safeText,
+    safeTextHash: await contentHash(safeText),
+    greetingName: state.greetingName, // resolved display name ONLY (SC3 — never a header hint)
+  });
+  await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
+    planId,
+    recipients: state.recipients as string[],
+    // mode is only asked/meaningful for >1 recipient; a single recipient is always individual.
+    mode: state.recipients.length > 1 ? (state.mode ?? "individual") : "individual",
+    subject: state.subject ?? "", // user-provided (ask_subject) — never model-derived
+    body: draft.body, // drafted wording
+  });
+  await assistantSay(ctx, tid, questionText(next));
+  return { threadId: tid };
 }
 
 /**
@@ -194,33 +255,96 @@ export const sendCockpitMessage = tenantAction({
       });
     }
 
-    // 6. Ask the next question, or (7) draft + propose when every required slot is filled.
+    // 6. A name (no @) triggers a bounded Gmail search BEFORE any draft/propose (DECISION #2 —
+    //    NO LLM tool-loop). A declined group re-asks. Otherwise advance (ask next / draft+propose).
     const next = nextQuestion(newState);
-    if (next.kind !== "ready") {
-      await say(questionText(next));
+    if (next.kind === "resolve_recipients") {
+      // Resolve turn: search → rank (@pikar/core) → persist candidates transiently. The card
+      // (Plan 05) renders off the persisted candidates; the pick folds via resolveRecipients.
+      const names = newState.pendingResolution?.map((p) => p.name) ?? [];
+      const pendingValid = [...(newState.pendingValid ?? [])];
+      await say("Searching your mailbox…");
+      const candidates: { name: string; matches: ContactMatch[] }[] = [];
+      const unresolved: string[] = [];
+      for (const name of names) {
+        // correlationId = threadId: a stable ref for the refs-only mailbox.searched audit (§4).
+        const res = await ctx.runAction(internal.gmail.search, {
+          tenantId: ctx.tenantId,
+          name,
+          correlationId: tid,
+        });
+        if (!res.ok) {
+          // Read-time auth failure: light the reconnect banner AND fall back to asking for the
+          // address directly (never dead-end). The other names' work is dropped — the user re-asks.
+          await ctx.runMutation(internal.notifications.notify, {
+            tenantId: ctx.tenantId,
+            kind: "gmail_reconnect",
+            message: "I couldn't read your mailbox — reconnect Gmail so I can look up contacts.",
+          });
+          await say(`I couldn't look up "${name}" — what's their email address?`);
+          return { threadId: tid };
+        }
+        const matches = rankCandidates(name, res.records);
+        if (matches.length > 0) candidates.push({ name, matches });
+        else unresolved.push(name);
+      }
+      if (candidates.length === 0) {
+        // Zero matches after the widen (gmail.search widens once) → ask for the address directly.
+        await say(`I couldn't find a contact for "${names.join(", ")}" — what's the email address?`);
+        return { threadId: tid };
+      }
+      await ctx.runMutation(internal.plans.writeCandidates, {
+        planId: plan._id,
+        candidates,
+        pendingValid,
+      });
+      const alsoAsk = unresolved.length
+        ? ` I couldn't find "${unresolved.join(", ")}" — add ${unresolved.length > 1 ? "their addresses" : "that address"} too.`
+        : "";
+      await say(`Found some matches — pick a contact to continue.${alsoAsk}`);
       return { threadId: tid };
     }
+    if (next.kind === "defer_group") {
+      await say(questionText(next)); // decline copy — the next turn provides explicit addresses
+      return { threadId: tid };
+    }
+    return await advance(ctx, tid, plan._id, newState);
+  },
+});
 
-    // ready → redact the body-intent BEFORE the model sees it (GRDL-01/02, CLAUDE.md §4),
-    // draft the body (the SOLE LLM call), then propose the PLAN (status → proposed).
-    const scan = scanText(newState.bodyIntent ?? "");
-    if (!scan.ok) throw new Error("cockpit: body-intent scan failed"); // fail closed, content-free
-    const safeText = scan.value.safeText;
-    const draft = await ctx.runAction(internal.llm.draftCockpit, {
-      tenantId: ctx.tenantId,
-      safeText,
-      safeTextHash: await contentHash(safeText),
-    });
-    await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
+/**
+ * Fold a contact PICK from the resolution card back into the conversation (SC2). Mirrors
+ * sendCockpitMessage's advance tail so a completed pick can reach `ready` → draft → propose.
+ * Args: the picked {name,address,displayName?} rows. Builds the `resolution` Answer, folds it
+ * (recipients + held pendingValid committed, greetingName captured), persists, wipes candidates
+ * (wipe-on-pick), then advances. Re-resolution ("no, the other Sarah") is a normal recipients
+ * turn through sendCockpitMessage — no new machinery here. Explicit return type (guidelines §96).
+ */
+export const resolveRecipients = tenantAction({
+  args: {
+    threadId: v.string(),
+    picks: v.array(
+      v.object({
+        name: v.string(),
+        address: v.string(),
+        displayName: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, { threadId, picks }): Promise<{ threadId: string }> => {
+    const plan = await ctx.runQuery(api.plans.byThread, { threadId });
+    if (!plan) throw new Error("cockpit: plan row missing for thread");
+    const state = toIntentState(plan);
+    // resolution never bounces (picks are already-valid addresses); applyAnswer folds them +
+    // the held pendingValid into recipients (deduped) and captures greetingName from pick #1.
+    const { state: newState } = applyAnswer(state, { slot: "resolution", picks });
+    await ctx.runMutation(internal.plans.patchPlan, {
       planId: plan._id,
       recipients: newState.recipients as string[],
-      // mode is only asked/meaningful for >1 recipient; a single recipient is always individual.
-      mode: newState.recipients.length > 1 ? (newState.mode ?? "individual") : "individual",
-      subject: newState.subject ?? "", // user-provided (ask_subject) — never model-derived
-      body: draft.body, // drafted wording
+      greetingName: newState.greetingName,
     });
-    await say(questionText(next));
-    return { threadId: tid };
+    await ctx.runMutation(internal.plans.clearCandidates, { planId: plan._id }); // wipe-on-pick
+    return await advance(ctx, threadId, plan._id, newState);
   },
 });
 

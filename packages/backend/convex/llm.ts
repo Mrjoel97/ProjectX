@@ -278,10 +278,17 @@ export const draftUncached = internalAction({
  * recipient is never model-derived (drafting.ts).
  */
 export const draftCockpit = internalAction({
-  args: { tenantId: v.string(), safeText: v.string(), safeTextHash: v.string() },
+  args: {
+    tenantId: v.string(),
+    safeText: v.string(),
+    safeTextHash: v.string(),
+    // The RESOLVED display name ONLY (SC3) — for a personalized greeting. NEVER a header hint
+    // (lastSubject/lastDateMs/count): those must not reach the LLM (llmRedaction static scan).
+    greetingName: v.optional(v.string()),
+  },
   handler: async (
     ctx,
-    { safeText, safeTextHash },
+    { safeText, safeTextHash, greetingName },
   ): Promise<{ subject: string; body: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — CLAUDE.md §5); fails closed
     // (throws NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
@@ -290,6 +297,8 @@ export const draftCockpit = internalAction({
       { name: EMAIL_DRAFTER_SKILL },
     );
     const smoke = parseSmoke(safeText);
+    // Prepend the greeting instruction (name only) so the body opens "Hi <name>,".
+    const prompt = greetingName ? `Open the email body with the greeting "Hi ${greetingName},".\n\n${safeText}` : safeText;
 
     // ponytail: no audit/telemetry here. draftCockpit has no thread/correlationId (only the
     // safeTextHash) — the CALLER (plan 07) owns the conversation's correlation and records
@@ -306,7 +315,7 @@ export const draftCockpit = internalAction({
         model: DEFAULT_MODEL,
         schema: draftSchema,
         system: skill.body,
-        prompt: safeText,
+        prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
@@ -318,7 +327,7 @@ export const draftCockpit = internalAction({
         model: CHEAP_MODEL,
         schema: draftSchema,
         system: skill.body,
-        prompt: safeText,
+        prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
