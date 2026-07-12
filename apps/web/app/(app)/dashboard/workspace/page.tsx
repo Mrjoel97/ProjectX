@@ -3,16 +3,19 @@
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
+import { useState } from "react";
+import { CardList } from "./cards";
+import { ChatPane } from "./ChatPane";
 import { SplitPane } from "./SplitPane";
 
-// SC1: the cockpit's structural shell. Two resizable panes under the existing (app) auth
-// gate (inherits the 18c8442 Connect-Gmail client-token fix for free). The real chat and
-// the PLAN/DRAFT/REPORT cards drop into these placeholders in plan 08.
+// The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
+// questions + drafted-plan copy via the agent thread); RIGHT = the PLAN/DRAFT/REPORT card
+// dispatcher. Both share one `threadId` held here — the first `sendCockpitMessage` mints it
+// (ChatPane → onThread) and it flows into both panes so the cards track the same conversation.
 //
-// Nothing plans without a mailbox: the composer is gated behind api.gmailAuth.gmailStatus
-// (the same seam connect-gmail/page.tsx uses), so an unconnected user is routed to consent
-// before they can type a goal. The panels themselves always render — only the composer is
-// gated — so the shell is visible while the gate is evaluated.
+// Nothing plans without a mailbox: the composer stays gated behind api.gmailAuth.gmailStatus
+// (unconnected → teal Connect-Gmail CTA). The panels always render (shell independent of mailbox
+// state). SplitPane + the (app) auth gate are untouched (plan 05).
 
 const panel = {
   display: "flex",
@@ -23,29 +26,23 @@ const panel = {
   padding: "1rem",
   background: "var(--card)",
 };
-const box = { border: "1px solid #e5e5e5", borderRadius: "0.5rem", padding: "0.75rem" };
 const heading = { margin: 0, fontSize: "1rem" as const };
 
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
 
   return (
-    // Give the grid a concrete height so the % / 1fr columns have something to fill.
-    // (app)/layout main has 1.5rem padding under a ~3.5rem header — 8rem covers both.
+    // Concrete height so the % / 1fr grid columns have something to fill (plan 05).
     <div style={{ height: "calc(100vh - 8rem)" }}>
       <SplitPane
         left={
           <section data-testid="chat-pane" style={panel}>
             <h2 style={heading}>Conversation</h2>
-            {/* chat pane — plan 08 */}
             {status === undefined ? (
               <p style={{ color: "#666", margin: 0 }}>Loading…</p>
             ) : status.connected ? (
-              <textarea
-                placeholder="Describe your goal…"
-                rows={3}
-                style={{ ...box, width: "100%", fontFamily: "inherit", resize: "vertical" }}
-              />
+              <ChatPane threadId={threadId} onThread={setThreadId} />
             ) : (
               <Link
                 href="/connect-gmail"
@@ -68,8 +65,7 @@ export default function WorkspacePage() {
         right={
           <section data-testid="workspace-pane" style={panel}>
             <h2 style={heading}>Workspace</h2>
-            {/* card list — plan 08 */}
-            <p style={{ color: "#666", margin: 0 }}>No artifacts yet.</p>
+            <CardList threadId={threadId} />
           </section>
         }
       />
