@@ -4,6 +4,7 @@
 // Modes: "baseline" (SessionStart — record HEAD) | "check" (Stop — compare).
 // Mapping lives in docs/playbooks/watch.json: { "<playbook>.md": ["path/prefix", ...] }
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -71,12 +72,52 @@ try {
   process.exit(0);
 }
 
+// Acknowledgments break the re-block loop: once a playbook has been updated/bumped
+// for a given state of its changed files, that exact state stays blessed — even after
+// the playbook edit is committed while the code change stays uncommitted (e.g. another
+// session's WIP). Any further edit to the files changes the hash and re-triggers.
+const ackFile = join(gitDir, "claude-playbooks-ack.json");
+let acks = {};
+try {
+  acks = JSON.parse(readFileSync(ackFile, "utf8"));
+} catch {}
+const hashHits = (hits) =>
+  createHash("sha256")
+    .update(
+      [...hits]
+        .sort()
+        .map((f) => {
+          try {
+            return `${f}:${git("hash-object", f)}`;
+          } catch {
+            return `${f}:gone`;
+          }
+        })
+        .join("\n")
+    )
+    .digest("hex");
+
 const stale = [];
+let acksDirty = false;
 for (const [playbook, prefixes] of Object.entries(watch)) {
   if (playbook === "_unassigned") continue;
   const pbPath = `docs/playbooks/${playbook}`;
   const hits = [...changed].filter((f) => prefixes.some((p) => f.startsWith(p)));
-  if (hits.length && !changed.has(pbPath)) stale.push({ pbPath, hits: hits.slice(0, 5) });
+  if (!hits.length) continue;
+  const state = hashHits(hits);
+  if (changed.has(pbPath)) {
+    if (acks[pbPath] !== state) {
+      acks[pbPath] = state; // playbook touched alongside — bless this exact file state
+      acksDirty = true;
+    }
+  } else if (acks[pbPath] !== state) {
+    stale.push({ pbPath, hits: hits.slice(0, 5) });
+  }
+}
+if (acksDirty) {
+  try {
+    writeFileSync(ackFile, JSON.stringify(acks));
+  } catch {}
 }
 
 // Creation gap: new code files no playbook covers. Register them under an existing
