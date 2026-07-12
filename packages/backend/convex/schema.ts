@@ -115,12 +115,42 @@ export default defineSchema({
     ),
     attachmentRefs: v.array(v.id("attachments")),
     workflowId: v.optional(v.string()),
+    // Groups fan-out recipient rows under one cockpit plan (DECISION #1). Optional
+    // → no migration (Pitfall-7 optional-on-read, same as safeText). The REPORT
+    // projection reads every recipient row for a plan via by_plan.
+    planId: v.optional(v.id("plans")),
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
-    .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"]),
+    .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"])
+    // REPORT projection: all recipient rows grouped under one cockpit plan.
+    .index("by_plan", ["planId"]),
+
+  // Cockpit plan/draft content plane (CLAUDE.md §4: raw content lives HERE, never in audit/DLQ).
+  // ONE row per guided conversation; the approve-gate object + idempotency CAS (DECISION #1).
+  plans: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(), // agent thread → renders PLAN/DRAFT/REPORT cards for this thread
+    status: v.union(
+      // PINNED lifecycle enum, shared by agent + delivery lanes:
+      v.literal("collecting"), // slots still filling during the guided conversation
+      v.literal("proposed"), // all slots filled + body drafted → PLAN card, awaiting Approve
+      v.literal("approved"), // executePlan CAS passed (set immediately before workflow.start)
+      v.literal("delivering"), // fan-out workflow started (requests rows seeded)
+      v.literal("done"), // fan-out complete
+    ),
+    // Slot content (accumulated during the conversation; all optional until filled):
+    recipients: v.optional(v.array(v.string())), // validated, deduped emails
+    mode: v.optional(v.union(v.literal("individual"), v.literal("group"))),
+    subject: v.optional(v.string()),
+    bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
+    body: v.optional(v.string()), // drafted wording (filled at "ready")
+    correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
+    workflowId: v.optional(v.string()), // set on executePlan
+    createdAt: v.number(),
+  }).index("by_thread", ["tenantId", "threadId"]),
 
   // File metadata only — the agent sees filename/mimeType/size, never contents.
   // `extracted` is filled by Phase 4 (INTK-02). requestId set after the request insert.
