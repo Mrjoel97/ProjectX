@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 3.2 context gathered
-last_updated: "2026-07-12T15:52:34.102Z"
-last_activity: "2026-07-12 — Phase 3.1 Wave 2: 03.1-05 executed (cockpit /dashboard/workspace two-pane shell + resizable a11y divider + SC1 E2E specs)"
+stopped_at: Completed 03.2-02-PLAN.md (transient candidate fields + writers)
+last_updated: "2026-07-12T16:54:43.701Z"
+last_activity: "2026-07-12 — Phase 3.2 Wave 1: 03.2-02 executed (transient candidate fields on plans + writeCandidates/clearCandidates)"
 progress:
   total_phases: 13
   completed_phases: 2
-  total_plans: 32
-  completed_plans: 29
-  percent: 91
+  total_plans: 38
+  completed_plans: 30
+  percent: 79
 ---
 
 # Project State
@@ -25,7 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.1 (Cockpit Core) — ALL PLANS EXECUTED (01–09, Waves 1–5). Ready for /gsd:verify-work. Phase 3 (Guardrails) also awaiting /gsd:verify-work.
+Phase: 3.2 (Inbox Reading) — Wave 1 in progress (03.2-02 executed, 1/6 plans). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
+Plan: 03.2-02 COMPLETE (Wave 1 — the TRANSIENT candidate-holding store behind the name-resolution card). `plans` table gains three OPTIONAL fields (no migration, Pitfall-7): `candidates` (array of {name, matches:[{address, displayName?, lastSubject?, lastDateMs?, count}]} — mirrors @pikar/core ContactMatch as a Convex validator; lastSubject is a USER-only hint, never sent to the LLM), `pendingValid` (same-turn valid addrs awaiting the uniform confirm), `greetingName` (resolved display name → drafter greeting). All content-plane only, NEVER audited (CLAUDE.md §4). plans.ts gains two internalMutations: `writeCandidates({planId, candidates, pendingValid})` (cockpit calls after a search) and `clearCandidates({planId})` (patches BOTH transient fields to undefined = wipe-on-pick → "no contacts cache at rest" is structural; deliberately leaves greetingName so it survives to the draft turn). `patchPlan` args extended with `greetingName` so the resolve path persists the greeting through the existing drop-undefined patch. Shared `CANDIDATES` validator const avoids duplicating the nested shape. Commits 169c8cc (schema) + 0d5374e (plans). Tests green: llmRedaction (5, plans.ts still emits no audit/DLQ), cockpitDraft (3), cockpit (8). CKPT-01 marked. Pre-existing audit.test.ts red (auditCounts unregistered) left untouched — out of scope. NEXT: remaining Phase 3.2 plans (01/03/04/05/06 across waves); Plan 04/05 consume writeCandidates/clearCandidates + read candidates off the byThread row.
+Prior: Phase 3.1 ALL PLANS EXECUTED (01–09, Waves 1–5). Ready for /gsd:verify-work.
 Plan: 03.1-09 COMPLETE (Wave 5 — E2E integration + human verification). Automated: `cockpit-report.spec.ts` drives chat → guided slot-fill (2 recipients → subject → body → mode) → PLAN card → ONE Approve → live per-recipient REPORT fills to `awaiting_reauth` over the offline `SMOKE::route=direct_llm::` path (SC4/SC5), double-approve no-op asserted; `connect-gmail.spec.ts` confirms /connect-gmail + workspace gate resolve to a bounded state (18c8442 fix verified by observation, auth gate NOT re-touched); `llmRedaction.test.ts` extended with 2 cockpit-plane assertions (cockpit.ts/plans.ts emit no audit/DLQ/telemetry, executePlan workflow.start payload refs-only, §4). Commits 77414ec + 1bfff20. Task 3 human-verify APPROVED: REAL multi-recipient Gmail delivery works, PLAN→single-Approve gating held (nothing sent before Approve, no double-send), divider clamps ~20% + persists across reload — reassigned Phase-2 SC-1/SC-2 satisfied, and the previously-deferred live-green E2E run is now covered by the real send. REVW-01/DLVR-01/INTK-01 marked complete. NEXT: /gsd:verify-work for Phase 3.1 (full suite: pnpm test + smoke:fanout + regression smoke:pipeline/guardrails + playwright).
 Prior: 03.1-08 executed (Wave 4 — the UI render half, SC2/SC3/SC5 render + REVW-01 single Approve). `ChatPane.tsx` renders the agent thread via `@convex-dev/agent/react` `useThreadMessages` (static list — streaming is a ponytail ceiling) + a teal composer calling `api.cockpit.sendCockpitMessage`, lifting the minted `threadId` to `page.tsx` so both panes share it. `cards.tsx` is a `switch(plan.status)` dispatcher over the single live `plans` row: PlanCard (recipient chips + mode + subject + body preview + steps + ONE `executePlan` Approve behind a `busy` guard = client no-op layered over the server CAS = send once; `gmail_not_connected` inline), DraftCard (full email), ReportCard (`api.plans.reportForPlan` reactive per-recipient rows: status badge + messageId + correlationId audit ref, refs-only §4 — fills LIVE via Convex reactivity, no polling). DEVIATION (Rule 3 blocking): added backend `api.cockpit.listThreadMessages` (tenantQuery paginated `listMessages` guarded on the `plans` by_thread row) — `useThreadMessages` requires a `{threadId, paginationOpts}` query that did not exist. Frontend types derived from the api (`FunctionReturnType`) — `@pikar/backend` exports only `./api`. `pnpm --filter @pikar/web typecheck` green; SplitPane + Gmail gate + (app) auth gate untouched. Commits 975394b (ChatPane+backend), 179603f (cards), f27c3ae (page). Carry-forward for plan 09/verify: live green E2E run; attachment→plan wiring + streaming chat are ponytail ceilings.
 Prior: 03.1-07 executed (Wave 3 — the orchestration seam, SC2/SC3/SC4 + DECISION #2). `cockpit.ts` wires the pure `emailIntent` brain (plan 03) to the `plans` content plane + registry draft (plan 06) and the fan-out workflow (plan 04). `sendCockpitMessage` (tenantAction) is a DETERMINISTIC guided turn: saves the user msg to the agent thread (codebase's FIRST `new Agent(...)`, used as a message store ONLY — never runs generateText/streamText), projects the plans row into EmailIntentState, maps free text → Answer for the slot the PRIOR nextQuestion asked, folds via applyAnswer, then asks the next question (deterministic copy, no LLM) or (ready) redacts the body-intent (pii.scanText, fail-closed) → drafts (the SOLE LLM call, draftCockpit) → code-invokes proposeEmailPlan (status → proposed). `executePlan` (tenantMutation) is the HUMAN approve gate: serializable CAS on plan.status (only first proposed→approved seeds rows + starts fan-out; double-approve no-ops = send once), Gmail-connected pre-check (no mailbox → {ok:false,gmail_not_connected}, token never logged §4), seeds ONE requests row per recipient with its OWN server-minted correlationId (crypto.randomUUID, mirrors requests.submit), and is the SOLE workflow.start(deliverApprovedPlan) call site = grep-able zero-sends-before-Approve. 8 cockpit.test.ts cases green (idempotency, zero-sends, tenant guard, parseAnswer). AGNT-02/REVW-01/DLVR-01 backend seam landed (SC2/SC3/SC4). One ponytail cast at Agent construction absorbs @convex-dev/agent@0.6.4 (AI SDK v6) vs ai@7 LanguageModel type mismatch — safe (model never called; do NOT bump pinned component §6). NOTE: plan 07 executor was cut off by a session limit AFTER committing feat+test (f287271, 0824f58) but BEFORE writing SUMMARY/ticking docs; orchestrator finished the bookkeeping on resume (code was already green). Also reconciled: ROADMAP ticks for 02 + 03 were lost to Wave-1 concurrent edits — restored. NEXT: Wave 4 (plan 08 — PLAN/DRAFT/REPORT cards + chat pane wired to live queries), then Wave 5 (plan 09 — E2E + human checkpoint).
@@ -75,6 +77,7 @@ Progress: [█████████░] 91%
 | Phase 03.1 P02 | 7 | 3 tasks | 5 files |
 | Phase 03.1 P01 | 6 | 2 tasks | 3 files |
 | Phase 03.1 P09 | 50 | 3 tasks | 3 files |
+| Phase 03.2 P02 | 3 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -141,6 +144,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: [Phase 03.1] 03-04 delivery fan-out (DLVR-01/SC4/SC5): `deliverApprovedPlan` durable workflow loops the existing governed `gmail.send` step once per recipient row (distinct recipient + OWN server-minted correlationId, shared planId), reusing workpool retries + audit + telemetry + onComplete-DLQ VERBATIM — the only new code is the fan-out loop + a per-row `deadLetterRecipient` (mirrors onPipelineComplete's three writes, refs-only payloads). Per-recipient isolation IS the try/catch: a terminal send throw is caught, dead-letters that row on its own cid, loop continues → workflow returns success (onComplete archives nothing). Each cid carries its own telemetry/DLQ (a shared cid collapses isolation via telemetry write-once). Fan-out smoke green on the live dev deployment (all recipients reach awaiting_reauth, forced row dead-letters ALONE, terminals write-once, zero raw subject/body/recipient in any log plane); smoke:pipeline regression green. Deviation: added a 3-line `SMOKE::fail` throw sentinel to gmail.send (offline forced terminal failure for the isolation smoke, mirrors llm.ts fail=primary — gmail.send otherwise never throws for the tokenless smoke tenant). markPlanDone is a local ~4-line setter so plan 04 compiles standalone in Wave 2; plan 07 (executePlan) owns the plan-status CAS + row seeding and starts this workflow.
 - [Phase 03.1]: [Phase 03.1] 03-02 wave-0 cockpit scaffolding: @convex-dev/agent@0.6.4 pinned into apps/web (matches backend, unlocks @convex-dev/agent/react chat hooks); teal cockpit CSS vars in globals.css (amber intact, inline-style+CSS-var discipline, no Tailwind); Playwright 1.61.1 installed as repo's first UI E2E harness (testDir e2e, chromium, baseURL :3111, reuseExistingServer against live convex-dev+next per SMOKE:: convention). Parallel wave-1 executors share one git index — Task 1 landed inside sibling 03-03's commit 137415a; content verified correct in HEAD.
 - [Phase 03.1]: [Phase 03.1] 03-06 wave-2 plans adapter + draft seam: plans.ts is a thin content-plane adapter (insertPlan/patchPlan/setPlanStatus internal writers + byThread/reportForPlan tenant-scoped reactive readers). reportForPlan is a LIVE PROJECTION (DECISION #1) — reads requests by_plan, joins each row's gmail.sent audit by correlationId for messageId; NO report[] array, NO report writer. draftCockpit added INSIDE llm.ts (still the correct home; NOT a second use-node module): loads email-drafter from the registry (fails closed unseeded), SMOKE:: returns deterministic offline draft (no model call), DEFAULT→CHEAP fallback kept. DECISION: draftCockpit writes NO audit/telemetry itself (it has only safeTextHash, no thread/correlationId) — the caller (plan 07) owns correlation-scoped logging; makes the draft path redaction-safe by construction AND sidesteps a pre-existing harness limit (convex-test 0.0.54 needs explicit t.registerComponent for the auditCounts aggregate, which no test does → any audit.log path throws; audit.test.ts silently red since the Phase-2 aggregate). AGNT-02/DLVR-01 NOT marked complete — this is the data + draft SEAM; reqs land when 07/08 wire the conversation + cards. Commits 2309a0f (plans.ts) + 90b5381 (draftCockpit+test); content verified in HEAD (sibling 03-04 commit 3ab9c58 interleaved — parallel wave).
+- [Phase 03.2]: [Phase 03.2] plans-row gains transient candidate store (candidates/pendingValid/greetingName, all optional → no migration); writeCandidates holds fetched contacts on the content plane, clearCandidates unsets both on pick (wipe-on-pick = 'no contacts cache at rest'), greetingName survives to the draft turn; candidate shape mirrors @pikar/core ContactMatch as a Convex validator (never audited, §4)
 
 ### Pending Todos
 
@@ -154,9 +158,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T15:52:34.085Z
-Stopped at: Phase 3.2 context gathered
-Resume file: .planning/phases/03.2-inbox-reading/03.2-CONTEXT.md
+Last session: 2026-07-12T16:54:43.270Z
+Stopped at: Completed 03.2-02-PLAN.md (transient candidate fields + writers)
+Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
