@@ -33,8 +33,8 @@ export const MIME_ALLOWLIST: ReadonlySet<string> = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
 ]);
 
-/** Structural email check — shape only, NOT deliverability. */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Structural email check — shape only, NOT deliverability. Anchored, single address. */
+export const isValidEmail = (s: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 /** Attachment metadata the boundary validates (contents are never inspected). */
 export interface Attachment {
@@ -64,7 +64,7 @@ export type ValidateResult = { ok: true } | { ok: false; reason: RejectionReason
 export function validateSubmit({ goal, recipient, attachments }: SubmitInput): ValidateResult {
   if (goal.trim().length === 0) return { ok: false, reason: "empty_goal" };
   if (goal.length > MAX_GOAL_LEN) return { ok: false, reason: "goal_too_long" };
-  if (!EMAIL_RE.test(recipient)) return { ok: false, reason: "bad_recipient" };
+  if (!isValidEmail(recipient)) return { ok: false, reason: "bad_recipient" };
   if (attachments.length > MAX_ATTACHMENTS) return { ok: false, reason: "too_many_attachments" };
   for (const a of attachments) {
     if (!MIME_ALLOWLIST.has(a.mimeType)) return { ok: false, reason: "bad_mime" };
