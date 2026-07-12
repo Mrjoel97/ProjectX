@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-07-12T01:49:55.526Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-07-12T02:09:05.985Z"
 last_activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09
 progress:
   total_phases: 13
   completed_phases: 0
   total_plans: 23
-  completed_plans: 18
-  percent: 74
+  completed_plans: 19
+  percent: 83
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3 (Guardrails) IN PROGRESS — wave 2 executing (03-03 done); Phase 2 backend spine closed for forward progress
-Plan: 03-03 executed (guardrails.ts guard choke point: prepare/preCall governed stops, getSafeTextByHash fail-closed reader, recordSpend reserve-consume, setKillSwitch; per-tenant submit rate limit; contentHash → lib/hash.ts). 03-02 executed (action-cache 0.3.1 + guardrail schema rails); 03-01 executed (pii SafeText brand, @pikar/cost). NEXT: 03-04 (wire llm.ts → getSafeTextByHash + static PII-field scan), 03-05 (pipeline → prepare/preCall/recordSpend + guardrails smoke). 02-01…02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 (not verified, not deleted)
+Phase: 3 (Guardrails) IN PROGRESS — wave 3 done (03-04 executed); only 03-05 remains
+Plan: 03-04 executed (THE LLM choke point closed: llm.ts reads redacted text ONLY via getSafeTextByHash — getForDelivery/.goal removed, static-scan enforced GRDL-01/02; route/draft wrappers front the tenant-namespaced action cache with sentinel-first short-circuit + preCall governed gate + timestamp-inferred cacheHit; real CHEAP_MODEL fallback in-action audited by error name; pipeline runs prepare BEFORE route → ONE governed blocked terminal, priced recordSpend per real call, LLM steps retry:false; smoke:pipeline green). 03-03 executed (guardrails.ts prepare/preCall/getSafeTextByHash/recordSpend/setKillSwitch; submit rate limit; contentHash → lib/hash.ts). 03-02 executed (action-cache 0.3.1 + guardrail schema rails); 03-01 executed (pii SafeText brand, @pikar/cost). NEXT: 03-05 (guardrails end-to-end smoke: blocked-terminal + kill-switch + budget + cache-hit + fallback paths). 02-01…02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 (not verified, not deleted)
 Status: Phase 2 backend spine COMPLETE (routing, drafting, review-gate mechanics, Gmail delivery, DLQ, telemetry, audit, migrations, aggregate) — unblocks Phase 3. The interim submit-form + review-queue UI shipped ad-hoc but is superseded by the Email Chat Cockpit: the `/submit` form and `/review` queue-gate are retired UX (kept on disk, retired later), while `/connect-gmail` (cockpit prerequisite), the ops page (OPSG-07), and `ReconnectBanner` (DLVR-03) SURVIVE and are reused by the cockpit. Phase 2 SC-1 (submit + live status) and SC-2 (see-plan + approve/edit/reject) end-user verification is reassigned to Phase 3.1's manual checkpoint. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
 Last activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09
 
-Progress: [███████░░░] 74%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [███████░░░] 74%
 | Phase 02 P07 | 35 | 3 tasks | 13 files |
 | Phase 03 P02 | 15 | 3 tasks | 7 files |
 | Phase 03 P03 | 30 | 3 tasks | 5 files |
+| Phase 03 P04 | 12 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,7 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02] Google is the Convex Auth sign-in provider (from @auth/core/providers/google — Convex Auth ships none); front-door scope is openid email profile ONLY, gmail.modify stays in the separate /connect-gmail flow. Authenticated shell lives under the (app) route group behind a default-deny middleware; dashboard at /dashboard (the group root would collide with the public / marketing page)
 - [Phase 03]: [Phase 03] action-cache 0.3.1 registered + guardrail schema rails laid (safeText/hash fields, by_tenant_safeTextHash index, guardrailConfig kill-switch table, scanning/blocked statuses, blocked telemetry outcome) — NO migration (all optional/default-on-read, Pitfall 7)
 - [Phase 03]: [Phase 03] guardrails.ts is the single guard choke point: prepare (kill-switch→PII scan+persist→cost/model→daily-spend check) and preCall share ONE discriminated governed-stop contract (RETURN, never throw — a governed stop is not a DLQ failure); getSafeTextByHash THROWS when redaction is missing so a model call cannot read raw goal text (GRDL-01); recordSpend reserves actual spend into the daily window so the next request fails closed (GRDL-03); per-tenant submit rate limit rejects the (N+1)th submit with an INTK-04-shaped auditable outcome (GRDL-06)
+- [Phase 03]: [Phase 03] 03-04 closed the LLM choke point: llm.ts reads redacted text ONLY via getSafeTextByHash (getForDelivery/.goal removed, static-scan enforced GRDL-01/02); route/draft wrappers front the tenant-namespaced action cache (key = tenantId/safeTextHash/model/skillVersion[/instructionHash], hash-only) with sentinel-first short-circuit + preCall governed gate + timestamp-inferred cacheHit; real fallback to CHEAP_MODEL in-action (audited by error NAME only); pipeline runs prepare BEFORE route, routes prepare+mid-flight-preCall stops to ONE governed blocked terminal (never DLQ), records priced spend per real call, LLM steps retry:false
 
 ### Pending Todos
 
@@ -136,8 +138,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T01:49:39.733Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-07-12T02:08:49.259Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
