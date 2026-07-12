@@ -111,14 +111,14 @@ Plans:
   3. For >1 recipient the agent asks individual-copies (safe default) vs group-email; a PLAN card shows recipients + mode + subject + body preview + steps before a single Approve.
   4. Approve triggers `executePlan` → a lean `deliverApprovedPlan` durable workflow that fans out per recipient over the existing `gmail.send` + retrier + audit + telemetry + DLQ; approval is idempotent (double-approve sends once) and zero sends occur before Approve.
   5. A REPORT card fills per recipient live (status + message id + audit link); one recipient failing dead-letters that row while the rest still send; no raw email content lands in any audit/DLQ payload.
-**Plans**: 9 plans in 5 waves (1/9 executed)
+**Plans**: 9 plans in 5 waves (7/9 executed)
   - [x] 03.1-01-PLAN.md — Backend contracts: plans table + planId on requests + pinned status enum + tenantAction wrapper (Wave 1) ✓ 2026-07-12
-  - [ ] 03.1-02-PLAN.md — Frontend + E2E harness: @convex-dev/agent@0.6.4 in apps/web, teal tokens, Playwright install (Wave 1)
-  - [ ] 03.1-03-PLAN.md — Pure emailIntent slot-filling module + tests (packages/core, TDD) (Wave 1)
+  - [x] 03.1-02-PLAN.md — Frontend + E2E harness: @convex-dev/agent@0.6.4 in apps/web, teal tokens, Playwright install (Wave 1) ✓ 2026-07-12
+  - [x] 03.1-03-PLAN.md — Pure emailIntent slot-filling module + tests (packages/core, TDD) (Wave 1) ✓ 2026-07-12
   - [x] 03.1-04-PLAN.md — deliverApprovedPlan fan-out workflow + deadLetterRecipient + smoke:fanout (Wave 2) ✓ 2026-07-12
   - [x] 03.1-05-PLAN.md — Cockpit page shell + resizable divider + SC1 E2E specs (Wave 2) ✓ 2026-07-12
   - [x] 03.1-06-PLAN.md — plans adapter (byThread + REPORT projection) + cockpitDraft in llm.ts (Wave 2) ✓ 2026-07-12
-  - [ ] 03.1-07-PLAN.md — Agent thread + proposeEmailPlan + executePlan approve gate (idempotent) (Wave 3)
+  - [x] 03.1-07-PLAN.md — Agent thread + proposeEmailPlan + executePlan approve gate (idempotent) (Wave 3) ✓ 2026-07-12
   - [ ] 03.1-08-PLAN.md — PLAN/DRAFT/REPORT cards + chat pane wired to live queries (Wave 4)
   - [ ] 03.1-09-PLAN.md — E2E integration + governance redaction + Connect-Gmail verify + human checkpoint (Wave 5)
 
