@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
 - [ ] **Phase 3.3: Attachment Generation** (INSERTED) - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
+- [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 — `.planning/design/scheduled-send.md`)
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog → durable brief → optional executable plan
@@ -158,6 +159,18 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. For a multi-recipient plan, each recipient can receive individually tailored wording, shown per recipient on the PLAN card before the single Approve.
   2. Personalized content passes the same PII/cost/review guardrails and per-recipient audit/telemetry as same-content sends.
+**Plans**: TBD
+
+### Phase 3.5: Deferred Send (INSERTED)
+**Goal**: A plan can carry a user-specified future send time, so the chief-of-staff promise covers *when* as well as *what* — approve once, and the governed send fires at the requested moment, cancellable until then.
+**Depends on**: Phase 3.1 (plan/approve/execute spine); no new scope or platform (Convex built-in scheduler `runAt`)
+**Requirements**: SCHD-01 (minted 2026-07-12)
+**Design**: `.planning/design/scheduled-send.md` (Tier 1; Tier 2 recurring is out of v1 — 7-day Testing-mode tokens + unmade approve-template-vs-re-draft governance decision)
+**Success Criteria** (what must be TRUE):
+  1. The guided conversation accepts a natural-language send time as an optional slot; no time given → immediate send on Approve (today's behavior is the unchanged default).
+  2. The PLAN card shows the resolved absolute time in the user's timezone before the single Approve; ambiguous times are re-asked, never guessed.
+  3. Approve schedules (never immediately starts) the existing `deliverApprovedPlan` fan-out; nothing sends before the scheduled time; audit/telemetry/DLQ paths are reused unchanged.
+  4. A scheduled plan is cancellable any time before it fires (halt control), with the cancellation audited; a token dead at fire time lands `awaiting_reauth` + notification exactly like an immediate send.
 **Plans**: TBD
 
 ### Phase 4: Attachment & Voice-Dictation Intake

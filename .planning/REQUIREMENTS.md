@@ -47,6 +47,12 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **CKPT-02**: Agent can generate a document and attach it to an outgoing email within an approved plan, flowing through the same governed send (audit, telemetry, DLQ) — distinct from INTK-02, which is *inbound* attachment ingestion
 - [ ] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
 
+### Scheduling
+
+*Added 2026-07-12 from the scheduled-send design (`.planning/design/scheduled-send.md`). Tier 1 only; recurring/standing-instruction sends are out of v1 scope (7-day Testing-mode tokens + unmade re-draft governance decision — see the design record).*
+
+- [ ] **SCHD-01**: A plan can carry a user-specified future send time expressed in natural language — the PLAN card shows the resolved absolute time (user's timezone) before the single Approve; approval schedules (never immediately starts) the same governed delivery fan-out; the user can cancel any time before it fires (cancellation audited); a token dead at fire time degrades to `awaiting_reauth` + notification exactly like an immediate send
+
 ### Knowledge Vault
 
 - [ ] **VALT-01**: Briefs and documents are stored and embedded (text-embedding-3-small @1536) for vector retrieval
@@ -146,6 +152,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Pending |
 | CKPT-03 | Phase 3.4 | Pending |
+| SCHD-01 | Phase 3.5 | Pending |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
 | VALT-03 | Phase 5 | Pending |
@@ -172,10 +179,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
-- v1 requirements: **43 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED)
-- Mapped to phases: 43
+- v1 requirements: **44 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send)
+- Mapped to phases: 44
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43*
+*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44*

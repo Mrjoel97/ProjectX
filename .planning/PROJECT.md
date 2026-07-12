@@ -31,6 +31,7 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 - [ ] LLM cache (safeTextHash lookup/store), primary generation, fallback generation on failure/timeout
 - [ ] Human review at the PLAN: user approves/edits/rejects the plan once before execution; after approval, execution is hands-off with stage-completion notifications and a halt control; edit/reject retry counters with escalation on threshold breach and review timeout handling *(redefined 2026-07-10 from per-response review)*
 - [ ] Conversational email cockpit: guided chat intake (slot-filling) → plan approval → multi-recipient governed send → live per-recipient report; later slices add inbox reading, agent-generated attachments, and per-recipient personalization *(added 2026-07-11, replaces the form/queue UX; see `.planning/design/email-chat-cockpit.md`)*
+- [ ] Deferred send: a plan can carry a user-specified future send time ("send this at 4 AM") — the PLAN card shows the resolved absolute time before the single Approve, execution is scheduled (not immediate) through the same governed delivery, and the user can cancel any time before it fires *(added 2026-07-12, SCHD-01 / Phase 3.5; recurring sends are out of scope for v1 — see `.planning/design/scheduled-send.md`)*
 - [ ] Final delivery via email through a provider-agnostic adapter (Gmail API and Microsoft Graph both supported)
 - [ ] Feedback capture; threshold breach triggers the prompt-optimization loop (self-improvement)
 - [ ] Telemetry: per-request tokens, cost, duration, decision counts, review outcome
@@ -48,6 +49,7 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 - Desktop/legacy RPA execution — no UiPath; browser/API tools only in v1
 - Public launch (billing, abuse protection, legal pages) — next milestone after private beta
 - Custom skills registry for third-party teams — enterprise-tier feature
+- Recurring/standing-instruction sends ("every day at 8 AM") — gated on verified OAuth (Testing mode's 7-day tokens break weekly schedules) and an unmade approve-template-vs-per-run-redraft governance decision; design constraints recorded in `.planning/design/scheduled-send.md`
 
 ## Context
 
@@ -88,6 +90,7 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 | **Approval granularity: per-PLAN, not per-delivery** (2026-07-10) | User approves the plan once; execution is hands-off, notifies per stage, and can be halted — matches the chief-of-staff promise | ✅ Adopted — REVW-01 redefined; cockpit design codifies it; Phase 2's per-response gate is the acknowledged interim |
 | **Email Chat Cockpit replaces the form/queue UX** (2026-07-11) | Conversational intake/approval over the same governed engine — no rewrite; form + review queue retire | ✅ Registered — Phases 3.1–3.4 in roadmap (2026-07-12); 02-08/02-09 superseded; CKPT-01..03 requirements minted |
 | **v1 PII engine: pure-TS `packages/pii`, no sidecar, no DLP API** (2026-07-12) | Deterministic scan/redact (email/card+Luhn/SSN/phone) with fail-closed Result; a cloud DLP API would add a processor for restricted-scope data (CASA surface); a sidecar is a whole deployment plane for one function | ✅ Decided + spike proven (8 tests green) — design record: `.planning/design/pii-engine.md`; names-in-prose tension deferred to Phase 3 planning |
+| **Scheduling split into two tiers: deferred send in v1 (Phase 3.5), recurring post-verification** (2026-07-12) | "Send at 4 AM" is the time dimension of the chief-of-staff promise and composes onto per-plan approval (the approved plan includes the when); recurring is a standing instruction blocked structurally by 7-day Testing-mode tokens and an unmade re-draft governance decision | ✅ Registered — SCHD-01 minted, Phase 3.5 inserted; design record: `.planning/design/scheduled-send.md` |
 
 ---
-*Last updated: 2026-07-12 — re-baselined: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`)*
+*Last updated: 2026-07-12 — re-baselined: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`); deferred send added (SCHD-01 / Phase 3.5), recurring sends scoped out (`.planning/design/scheduled-send.md`)*
