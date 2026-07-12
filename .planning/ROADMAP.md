@@ -149,7 +149,7 @@ Plans:
 **Requirements**: AGNT-01, AGNT-02 (reshaped — the Executive Agent finally becomes a real reasoning tool-loop instead of an inert message store; no new v1 ID)
 **Depends on:** Phase 3.2 (inbox-read primitives become agent tools). **Blocks Phase 3.3** — attachment generation builds on the agent engine, so this must land first.
 **Design record:** `.planning/design/agent-driven-cockpit.md`
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 - [ ] 03.2.1-01-PLAN.md — cockpit-agent skill registry row + seed constant + static-sync test (Wave 1)
