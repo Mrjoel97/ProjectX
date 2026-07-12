@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-07-12T02:40:06.964Z"
+stopped_at: Completed 03.1-03-PLAN.md
+last_updated: "2026-07-12T03:52:04.736Z"
 last_activity: "2026-07-12 — Phase 3 execution complete: 03-05 guardrails phase gate green (smoke:guardrails + smoke:pipeline)"
 progress:
   total_phases: 13
   completed_phases: 1
-  total_plans: 23
-  completed_plans: 20
+  total_plans: 32
+  completed_plans: 21
   percent: 87
 ---
 
@@ -65,6 +65,7 @@ Progress: [█████████░] 87%
 | Phase 03 P03 | 30 | 3 tasks | 5 files |
 | Phase 03 P04 | 12 | 3 tasks | 4 files |
 | Phase 03 P05 | 35 | 2 tasks | 4 files |
+| Phase 03.1 P03 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,7 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03] guardrails.ts is the single guard choke point: prepare (kill-switch→PII scan+persist→cost/model→daily-spend check) and preCall share ONE discriminated governed-stop contract (RETURN, never throw — a governed stop is not a DLQ failure); getSafeTextByHash THROWS when redaction is missing so a model call cannot read raw goal text (GRDL-01); recordSpend reserves actual spend into the daily window so the next request fails closed (GRDL-03); per-tenant submit rate limit rejects the (N+1)th submit with an INTK-04-shaped auditable outcome (GRDL-06)
 - [Phase 03]: [Phase 03] 03-04 closed the LLM choke point: llm.ts reads redacted text ONLY via getSafeTextByHash (getForDelivery/.goal removed, static-scan enforced GRDL-01/02); route/draft wrappers front the tenant-namespaced action cache (key = tenantId/safeTextHash/model/skillVersion[/instructionHash], hash-only) with sentinel-first short-circuit + preCall governed gate + timestamp-inferred cacheHit; real fallback to CHEAP_MODEL in-action (audited by error NAME only); pipeline runs prepare BEFORE route, routes prepare+mid-flight-preCall stops to ONE governed blocked terminal (never DLQ), records priced spend per real call, LLM steps retry:false
 - [Phase 03]: [Phase 03] 03-05 phase gate green: smoke:guardrails proves (live dev deployment) action-cache tenant isolation + model-free hit (llm.called draft-row count oracle), real primary-failure fallback, kill-switch + daily-budget governed stops on BOTH prepare and mid-flight preCall paths (one blocked terminal, never DLQ), submit-limiter rejection, and zero raw PII across audit/deadLetters/telemetry; smoke:pipeline regression still passes
+- [Phase 03.1]: [Phase 03.1] emailIntent is the pure SC2/SC3 next-question brain (no send path, no Convex import); invalid recipients bounce in rejected and are never stored; isValidEmail promoted to one shared regex (validateSubmit + emailIntent); ask_mode only when >1 recipient; attachmentIntent never gates ready
 
 ### Pending Todos
 
@@ -140,8 +142,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T02:29:13.724Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-07-12T03:52:04.725Z
+Stopped at: Completed 03.1-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
