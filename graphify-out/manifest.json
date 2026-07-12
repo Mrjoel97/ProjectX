@@ -65,7 +65,7 @@
     "semantic_hash": ""
   },
   "packages/backend/.convex/local/default/config.json": {
-    "mtime": 1783865787.998117,
+    "mtime": 1783879750.3476021,
     "ast_hash": "de9e9f5cb8657f33d8729ddc7b6e3b62",
     "semantic_hash": ""
   },
@@ -250,23 +250,23 @@
     "semantic_hash": ""
   },
   ".planning/PROJECT.md": {
-    "mtime": 1783860717.0498276,
-    "ast_hash": "aaba72d1254adce4849e2c466e4ea882",
+    "mtime": 1783879423.7606056,
+    "ast_hash": "689af5f9afe0610f1a36d3e28ff512f9",
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1783875310.8936422,
-    "ast_hash": "4547337a3df758612528af550c0f0b75",
+    "mtime": 1783879458.5452616,
+    "ast_hash": "4a56cbca03c13c0dd06f3e788fab0160",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1783877350.3187015,
-    "ast_hash": "f01ba2eb43e97c908d20c8a95926d520",
+    "mtime": 1783884847.6351228,
+    "ast_hash": "4b440b3553998cd2dd74d9f438f06e2d",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1783877381.9213269,
-    "ast_hash": "df89fd9a544aa242411036a282b7eb62",
+    "mtime": 1783884847.650751,
+    "ast_hash": "02d53ae096590114855cfb713c368c57",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1700,8 +1700,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1783877933.6680336,
-    "ast_hash": "be6c7231d90d6e6fb32006f8c276dd4b",
+    "mtime": 1783878308.2579606,
+    "ast_hash": "58d1d4e66437df4d9fc71741e4093442",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -1812,6 +1812,36 @@
   "apps/web/e2e/cockpit-resolve.spec.ts": {
     "mtime": 1783877861.6123042,
     "ast_hash": "39fa33a8442997df295ad343f45e925b",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2-inbox-reading/03.2-05-SUMMARY.md": {
+    "mtime": 1783878054.63386,
+    "ast_hash": "22256e46c47a4f1cef7374c3d2e2719b",
+    "semantic_hash": ""
+  },
+  ".convex/local/default/config.json": {
+    "mtime": 1783878834.8255084,
+    "ast_hash": "d28666db222c62aca2a44af1b02dfd3f",
+    "semantic_hash": ""
+  },
+  ".convex/local/default/dashboard.json": {
+    "mtime": 1783878946.3723156,
+    "ast_hash": "5547a54f2331048008c6e4cc73a7f571",
+    "semantic_hash": ""
+  },
+  ".planning/design/scheduled-send.md": {
+    "mtime": 1783879376.9831984,
+    "ast_hash": "7d167284ff24e78755d6f4380ddd7c60",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2-inbox-reading/03.2-06-SUMMARY.md": {
+    "mtime": 1783884496.8691142,
+    "ast_hash": "584b9122f82b134efac7d8f8c2945b71",
+    "semantic_hash": ""
+  },
+  ".planning/phases/03.2-inbox-reading/03.2-VERIFICATION.md": {
+    "mtime": 1783884815.1708171,
+    "ast_hash": "a1fc31f7ceb2f4db6fe45f3b3c177226",
     "semantic_hash": ""
   }
 }

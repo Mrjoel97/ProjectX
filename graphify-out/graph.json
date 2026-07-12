@@ -4,14 +4,164 @@
   "graph": {},
   "nodes": [
     {
+      "label": "cockpit.md",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "cockpit.md",
+      "id": "docs_playbooks_cockpit"
+    },
+    {
+      "label": "Playbook: Email Chat Cockpit",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "playbook: email chat cockpit",
+      "id": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
+    },
+    {
+      "label": "Purpose",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "purpose",
+      "id": "docs_playbooks_cockpit_purpose"
+    },
+    {
+      "label": "Key files",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "key files",
+      "id": "docs_playbooks_cockpit_key_files"
+    },
+    {
+      "label": "Dependencies & blast radius",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L42",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "dependencies & blast radius",
+      "id": "docs_playbooks_cockpit_dependencies_blast_radius"
+    },
+    {
+      "label": "Data flow",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L52",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "data flow",
+      "id": "docs_playbooks_cockpit_data_flow"
+    },
+    {
+      "label": "Invariants — what must never break",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L64",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "invariants — what must never break",
+      "id": "docs_playbooks_cockpit_invariants_what_must_never_break"
+    },
+    {
+      "label": "How to change safely",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L81",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "how to change safely",
+      "id": "docs_playbooks_cockpit_how_to_change_safely"
+    },
+    {
+      "label": "How to verify",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L88",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "how to verify",
+      "id": "docs_playbooks_cockpit_how_to_verify"
+    },
+    {
+      "label": "Operational notes",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L96",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "operational notes",
+      "id": "docs_playbooks_cockpit_operational_notes"
+    },
+    {
+      "label": "Known gaps & deferred work",
+      "file_type": "document",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L102",
+      "_origin": "ast",
+      "community": 7,
+      "norm_label": "known gaps & deferred work",
+      "id": "docs_playbooks_cockpit_known_gaps_deferred_work"
+    },
+    {
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 23,
+      "norm_label": "page.tsx",
+      "id": "apps_web_app_app_connect_gmail_page"
+    },
+    {
+      "label": "ConnectGmailPage()",
+      "file_type": "code",
+      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
+      "source_location": "L11",
+      "_origin": "ast",
+      "community": 23,
+      "norm_label": "connectgmailpage()",
+      "id": "apps_web_app_app_connect_gmail_page_connectgmailpage"
+    },
+    {
+      "label": "http.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "http.ts",
+      "id": "packages_backend_convex_http"
+    },
+    {
+      "label": "http",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 24,
+      "norm_label": "http",
+      "id": "packages_backend_convex_http_http"
+    },
+    {
       "label": "cockpit-report.spec.ts",
       "file_type": "code",
       "source_file": "apps/web/e2e/cockpit-report.spec.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "apps_web_e2e_cockpit_report_spec",
       "community": 230,
-      "norm_label": "cockpit-report.spec.ts"
+      "norm_label": "cockpit-report.spec.ts",
+      "id": "apps_web_e2e_cockpit_report_spec"
     },
     {
       "label": "cockpit-resolve.spec.ts",
@@ -19,9 +169,9 @@
       "source_file": "apps/web/e2e/cockpit-resolve.spec.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "apps_web_e2e_cockpit_resolve_spec",
       "community": 21,
-      "norm_label": "cockpit-resolve.spec.ts"
+      "norm_label": "cockpit-resolve.spec.ts",
+      "id": "apps_web_e2e_cockpit_resolve_spec"
     },
     {
       "label": "llm.ts",
@@ -29,9 +179,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm",
       "community": 171,
-      "norm_label": "llm.ts"
+      "norm_label": "llm.ts",
+      "id": "packages_backend_convex_llm"
     },
     {
       "label": "Route",
@@ -39,9 +189,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L46",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_route",
       "community": 171,
-      "norm_label": "route"
+      "norm_label": "route",
+      "id": "packages_backend_convex_llm_route"
     },
     {
       "label": "SMOKE_ROUTES",
@@ -49,9 +199,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_smoke_routes",
       "community": 171,
-      "norm_label": "smoke_routes"
+      "norm_label": "smoke_routes",
+      "id": "packages_backend_convex_llm_smoke_routes"
     },
     {
       "label": "Smoke",
@@ -59,9 +209,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L48",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_smoke",
       "community": 171,
-      "norm_label": "smoke"
+      "norm_label": "smoke",
+      "id": "packages_backend_convex_llm_smoke"
     },
     {
       "label": "parseSmoke()",
@@ -69,9 +219,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_parsesmoke",
       "community": 171,
-      "norm_label": "parsesmoke()"
+      "norm_label": "parsesmoke()",
+      "id": "packages_backend_convex_llm_parsesmoke"
     },
     {
       "label": "ZERO_USAGE",
@@ -79,9 +229,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L61",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_zero_usage",
       "community": 171,
-      "norm_label": "zero_usage"
+      "norm_label": "zero_usage",
+      "id": "packages_backend_convex_llm_zero_usage"
     },
     {
       "label": "GenUsage",
@@ -89,9 +239,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_genusage",
       "community": 171,
-      "norm_label": "genusage"
+      "norm_label": "genusage",
+      "id": "packages_backend_convex_llm_genusage"
     },
     {
       "label": "SafeRead",
@@ -99,9 +249,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L70",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_saferead",
       "community": 171,
-      "norm_label": "saferead"
+      "norm_label": "saferead",
+      "id": "packages_backend_convex_llm_saferead"
     },
     {
       "label": "routeCache",
@@ -109,9 +259,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L78",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_routecache",
       "community": 171,
-      "norm_label": "routecache"
+      "norm_label": "routecache",
+      "id": "packages_backend_convex_llm_routecache"
     },
     {
       "label": "draftCache",
@@ -119,9 +269,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L83",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_draftcache",
       "community": 171,
-      "norm_label": "draftcache"
+      "norm_label": "draftcache",
+      "id": "packages_backend_convex_llm_draftcache"
     },
     {
       "label": "RouteResult",
@@ -129,9 +279,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L91",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_routeresult",
       "community": 171,
-      "norm_label": "routeresult"
+      "norm_label": "routeresult",
+      "id": "packages_backend_convex_llm_routeresult"
     },
     {
       "label": "DraftResult",
@@ -139,9 +289,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L94",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_draftresult",
       "community": 171,
-      "norm_label": "draftresult"
+      "norm_label": "draftresult",
+      "id": "packages_backend_convex_llm_draftresult"
     },
     {
       "label": "routeUncached",
@@ -149,9 +299,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L105",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_routeuncached",
       "community": 171,
-      "norm_label": "routeuncached"
+      "norm_label": "routeuncached",
+      "id": "packages_backend_convex_llm_routeuncached"
     },
     {
       "label": "draftUncached",
@@ -159,9 +309,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L191",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_draftuncached",
       "community": 171,
-      "norm_label": "draftuncached"
+      "norm_label": "draftuncached",
+      "id": "packages_backend_convex_llm_draftuncached"
     },
     {
       "label": "draftCockpit",
@@ -169,9 +319,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L280",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_draftcockpit",
       "community": 171,
-      "norm_label": "draftcockpit"
+      "norm_label": "draftcockpit",
+      "id": "packages_backend_convex_llm_draftcockpit"
     },
     {
       "label": "draft",
@@ -179,9 +329,9 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L399",
       "_origin": "ast",
-      "id": "packages_backend_convex_llm_draft",
       "community": 171,
-      "norm_label": "draft"
+      "norm_label": "draft",
+      "id": "packages_backend_convex_llm_draft"
     },
     {
       "label": "ChatPane.tsx",
@@ -404,386 +554,6 @@
       "id": "apps_web_app_app_dashboard_workspace_cards_cardlist"
     },
     {
-      "label": "STATE.md",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "state.md",
-      "id": "planning_state"
-    },
-    {
-      "label": "Project State",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "project state",
-      "id": "planning_state_project_state"
-    },
-    {
-      "label": "Project Reference",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L19",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "project reference",
-      "id": "planning_state_project_reference"
-    },
-    {
-      "label": "Current Position",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L26",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "current position",
-      "id": "planning_state_current_position"
-    },
-    {
-      "label": "Performance Metrics",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L45",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "performance metrics",
-      "id": "planning_state_performance_metrics"
-    },
-    {
-      "label": "Accumulated Context",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L87",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "accumulated context",
-      "id": "planning_state_accumulated_context"
-    },
-    {
-      "label": "Decisions",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L89",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "decisions",
-      "id": "planning_state_decisions"
-    },
-    {
-      "label": "Pending Todos",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L157",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "pending todos",
-      "id": "planning_state_pending_todos"
-    },
-    {
-      "label": "Blockers/Concerns",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L161",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "blockers/concerns",
-      "id": "planning_state_blockers_concerns"
-    },
-    {
-      "label": "Session Continuity",
-      "file_type": "document",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L167",
-      "_origin": "ast",
-      "community": 13,
-      "norm_label": "session continuity",
-      "id": "planning_state_session_continuity"
-    },
-    {
-      "label": "03.2-04-SUMMARY.md",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "03.2-04-summary.md",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary"
-    },
-    {
-      "label": "Dependency graph",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "dependency graph",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_dependency_graph"
-    },
-    {
-      "label": "Tech tracking",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "tech tracking",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_tech_tracking"
-    },
-    {
-      "label": "Metrics",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L51",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "metrics",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_metrics"
-    },
-    {
-      "label": "Phase 03.2 Plan 04: Cockpit Name-Resolution Turn Summary",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L56",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "phase 03.2 plan 04: cockpit name-resolution turn summary",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary"
-    },
-    {
-      "label": "Performance",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L60",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "performance",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_performance"
-    },
-    {
-      "label": "Accomplishments",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L66",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "accomplishments",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_accomplishments"
-    },
-    {
-      "label": "Task Commits",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L75",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "task commits",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_task_commits"
-    },
-    {
-      "label": "Files Created/Modified",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L81",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "files created/modified",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_files_created_modified"
-    },
-    {
-      "label": "Decisions Made",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L88",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "decisions made",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_decisions_made"
-    },
-    {
-      "label": "Deviations from Plan",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L93",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "deviations from plan",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_deviations_from_plan"
-    },
-    {
-      "label": "Auto-fixed Issues",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L95",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "auto-fixed issues",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_auto_fixed_issues"
-    },
-    {
-      "label": "Issues Encountered",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L118",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "issues encountered",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_issues_encountered"
-    },
-    {
-      "label": "User Setup Required",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L122",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "user setup required",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_user_setup_required"
-    },
-    {
-      "label": "Next Phase Readiness",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L125",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "next phase readiness",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_next_phase_readiness"
-    },
-    {
-      "label": "Deferred Issues",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L129",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "deferred issues",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_deferred_issues"
-    },
-    {
-      "label": "Self-Check: PASSED",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L132",
-      "_origin": "ast",
-      "community": 18,
-      "norm_label": "self-check: passed",
-      "id": "planning_phases_03_2_inbox_reading_03_2_04_summary_self_check_passed"
-    },
-    {
-      "label": "cockpit.md",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "cockpit.md",
-      "id": "docs_playbooks_cockpit"
-    },
-    {
-      "label": "Playbook: Email Chat Cockpit",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "playbook: email chat cockpit",
-      "id": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
-    },
-    {
-      "label": "Purpose",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "purpose",
-      "id": "docs_playbooks_cockpit_purpose"
-    },
-    {
-      "label": "Key files",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L15",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "key files",
-      "id": "docs_playbooks_cockpit_key_files"
-    },
-    {
-      "label": "Dependencies & blast radius",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L41",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "dependencies & blast radius",
-      "id": "docs_playbooks_cockpit_dependencies_blast_radius"
-    },
-    {
-      "label": "Data flow",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L51",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "data flow",
-      "id": "docs_playbooks_cockpit_data_flow"
-    },
-    {
-      "label": "Invariants \u2014 what must never break",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L63",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "invariants \u2014 what must never break",
-      "id": "docs_playbooks_cockpit_invariants_what_must_never_break"
-    },
-    {
-      "label": "How to change safely",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L79",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "how to change safely",
-      "id": "docs_playbooks_cockpit_how_to_change_safely"
-    },
-    {
-      "label": "How to verify",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L86",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "how to verify",
-      "id": "docs_playbooks_cockpit_how_to_verify"
-    },
-    {
-      "label": "Operational notes",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L94",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "operational notes",
-      "id": "docs_playbooks_cockpit_operational_notes"
-    },
-    {
-      "label": "Known gaps & deferred work",
-      "file_type": "document",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L100",
-      "_origin": "ast",
-      "community": 7,
-      "norm_label": "known gaps & deferred work",
-      "id": "docs_playbooks_cockpit_known_gaps_deferred_work"
-    },
-    {
       "label": "cockpit.test.ts",
       "file_type": "code",
       "source_file": "packages/backend/convex/cockpit.test.ts",
@@ -824,13 +594,13 @@
       "id": "packages_backend_convex_cockpit_test_countrequests"
     },
     {
-      "label": "NOTE: the invalid token must contain '@' \u2014 a no-'@' token (\"not-an-email\") is no",
+      "label": "NOTE: the invalid token must contain '@' — a no-'@' token (\"not-an-email\") is no",
       "file_type": "rationale",
       "source_file": "packages/backend/convex/cockpit.test.ts",
       "source_location": "L140",
       "_origin": "ast",
       "community": 225,
-      "norm_label": "note: the invalid token must contain '@' \u2014 a no-'@' token (\"not-an-email\") is no",
+      "norm_label": "note: the invalid token must contain '@' — a no-'@' token (\"not-an-email\") is no",
       "id": "packages_backend_convex_cockpit_test_rationale_140"
     },
     {
@@ -992,166 +762,6 @@
       "community": 228,
       "norm_label": "executeplan",
       "id": "packages_backend_convex_cockpit_executeplan"
-    },
-    {
-      "label": "03.2-01-SUMMARY.md",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "03.2-01-summary.md",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary"
-    },
-    {
-      "label": "Dependency graph",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "dependency graph",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_dependency_graph"
-    },
-    {
-      "label": "Tech tracking",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L20",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "tech tracking",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_tech_tracking"
-    },
-    {
-      "label": "Metrics",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L46",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "metrics",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_metrics"
-    },
-    {
-      "label": "Phase 3.2 Plan 01: needs_resolution seam + pure contact-resolution helpers Summary",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L51",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "phase 3.2 plan 01: needs_resolution seam + pure contact-resolution helpers summary",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary"
-    },
-    {
-      "label": "Performance",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L55",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "performance",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_performance"
-    },
-    {
-      "label": "Accomplishments",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L63",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "accomplishments",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_accomplishments"
-    },
-    {
-      "label": "Task Commits",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "task commits",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_task_commits"
-    },
-    {
-      "label": "Files Created/Modified",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L79",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "files created/modified",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_files_created_modified"
-    },
-    {
-      "label": "Decisions Made",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L83",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "decisions made",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_decisions_made"
-    },
-    {
-      "label": "Deviations from Plan",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L88",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "deviations from plan",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_deviations_from_plan"
-    },
-    {
-      "label": "Auto-fixed Issues",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L90",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "auto-fixed issues",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_auto_fixed_issues"
-    },
-    {
-      "label": "Issues Encountered",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L105",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "issues encountered",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_issues_encountered"
-    },
-    {
-      "label": "User Setup Required",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L108",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "user setup required",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_user_setup_required"
-    },
-    {
-      "label": "Next Phase Readiness",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L111",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "next phase readiness",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_next_phase_readiness"
-    },
-    {
-      "label": "Self-Check: PASSED",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L119",
-      "_origin": "ast",
-      "community": 0,
-      "norm_label": "self-check: passed",
-      "id": "planning_phases_03_2_inbox_reading_03_2_01_summary_self_check_passed"
     },
     {
       "label": "emailIntent.test.ts",
@@ -1364,156 +974,6 @@
       "id": "docref_rfc_5322"
     },
     {
-      "label": "03.2-03-SUMMARY.md",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "03.2-03-summary.md",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary"
-    },
-    {
-      "label": "Dependency graph",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "dependency graph",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_dependency_graph"
-    },
-    {
-      "label": "Tech tracking",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "tech tracking",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_tech_tracking"
-    },
-    {
-      "label": "Metrics",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L43",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "metrics",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_metrics"
-    },
-    {
-      "label": "Phase 03.2 Plan 03: Gmail Headers-Only Search Summary",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L48",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "phase 03.2 plan 03: gmail headers-only search summary",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary"
-    },
-    {
-      "label": "Performance",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L52",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "performance",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_performance"
-    },
-    {
-      "label": "Accomplishments",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L60",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "accomplishments",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_accomplishments"
-    },
-    {
-      "label": "Task Commits",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L66",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "task commits",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_task_commits"
-    },
-    {
-      "label": "Files Created/Modified",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L71",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "files created/modified",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_files_created_modified"
-    },
-    {
-      "label": "Decisions Made",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L74",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "decisions made",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_decisions_made"
-    },
-    {
-      "label": "Deviations from Plan",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L79",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "deviations from plan",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_deviations_from_plan"
-    },
-    {
-      "label": "Issues Encountered",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L83",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "issues encountered",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_issues_encountered"
-    },
-    {
-      "label": "User Setup Required",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L86",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "user setup required",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_user_setup_required"
-    },
-    {
-      "label": "Next Phase Readiness",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L89",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "next phase readiness",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_next_phase_readiness"
-    },
-    {
-      "label": "Self-Check: PASSED",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L93",
-      "_origin": "ast",
-      "community": 6,
-      "norm_label": "self-check: passed",
-      "id": "planning_phases_03_2_inbox_reading_03_2_03_summary_self_check_passed"
-    },
-    {
       "label": "gmail.ts",
       "file_type": "code",
       "source_file": "packages/backend/convex/gmail.ts",
@@ -1642,336 +1102,6 @@
       "community": 10,
       "norm_label": "rfc-2822",
       "id": "docref_rfc_2822"
-    },
-    {
-      "label": "REQUIREMENTS.md",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "requirements.md",
-      "id": "planning_requirements"
-    },
-    {
-      "label": "Requirements: Pikar-AI",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "requirements: pikar-ai",
-      "id": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "label": "v1 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "v1 requirements",
-      "id": "planning_requirements_v1_requirements"
-    },
-    {
-      "label": "Intake & Enrichment",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "intake & enrichment",
-      "id": "planning_requirements_intake_enrichment"
-    },
-    {
-      "label": "Executive Agent & Planning",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "executive agent & planning",
-      "id": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "label": "Guardrails",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "guardrails",
-      "id": "planning_requirements_guardrails"
-    },
-    {
-      "label": "Human Review & Delivery",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "human review & delivery",
-      "id": "planning_requirements_human_review_delivery"
-    },
-    {
-      "label": "Email Cockpit",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "email cockpit",
-      "id": "planning_requirements_email_cockpit"
-    },
-    {
-      "label": "Knowledge Vault",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L50",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "knowledge vault",
-      "id": "planning_requirements_knowledge_vault"
-    },
-    {
-      "label": "Live Voice Sessions",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L57",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "live voice sessions",
-      "id": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "label": "Self-Improvement",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L64",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "self-improvement",
-      "id": "planning_requirements_self_improvement"
-    },
-    {
-      "label": "Governance & Operations",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "governance & operations",
-      "id": "planning_requirements_governance_operations"
-    },
-    {
-      "label": "Discoverability",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L80",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "discoverability",
-      "id": "planning_requirements_discoverability"
-    },
-    {
-      "label": "Private Beta",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L85",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "private beta",
-      "id": "planning_requirements_private_beta"
-    },
-    {
-      "label": "v2 Requirements",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L92",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "v2 requirements",
-      "id": "planning_requirements_v2_requirements"
-    },
-    {
-      "label": "Expansion",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L96",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "expansion",
-      "id": "planning_requirements_expansion"
-    },
-    {
-      "label": "Out of Scope",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "out of scope",
-      "id": "planning_requirements_out_of_scope"
-    },
-    {
-      "label": "Traceability",
-      "file_type": "document",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L120",
-      "_origin": "ast",
-      "community": 3,
-      "norm_label": "traceability",
-      "id": "planning_requirements_traceability"
-    },
-    {
-      "label": "03.2-02-SUMMARY.md",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "03.2-02-summary.md",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary"
-    },
-    {
-      "label": "Dependency graph",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "dependency graph",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_dependency_graph"
-    },
-    {
-      "label": "Tech tracking",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "tech tracking",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_tech_tracking"
-    },
-    {
-      "label": "Metrics",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L42",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "metrics",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_metrics"
-    },
-    {
-      "label": "Phase 03.2 Plan 02: Transient Candidate Fields Summary",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L47",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "phase 03.2 plan 02: transient candidate fields summary",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary"
-    },
-    {
-      "label": "Performance",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L51",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "performance",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_performance"
-    },
-    {
-      "label": "Accomplishments",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L59",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "accomplishments",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_accomplishments"
-    },
-    {
-      "label": "Task Commits",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L65",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "task commits",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_task_commits"
-    },
-    {
-      "label": "Files Created/Modified",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L70",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "files created/modified",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_files_created_modified"
-    },
-    {
-      "label": "Decisions Made",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L74",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "decisions made",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_decisions_made"
-    },
-    {
-      "label": "Deviations from Plan",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L81",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "deviations from plan",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_deviations_from_plan"
-    },
-    {
-      "label": "Issues Encountered",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L85",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "issues encountered",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_issues_encountered"
-    },
-    {
-      "label": "User Setup Required",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L89",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "user setup required",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_user_setup_required"
-    },
-    {
-      "label": "Next Phase Readiness",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L92",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "next phase readiness",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_next_phase_readiness"
-    },
-    {
-      "label": "Self-Check: PASSED",
-      "file_type": "document",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L96",
-      "_origin": "ast",
-      "community": 11,
-      "norm_label": "self-check: passed",
-      "id": "planning_phases_03_2_inbox_reading_03_2_02_summary_self_check_passed"
     },
     {
       "label": "plans.ts",
@@ -2404,23 +1534,23 @@
       "id": "docs_readme_docs"
     },
     {
-      "label": "`playbooks/` \u2014 one per feature/subsystem",
+      "label": "`playbooks/` — one per feature/subsystem",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L6",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`playbooks/` \u2014 one per feature/subsystem",
+      "norm_label": "`playbooks/` — one per feature/subsystem",
       "id": "docs_readme_playbooks_one_per_feature_subsystem"
     },
     {
-      "label": "`decisions/` \u2014 Architecture Decision Records (ADRs)",
+      "label": "`decisions/` — Architecture Decision Records (ADRs)",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L40",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`decisions/` \u2014 architecture decision records (adrs)",
+      "norm_label": "`decisions/` — architecture decision records (adrs)",
       "id": "docs_readme_decisions_architecture_decision_records_adrs"
     },
     {
@@ -2664,13 +1794,13 @@
       "id": "docs_playbooks_template_data_flow"
     },
     {
-      "label": "Invariants \u2014 what must never break",
+      "label": "Invariants — what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/TEMPLATE.md",
       "source_location": "L27",
       "_origin": "ast",
       "community": 235,
-      "norm_label": "invariants \u2014 what must never break",
+      "norm_label": "invariants — what must never break",
       "id": "docs_playbooks_template_invariants_what_must_never_break"
     },
     {
@@ -2774,13 +1904,13 @@
       "id": "docs_playbooks_audit_dead_letter_data_flow"
     },
     {
-      "label": "Invariants \u2014 what must never break",
+      "label": "Invariants — what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
       "source_location": "L43",
       "_origin": "ast",
       "community": 233,
-      "norm_label": "invariants \u2014 what must never break",
+      "norm_label": "invariants — what must never break",
       "id": "docs_playbooks_audit_dead_letter_invariants_what_must_never_break"
     },
     {
@@ -2884,13 +2014,13 @@
       "id": "docs_playbooks_skill_registry_data_flow"
     },
     {
-      "label": "Invariants \u2014 what must never break",
+      "label": "Invariants — what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/skill-registry.md",
       "source_location": "L40",
       "_origin": "ast",
       "community": 232,
-      "norm_label": "invariants \u2014 what must never break",
+      "norm_label": "invariants — what must never break",
       "id": "docs_playbooks_skill_registry_invariants_what_must_never_break"
     },
     {
@@ -3499,7 +2629,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "layout.tsx",
       "id": "apps_web_app_app_layout"
     },
@@ -3509,7 +2639,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "nav",
       "id": "apps_web_app_app_layout_nav"
     },
@@ -3519,7 +2649,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "deadletterbadge()",
       "id": "apps_web_app_app_layout_deadletterbadge"
     },
@@ -3529,7 +2659,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "shell()",
       "id": "apps_web_app_app_layout_shell"
     },
@@ -3539,7 +2669,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L93",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "appshell()",
       "id": "apps_web_app_app_layout_appshell"
     },
@@ -3549,7 +2679,7 @@
       "source_file": "apps/web/app/(app)/layout.tsx",
       "source_location": "L109",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "authgate()",
       "id": "apps_web_app_app_layout_authgate"
     },
@@ -3799,7 +2929,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 16,
+      "community": 19,
       "norm_label": "request_status",
       "id": "packages_backend_convex_pipeline_request_status"
     },
@@ -3849,7 +2979,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L86",
       "_origin": "ast",
-      "community": 19,
+      "community": 16,
       "norm_label": "pipelineworkflow",
       "id": "packages_backend_convex_pipeline_pipelineworkflow"
     },
@@ -4058,7 +3188,7 @@
       "source_file": "apps/web/app/(app)/_components/ReconnectBanner.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "reconnectbanner.tsx",
       "id": "apps_web_app_app_components_reconnectbanner"
     },
@@ -4068,29 +3198,9 @@
       "source_file": "apps/web/app/(app)/_components/ReconnectBanner.tsx",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "reconnectbanner()",
       "id": "apps_web_app_app_components_reconnectbanner_reconnectbanner"
-    },
-    {
-      "label": "page.tsx",
-      "file_type": "code",
-      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 190,
-      "norm_label": "page.tsx",
-      "id": "apps_web_app_app_connect_gmail_page"
-    },
-    {
-      "label": "ConnectGmailPage()",
-      "file_type": "code",
-      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 190,
-      "norm_label": "connectgmailpage()",
-      "id": "apps_web_app_app_connect_gmail_page_connectgmailpage"
     },
     {
       "label": "page.tsx",
@@ -4138,7 +3248,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_requests_page"
     },
@@ -4148,7 +3258,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "status_color",
       "id": "apps_web_app_app_requests_page_status_color"
     },
@@ -4158,7 +3268,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "statuspill()",
       "id": "apps_web_app_app_requests_page_statuspill"
     },
@@ -4168,7 +3278,7 @@
       "source_file": "apps/web/app/(app)/requests/page.tsx",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "requests()",
       "id": "apps_web_app_app_requests_page_requests"
     },
@@ -4228,7 +3338,7 @@
       "source_file": "apps/web/app/(app)/review/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_review_page"
     },
@@ -4238,7 +3348,7 @@
       "source_file": "apps/web/app/(app)/review/page.tsx",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "reviewqueue()",
       "id": "apps_web_app_app_review_page_reviewqueue"
     },
@@ -5018,7 +4128,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 190,
+      "community": 22,
       "norm_label": "auth.ts",
       "id": "packages_backend_convex_auth"
     },
@@ -5028,7 +4138,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 190,
+      "community": 22,
       "norm_label": "password",
       "id": "packages_backend_convex_auth_password"
     },
@@ -5038,7 +4148,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 190,
+      "community": 22,
       "norm_label": "{ auth, signin, signout, store, isauthenticated }",
       "id": "packages_backend_convex_auth_auth_signin_signout_store_isauthenticated"
     },
@@ -5128,7 +4238,7 @@
       "source_file": "packages/backend/convex/deadLetters.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 15,
+      "community": 43,
       "norm_label": "newcount",
       "id": "packages_backend_convex_deadletters_newcount"
     },
@@ -5343,26 +4453,6 @@
       "id": "packages_backend_convex_guardrails_test_seedconfig"
     },
     {
-      "label": "http.ts",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 190,
-      "norm_label": "http.ts",
-      "id": "packages_backend_convex_http"
-    },
-    {
-      "label": "http",
-      "file_type": "code",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 190,
-      "norm_label": "http",
-      "id": "packages_backend_convex_http_http"
-    },
-    {
       "label": "importGuard.test.ts",
       "file_type": "code",
       "source_file": "packages/backend/convex/importGuard.test.ts",
@@ -5528,7 +4618,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "list",
       "id": "packages_backend_convex_notifications_list"
     },
@@ -5548,7 +4638,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 16,
+      "community": 15,
       "norm_label": "notify",
       "id": "packages_backend_convex_notifications_notify"
     },
@@ -5598,7 +4688,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L147",
       "_origin": "ast",
-      "community": 15,
+      "community": 30,
       "norm_label": "list",
       "id": "packages_backend_convex_requests_list"
     },
@@ -7063,13 +6153,13 @@
       "id": "packages_pii_src_scan_scantext"
     },
     {
-      "label": "NOTE: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
+      "label": "NOTE: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
       "file_type": "rationale",
       "source_file": "packages/pii/src/scan.ts",
       "source_location": "L56",
       "_origin": "ast",
       "community": 155,
-      "norm_label": "note: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
+      "norm_label": "note: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
       "id": "packages_pii_src_scan_rationale_56"
     },
     {
@@ -7173,13 +6263,13 @@
       "id": "readme_clean_clone_boot_order_run_verbatim"
     },
     {
-      "label": "Skill registry seed (required \u2014 the pipeline fails closed without it)",
+      "label": "Skill registry seed (required — the pipeline fails closed without it)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L65",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "skill registry seed (required \u2014 the pipeline fails closed without it)",
+      "norm_label": "skill registry seed (required — the pipeline fails closed without it)",
       "id": "readme_skill_registry_seed_required_the_pipeline_fails_closed_without_it"
     },
     {
@@ -7213,33 +6303,33 @@
       "id": "readme_common_commands"
     },
     {
-      "label": "Dev tooling \u2014 build discipline & repo knowledge graph",
+      "label": "Dev tooling — build discipline & repo knowledge graph",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L117",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "dev tooling \u2014 build discipline & repo knowledge graph",
+      "norm_label": "dev tooling — build discipline & repo knowledge graph",
       "id": "readme_dev_tooling_build_discipline_repo_knowledge_graph"
     },
     {
-      "label": "ponytail \u2014 minimal-code discipline",
+      "label": "ponytail — minimal-code discipline",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L123",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "ponytail \u2014 minimal-code discipline",
+      "norm_label": "ponytail — minimal-code discipline",
       "id": "readme_ponytail_minimal_code_discipline"
     },
     {
-      "label": "graphify \u2014 repo knowledge graph (query before you read)",
+      "label": "graphify — repo knowledge graph (query before you read)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L135",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "graphify \u2014 repo knowledge graph (query before you read)",
+      "norm_label": "graphify — repo knowledge graph (query before you read)",
       "id": "readme_graphify_repo_knowledge_graph_query_before_you_read"
     },
     {
@@ -10033,13 +9123,13 @@
       "id": "packages_contracts_skills_executive_agent_classifier"
     },
     {
-      "label": "Executive Agent \u2014 Request Classifier (v1)",
+      "label": "Executive Agent — Request Classifier (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-agent.classifier.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "norm_label": "executive agent \u2014 request classifier (v1)",
+      "norm_label": "executive agent — request classifier (v1)",
       "id": "packages_contracts_skills_executive_agent_classifier_executive_agent_request_classifier_v1"
     },
     {
@@ -10083,13 +9173,13 @@
       "id": "packages_contracts_skills_executive_router"
     },
     {
-      "label": "Executive Agent \u2014 Router (v1)",
+      "label": "Executive Agent — Router (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-router.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 84,
-      "norm_label": "executive agent \u2014 router (v1)",
+      "norm_label": "executive agent — router (v1)",
       "id": "packages_contracts_skills_executive_router_executive_agent_router_v1"
     },
     {
@@ -10161,158 +9251,408 @@
       "community": 45,
       "norm_label": "planned sidecars",
       "id": "sidecars_readme_planned_sidecars"
+    },
+    {
+      "label": "audit (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L14",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_audit_table",
+      "community": 1,
+      "norm_label": "audit (table)"
+    },
+    {
+      "label": "deadLetters (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L26",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_deadletters_table",
+      "community": 1,
+      "norm_label": "deadLetters (table)"
+    },
+    {
+      "label": "skills (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L42",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_skills_table",
+      "community": 1,
+      "norm_label": "skills (table)"
+    },
+    {
+      "label": "pendingTimeouts (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L60",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_pendingtimeouts_table",
+      "community": 1,
+      "norm_label": "pendingTimeouts (table)"
+    },
+    {
+      "label": "exportCursors (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L73",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_exportcursors_table",
+      "community": 1,
+      "norm_label": "exportCursors (table)"
+    },
+    {
+      "label": "requests (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L83",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_requests_table",
+      "community": 1,
+      "norm_label": "requests (table)"
+    },
+    {
+      "label": "plans (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L132",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_plans_table",
+      "community": 1,
+      "norm_label": "plans (table)"
+    },
+    {
+      "label": "attachments (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L179",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_attachments_table",
+      "community": 1,
+      "norm_label": "attachments (table)"
+    },
+    {
+      "label": "telemetry (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L191",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_telemetry_table",
+      "community": 1,
+      "norm_label": "telemetry (table)"
+    },
+    {
+      "label": "notifications (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L206",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_notifications_table",
+      "community": 1,
+      "norm_label": "notifications (table)"
+    },
+    {
+      "label": "gmailTokens (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L217",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_gmailtokens_table",
+      "community": 1,
+      "norm_label": "gmailTokens (table)"
+    },
+    {
+      "label": "guardrailConfig (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L230",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_guardrailconfig_table",
+      "community": 1,
+      "norm_label": "guardrailConfig (table)"
+    },
+    {
+      "label": "demoItems (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L237",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_demoitems_table",
+      "community": 1,
+      "norm_label": "demoItems (table)"
     }
   ],
   "links": [
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L1",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit",
+      "target": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L52",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_data_flow"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L42",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_dependencies_blast_radius"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L81",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_how_to_change_safely"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L88",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_how_to_verify"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L64",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_invariants_what_must_never_break"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L15",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_key_files"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L102",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_known_gaps_deferred_work"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L96",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_operational_notes"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/cockpit.md",
+      "source_location": "L6",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
+      "target": "docs_playbooks_cockpit_purpose"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
+      "source_location": "L11",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "apps_web_app_app_connect_gmail_page",
+      "target": "apps_web_app_app_connect_gmail_page_connectgmailpage"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L7",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_http",
+      "target": "packages_backend_convex_http_http"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L399",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_draft",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_draft"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L83",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_draftcache",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_draftcache"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L280",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_draftcockpit",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_draftcockpit"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L94",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_draftresult",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_draftresult"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L191",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_draftuncached",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_draftuncached"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L66",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_genusage",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_genusage"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L49",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_parsesmoke",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_parsesmoke"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L351",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_route",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_route"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L78",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_routecache",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_routecache"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L91",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_routeresult",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_routeresult"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L105",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_routeuncached",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_routeuncached"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L70",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_saferead",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_saferead"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L48",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_smoke",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_smoke"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L47",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_smoke_routes",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_smoke_routes"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L61",
-      "weight": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llm",
-      "target": "packages_backend_convex_llm_zero_usage",
-      "confidence_score": 1.0
+      "target": "packages_backend_convex_llm_zero_usage"
     },
     {
       "relation": "calls",
@@ -10329,10 +9669,10 @@
       "relation": "references",
       "context": "call",
       "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
+      "confidence_score": 1,
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L53",
-      "weight": 1.0,
+      "weight": 1,
       "source": "packages_backend_convex_llm_parsesmoke",
       "target": "packages_backend_convex_llm_smoke_routes"
     },
@@ -10352,8 +9692,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L20",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_box"
     },
@@ -10362,8 +9702,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L21",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_bubble"
     },
@@ -10372,8 +9712,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L43",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_chatpane"
     },
@@ -10382,8 +9722,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L33",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_messagetext"
     },
@@ -10393,8 +9733,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L94",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_bubble"
     },
@@ -10404,8 +9744,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
       "source_location": "L95",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_chatpane_chatpane",
       "target": "apps_web_app_app_dashboard_workspace_chatpane_messagetext"
     },
@@ -10414,8 +9754,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L34",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_badge"
     },
@@ -10424,8 +9764,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_box"
     },
@@ -10434,8 +9774,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L15",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_btn"
     },
@@ -10444,8 +9784,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L247",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_cardlist"
     },
@@ -10454,8 +9794,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L19",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_chip"
     },
@@ -10464,8 +9804,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L151",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_contactmatch"
     },
@@ -10474,8 +9814,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_dim"
     },
@@ -10484,8 +9824,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L107",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_draftcard"
     },
@@ -10494,8 +9834,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L16",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_label"
     },
@@ -10504,8 +9844,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L154",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_matchhint"
     },
@@ -10514,8 +9854,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_muted"
     },
@@ -10524,8 +9864,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L29",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_plan"
     },
@@ -10534,8 +9874,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L47",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_plancard"
     },
@@ -10544,8 +9884,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L30",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_planid"
     },
@@ -10554,8 +9894,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L121",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_reportcard"
     },
@@ -10564,8 +9904,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L160",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards",
       "target": "apps_web_app_app_dashboard_workspace_cards_resolutioncard"
     },
@@ -10575,8 +9915,8 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L136",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards_reportcard",
       "target": "apps_web_app_app_dashboard_workspace_cards_badge"
     },
@@ -10586,368 +9926,18 @@
       "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L217",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_cards_resolutioncard",
       "target": "apps_web_app_app_dashboard_workspace_cards_matchhint"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state",
-      "target": "planning_state_project_state"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L87",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_accumulated_context"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_current_position"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L45",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_performance_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L19",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_project_reference"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L167",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_project_state",
-      "target": "planning_state_session_continuity"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L161",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_blockers_concerns"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L89",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_decisions"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/STATE.md",
-      "source_location": "L157",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_state_accumulated_context",
-      "target": "planning_state_pending_todos"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_dependency_graph"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L51",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L56",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_tech_tracking"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L66",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_accomplishments"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L88",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_decisions_made"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L129",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_deferred_issues"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L93",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_deviations_from_plan"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L81",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_files_created_modified"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L118",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_issues_encountered"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L125",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_next_phase_readiness"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L60",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_performance"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L132",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_self_check_passed"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L75",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_task_commits"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L122",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_phase_03_2_plan_04_cockpit_name_resolution_turn_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_user_setup_required"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-04-SUMMARY.md",
-      "source_location": "L95",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_04_summary_deviations_from_plan",
-      "target": "planning_phases_03_2_inbox_reading_03_2_04_summary_auto_fixed_issues"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L1",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit",
-      "target": "docs_playbooks_cockpit_playbook_email_chat_cockpit"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L51",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_data_flow"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L41",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_dependencies_blast_radius"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L79",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_how_to_change_safely"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L86",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_how_to_verify"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L63",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_invariants_what_must_never_break"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L15",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_key_files"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L100",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_known_gaps_deferred_work"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L94",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_operational_notes"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/cockpit.md",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "docs_playbooks_cockpit_playbook_email_chat_cockpit",
-      "target": "docs_playbooks_cockpit_purpose"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.test.ts",
       "source_location": "L41",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_test",
       "target": "packages_backend_convex_cockpit_test_countrequests"
     },
@@ -10956,8 +9946,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.test.ts",
       "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_test",
       "target": "packages_backend_convex_cockpit_test_modules"
     },
@@ -10966,8 +9956,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.test.ts",
       "source_location": "L22",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_test",
       "target": "packages_backend_convex_cockpit_test_seedplan"
     },
@@ -10976,8 +9966,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.test.ts",
       "source_location": "L140",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_test_rationale_140",
       "target": "packages_backend_convex_cockpit_test"
     },
@@ -10986,8 +9976,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llmRedaction.test.ts",
       "source_location": "L12",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llmredaction_test",
       "target": "packages_backend_convex_llmredaction_test_convexdir"
     },
@@ -10996,8 +9986,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/llmRedaction.test.ts",
       "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_llmredaction_test",
       "target": "packages_backend_convex_llmredaction_test_readsource"
     },
@@ -11006,8 +9996,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L163",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_advance"
     },
@@ -11016,8 +10006,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L149",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_assistantsay"
     },
@@ -11026,8 +10016,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L43",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_cockpitagent"
     },
@@ -11036,8 +10026,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L146",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_cockpitctx"
     },
@@ -11046,8 +10036,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L398",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_executeplan"
     },
@@ -11056,8 +10046,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L360",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_listthreadmessages"
     },
@@ -11066,8 +10056,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L55",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_parseanswer"
     },
@@ -11076,8 +10066,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L377",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_proposeemailplan"
     },
@@ -11086,8 +10076,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L122",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_questiontext"
     },
@@ -11096,8 +10086,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L323",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_resolverecipients"
     },
@@ -11106,8 +10096,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L204",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_sendcockpitmessage"
     },
@@ -11116,8 +10106,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L101",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit",
       "target": "packages_backend_convex_cockpit_tointentstate"
     },
@@ -11127,8 +10117,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L171",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_advance",
       "target": "packages_backend_convex_cockpit_questiontext"
     },
@@ -11136,10 +10126,10 @@
       "relation": "references",
       "context": "call",
       "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
+      "confidence_score": 1,
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L179",
-      "weight": 1.0,
+      "weight": 1,
       "source": "packages_backend_convex_cockpit_advance",
       "target": "packages_backend_convex_cockpit_cockpitctx"
     },
@@ -11149,160 +10139,10 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L171",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_cockpit_advance",
       "target": "packages_backend_convex_cockpit_assistantsay"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_dependency_graph"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L46",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L51",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L20",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_tech_tracking"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L63",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_accomplishments"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L83",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_decisions_made"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L88",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_deviations_from_plan"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L79",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_files_created_modified"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L105",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_issues_encountered"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L111",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_next_phase_readiness"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L55",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_performance"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L119",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_self_check_passed"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_task_commits"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L108",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_phase_3_2_plan_01_needs_resolution_seam_pure_contact_resolution_helpers_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_user_setup_required"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-01-SUMMARY.md",
-      "source_location": "L90",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_01_summary_deviations_from_plan",
-      "target": "planning_phases_03_2_inbox_reading_03_2_01_summary_auto_fixed_issues"
     },
     {
       "relation": "imports_from",
@@ -11310,8 +10150,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent"
     },
@@ -11321,8 +10161,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_applyanswer"
     },
@@ -11332,8 +10172,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_emailintentstate"
     },
@@ -11343,8 +10183,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_emptyintent"
     },
@@ -11354,8 +10194,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_headerrecord"
     },
@@ -11365,8 +10205,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_nextquestion"
     },
@@ -11376,8 +10216,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_parseaddress"
     },
@@ -11387,8 +10227,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.test.ts",
       "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_test",
       "target": "packages_core_src_emailintent_rankcandidates"
     },
@@ -11397,8 +10237,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L231",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "docref_rfc_5322"
     },
@@ -11407,8 +10247,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L67",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_answer"
     },
@@ -11417,8 +10257,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L138",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_applyanswer"
     },
@@ -11427,8 +10267,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L79",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_applyresult"
     },
@@ -11437,8 +10277,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L208",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_contactmatch"
     },
@@ -11447,8 +10287,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L106",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_dedupeappend"
     },
@@ -11457,8 +10297,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L119",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_dedupenames"
     },
@@ -11467,8 +10307,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L21",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_emailintentstate"
     },
@@ -11477,8 +10317,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L53",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_emptyintent"
     },
@@ -11487,8 +10327,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L42",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_group_words"
     },
@@ -11497,8 +10337,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L223",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_headerrecord"
     },
@@ -11507,8 +10347,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L50",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_isgroupword"
     },
@@ -11517,8 +10357,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L39",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_mutable"
     },
@@ -11527,8 +10367,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L217",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_namecandidates"
     },
@@ -11537,8 +10377,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L87",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_nextquestion"
     },
@@ -11547,8 +10387,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L234",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_parseaddress"
     },
@@ -11557,8 +10397,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L249",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_rankcandidates"
     },
@@ -11567,8 +10407,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_recipientmode"
     },
@@ -11577,8 +10417,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L193",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent",
       "target": "packages_core_src_emailintent_setordrop"
     },
@@ -11597,10 +10437,10 @@
       "relation": "references",
       "context": "call",
       "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
+      "confidence_score": 1,
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L50",
-      "weight": 1.0,
+      "weight": 1,
       "source": "packages_core_src_emailintent_isgroupword",
       "target": "packages_core_src_emailintent_group_words"
     },
@@ -11610,8 +10450,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L151",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_applyanswer",
       "target": "packages_core_src_emailintent_isgroupword"
     },
@@ -11621,8 +10461,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L161",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_applyanswer",
       "target": "packages_core_src_emailintent_dedupeappend"
     },
@@ -11632,8 +10472,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L158",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_applyanswer",
       "target": "packages_core_src_emailintent_dedupenames"
     },
@@ -11643,8 +10483,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L165",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_applyanswer",
       "target": "packages_core_src_emailintent_setordrop"
     },
@@ -11654,158 +10494,18 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/emailIntent.ts",
       "source_location": "L257",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_core_src_emailintent_rankcandidates",
       "target": "packages_core_src_emailintent_parseaddress"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_dependency_graph"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L43",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L48",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_tech_tracking"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L60",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_accomplishments"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L74",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_decisions_made"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L79",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_deviations_from_plan"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L71",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_files_created_modified"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L83",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_issues_encountered"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L89",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_next_phase_readiness"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L52",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_performance"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L93",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_self_check_passed"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L66",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_task_commits"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-03-SUMMARY.md",
-      "source_location": "L86",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_03_summary_phase_03_2_plan_03_gmail_headers_only_search_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_03_summary_user_setup_required"
     },
     {
       "relation": "cites",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L58",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "docref_rfc_2822"
     },
@@ -11814,8 +10514,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_base64url"
     },
@@ -11824,8 +10524,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L59",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_buildmime"
     },
@@ -11834,8 +10534,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L28",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_freshaccesstoken"
     },
@@ -11844,8 +10544,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L157",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_gq"
     },
@@ -11854,8 +10554,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L146",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_headerrecord"
     },
@@ -11864,8 +10564,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L154",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_meta_headers"
     },
@@ -11874,8 +10574,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L176",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_search"
     },
@@ -11884,8 +10584,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L150",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_searchresult"
     },
@@ -11894,8 +10594,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L86",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_send"
     },
@@ -11904,8 +10604,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L82",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_sendresult"
     },
@@ -11914,8 +10614,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L162",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_gmail",
       "target": "packages_backend_convex_gmail_toheaderrecord"
     },
@@ -11944,320 +10644,10 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L1",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements",
-      "target": "planning_requirements_requirements_pikar_ai"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L105",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_out_of_scope"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L120",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_traceability"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v1_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L92",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_requirements_pikar_ai",
-      "target": "planning_requirements_v2_requirements"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L80",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_discoverability"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L42",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_email_cockpit"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_executive_agent_planning"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_governance_operations"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_guardrails"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L33",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_human_review_delivery"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L10",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_intake_enrichment"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L50",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_knowledge_vault"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L57",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_live_voice_sessions"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L85",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_private_beta"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L64",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v1_requirements",
-      "target": "planning_requirements_self_improvement"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/REQUIREMENTS.md",
-      "source_location": "L96",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_requirements_v2_requirements",
-      "target": "planning_requirements_expansion"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_dependency_graph"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L42",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_metrics"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L47",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L18",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_tech_tracking"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L59",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_accomplishments"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L74",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_decisions_made"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L81",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_deviations_from_plan"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L70",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_files_created_modified"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L85",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_issues_encountered"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L92",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_next_phase_readiness"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L51",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_performance"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L96",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_self_check_passed"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L65",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_task_commits"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".planning/phases/03.2-inbox-reading/03.2-02-SUMMARY.md",
-      "source_location": "L89",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "planning_phases_03_2_inbox_reading_03_2_02_summary_phase_03_2_plan_02_transient_candidate_fields_summary",
-      "target": "planning_phases_03_2_inbox_reading_03_2_02_summary_user_setup_required"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L116",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_bythread"
     },
@@ -12266,8 +10656,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_candidates"
     },
@@ -12276,8 +10666,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L108",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_clearcandidates"
     },
@@ -12286,8 +10676,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L45",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_insertplan"
     },
@@ -12296,8 +10686,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L61",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_patchplan"
     },
@@ -12306,8 +10696,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L17",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_plan_status"
     },
@@ -12316,8 +10706,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L131",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_reportforplan"
     },
@@ -12326,8 +10716,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L80",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_setplanstatus"
     },
@@ -12336,8 +10726,8 @@
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L92",
-      "weight": 1.0,
-      "confidence_score": 1.0,
+      "weight": 1,
+      "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_writecandidates"
     },
@@ -14753,38 +13143,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
-      "source_location": "L10",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "apps_web_app_app_connect_gmail_page",
-      "target": "apps_web_app_app_connect_gmail_page_connectgmailpage"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
-      "source_location": "L13",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "apps_web_app_app_connect_gmail_page",
-      "target": "packages_backend_convex_gmailauth_gmailconnecturl"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
-      "source_location": "L12",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "apps_web_app_app_connect_gmail_page",
-      "target": "packages_backend_convex_gmailauth_gmailstatus"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "apps/web/app/(app)/dashboard/page.tsx",
       "source_location": "L4",
       "weight": 1,
@@ -16114,17 +14472,6 @@
       "target": "packages_backend_convex_auth_password"
     },
     {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L4",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_auth"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/convex.config.ts",
@@ -16369,17 +14716,6 @@
       "target": "packages_core_src_tokenexpiry_isexpiringsoon"
     },
     {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L5",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_gmailauth"
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16424,28 +14760,6 @@
       "target": "packages_backend_convex_gmailauth_requireenv"
     },
     {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L5",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_gmailauth_verifystate"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L66",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_gmailauth_store"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/guardrails.test.ts",
@@ -16474,16 +14788,6 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_guardrails_test",
       "target": "packages_backend_convex_guardrails_test_seedconfig"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/http.ts",
-      "source_location": "L7",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "packages_backend_convex_http",
-      "target": "packages_backend_convex_http_http"
     },
     {
       "relation": "contains",
@@ -21596,8 +19900,699 @@
       "confidence_score": 1,
       "source": "sidecars_readme_sidecars",
       "target": "sidecars_readme_planned_sidecars"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L14",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L26",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_deadletters_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L42",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_skills_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L60",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L73",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_exportcursors_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L83",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L132",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L179",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_attachments_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L191",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_telemetry_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L206",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_notifications_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L217",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_gmailtokens_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L230",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_guardrailconfig_table"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L237",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_demoitems_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/audit.ts",
+      "source_location": "L28",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_audit",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L6",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_llm_draftcockpit"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L212",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_plans_insertplan"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L225",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_plans_bythread"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L242",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_plans_patchplan"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L271",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_gmail_search"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L279",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_notifications_notify"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L296",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_plans_writecandidates"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L346",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_plans_clearcandidates"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L412",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_gmailauth_gettokens"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L446",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_deliverapprovedplan_deliverapprovedplan"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L449",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_deadletter_onpipelinecomplete"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/cockpit.ts",
+      "source_location": "L428",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_cockpit",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L32",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_deadletter",
+      "target": "packages_backend_convex_schema_deadletters_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/deadLetter.ts",
+      "source_location": "L78",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_deadletter",
+      "target": "packages_backend_convex_schema_telemetry_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/demo.ts",
+      "source_location": "L12",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_demo",
+      "target": "packages_backend_convex_schema_demoitems_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmail.ts",
+      "source_location": "L34",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmail",
+      "target": "packages_backend_convex_gmailauth_gettokens"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmail.ts",
+      "source_location": "L50",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmail",
+      "target": "packages_backend_convex_gmailauth_updateaccess"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmail.ts",
+      "source_location": "L89",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmail",
+      "target": "packages_backend_convex_gmailauth_getfordelivery"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmail.ts",
+      "source_location": "L104",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmail",
+      "target": "packages_backend_convex_pipeline_setstatus"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmail.ts",
+      "source_location": "L130",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmail",
+      "target": "packages_backend_convex_audit_log"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L89",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_schema_gmailtokens_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/gmailAuth.ts",
+      "source_location": "L160",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_gmailauth",
+      "target": "packages_backend_convex_schema_notifications_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/guardrails.ts",
+      "source_location": "L35",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_guardrails",
+      "target": "packages_backend_convex_schema_guardrailconfig_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/http.ts",
+      "source_location": "L66",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_http",
+      "target": "packages_backend_convex_gmailauth_store"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L116",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails_getsafetextbyhash"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L124",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_audit_log"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L143",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_skills_getactiveskill"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L378",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails_precall"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L437",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails_saveinstruction"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/notifications.ts",
+      "source_location": "L46",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_notifications",
+      "target": "packages_backend_convex_schema_notifications_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/plans.ts",
+      "source_location": "L48",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_plans",
+      "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L99",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/requests.ts",
+      "source_location": "L113",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_requests",
+      "target": "packages_backend_convex_schema_attachments_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/review.ts",
+      "source_location": "L68",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_review",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/skills.ts",
+      "source_location": "L115",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_skills",
+      "target": "packages_backend_convex_schema_skills_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L145",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_requests_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L213",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smokeAssert.ts",
+      "source_location": "L53",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smokeassert",
+      "target": "packages_backend_convex_schema_pendingtimeouts_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/telemetry.ts",
+      "source_location": "L59",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_telemetry",
+      "target": "packages_backend_convex_schema_telemetry_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/wormCursor.ts",
+      "source_location": "L35",
+      "weight": 1,
+      "context": "db_read",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_wormcursor",
+      "target": "packages_backend_convex_schema_audit_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/wormCursor.ts",
+      "source_location": "L52",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_wormcursor",
+      "target": "packages_backend_convex_schema_exportcursors_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
+      "source_location": "L12",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_connect_gmail_page",
+      "target": "packages_backend_convex_gmailauth_gmailstatus"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/connect-gmail/page.tsx",
+      "source_location": "L13",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_connect_gmail_page",
+      "target": "packages_backend_convex_gmailauth_gmailconnecturl"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
+      "source_location": "L29",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_cards",
+      "target": "packages_backend_convex_plans_bythread"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
+      "source_location": "L48",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_cards",
+      "target": "packages_backend_convex_cockpit_executeplan"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
+      "source_location": "L124",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_cards",
+      "target": "packages_backend_convex_plans_reportforplan"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
+      "source_location": "L161",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_cards",
+      "target": "packages_backend_convex_cockpit_resolverecipients"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
+      "source_location": "L44",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_chatpane",
+      "target": "packages_backend_convex_cockpit_sendcockpitmessage"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
+      "source_location": "L50",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_chatpane",
+      "target": "packages_backend_convex_cockpit_listthreadmessages"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx",
+      "source_location": "L57",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_chatpane",
+      "target": "packages_backend_convex_plans_bythread"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "87bd468876df00c2bda4e09bbce784da076e5258"
+  "built_at_commit": "252d1d58c43625528b183e0ab7c092469e1384b8"
 }
