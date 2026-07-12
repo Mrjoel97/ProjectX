@@ -1,0 +1,64 @@
+/**
+ * @pikar/cost — pure-TS cost estimation + model selection (GRDL-03).
+ *
+ * Fail-closed by construction: every function returns Result, so an unknown model
+ * or an over-budget request surfaces as Err (never NaN/undefined/throw) and the
+ * convex adapter can stop the request. Domain logic per CLAUDE.md §1.
+ */
+import { type Result, err, ok } from "@pikar/core/result";
+import type { SafeText } from "@pikar/pii";
+
+export const DEFAULT_MODEL = "openai/gpt-4o-mini";
+export const CHEAP_MODEL = "openai/gpt-4.1-nano"; // downgrade AND fallback target
+
+// Vercel AI Gateway per-MTok pricing, verified 2026-07-12.
+export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> = {
+  [DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
+  [CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
+};
+
+// ponytail: chars/4 heuristic — feeds a budget THRESHOLD, not billing; real cost
+// prices SDK usage via priceUsage. Adopt a tokenizer only if the margin ever matters.
+export const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+
+// ponytail: fixed expected-output size for an email draft; tune when telemetry shows drift.
+export const EXPECTED_OUTPUT_TOKENS = 1024;
+
+export type CostError = { code: "unknown_model" | "over_budget" };
+
+export function estimateCostUsd(
+  model: string,
+  tokensIn: number,
+  tokensOut: number,
+): Result<number, CostError> {
+  const p = PRICING[model];
+  if (!p) return err({ code: "unknown_model" });
+  return ok((tokensIn / 1_000_000) * p.inPerMTok + (tokensOut / 1_000_000) * p.outPerMTok);
+}
+
+export function priceUsage(
+  model: string,
+  usage: { inputTokens?: number; outputTokens?: number },
+): Result<number, CostError> {
+  return estimateCostUsd(model, usage.inputTokens ?? 0, usage.outputTokens ?? 0);
+}
+
+/** GRDL-03: default model if it fits budgetUsdPerRequest; else downgrade to CHEAP_MODEL;
+ *  else Err over_budget. Any unknown-model Err propagates (fail closed). Accepts SafeText
+ *  ONLY — cost is always estimated from redacted text (GRDL-02/03). */
+export function chooseModel(
+  safeText: SafeText,
+  budgetUsdPerRequest: number,
+): Result<{ model: string; estCents: number }, CostError> {
+  const tokensIn = estimateTokens(safeText);
+  const budgetOk = Number.isFinite(budgetUsdPerRequest) && budgetUsdPerRequest > 0;
+  for (const model of [DEFAULT_MODEL, CHEAP_MODEL]) {
+    const est = estimateCostUsd(model, tokensIn, EXPECTED_OUTPUT_TOKENS);
+    if (!est.ok) return est; // unknown_model propagates — fail closed
+    if (budgetOk && est.value <= budgetUsdPerRequest) {
+      // Integer cents, fail-closed bias: a sub-cent estimate still costs ≥ 1 cent of budget.
+      return ok({ model, estCents: Math.max(1, Math.ceil(est.value * 100)) });
+    }
+  }
+  return err({ code: "over_budget" });
+}
