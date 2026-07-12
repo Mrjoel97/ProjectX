@@ -3,7 +3,10 @@ import {
   applyAnswer,
   emptyIntent,
   nextQuestion,
+  parseAddress,
+  rankCandidates,
   type EmailIntentState,
+  type HeaderRecord,
 } from "./emailIntent";
 
 describe("emailIntent — SC2/SC3 slot-filling brain", () => {
@@ -200,5 +203,66 @@ describe("emailIntent — SC2/SC3 slot-filling brain", () => {
     expect(res.state.recipients).toEqual(["a@b.com", "c@d.com"]);
     expect(res.state.pendingValid).toBeUndefined();
     expect(res.state.pendingResolution).toBeUndefined();
+  });
+});
+
+describe("parseAddress — header value → { displayName?, address }", () => {
+  test('"Name <addr>" → displayName + lowercased address', () => {
+    expect(parseAddress("Sarah Chen <sarah@acme.com>")).toEqual({
+      displayName: "Sarah Chen",
+      address: "sarah@acme.com",
+    });
+    // quoted display name + mixed-case address lowercased
+    expect(parseAddress('"Bob Jones" <Bob@Example.COM>')).toEqual({
+      displayName: "Bob Jones",
+      address: "bob@example.com",
+    });
+  });
+
+  test("bare address → address only, no displayName; address lowercased", () => {
+    expect(parseAddress("sarah@acme.com")).toEqual({ address: "sarah@acme.com" });
+    expect(parseAddress("  SARAH@Acme.com  ")).toEqual({ address: "sarah@acme.com" });
+  });
+
+  test("non-address → null", () => {
+    expect(parseAddress("not-an-address")).toBeNull();
+    expect(parseAddress("")).toBeNull();
+  });
+});
+
+describe("rankCandidates — dedupe + rank contacts from header metadata", () => {
+  test("zero records → []", () => {
+    expect(rankCandidates("Sarah", [])).toEqual([]);
+  });
+
+  test("dedupes by lowercased address, counts frequency, ranks count desc then recency desc, caps ~5", () => {
+    const recs: HeaderRecord[] = [
+      { from: "Sarah Chen <sarah@acme.com>", subject: "Old", date: "2024-01-01T00:00:00Z" },
+      { from: "SARAH <SARAH@acme.com>", subject: "New", date: "2024-06-01T00:00:00Z" },
+      { from: "Tom <tom@x.com>", subject: "One-off", date: "2024-07-01T00:00:00Z" },
+    ];
+    const ranked = rankCandidates("Sarah", recs);
+    // sarah appears twice (deduped to one, count 2) → ranks above tom (count 1)
+    expect(ranked.map((m) => m.address)).toEqual(["sarah@acme.com", "tom@x.com"]);
+    const sarah = ranked[0]!;
+    expect(sarah.count).toBe(2);
+    // most-recent hit drives lastSubject/lastDateMs
+    expect(sarah.lastSubject).toBe("New");
+    expect(sarah.lastDateMs).toBe(Date.parse("2024-06-01T00:00:00Z"));
+  });
+
+  test("parses From/To/Cc and ignores unparseable / missing fields", () => {
+    const recs: HeaderRecord[] = [
+      { to: "a@x.com, b@x.com", cc: "garbage-no-at", from: "" },
+    ];
+    const ranked = rankCandidates("x", recs);
+    expect(ranked.map((m) => m.address).sort()).toEqual(["a@x.com", "b@x.com"]);
+  });
+
+  test("caps output at ~5", () => {
+    const recs: HeaderRecord[] = Array.from({ length: 9 }, (_, i) => ({
+      from: `p${i}@x.com`,
+    }));
+    expect(rankCandidates("p", recs).length).toBeLessThanOrEqual(5);
   });
 });
