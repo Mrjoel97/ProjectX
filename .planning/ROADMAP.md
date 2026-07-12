@@ -149,10 +149,15 @@ Plans:
 **Requirements**: AGNT-01, AGNT-02 (reshaped — the Executive Agent finally becomes a real reasoning tool-loop instead of an inert message store; no new v1 ID)
 **Depends on:** Phase 3.2 (inbox-read primitives become agent tools). **Blocks Phase 3.3** — attachment generation builds on the agent engine, so this must land first.
 **Design record:** `.planning/design/agent-driven-cockpit.md`
-**Plans:** 0 plans
+**Plans:** 6 plans in 5 waves (planned 2026-07-12)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 03.2.1 to break down)
+- [ ] 03.2.1-01-PLAN.md — cockpit-agent skill registry row + seed constant + static-sync test (Wave 1)
+- [ ] 03.2.1-02-PLAN.md — Pure tool-internals in @pikar/core: buildRecipientView + applyRecipientEdit (index/label view, add/remove/set bounce) (Wave 1)
+- [ ] 03.2.1-03-PLAN.md — Governed tool wrappers + agent-context builder in llm.ts + per-tool unit tests + redaction static scan (Wave 2)
+- [ ] 03.2.1-04-PLAN.md — runCockpitAgent generateText tool-loop (preCall/maxSteps/recordSpend/fallback) + mock-model integration test (Wave 3)
+- [ ] 03.2.1-05-PLAN.md — Clean cutover: sendCockpitMessage thin driver + FSM delete + slim emailIntent + offline SMOKE:: E2E (Wave 4)
+- [ ] 03.2.1-06-PLAN.md — Cockpit playbook rewrite (§9) + watch.json + human-verify checkpoint (Wave 5)
 
 ### Phase 3.3: Attachment Generation (INSERTED)
 **Goal**: The agent can generate a document and attach it to an outgoing email, so a plan can deliver produced artifacts, not just body text.
