@@ -1,30 +1,41 @@
 # Graph Report - Pikar-Ai  (2026-07-12)
 
 ## Corpus Check
-- 298 files · ~246,965 words
+- 318 files · ~272,947 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 916 nodes · 1053 edges · 92 communities (79 shown, 13 thin omitted)
+- 1015 nodes · 1116 edges · 101 communities (88 shown, 13 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `66059698`
+- Built from commit: `87bd4688`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Architecture Patterns
+- functions.ts
 - package.json
-- Architecture Research
+- page.tsx
 - biome.json
-- Stack Research — Convex Revision
+- buildTelemetry.ts
 - skills.ts
-- dependencies
+- Phase 03.2 Plan 03: Gmail Headers-Only Search Summary
 - Playbook: Email Chat Cockpit
 - ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages
+- emailIntent.ts
+- gmail.ts
 - result.ts
+- plans.ts
+- Project State
+- page.tsx
+- layout.tsx
+- page.tsx
+- deadLetters.ts
+- Phase 03.2 Plan 04: Cockpit Name-Resolution Turn Summary
+- deliverApprovedPlan.ts
+- ChatPane.tsx
 - Common Pitfalls
 - audit.ts
 - demo.ts
@@ -43,7 +54,6 @@
 - convex.config.ts
 - graphify
 - smoke.ts
-- smokeAssert.ts
 - worm.test.ts
 - wormCursor.ts
 - providers.tsx
@@ -69,7 +79,6 @@
 - Convex
 - scan.ts
 - tenant.ts
-- pipeline.ts
 - llm.ts
 - drafting.ts
 - llmRedaction.test.ts
@@ -83,7 +92,6 @@
 - SplitPane.tsx
 - run-smoke-fanout.mjs
 - cockpitDraft.test.ts
-- functions.ts
 - auth.ts
 - cards.tsx
 - Playbook: Email Chat Cockpit
@@ -93,16 +101,16 @@
 - docs/
 
 ## God Nodes (most connected - your core abstractions)
-1. `base()` - 12 edges
-2. `Convex Create Component` - 12 edges
-3. `Migrations Component Reference` - 12 edges
-4. `Convex Quickstart` - 12 edges
-5. `Pikar AI — Repository Conventions` - 11 edges
-6. `Hot Path Rules` - 11 edges
-7. `Convex Auth` - 11 edges
-8. `Playbook: Email Chat Cockpit` - 10 edges
-9. `Playbook: <feature name>` - 10 edges
-10. `Playbook: Audit Log & Dead-Letter Pipeline` - 10 edges
+1. `Phase 03.2 Plan 04: Cockpit Name-Resolution Turn Summary` - 12 edges
+2. `v1 Requirements` - 12 edges
+3. `base()` - 12 edges
+4. `Convex Create Component` - 12 edges
+5. `Migrations Component Reference` - 12 edges
+6. `Convex Quickstart` - 12 edges
+7. `Phase 3.2 Plan 01: needs_resolution seam + pure contact-resolution helpers Summary` - 11 edges
+8. `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary` - 11 edges
+9. `Phase 03.2 Plan 02: Transient Candidate Fields Summary` - 11 edges
+10. `Hot Path Rules` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - None detected - all connections are within the same source files.
@@ -110,35 +118,35 @@
 ## Import Cycles
 - None detected.
 
-## Communities (92 total, 13 thin omitted)
+## Communities (101 total, 13 thin omitted)
 
-### Community 0 - "Architecture Patterns"
-Cohesion: 0.17
-Nodes (11): 1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter, 2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module, 3. The audit module is insert-only, 4. Audit and dead-letter payloads must be redaction-safe, 5. No hardcoded agent prompts — skills load from the registry, 6. Pinned pre-1.0 component versions must not be bumped casually, 7. Boot order, 8. Ponytail discipline — the laziest solution that works (MANDATED) (+3 more)
+### Community 0 - "functions.ts"
+Cohesion: 0.12
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 1 - "package.json"
-Cohesion: 0.24
-Nodes (7): crons, flagExpiringTokens, exportCursors (table), exportAudit, advanceCursor, auditSince, getCursor
+Cohesion: 0.07
+Nodes (19): modules, modules, modules, REQ, activateSkill, getActiveSkill, loadSkill(), seedSkills (+11 more)
 
-### Community 2 - "Architecture Research"
-Cohesion: 0.20
-Nodes (7): deliverApprovedPlan, markPlanDone, send, setStatus, telemetry (table), terminalOutcome, writeTerminal
-
-### Community 3 - "biome.json"
+### Community 2 - "page.tsx"
 Cohesion: 0.20
 Nodes (8): DEFAULT_CONFIG, getSafeTextByHash, preCall, prepare, rateLimiter, recordSpend, saveInstruction, setKillSwitch
 
-### Community 4 - "Stack Research — Convex Revision"
-Cohesion: 0.28
-Nodes (6): buildTelemetry(), LlmUsage, ReviewOutcome, TelemetryRow, TerminalOutcome, OPSG01_KEYS
+### Community 3 - "biome.json"
+Cohesion: 0.11
+Nodes (17): Discoverability, Email Cockpit, Executive Agent & Planning, Expansion, Governance & Operations, Guardrails, Human Review & Delivery, Intake & Enrichment (+9 more)
+
+### Community 4 - "buildTelemetry.ts"
+Cohesion: 0.13
+Nodes (13): badge(), box, btn, chip, ContactMatch, dim, label, matchHint() (+5 more)
 
 ### Community 5 - "skills.ts"
 Cohesion: 0.47
 Nodes (4): parseRouting(), ParseRoutingResult, RoutingDecision, routingSchema
 
-### Community 6 - "dependencies"
-Cohesion: 0.40
-Nodes (4): log, deadLetterRecipient, onPipelineComplete, deadLetters (table)
+### Community 6 - "Phase 03.2 Plan 03: Gmail Headers-Only Search Summary"
+Cohesion: 0.13
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 7 - "Playbook: Email Chat Cockpit"
 Cohesion: 0.18
@@ -148,17 +156,61 @@ Nodes (10): Data flow, Dependencies & blast radius, How to change safely, How to
 Cohesion: 0.33
 Nodes (5): ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages, Alternatives rejected, Consequences, Context, Decision
 
+### Community 9 - "emailIntent.ts"
+Cohesion: 0.16
+Nodes (19): RFC-5322, Answer, applyAnswer(), ApplyResult, ContactMatch, dedupeAppend(), dedupeNames(), EmailIntentState (+11 more)
+
+### Community 10 - "gmail.ts"
+Cohesion: 0.17
+Nodes (6): RFC-2822, HeaderRecord, META_HEADERS, search, SearchResult, SendResult
+
 ### Community 11 - "result.ts"
-Cohesion: 0.31
-Nodes (8): Answer, applyAnswer(), ApplyResult, dedupeAppend(), EmailIntentState, emptyIntent, nextQuestion, RecipientMode
+Cohesion: 0.13
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+
+### Community 12 - "plans.ts"
+Cohesion: 0.20
+Nodes (9): byThread, CANDIDATES, clearCandidates, insertPlan, patchPlan, PLAN_STATUS, reportForPlan, setPlanStatus (+1 more)
+
+### Community 13 - "Project State"
+Cohesion: 0.20
+Nodes (9): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Pending Todos, Performance Metrics, Project Reference, Project State (+1 more)
+
+### Community 14 - "page.tsx"
+Cohesion: 0.22
+Nodes (7): retrier, workflow, armTimeout, fireTimeout, reviewDecisionValidator, reviewEventValidator, sendDecision
+
+### Community 15 - "layout.tsx"
+Cohesion: 0.08
+Nodes (13): NAV, STATUS_COLOR, listNew, markResolved, newCount, addItem, listItems, tenantAction (+5 more)
+
+### Community 16 - "page.tsx"
+Cohesion: 0.16
+Nodes (10): box, btn, Mode, contentHash(), notify, REQUEST_STATUS, attachmentArg, get (+2 more)
+
+### Community 17 - "deadLetters.ts"
+Cohesion: 0.28
+Nodes (6): buildTelemetry(), LlmUsage, ReviewOutcome, TelemetryRow, TerminalOutcome, OPSG01_KEYS
+
+### Community 18 - "Phase 03.2 Plan 04: Cockpit Name-Resolution Turn Summary"
+Cohesion: 0.12
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
+
+### Community 19 - "deliverApprovedPlan.ts"
+Cohesion: 0.13
+Nodes (12): deliverApprovedPlan, markPlanDone, send, BlockReason, LABELS, pipelineWorkflow, saveDraft, setStatus (+4 more)
+
+### Community 20 - "ChatPane.tsx"
+Cohesion: 0.60
+Nodes (4): box, bubble(), ChatPane(), messageText()
 
 ### Community 26 - "Common Pitfalls"
 Cohesion: 0.25
 Nodes (8): out, out, backendDir, convexBin, invoke(), must(), pollPass(), IMPORTANT: on Windows + Node 24 the convex CLI process can crash during exit
 
 ### Community 31 - "audit.ts"
-Cohesion: 0.22
-Nodes (8): auditCounts, backfillAuditCounts, countAudit, audit (table), AuditHash, AuditPayload, AuditPayloadValue, AuditRef
+Cohesion: 0.24
+Nodes (7): auditCounts, backfillAuditCounts, countAudit, AuditHash, AuditPayload, AuditPayloadValue, AuditRef
 
 ### Community 32 - "demo.ts"
 Cohesion: 0.08
@@ -185,8 +237,8 @@ Cohesion: 0.40
 Nodes (3): backend, NOTE: `convex codegen` requires a configured deployment (CONVEX_DEPLOYMENT in, root
 
 ### Community 39 - "auth.ts"
-Cohesion: 0.07
-Nodes (29): AttachmentPicker(), UploadedAttachment, box, btn, Mode, REJECTION_COPY, retrier, workflow (+21 more)
+Cohesion: 0.17
+Nodes (13): AttachmentPicker(), UploadedAttachment, REJECTION_COPY, generateUploadUrl, submit, Attachment, isValidEmail(), MIME_ALLOWLIST (+5 more)
 
 ### Community 46 - "page.tsx"
 Cohesion: 0.12
@@ -195,10 +247,6 @@ Nodes (7): HAS_PLACEHOLDERS, PLACEHOLDERS, ledger, metadata, structuredData, met
 ### Community 62 - "smoke.ts"
 Cohesion: 0.08
 Nodes (23): 1. Push Filters To Storage, 2. Minimize Data Sources, 3. Minimize Row Size, 4. Isolate Frequently-Updated Fields, 5. Match Consistency To Read Patterns, Aggregates, Backfills, Check for redundant indexes (+15 more)
-
-### Community 64 - "smokeAssert.ts"
-Cohesion: 0.12
-Nodes (15): assertAtReview, assertBlocked, assertDeadLetter, assertDeadLetterReason, assertFallback, assertFanoutIdempotent, assertFanoutReachedAll, assertLlmCalledCount (+7 more)
 
 ### Community 67 - "worm.test.ts"
 Cohesion: 0.10
@@ -293,20 +341,16 @@ Cohesion: 0.14
 Nodes (19): Err, Ok, Result, unwrap(), chooseModel(), CostError, estimateCostUsd(), estimateTokens() (+11 more)
 
 ### Community 168 - "tenant.ts"
-Cohesion: 0.07
-Nodes (22): modules, modules, modules, REQ, attachments (table), gmailTokens (table), guardrailConfig (table), skills (table) (+14 more)
-
-### Community 170 - "pipeline.ts"
-Cohesion: 0.20
-Nodes (8): draft, Route, BlockReason, LABELS, REQUEST_STATUS, saveDraft, Usage, useVerbatimDraft
+Cohesion: 0.12
+Nodes (15): assertAtReview, assertBlocked, assertDeadLetter, assertDeadLetterReason, assertFallback, assertFanoutIdempotent, assertFanoutReachedAll, assertLlmCalledCount (+7 more)
 
 ### Community 171 - "llm.ts"
-Cohesion: 0.15
-Nodes (13): draftCache, DraftResult, draftUncached, GenUsage, parseSmoke(), routeCache, RouteResult, routeUncached (+5 more)
+Cohesion: 0.13
+Nodes (15): draft, draftCache, draftCockpit, DraftResult, draftUncached, GenUsage, parseSmoke(), Route (+7 more)
 
 ### Community 176 - "smoke.ts"
-Cohesion: 0.15
-Nodes (12): pipelineWorkflow, assertSubmitRateLimited, boom, drainDailySpend, failingPipeline, recordReviewOutcome, resetDailySpend, reviewGate (+4 more)
+Cohesion: 0.13
+Nodes (14): log, deadLetterRecipient, onPipelineComplete, assertSubmitRateLimited, boom, drainDailySpend, failingPipeline, recordReviewOutcome (+6 more)
 
 ### Community 180 - "requests.ts"
 Cohesion: 0.33
@@ -317,8 +361,8 @@ Cohesion: 0.50
 Nodes (3): backfillRequestDefaults, migrations, run
 
 ### Community 190 - "tokenExpiry.ts"
-Cohesion: 0.09
-Nodes (19): heading, panel, RFC-2822, { auth, signIn, signOut, store, isAuthenticated }, password, SendResult, buildAuthorizeUrl(), getForDelivery (+11 more)
+Cohesion: 0.08
+Nodes (23): heading, panel, { auth, signIn, signOut, store, isAuthenticated }, password, crons, buildAuthorizeUrl(), flagExpiringTokens, getForDelivery (+15 more)
 
 ### Community 191 - "tenant.ts"
 Cohesion: 0.33
@@ -336,13 +380,9 @@ Nodes (4): clamp(), readSaved(), SplitPane(), userKey()
 Cohesion: 0.40
 Nodes (4): cids, needles, recipients, siblingCids
 
-### Community 217 - "functions.ts"
-Cohesion: 0.07
-Nodes (16): NAV, STATUS_COLOR, listNew, markResolved, newCount, addItem, listItems, tenantAction (+8 more)
-
 ### Community 228 - "cards.tsx"
-Cohesion: 0.07
-Nodes (28): badge(), box, btn, chip, dim, label, muted, Plan (+20 more)
+Cohesion: 0.19
+Nodes (10): advance(), assistantSay(), cockpitAgent, CockpitCtx, executePlan, listThreadMessages, proposeEmailPlan, questionText() (+2 more)
 
 ### Community 232 - "Playbook: Email Chat Cockpit"
 Cohesion: 0.12
@@ -353,8 +393,8 @@ Cohesion: 0.12
 Nodes (15): ADR-002: Insert-only audit log with redaction-safe payloads; WORM immutability lives outside Convex, Alternatives rejected, Consequences, Context, Decision, Data flow, Dependencies & blast radius, How to change safely (+7 more)
 
 ### Community 234 - "check-playbooks.mjs"
-Cohesion: 0.17
-Nodes (10): baselineFile, changed, covered, created, input, problems, sessionId, stale (+2 more)
+Cohesion: 0.14
+Nodes (14): ackFile, acks, baselineFile, changed, covered, created, git(), hashHits() (+6 more)
 
 ### Community 235 - "Playbook: <feature name>"
 Cohesion: 0.18
@@ -365,24 +405,24 @@ Cohesion: 0.50
 Nodes (3): `decisions/` — Architecture Decision Records (ADRs), docs/, `playbooks/` — one per feature/subsystem
 
 ## Knowledge Gaps
-- **473 isolated node(s):** `Purpose`, `Key files`, `Dependencies & blast radius`, `Data flow`, `Invariants — what must never break` (+468 more)
+- **567 isolated node(s):** `Smoke`, `ZERO_USAGE`, `GenUsage`, `SafeRead`, `routeCache` (+562 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `log` connect `dependencies` to `auth.ts`, `pipeline.ts`, `llm.ts`, `smoke.ts`, `tokenExpiry.ts`, `audit.ts`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
-- **Why does `requests (table)` connect `cards.tsx` to `tenant.ts`, `smoke.ts`, `auth.ts`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `pendingTimeouts (table)` connect `auth.ts` to `tenant.ts`, `smokeAssert.ts`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **What connects `Purpose`, `Key files`, `Dependencies & blast radius` to the rest of the system?**
-  _477 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `demo.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
-- **Should `auth.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07200929152148665 - nodes in this community are weakly interconnected._
-- **Should `page.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.12418300653594772 - nodes in this community are weakly interconnected._
+- **Why does `tenantQuery` connect `layout.tsx` to `page.tsx`, `tokenExpiry.ts`?**
+  _High betweenness centrality (0.008) - this node is a cross-community bridge._
+- **Why does `send` connect `deliverApprovedPlan.ts` to `gmail.ts`?**
+  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+- **What connects `Smoke`, `ZERO_USAGE`, `GenUsage` to the rest of the system?**
+  _572 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `functions.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.125 - nodes in this community are weakly interconnected._
+- **Should `package.json` be split into smaller, more focused modules?**
+  _Cohesion score 0.07394957983193277 - nodes in this community are weakly interconnected._
+- **Should `biome.json` be split into smaller, more focused modules?**
+  _Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected._
+- **Should `buildTelemetry.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.1323529411764706 - nodes in this community are weakly interconnected._

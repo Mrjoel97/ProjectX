@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-12 against 03.2-04 (Phase 3.2 Wave 2: resolution turn WIRED — cockpit runs `gmail.search`→`rankCandidates`→`writeCandidates` on an unresolved name, `resolveRecipients` folds the pick, `greetingName` threads to the drafter; DECISION #2 preserved, one LLM call)
+> Last verified: 2026-07-12 against 03.2-05 (Phase 3.2 Wave 3: the resolution CARD UI landed — `cards.tsx` `ResolutionCard` renders one chip-section per unresolved name (address + count/last-contacted hint) plus a pre-selected `pendingValid` "already valid" row, and calls `api.cockpit.resolveRecipients` on the pick; `ChatPane` shows a "Searching your mailbox…" activity chip while `plan.candidates` are parked; `cockpit-resolve.spec.ts` proves name→card→pick→PLAN offline with nothing sent; `cockpit-report.spec.ts` recipients line is comma-separated for the new tokenizer. Prior (03.2-04): resolution turn WIRED — cockpit runs `gmail.search`→`rankCandidates`→`writeCandidates` on an unresolved name, `resolveRecipients` folds the pick, `greetingName` threads to the drafter; DECISION #2 preserved, one LLM call; `/gmail/callback` 303-redirects to the app; `draftCockpit` SMOKE path honors `greetingName` so the resolution E2E asserts the greeting offline)
 > Build history: `.planning/phases/03.1-cockpit-core/` (numbered `03.1-NN-PLAN.md` docs, `03.1-VALIDATION.md`, `deferred-items.md`) · Design: `.planning/design/email-chat-cockpit.md` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -16,8 +16,8 @@ WorkflowManager, `email-drafter` skill) — not a separate engine.
 
 Frontend (`apps/web/app/(app)/dashboard/workspace/`):
 - `page.tsx` — cockpit page; holds the shared `threadId` state, Gmail-status gate, renders SplitPane(ChatPane, CardList)
-- `ChatPane.tsx` — left pane; `useThreadMessages` + composer calling `sendCockpitMessage`; lifts the minted threadId via `onThread`
-- `cards.tsx` — right pane; `CardList` dispatcher + `PlanCard` (Approve button), `DraftCard`, `ReportCard`
+- `ChatPane.tsx` — left pane; `useThreadMessages` + composer calling `sendCockpitMessage`; lifts the minted threadId via `onThread`; 3.2: a "Searching your mailbox…" activity chip while `plan.candidates` are parked
+- `cards.tsx` — right pane; `CardList` dispatcher + `PlanCard` (Approve button), `DraftCard`, `ReportCard`; 3.2: `ResolutionCard` (chip-section per unresolved name + `pendingValid` row → `resolveRecipients` on pick), dispatched during `collecting` BEFORE `proposed`
 - `SplitPane.tsx` — native resizable split (a11y separator, ≥20% clamp, localStorage persist)
 
 Backend (`packages/backend/convex/`):
@@ -35,8 +35,9 @@ Pure core: `packages/core/src/emailIntent.ts` — `nextQuestion` / `applyAnswer`
 
 Tests: `packages/backend/convex/cockpit.test.ts`, `packages/core/src/emailIntent.test.ts`,
 `packages/backend/convex/llmRedaction.test.ts`, `apps/web/e2e/cockpit-report.spec.ts`,
-`apps/web/e2e/connect-gmail.spec.ts`, `apps/web/e2e/cockpit-render.spec.ts`,
-`apps/web/e2e/cockpit-split.spec.ts`, `packages/backend/scripts/run-smoke-fanout.mjs`.
+`apps/web/e2e/cockpit-resolve.spec.ts`, `apps/web/e2e/connect-gmail.spec.ts`,
+`apps/web/e2e/cockpit-render.spec.ts`, `apps/web/e2e/cockpit-split.spec.ts`,
+`packages/backend/scripts/run-smoke-fanout.mjs`.
 
 ## Dependencies & blast radius
 
@@ -98,8 +99,6 @@ when assessing blast radius). Couplings graphify cannot see:
 - Divider position persists per-browser (localStorage), not cross-device
 
 ## Known gaps & deferred work
-
-- Phase 3.2 Wave 2 (03.2-04) wired the resolution BACKEND (search→rank→candidates→`resolveRecipients` fold→`greetingName`); the resolution CARD UI (renders off `plans.candidates`, calls `api.cockpit.resolveRecipients`) lands in 03.2-05. Until then `resolveRecipients` is callable but no UI drives it — the E2E path uses the `SMOKE::` search fixture in `gmail.ts`
 
 - Attachments: `AttachmentPicker` uploads only; wiring storageIds into the plan is deferred (Phase 4, INTK-02)
 - DraftCard has no inline editor — edits arrive as new guided-conversation turns
