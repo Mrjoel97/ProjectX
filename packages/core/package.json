@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "ai": "7.0.20"
+  },
   "devDependencies": {
     "vitest": "3.2.7"
   }
