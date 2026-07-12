@@ -8,10 +8,13 @@
 // import guard (telemetry.ts precedent — no allowlist entry needed). This module
 // touches ctx.db, so it must stay on the default runtime (no "use node").
 import { HOUR, RateLimiter } from "@convex-dev/rate-limiter";
+import { chooseModel } from "@pikar/cost";
+import { scanText } from "@pikar/pii";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { contentHash } from "./lib/hash";
 
 // ponytail: fixed constants for the single-owner beta; per-tenant policy is the
 // upgrade path (deferred per 03-RESEARCH).
@@ -48,6 +51,60 @@ export const setKillSwitch = internalMutation({
         updatedAt: Date.now(),
       });
     }
+  },
+});
+
+/** The guard mutation (GRDL-01/03). One transactional, deterministic pass every
+ *  request makes BEFORE any model call. EXPECTED rejections RETURN a discriminated
+ *  governed stop (never a throw — a governed stop is not a DLQ failure); only bugs
+ *  (a missing row) throw. On the ok path it persists the redacted goal + its hash
+ *  (content plane — the raw goal already lives on this row). */
+export const prepare = internalMutation({
+  args: { requestId: v.id("requests") },
+  handler: async (
+    ctx,
+    { requestId },
+  ): Promise<
+    | { ok: true; model: string; safeTextHash: string; piiCounts: Record<string, number>; estCents: number }
+    | {
+        ok: false;
+        reason:
+          | "kill_switch"
+          | "pii_scan_failed"
+          | "cost_estimate_failed"
+          | "over_budget"
+          | "daily_budget_exhausted";
+      }
+  > => {
+    const req = await ctx.db.get(requestId);
+    if (!req) throw new Error("guardrails.prepare: request not found"); // bug, not a governed stop
+
+    const cfg = await getConfig(ctx);
+    if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
+
+    // Destructure ONLY safeText + counts — `entities` is raw PII and must never
+    // appear in this file (CLAUDE.md §4; the 03-04 static scan enforces it).
+    const scan = scanText(req.goal);
+    if (!scan.ok) return { ok: false, reason: "pii_scan_failed" };
+    const { safeText, counts } = scan.value;
+
+    const safeTextHash = await contentHash(safeText);
+
+    const choice = chooseModel(safeText, cfg.budgetUsdPerRequest);
+    if (!choice.ok) {
+      return {
+        ok: false,
+        reason: choice.error.code === "over_budget" ? "over_budget" : "cost_estimate_failed",
+      };
+    }
+    const { model, estCents } = choice.value;
+
+    // Check-before: the estimated spend must fit the remaining daily window.
+    const spend = await rateLimiter.check(ctx, "dailySpendCents", { count: estCents });
+    if (!spend.ok) return { ok: false, reason: "daily_budget_exhausted" };
+
+    await ctx.db.patch(requestId, { safeText, safeTextHash });
+    return { ok: true, model, safeTextHash, piiCounts: counts, estCents };
   },
 });
 
