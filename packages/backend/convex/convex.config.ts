@@ -6,6 +6,7 @@ import rateLimiter from "@convex-dev/rate-limiter/convex.config.js";
 import actionRetrier from "@convex-dev/action-retrier/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
 import aggregate from "@convex-dev/aggregate/convex.config.js";
+import cache from "@convex-dev/action-cache/convex.config.js";
 
 const app = defineApp();
 
@@ -21,5 +22,8 @@ app.use(actionRetrier);
 // any plan file imports them. Pinned exact — do not bump casually (CLAUDE.md §6).
 app.use(migrations);
 app.use(aggregate, { name: "auditCounts" });
+
+// Phase-3 component (GRDL-04). Pinned exact — do not bump casually (CLAUDE.md §6).
+app.use(cache);
 
 export default app;

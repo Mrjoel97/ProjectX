@@ -71,6 +71,9 @@ importers:
       '@auth/core':
         specifier: 0.41.2
         version: 0.41.2
+      '@convex-dev/action-cache':
+        specifier: 0.3.1
+        version: 0.3.1(convex@1.42.1(react@19.2.7))
       '@convex-dev/action-retrier':
         specifier: 0.3.1
         version: 0.3.1(convex@1.42.1(react@19.2.7))
@@ -135,6 +138,19 @@ importers:
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
 
   packages/core:
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
+  packages/cost:
+    dependencies:
+      '@pikar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@pikar/pii':
+        specifier: workspace:*
+        version: link:../pii
     devDependencies:
       vitest:
         specifier: 3.2.7
@@ -250,6 +266,11 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@convex-dev/action-cache@0.3.1':
+    resolution: {integrity: sha512-HTN/GXyX4t89xxsMXeacMDtQi2jEzQrrlLTtTV1L87Odxz7N8EQHIuI9HOug0dIsz6Gd1VybYbjT1Buv8jarLw==}
+    peerDependencies:
+      convex: ^1.24.8
 
   '@convex-dev/action-retrier@0.3.1':
     resolution: {integrity: sha512-uji7ZV4GYN24fgnV9FrXABbq2mWCpcMohkEa2ie1zmD5S7ioSxNNBE0lNPB1jlMzICqWCTrbSTr68bgJPag6Ww==}
@@ -1554,6 +1575,10 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.3':
     optional: true
+
+  '@convex-dev/action-cache@0.3.1(convex@1.42.1(react@19.2.7))':
+    dependencies:
+      convex: 1.42.1(react@19.2.7)
 
   '@convex-dev/action-retrier@0.3.1(convex@1.42.1(react@19.2.7))':
     dependencies:
