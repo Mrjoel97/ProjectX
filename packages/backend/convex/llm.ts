@@ -309,7 +309,9 @@ export const draftCockpit = internalAction({
       if (smoke) {
         // failPrimary throws INTO the catch so the real fallback path runs; else offline draft.
         if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
-        return { subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}` };
+        // Honor the greeting offline too (SC3) so the resolution E2E can prove "Hi <name>," without a model.
+        const greeting = greetingName ? `Hi ${greetingName},\n\n` : "";
+        return { subject: "Smoke Subject", body: `${greeting}Smoke draft for ${safeTextHash}` };
       }
       const { object } = await generateObject({
         model: DEFAULT_MODEL,

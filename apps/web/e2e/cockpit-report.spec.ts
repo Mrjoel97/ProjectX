@@ -25,8 +25,10 @@ test("chat → plan → one approve → live per-recipient report (offline SMOKE
     await composer.press("Enter");
   };
 
-  // 1. recipients (2 valid → no re-ask) → next question: subject.
-  await say("alice@example.com bob@example.com");
+  // 1. recipients (2 valid → no re-ask) → next question: subject. Comma-separated: the parseAnswer
+  // tokenizer now segments recipients on comma/"and" only (a multi-word NAME stays whole), so a
+  // space-separated pair parses as one malformed segment → a re-ask. Comma keeps this green.
+  await say("alice@example.com, bob@example.com");
   await expect(page.getByText(/subject line/i)).toBeVisible({ timeout: 15_000 });
 
   // 2. subject → next: body intent.
