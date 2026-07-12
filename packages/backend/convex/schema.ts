@@ -147,6 +147,29 @@ export default defineSchema({
     subject: v.optional(v.string()),
     bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
     body: v.optional(v.string()), // drafted wording (filled at "ready")
+    // TRANSIENT name-resolution store (Plan 04/05 resolution card): raw fetched
+    // candidate names/addresses/hints held on the content plane ONLY (CLAUDE.md §4 —
+    // raw content lives in `plans`, NEVER in audit/DLQ), wiped on pick (clearCandidates).
+    // The "no contacts cache at rest" invariant: only the chosen address persists in
+    // `recipients`; candidates/pendingValid never survive the pick. All optional → no migration.
+    candidates: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          matches: v.array(
+            v.object({
+              address: v.string(),
+              displayName: v.optional(v.string()),
+              lastSubject: v.optional(v.string()), // USER-only hint — never sent to the LLM
+              lastDateMs: v.optional(v.number()),
+              count: v.number(),
+            }),
+          ),
+        }),
+      ),
+    ),
+    pendingValid: v.optional(v.array(v.string())), // same-turn valid addrs awaiting the uniform confirm
+    greetingName: v.optional(v.string()), // resolved display name → drafter greeting (survives to draft turn)
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
