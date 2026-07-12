@@ -10,6 +10,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
+import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { reviewEventValidator } from "./review";
 
@@ -130,12 +131,21 @@ export const seedPipeline = internalMutation({
       v.literal("sub_agent"),
       v.literal("unknown"),
     ),
+    // 03-05 phase gate: parameterize tenant + goal so the guardrails smoke can drive
+    // two-tenant cache isolation and PII-bearing goals. Existing callers pass neither
+    // and get the historic behavior (tenant "smoke", route-derived sentinel goal).
+    tenant: v.optional(v.string()),
+    goal: v.optional(v.string()),
   },
-  handler: async (ctx, { correlationId, route }): Promise<{ requestId: Id<"requests"> }> => {
+  handler: async (
+    ctx,
+    { correlationId, route, tenant, goal },
+  ): Promise<{ requestId: Id<"requests"> }> => {
+    const tenantId = tenant ?? "smoke";
     const requestId = await ctx.db.insert("requests", {
-      tenantId: "smoke",
+      tenantId,
       correlationId,
-      goal: `SMOKE::route=${route}:: thank a colleague`,
+      goal: goal ?? `SMOKE::route=${route}:: thank a colleague`,
       recipient: "smoke@example.com",
       status: "submitted",
       attachmentRefs: [],
@@ -144,12 +154,54 @@ export const seedPipeline = internalMutation({
     await workflow.start(
       ctx,
       internal.pipeline.pipelineWorkflow,
-      { correlationId, requestId, tenantId: "smoke" },
+      { correlationId, requestId, tenantId },
       {
         onComplete: internal.deadLetter.onPipelineComplete,
-        context: { tenantId: "smoke", correlationId, payload: { correlationId, requestId } },
+        context: { tenantId, correlationId, payload: { correlationId, requestId } },
       },
     );
     return { requestId };
+  },
+});
+
+// --- 03-05: rate-limiter drivers (synthetic keys / global window ONLY) --------
+// The daily-spend window is GLOBAL (keyless) — draining it blocks EVERY later
+// smoke, so resetDailySpend is mandatory finally-cleanup (03-RESEARCH Pitfall 5).
+
+/** Exhaust the global daily-spend window so the next prepare/preCall fails closed. */
+export const drainDailySpend = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await rateLimiter.limit(ctx, "dailySpendCents", { count: DAILY_BUDGET_CENTS, reserve: true });
+  },
+});
+
+/** Refill the global daily-spend window — MANDATORY cleanup after drainDailySpend. */
+export const resetDailySpend = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await rateLimiter.reset(ctx, "dailySpendCents");
+  },
+});
+
+/** GRDL-06: prove the submit token bucket (capacity 5) rejects the 6th consume.
+ *  Uses a random synthetic key so it never poisons a real tenant, and resets it
+ *  after. The submit-form wiring itself is verified by test/typecheck in 03-03. */
+export const assertSubmitRateLimited = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const key = `smoke-${crypto.randomUUID()}`;
+    try {
+      for (let i = 1; i <= 6; i++) {
+        const { ok } = await rateLimiter.limit(ctx, "submitRequest", { key });
+        const expectOk = i <= 5; // capacity 5: attempts 1–5 ok, the 6th rejected
+        if (ok !== expectOk) {
+          throw new Error(`submitRequest attempt ${i}: ok=${ok}, expected ${expectOk} (capacity 5)`);
+        }
+      }
+    } finally {
+      await rateLimiter.reset(ctx, "submitRequest", { key });
+    }
+    return { ok: true };
   },
 });

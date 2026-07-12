@@ -126,6 +126,171 @@ export const assertDeadLetterReason = internalQuery({
   },
 });
 
+// ── 03-05 guardrail phase-gate assertions ────────────────────────────────────
+// The component behaviors convex-test cannot emulate (kill switch, budget window,
+// action-cache isolation/hit, fallback) plus GRDL-02's no-raw-PII needle scan.
+
+/** A governed stop (kill switch / budget) landed the request at the `blocked`
+ *  terminal: status blocked + guardrail.blocked audit (reason) + blocked telemetry,
+ *  and — critically — NO deadLetters row (a governed stop must never dead-letter). */
+export const assertBlocked = internalQuery({
+  args: { correlationId: v.string(), reason: v.string() },
+  handler: async (ctx, { correlationId, reason }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "blocked") {
+      throw new Error(`request ${correlationId} at "${req.status}", expected blocked`);
+    }
+
+    const audits = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    const blocked = audits.find((a) => a.eventType === "guardrail.blocked");
+    if (!blocked) throw new Error(`no guardrail.blocked audit for ${correlationId}`);
+    if (blocked.payload?.reason !== reason) {
+      throw new Error(`guardrail.blocked reason "${blocked.payload?.reason}" !== "${reason}"`);
+    }
+
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!tel || tel.reviewOutcome !== "blocked") {
+      throw new Error(`no blocked telemetry row for ${correlationId}`);
+    }
+
+    // A governed stop is NOT a DLQ failure — no dead letter may exist for this cid.
+    const news = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    if (news.some((r) => r.correlationId === correlationId)) {
+      throw new Error(`deadLetters row for ${correlationId} — a governed stop must not dead-letter`);
+    }
+    return { ok: true, reason };
+  },
+});
+
+/** GRDL-01/02: the request was redacted — safeText + hash written, every expected
+ *  placeholder present, and a request.redacted audit row carries piiCounts. Returns
+ *  safeTextHash (the cache-key + audit correlation for the count/needle assertions). */
+export const assertRedacted = internalQuery({
+  args: { correlationId: v.string(), placeholders: v.optional(v.array(v.string())) },
+  handler: async (ctx, { correlationId, placeholders }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (!req.safeTextHash || req.safeText === undefined) {
+      throw new Error(`request ${correlationId} not redacted (safeText/safeTextHash unset)`);
+    }
+    for (const p of placeholders ?? []) {
+      if (!req.safeText.includes(p)) {
+        throw new Error(`safeText for ${correlationId} missing placeholder ${p}`);
+      }
+    }
+
+    const audits = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    const redacted = audits.find((a) => a.eventType === "request.redacted");
+    if (!redacted) throw new Error(`no request.redacted audit for ${correlationId}`);
+    if (redacted.payload?.piiCounts === undefined) {
+      throw new Error(`request.redacted for ${correlationId} missing piiCounts`);
+    }
+    return { safeTextHash: req.safeTextHash };
+  },
+});
+
+/** GRDL-02's letter: NO raw PII in any log plane. Scans every audit row for BOTH
+ *  the request cid AND the safeTextHash (the model-side audit correlation), every
+ *  new deadLetters row for the cid, and the telemetry row — asserts no needle appears.
+ *  Needle values (raw PII) are NEVER echoed back — only their index — so this
+ *  assertion's own output can't become a leak. */
+export const assertNoRawPii = internalQuery({
+  args: { correlationId: v.string(), safeTextHash: v.string(), needles: v.array(v.string()) },
+  handler: async (ctx, { correlationId, safeTextHash, needles }) => {
+    const auditsCid = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    const auditsHash = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", safeTextHash))
+      .collect();
+    const news = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+
+    const blobs = [
+      ...auditsCid.map((a) => JSON.stringify(a)),
+      ...auditsHash.map((a) => JSON.stringify(a)),
+      ...news.filter((r) => r.correlationId === correlationId).map((r) => JSON.stringify(r)),
+      tel ? JSON.stringify(tel) : "",
+    ];
+    for (let n = 0; n < needles.length; n++) {
+      const needle = needles[n];
+      if (needle && blobs.some((b) => b.includes(needle))) {
+        throw new Error(`RAW PII leak: needle #${n} found in a log plane for ${correlationId}`);
+      }
+    }
+    return { ok: true, scanned: blobs.length };
+  },
+});
+
+/** GRDL-04 cache oracle: count llm.called DRAFT-stage rows for this (tenant, hash).
+ *  A cache miss adds a row; a hit adds none. Two tenants with the identical goal each
+ *  produce 1 (isolated entries); the same tenant repeating the goal stays at 1 (hit). */
+export const assertLlmCalledCount = internalQuery({
+  args: {
+    safeTextHash: v.string(),
+    tenantId: v.string(),
+    stage: v.string(),
+    expected: v.number(),
+  },
+  handler: async (ctx, { safeTextHash, tenantId, stage, expected }) => {
+    const rows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", safeTextHash))
+      .collect();
+    const count = rows.filter(
+      (a) => a.eventType === "llm.called" && a.tenantId === tenantId && a.payload?.stage === stage,
+    ).length;
+    if (count !== expected) {
+      throw new Error(
+        `llm.called ${stage} count for ${tenantId}/${safeTextHash.slice(0, 8)} = ${count}, expected ${expected}`,
+      );
+    }
+    return { ok: true, count };
+  },
+});
+
+/** GRDL-05: an eligible primary failure produced an llm.fallback audit for the hash. */
+export const assertFallback = internalQuery({
+  args: { safeTextHash: v.string() },
+  handler: async (ctx, { safeTextHash }) => {
+    const rows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", safeTextHash))
+      .collect();
+    if (!rows.some((a) => a.eventType === "llm.fallback")) {
+      throw new Error(`no llm.fallback audit for ${safeTextHash.slice(0, 8)}`);
+    }
+    return { ok: true };
+  },
+});
+
 /** OPSG-06: the first migration ran and recorded a completed (success) state. */
 export const assertMigrationRan = internalQuery({
   args: {},
