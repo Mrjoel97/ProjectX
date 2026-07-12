@@ -66,7 +66,10 @@ export type NextQuestion =
 /** One user answer, discriminated by the slot it fills. */
 export type Answer =
   | { slot: "recipients"; value: readonly string[] }
-  | { slot: "resolution"; picks: readonly { name: string; address: string; displayName?: string }[] }
+  | {
+      slot: "resolution";
+      picks: readonly { name: string; address: string; displayName?: string }[];
+    }
   | { slot: "subject"; value: string }
   | { slot: "bodyIntent"; value: string }
   | { slot: "mode"; value: RecipientMode }
@@ -194,4 +197,90 @@ function setOrDrop<K extends "rejected" | "groupDeferred" | "pendingResolution" 
 ): void {
   if (value.length > 0) state[key] = value;
   else delete state[key];
+}
+
+// ─── Pure contact-resolution helpers (Plan 04 cockpit composes these) ────────────────────────────
+// Co-located in this file — NOT a sibling module — so they stay under the cockpit.md §9 playbook
+// watch (a new packages/core/src/*.ts would trip the Stop hook). No Convex/Gmail import here either.
+
+/** A single ranked contact match for an unresolved name. `lastSubject`/`lastDateMs` are USER-only
+ *  hints — they must NEVER be sent to the LLM (CLAUDE.md §4). */
+export interface ContactMatch {
+  address: string; // lowercased, deduped
+  displayName?: string;
+  lastSubject?: string;
+  lastDateMs?: number;
+  count: number; // frequency across the search hits
+}
+
+/** The ranked candidate set for one unresolved name (stored on the plans row by Plan 04). */
+export interface NameCandidates {
+  name: string;
+  matches: ContactMatch[];
+}
+
+/** Raw header record the Gmail metadata search (Plan 03) returns; core parses these. */
+export interface HeaderRecord {
+  from?: string;
+  to?: string;
+  cc?: string;
+  subject?: string;
+  date?: string;
+}
+
+// ponytail: handles only `Name <addr>` / quoted-name / bare-addr shapes — no RFC 5322 group-address
+// or comment syntax; upgrade on a demonstrated malformed-header failure (research Pattern 2).
+/** Parse one header address value into `{ displayName?, address }` (lowercased), or null. */
+export function parseAddress(raw: string): { displayName?: string; address: string } | null {
+  const m = raw.match(/^\s*(?:"?([^"<]*?)"?\s*)?<([^>]+)>\s*$/);
+  if (m?.[2]) {
+    return { displayName: m[1]?.trim() || undefined, address: m[2].trim().toLowerCase() };
+  }
+  const bare = raw.trim().toLowerCase();
+  return bare.includes("@") ? { address: bare } : null;
+}
+
+/**
+ * Rank the contacts appearing in a name-search's header records: parse every From/To/Cc, dedupe by
+ * lowercased address, count frequency, and track the most-recent date + its subject/displayName.
+ * Sorted `count desc, then lastDateMs desc`; capped at 5. `Date.parse` is pure (no clock read).
+ * `name` is the label the caller carries onto NameCandidates — the search already scoped the records.
+ */
+export function rankCandidates(_name: string, records: readonly HeaderRecord[]): ContactMatch[] {
+  const byAddr = new Map<string, ContactMatch>();
+  for (const rec of records) {
+    const parsed = Date.parse(rec.date ?? "");
+    const dateMs = Number.isNaN(parsed) ? undefined : parsed;
+    for (const field of [rec.from, rec.to, rec.cc]) {
+      if (!field) continue;
+      for (const part of field.split(",")) {
+        const addr = parseAddress(part);
+        if (!addr) continue;
+        const hit = byAddr.get(addr.address);
+        if (!hit) {
+          byAddr.set(addr.address, {
+            address: addr.address,
+            displayName: addr.displayName,
+            lastSubject: rec.subject,
+            lastDateMs: dateMs,
+            count: 1,
+          });
+          continue;
+        }
+        hit.count += 1;
+        const isNewer =
+          dateMs !== undefined && (hit.lastDateMs === undefined || dateMs > hit.lastDateMs);
+        if (isNewer) {
+          hit.lastDateMs = dateMs;
+          hit.lastSubject = rec.subject;
+        }
+        if (addr.displayName && (isNewer || hit.displayName === undefined)) {
+          hit.displayName = addr.displayName;
+        }
+      }
+    }
+  }
+  return [...byAddr.values()]
+    .sort((a, b) => b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
+    .slice(0, 5);
 }

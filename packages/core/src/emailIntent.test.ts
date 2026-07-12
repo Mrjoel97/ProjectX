@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   applyAnswer,
+  type EmailIntentState,
   emptyIntent,
+  type HeaderRecord,
   nextQuestion,
   parseAddress,
   rankCandidates,
-  type EmailIntentState,
-  type HeaderRecord,
 } from "./emailIntent";
 
 describe("emailIntent — SC2/SC3 slot-filling brain", () => {
@@ -98,10 +98,13 @@ describe("emailIntent — SC2/SC3 slot-filling brain", () => {
   });
 
   test("dedupe: duplicate recipient (case-insensitive) not added twice", () => {
-    const s = applyAnswer({ recipients: ["A@B.com"] }, {
-      slot: "recipients",
-      value: ["a@b.com", "c@d.com"],
-    }).state;
+    const s = applyAnswer(
+      { recipients: ["A@B.com"] },
+      {
+        slot: "recipients",
+        value: ["a@b.com", "c@d.com"],
+      },
+    ).state;
     expect(s.recipients).toEqual(["A@B.com", "c@d.com"]);
   });
 
@@ -244,17 +247,15 @@ describe("rankCandidates — dedupe + rank contacts from header metadata", () =>
     const ranked = rankCandidates("Sarah", recs);
     // sarah appears twice (deduped to one, count 2) → ranks above tom (count 1)
     expect(ranked.map((m) => m.address)).toEqual(["sarah@acme.com", "tom@x.com"]);
-    const sarah = ranked[0]!;
-    expect(sarah.count).toBe(2);
+    const [sarah] = ranked;
+    expect(sarah?.count).toBe(2);
     // most-recent hit drives lastSubject/lastDateMs
-    expect(sarah.lastSubject).toBe("New");
-    expect(sarah.lastDateMs).toBe(Date.parse("2024-06-01T00:00:00Z"));
+    expect(sarah?.lastSubject).toBe("New");
+    expect(sarah?.lastDateMs).toBe(Date.parse("2024-06-01T00:00:00Z"));
   });
 
   test("parses From/To/Cc and ignores unparseable / missing fields", () => {
-    const recs: HeaderRecord[] = [
-      { to: "a@x.com, b@x.com", cc: "garbage-no-at", from: "" },
-    ];
+    const recs: HeaderRecord[] = [{ to: "a@x.com, b@x.com", cc: "garbage-no-at", from: "" }];
     const ranked = rankCandidates("x", recs);
     expect(ranked.map((m) => m.address).sort()).toEqual(["a@x.com", "b@x.com"]);
   });
