@@ -15,6 +15,11 @@ import { type Result, err, ok } from "@pikar/core/result";
 
 export type PiiType = "email" | "card" | "ssn" | "phone";
 
+/** Redacted text — the ONLY string shape allowed to reach a model call or a cost
+ *  estimator. Brands erase at Convex arg boundaries; the runtime guard is
+ *  guardrails.getSafeTextByHash (plan 03-03). */
+export type SafeText = string & { readonly __safeText: unique symbol };
+
 export type PiiEntity = {
   /** Stable placeholder inserted into safeText, e.g. "[EMAIL_1]". */
   readonly placeholder: string;
@@ -25,7 +30,7 @@ export type PiiEntity = {
 
 export type PiiScanResult = {
   /** Input with every detected entity replaced by its placeholder. */
-  readonly safeText: string;
+  readonly safeText: SafeText;
   /** Per-type match counts — the ONLY log-safe summary of a scan. */
   readonly counts: Readonly<Record<PiiType, number>>;
   /** Raw entities for delivery-time re-substitution. PII — never log. */
@@ -122,7 +127,7 @@ export function scanText(input: unknown): Result<PiiScanResult, PiiScanError> {
       safeText = safeText.slice(0, m.start) + entity.placeholder + safeText.slice(m.end);
     }
 
-    return ok({ safeText, counts, entities: [...byValue.values()] });
+    return ok({ safeText: safeText as SafeText, counts, entities: [...byValue.values()] });
   } catch (e) {
     return err({ code: "scan_failed", message: e instanceof Error ? e.message : String(e) });
   }
