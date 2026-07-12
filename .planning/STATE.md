@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.2-05-PLAN.md (resolution card UI + searching chip + cockpit-resolve E2E)
-last_updated: "2026-07-12T17:42:09.642Z"
+stopped_at: 03.2-06 Task 1 done (playbook+watch §9 close, commit 4348527); PAUSED at CKPT-01 human-verify — awaiting real mailbox-read confirmation
+last_updated: "2026-07-12T17:45:31.406Z"
 last_activity: "2026-07-12 — Phase 3.2 Wave 3: 03.2-05 executed (resolution card UI + "Searching your mailbox…" chip + cockpit-resolve E2E over the SMOKE:: fixture)"
 progress:
   total_phases: 13
@@ -169,8 +169,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12T17:41:13.328Z
-Stopped at: Completed 03.2-05-PLAN.md (resolution card UI + searching chip + cockpit-resolve E2E)
+Last session: 2026-07-12T17:45:31.394Z
+Stopped at: 03.2-06 Task 1 done (playbook+watch §9 close, commit 4348527); PAUSED at CKPT-01 human-verify — awaiting real mailbox-read confirmation
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
