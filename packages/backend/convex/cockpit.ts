@@ -55,7 +55,18 @@ export function parseAnswer(prior: NextQuestion, text: string): Answer | null {
   switch (prior.kind) {
     case "ask_recipients":
     case "reask_recipient":
-      return { slot: "recipients", value: t.split(/[\s,]+/).filter((s) => s.length > 0) };
+      // Segment on comma / the word "and" ONLY — intra-segment spaces stay so a multi-word
+      // NAME ("Sarah Chen") survives as one token for Gmail resolution.
+      // ponytail: accepted behavior break (Pitfall 3) — space-separated emails
+      // ("a@x.com b@x.com") now collapse to ONE malformed segment that bounces to the re-ask
+      // (was whitespace-split before). Upgrade to a per-token email scan only if users hit it.
+      return {
+        slot: "recipients",
+        value: t
+          .split(/\s*,\s*|\s+and\s+/i)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
+      };
     case "ask_subject":
       return { slot: "subject", value: t };
     case "ask_body_intent":
@@ -73,18 +84,30 @@ export function parseAnswer(prior: NextQuestion, text: string): Answer | null {
   }
 }
 
-/** Project the stored plan row into the pure EmailIntentState (`rejected` is transient). */
-function toIntentState(plan: {
+/**
+ * Project the stored plan row into the pure EmailIntentState (`rejected` is transient).
+ * The transient resolution fields survive across turns via the plans row: `candidates` →
+ * `pendingResolution` names (so `nextQuestion` keeps returning `resolve_recipients` until the
+ * pick), `pendingValid` held addresses, and `greetingName` to the drafter. Exported for the
+ * unit test (the projection is the glue the resolve fold rides on).
+ */
+export function toIntentState(plan: {
   recipients?: string[];
   subject?: string;
   bodyIntent?: string;
   mode?: "individual" | "group";
+  candidates?: { name: string }[];
+  pendingValid?: string[];
+  greetingName?: string;
 }): EmailIntentState {
   return {
     recipients: plan.recipients ?? [],
     subject: plan.subject,
     bodyIntent: plan.bodyIntent,
     mode: plan.mode,
+    pendingResolution: plan.candidates?.map((c) => ({ name: c.name })),
+    pendingValid: plan.pendingValid,
+    greetingName: plan.greetingName,
   };
 }
 
@@ -95,6 +118,10 @@ function questionText(q: NextQuestion): string {
       return "Who should this email go to? Share one or more email addresses.";
     case "reask_recipient":
       return `"${q.invalid}" doesn't look like a valid email address — what should it be?`;
+    case "resolve_recipients":
+      return "Found some matches — pick a contact to continue.";
+    case "defer_group":
+      return "Group lists like 'team' aren't supported yet — please give the explicit addresses.";
     case "ask_subject":
       return "What's the subject line?";
     case "ask_body_intent":
