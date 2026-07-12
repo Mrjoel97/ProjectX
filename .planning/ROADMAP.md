@@ -111,8 +111,8 @@ Plans:
   3. For >1 recipient the agent asks individual-copies (safe default) vs group-email; a PLAN card shows recipients + mode + subject + body preview + steps before a single Approve.
   4. Approve triggers `executePlan` → a lean `deliverApprovedPlan` durable workflow that fans out per recipient over the existing `gmail.send` + retrier + audit + telemetry + DLQ; approval is idempotent (double-approve sends once) and zero sends occur before Approve.
   5. A REPORT card fills per recipient live (status + message id + audit link); one recipient failing dead-letters that row while the rest still send; no raw email content lands in any audit/DLQ payload.
-**Plans**: 9 plans in 5 waves
-  - [ ] 03.1-01-PLAN.md — Backend contracts: plans table + planId on requests + pinned status enum + tenantAction wrapper (Wave 1)
+**Plans**: 9 plans in 5 waves (1/9 executed)
+  - [x] 03.1-01-PLAN.md — Backend contracts: plans table + planId on requests + pinned status enum + tenantAction wrapper (Wave 1) ✓ 2026-07-12
   - [ ] 03.1-02-PLAN.md — Frontend + E2E harness: @convex-dev/agent@0.6.4 in apps/web, teal tokens, Playwright install (Wave 1)
   - [ ] 03.1-03-PLAN.md — Pure emailIntent slot-filling module + tests (packages/core, TDD) (Wave 1)
   - [ ] 03.1-04-PLAN.md — deliverApprovedPlan fan-out workflow + deadLetterRecipient + smoke:fanout (Wave 2)
@@ -226,7 +226,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 �
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
 | 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
 | 3. Guardrails | 0/5 | Planned | - |
-| 3.1 Cockpit Core (INSERTED) | 0/TBD | Not started | - |
+| 3.1 Cockpit Core (INSERTED) | 1/9 | In Progress (Wave 0 contracts done) | 2026-07-12 |
 | 3.2 Inbox Reading (INSERTED) | 0/TBD | Not started | - |
 | 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
