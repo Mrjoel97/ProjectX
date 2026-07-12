@@ -19,7 +19,7 @@
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
-import { EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
+import { COCKPIT_AGENT_SKILL, EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
 import {
   type RecipientEdit,
   applyRecipientEdit,
@@ -27,9 +27,10 @@ import {
   isFallbackEligible,
   rankCandidates,
 } from "@pikar/core";
-import { CHEAP_MODEL, DEFAULT_MODEL } from "@pikar/cost";
+import { CHEAP_MODEL, DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { generateObject, jsonSchema, tool } from "ai";
+import { type LanguageModel, generateObject, generateText, jsonSchema, stepCountIs, tool } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -551,23 +552,249 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
   };
 }
 
+// ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
+// runCockpitAgent is the reasoning engine: preCall gates BEFORE the loop (a governed stop is a
+// conversational "paused" reply, NEVER a DLQ), generateText drives the tools with the cockpit-agent
+// skill as `system`, stepCountIs(8) bounds the loop (the ceiling without a proposal makes the agent
+// ask rather than loop), and recordSpend consumes the priced usage after — verbatim the route/draft
+// rails. An eligible failure retries once on CHEAP_MODEL (isFallbackEligible).
+// ponytail: `stopWhen: stepCountIs(8)` IS ai@7's maxSteps (the SDK renamed it; do NOT bump the
+// pinned component to chase the old name — §6).
+
+const PAUSED_REPLY =
+  "I've paused for a moment — I'm briefly unavailable. Please send that again shortly.";
+
+// A model paired with the pricing id used for recordSpend. An injected mock model is not a gateway
+// string, so pricing needs the id explicitly (priceUsage keys on the model string).
+type PricedModel = { model: LanguageModel; id: string };
+
+// Invoke one built tool by name with a live action ctx (convex-test cannot fabricate one, so both
+// the SMOKE offline path and the test shims route through this). Mirrors the tool-loop's own call.
+function invokeTool(
+  tools: ReturnType<typeof buildCockpitTools>,
+  name: string,
+  input: unknown,
+): Promise<string> {
+  const t = (tools as unknown as Record<string, { execute: (i: unknown, o: unknown) => Promise<string> }>)[name];
+  if (!t) throw new Error(`unknown cockpit tool: ${name}`);
+  return t.execute(input, { toolCallId: "cockpit", messages: [] });
+}
+
+// Price the reasoning call's usage → consume the daily-spend window (guarded: unknown model / zero
+// cost skip; recordSpend itself also no-ops at cents<=0, so a ZERO_USAGE turn never drains budget).
+async function recordModelSpend(
+  ctx: GenericActionCtx<DataModel>,
+  id: string,
+  usage: { inputTokens?: number; outputTokens?: number },
+): Promise<void> {
+  const priced = priceUsage(id, usage);
+  if (!priced.ok) return;
+  await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+}
+
+// The governed generateText loop shared by runCockpitAgent (a gateway model string) and the
+// mock-model test shim (a scripted mock — Convex args cannot carry a LanguageModel). Runs the
+// loop, records spend, and on an eligible primary failure retries once on the fallback model.
+// Explicit return type keeps this out of the `internal`-graph circular inference (§96).
+async function runAgentLoop(
+  ctx: GenericActionCtx<DataModel>,
+  args: {
+    tenantId: string;
+    planId: Id<"plans">;
+    system: string;
+    prompt: string;
+    primary: PricedModel;
+    fallback: PricedModel;
+  },
+): Promise<{ reply: string }> {
+  const { tenantId, planId, system, prompt, primary, fallback } = args;
+  const tools = buildCockpitTools(ctx, tenantId, planId);
+  const run = async (m: PricedModel, maxRetries: number): Promise<{ reply: string }> => {
+    const res = await generateText({
+      model: m.model,
+      system,
+      prompt,
+      tools,
+      stopWhen: stepCountIs(8),
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      maxRetries,
+    });
+    await recordModelSpend(ctx, m.id, res.usage);
+    return { reply: res.text };
+  };
+  try {
+    return await run(primary, 1);
+  } catch (e) {
+    if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
+    return await run(fallback, 0);
+  }
+}
+
+// ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────
+// The E2E has no gateway, so it drives the loop turn-by-turn: ONE sentinel op per user message
+// maps to exactly ONE governed tool call (the SAME tools the model would call — no logic
+// duplication, no generateText). Per-request + content-free framing, mirroring the route/draft
+// sentinel. Grammar (one per message):
+//   SMOKE::agent::add=a@x.com,b@x.com | resolve=Name | subject=... | mode=individual|group
+//                | body=<intent> | remove=<1-based index> | propose
+type AgentSmokeOp =
+  | { kind: "add"; addresses: string[] }
+  | { kind: "resolve"; name: string }
+  | { kind: "subject"; subject: string }
+  | { kind: "mode"; mode: "individual" | "group" }
+  | { kind: "body"; intent: string }
+  | { kind: "remove"; index: number }
+  | { kind: "propose" };
+
+function parseAgentSmoke(text: string): AgentSmokeOp | null {
+  const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
+  if (!m) return null;
+  const spec = m[1].trim();
+  if (spec === "propose") return { kind: "propose" };
+  const eq = spec.indexOf("=");
+  if (eq < 0) return null;
+  const key = spec.slice(0, eq).trim();
+  const val = spec.slice(eq + 1).trim();
+  switch (key) {
+    case "add":
+      return { kind: "add", addresses: val.split(",").map((s) => s.trim()).filter(Boolean) };
+    case "resolve":
+      return { kind: "resolve", name: val };
+    case "subject":
+      return { kind: "subject", subject: val };
+    case "mode":
+      return { kind: "mode", mode: val === "group" ? "group" : "individual" };
+    case "body":
+      return { kind: "body", intent: val };
+    case "remove":
+      return { kind: "remove", index: Number(val) };
+    default:
+      return null;
+  }
+}
+
+function runAgentSmokeOp(tools: ReturnType<typeof buildCockpitTools>, op: AgentSmokeOp): Promise<string> {
+  switch (op.kind) {
+    case "add":
+      return invokeTool(tools, "addRecipients", { addresses: op.addresses });
+    case "resolve":
+      return invokeTool(tools, "resolveContacts", { name: op.name });
+    case "subject":
+      return invokeTool(tools, "setSubject", { subject: op.subject });
+    case "mode":
+      return invokeTool(tools, "setMode", { mode: op.mode });
+    case "body":
+      return invokeTool(tools, "draftBody", { intent: op.intent });
+    case "remove":
+      return invokeTool(tools, "removeRecipient", { index: op.index });
+    case "propose":
+      return invokeTool(tools, "proposePlan", {});
+  }
+}
+
+/**
+ * The Executive Agent tool-loop (AGNT-01/02). One turn: gate on preCall (blocked → a conversational
+ * "paused" reply as DATA, never a throw/DLQ) → load the cockpit-agent skill as `system` (fails
+ * closed unseeded, §5) → feed the index+label plan context (address-free, §2-D) + the user text to
+ * generateText with the governed tools → recordSpend the priced usage → return the assistant reply
+ * (Plan 05's driver saves it to the thread). A SMOKE:: sentinel drives one governed tool call
+ * offline (no gateway — the Plan 05 E2E path). Explicit return type dodges TS7022 (§96).
+ * ponytail: `model?` overrides the gateway model string; the mock-model seam is the test shim below
+ * (a LanguageModel is not Convex-serializable, so it cannot ride in the args).
+ */
+export const runCockpitAgent = internalAction({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    text: v.string(),
+    model: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    { tenantId, planId, text, model },
+  ): Promise<{ reply: string; blocked?: "kill_switch" | "daily_budget_exhausted" }> => {
+    // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, {});
+    if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
+
+    // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
+    const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
+      name: COCKPIT_AGENT_SKILL,
+    });
+
+    // 3. Current plan state → the model-facing context (index+label recipients, address-free §2-D).
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    const tools = buildCockpitTools(ctx, tenantId, planId);
+
+    // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText.
+    const smokeOp = parseAgentSmoke(text);
+    if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp) };
+
+    // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
+    const primaryId = model ?? DEFAULT_MODEL;
+    const { reply } = await runAgentLoop(ctx, {
+      tenantId,
+      planId,
+      system: skill.body,
+      prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: ${text}`,
+      primary: { model: primaryId, id: primaryId },
+      fallback: { model: CHEAP_MODEL, id: CHEAP_MODEL },
+    });
+    return { reply };
+  },
+});
+
 /**
  * Test-support shim (convex-test cannot fabricate an action ctx): build the tool set with a live
  * ctx and invoke one tool by name. Exercises the REAL primitives offline via SMOKE::. Not used in
- * production — Plan 04's generateText loop is the real caller.
+ * production — the generateText loop above is the real caller.
  * ponytail: test-only, but it must live in this "use node" module — the tools close over an action
- * ctx a query/mutation test ctx cannot provide. Remove if the loop lands a testable seam.
+ * ctx a query/mutation test ctx cannot provide.
  */
 export const __invokeCockpitTool = internalAction({
   args: { tenantId: v.string(), planId: v.id("plans"), toolName: v.string(), input: v.any() },
-  handler: async (ctx, { tenantId, planId, toolName, input }): Promise<string> => {
-    const tools = buildCockpitTools(ctx, tenantId, planId) as unknown as Record<
-      string,
-      { execute: (i: unknown, o: unknown) => Promise<string> }
-    >;
-    const t = tools[toolName];
-    if (!t) throw new Error(`unknown cockpit tool: ${toolName}`);
-    return await t.execute(input, { toolCallId: "test", messages: [] });
+  handler: async (ctx, { tenantId, planId, toolName, input }): Promise<string> =>
+    invokeTool(buildCockpitTools(ctx, tenantId, planId), toolName, input),
+});
+
+/**
+ * Test-support shim for the mock-model loop: a LanguageModel cannot ride through Convex action args,
+ * so the mock is BUILT here from a serializable script of doGenerate results and handed to the SAME
+ * governed loop (runAgentLoop) runCockpitAgent uses. Proves generateText runs the tools + records
+ * spend + falls back to CHEAP_MODEL — all offline. Mirrors __invokeCockpitTool.
+ * ponytail: script-driven mock, not a model arg (models are not Convex-serializable).
+ */
+export const __runCockpitAgentWithScript = internalAction({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    primary: v.array(v.any()),
+    fallback: v.optional(v.array(v.any())),
+    failPrimary: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { tenantId, planId, primary, fallback, failPrimary }): Promise<{ reply: string }> => {
+    const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
+      name: COCKPIT_AGENT_SKILL,
+    });
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    const primaryModel = failPrimary
+      ? new MockLanguageModelV4({
+          doGenerate: async () => {
+            throw new DOMException("mock: forced primary failure", "TimeoutError");
+          },
+        })
+      : new MockLanguageModelV4({ doGenerate: primary as never });
+    const fallbackModel = new MockLanguageModelV4({ doGenerate: (fallback ?? primary) as never });
+    return await runAgentLoop(ctx, {
+      tenantId,
+      planId,
+      system: skill.body,
+      prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
+      primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
+      fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
+    });
   },
 });
 
