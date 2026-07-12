@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/check-playbooks.mjs baseline",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/check-playbooks.mjs\" baseline",
             "timeout": 15
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/check-playbooks.mjs check",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/check-playbooks.mjs\" check",
             "timeout": 30,
             "statusMessage": "Checking playbook freshness"
           }

@@ -15,8 +15,19 @@ try {
   input = JSON.parse(readFileSync(0, "utf8") || "{}");
 } catch {}
 const mode = process.argv[2];
+
+// Hooks run in the session's cwd, which may be a subdirectory (or the repo root of
+// another machine layout) — anchor everything to the repo root and never block if
+// we can't find it.
+let gitDir;
+try {
+  process.chdir(git("rev-parse", "--show-toplevel"));
+  gitDir = git("rev-parse", "--git-dir"); // worktree-safe (".git" may be a file)
+} catch {
+  process.exit(0);
+}
 const sessionId = String(input.session_id || "default").replace(/[^A-Za-z0-9_-]/g, "");
-const baselineFile = join(".git", `claude-playbooks-${sessionId || "default"}`);
+const baselineFile = join(gitDir, `claude-playbooks-${sessionId || "default"}`);
 
 if (mode === "baseline") {
   // Record HEAD at session start so "check" sees changes committed mid-session,
