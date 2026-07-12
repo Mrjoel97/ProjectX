@@ -22,6 +22,22 @@ const PLAN_STATUS = v.union(
   v.literal("done"),
 );
 
+// Mirrors plans.candidates in schema.ts (mirrors @pikar/core ContactMatch/NameCandidates, Plan 01).
+const CANDIDATES = v.array(
+  v.object({
+    name: v.string(),
+    matches: v.array(
+      v.object({
+        address: v.string(),
+        displayName: v.optional(v.string()),
+        lastSubject: v.optional(v.string()),
+        lastDateMs: v.optional(v.number()),
+        count: v.number(),
+      }),
+    ),
+  }),
+);
+
 /**
  * Create the single `plans` row for a thread (the agent creates it on first turn).
  * Starts at "collecting" with empty recipients; returns planId for the conversation to patch.
@@ -51,6 +67,7 @@ export const patchPlan = internalMutation({
     bodyIntent: v.optional(v.string()),
     body: v.optional(v.string()),
     status: v.optional(PLAN_STATUS),
+    greetingName: v.optional(v.string()), // resolve path persists the drafter greeting through patchPlan
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
@@ -64,6 +81,34 @@ export const setPlanStatus = internalMutation({
   args: { planId: v.id("plans"), status: PLAN_STATUS },
   handler: async (ctx, { planId, status }) => {
     await ctx.db.patch(planId, { status });
+  },
+});
+
+/**
+ * TRANSIENT candidate writer (cockpit calls after a name search). Holds fetched
+ * candidates + same-turn pendingValid addresses on the content plane so the resolution
+ * card renders across turns. Content-plane only — never audited (CLAUDE.md §4).
+ */
+export const writeCandidates = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    candidates: CANDIDATES,
+    pendingValid: v.array(v.string()),
+  },
+  handler: async (ctx, { planId, candidates, pendingValid }) => {
+    await ctx.db.patch(planId, { candidates, pendingValid });
+  },
+});
+
+/**
+ * Wipe-on-pick: unset BOTH transient fields (patch to undefined removes the field in
+ * Convex → "no contacts cache at rest"). Does NOT touch greetingName — it must survive
+ * to the draft turn.
+ */
+export const clearCandidates = internalMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    await ctx.db.patch(planId, { candidates: undefined, pendingValid: undefined });
   },
 });
 
