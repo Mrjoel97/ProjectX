@@ -14,6 +14,10 @@ A user speaks or types a goal and the system reliably plans it, shows the plan f
 
 (None yet — ship to validate)
 
+*Post-beta gate: a feature idea may not move from idea to roadmap phase without an
+evidence-backed Validated line — see `.planning/design/moat-strategy.md` for the
+evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
+
 ### Active
 
 - [ ] Request intake via text, file attachments, and voice (recorded dictation → transcription)
@@ -52,6 +56,7 @@ A user speaks or types a goal and the system reliably plans it, shows the plan f
 - Required workflow tools: GSD for all building workflows; ponytail plugin (minimal-code decision ladder) for code-generation discipline.
 - Resources on hand: LLM API key(s), cloud hosting account, Microsoft 365 and Google Workspace. No UiPath tenant.
 - Builder: solo owner + Claude Code.
+- Moat strategy: two structural moats cultivated deliberately — per-tenant learning moat (vault + SkillOpt loop) and compliance/trust moat (audit spine + restricted-scope posture); roadmap prioritization and the post-beta Validated gate follow `.planning/design/moat-strategy.md`.
 
 ## Constraints
 
@@ -85,4 +90,4 @@ A user speaks or types a goal and the system reliably plans it, shows the plan f
 | **v1 PII engine: pure-TS `packages/pii`, no sidecar, no DLP API** (2026-07-12) | Deterministic scan/redact (email/card+Luhn/SSN/phone) with fail-closed Result; a cloud DLP API would add a processor for restricted-scope data (CASA surface); a sidecar is a whole deployment plane for one function | ✅ Decided + spike proven (8 tests green) — design record: `.planning/design/pii-engine.md`; names-in-prose tension deferred to Phase 3 planning |
 
 ---
-*Last updated: 2026-07-12 — re-baselined: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded*
+*Last updated: 2026-07-12 — re-baselined: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`)*
