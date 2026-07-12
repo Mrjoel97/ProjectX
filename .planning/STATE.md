@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 2 closed — 02-08/02-09 superseded by Phase 3.1 cockpit
-last_updated: "2026-07-12T00:00:00.000Z"
-last_activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09 (UI retired by cockpit)
+status: verifying
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-07-12T01:36:39.146Z"
+last_activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09
 progress:
   total_phases: 13
   completed_phases: 0
-  total_plans: 18
-  completed_plans: 15
-  percent: 83
+  total_plans: 23
+  completed_plans: 16
+  percent: 70
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** A user speaks or types a goal and the system reliably plans it, shows the plan for a single approval before anything leaves the building (approve once → hands-off governed execution, notify + halt), executes it with guardrails (cost, PII, quality), and follows through to real delivery (email) — with a full audit trail. *(Per-plan approval, 2026-07-10.)*
-**Current focus:** Phase 2 — Thin End-to-End Slice
+**Current focus:** Phase 3 — Guardrails
 
 ## Current Position
 
-Phase: 2 of 9 closed for forward progress → next is Phase 3 (Guardrails), then the cockpit (3.1)
-Plan: 02-01…02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 (not verified, not deleted)
+Phase: 3 (Guardrails) IN PROGRESS — wave 1 executing; Phase 2 backend spine closed for forward progress
+Plan: 03-02 executed (action-cache 0.3.1 + guardrail schema rails); 03-01 executed in parallel (pii SafeText brand, @pikar/cost). 02-01…02-07 executed; 02-08/02-09 SUPERSEDED by Phase 3.1 (not verified, not deleted)
 Status: Phase 2 backend spine COMPLETE (routing, drafting, review-gate mechanics, Gmail delivery, DLQ, telemetry, audit, migrations, aggregate) — unblocks Phase 3. The interim submit-form + review-queue UI shipped ad-hoc but is superseded by the Email Chat Cockpit: the `/submit` form and `/review` queue-gate are retired UX (kept on disk, retired later), while `/connect-gmail` (cockpit prerequisite), the ops page (OPSG-07), and `ReconnectBanner` (DLVR-03) SURVIVE and are reused by the cockpit. Phase 2 SC-1 (submit + live status) and SC-2 (see-plan + approve/edit/reject) end-user verification is reassigned to Phase 3.1's manual checkpoint. Phase 1's 01-08/01-09 remain deferred human checkpoints (Phase 9).
 Last activity: 2026-07-12 — Registered cockpit phases 3.1–3.4; superseded 02-08/02-09
 
-Progress: [████████░░] 83%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 83%
 | Phase 02 P05 | 30 | 3 tasks | 4 files |
 | Phase 02 P06 | 35 | 3 tasks | 10 files |
 | Phase 02 P07 | 35 | 3 tasks | 13 files |
+| Phase 03 P02 | 15 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Recent decisions affecting current work:
 - [Cockpit — supersede 02-08/09, 2026-07-12]: 02-08 (submit form) + 02-09 (review queue/gate/ops/connect-gmail/reconnect) code already existed on disk (built ad-hoc during auth work), never got SUMMARY files or their blocking human-verify checkpoints. Rather than finish+verify UX the cockpit retires, they are SUPERSEDED by Phase 3.1. RETIRED UX: `/submit` form, `/review` queue + collapsed gate (cockpit approves at the PLAN, not a mid-run gate). SURVIVES & reused by cockpit (do NOT delete): `/connect-gmail` (prerequisite), ops page (OPSG-07), `ReconnectBanner` (DLVR-03) — verified real (markResolved/buildAuthorizeUrl/awaiting_reauth present). Nothing deleted now (design: retired pages "Kept, retired later"). Phase 2 backend spine complete → unblocks Phase 3. SC-1/SC-2 end-user verification reassigned to 3.1's manual checkpoint
 - [Cockpit — roadmap 2026-07-12]: Email Chat Cockpit slices registered as decimal phases **3.1 Cockpit Core, 3.2 Inbox Reading, 3.3 Attachment Generation, 3.4 Per-Recipient Personalization** (INSERTED after Phase 3, before Phase 4 — zero renumber of existing 4–9). Sequenced AFTER Guardrails; the cockpit REPLACES Phase 2's /submit form + /review queue UX while reusing the governed backend spine unchanged. Slice 1 reshapes INTK-01/AGNT-02/REVW-01/DLVR-01 UX (no new v1 ID); slices 2–4 are new capabilities with no prior v1 ID (formal REQUIREMENTS.md IDs are a follow-up if wanted). Source: `.planning/design/email-chat-cockpit.md`. total_phases 9→13
 - [Phase 02]: [Phase 02] Google is the Convex Auth sign-in provider (from @auth/core/providers/google — Convex Auth ships none); front-door scope is openid email profile ONLY, gmail.modify stays in the separate /connect-gmail flow. Authenticated shell lives under the (app) route group behind a default-deny middleware; dashboard at /dashboard (the group root would collide with the public / marketing page)
+- [Phase 03]: [Phase 03] action-cache 0.3.1 registered + guardrail schema rails laid (safeText/hash fields, by_tenant_safeTextHash index, guardrailConfig kill-switch table, scanning/blocked statuses, blocked telemetry outcome) — NO migration (all optional/default-on-read, Pitfall 7)
 
 ### Pending Todos
 
@@ -131,8 +133,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-11T16:24:27.963Z
-Stopped at: Completed 02-07-PLAN.md
+Last session: 2026-07-12T01:36:25.496Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
