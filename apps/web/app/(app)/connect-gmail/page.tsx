@@ -2,6 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 
 // DLVR-03 / Gmail consent (02-05). One explicit consent grants gmail.modify (read, draft,
 // send, organise — never permanent delete). The authorize URL is minted server-side with a
@@ -11,9 +12,23 @@ export default function ConnectGmailPage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
   const connectUrl = useQuery(api.gmailAuth.gmailConnectUrl);
 
+  // The OAuth callback (backend http.ts) redirects failures back here as ?gmailError=<reason>
+  // so the user never dead-ends on the Convex-site domain. Read once on mount (client-only —
+  // avoids the useSearchParams Suspense requirement for a value that only arrives via redirect).
+  const [gmailError, setGmailError] = useState<string | null>(null);
+  useEffect(() => {
+    setGmailError(new URLSearchParams(window.location.search).get("gmailError"));
+  }, []);
+
   return (
     <section style={{ display: "grid", gap: "1rem", maxWidth: "40rem" }}>
       <h1>Connect Gmail</h1>
+
+      {gmailError && (
+        <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: "0.5rem", padding: "1rem", color: "#991b1b" }}>
+          {gmailError}
+        </div>
+      )}
 
       {status === undefined ? (
         <p>Loading…</p>

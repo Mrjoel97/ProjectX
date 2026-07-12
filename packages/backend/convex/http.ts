@@ -15,17 +15,25 @@ http.route({
   path: "/gmail/callback",
   method: "GET",
   handler: httpAction(async (ctx, req) => {
+    // The callback runs on the Convex site origin (:3211); it MUST bounce the browser back to
+    // the app (SITE_URL) so the user never dead-ends on this domain in the same tab. Success →
+    // the cockpit (gmailStatus is reactive, so the composer unlocks on arrival); any failure →
+    // the connect page carrying a readable reason. See connect-gmail/page.tsx (?gmailError=).
+    const site = process.env.SITE_URL ?? "http://localhost:3111";
+    const seeOther = (path: string) => new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
+    const fail = (msg: string) => seeOther(`/connect-gmail?gmailError=${encodeURIComponent(msg)}`);
+
     const url = new URL(req.url);
     const oauthError = url.searchParams.get("error");
     if (oauthError) {
-      return new Response(`Gmail connection cancelled or failed: ${oauthError}`, { status: 400 });
+      return fail(`Gmail connection cancelled or failed: ${oauthError}`);
     }
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
-    if (!code || !state) return new Response("Missing code or state", { status: 400 });
+    if (!code || !state) return fail("Missing code or state — please try connecting again.");
 
     const tenantId = await verifyState(state);
-    if (!tenantId) return new Response("Invalid or tampered state", { status: 400 });
+    if (!tenantId) return fail("Invalid or tampered state — please try connecting again.");
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -39,7 +47,7 @@ http.route({
       }),
     });
     if (!tokenRes.ok) {
-      return new Response("Token exchange failed", { status: 502 });
+      return fail("Token exchange with Google failed — please try connecting again.");
     }
     const tok = (await tokenRes.json()) as {
       refresh_token?: string;
@@ -50,9 +58,8 @@ http.route({
     // Pitfall 3: no refresh_token means Google reused a prior grant (missing offline+consent).
     // Surface it as a hard error so the user re-consents rather than silently half-connecting.
     if (!tok.refresh_token || !tok.access_token) {
-      return new Response(
+      return fail(
         "No refresh token returned. Remove Pikar's access at myaccount.google.com/permissions, then reconnect.",
-        { status: 400 },
       );
     }
 
@@ -63,9 +70,8 @@ http.route({
       expiresAt: Date.now() + (tok.expires_in ?? 3600) * 1000,
       scope: tok.scope ?? "https://www.googleapis.com/auth/gmail.modify",
     });
-    return new Response("Gmail connected. You can close this tab and return to Pikar.", {
-      status: 200,
-    });
+    // Back to the cockpit — gmailStatus (reactive) flips the composer to connected on arrival.
+    return seeOther("/dashboard/workspace");
   }),
 });
 
