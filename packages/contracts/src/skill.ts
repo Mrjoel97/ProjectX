@@ -40,3 +40,6 @@ export const EXECUTIVE_ROUTER_SKILL = "executive-router" as const;
 
 /** Registry name of the email drafter skill (AGNT-02). */
 export const EMAIL_DRAFTER_SKILL = "email-drafter" as const;
+
+/** Registry name of the cockpit Executive Agent tool-loop skill (AGNT-01). */
+export const COCKPIT_AGENT_SKILL = "cockpit-agent" as const;

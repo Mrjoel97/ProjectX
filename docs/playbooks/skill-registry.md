@@ -1,6 +1,6 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-07-12 against c577890
+> Last verified: 03.2.1-01
 > Build history: `.planning/phases/01-foundation-governance-substrate/01-04-*.md` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -26,7 +26,7 @@ it is the substrate the Phase 8 SkillOpt optimization loop will operate on.
 `graphify query "skills registry"`. Every LLM call site depends on an active skill row
 existing — **a fresh deployment without seeding dead-letters every request**
 (`NO_ACTIVE_SKILL: executive-router`). Current skills: `executive-agent.classifier`,
-`executive-router`, `email-drafter`. The active row's `version` is part of the LLM
+`executive-router`, `email-drafter`, `cockpit-agent`. The active row's `version` is part of the LLM
 action-cache key, so activation/rollback automatically invalidates cached outputs.
 
 ## Data flow
