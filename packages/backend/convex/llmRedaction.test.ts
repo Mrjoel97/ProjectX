@@ -86,7 +86,10 @@ test("draftCockpit receives NO mailbox header hints — greetingName is the only
   const src = readSource("llm.ts");
   const start = src.indexOf("export const draftCockpit");
   const rest = src.slice(start);
-  const end = rest.indexOf("export const route");
+  // End at the true close of the draftCockpit block — the next top-level export. (Was
+  // "export const route"; the cockpit tool set now sits between them and legitimately
+  // mentions `matches` via rankCandidates, so this must bound draftCockpit ONLY.)
+  const end = rest.indexOf("\nexport function buildAgentContext");
   // Strip line comments — the invariant is about the CODE surface, not prose that documents the
   // forbidden fields by name (which is itself useful).
   const draftBlock = (end >= 0 ? rest.slice(0, end) : rest).replace(/\/\/[^\n]*/g, "");
@@ -95,6 +98,45 @@ test("draftCockpit receives NO mailbox header hints — greetingName is the only
     /lastSubject|lastDateMs|matches/,
   );
   expect(draftBlock, "draftCockpit references a header count").not.toMatch(/\bcount\b/);
+});
+
+// ── 03.2.1-03: the Executive-Agent reasoning surface is provably index/label-only ──────────────
+// buildAgentContext + buildCockpitTools are the model-facing surface (Plan 04's loop feeds them
+// to generateText). The runtime proof is Plan 04's mock-model test; these are the STATIC
+// complement — the context is built from buildRecipientView (index+label, never an address), and
+// the draftBody tool still redacts (scanText) before the drafting sub-call.
+
+test("buildAgentContext is index/label-only (buildRecipientView, no raw recipients array interpolated)", () => {
+  const src = readSource("llm.ts");
+  const start = src.indexOf("export function buildAgentContext");
+  expect(start, "buildAgentContext not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\nexport function buildCockpitTools");
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+  // The recipient view MUST come from buildRecipientView (index+label) …
+  expect(block).toMatch(/buildRecipientView/);
+  // … and the raw `recipients` string[] must never be interpolated straight into the model-facing
+  // string (e.g. `${plan.recipients}` / `recipients.join(`) — that would leak addresses (§2-D).
+  expect(block, "buildAgentContext interpolates the raw recipients array").not.toMatch(
+    /\$\{[^}]*\brecipients\b[^}]*\}|\brecipients\s*\.\s*join\s*\(/,
+  );
+});
+
+test("the draftBody tool redacts (scanText) BEFORE any model call (GRDL-01/02)", () => {
+  const src = readSource("llm.ts");
+  const start = src.indexOf("draftBody: tool(");
+  expect(start, "draftBody tool not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("proposePlan: tool(");
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+  // scanText must appear, and it must precede the draftCockpit sub-call in source order.
+  const scanAt = block.indexOf("scanText(");
+  const draftAt = block.indexOf("draftCockpit");
+  expect(scanAt, "draftBody tool does not call scanText").toBeGreaterThanOrEqual(0);
+  expect(draftAt, "draftBody tool does not call draftCockpit").toBeGreaterThanOrEqual(0);
+  expect(scanAt, "scanText must run before draftCockpit (redact-before-model)").toBeLessThan(
+    draftAt,
+  );
 });
 
 test("cockpit's only delivery-audit crossing (workflow.start context payload) carries refs only", () => {
