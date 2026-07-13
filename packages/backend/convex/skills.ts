@@ -6,22 +6,22 @@
 // is a new version row plus an activateSkill flip; body/name/version are never
 // patched (only `status` and `evidence` may change).
 
-import { v } from "convex/values";
 import {
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_AGENT_CLASSIFIER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
+  type LoadedSkill,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
-  type LoadedSkill,
 } from "@pikar/contracts/skill";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
+import { v } from "convex/values";
 import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 
 /**
@@ -29,15 +29,10 @@ import { internalMutation, internalQuery, type QueryCtx } from "./_generated/ser
  * row via by_name_status and FAILS CLOSED (throws) when none exists. Callers
  * must record { name, version } in telemetry/audit for every use (Phase 8).
  */
-export async function loadSkill(
-  ctx: QueryCtx,
-  name: string,
-): Promise<LoadedSkill> {
+export async function loadSkill(ctx: QueryCtx, name: string): Promise<LoadedSkill> {
   const row = await ctx.db
     .query("skills")
-    .withIndex("by_name_status", (q) =>
-      q.eq("name", name).eq("status", "active"),
-    )
+    .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
     .unique();
 
   if (row === null) {
@@ -66,9 +61,7 @@ export const activateSkill = internalMutation({
   handler: async (ctx, { name, version }) => {
     const target = await ctx.db
       .query("skills")
-      .withIndex("by_name_version", (q) =>
-        q.eq("name", name).eq("version", version),
-      )
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
       .unique();
 
     if (target === null) {
@@ -77,9 +70,7 @@ export const activateSkill = internalMutation({
 
     const current = await ctx.db
       .query("skills")
-      .withIndex("by_name_status", (q) =>
-        q.eq("name", name).eq("status", "active"),
-      )
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
       .unique();
 
     if (current !== null && current._id !== target._id) {
@@ -118,7 +109,13 @@ export const seedSkills = internalMutation({
         .collect();
 
       if (rows.length === 0) {
-        await ctx.db.insert("skills", { name, version: 1, body, status: "active", createdAt: Date.now() });
+        await ctx.db.insert("skills", {
+          name,
+          version: 1,
+          body,
+          status: "active",
+          createdAt: Date.now(),
+        });
         continue;
       }
 

@@ -20,7 +20,11 @@ test("draftDocument loads the document-drafter body from the registry (fails clo
   // No seedSkills → no active document-drafter row. A registry-backed drafter fails closed
   // (NO_ACTIVE_SKILL); a hardcoded prompt would never consult the registry and would not throw.
   await expect(
-    t.action(internal.llm.draftDocument, { tenantId: "t1", safeText: `${SMOKE}x`, safeTextHash: "h" }),
+    t.action(internal.llm.draftDocument, {
+      tenantId: "t1",
+      safeText: `${SMOKE}x`,
+      safeTextHash: "h",
+    }),
   ).rejects.toThrow();
 
   // Seeded → the same SMOKE input now succeeds, so the body genuinely came from the registry.

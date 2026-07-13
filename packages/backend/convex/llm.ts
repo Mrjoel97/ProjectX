@@ -1,5 +1,6 @@
 "use node";
 
+import { createHash } from "node:crypto";
 // Executive Agent LLM surface (AGNT-01/02/03 + GRDL-01/02/04/05) — the `route` and
 // `draft` steps the pipeline (02-06) reaches through the Vercel AI Gateway.
 //
@@ -21,22 +22,36 @@
 import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
-import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
-import { COCKPIT_AGENT_SKILL, DOCUMENT_DRAFTER_SKILL, EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
+import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
-  type RecipientEdit,
+  COCKPIT_AGENT_SKILL,
+  DOCUMENT_DRAFTER_SKILL,
+  EMAIL_DRAFTER_SKILL,
+  EXECUTIVE_ROUTER_SKILL,
+} from "@pikar/contracts/skill";
+import {
   applyRecipientEdit,
   buildRecipientView,
   isFallbackEligible,
+  type RecipientEdit,
   rankCandidates,
+  tokenizeMarkdown,
+  toWinAnsi,
 } from "@pikar/core";
 import { CHEAP_MODEL, DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { type LanguageModel, generateObject, generateText, jsonSchema, stepCountIs, tool } from "ai";
+import {
+  generateObject,
+  generateText,
+  jsonSchema,
+  type LanguageModel,
+  stepCountIs,
+  tool,
+} from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
-import { createHash } from "node:crypto";
+import { PDFDocument, type PDFFont, StandardFonts } from "pdf-lib";
 import { components, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
@@ -152,7 +167,11 @@ export const routeUncached = internalAction({
       await auditCalled(model);
       if (smoke.route === "unknown") throw new Error("unknown_route");
       return {
-        routing: { route: smoke.route, steps: [{ n: 1, description: "smoke" }], rationale: "smoke" },
+        routing: {
+          route: smoke.route,
+          steps: [{ n: 1, description: "smoke" }],
+          rationale: "smoke",
+        },
         usage: ZERO_USAGE,
         generatedAt: Date.now(),
       };
@@ -182,7 +201,12 @@ export const routeUncached = internalAction({
         correlationId: safeTextHash,
         eventType: "llm.fallback",
         actor: "system",
-        payload: { fromModel: model, toModel: CHEAP_MODEL, errorName: (e as Error)?.name ?? "unknown", stage: "route" },
+        payload: {
+          fromModel: model,
+          toModel: CHEAP_MODEL,
+          errorName: (e as Error)?.name ?? "unknown",
+          stage: "route",
+        },
       });
       const { object, usage } = await generateObject({
         model: resolveModel(CHEAP_MODEL),
@@ -237,14 +261,22 @@ export const draftUncached = internalAction({
     });
     const smoke = parseSmoke(safeText);
     const prompt =
-      lastInstruction && instructionHash ? `${safeText}\n\nRevision instruction: ${lastInstruction}` : safeText;
+      lastInstruction && instructionHash
+        ? `${safeText}\n\nRevision instruction: ${lastInstruction}`
+        : safeText;
 
     try {
       if (smoke) {
         // failPrimary throws INTO the real catch so isFallbackEligible classifies it.
-        if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        if (smoke.failPrimary)
+          throw new DOMException("smoke: forced primary failure", "TimeoutError");
         await auditCalled(model);
-        return { subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}`, usage: ZERO_USAGE, generatedAt: Date.now() };
+        return {
+          subject: "Smoke Subject",
+          body: `Smoke draft for ${safeTextHash}`,
+          usage: ZERO_USAGE,
+          generatedAt: Date.now(),
+        };
       }
       const { object, usage } = await generateObject({
         model: resolveModel(model),
@@ -263,10 +295,21 @@ export const draftUncached = internalAction({
         correlationId: safeTextHash,
         eventType: "llm.fallback",
         actor: "system",
-        payload: { fromModel: model, toModel: CHEAP_MODEL, errorName: (e as Error)?.name ?? "unknown", stage: "draft" },
+        payload: {
+          fromModel: model,
+          toModel: CHEAP_MODEL,
+          errorName: (e as Error)?.name ?? "unknown",
+          stage: "draft",
+        },
       });
       // Sentinel short-circuits the fallback to a fixed draft (no model call).
-      if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback", usage: ZERO_USAGE, generatedAt: Date.now() };
+      if (smoke)
+        return {
+          subject: "Smoke Fallback Subject",
+          body: "smoke fallback",
+          usage: ZERO_USAGE,
+          generatedAt: Date.now(),
+        };
       const { object, usage } = await generateObject({
         model: resolveModel(CHEAP_MODEL),
         schema: draftSchema,
@@ -316,7 +359,9 @@ export const draftCockpit = internalAction({
     );
     const smoke = parseSmoke(safeText);
     // Prepend the greeting instruction (name only) so the body opens "Hi <name>,".
-    const prompt = greetingName ? `Open the email body with the greeting "Hi ${greetingName},".\n\n${safeText}` : safeText;
+    const prompt = greetingName
+      ? `Open the email body with the greeting "Hi ${greetingName},".\n\n${safeText}`
+      : safeText;
 
     // ponytail: no audit/telemetry here. draftCockpit has no thread/correlationId (only the
     // safeTextHash) — the CALLER (plan 07) owns the conversation's correlation and records
@@ -326,7 +371,8 @@ export const draftCockpit = internalAction({
     try {
       if (smoke) {
         // failPrimary throws INTO the catch so the real fallback path runs; else offline draft.
-        if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        if (smoke.failPrimary)
+          throw new DOMException("smoke: forced primary failure", "TimeoutError");
         // Honor the greeting offline too (SC3) so the resolution E2E can prove "Hi <name>," without a model.
         const greeting = greetingName ? `Hi ${greetingName},\n\n` : "";
         return { subject: "Smoke Subject", body: `${greeting}Smoke draft for ${safeTextHash}` };
@@ -407,7 +453,11 @@ export function buildAgentContext(plan: {
  * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
  * 04 hands this set to generateText — Plan 03 ships them as independently testable wrappers.
  */
-export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: string, planId: Id<"plans">) {
+export function buildCockpitTools(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+  planId: Id<"plans">,
+) {
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
     if (!plan || plan.tenantId !== tenantId) throw new Error("cockpit: plan row missing"); // no cross-tenant
@@ -438,7 +488,11 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
       }),
       execute: async ({ name }): Promise<string> => {
         // correlationId = planId: a stable ref for the refs-only mailbox.searched audit (§4).
-        const res = await ctx.runAction(internal.gmail.search, { tenantId, name, correlationId: planId });
+        const res = await ctx.runAction(internal.gmail.search, {
+          tenantId,
+          name,
+          correlationId: planId,
+        });
         if (!res.ok) {
           // Read-time auth failure: light the reconnect banner AND fall back to asking (never dead-end).
           await ctx.runMutation(internal.notifications.notify, {
@@ -449,27 +503,42 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
           return `I couldn't read the mailbox to look up "${name}". Ask the user for the email address directly.`;
         }
         const matches = rankCandidates(name, res.records);
-        if (matches.length === 0) return `No contacts matched "${name}". Ask the user for the email address directly.`;
+        if (matches.length === 0)
+          return `No contacts matched "${name}". Ask the user for the email address directly.`;
         // Hold the candidates on the content plane so the ResolutionCard renders; the human picks a
         // chip → resolveRecipients folds the real address in (the model never sees it).
-        await ctx.runMutation(internal.plans.writeCandidates, { planId, candidates: [{ name, matches }], pendingValid: [] });
+        await ctx.runMutation(internal.plans.writeCandidates, {
+          planId,
+          candidates: [{ name, matches }],
+          pendingValid: [],
+        });
         // refs-only summary: counts + display-name LABELS, never an address (§2-D / §4).
-        const labels = matches.map((m, i) => `#${i + 1} ${m.displayName ?? "(no name)"}`).join(", ");
+        const labels = matches
+          .map((m, i) => `#${i + 1} ${m.displayName ?? "(no name)"}`)
+          .join(", ");
         return `Found ${matches.length} contact(s) for "${name}": ${labels}. The user will pick one — do not guess the address.`;
       },
     }),
     addRecipients: tool({
-      description: "Add one or more explicit, user-provided email addresses. Invalid addresses are rejected, not added.",
+      description:
+        "Add one or more explicit, user-provided email addresses. Invalid addresses are rejected, not added.",
       inputSchema: jsonSchema<{ addresses: string[] }>({
         type: "object",
-        properties: { addresses: { type: "array", items: { type: "string" }, description: "Explicit email addresses the user typed." } },
+        properties: {
+          addresses: {
+            type: "array",
+            items: { type: "string" },
+            description: "Explicit email addresses the user typed.",
+          },
+        },
         required: ["addresses"],
         additionalProperties: false,
       }),
       execute: ({ addresses }): Promise<string> => editRecipients({ op: "add", addresses }),
     }),
     setRecipients: tool({
-      description: "Replace the entire recipient list with these explicit email addresses. Invalid addresses are rejected.",
+      description:
+        "Replace the entire recipient list with these explicit email addresses. Invalid addresses are rejected.",
       inputSchema: jsonSchema<{ addresses: string[] }>({
         type: "object",
         properties: { addresses: { type: "array", items: { type: "string" } } },
@@ -483,7 +552,9 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
         "Remove the recipient at the given 1-based #index (as shown in the plan). You never handle the address — the server resolves the index to it.",
       inputSchema: jsonSchema<{ index: number }>({
         type: "object",
-        properties: { index: { type: "number", description: "1-based index of the recipient to remove." } },
+        properties: {
+          index: { type: "number", description: "1-based index of the recipient to remove." },
+        },
         required: ["index"],
         additionalProperties: false,
       }),
@@ -503,7 +574,8 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
       },
     }),
     setMode: tool({
-      description: "Set how multiple recipients are addressed: individually (a separate email each) or as one group thread.",
+      description:
+        "Set how multiple recipients are addressed: individually (a separate email each) or as one group thread.",
       inputSchema: jsonSchema<{ mode: "individual" | "group" }>({
         type: "object",
         properties: { mode: { type: "string", enum: ["individual", "group"] } },
@@ -516,10 +588,13 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
       },
     }),
     draftBody: tool({
-      description: "Draft the email body from a plain-language description of what to say. The draft is stored on the plan.",
+      description:
+        "Draft the email body from a plain-language description of what to say. The draft is stored on the plan.",
       inputSchema: jsonSchema<{ intent: string }>({
         type: "object",
-        properties: { intent: { type: "string", description: "What the email should say, in plain language." } },
+        properties: {
+          intent: { type: "string", description: "What the email should say, in plain language." },
+        },
         required: ["intent"],
         additionalProperties: false,
       }),
@@ -529,20 +604,32 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
         if (!scan.ok) throw new Error("cockpit: body-intent scan failed");
         const safeText = scan.value.safeText;
         const plan = await readPlan();
-        const draft: { subject: string; body: string } = await ctx.runAction(internal.llm.draftCockpit, {
-          tenantId,
-          safeText,
-          safeTextHash: await contentHash(safeText),
-          greetingName: plan.greetingName, // resolved display name ONLY (SC3 — never a header hint)
-        });
+        const draft: { subject: string; body: string } = await ctx.runAction(
+          internal.llm.draftCockpit,
+          {
+            tenantId,
+            safeText,
+            safeTextHash: await contentHash(safeText),
+            greetingName: plan.greetingName, // resolved display name ONLY (SC3 — never a header hint)
+          },
+        );
         // bodyIntent is content-plane (never a log — §4); body is the drafted wording.
-        await ctx.runMutation(internal.plans.patchPlan, { planId, bodyIntent: intent, body: draft.body });
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          bodyIntent: intent,
+          body: draft.body,
+        });
         return "Body drafted and saved to the plan.";
       },
     }),
     proposePlan: tool({
-      description: "Propose the finished plan for the user to review and Approve. Call only once recipients, subject, and a drafted body are all set.",
-      inputSchema: jsonSchema<Record<string, never>>({ type: "object", properties: {}, additionalProperties: false }),
+      description:
+        "Propose the finished plan for the user to review and Approve. Call only once recipients, subject, and a drafted body are all set.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
       execute: async (): Promise<string> => {
         const plan = await readPlan();
         const recipients = plan.recipients ?? [];
@@ -551,8 +638,10 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
         if (recipients.length === 0) {
           return "Cannot propose yet — no recipients are set. Have the user resolve or add at least one recipient first.";
         }
-        if (!plan.subject) return "Cannot propose yet — no subject is set. Ask the user for the subject.";
-        if (!plan.body) return "Cannot propose yet — the body has not been drafted. Call draftBody first.";
+        if (!plan.subject)
+          return "Cannot propose yet — no subject is set. Ask the user for the subject.";
+        if (!plan.body)
+          return "Cannot propose yet — the body has not been drafted. Call draftBody first.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
         await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
@@ -590,7 +679,9 @@ function invokeTool(
   name: string,
   input: unknown,
 ): Promise<string> {
-  const t = (tools as unknown as Record<string, { execute: (i: unknown, o: unknown) => Promise<string> }>)[name];
+  const t = (
+    tools as unknown as Record<string, { execute: (i: unknown, o: unknown) => Promise<string> }>
+  )[name];
   if (!t) throw new Error(`unknown cockpit tool: ${name}`);
   return t.execute(input, { toolCallId: "cockpit", messages: [] });
 }
@@ -672,7 +763,13 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const val = spec.slice(eq + 1).trim();
   switch (key) {
     case "add":
-      return { kind: "add", addresses: val.split(",").map((s) => s.trim()).filter(Boolean) };
+      return {
+        kind: "add",
+        addresses: val
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      };
     case "resolve":
       return { kind: "resolve", name: val };
     case "subject":
@@ -688,7 +785,10 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
   }
 }
 
-function runAgentSmokeOp(tools: ReturnType<typeof buildCockpitTools>, op: AgentSmokeOp): Promise<string> {
+function runAgentSmokeOp(
+  tools: ReturnType<typeof buildCockpitTools>,
+  op: AgentSmokeOp,
+): Promise<string> {
   switch (op.kind) {
     case "add":
       return invokeTool(tools, "addRecipients", { addresses: op.addresses });
@@ -789,7 +889,10 @@ export const __runCockpitAgentWithScript = internalAction({
     fallback: v.optional(v.array(v.any())),
     failPrimary: v.optional(v.boolean()),
   },
-  handler: async (ctx, { tenantId, planId, primary, fallback, failPrimary }): Promise<{ reply: string }> => {
+  handler: async (
+    ctx,
+    { tenantId, planId, primary, fallback, failPrimary },
+  ): Promise<{ reply: string }> => {
     const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: COCKPIT_AGENT_SKILL,
     });
@@ -840,7 +943,11 @@ export const route = internalAction({
       if (smoke.route === "unknown") throw new Error("unknown_route");
       return {
         blocked: null,
-        routing: { route: smoke.route, steps: [{ n: 1, description: "smoke" }], rationale: "smoke" },
+        routing: {
+          route: smoke.route,
+          steps: [{ n: 1, description: "smoke" }],
+          rationale: "smoke",
+        },
         usage: ZERO_USAGE,
         cacheHit: false,
       };
@@ -880,14 +987,23 @@ export const draft = internalAction({
     instruction: v.optional(v.string()),
     force: v.optional(v.boolean()),
   },
-  handler: async (ctx, { tenantId, requestId, safeTextHash, model, instruction, force }): Promise<DraftResult> => {
+  handler: async (
+    ctx,
+    { tenantId, requestId, safeTextHash, model, instruction, force },
+  ): Promise<DraftResult> => {
     const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
       tenantId,
       safeTextHash,
     });
     const smoke = parseSmoke(safeText);
     if (smoke && !smoke.cache) {
-      return { blocked: null, subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}`, usage: ZERO_USAGE, cacheHit: false };
+      return {
+        blocked: null,
+        subject: "Smoke Subject",
+        body: `Smoke draft for ${safeTextHash}`,
+        usage: ZERO_USAGE,
+        cacheHit: false,
+      };
     }
 
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
@@ -916,7 +1032,13 @@ export const draft = internalAction({
     const value: { subject: string; body: string; usage: GenUsage; generatedAt: number } =
       await draftCache.fetch(ctx, args, force ? { force: true } : undefined);
     const cacheHit = value.generatedAt < tStart;
-    return { blocked: null, subject: value.subject, body: value.body, usage: value.usage, cacheHit };
+    return {
+      blocked: null,
+      subject: value.subject,
+      body: value.body,
+      usage: value.usage,
+      cacheHit,
+    };
   },
 });
 
@@ -947,19 +1069,29 @@ export const draftDocument = internalAction({
     safeText: v.string(),
     safeTextHash: v.string(),
   },
-  handler: async (ctx, { safeText, safeTextHash }): Promise<{ title: string; markdown: string }> => {
+  handler: async (
+    ctx,
+    { safeText, safeTextHash },
+  ): Promise<{ title: string; markdown: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL)
     // when unseeded, so a hardcoded fallback can never sneak in.
-    const skill: { body: string; version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
-      name: DOCUMENT_DRAFTER_SKILL,
-    });
+    const skill: { body: string; version: number } = await ctx.runQuery(
+      internal.skills.getActiveSkill,
+      {
+        name: DOCUMENT_DRAFTER_SKILL,
+      },
+    );
     const smoke = parseSmoke(safeText);
 
     try {
       if (smoke) {
         // failPrimary throws INTO the catch so the real fallback path runs; else offline document.
-        if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
-        return { title: "Smoke Document", markdown: `# Smoke Document\n\nSmoke draft for ${safeTextHash}.` };
+        if (smoke.failPrimary)
+          throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        return {
+          title: "Smoke Document",
+          markdown: `# Smoke Document\n\nSmoke draft for ${safeTextHash}.`,
+        };
       }
       const { object } = await generateObject({
         model: resolveModel(DEFAULT_MODEL),
@@ -972,7 +1104,8 @@ export const draftDocument = internalAction({
       return { title: object.title, markdown: object.markdown };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
-      if (smoke) return { title: "Smoke Fallback Document", markdown: "# Smoke Fallback\n\nfallback body" };
+      if (smoke)
+        return { title: "Smoke Fallback Document", markdown: "# Smoke Fallback\n\nfallback body" };
       const { object } = await generateObject({
         model: resolveModel(CHEAP_MODEL),
         schema: documentSchema,
@@ -985,3 +1118,91 @@ export const draftDocument = internalAction({
     }
   },
 });
+
+// ── Pure-JS PDF renderer (CKPT-02, V1 + V2) ──────────────────────────────────
+// markdownToPdf turns the drafter's simple markdown into a deterministic PDF using ONLY pdf-lib
+// Standard-14 fonts (Helvetica family) — NEVER embedFont(ttf), which pulls fontkit and inlines
+// TTF bytes, breaking the Convex esbuild bundle (no runtime font-file reads). Lives HERE in the
+// sole "use node" module (a second node module re-trips the TS circular-inference cliff). Every
+// drawn string passes through toWinAnsi so drawText can never throw on smart punctuation / astral
+// glyphs (V2). CreationDate/ModDate are pinned to the epoch → byte-identical output (V1). The
+// whole render is wrapped so ANY throw becomes a rejection — never a partial/empty PDF.
+// ponytail: line-based renderer over Standard-14; add marked/fontkit only if rich markdown or
+// embedded fonts land.
+
+const PAGE_W = 612; // US-Letter, points
+const PAGE_H = 792;
+const MARGIN = 72;
+const CONTENT_W = PAGE_W - 2 * MARGIN;
+const LEADING = 1.35;
+// Point size per block kind (headings bold, body/bullet regular).
+const SIZE: Record<string, number> = { h1: 18, h2: 15, h3: 13, para: 11, bullet: 11 };
+
+// Greedy word-wrap for one already-sanitized line at the given font/size. A single word wider
+// than maxWidth overflows its own line (rare; hard-break is the upgrade path).
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) return [""];
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const trial = cur ? `${cur} ${w}` : w;
+    if (cur === "" || font.widthOfTextAtSize(trial, size) <= maxWidth) {
+      cur = trial;
+    } else {
+      lines.push(cur);
+      cur = w;
+    }
+  }
+  lines.push(cur);
+  return lines;
+}
+
+export async function markdownToPdf(title: string, markdown: string): Promise<Uint8Array> {
+  try {
+    const doc = await PDFDocument.create();
+    // Metadata: title feeds the human-facing document name; pin the dates for deterministic bytes.
+    doc.setTitle(toWinAnsi(title));
+    doc.setCreationDate(new Date(0));
+    doc.setModificationDate(new Date(0));
+
+    const body = await doc.embedFont(StandardFonts.Helvetica);
+    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+    let page = doc.addPage([PAGE_W, PAGE_H]);
+    let y = PAGE_H - MARGIN;
+
+    const draw = (text: string, size: number, font: PDFFont, indent: number, prefix = "") => {
+      const lineHeight = size * LEADING;
+      const safe = toWinAnsi(text);
+      const lines = wrapText(safe, font, size, CONTENT_W - indent);
+      lines.forEach((line, i) => {
+        if (y - lineHeight < MARGIN) {
+          page = doc.addPage([PAGE_W, PAGE_H]);
+          y = PAGE_H - MARGIN;
+        }
+        const text2 = i === 0 && prefix ? prefix + line : line;
+        page.drawText(text2, { x: MARGIN + indent, y: y - size, size, font });
+        y -= lineHeight;
+      });
+    };
+
+    for (const tok of tokenizeMarkdown(markdown)) {
+      const size = SIZE[tok.kind] ?? 11;
+      // Small gap before every block for readable spacing.
+      y -= size * (LEADING - 1);
+      if (tok.kind === "bullet") {
+        draw(tok.text, size, body, 18, "- ");
+      } else if (tok.kind === "para") {
+        draw(tok.text, size, body, 0);
+      } else {
+        draw(tok.text, size, bold, 0);
+      }
+    }
+
+    return await doc.save();
+  } catch (e) {
+    // Render failure blocks approval — surface it, never return a partial/empty PDF (CONTEXT).
+    throw new Error(`markdownToPdf: render failed (${(e as Error)?.name ?? "unknown"})`);
+  }
+}

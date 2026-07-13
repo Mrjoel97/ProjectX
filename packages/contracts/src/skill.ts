@@ -20,10 +20,7 @@ export type LoadedSkill = {
  * `by_name_status` index, reading the single status==="active" row and
  * THROWING (failing closed) when none exists.
  */
-export type SkillLoader<Ctx = unknown> = (
-  ctx: Ctx,
-  name: string,
-) => Promise<LoadedSkill>;
+export type SkillLoader<Ctx = unknown> = (ctx: Ctx, name: string) => Promise<LoadedSkill>;
 
 /** Error prefix thrown by loadSkill when no active skill row exists (fails closed). */
 export const NO_ACTIVE_SKILL_ERROR = "NO_ACTIVE_SKILL" as const;
@@ -32,8 +29,7 @@ export const NO_ACTIVE_SKILL_ERROR = "NO_ACTIVE_SKILL" as const;
 export const NO_SUCH_SKILL_VERSION_ERROR = "NO_SUCH_SKILL_VERSION" as const;
 
 /** Registry name of the seed Executive Agent classifier skill (seeds AGNT-01). */
-export const EXECUTIVE_AGENT_CLASSIFIER_SKILL =
-  "executive-agent.classifier" as const;
+export const EXECUTIVE_AGENT_CLASSIFIER_SKILL = "executive-agent.classifier" as const;
 
 /** Registry name of the Executive Agent router skill (AGNT-01/02/03). */
 export const EXECUTIVE_ROUTER_SKILL = "executive-router" as const;

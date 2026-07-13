@@ -1,12 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
+import { convexTest } from "convex-test";
+import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 import { loadSkill } from "./skills";
@@ -46,9 +46,7 @@ describe("skills registry loader + activation", () => {
 
   test("loadSkill fails closed (throws) when no active skill exists", async () => {
     const t = convexTest(schema, modules);
-    await expect(
-      t.run((ctx) => loadSkill(ctx, "nonexistent")),
-    ).rejects.toThrow();
+    await expect(t.run((ctx) => loadSkill(ctx, "nonexistent"))).rejects.toThrow();
   });
 
   test("seedSkills is idempotent (run twice inserts one v1 row)", async () => {
@@ -123,9 +121,7 @@ describe("skills registry loader + activation", () => {
     const active = await t.run(async (ctx) =>
       ctx.db
         .query("skills")
-        .withIndex("by_name_status", (q) =>
-          q.eq("name", SKILL_NAME).eq("status", "active"),
-        )
+        .withIndex("by_name_status", (q) => q.eq("name", SKILL_NAME).eq("status", "active"))
         .collect(),
     );
     expect(active).toHaveLength(1);
@@ -139,9 +135,7 @@ describe("skills registry loader + activation", () => {
     const v1Row = await t.run(async (ctx) =>
       ctx.db
         .query("skills")
-        .withIndex("by_name_version", (q) =>
-          q.eq("name", SKILL_NAME).eq("version", 1),
-        )
+        .withIndex("by_name_version", (q) => q.eq("name", SKILL_NAME).eq("version", 1))
         .unique(),
     );
     expect(v1Row).not.toBeNull();
@@ -158,9 +152,7 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["cockpit-agent.md", cockpitAgentSkillBody],
     ["document-drafter.md", documentDrafterSkillBody],
   ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
-    const mdPath = fileURLToPath(
-      new URL(`../../contracts/skills/${file}`, import.meta.url),
-    );
+    const mdPath = fileURLToPath(new URL(`../../contracts/skills/${file}`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
   });
 

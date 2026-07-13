@@ -37,7 +37,8 @@
     "@pikar/pii": "workspace:*",
     "ai": "7.0.20",
     "convex": "1.42.1",
-    "convex-helpers": "0.1.120"
+    "convex-helpers": "0.1.120",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
