@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.3-02-PLAN.md
-last_updated: "2026-07-13T21:00:39.263Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 1: 03.3-02 executed (plans.attachments + attachmentError schema, recordAttachments writer, the FIRST storage.getUrl served from tenant-guarded attachmentUrls + reportForPlan URL extension; CKPT-02 content plane). Backend 92/93 green."
+stopped_at: Completed 03.3-01-PLAN.md (attachment-generation engine)
+last_updated: "2026-07-13T21:13:22.105Z"
+last_activity: "2026-07-12 — Phase 3.2 Wave 4: 03.2-06 executed (cockpit playbook read-path docs + gmail.ts watch confirmed; CKPT-01 real mailbox read human-verified, zero sends). Phase 3.2 COMPLETE (6/6)."
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 50
-  completed_plans: 43
-  percent: 86
+  completed_plans: 44
+  percent: 92
 ---
 
 # Project State
@@ -25,7 +25,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.3 (Attachment Generation) — IN PROGRESS (Wave 1). Plan 03.3-02 COMPLETE.
+Phase: 3.3 (Attachment Generation) — IN PROGRESS (Wave 1). Plans 03.3-01/02/03 COMPLETE (executed concurrently in the same tree).
+Plan: 03.3-01 COMPLETE (Wave 1 — the document-generation ENGINE, CKPT-02). Pure `@pikar/core` `documentGen.ts`: `tokenizeMarkdown` (line-based #/##/### headings, `- ` bullets, blank-line paragraphs — no inline/nested md), `toWinAnsi` (map the LLM-prose offenders — curly quotes/en-em-dash/ellipsis/nbsp — then keep ONLY 0x20-0x7E + 0xA0-0xFF and DROP the rest so pdf-lib Standard-14 `drawText` can never throw, V2), `buildDocFilename` (deterministic LLM-free slug+date, `-N` on exact-base collision, always `.pdf`), `exceedsByteCap` + `PLAN_ATTACHMENT_CAP_BYTES` (8 MiB) — 10 colocated tests. `document-drafter` registry skill via the 5-file mirror (canonical `.md` + byte-identical derived `documentDrafterSkillBody` + `DOCUMENT_DRAFTER_SKILL` const + `seedSkills` row + drift `test.each` row) — fails closed, no hardcoded prompt (§5). `llm.ts` gained `draftDocument` internalAction (mirrors `draftCockpit`: registry fail-closed, takes ALREADY-REDACTED `{tenantId, safeText, safeTextHash}`, SMOKE:: offline path returns fixed markdown with NO model call, else DEFAULT→CHEAP_MODEL, returns `{title, markdown}`, writes NO audit — caller owns correlation) + `markdownToPdf(title, markdown)` (pure-JS pdf-lib@1.17.1, Standard-14 Helvetica ONLY — never `embedFont(ttf)`, so NO runtime font-file reads; US-Letter, manual word-wrap + page-break, `toWinAnsi` on every drawn string, pinned epoch CreationDate/ModDate for byte-identical output (V1), any throw → rejection never a partial PDF). Inline `jsonSchema<{title,markdown}>` in llm.ts (no new contracts schema; adapter stays zod-free). Core 58/58, backend 100/101 (the 1 red = pre-existing audit.test.ts auditCounts-unregistered, NOT a regression). §9: documentGen.ts registered under cockpit.md `watch.json`; skill-registry.md + cockpit.md Last-verified bumped (03.3-01) + new-surface notes. Commits da74428 (Task1 validators), 65132a2 (Task2 skill+draftDocument), 2107bbe (Task3 renderer). DEVIATION (Rule 1): the plan's `buildDocFilename` example was self-inconsistent with its own "-N on collision" rule (appended -1 without a real collision) — implemented the correct documented rule + self-consistent tests. ENGINE ONLY — no wiring/tools/send/UI (downstream Wave plans). NEXT: Plan 04 attachment tools consume `draftDocument`+`markdownToPdf`+`recordAttachments`; Plan 05 cards; Plan 06 phase close.
 Plan: 03.3-02 COMPLETE (Wave 1 — the attachment CONTENT-PLANE extension, CKPT-02). Schema + adapter ONLY (no tools/send/UI). `plans` table gains two OPTIONAL fields (no migration, same discipline as `safeText`/`candidates`): `attachments` (array of `{storageId, filename, mimeType, size}` — inline generated-attachment refs = the pre-approval source of truth for the PLAN card) and `attachmentError` (transient render-failed / over-byte-cap marker the propose gate reads, V7). `plans.ts` gains: the `ATTACHMENTS` validator const; `recordAttachments` internalMutation — the SINGLE content-plane write surface (replaces the array wholesale + sets/clears `attachmentError` directly; passing `undefined` clears it, so a successful generate wipes a prior error without special-casing the drop-undefined `patchPlan`); `attachmentUrls` tenantQuery — the FIRST `storage.getUrl` in the codebase, guarded on the plan row (mirrors `byThread`; a cross-tenant caller gets `[]`, never another tenant's signed URL — V5 isolation); and a `reportForPlan` extension adding per-recipient `attachments: [{filename, url}]` resolved from each `requests.attachmentRefs` → the attachments-table row → `getUrl` (re-download the EXACT sent bytes; storage immutable per id). A signed download URL is a bearer capability → returned ONLY from these tenant-guarded queries, NEVER logged (CLAUDE.md §4). TDD `plans.test.ts` (4, V5): store→getUrl round-trip resolves a non-null url; the tenant guard denies cross-tenant; reportForPlan surfaces the delivered filename+url (empty [] when a request carries none). Backend 92/93 green (the 1 red = pre-existing audit.test.ts auditCounts-unregistered, NOT a regression). §9: cockpit.md playbook updated same-turn (plans.ts is watch-protected there — attachment Key-files + the bearer-capability invariant; Last verified → 03.3-02). Commits 25fc02a (feat schema+recordAttachments), 26f97ff (test RED), b481e56 (feat GREEN attachmentUrls+reportForPlan), b40d40c (docs playbook). No deviations (the plan's auditCounts-registration note was unneeded — the reportForPlan test seeds audit via raw db.insert, bypassing the aggregate). NOTE: sibling Wave-1 plans 03.3-01 (pure document validators) + 03.3-03 (send loads attachment bytes) executed CONCURRENTLY in the same tree — their commits interleave; skill-registry.md §9 update for the document-drafter skill is a SIBLING's responsibility (out of this plan's scope). NEXT: remaining Phase 3.3 plans (04 attachment tools consume recordAttachments, 05 PLAN/REPORT cards consume attachmentUrls, 06 phase close).
 
 Phase: 3.2.1 (Agent-Driven Cockpit) — ALL 6 PLANS COMPLETE (Wave 5 CLOSED). Reshaped the cockpit from the deterministic `emailIntent` FSM to an Executive Agent governed tool-loop (Approach A + index/label reasoning); the cutover landed in Plan 05 and Plan 06 closed the phase (playbook rewrite + live human-verify). Phase 3.2.1 is code-complete AND human-verified — the orchestrator owns `verify_phase_goal` + marking the phase complete. Phase 3.2 (Inbox Reading) COMPLETE (6/6). Phase 3.1 (Cockpit Core) + Phase 3 (Guardrails) awaiting /gsd:verify-work.
@@ -103,6 +104,7 @@ Progress: [█████████░] 92%
 | Phase 03.2.1 P05 | 9 | 3 tasks | 5 files |
 | Phase 03.3 P03 | 8 | 2 tasks | 3 files |
 | Phase 03.3 P02 | 7 | 2 tasks | 4 files |
+| Phase 03.3 P01 | 18 | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -184,6 +186,8 @@ Recent decisions affecting current work:
 - [Phase 03.3]: [Phase 03.3] Gmail send carries attachments: buildMime multipart/mixed (byte-identical zero-attachment branch), send loads bytes via ctx.storage.get; missing blob throws to DLQ; gmail.sent audit stays refs-only (§4)
 - [Phase 03.3]: attachmentUrls is the FIRST storage.getUrl in the codebase — a signed download URL is a bearer capability, returned ONLY from tenant-guarded queries (attachmentUrls/reportForPlan) and never logged (§4)
 - [Phase 03.3]: recordAttachments is the single content-plane write surface for plans.attachments + attachmentError; passing attachmentError undefined clears it (unambiguous error-clear on successful generate, no drop-undefined special-case)
+- [Phase 03.3]: [Phase 03.3] Attachment renderer uses pdf-lib Standard-14 fonts ONLY (never embedFont(ttf)) — no runtime font-file reads, so the Convex esbuild bundle stays intact; pinned CreationDate/ModDate (epoch) make PDF bytes deterministic
+- [Phase 03.3]: [Phase 03.3] toWinAnsi sanitizes conservatively (keep 0x20-0x7E + 0xA0-0xFF, map known LLM offenders, drop the rest) so pdf-lib drawText can never throw on smart-punct/astral input (V2)
 
 ### Roadmap Evolution
 
@@ -201,8 +205,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T21:00:39.229Z
-Stopped at: Completed 03.3-02-PLAN.md
+Last session: 2026-07-13T21:13:22.088Z
+Stopped at: Completed 03.3-01-PLAN.md (attachment-generation engine)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
