@@ -171,7 +171,7 @@ Plans:
 
 Plans:
 - [ ] 03.3-01-PLAN.md — @pikar/core doc validators + document-drafter skill + draftDocument + markdownToPdf render (Wave 1)
-- [ ] 03.3-02-PLAN.md — plans.attachments/attachmentError schema + recordAttachments + attachmentUrls + reportForPlan URLs (Wave 1)
+- [x] 03.3-02-PLAN.md — plans.attachments/attachmentError schema + recordAttachments + attachmentUrls + reportForPlan URLs (Wave 1)
 - [x] 03.3-03-PLAN.md — multipart buildMime + send loads storage bytes + getForDelivery resolves refs (Wave 1)
 - [ ] 03.3-04-PLAN.md — generate/regenerate/remove attachment tools + proposePlan cap/render gate + SMOKE ops (Wave 2)
 - [ ] 03.3-05-PLAN.md — executePlan fan-out propagation + PLAN/REPORT card attachment rows (Wave 3)
