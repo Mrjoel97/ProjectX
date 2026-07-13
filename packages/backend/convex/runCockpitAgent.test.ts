@@ -121,6 +121,31 @@ test("kill-switch: runCockpitAgent returns a paused reply + blocked, and writes 
   expect(dlq).toHaveLength(0);
 });
 
+test("SMOKE::agent attachment ops drive the tools offline (attach -> regenerate -> removeAttachment)", async () => {
+  const { t, planId } = await setup();
+  const run = (text: string) =>
+    t.action(internal.llm.runCockpitAgent, { tenantId: "t1", threadId: "thread1", planId, text });
+
+  // attach: SMOKE:: topic → draftDocument fixed markdown → markdownToPdf deterministic bytes.
+  const gen = await run("SMOKE::agent::attach=SMOKE::route=direct_llm:: quarterly report");
+  expect(gen.reply).toMatch(/\.pdf/);
+  const afterGen = await readPlan(t, planId);
+  expect(afterGen?.attachments?.length).toBe(1);
+  const firstId = afterGen!.attachments![0]!.storageId;
+
+  // regenerate=<index>:<topic> — supersede in place, old bytes gone.
+  await run("SMOKE::agent::regenerate=1:SMOKE::route=direct_llm:: revised report");
+  const afterRegen = await readPlan(t, planId);
+  expect(afterRegen?.attachments?.length).toBe(1);
+  expect(afterRegen!.attachments![0]!.storageId).not.toBe(firstId);
+  expect(await t.run((ctx) => ctx.storage.getUrl(firstId))).toBeNull();
+
+  // removeAttachment=<index> — dropped.
+  const rm = await run("SMOKE::agent::removeAttachment=1");
+  expect(rm.reply).toMatch(/removed/i);
+  expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
+});
+
 test("fallback: an eligible primary failure retries on the CHEAP model", async () => {
   const { t, planId } = await setup();
 

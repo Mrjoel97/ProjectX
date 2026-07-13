@@ -536,7 +536,11 @@ export function buildCockpitTools(
         "The attachments would exceed the size limit. Ask the user to remove one or use a smaller document.",
       );
     }
-    const storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+    // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
+    // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
+    const storageId = await ctx.storage.store(
+      new Blob([bytes as BlobPart], { type: "application/pdf" }),
+    );
     return {
       ok: true,
       att: { storageId, filename, mimeType: "application/pdf", size: bytes.byteLength },
@@ -915,6 +919,7 @@ async function runAgentLoop(
 // sentinel. Grammar (one per message):
 //   SMOKE::agent::add=a@x.com,b@x.com | resolve=Name | subject=... | mode=individual|group
 //                | body=<intent> | remove=<1-based index> | propose
+//                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
 type AgentSmokeOp =
   | { kind: "add"; addresses: string[] }
   | { kind: "resolve"; name: string }
@@ -922,7 +927,10 @@ type AgentSmokeOp =
   | { kind: "mode"; mode: "individual" | "group" }
   | { kind: "body"; intent: string }
   | { kind: "remove"; index: number }
-  | { kind: "propose" };
+  | { kind: "propose" }
+  | { kind: "attach"; topic: string }
+  | { kind: "regenerate"; index: number; topic: string }
+  | { kind: "removeAttachment"; index: number };
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
@@ -952,6 +960,16 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
       return { kind: "body", intent: val };
     case "remove":
       return { kind: "remove", index: Number(val) };
+    case "attach":
+      return { kind: "attach", topic: val };
+    case "regenerate": {
+      // <1-based index>:<topic> — split on the FIRST colon (the topic may itself carry a SMOKE:: prefix).
+      const c = val.indexOf(":");
+      if (c < 0) return null;
+      return { kind: "regenerate", index: Number(val.slice(0, c)), topic: val.slice(c + 1) };
+    }
+    case "removeAttachment":
+      return { kind: "removeAttachment", index: Number(val) };
     default:
       return null;
   }
@@ -976,6 +994,12 @@ function runAgentSmokeOp(
       return invokeTool(tools, "removeRecipient", { index: op.index });
     case "propose":
       return invokeTool(tools, "proposePlan", {});
+    case "attach":
+      return invokeTool(tools, "generateAttachment", { topic: op.topic });
+    case "regenerate":
+      return invokeTool(tools, "regenerateAttachment", { index: op.index, topic: op.topic });
+    case "removeAttachment":
+      return invokeTool(tools, "removeAttachment", { index: op.index });
   }
 }
 
