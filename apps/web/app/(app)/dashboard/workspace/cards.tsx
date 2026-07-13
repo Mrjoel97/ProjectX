@@ -162,29 +162,31 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
   const candidates = plan.candidates ?? [];
   const pendingValid = plan.pendingValid ?? [];
   const [busy, setBusy] = useState(false);
-  // Selection = one address per name. Single-match sections pre-select their only chip, but the
-  // "Use these contacts" click is still required to confirm (a name→address is an inference).
-  const [picked, setPicked] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
+  // Multi-select: each name maps to the SET of picked addresses (checkbox-style, not radio) — the
+  // mailbox search is noisy, so let the user add every contact they actually mean. Single-match
+  // sections pre-select their one chip; the "Use these contacts" click still confirms (a
+  // name→address is an inference). resolveRecipients folds ALL picks (applyRecipientEdit dedupes).
+  const [picked, setPicked] = useState<Record<string, string[]>>(() => {
+    const init: Record<string, string[]> = {};
     for (const c of candidates) {
       const [only] = c.matches;
-      if (c.matches.length === 1 && only) init[c.name] = only.address;
+      if (c.matches.length === 1 && only) init[c.name] = [only.address];
     }
     return init;
   });
 
-  const allPicked = candidates.every((c) => picked[c.name]);
+  const allPicked = candidates.every((c) => (picked[c.name]?.length ?? 0) > 0);
 
   async function useContacts() {
     if (busy || !allPicked) return;
     setBusy(true);
     try {
-      const picks = candidates.flatMap((c) => {
-        const address = picked[c.name];
-        if (!address) return [];
-        const m = c.matches.find((x) => x.address === address);
-        return [{ name: c.name, address, displayName: m?.displayName }];
-      });
+      const picks = candidates.flatMap((c) =>
+        (picked[c.name] ?? []).map((address) => {
+          const m = c.matches.find((x) => x.address === address);
+          return { name: c.name, address, displayName: m?.displayName };
+        }),
+      );
       await resolve({ threadId, picks });
     } finally {
       setBusy(false);
@@ -199,12 +201,22 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
           <div style={{ ...dim, fontWeight: 600, marginBottom: "0.3rem" }}>{c.name}</div>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
             {c.matches.map((m) => {
-              const sel = picked[c.name] === m.address;
+              const sel = picked[c.name]?.includes(m.address) ?? false;
               return (
                 <button
                   key={m.address}
                   type="button"
-                  onClick={() => setPicked((p) => ({ ...p, [c.name]: m.address }))}
+                  onClick={() =>
+                    setPicked((p) => {
+                      const cur = p[c.name] ?? [];
+                      return {
+                        ...p,
+                        [c.name]: cur.includes(m.address)
+                          ? cur.filter((a) => a !== m.address)
+                          : [...cur, m.address],
+                      };
+                    })
+                  }
                   style={{
                     ...chip,
                     cursor: "pointer",

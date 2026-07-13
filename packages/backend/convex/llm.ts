@@ -656,7 +656,7 @@ type AgentSmokeOp =
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
-  if (!m) return null;
+  if (!m?.[1]) return null;
   const spec = m[1].trim();
   if (spec === "propose") return { kind: "propose" };
   const eq = spec.indexOf("=");

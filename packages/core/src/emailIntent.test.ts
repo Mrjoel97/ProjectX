@@ -36,20 +36,44 @@ describe("rankCandidates — dedupe + rank contacts from header metadata", () =>
     expect(rankCandidates("Sarah", [])).toEqual([]);
   });
 
-  test("dedupes by lowercased address, counts frequency, ranks count desc then recency desc, caps ~5", () => {
+  test("dedupes by lowercased address, counts frequency; a non-name-match (Tom) is dropped when a name-match exists", () => {
     const recs: HeaderRecord[] = [
       { from: "Sarah Chen <sarah@acme.com>", subject: "Old", date: "2024-01-01T00:00:00Z" },
       { from: "SARAH <SARAH@acme.com>", subject: "New", date: "2024-06-01T00:00:00Z" },
       { from: "Tom <tom@x.com>", subject: "One-off", date: "2024-07-01T00:00:00Z" },
     ];
     const ranked = rankCandidates("Sarah", recs);
-    // sarah appears twice (deduped to one, count 2) → ranks above tom (count 1)
-    expect(ranked.map((m) => m.address)).toEqual(["sarah@acme.com", "tom@x.com"]);
+    // sarah matches the name (deduped, count 2); tom shared a thread but is NOT a Sarah → filtered out.
+    expect(ranked.map((m) => m.address)).toEqual(["sarah@acme.com"]);
     const [sarah] = ranked;
     expect(sarah?.count).toBe(2);
     // most-recent hit drives lastSubject/lastDateMs
     expect(sarah?.lastSubject).toBe("New");
     expect(sarah?.lastDateMs).toBe(Date.parse("2024-06-01T00:00:00Z"));
+  });
+
+  test("ranks name-matches over higher-frequency noise (the live bug: 'Sarah' surfaced joel.feruzi/pdfFiller)", () => {
+    const recs: HeaderRecord[] = [
+      // noise: a frequent correspondent who was merely on threads that mentioned Sarah
+      { from: "joel <joel.feruzi@gmail.com>", subject: "a", date: "2024-05-01T00:00:00Z" },
+      { from: "joel <joel.feruzi@gmail.com>", subject: "b", date: "2024-05-02T00:00:00Z" },
+      { from: "joel <joel.feruzi@gmail.com>", subject: "c", date: "2024-05-03T00:00:00Z" },
+      // the real match, seen once
+      { from: "Sarah Li <sarah.li@acme.com>", subject: "hi", date: "2024-04-01T00:00:00Z" },
+    ];
+    const ranked = rankCandidates("Sarah", recs);
+    // only the name-match survives — despite joel having 3x the frequency.
+    expect(ranked.map((m) => m.address)).toEqual(["sarah.li@acme.com"]);
+  });
+
+  test("no name-match anywhere → falls back to the frequency ranking (never empty when records exist)", () => {
+    const recs: HeaderRecord[] = [
+      { from: "Bob <bob@x.com>", date: "2024-01-01T00:00:00Z" },
+      { from: "Bob <bob@x.com>", date: "2024-02-01T00:00:00Z" },
+      { from: "Al <al@x.com>", date: "2024-03-01T00:00:00Z" },
+    ];
+    // "Zara" matches neither → fall back to count-desc so the user still sees SOMETHING to pick.
+    expect(rankCandidates("Zara", recs).map((m) => m.address)).toEqual(["bob@x.com", "al@x.com"]);
   });
 
   test("parses From/To/Cc and ignores unparseable / missing fields", () => {

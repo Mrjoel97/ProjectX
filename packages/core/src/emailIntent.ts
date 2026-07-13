@@ -129,10 +129,13 @@ export function parseAddress(raw: string): { displayName?: string; address: stri
 /**
  * Rank the contacts appearing in a name-search's header records: parse every From/To/Cc, dedupe by
  * lowercased address, count frequency, and track the most-recent date + its subject/displayName.
- * Sorted `count desc, then lastDateMs desc`; capped at 5. `Date.parse` is pure (no clock read).
- * `name` is the label the caller carries onto NameCandidates — the search already scoped the records.
+ * Gmail search matches the name ANYWHERE in a thread, so the raw records include correspondents who
+ * merely shared a thread that mentioned the name (e.g. "Sarah" surfaces people CC'd alongside her).
+ * So we rank by NAME-MATCH first (does the display name / address contain the search name), and when
+ * any candidate matches we show ONLY those — dropping the noise; if none match, fall back to the
+ * frequency ranking. Then `count desc, then lastDateMs desc`; capped at 5. `Date.parse` is pure.
  */
-export function rankCandidates(_name: string, records: readonly HeaderRecord[]): ContactMatch[] {
+export function rankCandidates(name: string, records: readonly HeaderRecord[]): ContactMatch[] {
   const byAddr = new Map<string, ContactMatch>();
   for (const rec of records) {
     const parsed = Date.parse(rec.date ?? "");
@@ -166,7 +169,19 @@ export function rankCandidates(_name: string, records: readonly HeaderRecord[]):
       }
     }
   }
-  return [...byAddr.values()]
-    .sort((a, b) => b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
+  // Name-match score: 2 = display name / address contains the full search name, 1 = contains any
+  // token of it, 0 = no match. Lets a real "Sarah" outrank people merely on her threads.
+  const q = name.trim().toLowerCase();
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const score = (c: ContactMatch): number => {
+    const hay = `${c.displayName ?? ""} ${c.address}`.toLowerCase();
+    if (q && hay.includes(q)) return 2;
+    return tokens.some((t) => hay.includes(t)) ? 1 : 0;
+  };
+  const all = [...byAddr.values()];
+  const named = all.filter((c) => score(c) > 0);
+  const pool = named.length > 0 ? named : all; // show only name-matches when any exist, else all
+  return pool
+    .sort((a, b) => score(b) - score(a) || b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
     .slice(0, 5);
 }
