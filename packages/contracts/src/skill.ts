@@ -43,3 +43,6 @@ export const EMAIL_DRAFTER_SKILL = "email-drafter" as const;
 
 /** Registry name of the cockpit Executive Agent tool-loop skill (AGNT-01). */
 export const COCKPIT_AGENT_SKILL = "cockpit-agent" as const;
+
+/** Registry name of the document drafter skill (CKPT-02 — attachment generation). */
+export const DOCUMENT_DRAFTER_SKILL = "document-drafter" as const;

@@ -22,7 +22,7 @@ import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
-import { COCKPIT_AGENT_SKILL, EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
+import { COCKPIT_AGENT_SKILL, DOCUMENT_DRAFTER_SKILL, EMAIL_DRAFTER_SKILL, EXECUTIVE_ROUTER_SKILL } from "@pikar/contracts/skill";
 import {
   type RecipientEdit,
   applyRecipientEdit,
@@ -917,5 +917,71 @@ export const draft = internalAction({
       await draftCache.fetch(ctx, args, force ? { force: true } : undefined);
     const cacheHit = value.generatedAt < tStart;
     return { blocked: null, subject: value.subject, body: value.body, usage: value.usage, cacheHit };
+  },
+});
+
+// ── Attachment generation (CKPT-02) ──────────────────────────────────────────
+// The document-drafting sub-call. Mirrors draftCockpit EXACTLY (RESEARCH Seam 6): takes
+// ALREADY-REDACTED text ({ tenantId, safeText, safeTextHash }) — the CALLER (Plan 04) scans the
+// topic via scanText BEFORE calling, so no raw PII reaches the model or any log (GRDL-01/02,
+// CLAUDE.md §4). The drafter body loads from the registry (no hardcoded prompt — §5). Returns
+// { title, markdown }: title feeds buildDocFilename, markdown feeds markdownToPdf. Writes NO
+// audit (caller owns correlation, same as draftCockpit). SMOKE:: short-circuits to a fixed
+// offline document (no model call — the fan-out/E2E path); else DEFAULT_MODEL → CHEAP_MODEL.
+
+// Structured output shape for the drafter (jsonSchema, not zod — keeps this node adapter
+// zod-free like the tool set). generateObject validates the model against it.
+const documentSchema = jsonSchema<{ title: string; markdown: string }>({
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    markdown: { type: "string" },
+  },
+  required: ["title", "markdown"],
+  additionalProperties: false,
+});
+
+export const draftDocument = internalAction({
+  args: {
+    tenantId: v.string(),
+    safeText: v.string(),
+    safeTextHash: v.string(),
+  },
+  handler: async (ctx, { safeText, safeTextHash }): Promise<{ title: string; markdown: string }> => {
+    // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL)
+    // when unseeded, so a hardcoded fallback can never sneak in.
+    const skill: { body: string; version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
+      name: DOCUMENT_DRAFTER_SKILL,
+    });
+    const smoke = parseSmoke(safeText);
+
+    try {
+      if (smoke) {
+        // failPrimary throws INTO the catch so the real fallback path runs; else offline document.
+        if (smoke.failPrimary) throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        return { title: "Smoke Document", markdown: `# Smoke Document\n\nSmoke draft for ${safeTextHash}.` };
+      }
+      const { object } = await generateObject({
+        model: resolveModel(DEFAULT_MODEL),
+        schema: documentSchema,
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 1,
+      });
+      return { title: object.title, markdown: object.markdown };
+    } catch (e) {
+      if (!isFallbackEligible(e)) throw e;
+      if (smoke) return { title: "Smoke Fallback Document", markdown: "# Smoke Fallback\n\nfallback body" };
+      const { object } = await generateObject({
+        model: resolveModel(CHEAP_MODEL),
+        schema: documentSchema,
+        system: skill.body,
+        prompt: safeText,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      return { title: object.title, markdown: object.markdown };
+    }
   },
 });

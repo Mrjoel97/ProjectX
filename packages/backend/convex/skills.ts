@@ -9,6 +9,7 @@
 import { v } from "convex/values";
 import {
   COCKPIT_AGENT_SKILL,
+  DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_AGENT_CLASSIFIER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
@@ -17,6 +18,7 @@ import {
   type LoadedSkill,
 } from "@pikar/contracts/skill";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
+import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
@@ -106,6 +108,7 @@ export const seedSkills = internalMutation({
       { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
       { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
       { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
+      { name: DOCUMENT_DRAFTER_SKILL, body: documentDrafterSkillBody },
     ];
 
     for (const { name, body } of seeds) {
