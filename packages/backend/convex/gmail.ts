@@ -156,8 +156,22 @@ export const send = internalAction({
       return { delivered: false, reason: access.reason };
     }
 
+    // Load each resolved attachment's bytes from storage and STANDARD-base64 them for the MIME
+    // part (buildMime wraps at 76). A missing/deleted storage blob is a HARD failure → throw →
+    // retrier → onComplete DLQ: never silently send the message without the promised attachment.
+    const parts: MimeAttachment[] = [];
+    for (const a of req.attachments) {
+      const blob = await ctx.storage.get(a.storageId);
+      if (!blob) throw new Error(`gmail.send: attachment blob ${a.storageId} missing`);
+      parts.push({
+        filename: a.filename,
+        mimeType: a.mimeType,
+        base64: Buffer.from(await blob.arrayBuffer()).toString("base64"),
+      });
+    }
+
     // Deliver via the Gmail REST API.
-    const raw = base64Url(buildMime(req.recipient, req.subject, req.body));
+    const raw = base64Url(buildMime(req.recipient, req.subject, req.body, parts));
     const sendRes = await fetch(SEND_ENDPOINT, {
       method: "POST",
       headers: {

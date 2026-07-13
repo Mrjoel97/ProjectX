@@ -122,12 +122,21 @@ export const getForDelivery = internalQuery({
   handler: async (ctx, { requestId }) => {
     const r = await ctx.db.get(requestId);
     if (!r) return null;
+    // Resolve each attachment ref → the storage-bearing metadata the send action needs.
+    // A dangling ref (deleted row) is dropped here; a missing STORAGE blob is the hard
+    // failure `send` throws on (never a silent send without the promised attachment).
+    const attachments = [];
+    for (const ref of r.attachmentRefs) {
+      const a = await ctx.db.get(ref);
+      if (a) attachments.push({ filename: a.filename, mimeType: a.mimeType, storageId: a.storageId });
+    }
     return {
       tenantId: r.tenantId,
       correlationId: r.correlationId,
       recipient: r.recipient,
       subject: r.goal,
       body: r.editedBody ?? r.draft ?? "",
+      attachments,
     };
   },
 });
