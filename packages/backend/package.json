@@ -41,6 +41,7 @@
     "pdf-lib": "1.17.1"
   },
   "devDependencies": {
+    "@convex-dev/workpool": "0.4.7",
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^26.1.1",
     "convex-test": "0.0.54",

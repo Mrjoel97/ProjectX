@@ -220,6 +220,25 @@ export const executePlan = tenantMutation({
     const body = plan.body ?? "";
     const targets = mode === "group" ? [recipients.join(", ")] : recipients;
 
+    // Materialize the plan's generated attachments (inline refs on the plan row → the pre-approval
+    // source of truth) into `attachments` table rows ONCE, then share their ids across EVERY
+    // recipient's request (this slice sends one document set to all — no per-recipient duplication,
+    // no extra storage writes; storage is immutable per id so one byte set is safe to fan out).
+    // requestId is left unset: a shared row belongs to no single request. gmail.send reads each
+    // request's attachmentRefs → these rows → the bytes (Plan 03, unchanged).
+    const attachmentRefs: Id<"attachments">[] = [];
+    for (const a of plan.attachments ?? []) {
+      attachmentRefs.push(
+        await ctx.db.insert("attachments", {
+          tenantId: ctx.tenantId,
+          storageId: a.storageId,
+          filename: a.filename,
+          mimeType: a.mimeType,
+          size: a.size,
+        }),
+      );
+    }
+
     const requestIds: Id<"requests">[] = [];
     const correlationIds: string[] = [];
     for (const recipient of targets) {
@@ -231,7 +250,7 @@ export const executePlan = tenantMutation({
         recipient,
         draft: body, // ... and body := editedBody ?? draft
         status: "approved",
-        attachmentRefs: [],
+        attachmentRefs, // SAME shared ids for every recipient (one generated document set)
         planId,
         createdAt: Date.now(),
       });

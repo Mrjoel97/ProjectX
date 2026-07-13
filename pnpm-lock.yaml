@@ -132,6 +132,9 @@ importers:
         specifier: 1.17.1
         version: 1.17.1
     devDependencies:
+      '@convex-dev/workpool':
+        specifier: 0.4.7
+        version: 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
