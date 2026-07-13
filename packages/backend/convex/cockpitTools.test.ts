@@ -192,3 +192,49 @@ test("generateAttachment over the byte cap sets attachmentError and stores NO ne
   expect(plan?.attachmentError).toBeTruthy();
   expect(plan?.attachments?.length).toBe(1); // no new ref appended over-cap
 });
+
+// ── 03.3-04 Task 2: proposePlan render-OK + under-cap gate (V7) ────────────────
+// A render-failed / over-cap plan is structurally NOT approvable. proposePlan reads the facts
+// from the ROW (never model args) and refuses so the agent regenerates/removes before proposing.
+
+async function fillProposable(t: T, planId: Id<"plans">): Promise<void> {
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com"] });
+  await call(t, planId, "setSubject", { subject: "Hi" });
+  await call(t, planId, "draftBody", { intent: `${ATTACH} say hello` });
+}
+
+test("proposePlan refuses when attachmentError is set (render-fail/over-cap → not approvable, V7)", async () => {
+  const { t, planId } = await setup();
+  await fillProposable(t, planId);
+  await call(t, planId, "generateAttachment", { topic: "SMOKE::route=direct_llm::render=fail:: x" });
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/attachment|cannot propose/i);
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed");
+});
+
+test("proposePlan refuses when attachments exceed the byte cap (defense-in-depth, no error flag)", async () => {
+  const { t, planId } = await setup();
+  await fillProposable(t, planId);
+  const sid = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+  await t.mutation(internal.plans.recordAttachments, {
+    planId,
+    attachments: [
+      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES + 1 },
+    ],
+  }); // no attachmentError — the cap re-check must catch it on its own
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/size|large|limit/i);
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed");
+});
+
+test("proposePlan proceeds with a healthy attachment", async () => {
+  const { t, planId } = await setup();
+  await fillProposable(t, planId);
+  await call(t, planId, "generateAttachment", { topic: `${ATTACH} healthy doc` });
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/proposed/i);
+  expect((await readPlan(t, planId))?.status).toBe("proposed");
+});
