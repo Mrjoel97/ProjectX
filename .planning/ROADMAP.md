@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Guardrails** - PII redaction, cost estimate/downgrade, tenant-namespaced cache, fallback, rate-limit + cost kill-switch
 - [ ] **Phase 3.1: Cockpit Core** (INSERTED) - Two-pane chat cockpit: guided slot-filling conversation → single plan-approval → hands-off multi-recipient governed send → live per-recipient report; reuses the Phase 2 engine, retires the /submit form + /review queue
 - [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
-- [ ] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
+- [x] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) — 2026-07-13 - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
 - [ ] **Phase 3.3: Attachment Generation** (INSERTED) - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 — `.planning/design/scheduled-send.md`)
@@ -152,12 +152,12 @@ Plans:
 **Plans:** 6/6 plans complete
 
 Plans:
-- [ ] 03.2.1-01-PLAN.md — cockpit-agent skill registry row + seed constant + static-sync test (Wave 1)
-- [ ] 03.2.1-02-PLAN.md — Pure tool-internals in @pikar/core: buildRecipientView + applyRecipientEdit (index/label view, add/remove/set bounce) (Wave 1)
-- [ ] 03.2.1-03-PLAN.md — Governed tool wrappers + agent-context builder in llm.ts + per-tool unit tests + redaction static scan (Wave 2)
-- [ ] 03.2.1-04-PLAN.md — runCockpitAgent generateText tool-loop (preCall/maxSteps/recordSpend/fallback) + mock-model integration test (Wave 3)
-- [ ] 03.2.1-05-PLAN.md — Clean cutover: sendCockpitMessage thin driver + FSM delete + slim emailIntent + offline SMOKE:: E2E (Wave 4)
-- [ ] 03.2.1-06-PLAN.md — Cockpit playbook rewrite (§9) + watch.json + human-verify checkpoint (Wave 5)
+- [x] 03.2.1-01-PLAN.md — cockpit-agent skill registry row + seed constant + static-sync test (Wave 1)
+- [x] 03.2.1-02-PLAN.md — Pure tool-internals in @pikar/core: buildRecipientView + applyRecipientEdit (index/label view, add/remove/set bounce) (Wave 1)
+- [x] 03.2.1-03-PLAN.md — Governed tool wrappers + agent-context builder in llm.ts + per-tool unit tests + redaction static scan (Wave 2)
+- [x] 03.2.1-04-PLAN.md — runCockpitAgent generateText tool-loop (preCall/maxSteps/recordSpend/fallback) + mock-model integration test (Wave 3)
+- [x] 03.2.1-05-PLAN.md — Clean cutover: sendCockpitMessage thin driver + FSM delete + slim emailIntent + offline SMOKE:: E2E (Wave 4)
+- [x] 03.2.1-06-PLAN.md — Cockpit playbook rewrite (§9) + watch.json + human-verify checkpoint (Wave 5)
 
 ### Phase 3.3: Attachment Generation (INSERTED)
 **Goal**: The agent can generate a document and attach it to an outgoing email, so a plan can deliver produced artifacts, not just body text.
@@ -265,7 +265,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 3.1 → 3.2 → 3.3 → 3.4 �
 | 2. Thin End-to-End Slice | 7/9 (+2 superseded by 3.1) | Spine complete; UI superseded | 2026-07-12 |
 | 3. Guardrails | 0/5 | Planned | - |
 | 3.1 Cockpit Core (INSERTED) | 8/9 | In Progress (Waves 1–4 done; Wave 5 E2E + human checkpoint next) | 2026-07-12 |
-| 3.2 Inbox Reading (INSERTED) | 0/6 | Planned (4 waves) | - |
+| 3.2 Inbox Reading (INSERTED) | 6/6 | Complete | 2026-07-12 |
+| 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 0/TBD | Not started | - |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
