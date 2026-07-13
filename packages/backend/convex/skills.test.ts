@@ -66,6 +66,35 @@ describe("skills registry loader + activation", () => {
     expect(rows[0]!.status).toBe("active");
   });
 
+  test("seedSkills publishes a NEW version when the active body has drifted from the constant", async () => {
+    const t = convexTest(schema, modules);
+    // Simulate an older prompt already seeded before an edit.
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "cockpit-agent",
+        version: 1,
+        body: "OLD STALE BODY",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+
+    await t.mutation(internal.skills.seedSkills, {});
+
+    // The edited constant is published as v2/active; the stale v1 is archived, never mutated.
+    const active = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
+    expect(active.version).toBe(2);
+    expect(active.body).toBe(lf(cockpitAgentSkillBody));
+    const v1 = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 1))
+        .unique(),
+    );
+    expect(v1!.status).toBe("archived");
+    expect(v1!.body).toBe("OLD STALE BODY"); // immutable-per-version: prior row never rewritten
+  });
+
   test("activateSkill flips atomically; prior version body stays immutable", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(internal.skills.seedSkills, {});

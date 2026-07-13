@@ -1,6 +1,6 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 03.2.1-01
+> Last verified: 2026-07-13 (03.2.1 gap-closure — `seedSkills` gained a PUBLISH-ON-CHANGE path: an edited skill body is published as a new immutable version + activated, closing the old "no production write path for v2+" gap. Used it to ship a `cockpit-agent` prompt edit (contact resolution is now panel-driven: after `resolveContacts` the agent STOPS and the user picks in the panel; never set a resolved contact via `addRecipients`/`setRecipients`) as v2. Prior: 03.2.1-01)
 > Build history: `.planning/phases/01-foundation-governance-substrate/01-04-*.md` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -14,7 +14,7 @@ it is the substrate the Phase 8 SkillOpt optimization loop will operate on.
 ## Key files
 
 - `packages/backend/convex/schema.ts` — `skills` table + `by_name_status`, `by_name_version` indexes
-- `packages/backend/convex/skills.ts` — the module: `loadSkill`, `getActiveSkill` (internalQuery), `activateSkill` (internalMutation, the ONE permitted status mutation), `seedSkills` (internalMutation, idempotent)
+- `packages/backend/convex/skills.ts` — the module: `loadSkill`, `getActiveSkill` (internalQuery), `activateSkill` (internalMutation, the ONE permitted status mutation), `seedSkills` (internalMutation — idempotent for unchanged bodies; PUBLISHES a new version + activates on a body edit)
 - `packages/contracts/src/skill.ts` — loader contract, error prefixes, skill-name constants
 - `packages/contracts/skills/*.md` — canonical human-editable prompt bodies; `packages/contracts/src/skills/*.ts` — derived bundler-safe constants (drift between the two is test-enforced)
 - `packages/backend/convex/llm.ts` — the runtime callers (`route`, `draft`, `draftCockpit` → `getActiveSkill`)
@@ -31,7 +31,7 @@ action-cache key, so activation/rollback automatically invalidates cached output
 
 ## Data flow
 
-1. **Seed**: `seedSkills` inserts the three v1 rows as `active`; idempotent (skips any name that already has rows); never mutates existing rows. Local dev auto-seeds (`convex dev --run skills:seedSkills`); production requires `npm run seed` after `npx convex deploy`.
+1. **Seed + publish**: `seedSkills` inserts each skill v1/`active` on first run. On re-run it is idempotent when the body is UNCHANGED; when a `.md` edit has changed the derived constant it publishes a NEW version (`maxVersion+1`), archives the old active row, and activates the new one — never mutating a prior row (immutable-per-version). This is how a source prompt edit reaches production: edit the `.md`, regenerate the `.ts` constant, re-run `seedSkills`. Local dev auto-seeds (`convex dev --run skills:seedSkills`); production requires `npm run seed` after `npx convex deploy`.
 2. **Load**: `loadSkill(ctx, name)` selects the single row with `status == "active"` for the name (`.unique()` — throws on 0 or >1). Selection is active-row-wins, NOT max-version.
 3. **Missing/ambiguous** → throws `NO_ACTIVE_SKILL` → the pipeline dead-letters the request. Fail-closed by design: an agent can never silently run without a governed prompt.
 4. **New version**: insert a new row (`status: "candidate"`), then `activateSkill(name, version)` atomically archives the current active row and activates the target, in one mutation.
@@ -67,5 +67,5 @@ action-cache key, so activation/rollback automatically invalidates cached output
 
 ## Known gaps & deferred work
 
-- **No production write path for v2+ rows** — `seedSkills` only creates v1s; new candidate versions currently require a direct insert (tests do this inline). Phase 8 (SkillOpt) is the designated owner of the candidate→eval→activate loop.
+- **Source prompt edits publish via `seedSkills`** (a changed body → new version + activate; added 03.2.1). Phase 8 (SkillOpt) remains the designated owner of the *automated* candidate→eval→activate loop; `seedSkills` covers the manual source-edit→publish path (edit `.md` → regenerate `.ts` → re-seed).
 - The `rolled_back` status literal exists in the schema but is never written — rollback produces `archived`. Either SkillOpt will use it or it should be removed then.

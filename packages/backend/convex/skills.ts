@@ -91,11 +91,12 @@ export const activateSkill = internalMutation({
 });
 
 /**
- * Idempotent seed of the Phase-2 agent skills (each v1, active). Bodies
- * originate from the registry-bound markdown sources (via the derived
- * constants) — no agent prompt is hardcoded here. Each name is inserted only if
- * absent, so re-running seeds nothing twice and never mutates an existing row
- * (immutable-per-version).
+ * Seed + PUBLISH the agent skills from the registry-bound markdown sources (via
+ * the derived constants) — no agent prompt is hardcoded here. First run inserts
+ * each as v1/active. Re-running is idempotent when a body is UNCHANGED, and when
+ * a body has been edited it publishes a NEW version (maxVersion+1) and activates
+ * it — never mutating a prior row (immutable-per-version, CLAUDE.md §5). This is
+ * the path a skill-prompt edit takes to production; rollback stays activateSkill.
  */
 export const seedSkills = internalMutation({
   args: {},
@@ -108,16 +109,27 @@ export const seedSkills = internalMutation({
     ];
 
     for (const { name, body } of seeds) {
-      const existing = await ctx.db
+      const rows = await ctx.db
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", name))
-        .first();
+        .collect();
 
-      if (existing !== null) continue;
+      if (rows.length === 0) {
+        await ctx.db.insert("skills", { name, version: 1, body, status: "active", createdAt: Date.now() });
+        continue;
+      }
 
+      const active = rows.find((r) => r.status === "active");
+      if (active && active.body === body) continue; // unchanged → nothing to publish (idempotent)
+
+      // Body changed (a skill edit): publish a NEW immutable version and activate it — never mutate
+      // the old row (immutable-per-version, CLAUDE.md §5). This is the "publish a skill edit" path;
+      // rollback stays activateSkill on a prior version. Version = max existing + 1 (dedup-safe).
+      const maxVersion = Math.max(...rows.map((r) => r.version));
+      if (active) await ctx.db.patch(active._id, { status: "archived" });
       await ctx.db.insert("skills", {
         name,
-        version: 1,
+        version: maxVersion + 1,
         body,
         status: "active",
         createdAt: Date.now(),
