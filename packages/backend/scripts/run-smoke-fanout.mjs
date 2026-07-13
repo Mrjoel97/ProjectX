@@ -10,6 +10,7 @@
 import { randomUUID } from "node:crypto";
 import { must, pollPass } from "./smokeRun.mjs";
 
+const parse = (out) => JSON.parse(out);
 const N = 3;
 const cids = Array.from({ length: N }, () => `smoke-fanout-${randomUUID()}`);
 const failIndex = N - 1;
@@ -19,9 +20,28 @@ const recipients = cids.map((_, i) => `recipient${i}@smoke.example`);
 // Distinctive content needles that must NEVER surface in a log plane (SC5 redaction).
 const subjectNeedle = `SUBJ-SECRET-${randomUUID().slice(0, 8)}`;
 const bodyNeedle = `BODY-SECRET-${randomUUID().slice(0, 8)}`;
+// CKPT-02 (V6): a generated attachment rides the governed fan-out. The stored PDF's byte
+// marker (and its base64) must NEVER appear in a log plane — refs only (storageId/filename/
+// size/counts), never the file bytes (CLAUDE.md §4).
+const pdfMarker = `PDFBYTES-SECRET-${randomUUID().slice(0, 8)}`;
+const pdfMarkerB64 = Buffer.from(pdfMarker).toString("base64");
+const attachmentFilename = "smoke-proposal.pdf";
 
-console.log(`[smoke:fanout] seeding ${N} recipients (1 forced-fail: ${failCid})`);
-must("smoke:seedFanout", { correlationIds: cids, recipients, failIndex, subjectNeedle, bodyNeedle });
+console.log("[smoke:fanout] storing a fixed-bytes PDF for the shared attachment...");
+const { storageId, size } = parse(must("smoke:storeSmokePdf", { marker: pdfMarker }));
+
+console.log(`[smoke:fanout] seeding ${N} recipients (1 forced-fail: ${failCid}) + 1 shared attachment`);
+must("smoke:seedFanout", {
+  correlationIds: cids,
+  recipients,
+  failIndex,
+  subjectNeedle,
+  bodyNeedle,
+  attachment: { storageId, filename: attachmentFilename, size },
+});
+
+console.log("[smoke:fanout] asserting: the ONE attachment fanned to every recipient (shared ref, V6)...");
+must("smokeAssert:assertFanoutAttachmentShared", { correlationIds: cids });
 
 console.log("[smoke:fanout] polling: every non-fail recipient reached awaiting_reauth|sent...");
 await pollPass("smokeAssert:assertFanoutReachedAll", { correlationIds: cids, failCid });
@@ -32,8 +52,8 @@ await pollPass("smokeAssert:assertRecipientDeadLettered", { correlationId: failC
 console.log("[smoke:fanout] asserting: one terminal per recipient (write-once)...");
 await pollPass("smokeAssert:assertFanoutIdempotent", { correlationIds: cids });
 
-console.log("[smoke:fanout] asserting: no raw email content in any log plane...");
-const needles = [subjectNeedle, bodyNeedle, ...recipients];
+console.log("[smoke:fanout] asserting: no raw email content OR attachment bytes in any log plane...");
+const needles = [subjectNeedle, bodyNeedle, ...recipients, pdfMarker, pdfMarkerB64];
 await pollPass("smokeAssert:assertNoRawPiiFanout", { correlationIds: cids, needles });
 
 console.log("[smoke:fanout] PASSED");

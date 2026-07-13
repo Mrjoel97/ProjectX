@@ -105,8 +105,32 @@ try {
   must("smoke:resetDailySpend", {});
 }
 
-console.log("[smoke:guardrails] 6/6 submit rate limiter rejects the 6th consume (GRDL-06)");
+console.log("[smoke:guardrails] 6/7 submit rate limiter rejects the 6th consume (GRDL-06)");
 must("smoke:assertSubmitRateLimited", {});
 console.log("  ok — token bucket capacity 5 enforced");
+
+console.log("[smoke:guardrails] 7/7 attachment generation pauses under a governed stop (V8, CKPT-02)");
+try {
+  // A generation turn under the kill switch: runCockpitAgent.preCall returns the paused reply
+  // BEFORE the generateAttachment tool runs → NO attachment stored, NO DLQ, plan unapprovable.
+  const tenant = `smokeAttach-${uid()}`;
+  const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
+  must("guardrails:setKillSwitch", { on: true });
+  const res = parse(
+    must("llm:runCockpitAgent", {
+      tenantId: tenant,
+      threadId,
+      planId,
+      text: "SMOKE::agent::attach=SMOKE::route=direct_llm:: quarterly report",
+    }),
+  );
+  if (res.blocked !== "kill_switch") {
+    throw new Error(`generation turn not paused: blocked=${res.blocked ?? "none"}, expected kill_switch`);
+  }
+  must("smokeAssert:assertNoAttachmentStored", { planId, tenantId: tenant });
+  console.log("  ok — paused as data (kill_switch), no attachment stored, no dead letter");
+} finally {
+  must("guardrails:setKillSwitch", { on: false });
+}
 
 console.log("[smoke:guardrails] PASSED");

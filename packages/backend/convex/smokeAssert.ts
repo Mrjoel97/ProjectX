@@ -438,6 +438,61 @@ export const assertNoRawPiiFanout = internalQuery({
   },
 });
 
+// ── 03.3-06 attachment fan-out assertions (CKPT-02 / V6, V8) ──────────────────
+
+/** V6: the ONE generated document set fanned to EVERY recipient — every row carries the SAME
+ *  single shared attachment ref (no per-recipient duplication). Proves the attachment rode the
+ *  governed fan-out to all recipients (executePlan's materialization is unit-tested; this is the
+ *  live delivery-plane proof). */
+export const assertFanoutAttachmentShared = internalQuery({
+  args: { correlationIds: v.array(v.string()) },
+  handler: async (ctx, { correlationIds }) => {
+    const refs = new Set<string>();
+    for (const cid of correlationIds) {
+      const req = await ctx.db
+        .query("requests")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .first();
+      if (!req) throw new Error(`fanout-attach: no request for ${cid}`);
+      if (req.attachmentRefs.length !== 1) {
+        throw new Error(
+          `fanout-attach: ${cid} carries ${req.attachmentRefs.length} refs, expected 1 (shared attachment)`,
+        );
+      }
+      refs.add(String(req.attachmentRefs[0]));
+    }
+    if (refs.size !== 1) {
+      throw new Error(`fanout-attach: ${refs.size} distinct attachment refs across rows, expected 1 (shared)`);
+    }
+    return { ok: true, sharedRef: [...refs][0] };
+  },
+});
+
+/** V8: a governed stop (kill switch / budget) during attachment GENERATION paused as data —
+ *  NO attachment was stored on the plan, NO attachmentError set, and NO deadLetters row exists
+ *  for the tenant (a pause never touches the DLQ). */
+export const assertNoAttachmentStored = internalQuery({
+  args: { planId: v.id("plans"), tenantId: v.string() },
+  handler: async (ctx, { planId, tenantId }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan) throw new Error(`no plan ${planId}`);
+    if ((plan.attachments ?? []).length !== 0) {
+      throw new Error(`plan ${planId} stored ${plan.attachments?.length} attachment(s) under a governed stop`);
+    }
+    if (plan.attachmentError !== undefined) {
+      throw new Error(`plan ${planId} set attachmentError under a governed stop (expected a clean pause)`);
+    }
+    const dls = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_status", (q) => q.eq("status", "new"))
+      .collect();
+    if (dls.some((r) => r.tenantId === tenantId)) {
+      throw new Error(`deadLetters row for ${tenantId} — a governed pause during generation must not dead-letter`);
+    }
+    return { ok: true };
+  },
+});
+
 /** OPSG-06: the first migration ran and recorded a completed (success) state. */
 export const assertMigrationRan = internalQuery({
   args: {},

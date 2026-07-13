@@ -193,7 +193,24 @@ export const resetDailySpend = internalMutation({
 // recipient's goal starts with the SMOKE::fail sentinel → gmail.send throws terminally
 // → the try/catch dead-letters THAT row in isolation while the rest still reach.
 
-/** Seed a plan + one `requests` row per recipient, then start deliverApprovedPlan. */
+/** Store fixed PDF-labelled bytes in storage → the send-time blob a shared attachment ref
+ *  points at. Deterministic content (`%PDF-1.4\n<marker>`): the fan-out smoke passes the
+ *  marker (and its base64) as a redaction needle so the no-raw-bytes scan has a real target.
+ *  A regular action (NOT use-node) has ctx.storage.store; smoke.ts stays non-node. */
+export const storeSmokePdf = internalAction({
+  args: { marker: v.string() },
+  handler: async (ctx, { marker }): Promise<{ storageId: string; size: number }> => {
+    const bytes = new TextEncoder().encode(`%PDF-1.4\n${marker}\n%%EOF\n`);
+    const storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+    return { storageId, size: bytes.byteLength };
+  },
+});
+
+/** Seed a plan + one `requests` row per recipient, then start deliverApprovedPlan.
+ *  CKPT-02: when `attachment` is passed, materialize ONE shared `attachments` row and fan the
+ *  SAME ref id to EVERY recipient (mirrors executePlan — one generated document set to all,
+ *  no per-recipient duplication), so the delivery-plane smoke proves the attachment rides the
+ *  governed fan-out with refs-only logs (V6). */
 export const seedFanout = internalMutation({
   args: {
     correlationIds: v.array(v.string()),
@@ -201,11 +218,14 @@ export const seedFanout = internalMutation({
     failIndex: v.number(), // this row's goal gets the SMOKE::fail throw sentinel
     subjectNeedle: v.string(), // embedded in goal → must NEVER appear in a log plane
     bodyNeedle: v.string(), // embedded in draft → must NEVER appear in a log plane
+    attachment: v.optional(
+      v.object({ storageId: v.id("_storage"), filename: v.string(), size: v.number() }),
+    ),
   },
   handler: async (
     ctx,
-    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle },
-  ): Promise<{ planId: Id<"plans"> }> => {
+    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle, attachment },
+  ): Promise<{ planId: Id<"plans">; attachmentId?: Id<"attachments"> }> => {
     if (recipients.length !== correlationIds.length) {
       throw new Error("seedFanout: recipients/correlationIds length mismatch");
     }
@@ -216,6 +236,18 @@ export const seedFanout = internalMutation({
       status: "approved",
       createdAt: now,
     });
+    // Materialize ONE shared attachments row (mirrors executePlan) → the same ref fans to all.
+    let attachmentId: Id<"attachments"> | undefined;
+    if (attachment) {
+      attachmentId = await ctx.db.insert("attachments", {
+        tenantId: "smoke",
+        storageId: attachment.storageId,
+        filename: attachment.filename,
+        mimeType: "application/pdf",
+        size: attachment.size,
+      });
+    }
+    const sharedRefs: Id<"attachments">[] = attachmentId ? [attachmentId] : [];
     const requestIds: Id<"requests">[] = [];
     for (let i = 0; i < correlationIds.length; i++) {
       const correlationId = correlationIds[i];
@@ -232,7 +264,7 @@ export const seedFanout = internalMutation({
           recipient,
           draft: `SMOKE:: ${bodyNeedle} #${i}`,
           status: "approved",
-          attachmentRefs: [],
+          attachmentRefs: sharedRefs, // SAME shared id for every recipient (V6 fan-out)
           planId,
           createdAt: now,
         }),
@@ -250,7 +282,27 @@ export const seedFanout = internalMutation({
         context: { tenantId: "smoke", correlationId: planCid, payload: { planId } },
       },
     );
-    return { planId };
+    return { planId, attachmentId };
+  },
+});
+
+// --- 03.3-06 (V8): attachment generation pauses under a governed stop ---------
+// A budget/kill-switch stop during generation is a PAUSE (preCall returns before the tool
+// runs) — no attachment stored, no DLQ, plan stays unapprovable. Seed a bare cockpit plan so
+// the guardrails smoke can drive runCockpitAgent's attach op under the kill switch.
+
+/** Seed an empty cockpit `plans` row for a tenant → runCockpitAgent target (V8). */
+export const seedCockpitPlan = internalMutation({
+  args: { tenant: v.string() },
+  handler: async (ctx, { tenant }): Promise<{ planId: Id<"plans">; threadId: string }> => {
+    const threadId = `smoke-attach-${crypto.randomUUID()}`;
+    const planId = await ctx.db.insert("plans", {
+      tenantId: tenant,
+      threadId,
+      status: "collecting",
+      createdAt: Date.now(),
+    });
+    return { planId, threadId };
   },
 });
 
