@@ -31,7 +31,9 @@ import {
 } from "@pikar/contracts/skill";
 import {
   applyRecipientEdit,
+  buildDocFilename,
   buildRecipientView,
+  exceedsByteCap,
   isFallbackEligible,
   type RecipientEdit,
   rankCandidates,
@@ -414,6 +416,10 @@ export const draftCockpit = internalAction({
 
 // The plan-row fields the tools read. Explicit so the runQuery result never resolves through
 // the `internal` graph (guidelines §96 circular-inference cliff, as the sibling actions do).
+// One generated-attachment ref (mirrors plans.attachments in schema.ts). storageId + counts only —
+// the signed URL is a bearer capability minted ONLY by plans.attachmentUrls (never here — §4).
+type Att = { storageId: Id<"_storage">; filename: string; mimeType: string; size: number };
+
 type PlanRow = {
   tenantId: string;
   recipients?: string[];
@@ -421,6 +427,8 @@ type PlanRow = {
   body?: string;
   mode?: "individual" | "group";
   greetingName?: string;
+  attachments?: Att[];
+  attachmentError?: string;
 };
 
 /**
@@ -433,10 +441,17 @@ export function buildAgentContext(plan: {
   subject?: string;
   body?: string;
   mode?: "individual" | "group";
+  attachments?: { filename: string }[];
+  attachmentError?: string;
 }): string {
   const view = buildRecipientView((plan.recipients ?? []).map((address) => ({ address })));
   const recipients = view.length
     ? view.map((r) => `  #${r.index}: ${r.label}`).join("\n")
+    : "  (none yet)";
+  // Attachments render by #index + filename (content-plane names; no storageId/URL reaches the model).
+  const atts = plan.attachments ?? [];
+  const attachments = atts.length
+    ? atts.map((a, i) => `  #${i + 1}: ${a.filename}`).join("\n")
     : "  (none yet)";
   return [
     "Current email plan:",
@@ -445,6 +460,11 @@ export function buildAgentContext(plan: {
     `Subject: ${plan.subject ?? "(not set)"}`,
     `Body drafted: ${plan.body ? "yes" : "no"}`,
     `Send mode: ${plan.mode ?? "(not set)"}`,
+    "Attachments (reason about these by #index/filename):",
+    attachments,
+    ...(plan.attachmentError
+      ? [`Attachment problem (fix before proposing): ${plan.attachmentError}`]
+      : []),
   ].join("\n");
 }
 
@@ -462,6 +482,65 @@ export function buildCockpitTools(
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
     if (!plan || plan.tenantId !== tenantId) throw new Error("cockpit: plan row missing"); // no cross-tenant
     return plan;
+  };
+
+  // Shared generate path for generateAttachment/regenerateAttachment (CKPT-02): scan (fail-closed)
+  // → draft → render → filename → cap check → store. Returns the stored ref, or writes attachmentError
+  // (preserving `existing`) and returns a failure the agent relays. `replaceIndex` (0-based) is the
+  // slot being superseded — excluded from the filename-collision set and the cap total. NEVER surfaces
+  // a URL/bytes (§2-D/§4). ponytail: no new spend code — the loop's preCall/recordSpend already governs
+  // the turn, exactly like draftBody.
+  const renderAndStore = async (
+    topic: string,
+    existing: Att[],
+    replaceIndex: number | null,
+  ): Promise<{ ok: true; att: Att } | { ok: false; message: string }> => {
+    const scan = scanText(topic);
+    if (!scan.ok) throw new Error("cockpit: attachment-topic scan failed"); // redact-then-write §4
+    const safeText = scan.value.safeText;
+    const draft: { title: string; markdown: string } = await ctx.runAction(
+      internal.llm.draftDocument,
+      { tenantId, safeText, safeTextHash: await contentHash(safeText) },
+    );
+    const setError = async (message: string): Promise<{ ok: false; message: string }> => {
+      // Render-fail / over-cap → mark the plan not-proposable, add NO ref (block-on-render-fail).
+      await ctx.runMutation(internal.plans.recordAttachments, {
+        planId,
+        attachments: existing,
+        attachmentError: message,
+      });
+      return { ok: false, message };
+    };
+    let bytes: Uint8Array;
+    try {
+      // ponytail: render=fail:: is a per-request offline hook (mirrors fail=primary::) to exercise
+      // block-on-render-fail without provoking a real pdf-lib throw. Remove with the SMOKE seam.
+      if (safeText.includes("render=fail::")) throw new Error("smoke: forced render failure");
+      bytes = await markdownToPdf(draft.title, draft.markdown);
+    } catch {
+      return setError(
+        "I couldn't generate the attachment — the document failed to render. Tell the user and offer to try again.",
+      );
+    }
+    const others = existing.filter((_, j) => j !== replaceIndex);
+    // Pin the date offline so SMOKE fixtures stay byte-deterministic; real time otherwise.
+    const today = parseSmoke(safeText) ? "1970-01-01" : new Date().toISOString().slice(0, 10);
+    const filename = buildDocFilename(
+      topic,
+      today,
+      others.map((a) => a.filename),
+    );
+    const total = others.reduce((s, a) => s + a.size, 0) + bytes.byteLength;
+    if (exceedsByteCap(total)) {
+      return setError(
+        "The attachments would exceed the size limit. Ask the user to remove one or use a smaller document.",
+      );
+    }
+    const storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+    return {
+      ok: true,
+      att: { storageId, filename, mimeType: "application/pdf", size: bytes.byteLength },
+    };
   };
 
   // add | set share the bounce/patch shape; remove differs (index → server-side address).
@@ -620,6 +699,91 @@ export function buildCockpitTools(
           body: draft.body,
         });
         return "Body drafted and saved to the plan.";
+      },
+    }),
+    generateAttachment: tool({
+      description:
+        "Generate a PDF document on the given topic and attach it to the plan. Only after the user asks for (or confirms) an attachment. A render or size failure blocks approval until fixed.",
+      inputSchema: jsonSchema<{ topic: string }>({
+        type: "object",
+        properties: {
+          topic: { type: "string", description: "What the document should be about, in plain language." },
+        },
+        required: ["topic"],
+        additionalProperties: false,
+      }),
+      execute: async ({ topic }): Promise<string> => {
+        const plan = await readPlan();
+        const existing = plan.attachments ?? [];
+        const res = await renderAndStore(topic, existing, null);
+        if (!res.ok) return res.message;
+        // Append the new ref + CLEAR any prior error (a clean generate makes the plan proposable again).
+        await ctx.runMutation(internal.plans.recordAttachments, {
+          planId,
+          attachments: [...existing, res.att],
+          attachmentError: undefined,
+        });
+        return `Generated ${res.att.filename} — ${existing.length + 1} attachment(s) on the plan.`;
+      },
+    }),
+    regenerateAttachment: tool({
+      description:
+        "Regenerate the attachment at the given 1-based #index from a new topic, replacing it in place. The old document is discarded once the new one is stored.",
+      inputSchema: jsonSchema<{ index: number; topic: string }>({
+        type: "object",
+        properties: {
+          index: { type: "number", description: "1-based #index of the attachment to replace." },
+          topic: { type: "string", description: "What the new document should be about." },
+        },
+        required: ["index", "topic"],
+        additionalProperties: false,
+      }),
+      execute: async ({ index, topic }): Promise<string> => {
+        const plan = await readPlan();
+        const existing = plan.attachments ?? [];
+        const i = index - 1;
+        if (i < 0 || i >= existing.length)
+          return `Rejected: there is no attachment #${index}. The plan has ${existing.length}.`;
+        const old = existing[i]!;
+        const res = await renderAndStore(topic, existing, i);
+        if (!res.ok) return res.message;
+        const next = existing.map((a, j) => (j === i ? res.att : a));
+        await ctx.runMutation(internal.plans.recordAttachments, {
+          planId,
+          attachments: next,
+          attachmentError: undefined,
+        });
+        await ctx.storage.delete(old.storageId); // delete AFTER the new ref persists (O3 — no orphan/dangling ref)
+        return `Regenerated attachment #${index} as ${res.att.filename}.`;
+      },
+    }),
+    removeAttachment: tool({
+      description:
+        "Remove the attachment at the given 1-based #index from the plan and delete its stored bytes.",
+      inputSchema: jsonSchema<{ index: number }>({
+        type: "object",
+        properties: {
+          index: { type: "number", description: "1-based #index of the attachment to remove." },
+        },
+        required: ["index"],
+        additionalProperties: false,
+      }),
+      execute: async ({ index }): Promise<string> => {
+        const plan = await readPlan();
+        const existing = plan.attachments ?? [];
+        const i = index - 1;
+        if (i < 0 || i >= existing.length)
+          return `Rejected: there is no attachment #${index} to remove.`;
+        const old = existing[i]!;
+        const next = existing.filter((_, j) => j !== i);
+        // Persist the shortened array FIRST, then delete the bytes (O3 — never a dangling ref).
+        await ctx.runMutation(internal.plans.recordAttachments, {
+          planId,
+          attachments: next,
+          attachmentError: undefined,
+        });
+        await ctx.storage.delete(old.storageId);
+        return `Removed attachment #${index} — ${next.length} attachment(s) remain.`;
       },
     }),
     proposePlan: tool({
