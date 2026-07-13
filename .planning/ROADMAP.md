@@ -174,7 +174,7 @@ Plans:
 - [x] 03.3-02-PLAN.md — plans.attachments/attachmentError schema + recordAttachments + attachmentUrls + reportForPlan URLs (Wave 1)
 - [x] 03.3-03-PLAN.md — multipart buildMime + send loads storage bytes + getForDelivery resolves refs (Wave 1)
 - [x] 03.3-04-PLAN.md — generate/regenerate/remove attachment tools + proposePlan cap/render gate + SMOKE ops (Wave 2)
-- [ ] 03.3-05-PLAN.md — executePlan fan-out propagation + PLAN/REPORT card attachment rows (Wave 3)
+- [x] 03.3-05-PLAN.md — executePlan fan-out propagation + PLAN/REPORT card attachment rows (Wave 3)
 - [ ] 03.3-06-PLAN.md — smoke:fanout/guardrails + cockpit-attachment E2E + human-verify + playbook close (Wave 4)
 
 ### Phase 3.4: Per-Recipient Personalization (INSERTED)
@@ -275,7 +275,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.1 Cockpit Core (INSERTED) | 8/9 | In Progress (Waves 1â4 done; Wave 5 E2E + human checkpoint next) | 2026-07-12 |
 | 3.2 Inbox Reading (INSERTED) | 6/6 | Complete | 2026-07-12 |
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
-| 3.3 Attachment Generation (INSERTED) | 0/6 | Planned | - |
+| 3.3 Attachment Generation (INSERTED) | 5/6 | In Progress | - |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
