@@ -44,7 +44,112 @@ function badge(status: string) {
   return { ...c, padding: "0.1rem 0.5rem", borderRadius: "0.375rem", fontSize: "0.8rem", fontWeight: 700 };
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+// Human byte size for the attachment rows (lazy: KB/MB thresholds, no lib).
+function fmtSize(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
+// Shared list-row style for an attachment (mirrors the AttachmentPicker idiom).
+const attRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.6rem",
+  padding: "0.4rem 0.6rem",
+  border: "1px solid #e5e5e5",
+  borderRadius: "0.5rem",
+  fontSize: "0.85rem",
+} as const;
+
+// The generated-attachment section of the PLAN card (CKPT-02). Reads the reactive plan row for
+// filenames + the tenant-guarded signed URLs (attachmentUrls — the URL is a bearer capability,
+// §4). Regenerate/Remove re-enter the agent tool-loop via sendCockpitMessage: a button is a
+// precise intent, so it sends a natural-language instruction the live agent maps to the
+// removeAttachment/regenerateAttachment tools. The offline E2E (Plan 06) drives the same tools
+// deterministically via the composer's `SMOKE::agent::removeAttachment=<i>` / `regenerate=<i>:<topic>`
+// sentinels (Plan 04). ponytail: no per-button SMOKE flag — offline determinism is composer-driven.
+function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) {
+  const urls = useQuery(api.plans.attachmentUrls, { planId: plan._id });
+  const send = useAction(api.cockpit.sendCockpitMessage);
+  const [busy, setBusy] = useState(false);
+  const [topics, setTopics] = useState<Record<number, string>>({});
+  const attachments = plan.attachments ?? [];
+
+  async function drive(text: string) {
+    if (busy || !threadId) return;
+    setBusy(true);
+    try {
+      await send({ threadId, text });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (plan.attachmentError) {
+    return (
+      <div style={{ margin: "0.5rem 0" }}>
+        <div style={label}>ATTACHMENT</div>
+        <p role="alert" style={{ color: "#dc2626", margin: "0.3rem 0 0" }}>
+          Couldn't generate the document: {plan.attachmentError}. Fix it in chat before approving —
+          the plan stays unapprovable until the attachment is regenerated.
+        </p>
+      </div>
+    );
+  }
+  if (attachments.length === 0) return null;
+
+  return (
+    <div style={{ margin: "0.5rem 0" }}>
+      <div style={label}>ATTACHMENTS</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.4rem" }}>
+        {attachments.map((a, i) => {
+          const url = urls?.[i]?.url ?? null; // urls loads async + may be null (getUrl); guard both
+          return (
+            <li key={a.storageId} style={attRow}>
+              {url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: "var(--teal-600)" }}>
+                  {a.filename}
+                </a>
+              ) : (
+                <span style={{ fontWeight: 600 }}>{a.filename}</span>
+              )}
+              <span style={dim}>{fmtSize(a.size)}</span>
+              <span style={{ marginLeft: "auto", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                <input
+                  value={topics[i] ?? ""}
+                  onChange={(e) => setTopics((p) => ({ ...p, [i]: e.target.value }))}
+                  placeholder="new topic…"
+                  aria-label={`Regenerate ${a.filename} topic`}
+                  style={{ fontSize: "0.8rem", padding: "0.15rem 0.4rem", border: "1px solid #e5e5e5", borderRadius: "0.3rem" }}
+                />
+                <button
+                  type="button"
+                  disabled={busy || !(topics[i] ?? "").trim()}
+                  onClick={() => void drive(`Please regenerate the "${a.filename}" attachment about: ${(topics[i] ?? "").trim()}.`)}
+                  style={{ ...btn, padding: "0.2rem 0.6rem", fontSize: "0.8rem", border: "1px solid #e5e5e5", background: "#fff" }}
+                >
+                  Regenerate
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void drive(`Please remove the "${a.filename}" attachment.`)}
+                  aria-label={`Remove ${a.filename}`}
+                  style={{ ...btn, padding: "0.2rem 0.5rem", fontSize: "0.8rem", border: "1px solid #e5e5e5", background: "#fff" }}
+                >
+                  ✕
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -81,6 +186,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         {body.slice(0, 240)}
         {body.length > 240 ? "…" : ""}
       </p>
+      <PlanAttachments plan={plan} threadId={threadId} />
       <ol style={{ margin: "0 0 0.75rem", paddingLeft: "1.25rem", color: "#444" }}>
         <li>Draft the email</li>
         <li>
@@ -136,6 +242,20 @@ function ReportCard({ planId }: { planId: PlanId }) {
               <span style={badge(r.status)}>{r.status}</span>
               <span style={{ fontWeight: 600 }}>{r.recipient}</span>
               {r.messageId && <span style={dim}>msg {r.messageId}</span>}
+              {/* Delivered-with-attachment: re-download the EXACT sent bytes (immutable per storage
+                  id; the signed url is a bearer capability, §4 — surfaced only from reportForPlan). */}
+              {r.attachments.map((att) => (
+                <span key={att.filename} style={{ ...chip, display: "inline-flex", gap: "0.3rem" }}>
+                  📎
+                  {att.url ? (
+                    <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal-600)" }}>
+                      {att.filename}
+                    </a>
+                  ) : (
+                    att.filename
+                  )}
+                </span>
+              ))}
               {/* Audit ref: the row's correlationId keys its append-only audit trail (refs only,
                   CLAUDE.md §4). ponytail: a dedicated per-correlation audit-trail view is a later
                   slice — surfacing the id (selectable) is the honest link target for now. */}
@@ -272,7 +392,7 @@ export function CardList({ threadId }: { threadId?: string }) {
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
-      {plan.status === "proposed" && <PlanCard plan={plan} />}
+      {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
     </div>
