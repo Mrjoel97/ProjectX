@@ -806,6 +806,14 @@ export function buildCockpitTools(
           return "Cannot propose yet — no subject is set. Ask the user for the subject.";
         if (!plan.body)
           return "Cannot propose yet — the body has not been drafted. Call draftBody first.";
+        // Attachment health gate (V7): a render-failed / over-cap document is structurally
+        // not-approvable. Facts come from the ROW; refuse so the agent regenerates/removes first.
+        if (plan.attachmentError)
+          return `Cannot propose yet — ${plan.attachmentError} Regenerate or remove the document, then propose.`;
+        // ponytail: the cap is re-checked here as defense-in-depth; generateAttachment already refuses over-cap.
+        const attachTotal = (plan.attachments ?? []).reduce((s, a) => s + a.size, 0);
+        if (exceedsByteCap(attachTotal))
+          return "Cannot propose yet — the attachments exceed the size limit. Ask the user to remove one.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
         await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
