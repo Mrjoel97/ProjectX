@@ -151,6 +151,29 @@ export const getById = internalQuery({
   handler: async (ctx, { planId }) => await ctx.db.get(planId),
 });
 
+/**
+ * Signed download URLs for a plan's generated attachments (CKPT-02, PLAN/REPORT cards).
+ * This is the FIRST `storage.getUrl` in the codebase: the URL is a bearer capability, so it is
+ * ONLY ever returned from this tenant-guarded query and NEVER logged (CLAUDE.md §4). Guards on the
+ * plan row (mirrors byThread) — a caller whose identity ≠ plan.tenantId gets an empty array, never
+ * another tenant's signed URL.
+ */
+export const attachmentUrls = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) return [];
+    return Promise.all(
+      (plan.attachments ?? []).map(async (a) => ({
+        filename: a.filename,
+        mimeType: a.mimeType,
+        size: a.size,
+        url: await ctx.storage.getUrl(a.storageId),
+      })),
+    );
+  },
+});
+
 /** The tenant's plans row for a thread → feeds the PLAN + DRAFT cards (by_thread). */
 export const byThread = tenantQuery({
   args: { threadId: v.string() },
@@ -183,11 +206,20 @@ export const reportForPlan = tenantQuery({
         .withIndex("by_correlation", (q) => q.eq("correlationId", r.correlationId))
         .filter((q) => q.eq(q.field("eventType"), "gmail.sent"))
         .first();
+      // Per-recipient delivered attachment(s): re-download the EXACT sent bytes. Storage is
+      // immutable per id, so we resolve the persisted send-time refs — never regenerate (§4: url never logged).
+      const attachments = [];
+      for (const ref of r.attachmentRefs) {
+        const att = await ctx.db.get(ref);
+        if (!att) continue;
+        attachments.push({ filename: att.filename, url: await ctx.storage.getUrl(att.storageId) });
+      }
       report.push({
         recipient: r.recipient,
         status: r.status,
         correlationId: r.correlationId,
         messageId: (sent?.payload as { messageId?: string } | undefined)?.messageId ?? null,
+        attachments,
       });
     }
     return report;
