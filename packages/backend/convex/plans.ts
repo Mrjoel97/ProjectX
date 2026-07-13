@@ -38,6 +38,16 @@ const CANDIDATES = v.array(
   }),
 );
 
+// Mirrors plans.attachments in schema.ts — generated outbound attachment refs (CKPT-02).
+const ATTACHMENTS = v.array(
+  v.object({
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+  }),
+);
+
 /**
  * Create the single `plans` row for a thread (the agent creates it on first turn).
  * Starts at "collecting" with empty recipients; returns planId for the conversation to patch.
@@ -109,6 +119,25 @@ export const clearCandidates = internalMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     await ctx.db.patch(planId, { candidates: undefined, pendingValid: undefined });
+  },
+});
+
+/**
+ * The single content-plane write surface for generated attachments (CKPT-02, Plan 04 tools).
+ * ALWAYS replaces `attachments` wholesale (supersede/remove = pass the full new array) and
+ * sets/clears `attachmentError` directly — passing `attachmentError: undefined` CLEARS it (a
+ * successful generate wipes a prior render/cap error), mirroring clearCandidates. Because this
+ * writes the error explicitly (not via the drop-undefined patchPlan), the clear path is
+ * unambiguous. Content-plane only — NEVER audited (CLAUDE.md §4).
+ */
+export const recordAttachments = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    attachments: ATTACHMENTS,
+    attachmentError: v.optional(v.string()),
+  },
+  handler: async (ctx, { planId, attachments, attachmentError }) => {
+    await ctx.db.patch(planId, { attachments, attachmentError });
   },
 });
 

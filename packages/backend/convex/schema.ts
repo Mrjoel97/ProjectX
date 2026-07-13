@@ -147,6 +147,19 @@ export default defineSchema({
     subject: v.optional(v.string()),
     bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
     body: v.optional(v.string()), // drafted wording (filled at "ready")
+    // Generated outbound attachments (CKPT-02). Inline on the plan = pre-approval source of truth
+    // for the PLAN card; executePlan materializes attachments-table rows at fan-out. All optional → no migration.
+    attachments: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          filename: v.string(),
+          mimeType: v.string(),
+          size: v.number(),
+        }),
+      ),
+    ),
+    attachmentError: v.optional(v.string()), // transient: render-failed / over-byte-cap → blocks propose (V7)
     // TRANSIENT name-resolution store (Plan 04/05 resolution card): raw fetched
     // candidate names/addresses/hints held on the content plane ONLY (CLAUDE.md §4 —
     // raw content lives in `plans`, NEVER in audit/DLQ), wiped on pick (clearCandidates).
