@@ -61,6 +61,30 @@ test("removeRecipient resolves a 1-based index — the address is never a tool a
   expect(oob).toMatch(/reject/i);
 });
 
+test("setRecipients([]) cannot wipe already-set recipients — it bounces (03.2.1 disappearing-recipients bug)", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com", "alice@example.com"] });
+
+  const res = await call(t, planId, "setRecipients", { addresses: [] });
+  expect(res).toMatch(/reject/i);
+  // Recipients survive — an empty set no longer silently clears the list.
+  expect((await readPlan(t, planId))?.recipients).toEqual(["bob@example.com", "alice@example.com"]);
+});
+
+test("proposePlan refuses an incomplete plan — never proposes a zero-recipient plan", async () => {
+  const { t, planId } = await setup();
+
+  const noRecip = await call(t, planId, "proposePlan", {});
+  expect(noRecip).toMatch(/no recipients/i);
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed");
+
+  // A recipient but no subject/body → still refuses (nothing half-baked reaches the PLAN card).
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com"] });
+  const noSubject = await call(t, planId, "proposePlan", {});
+  expect(noSubject).toMatch(/subject/i);
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed");
+});
+
 test("draftBody redacts (scanText) BEFORE the drafting model call", async () => {
   const { t, planId } = await setup();
   const LEAK = "leak@secret.com";

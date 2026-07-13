@@ -546,13 +546,20 @@ export function buildCockpitTools(ctx: GenericActionCtx<DataModel>, tenantId: st
       execute: async (): Promise<string> => {
         const plan = await readPlan();
         const recipients = plan.recipients ?? [];
+        // Guard: never propose an incomplete plan (a zero-recipient plan drafted+proposed was the
+        // 03.2.1 bug). Refuse and tell the agent what's missing so it re-resolves / re-asks.
+        if (recipients.length === 0) {
+          return "Cannot propose yet — no recipients are set. Have the user resolve or add at least one recipient first.";
+        }
+        if (!plan.subject) return "Cannot propose yet — no subject is set. Ask the user for the subject.";
+        if (!plan.body) return "Cannot propose yet — the body has not been drafted. Call draftBody first.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
         await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
           recipients,
           mode: recipients.length > 1 ? (plan.mode ?? "individual") : "individual",
-          subject: plan.subject ?? "",
-          body: plan.body ?? "",
+          subject: plan.subject,
+          body: plan.body,
         });
         return "Plan proposed — the user can now review and Approve it.";
       },

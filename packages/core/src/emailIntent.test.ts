@@ -152,4 +152,16 @@ describe("applyRecipientEdit — add/remove/set with validation bounce + index r
     const res = applyRecipientEdit(["a@x.com"], { op: "set", addresses: ["c@d.com", "bad@"] });
     expect(res).toEqual({ ok: false, recipients: ["c@d.com"], rejected: ["bad@"] });
   });
+
+  test("set to EMPTY never wipes: bounces and keeps the current recipients (the 03.2.1 disappearing-recipients bug)", () => {
+    const res = applyRecipientEdit(["a@x.com", "b@y.com"], { op: "set", addresses: [] });
+    expect(res.ok).toBe(false);
+    expect(res.recipients).toEqual(["a@x.com", "b@y.com"]); // unchanged — not wiped
+  });
+
+  test("set with only invalid addresses → also keeps the current recipients (would-be-empty bounces)", () => {
+    const res = applyRecipientEdit(["a@x.com"], { op: "set", addresses: ["nope", "bad@"] });
+    expect(res.ok).toBe(false);
+    expect(res.recipients).toEqual(["a@x.com"]); // unchanged
+  });
 });

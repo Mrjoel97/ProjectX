@@ -81,6 +81,12 @@ export function applyRecipientEdit(
   for (const a of edit.addresses) (isValidEmail(a) ? valid : rejected).push(a);
   const base = edit.op === "add" ? recipients : [];
   const next = dedupeAppend(base, valid);
+  // A "set" that would EMPTY the list is never legitimate (a plan needs ≥1 recipient). Bounce it,
+  // keeping the current recipients — so an empty or all-garbage setRecipients can never silently
+  // wipe already-resolved contacts (the model emitting `setRecipients([])` did exactly that).
+  if (edit.op === "set" && next.length === 0) {
+    return { ok: false, recipients: [...recipients], rejected: rejected.length > 0 ? rejected : ["(empty)"] };
+  }
   if (rejected.length > 0) return { ok: false, recipients: next, rejected };
   return { ok: true, recipients: next };
 }
