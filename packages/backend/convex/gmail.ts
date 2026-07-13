@@ -55,16 +55,67 @@ async function freshAccessToken(
   return { ok: true, token: refreshed.access_token };
 }
 
-/** RFC-2822 plain-text message. */
-function buildMime(to: string, subject: string, body: string): string {
-  return [
+/** An already-base64'd attachment part, decoded from storage bytes by `send`. */
+type MimeAttachment = { filename: string; mimeType: string; base64: string };
+
+/** Wrap a base64 string into ≤76-char CRLF lines (RFC 2045). */
+function wrap76(b64: string): string {
+  return b64.match(/.{1,76}/g)?.join("\r\n") ?? "";
+}
+
+/**
+ * RFC-2822 message. Zero attachments → the EXACT legacy single-part plain-text string
+ * (byte-identical, so today's sends are provably unchanged — V4). One+ → `multipart/mixed`:
+ * ONE top-level MIME-Version:1.0, a `=_pikar_<hex>` boundary, a base64 text/plain body part,
+ * one `application/pdf`-style part per attachment (STANDARD base64, wrapped 76 — NOT url-safe;
+ * only the whole raw message is base64url'd, by base64Url(), the classic Gmail bug), and a
+ * MANDATORY closing `--boundary--` (V3). CRLF everywhere. Filenames are app-generated sanitized
+ * ASCII (Plan 01). // ponytail: RFC 2047 encoded-word; ASCII names skip it.
+ * // ponytail: hard 8MB/plan cap (Plan 04) keeps us on the simple raw send; add
+ * // uploadType=resumable only if a real doc exceeds it.
+ */
+export function buildMime(
+  to: string,
+  subject: string,
+  body: string,
+  attachments: MimeAttachment[] = [],
+): string {
+  if (attachments.length === 0) {
+    return [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "",
+      body,
+    ].join("\r\n");
+  }
+
+  const boundary = `=_pikar_${crypto.randomUUID().replace(/-/g, "")}`;
+  const lines: string[] = [
     `To: ${to}`,
     `Subject: ${subject}`,
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",
-    body,
-  ].join("\r\n");
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    wrap76(Buffer.from(body, "utf-8").toString("base64")),
+  ];
+  for (const a of attachments) {
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${a.mimeType}; name="${a.filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${a.filename}"`,
+      "",
+      wrap76(a.base64),
+    );
+  }
+  lines.push(`--${boundary}--`);
+  return lines.join("\r\n");
 }
 
 function base64Url(s: string): string {
