@@ -41,9 +41,16 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
 
   // 2. pick the contact + confirm → resolveRecipients folds the address in and wipes candidates
   //    (the card disappears — the model never saw the address, §2-D).
+  const msgsBeforePick = await page.getByTestId("chat-message").count();
   await sarahChip.click();
   await workspace.getByRole("button", { name: /use these contacts/i }).click();
   await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toHaveCount(0, { timeout: 15_000 });
+
+  // A pick is an agent TURN, not a dead-end (regression guard for the blank-workspace/hanging-reply
+  // bug): resolveRecipients re-enters the tool-loop and saves exactly ONE new assistant reply —
+  // WITHOUT the user sending another message. Content varies (real reply vs offline error turn), so
+  // assert on the count, not the prose. Before the fix this stayed flat and the conversation hung.
+  await expect(page.getByTestId("chat-message")).toHaveCount(msgsBeforePick + 1, { timeout: 20_000 });
 
   // 3. a conversational EDIT: add a second recipient (addRecipients tool — validated, deduped).
   await say("SMOKE::agent::add=bob@example.com");

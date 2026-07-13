@@ -20,6 +20,7 @@
     "smoke:worm": "node ./scripts/run-smoke-worm.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "4.0.11",
     "@auth/core": "0.41.2",
     "@convex-dev/action-cache": "0.3.1",
     "@convex-dev/action-retrier": "0.3.1",

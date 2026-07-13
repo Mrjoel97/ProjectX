@@ -85,12 +85,21 @@ export const sendCockpitMessage = tenantAction({
   },
 });
 
+// A card pick is an agent TURN, not a dead-end: the synthetic user text that re-enters the
+// tool-loop after the recipients are folded. buildAgentContext already shows the model the updated
+// index/label recipients (address-free, §2-D), so this only signals "the pick happened, continue".
+const RESOLUTION_CONTINUE =
+  "I've picked the recipients from the contact list. Please continue composing the email.";
+
 /**
  * Fold a contact PICK from the resolution card back into the conversation (SC2). The picked
  * addresses are already valid, so this thin action folds them (plus any held pendingValid) into
  * the recipient list via the shared `applyRecipientEdit`, records the first pick's display name as
- * the drafted greeting, then wipes the transient candidates (wipe-on-pick). The next user turn
- * drives the agent from the updated plan row. Explicit return type (guidelines §96).
+ * the drafted greeting, then wipes the transient candidates (wipe-on-pick). It then RE-ENTERS the
+ * governed tool-loop so the agent takes its next step (ask the subject / draft / propose) from the
+ * updated plan row — without this the conversation dead-ends on a blank workspace after the card
+ * unmounts. Mirrors sendCockpitMessage's drive+save tail (a thrown failure saves a non-dead-ending
+ * error turn; nothing is sent). Explicit return type (guidelines §96).
  */
 export const resolveRecipients = tenantAction({
   args: {
@@ -116,6 +125,25 @@ export const resolveRecipients = tenantAction({
       greetingName: picks[0]?.displayName, // FIRST pick names the greeting (undefined is dropped)
     });
     await ctx.runMutation(internal.plans.clearCandidates, { planId: plan._id }); // wipe-on-pick
+
+    // Re-enter the tool-loop so the agent continues from the folded recipients (never a dead hang).
+    let reply: string;
+    try {
+      const res = await ctx.runAction(internal.llm.runCockpitAgent, {
+        tenantId: ctx.tenantId,
+        threadId,
+        planId: plan._id,
+        text: RESOLUTION_CONTINUE,
+      });
+      reply = res.reply;
+    } catch {
+      reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+    }
+    await cockpitAgent.saveMessage(ctx, {
+      threadId,
+      message: { role: "assistant", content: reply },
+      skipEmbeddings: true,
+    });
     return { threadId };
   },
 });

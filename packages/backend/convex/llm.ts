@@ -11,11 +11,14 @@
 // ctx.runQuery (01-07 rule — actions have no ctx.db). It stays the ONLY node module
 // touched — a new node module re-triggers the TS circular-inference cliff (02-06).
 //
-// A bare string model id ("openai/gpt-4o-mini") routes through the Vercel AI Gateway
-// when AI_GATEWAY_API_KEY is set — no provider package import (@ai-sdk/openai). The
-// uncached actions carry the model in their args (guardrails.prepare chose it), fall
-// back to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced
-// action cache (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+// Model ids ("openai/gpt-4o-mini") are pricing/audit keys; `resolveModel` maps each to a
+// direct-OpenAI LanguageModel via @ai-sdk/openai (reads OPENAI_API_KEY from the deployment
+// env). The Vercel AI Gateway is NOT used — BYOK there is gated behind paid Vercel credits,
+// a double charge on top of the OpenAI key we already pay for (decision 2026-07-13). The
+// uncached actions carry the model id in their args (guardrails.prepare chose it), fall back
+// to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced action cache
+// (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { type RoutingDecision, parseRouting, routingSchema } from "@pikar/contracts/routing";
@@ -42,6 +45,11 @@ import { contentHash } from "./lib/hash";
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
 const CALL_TIMEOUT_MS = 45_000;
+
+// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel.
+// The `openai/` prefix is the gateway namespace; the @ai-sdk/openai provider wants the bare
+// name and reads OPENAI_API_KEY from the deployment env. Pricing/audit keep the full id.
+const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 // ── Smoke seam ──────────────────────────────────────────────────────────────
 // A dev-deployment smoke must drive the REAL spine deterministically and offline
@@ -156,7 +164,7 @@ export const routeUncached = internalAction({
 
     try {
       const { object, usage } = await generateObject({
-        model,
+        model: resolveModel(model),
         schema: routingSchema,
         system: skill.body,
         prompt: safeText,
@@ -177,7 +185,7 @@ export const routeUncached = internalAction({
         payload: { fromModel: model, toModel: CHEAP_MODEL, errorName: (e as Error)?.name ?? "unknown", stage: "route" },
       });
       const { object, usage } = await generateObject({
-        model: CHEAP_MODEL,
+        model: resolveModel(CHEAP_MODEL),
         schema: routingSchema,
         system: skill.body,
         prompt: safeText,
@@ -239,7 +247,7 @@ export const draftUncached = internalAction({
         return { subject: "Smoke Subject", body: `Smoke draft for ${safeTextHash}`, usage: ZERO_USAGE, generatedAt: Date.now() };
       }
       const { object, usage } = await generateObject({
-        model,
+        model: resolveModel(model),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -260,7 +268,7 @@ export const draftUncached = internalAction({
       // Sentinel short-circuits the fallback to a fixed draft (no model call).
       if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback", usage: ZERO_USAGE, generatedAt: Date.now() };
       const { object, usage } = await generateObject({
-        model: CHEAP_MODEL,
+        model: resolveModel(CHEAP_MODEL),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -324,7 +332,7 @@ export const draftCockpit = internalAction({
         return { subject: "Smoke Subject", body: `${greeting}Smoke draft for ${safeTextHash}` };
       }
       const { object } = await generateObject({
-        model: DEFAULT_MODEL,
+        model: resolveModel(DEFAULT_MODEL),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -336,7 +344,7 @@ export const draftCockpit = internalAction({
       if (!isFallbackEligible(e)) throw e;
       if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback" };
       const { object } = await generateObject({
-        model: CHEAP_MODEL,
+        model: resolveModel(CHEAP_MODEL),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -739,8 +747,8 @@ export const runCockpitAgent = internalAction({
       planId,
       system: skill.body,
       prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: ${text}`,
-      primary: { model: primaryId, id: primaryId },
-      fallback: { model: CHEAP_MODEL, id: CHEAP_MODEL },
+      primary: { model: resolveModel(primaryId), id: primaryId },
+      fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
     });
     return { reply };
   },

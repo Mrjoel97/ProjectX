@@ -91,7 +91,7 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
           <p style={{ color: "#666", margin: 0 }}>Tell me who to email and what to say.</p>
         ) : (
           messages.results.map((m) => (
-            <div key={m.key} style={bubble(m.message?.role === "user")}>
+            <div key={m.key} data-testid="chat-message" style={bubble(m.message?.role === "user")}>
               {messageText(m.message?.content)}
             </div>
           ))
