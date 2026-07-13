@@ -5,6 +5,7 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
+import { PLAN_ATTACHMENT_CAP_BYTES } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { internal } from "./_generated/api";
@@ -104,4 +105,90 @@ test("resolveContacts writes candidates and returns a refs-only summary (NO addr
   expect(summary).not.toContain("@"); // no address ever crosses to the model (§2-D)
   const plan = await readPlan(t, planId);
   expect(plan?.candidates?.length).toBeGreaterThan(0); // held on the content plane for the card
+});
+
+// ── 03.3-04 Task 1: generated attachment tools (CKPT-02) ──────────────────────
+// Each tool is the governance boundary: scan → draft → render → store → record. Drive them
+// through the real primitives offline (SMOKE:: draftDocument returns fixed markdown → markdownToPdf
+// yields deterministic bytes) and assert the plan-row source of truth + no orphan bytes.
+
+const ATTACH = "SMOKE::route=direct_llm::"; // survives redaction → draftDocument offline path
+
+test("generateAttachment renders a stored PDF ref on the plan (scan→draft→render→store→record)", async () => {
+  const { t, planId } = await setup();
+  const res = await call(t, planId, "generateAttachment", { topic: `${ATTACH} quarterly report` });
+
+  expect(res).toMatch(/\.pdf/); // a filename label, never a URL/bytes
+  expect(res).not.toMatch(/http/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.attachments?.length).toBe(1);
+  expect(plan?.attachments?.[0]?.mimeType).toBe("application/pdf");
+  expect(plan?.attachments?.[0]?.size).toBeGreaterThan(0);
+  expect(plan?.attachmentError).toBeUndefined(); // a clean generate clears any prior error
+  // bytes actually landed in storage.
+  const url = await t.run((ctx) => ctx.storage.getUrl(plan!.attachments![0]!.storageId));
+  expect(url).toBeTruthy();
+});
+
+test("regenerateAttachment supersedes in place and deletes the OLD bytes (O3, no orphan)", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "generateAttachment", { topic: `${ATTACH} first` });
+  const oldId = (await readPlan(t, planId))!.attachments![0]!.storageId;
+
+  const res = await call(t, planId, "regenerateAttachment", { index: 1, topic: `${ATTACH} second` });
+  expect(res).not.toMatch(/reject/i);
+  const after = await readPlan(t, planId);
+  expect(after?.attachments?.length).toBe(1);
+  const newId = after!.attachments![0]!.storageId;
+  expect(newId).not.toBe(oldId);
+  expect(await t.run((ctx) => ctx.storage.getUrl(oldId))).toBeNull(); // old bytes deleted
+
+  // Out-of-range index bounces (no change, nothing rendered/stored).
+  const oob = await call(t, planId, "regenerateAttachment", { index: 9, topic: `${ATTACH} nope` });
+  expect(oob).toMatch(/reject/i);
+  expect((await readPlan(t, planId))?.attachments?.length).toBe(1);
+});
+
+test("removeAttachment drops the ref and deletes its stored bytes (no orphan)", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "generateAttachment", { topic: `${ATTACH} doc a` });
+  const id = (await readPlan(t, planId))!.attachments![0]!.storageId;
+
+  const res = await call(t, planId, "removeAttachment", { index: 1 });
+  expect(res).not.toMatch(/reject/i);
+  expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
+  expect(await t.run((ctx) => ctx.storage.getUrl(id))).toBeNull(); // bytes deleted
+
+  const oob = await call(t, planId, "removeAttachment", { index: 1 });
+  expect(oob).toMatch(/reject/i); // nothing left to remove
+});
+
+test("generateAttachment on a render failure sets attachmentError and stores NO ref (block-on-render-fail)", async () => {
+  const { t, planId } = await setup();
+  const res = await call(t, planId, "generateAttachment", {
+    topic: "SMOKE::route=direct_llm::render=fail:: broken",
+  });
+
+  expect(res).toMatch(/couldn't|render|failed|try again/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.attachmentError).toBeTruthy();
+  expect(plan?.attachments ?? []).toEqual([]); // no ref added on a render throw
+});
+
+test("generateAttachment over the byte cap sets attachmentError and stores NO new ref", async () => {
+  const { t, planId } = await setup();
+  // Pre-seed a real stored blob whose recorded size already fills the cap.
+  const sid = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+  await t.mutation(internal.plans.recordAttachments, {
+    planId,
+    attachments: [
+      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+    ],
+  });
+
+  const res = await call(t, planId, "generateAttachment", { topic: `${ATTACH} another` });
+  expect(res).toMatch(/size|large|limit/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.attachmentError).toBeTruthy();
+  expect(plan?.attachments?.length).toBe(1); // no new ref appended over-cap
 });
