@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 3.3 planned (6 plans, 4 waves) — verification passed
-last_updated: "2026-07-13T20:44:41.461Z"
+stopped_at: Completed 03.3-02-PLAN.md
+last_updated: "2026-07-13T21:00:39.263Z"
 last_activity: "2026-07-12 — Phase 3.2 Wave 4: 03.2-06 executed (cockpit playbook read-path docs + gmail.ts watch confirmed; CKPT-01 real mailbox read human-verified, zero sends). Phase 3.2 COMPLETE (6/6)."
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 50
-  completed_plans: 41
+  completed_plans: 43
   percent: 92
 ---
 
@@ -98,6 +98,8 @@ Progress: [█████████░] 92%
 | Phase 03.2.1 P03 | 18 | 3 tasks | 4 files |
 | Phase 03.2.1 P04 | 22 | 2 tasks | 4 files |
 | Phase 03.2.1 P05 | 9 | 3 tasks | 5 files |
+| Phase 03.3 P03 | 8 | 2 tasks | 3 files |
+| Phase 03.3 P02 | 7 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -176,6 +178,9 @@ Recent decisions affecting current work:
 - [Phase 03.2.1]: [Phase 03.2.1] 03.2.1-04: runCockpitAgent — the governed generateText tool-loop in llm.ts. preCall gates BEFORE the loop (governed kill-switch/budget stop = a paused reply as DATA, never a DLQ), the cockpit-agent skill body is the system prompt, stopWhen stepCountIs(8) bounds it (ai@7's maxSteps rename), recordSpend consumes priced usage, isFallbackEligible retries once on CHEAP_MODEL. SMOKE::agent::<op> drives one governed tool call per turn offline (Plan 05 E2E). Mock-model loop test proves a scripted edit sequence reaches proposed, kill-switch pauses without a DLQ, and the CHEAP_MODEL fallback + recordSpend run — all offline via __runCockpitAgentWithScript (a LanguageModel is not Convex-serializable, so the mock is built server-side from a script). ENGINE only — sendCockpitMessage cutover is Plan 05.
 - [Phase 03.2.1]: [Phase 03.2.1] 03.2.1-05 CUTOVER: sendCockpitMessage is a thin driver over runCockpitAgent (save user turn → loop → save reply); the deterministic emailIntent FSM is DELETED (no dual engine); only pure validators survive in @pikar/core (parseAddress/rankCandidates/buildRecipientView/applyRecipientEdit); resolveRecipients folds a card pick via applyRecipientEdit + greetingName then clearCandidates (no advance tail — the next user turn drives the agent); send-safety spine (executePlan/proposeEmailPlan/listThreadMessages) unchanged, workflow.start single call site
 - [Phase 03.2.1]: [Phase 03.2.1] 03.2.1-06 PHASE CLOSE + live gap-closure. Playbook cockpit.md rewritten for the agent tool-loop (Last verified → 03.2.1-06; check-playbooks passes; watch.json unchanged — skill sources already covered). Task-2 human-verify APPROVED on the live Gmail-connected backend (resolve-by-name → multi-select card pick → agent auto-continue → PLAN → one Approve, nothing sent before it). The human-verify surfaced live-only defects fixed as gap-closure (already committed/deployed): **(1) LLM transport REVERSED from the Vercel AI Gateway to DIRECT OpenAI (`@ai-sdk/openai@4.0.11`, `OPENAI_API_KEY`)** — gateway BYOK is gated behind paid Vercel credits (double charge) and the free tier rate-limited the agent loop (supersedes memory `llm-use-vercel-ai-gateway` for the cockpit path; b635d19); **(2) contact resolution is PANEL-DRIVEN** — the agent stops after resolveContacts and never self-resolves a contact (cockpit-agent prompt v2), the human's card pick re-enters the tool-loop/auto-continues (9efa802, b635d19); **(3) seedSkills gained a publish-on-change path** — an edited skill body mints a new immutable version + activates it (rollback = re-activate a prior version); cockpit-agent published to v2 live (9efa802); **(4) recipient-integrity guards** — applyRecipientEdit bounces a "set" that would empty recipients, proposePlan refuses a zero-recipient/incomplete plan (042f2cd); also rankCandidates now ranks/filters by name-match + ResolutionCard is multi-select (429c862). Runtime: skills:seedSkills run live (cockpit-agent had been unseeded → NO_ACTIVE_SKILL). AGNT-01/AGNT-02 satisfied — real governed Executive-Agent tool-loop, live-verified, zero-sends-before-Approve intact.
+- [Phase 03.3]: [Phase 03.3] Gmail send carries attachments: buildMime multipart/mixed (byte-identical zero-attachment branch), send loads bytes via ctx.storage.get; missing blob throws to DLQ; gmail.sent audit stays refs-only (§4)
+- [Phase 03.3]: attachmentUrls is the FIRST storage.getUrl in the codebase — a signed download URL is a bearer capability, returned ONLY from tenant-guarded queries (attachmentUrls/reportForPlan) and never logged (§4)
+- [Phase 03.3]: recordAttachments is the single content-plane write surface for plans.attachments + attachmentError; passing attachmentError undefined clears it (unambiguous error-clear on successful generate, no drop-undefined special-case)
 
 ### Roadmap Evolution
 
@@ -193,9 +198,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T20:44:41.446Z
-Stopped at: Phase 3.3 planned (6 plans, 4 waves) — verification passed
-Resume file: .planning/phases/03.3-attachment-generation/03.3-01-PLAN.md
+Last session: 2026-07-13T21:00:39.229Z
+Stopped at: Completed 03.3-02-PLAN.md
+Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
