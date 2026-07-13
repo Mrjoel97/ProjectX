@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 03.2.1-06-PLAN.md
-last_updated: "2026-07-13T18:40:00.000Z"
-last_activity: "2026-07-13 — Phase 3.2.1 Wave 5: 03.2.1-06 executed (phase close — cockpit playbook rewritten for the agent tool-loop, Last verified → 03.2.1-06; Task-2 human-verify APPROVED on the live Gmail-connected backend after live gap-closure). Phase 3.2.1 code-complete + human-verified (6/6); orchestrator owns verify_phase_goal + phase-complete."
+last_updated: "2026-07-13T18:29:12.731Z"
+last_activity: "2026-07-12 — Phase 3.2 Wave 4: 03.2-06 executed (cockpit playbook read-path docs + gmail.ts watch confirmed; CKPT-01 real mailbox read human-verified, zero sends). Phase 3.2 COMPLETE (6/6)."
 progress:
   total_phases: 15
   completed_phases: 4
   total_plans: 44
   completed_plans: 41
-  percent: 93
+  percent: 92
 ---
 
 # Project State
