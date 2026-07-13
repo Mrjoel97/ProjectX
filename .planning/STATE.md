@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03.2.1-06-PLAN.md
-last_updated: "2026-07-13T18:29:12.731Z"
+stopped_at: Phase 3.3 planned (6 plans, 4 waves) — verification passed
+last_updated: "2026-07-13T20:44:41.461Z"
 last_activity: "2026-07-12 — Phase 3.2 Wave 4: 03.2-06 executed (cockpit playbook read-path docs + gmail.ts watch confirmed; CKPT-01 real mailbox read human-verified, zero sends). Phase 3.2 COMPLETE (6/6)."
 progress:
   total_phases: 15
   completed_phases: 4
-  total_plans: 44
+  total_plans: 50
   completed_plans: 41
   percent: 92
 ---
@@ -193,9 +193,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T18:40:00.000Z
-Stopped at: Completed 03.2.1-06-PLAN.md
-Resume file: None
+Last session: 2026-07-13T20:44:41.446Z
+Stopped at: Phase 3.3 planned (6 plans, 4 waves) — verification passed
+Resume file: .planning/phases/03.3-attachment-generation/03.3-01-PLAN.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
