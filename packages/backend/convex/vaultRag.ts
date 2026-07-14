@@ -7,7 +7,6 @@
 // one without the other, or entries silently stop matching. Plans 04/05 append the
 // embed/search action steps here.
 
-import { openai } from "@ai-sdk/openai";
 import { RAG } from "@convex-dev/rag";
 import { priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -15,16 +14,60 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
-// ponytail: the exact `EmbeddingModel` RAG's constructor expects. Derived from RAG
-// itself (not imported from "ai") so it tracks the ai@6 that `@convex-dev/rag` bundles,
-// independent of the backend's own ai@7 — the two provider majors declare incompatible
-// `EmbeddingModel` types even though the runtime shape is identical. Same skew the
-// LanguageModel casts in llm.ts absorb; drop when the pinned versions realign (§6).
+const EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_DIM = 1536; // MUST equal the model output AND stay ≤ Convex's 2048 cap (Pitfall 2)
+
+// ponytail: `@convex-dev/rag@0.7.5` bundles ai@6, whose `embedMany` accepts ONLY an
+// EmbeddingModelV2 (`specificationVersion: "v2"`). The backend's `@ai-sdk/openai@4`
+// (paired with ai@7, which llm.ts needs) produces a spec-"v4" model that ai@6 REJECTS at
+// runtime — `AI_UnsupportedModelVersionError`. A prior `openai.embedding(...) as unknown as`
+// cast silenced only the compile error; the runtime object was still v4 and every ingest
+// embed threw. This ~25-line adapter implements the tiny v2 contract ai@6 checks by calling
+// OpenAI's embeddings REST API directly, decoupling RAG from the provider-major skew (no new
+// dep, no §6 bump). Drop when the pinned RAG realigns to ai@7.
+const openaiEmbeddingV2 = {
+  specificationVersion: "v2" as const,
+  provider: "openai.embedding",
+  modelId: EMBEDDING_MODEL,
+  maxEmbeddingsPerCall: 2048, // OpenAI's per-request input cap
+  supportsParallelCalls: true,
+  async doEmbed({
+    values,
+    abortSignal,
+    headers,
+  }: {
+    values: string[];
+    abortSignal?: AbortSignal;
+    headers?: Record<string, string | undefined>;
+  }): Promise<{ embeddings: number[][]; usage: { tokens: number } }> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("vault: OPENAI_API_KEY unset for embeddings");
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...headers },
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: values, dimensions: EMBEDDING_DIM }),
+      signal: abortSignal,
+    });
+    if (!res.ok) throw new Error(`vault: embeddings API ${res.status} ${await res.text()}`);
+    const json = (await res.json()) as {
+      data: Array<{ embedding: number[] }>;
+      usage?: { prompt_tokens?: number };
+    };
+    return {
+      embeddings: json.data.map((d) => d.embedding),
+      usage: { tokens: json.usage?.prompt_tokens ?? 0 },
+    };
+  },
+};
+
+// The two provider majors (ai@6 in RAG, ai@7 in the backend) declare structurally-divergent
+// `EmbeddingModel` types, so the cast is still needed to satisfy the constructor — but unlike
+// before, the object BEHIND it now genuinely implements the v2 contract ai@6 enforces at runtime.
 type RagEmbeddingModel = ConstructorParameters<typeof RAG>[1]["textEmbeddingModel"];
 
 export const rag = new RAG(components.rag, {
-  textEmbeddingModel: openai.embedding("text-embedding-3-small") as unknown as RagEmbeddingModel,
-  embeddingDimension: 1536, // MUST equal the model output AND be ≤ Convex's 2048 cap (Pitfall 2)
+  textEmbeddingModel: openaiEmbeddingV2 as unknown as RagEmbeddingModel,
+  embeddingDimension: EMBEDDING_DIM,
 });
 
 // ── The ingest embed step (Plan 04) ──────────────────────────────────────────

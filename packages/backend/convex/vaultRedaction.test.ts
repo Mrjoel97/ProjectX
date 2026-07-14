@@ -60,3 +60,19 @@ test("extract + embed steps redact (scanText) BEFORE any model / embedding call 
     ragSrc.indexOf("rag.add("),
   );
 });
+
+test("the RAG instance is built with a v2-spec embedding model (ai@6 compat, NOT the v4 provider)", () => {
+  // Runtime regression guard: `@convex-dev/rag@0.7.5` bundles ai@6, whose embedMany accepts ONLY an
+  // EmbeddingModelV2 (`specificationVersion: "v2"`). Passing `openai.embedding(...)` from the backend's
+  // @ai-sdk/openai@4 (a spec-"v4" model, correct for ai@7 / llm.ts) throws AI_UnsupportedModelVersionError
+  // at ingest time — a runtime skew a type-cast silences but does not fix. The vault must hand RAG a v2
+  // adapter. Caught live (a Brain Dump stuck on `processing`); this locks the fix in.
+  const ragSrc = readSource("vaultRag.ts");
+  expect(ragSrc, "vaultRag no longer declares a v2-spec embedding model").toMatch(
+    /specificationVersion:\s*["']v2["']/,
+  );
+  // The v4 trap: never pass the raw provider embedding model straight into the RAG constructor again.
+  expect(ragSrc, "vaultRag passes a raw openai.embedding(...) model to RAG (spec v4 — breaks ingest)").not.toMatch(
+    /textEmbeddingModel:\s*openai\.embedding\(/,
+  );
+});
