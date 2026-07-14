@@ -346,3 +346,33 @@ export const executePlan = tenantMutation({
     return { ok: true, workflowId };
   },
 });
+
+/**
+ * Halt a scheduled send before it fires (SC4). CAS-guarded on status==="scheduled": a non-scheduled
+ * plan (already fired, canceled, or never scheduled) no-ops with alreadyResolved — this is the guard
+ * that keeps ctx.scheduler.cancel from throwing on an already-committed id (RESEARCH Pitfall 1). On a
+ * live scheduled plan: cancel the armed function, flip → canceled, and write ONE refs-only
+ * plan.canceled audit (payload = {planId} ONLY — never subject/body/recipients; audit is insert-only
+ * per CLAUDE.md §3/§4). Tenant-guarded (no cross-tenant cancel). Idempotent.
+ */
+export const cancelScheduledPlan = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<{ ok: true; canceled?: true; alreadyResolved?: true }> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant cancel
+    if (plan.status !== "scheduled") return { ok: true, alreadyResolved: true }; // CAS: cancel() would throw on a fired id
+    if (plan.scheduledFunctionId) await ctx.scheduler.cancel(plan.scheduledFunctionId);
+    await ctx.db.patch(planId, { status: "canceled" });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: plan.correlationId ?? String(planId),
+      eventType: "plan.canceled",
+      actor: ctx.tenantId,
+      payload: { planId }, // refs only (§4) — never subject/body/recipients/sendAt
+    });
+    return { ok: true, canceled: true };
+  },
+});
