@@ -10,18 +10,33 @@
 //
 // ponytail: line-based md tokenizer; swap to marked tokens if inline/nested md needed.
 
-/** A single rendered block. Bullets and headings/paragraphs share the {kind,text} shape. */
-export type DocToken = {
-  kind: "h1" | "h2" | "h3" | "bullet" | "para";
-  text: string;
-};
+/** A rendered block. Headings/para/bullet/ordered carry raw `text` (the renderer applies
+ * `inlineRuns` for bold); a table carries its parsed header + body cells. */
+export type DocToken =
+  | { kind: "h1" | "h2" | "h3" | "bullet" | "para"; text: string }
+  | { kind: "ordered"; text: string; num: number }
+  | { kind: "table"; header: string[]; rows: string[][] };
+
+/** One styled span of inline text: `bold` runs render in the bold font. */
+export type InlineRun = { text: string; bold: boolean };
 
 const HEADING_KINDS = ["h1", "h2", "h3"] as const;
 
+const isTableRow = (l: string): boolean => l.startsWith("|") && l.indexOf("|", 1) > 0;
+// The |---|:--:| divider under a table's header row (dashes + optional colons/pipes/spaces).
+const isTableSep = (l: string): boolean => /-/.test(l) && /^\|?[\s:|-]+$/.test(l);
+const splitRow = (l: string): string[] =>
+  l
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map((c) => c.trim());
+
 /**
- * Line-based markdown → block tokens. Supports `#`/`##`/`###` headings, `- ` bullets, and
- * blank-line-separated paragraphs (consecutive plain lines join into one paragraph with a
- * single space). NO inline/nested markdown — the renderer draws each token's text verbatim.
+ * Line-based markdown → block tokens. Supports `#`..`######` headings (clamped to 3 visual
+ * levels), `- `/`* ` bullets, `N. ` numbered items, GitHub pipe tables (a header row + a
+ * `|---|` divider + body rows), and blank-line-separated paragraphs (consecutive plain lines
+ * join with a single space). Inline emphasis stays in the token text — `inlineRuns` resolves it
+ * at render time, so raw `**`/`` ` `` never reach the page.
  */
 export function tokenizeMarkdown(md: string): DocToken[] {
   const tokens: DocToken[] = [];
@@ -32,19 +47,41 @@ export function tokenizeMarkdown(md: string): DocToken[] {
       para = [];
     }
   };
-  for (const raw of md.split("\n")) {
-    const line = raw.trim();
+  const lines = md.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
     if (line === "") {
       flush();
       continue;
     }
-    const heading = line.match(/^(#{1,3}) (.*)$/);
-    if (heading) {
+    // Table: a pipe header row immediately followed by a |---| separator, then body rows.
+    if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1]!.trim())) {
       flush();
-      tokens.push({ kind: HEADING_KINDS[heading[1]!.length - 1]!, text: heading[2]!.trim() });
+      const header = splitRow(line);
+      const rows: string[][] = [];
+      i += 2; // consume header + separator
+      while (i < lines.length && isTableRow(lines[i]!.trim())) {
+        rows.push(splitRow(lines[i]!.trim()));
+        i++;
+      }
+      i--; // the for-loop re-increments
+      tokens.push({ kind: "table", header, rows });
       continue;
     }
-    if (line.startsWith("- ")) {
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      flush();
+      const level = Math.min(heading[1]!.length, 3);
+      tokens.push({ kind: HEADING_KINDS[level - 1]!, text: heading[2]!.trim() });
+      continue;
+    }
+    const ordered = line.match(/^(\d+)\.\s+(.*)$/);
+    if (ordered) {
+      flush();
+      tokens.push({ kind: "ordered", text: ordered[2]!.trim(), num: Number(ordered[1]) });
+      continue;
+    }
+    if (line.startsWith("- ") || line.startsWith("* ")) {
       flush();
       tokens.push({ kind: "bullet", text: line.slice(2).trim() });
       continue;
@@ -53,6 +90,27 @@ export function tokenizeMarkdown(md: string): DocToken[] {
   }
   flush();
   return tokens;
+}
+
+/**
+ * Resolve inline emphasis into styled runs. `**bold**` / `__bold__` become bold runs; every other
+ * stray inline marker (`*`, `` ` ``, leftover `_`) is stripped so the page never shows raw syntax.
+ * ponytail: mid-word bold (`un**x**y`) splits into space-separated words at render — rare in
+ * generated prose; swap in a real inline parser (marked) if it starts mattering.
+ */
+export function inlineRuns(text: string): InlineRun[] {
+  const clean = (s: string): string => s.replace(/[*`_]/g, "");
+  const runs: InlineRun[] = [];
+  const re = /(\*\*|__)(.+?)\1/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) runs.push({ text: clean(text.slice(last, m.index)), bold: false });
+    runs.push({ text: clean(m[2]!), bold: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) runs.push({ text: clean(text.slice(last)), bold: false });
+  return runs.filter((r) => r.text.length > 0);
 }
 
 // The LLM-prose offenders (RESEARCH §1): curly quotes, en/em-dash, ellipsis, nbsp. Mapped to

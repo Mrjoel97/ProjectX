@@ -54,3 +54,34 @@ test("multi-page: content that overflows one page paginates (no throw)", async (
   const bytes = await markdownToPdf("Long", `# Long\n\n${many}`);
   expect(startsWithPdf(bytes)).toBe(true);
 });
+
+test("rich formatting (bold, table, numbered list, sub-headings) renders a valid PDF", async () => {
+  // The professional-layout path: inline bold, a pipe table, an ordered list, and h2/h3 all
+  // exercise drawBlock's run layout + drawTable without throwing. inlineRuns strips the raw
+  // **/# tokens (unit-tested in @pikar/core) so none reach the page as literals.
+  const md = [
+    "## Overview",
+    "",
+    "**Objective:** launch the new product by end of month.",
+    "",
+    "### Timeline",
+    "",
+    "| Phase | Date |",
+    "|-------|------|",
+    "| Build | Wk 1 |",
+    "| Ship  | Wk 4 |",
+    "",
+    "1. Finalize the brief",
+    "2. Brief the team",
+    "",
+    "- a bullet point",
+    "- another point",
+  ].join("\n");
+  const a = await markdownToPdf("Product Brief", md);
+  const b = await markdownToPdf("Product Brief", md);
+  expect(startsWithPdf(a)).toBe(true);
+  expect(a.length).toBeGreaterThan(400);
+  expect(a.length).toBeLessThan(50_000);
+  // Deterministic across runs even with tables + shapes (pinned dates, no randomness).
+  expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+});

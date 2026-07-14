@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDocFilename,
   exceedsByteCap,
+  inlineRuns,
   PLAN_ATTACHMENT_CAP_BYTES,
   tokenizeMarkdown,
   toWinAnsi,
@@ -27,6 +28,57 @@ describe("tokenizeMarkdown", () => {
 
   it("ignores leading/trailing blank lines", () => {
     expect(tokenizeMarkdown("\n\n# Only\n\n")).toEqual([{ kind: "h1", text: "Only" }]);
+  });
+
+  it("clamps h4-h6 to h3 and accepts `* ` bullets", () => {
+    expect(tokenizeMarkdown("#### Deep\n\n* star bullet")).toEqual([
+      { kind: "h3", text: "Deep" },
+      { kind: "bullet", text: "star bullet" },
+    ]);
+  });
+
+  it("parses numbered list items with their number", () => {
+    expect(tokenizeMarkdown("1. first\n2. second")).toEqual([
+      { kind: "ordered", text: "first", num: 1 },
+      { kind: "ordered", text: "second", num: 2 },
+    ]);
+  });
+
+  it("parses a GitHub pipe table (header + divider + rows)", () => {
+    const md = "| Item | Detail |\n|------|--------|\n| a | 1 |\n| b | 2 |";
+    expect(tokenizeMarkdown(md)).toEqual([
+      {
+        kind: "table",
+        header: ["Item", "Detail"],
+        rows: [
+          ["a", "1"],
+          ["b", "2"],
+        ],
+      },
+    ]);
+  });
+});
+
+describe("inlineRuns", () => {
+  it("splits **bold** into bold runs and strips the markers", () => {
+    expect(inlineRuns("plain **loud** tail")).toEqual([
+      { text: "plain ", bold: false },
+      { text: "loud", bold: true },
+      { text: " tail", bold: false },
+    ]);
+  });
+
+  it("strips stray inline markers so the page never shows raw * or backticks", () => {
+    // a lone `*` and a `code` span leave no literal syntax behind
+    const runs = inlineRuns("a *stray star and `code` here");
+    const rendered = runs.map((r) => r.text).join("");
+    expect(rendered).not.toMatch(/[*`]/);
+    expect(rendered).toBe("a stray star and code here");
+  });
+
+  it("handles __bold__ and drops empty runs", () => {
+    expect(inlineRuns("__x__")).toEqual([{ text: "x", bold: true }]);
+    expect(inlineRuns("**")).toEqual([]);
   });
 });
 
