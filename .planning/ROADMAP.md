@@ -219,14 +219,14 @@ Plans:
   4. User can browse and search their own vault contents.
 **Plans**: 7 plans in 7 waves (Lane C, planned 2026-07-14)
 
-Plans:
-- [ ] 05-01-PLAN.md — vault playbook + watch.json registration + @pikar/vault pure domain (normalize/BFS/fusion/categories/constants) (Wave 1)
-- [ ] 05-02-PLAN.md — schema (vaultDocuments/graphNodes/graphEdges) + single RAG instance + graph-extractor skill 5-file mirror (Wave 2)
-- [ ] 05-03-PLAN.md — graph plane: extractGraph (V8 generateObject) + upsert dedup/degree/GC + hop-capped BFS expand (Wave 3)
-- [ ] 05-04-PLAN.md — ingest workflow (store→embed→extract→ready) + rag.add embed + lifecycle mutations + delete-cascade + §4 redaction scan (Wave 4)
-- [ ] 05-05-PLAN.md — vaultGround hybrid vector+graph retrieval + browse/stats/category-search/signed-download/docEntities read plane (Wave 5)
-- [ ] 05-06-PLAN.md — /dashboard/vault route matching brand-024242/024258 (stat tiles, tabs, dropzone, search, grid/list, preview modal) + nav (Wave 6)
-- [ ] 05-07-PLAN.md — Playwright vault E2E + live smoke:vault + playbook/STATE/ROADMAP close + human-verify (Wave 7)
+Plans: 7/7 executed (Lane C). Phase 5 code-complete; live 1:1 UI verify deferred to /gsd:verify-work (orchestrator owns verify_phase_goal + phase-complete).
+- [x] 05-01-PLAN.md — vault playbook + watch.json registration + @pikar/vault pure domain (normalize/BFS/fusion/categories/constants) (Wave 1)
+- [x] 05-02-PLAN.md — schema (vaultDocuments/graphNodes/graphEdges) + single RAG instance + graph-extractor skill 5-file mirror (Wave 2)
+- [x] 05-03-PLAN.md — graph plane: extractGraph (V8 generateObject) + upsert dedup/degree/GC + hop-capped BFS expand (Wave 3)
+- [x] 05-04-PLAN.md — ingest workflow (store→embed→extract→ready) + rag.add embed + lifecycle mutations + delete-cascade + §4 redaction scan (Wave 4)
+- [x] 05-05-PLAN.md — vaultGround hybrid vector+graph retrieval + browse/stats/category-search/signed-download/docEntities read plane (Wave 5)
+- [x] 05-06-PLAN.md — /dashboard/vault route matching brand-024242/024258 (stat tiles, tabs, dropzone, search, grid/list, preview modal) + nav (Wave 6)
+- [x] 05-07-PLAN.md — Playwright vault E2E + live smoke:vault + playbook/STATE/ROADMAP close + human-verify (Wave 7)
 
 ### Phase 6: Live Voice Sessions
 **Goal**: Users can hold a live strategy conversation with the Executive Agent that safely becomes a durable brief and, optionally, an executable plan â the product's identity feature, isolated from the durable pipeline and cost-metered.
@@ -287,7 +287,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
-| 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
+| 5. Knowledge Vault & GraphRAG | 7/7 | Code-complete (live UI verify deferred) | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
 | 8. Self-Improvement | 0/TBD | Not started | - |
