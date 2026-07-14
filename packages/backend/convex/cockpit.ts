@@ -246,9 +246,15 @@ export const executePlan = tenantMutation({
       const requestId = await ctx.db.insert("requests", {
         tenantId: ctx.tenantId,
         correlationId,
-        goal: subject, // gmail.getForDelivery reads subject := goal ...
+        goal: subject, // gmail.getForDelivery reads subject := goal ... (SHARED subject)
         recipient,
-        draft: body, // ... and body := editedBody ?? draft
+        // ... and body := editedBody ?? draft. Per-recipient personalization (CKPT-03): the
+        // tailored body if this recipient has one, else the shared body. Keyed by the RAW
+        // `recipient` value the loop iterates from plan.recipients — the SAME string
+        // personalizeRecipient wrote (Wave 2), so the lookup can't miss. An orphaned key
+        // (address no longer in recipients) is simply never read (harmless). Group mode's
+        // comma-joined `recipient` misses the address key and falls back to the shared body.
+        draft: (plan.recipientBodies ?? {})[recipient] ?? body,
         status: "approved",
         attachmentRefs, // SAME shared ids for every recipient (one generated document set)
         planId,

@@ -143,6 +143,41 @@ test("the draftBody tool redacts (scanText) BEFORE any model call (GRDL-01/02)",
   );
 });
 
+// ── 03.4-02: per-recipient personalization stays redact-then-draft + content-plane only (§4) ─────
+
+test("the personalizeRecipient tool redacts (scanText) BEFORE any model call (GRDL-01/02, SC2)", () => {
+  const src = readSource("llm.ts");
+  const start = src.indexOf("personalizeRecipient: tool(");
+  expect(start, "personalizeRecipient tool not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("generateAttachment: tool(");
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+  // scanText must appear, and it must precede the draftCockpit sub-call in source order (identical
+  // guardrail to draftBody — redact BEFORE the model, so PII parity is free by construction).
+  const scanAt = block.indexOf("scanText(");
+  const draftAt = block.indexOf("draftCockpit");
+  expect(scanAt, "personalizeRecipient does not call scanText").toBeGreaterThanOrEqual(0);
+  expect(draftAt, "personalizeRecipient does not call draftCockpit").toBeGreaterThanOrEqual(0);
+  expect(scanAt, "scanText must run before draftCockpit (redact-before-model)").toBeLessThan(draftAt);
+});
+
+test("recipientBodies (per-recipient content) never reaches an audit/DLQ/telemetry write (§4, Pitfall 5)", () => {
+  // recipientBodies holds the tailored bodies — content plane, exactly like body/subject/recipients.
+  // It must NEVER appear in a log-plane payload/insert. Scan the model + orchestration + adapter
+  // surfaces (llm.ts / cockpit.ts / plans.ts) for any audit/deadLetters/telemetry write carrying it.
+  for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
+    const src = readSource(file);
+    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+      expect(p, `${file} log payload leaks recipientBodies: ${p}`).not.toMatch(/recipientBodies/);
+    }
+    for (const ins of src.match(
+      /\.insert\(\s*["'](?:audit|deadLetters|telemetry)["'][\s\S]{0,400}?\)/g,
+    ) ?? []) {
+      expect(ins, `${file} log insert leaks recipientBodies`).not.toMatch(/recipientBodies/);
+    }
+  }
+});
+
 test("cockpit's only delivery-audit crossing (workflow.start context payload) carries refs only", () => {
   // executePlan hands a `context.payload` to the fan-out's onComplete audit trail. It MUST be a
   // ref ({ planId }) — never the raw subject/body/recipient/bodyIntent/draft/goal — or the

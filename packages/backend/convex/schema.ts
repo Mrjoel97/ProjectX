@@ -183,6 +183,11 @@ export default defineSchema({
     ),
     pendingValid: v.optional(v.array(v.string())), // same-turn valid addrs awaiting the uniform confirm
     greetingName: v.optional(v.string()), // resolved display name → drafter greeting (survives to draft turn)
+    // Per-recipient body overrides (CKPT-03). Keyed by lowercased ADDRESS → that recipient's
+    // tailored body; a missing key = the shared `body`. Address-keyed (not index) survives
+    // mid-conversation recipient edits; orphan keys filter harmlessly at seed. Optional → no
+    // migration (mirrors attachments/candidates/greetingName). Content-plane ONLY, NEVER audited (§4).
+    recipientBodies: v.optional(v.record(v.string(), v.string())),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),

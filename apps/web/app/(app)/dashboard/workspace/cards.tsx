@@ -149,6 +149,45 @@ function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) 
   );
 }
 
+// The per-recipient body section of the PLAN card (CKPT-03). Personalization is the INVERSE of the
+// attachment fan-out: each recipient can carry a DISTINCT tailored body (recipientBodies[address])
+// while sharing the subject. Read-only (slice 1 — tailoring happens in chat via the agent's
+// personalizeRecipient tool, like DraftCard has no inline editor). When NO recipient has an
+// override the shared PREVIEW already covers the same-content case, so this renders nothing; when
+// any override exists, show each recipient's tailored/shared body so the user sees them BEFORE the
+// single Approve (SC1). ponytail: reuses the existing label/dim/chip/box tokens — no new component.
+function PlanRecipientBodies({ plan }: { plan: Plan }) {
+  const recipients = plan.recipients ?? [];
+  const overrides = plan.recipientBodies ?? {};
+  const sharedBody = plan.body ?? "";
+  // Only surface the breakdown when at least one recipient is actually tailored.
+  if (recipients.length === 0 || Object.keys(overrides).length === 0) return null;
+
+  return (
+    <div style={{ margin: "0.5rem 0" }}>
+      <div style={label}>PER-RECIPIENT BODY</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.5rem" }}>
+        {recipients.map((r) => {
+          const tailored = overrides[r]; // exact-string lookup — same key executePlan seeds with
+          const bodyText = tailored ?? sharedBody;
+          return (
+            <li key={r} style={{ border: "1px solid #e5e5e5", borderRadius: "0.5rem", padding: "0.5rem 0.6rem" }}>
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.3rem" }}>
+                <span style={chip}>{r}</span>
+                <span style={{ ...dim, fontWeight: 700 }}>{tailored ? "tailored" : "shared body"}</span>
+              </div>
+              <p style={{ whiteSpace: "pre-wrap", margin: 0, color: "#444", fontSize: "0.85rem" }}>
+                {bodyText.slice(0, 240)}
+                {bodyText.length > 240 ? "…" : ""}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const [busy, setBusy] = useState(false);
@@ -186,6 +225,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         {body.slice(0, 240)}
         {body.length > 240 ? "…" : ""}
       </p>
+      <PlanRecipientBodies plan={plan} />
       <PlanAttachments plan={plan} threadId={threadId} />
       <ol style={{ margin: "0 0 0.75rem", paddingLeft: "1.25rem", color: "#444" }}>
         <li>Draft the email</li>

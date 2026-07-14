@@ -4,7 +4,7 @@
 // convex-test carries a real storage plane, so store→getUrl round-trips here without a network.
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -79,6 +79,70 @@ describe("attachmentUrls (V5 — tenant-guarded signed download URLs)", () => {
       .query(api.plans.attachmentUrls, { planId });
 
     expect(urls).toEqual([]);
+  });
+});
+
+describe("patchPlan recipientBodies (3.4 — per-recipient body override, content-plane only)", () => {
+  /** Seed a collecting plan with two recipients; return its id. */
+  async function seedPlan(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "collecting",
+        recipients: ["bob@x.com", "amy@x.com"],
+        body: "Shared body.",
+        createdAt: Date.now(),
+      }),
+    );
+  }
+
+  test("patchPlan writes recipientBodies keyed by address; getById reads it back verbatim", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      recipientBodies: { "bob@x.com": "Hi Bob, tailored for you." },
+    });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.recipientBodies).toEqual({ "bob@x.com": "Hi Bob, tailored for you." });
+    expect(plan?.body).toBe("Shared body."); // shared body untouched
+  });
+
+  test("a subject-only patch leaves an existing recipientBodies map untouched (drop-undefined)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      recipientBodies: { "bob@x.com": "Hi Bob." },
+    });
+    // A later patch that carries NO recipientBodies must not clobber the stored map.
+    await t.mutation(internal.plans.patchPlan, { planId, subject: "New subject" });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.subject).toBe("New subject");
+    expect(plan?.recipientBodies).toEqual({ "bob@x.com": "Hi Bob." });
+  });
+
+  test("a second recipientBodies patch replaces the whole map wholesale", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      recipientBodies: { "bob@x.com": "First." },
+    });
+    // Wave 2's tool passes the full merged map — a second write is a wholesale replace.
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      recipientBodies: { "bob@x.com": "First.", "amy@x.com": "Second." },
+    });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.recipientBodies).toEqual({ "bob@x.com": "First.", "amy@x.com": "Second." });
   });
 });
 

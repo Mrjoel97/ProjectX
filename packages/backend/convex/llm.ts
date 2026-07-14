@@ -431,6 +431,11 @@ type PlanRow = {
   greetingName?: string;
   attachments?: Att[];
   attachmentError?: string;
+  recipientBodies?: Record<string, string>; // address → tailored body override (CKPT-03); missing = shared body
+  // NOTE: parked name-resolution `candidates` are NOT declared here on purpose — the model-facing
+  // contract for them lives in buildAgentContext's own param (NAME + count only, §2-D/§4), and
+  // getById returns the full row at runtime so buildAgentContext(plan) reads them. Declaring the
+  // candidate `matches` shape in THIS span would trip the draftCockpit header-hint redaction scan.
 };
 
 /**
@@ -445,11 +450,30 @@ export function buildAgentContext(plan: {
   mode?: "individual" | "group";
   attachments?: { filename: string }[];
   attachmentError?: string;
+  recipientBodies?: Record<string, string>;
+  // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
+  // ONLY the name + matches.length — never a field inside a match (§2-D/§4).
+  candidates?: { name: string; matches: { address: string; displayName?: string }[] }[];
 }): string {
-  const view = buildRecipientView((plan.recipients ?? []).map((address) => ({ address })));
+  const bodies = plan.recipientBodies ?? {};
+  const addrs = plan.recipients ?? [];
+  const view = buildRecipientView(addrs.map((address) => ({ address })));
+  // Align each view row to its address ONLY to look up the personalization flag — the address is
+  // never emitted; the model sees the #index/label and " — personalized" / " — shared body" (§2-D).
   const recipients = view.length
-    ? view.map((r) => `  #${r.index}: ${r.label}`).join("\n")
+    ? view
+        .map((r, i) => {
+          const tailored = addrs[i] && bodies[addrs[i]!] ? " — personalized" : " — shared body";
+          return `  #${r.index}: ${r.label}${tailored}`;
+        })
+        .join("\n")
     : "  (none yet)";
+  // Resolution-in-progress: names searched whose contact the user has NOT yet picked from the
+  // ResolutionCard. Surfacing this (NAME + count ONLY — never a candidate address or hint, §2-D/§4)
+  // keeps the model's view of the shared plan state COMPLETE, so it neither falsely claims a name
+  // is "already added" nor blindly re-resolves — it tells the user to pick from the card. This is
+  // the fix for the agent↔workspace disconnect (a multi-name turn surfaced it in the 3.4 human-verify).
+  const pending = plan.candidates ?? [];
   // Attachments render by #index + filename (content-plane names; no storageId/URL reaches the model).
   const atts = plan.attachments ?? [];
   const attachments = atts.length
@@ -459,6 +483,13 @@ export function buildAgentContext(plan: {
     "Current email plan:",
     "Recipients (reason about these by #index only):",
     recipients,
+    // Only shown when a search is unresolved — the user must pick before these become recipients.
+    ...(pending.length
+      ? [
+          "Awaiting the user's contact pick (NOT yet recipients — tell the user to pick from the card, do NOT claim you added them):",
+          ...pending.map((c) => `  ${c.name}: ${c.matches.length} contact(s) found`),
+        ]
+      : []),
     `Subject: ${plan.subject ?? "(not set)"}`,
     `Body drafted: ${plan.body ? "yes" : "no"}`,
     `Send mode: ${plan.mode ?? "(not set)"}`,
@@ -716,6 +747,49 @@ export function buildCockpitTools(
         return "Body drafted and saved to the plan.";
       },
     }),
+    personalizeRecipient: tool({
+      description:
+        "Tailor the email wording for ONE recipient at the given 1-based #index, from a plain-language instruction. The shared body is unchanged; only that recipient gets the tailored version.",
+      inputSchema: jsonSchema<{ index: number; instructions: string }>({
+        type: "object",
+        properties: {
+          index: { type: "number", description: "1-based #index of the recipient to tailor." },
+          instructions: {
+            type: "string",
+            description: "How this recipient's wording should differ, in plain language.",
+          },
+        },
+        required: ["index", "instructions"],
+        additionalProperties: false,
+      }),
+      execute: async ({ index, instructions }): Promise<string> => {
+        const plan = await readPlan();
+        const recipients = plan.recipients ?? [];
+        const i = index - 1;
+        if (i < 0 || i >= recipients.length)
+          // Out-of-range → refuse; NEVER patch a body onto a non-existent recipient (§2-D).
+          return `Rejected: there is no recipient #${index}. The plan has ${recipients.length}.`;
+        const address = recipients[i]!; // resolved server-side — the model never handles it (§2-D)
+        // Redact BEFORE the drafting model sees anything (GRDL-01/02, CLAUDE.md §4). Fail closed —
+        // the identical guardrail draftBody uses, so PII/cost parity is free by construction (SC2).
+        const scan = scanText(instructions);
+        if (!scan.ok) throw new Error("cockpit: personalize-intent scan failed");
+        const safeText = scan.value.safeText;
+        const draft: { subject: string; body: string } = await ctx.runAction(
+          internal.llm.draftCockpit,
+          { tenantId, safeText, safeTextHash: await contentHash(safeText) },
+          // ponytail: OMIT greetingName — the shared greetingName is pick-#1's name and would open a
+          // DIFFERENT recipient's tailored body with the wrong "Hi <name>,". Let the instructions
+          // carry any greeting intent. Ceiling: a per-recipient greeting map (Pitfall 4).
+        );
+        // Merge, don't replace: spread the existing overrides so tailoring #2 keeps #1's override.
+        // The full merged map is passed — patchPlan replaces recipientBodies wholesale.
+        const next = { ...(plan.recipientBodies ?? {}), [address]: draft.body };
+        await ctx.runMutation(internal.plans.patchPlan, { planId, recipientBodies: next });
+        // Return a LABEL only — never the address or the tailored body (§2-D/§4).
+        return `Tailored the wording for recipient #${index}.`;
+      },
+    }),
     generateAttachment: tool({
       description:
         "Generate a PDF document on the given topic and attach it to the plan. Only after the user asks for (or confirms) an attachment. A render or size failure blocks approval until fixed.",
@@ -829,6 +903,12 @@ export function buildCockpitTools(
         const attachTotal = (plan.attachments ?? []).reduce((s, a) => s + a.size, 0);
         if (exceedsByteCap(attachTotal))
           return "Cannot propose yet — the attachments exceed the size limit. Ask the user to remove one.";
+        // Personalization ⊗ group mode (CKPT-03, locked decision): a group send is ONE combined
+        // email, so a per-recipient tailored body cannot apply. REFUSE (not silently force-individual)
+        // so switching to individual is the user's explicit consent. Facts from the ROW.
+        const hasPersonalization = Object.keys(plan.recipientBodies ?? {}).length > 0;
+        if (hasPersonalization && plan.mode === "group")
+          return "Cannot propose yet — this plan tailors wording per recipient, which requires individual sends (a group send is one combined email). Switch the mode to individual, then propose.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
         await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
@@ -931,6 +1011,7 @@ async function runAgentLoop(
 //   SMOKE::agent::add=a@x.com,b@x.com | resolve=Name | subject=... | mode=individual|group
 //                | body=<intent> | remove=<1-based index> | propose
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
+//                | personalize=<1-based index>:<intent>
 type AgentSmokeOp =
   | { kind: "add"; addresses: string[] }
   | { kind: "resolve"; name: string }
@@ -941,7 +1022,8 @@ type AgentSmokeOp =
   | { kind: "propose" }
   | { kind: "attach"; topic: string }
   | { kind: "regenerate"; index: number; topic: string }
-  | { kind: "removeAttachment"; index: number };
+  | { kind: "removeAttachment"; index: number }
+  | { kind: "personalize"; index: number; instructions: string };
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
@@ -981,6 +1063,12 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
     }
     case "removeAttachment":
       return { kind: "removeAttachment", index: Number(val) };
+    case "personalize": {
+      // <1-based index>:<intent> — split on the FIRST colon (the intent may carry a SMOKE:: prefix).
+      const c = val.indexOf(":");
+      if (c < 0) return null;
+      return { kind: "personalize", index: Number(val.slice(0, c)), instructions: val.slice(c + 1) };
+    }
     default:
       return null;
   }
@@ -1011,6 +1099,11 @@ function runAgentSmokeOp(
       return invokeTool(tools, "regenerateAttachment", { index: op.index, topic: op.topic });
     case "removeAttachment":
       return invokeTool(tools, "removeAttachment", { index: op.index });
+    case "personalize":
+      return invokeTool(tools, "personalizeRecipient", {
+        index: op.index,
+        instructions: op.instructions,
+      });
   }
 }
 
