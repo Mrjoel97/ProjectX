@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 03.5-02-PLAN.md
-last_updated: "2026-07-14T18:54:47.452Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Completed 03.5-03-PLAN.md
+last_updated: "2026-07-14T19:15:06.457Z"
+last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 3: 03.5-03 executed (executePlan scheduler branch + cancel + card surface, SCHD-01/SC3/SC4). Extracted the SOLE workflow.start(deliverApprovedPlan) into startFanout (shared by the immediate approve path AND startScheduledDelivery); a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); startScheduledDelivery fires the SAME fan-out at the moment (awaiting_reauth/DLQ/telemetry free); cancelScheduledPlan CAS-guarded scheduler.cancel + status canceled + refs-only plan.canceled audit (idempotent, tenant-guarded); setPlanSendTime picker writer; cards.tsx datetime-local picker + resolved absolute time/tz + ScheduledCard/CanceledCard + CardList dispatch. cockpit.test/plans.test 23/23 green; web typecheck clean; ONE real workflow.start( in cockpit.ts inside startFanout; refs-only §4 asserted; check-playbooks exit 0. Commits d6734f8/46539b6 (T1), 78613fc/c527a41 (T2), d9c4cd0 (T3). NO code deviations (the naive workflow.start grep proxy over-counts pre-existing unrelated workflows in requests.ts/smoke.ts). Lane A. NEXT: Wave 4 (03.5-04 — cockpit-schedule E2E + smoke + deferred-send human-verify)."
 progress:
   total_phases: 15
   completed_phases: 6
   total_plans: 58
-  completed_plans: 53
+  completed_plans: 54
 ---
 
 ---
@@ -100,6 +100,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 **Current focus:** Phase 3.1 — Cockpit Core (all 5 waves / plans 01–09 executed; ready for /gsd:verify-work)
 
 ## Current Position
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 3 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.5-03 COMPLETE (Wave 3 — the load-bearing structural change: `executePlan` SCHEDULES instead of STARTS on a future send time; SCHD-01/SC3/SC4). BACKEND: the `workflow.start(deliverApprovedPlan)` + status→delivering block was extracted into a module-level `startFanout(ctx, {planId, tenantId, requestIds, correlationIds, planCid})` — the SOLE real `workflow.start(` in cockpit.ts, now shared by BOTH the immediate approve path AND the scheduled callback (NO second call site). After the UNCHANGED seed loop (requests rows frozen AT APPROVE), `executePlan` branches: a FUTURE `plan.sendAt` → `ctx.scheduler.runAt(sendAt, internal.cockpit.startScheduledDelivery, args)` + status `scheduled` + store `scheduledFunctionId` (nothing sends before fire, returns `{ok:true, scheduled:true}`); else immediate `startFanout` (sendAt unset OR ≤ now — byte-identical to today, Open Question 2). `startScheduledDelivery` (internalMutation) fires the SAME frozen fan-out at the moment (a dead token at fire inherits `awaiting_reauth`/DLQ/telemetry FOR FREE, SC4). `cancelScheduledPlan` (tenantMutation) is CAS-guarded on `status==='scheduled'` (else `{alreadyResolved:true}` — the guard that keeps `scheduler.cancel` from throwing on an already-fired id, Pitfall 1) → `scheduler.cancel` → status `canceled` → ONE refs-only `plan.canceled` audit (`payload {planId}` ONLY, insert-only §3/§4); idempotent + tenant-guarded. `plans.setPlanSendTime` (tenantMutation) is the PLAN-card date picker's tenant-guarded writer (undefined clears `sendAt` → immediate). FRONTEND (`cards.tsx`): the PLAN card gained a native `<input type="datetime-local">` bound to `plan.sendAt` (epoch↔local wall-clock via the browser tz — no hand-rolled tz math, Pattern 6) + a "Send immediately" clear + the resolved ABSOLUTE time/tz shown before the single Approve (SC2); `ScheduledCard` ("Scheduled for <abs, tz>" + Cancel, busy no-op) + `CanceledCard`; `CardList` dispatches `scheduled`→ScheduledCard / `canceled`→CanceledCard and suppresses the DraftCard under both (Open Question 3). TESTS: offline fake-timer scheduler (`vi.useFakeTimers` + `t.finishInProgressScheduledFunctions`) — arm→fire, cancel-before-fire (refs-only audit + nothing sent + double-cancel no-op + cross-tenant refused), immediate-path-unchanged, `setPlanSendTime` tenant-guard; `withDelivery()` now ALSO registers the `auditCounts` aggregate so the cancel audit insert runs in-test. Verifies: `cockpit.test`/`plans.test` 23/23 green; web typecheck clean; ONE real `await workflow.start(` in cockpit.ts inside `startFanout` (AST-free count = 1); refs-only §4 asserted (planId present, subject/body/recipient absent); check-playbooks exit 0. cockpit.md §9 Last verified → 03.5-03. Commits d6734f8 (T1 test RED), 46539b6 (T1 feat GREEN startFanout+branch+startScheduledDelivery), 78613fc (T2 test RED), c527a41 (T2 feat GREEN cancel+setPlanSendTime), d9c4cd0 (T3 feat picker+ScheduledCard+playbook). NO code deviations — the plan's naive `git grep -c 'workflow.start('` verify over-counts because the requests pipeline (requests.ts) + the smoke harness (smoke.ts) legitimately start their OWN workflows; the load-bearing invariant (one real workflow.start in cockpit.ts, shared by both approve branches) holds. The runCockpitAgent cold-start timeout flake (matched by the `cockpit` glob) is pre-existing/environmental, NOT a regression. STRUCTURE + cancel + picker/ScheduledCard ONLY — the E2E + smoke + human-verify land in Wave 4. NEXT: Wave 4 (03.5-04 — cockpit-schedule E2E + smoke + deferred-send human-verify: real future send fires, real cancel halts, real dead-token-at-fire → awaiting_reauth).
 
 Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 1 (Lane A worktree, branch lane-a/cockpit-send).
 Plan: 03.5-01 COMPLETE (Wave 1 — the deterministic FOUNDATION for SCHD-01; TWO append-only, no-migration additions; no behavior change to the existing spine). (1) `@pikar/core` `emailIntent.ts` gained the PURE `parseSendTime(text, nowMs, ianaTz)` → `{kind:"resolved";epochMs} | "ambiguous" | "past" | "none"` — the CLIENT injects the trusted clock + IANA zone (the model NEVER supplies "now", §2-D); zone wall-clock↔epoch via `Intl.DateTimeFormat` (no `Date.now`, no dependency — ponytail rung 6/7, NOT chrono-node). Slice-1 grammar: relative "in N hours/minutes"; today/tomorrow/weekday + optional time (09:00 default); a bare PM time ("4pm") resolves today-if-future-else-tomorrow; a bare AM time ("4am") or meridiem-less bare hour ("at 4") with no day → `ambiguous` (RE-ASK, never guess — locked bound 3, reconciling the plan's two behavior examples); a concrete day+time already passed → `past`. Stores ONE absolute epoch ms (Tier-1 rule — never a wall-clock string/tz pair). 34 core cases green (full core 77/77). (2) The `plans` content plane gained `sendAt: v.optional(v.number())` (the ONE deferred-send source of truth, nullable = immediate) + `scheduledFunctionId: v.optional(v.id("_scheduled_functions"))` (cancel handle, mirrors review.ts pendingTimeouts.scheduledId), and the PINNED status union APPENDED `scheduled` (after `approved`) + `canceled` (after `done`) — the hand-maintained `PLAN_STATUS` mirror in plans.ts carries the SAME two literals in the same order (RESEARCH Pitfall 5) or setPlanStatus/patchPlan reject them at runtime. `patchPlan` gained one optional `sendAt`; the drop-undefined handler is UNCHANGED (a subject-only patch preserves a stored `sendAt`). 10 plans cases green. cockpit.md §9 Last verified → 03.5-01; check-playbooks exit 0. Commits 79e6937 (test RED parser), 383b7da (feat GREEN parser), 1e166bd (fix strict-index — the ONE deviation, Rule 1), a205035 (test RED plans), 5c168e3 (feat GREEN schema+plans+playbook). ONE deviation (parseSendTime not clean under `noUncheckedIndexedAccess` — guarded regex-group access; necessary for the "backend source typechecks" done-criterion, no scope creep). Full backend suite 128/132 — the 4 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered + runCockpitAgent×2/cockpitDraft cold-start timeout flakes, proven 8/8 in isolation at `--testTimeout=30000`), NOT regressions (my changes are additive optional fields + a new pure fn; none of those paths touch parseSendTime/sendAt/the status literals). FOUNDATION ONLY — no `setSendTime` tool (Wave 2), no `executePlan` scheduler branch/cancel mutation (Wave 3), no picker/ScheduledCard (Wave 4). NEXT: Wave 2 (03.5-02 — `setSendTime` tool calls parseSendTime + writes `plan.sendAt`; agent Scheduling skill; §4 scan).
@@ -205,6 +208,7 @@ Progress: [█████████░] 94%
 | Phase 03.4 P03 | 37 | 2 tasks | 4 files |
 | Phase 03.5-deferred-send P01 | 16 | 2 tasks | 6 files |
 | Phase 03.5 P02 | 24min | 3 tasks | 9 files |
+| Phase 03.5-deferred-send P03 | 14min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -298,6 +302,8 @@ Recent decisions affecting current work:
 - [Phase 03.5-deferred-send]: parseSendTime: bare PM resolves today-or-tomorrow; bare AM / meridiem-less bare hour with no day → ambiguous (locked bound 3: never guess a day)
 - [Phase 03.5-deferred-send]: Deferred send stores ONE absolute epoch ms (plans.sendAt, nullable=immediate) — never a wall-clock string or tz pair (Tier-1 rule)
 - [Phase 03.5]: setSendTime parses a volunteered NL time with the TRUSTED client's clock+zone (§2-D), never the model's; resolved writes plan.sendAt, ambiguous/past re-ask with no write (SC2)
+- [Phase 03.5-deferred-send]: 03.5-03: startFanout is the SOLE workflow.start(deliverApprovedPlan) call site, shared by the immediate approve path AND startScheduledDelivery — no second call site added
+- [Phase 03.5-deferred-send]: 03.5-03: a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); cancelScheduledPlan is CAS-guarded + refs-only audited
 
 ### Roadmap Evolution
 
@@ -315,8 +321,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T18:53:44.839Z
-Stopped at: Completed 03.5-02-PLAN.md
+Last session: 2026-07-14T19:14:49.212Z
+Stopped at: Completed 03.5-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
