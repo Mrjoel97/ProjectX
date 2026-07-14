@@ -883,6 +883,12 @@ export function buildCockpitTools(
         const attachTotal = (plan.attachments ?? []).reduce((s, a) => s + a.size, 0);
         if (exceedsByteCap(attachTotal))
           return "Cannot propose yet — the attachments exceed the size limit. Ask the user to remove one.";
+        // Personalization ⊗ group mode (CKPT-03, locked decision): a group send is ONE combined
+        // email, so a per-recipient tailored body cannot apply. REFUSE (not silently force-individual)
+        // so switching to individual is the user's explicit consent. Facts from the ROW.
+        const hasPersonalization = Object.keys(plan.recipientBodies ?? {}).length > 0;
+        if (hasPersonalization && plan.mode === "group")
+          return "Cannot propose yet — this plan tailors wording per recipient, which requires individual sends (a group send is one combined email). Switch the mode to individual, then propose.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
         await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
