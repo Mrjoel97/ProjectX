@@ -217,7 +217,16 @@ Plans:
   2. Graphify extracts entities/relationships from vault content at ingestion; the resulting nodes/edges are stored and queryable in Convex `graphNodes`/`graphEdges` tables.
   3. A request is grounded using hybrid retrieval â vector similarity plus hop-capped graph traversal â scoped to only the requesting user's data.
   4. User can browse and search their own vault contents.
-**Plans**: TBD
+**Plans**: 7 plans in 7 waves (Lane C, planned 2026-07-14)
+
+Plans:
+- [ ] 05-01-PLAN.md — vault playbook + watch.json registration + @pikar/vault pure domain (normalize/BFS/fusion/categories/constants) (Wave 1)
+- [ ] 05-02-PLAN.md — schema (vaultDocuments/graphNodes/graphEdges) + single RAG instance + graph-extractor skill 5-file mirror (Wave 2)
+- [ ] 05-03-PLAN.md — graph plane: extractGraph (V8 generateObject) + upsert dedup/degree/GC + hop-capped BFS expand (Wave 3)
+- [ ] 05-04-PLAN.md — ingest workflow (store→embed→extract→ready) + rag.add embed + lifecycle mutations + delete-cascade + §4 redaction scan (Wave 4)
+- [ ] 05-05-PLAN.md — vaultGround hybrid vector+graph retrieval + browse/stats/category-search/signed-download/docEntities read plane (Wave 5)
+- [ ] 05-06-PLAN.md — /dashboard/vault route matching brand-024242/024258 (stat tiles, tabs, dropzone, search, grid/list, preview modal) + nav (Wave 6)
+- [ ] 05-07-PLAN.md — Playwright vault E2E + live smoke:vault + playbook/STATE/ROADMAP close + human-verify (Wave 7)
 
 ### Phase 6: Live Voice Sessions
 **Goal**: Users can hold a live strategy conversation with the Executive Agent that safely becomes a durable brief and, optionally, an executable plan â the product's identity feature, isolated from the durable pipeline and cost-metered.

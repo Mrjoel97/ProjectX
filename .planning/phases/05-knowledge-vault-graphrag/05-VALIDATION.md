@@ -2,7 +2,7 @@
 phase: 5
 slug: knowledge-vault-graphrag
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-14
 ---
@@ -40,30 +40,32 @@ created: 2026-07-14
 
 | Req | Behavior | Wave | Test Type | Automated Command | File Exists | Status |
 |-----|----------|------|-----------|-------------------|-------------|--------|
-| VALT-01 | `vaultUpload` writes `vaultDocuments{status:processing}` + storage + starts ingest workflow; hash-dedup skips re-embed | — | unit (convex-test) | `pnpm --filter @pikar/backend test vault` | ❌ W0 | ⬜ pending |
-| VALT-01 | Real embed via `rag.add` (text-embedding-3-small@1536) → entry searchable | — | live smoke | `pnpm --filter @pikar/backend smoke:vault` | ❌ W0 | ⬜ pending |
-| VALT-02 | `extractGraph` SMOKE:: fixture → `upsertGraph` dedupes same entity across 2 docs to ONE node; degree bookkeeping | — | unit (convex-test) | `pnpm --filter @pikar/backend test vaultGraph` | ❌ W0 | ⬜ pending |
-| VALT-02 | `normalizeName`, BFS traversal, orphan-GC-on-delete correct | — | unit (pure) | `pnpm --filter @pikar/vault test` | ❌ W0 | ⬜ pending |
-| VALT-03 | `vaultGround` SMOKE:: path: vector-seed → graph-expand ≤2 → merge; tenant-scoped (cross-tenant returns nothing) | — | unit (convex-test) + pure fusion | `pnpm --filter @pikar/backend test vaultGround` | ❌ W0 | ⬜ pending |
-| VALT-03 | Live hybrid retrieval returns a real merged context for a seeded corpus | — | live smoke | `pnpm --filter @pikar/backend smoke:vault` | ❌ W0 | ⬜ pending |
-| VALT-04 | Vault route renders 4 stat tiles + 6 tabs + dropzone + search + grid/list; honest-zero empty state; upload→processing→ready reactive; delete cascades | — | E2E (Playwright, SMOKE:: ingest) | `pnpm --filter @pikar/web test vault` | ❌ W0 | ⬜ pending |
-| VALT-04 | Signed-URL download is tenant-guarded (cross-tenant → null) | — | unit (convex-test) | `pnpm --filter @pikar/backend test vault` | ❌ W0 | ⬜ pending |
-| §4 | graph/audit/deadLetter payloads carry NO raw text; only `vaultDocuments.text` + rag chunks hold raw | — | static scan (mirror `llmRedaction.test.ts`) | `pnpm --filter @pikar/backend test vaultRedaction` | ❌ W0 | ⬜ pending |
+| VALT-01 | `vaultUpload` writes `vaultDocuments{status:processing}` + storage + starts ingest workflow; hash-dedup skips re-embed | 4 (Plan 04) | unit (convex-test) | `pnpm --filter @pikar/backend test vault` | ✅ created by 05-04 | ⬜ pending |
+| VALT-01 | Real embed via `rag.add` (text-embedding-3-small@1536) → entry searchable | 7 (Plan 07) | live smoke | `pnpm --filter @pikar/backend smoke:vault` | ✅ created by 05-07 | ⬜ pending |
+| VALT-02 | `extractGraph` SMOKE:: fixture → `upsertGraph` dedupes same entity across 2 docs to ONE node; degree bookkeeping | 3 (Plan 03) | unit (convex-test) | `pnpm --filter @pikar/backend test vaultGraph` | ✅ created by 05-03 | ⬜ pending |
+| VALT-02 | `normalizeName`, BFS traversal, fusion correct (pure); orphan-GC-on-delete correct (convex-test) | 1 (Plan 01) + 4 (Plan 04) | unit (pure) + convex-test | `pnpm --filter @pikar/vault test` ; `pnpm --filter @pikar/backend test vault` | ✅ created by 05-01/05-04 | ⬜ pending |
+| VALT-03 | `vaultGround` SMOKE:: path: vector-seed → graph-expand ≤2 → merge; tenant-scoped (cross-tenant returns nothing) | 5 (Plan 05) | unit (convex-test) + pure fusion | `pnpm --filter @pikar/backend test vaultGround` | ✅ created by 05-05 | ⬜ pending |
+| VALT-03 | Live hybrid retrieval returns a real merged context for a seeded corpus | 7 (Plan 07) | live smoke | `pnpm --filter @pikar/backend smoke:vault` | ✅ created by 05-07 | ⬜ pending |
+| VALT-04 | Vault route renders 4 stat tiles + 6 tabs + dropzone + search + grid/list; honest-zero empty state; upload→processing→ready reactive; delete cascades | 6 (Plan 06) build + 7 (Plan 07) E2E | E2E (Playwright, SMOKE:: ingest) | `pnpm --filter @pikar/web test vault` | ✅ created by 05-07 | ⬜ pending |
+| VALT-04 | Signed-URL download is tenant-guarded (cross-tenant → null) | 5 (Plan 05) | unit (convex-test) | `pnpm --filter @pikar/backend test vault` | ✅ created by 05-05 | ⬜ pending |
+| §4 | graph/audit/deadLetter payloads carry NO raw text; only `vaultDocuments.text` + rag chunks hold raw | 4 (Plan 04) | static scan (mirror `llmRedaction.test.ts`) | `pnpm --filter @pikar/backend test vaultRedaction` | ✅ created by 05-04 | ⬜ pending |
 
-*Wave column filled by the planner once plans/waves are assigned. Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Wave column filled by the planner. Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `packages/vault/` package scaffold + `src/*.test.ts` (normalizeName, BFS traversal, fusion, category mapping) — VALT-02/03
-- [ ] `convex/vault.test.ts` — ingest / hash-dedup / download-guard / delete-cascade (register `workflow` + `rag` components in convex-test) — VALT-01/04
-- [ ] `convex/vaultGraph.test.ts` — upsert dedup + degree bookkeeping + orphan GC — VALT-02
-- [ ] `convex/vaultGround.test.ts` — SMOKE:: hybrid fusion + tenant scope — VALT-03
-- [ ] `convex/vaultRedaction.test.ts` — §4 static scan of the new vault modules
-- [ ] `apps/web/.../vault.spec.ts` — Playwright E2E over a SMOKE:: ingest — VALT-04
-- [ ] `scripts/run-smoke-vault.mjs` + a `smoke:vault` package script — live embed/search/ground gate
-- [ ] `SMOKE::` seam in the extractor + embed/search paths (deterministic offline fixtures, no live model)
+*Nyquist note: this phase has no separate "Wave 0" plan — each plan is test-first and creates its own scaffold in the same wave it lands (pure tests in Plan 01; convex-test files in Plans 03/04/05; the redaction scan in Plan 04; the Playwright spec + live smoke in Plan 07). The mapping below shows which plan creates each missing reference.*
+
+- [ ] `packages/vault/` scaffold + `src/*.test.ts` (normalizeName, BFS traversal, fusion, category mapping) — **Plan 01** — VALT-02/03
+- [ ] `convex/vaultGraph.test.ts` — upsert dedup + degree bookkeeping + orphan GC + BFS scope — **Plan 03** — VALT-02
+- [ ] `convex/vault.test.ts` — ingest / hash-dedup / accept-but-defer / download-guard / delete-cascade (register `workflow` + `rag` components) — **Plan 04/05** — VALT-01/04
+- [ ] `convex/vaultRedaction.test.ts` — §4 static scan of the new vault modules — **Plan 04**
+- [ ] `convex/vaultGround.test.ts` — SMOKE:: hybrid fusion + tenant scope — **Plan 05** — VALT-03
+- [ ] `apps/web/e2e/vault.spec.ts` — Playwright E2E over a SMOKE:: ingest — **Plan 07** — VALT-04
+- [ ] `scripts/run-smoke-vault.mjs` + a `smoke:vault` package script — live embed/search/ground gate — **Plan 07**
+- [ ] `SMOKE::` seam in the extractor (Plan 03) + embed/search paths (Plans 04/05) — deterministic offline fixtures, no live model
 - [ ] No framework install needed (vitest / convex-test / Playwright / workpool devDep all present)
 
 ---
@@ -72,18 +74,18 @@ created: 2026-07-14
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Live embed + hybrid retrieval quality over a real seeded corpus | VALT-01, VALT-03 | Real OpenAI embeddings + RRF ranking can't run in `convex-test` (no network embed); quality is judged, not asserted | Run `smoke:vault` against a live `convex dev` deployment; upload 2–3 briefs, confirm search + `vaultGround` return sensible merged context |
-| Vault UI matches the committed screenshots (`brand-024242/024258`) 1:1 | VALT-04 | Visual fidelity (spacing, tiles, tabs, tokens) is a human judgment beyond Playwright DOM assertions | Open `/dashboard/vault`, compare against the two screenshots; verify stat tiles, 6 tabs, dropzone copy, grid/list, Refresh + Loading pill |
+| Live embed + hybrid retrieval quality over a real seeded corpus | VALT-01, VALT-03 | Real OpenAI embeddings + RRF ranking can't run in `convex-test` (no network embed); quality is judged, not asserted | Run `smoke:vault` against a live `convex dev` deployment (Plan 07); upload 2–3 briefs, confirm search + `vaultGround` return sensible merged context |
+| Vault UI matches the committed screenshots (`brand-024242/024258`) 1:1 | VALT-04 | Visual fidelity (spacing, tiles, tabs, tokens) is a human judgment beyond Playwright DOM assertions | Open `/dashboard/vault` (Plan 07 checkpoint), compare against the two screenshots; verify stat tiles, 6 tabs, dropzone copy, grid/list, Refresh + Loading pill |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 20s (unit path)
-- [ ] `nyquist_compliant: true` set in frontmatter (after planner assigns waves/tasks)
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (mapped to the creating plan)
+- [x] No watch-mode flags
+- [x] Feedback latency < 20s (unit path)
+- [x] `nyquist_compliant: true` set in frontmatter (waves/tasks assigned)
 
-**Approval:** pending
+**Approval:** planner-signed 2026-07-14 (7 plans, 7 waves)
