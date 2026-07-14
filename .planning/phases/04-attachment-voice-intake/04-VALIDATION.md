@@ -48,7 +48,7 @@ planned: 2026-07-14
 | INTK-03 | transcription priced per audio-minute (fail-closed) | 04-03 · T2 | unit (pure) | `pnpm --filter @pikar/cost test` | ⬜ pending |
 | INTK-02/03 | intakeDb upload URL + artifact CRUD round-trip | 04-04 · T1 | convex-test | `pnpm --filter @pikar/backend test -- intake` | ⬜ pending |
 | INTK-02 | extract → **redact** → persist safeText; raw never in audit | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` | ⬜ pending |
-| INTK-02 | fail-closed: `scanText` Err → status=failed, no safeText, no merge | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` (`SMOKE::extract::` + PII-poison) | ⬜ pending |
+| INTK-02 | fail-closed: `scanText` Err → status=failed, no safeText, no merge, + ONE refs-only redaction-failure audit row (OPSG-02) | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` (`SMOKE::extract::` + PII-poison) | ⬜ pending |
 | INTK-02 | cost recorded for extraction call (kill-switch respected) | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` | ⬜ pending |
 | INTK-02 | attachment safeText drives a cockpit turn (merge seam) | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` | ⬜ pending |
 | INTK-03 | dictation transcript → conversation turn like a typed request | 04-04 · T3 | convex-test | `pnpm --filter @pikar/backend test -- intake` (`SMOKE::transcribe::<goal>`) | ⬜ pending |
