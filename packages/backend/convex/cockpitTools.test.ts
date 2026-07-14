@@ -10,6 +10,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { buildAgentContext } from "./llm";
 import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
@@ -237,4 +238,65 @@ test("proposePlan proceeds with a healthy attachment", async () => {
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/proposed/i);
   expect((await readPlan(t, planId))?.status).toBe("proposed");
+});
+
+// ── 03.4-02 Task 1: personalizeRecipient tool + buildAgentContext surfacing (CKPT-03) ──────────
+// Per-recipient body tailoring by 1-based #index. Mirrors draftBody's scan→draftCockpit→patch, but
+// the tailored wording lands in recipientBodies[address] (address resolved server-side, §2-D) —
+// the shared body is UNCHANGED. Out-of-range index bounces without a write; overrides merge.
+
+const PERS = "SMOKE::route=direct_llm::"; // survives redaction → draftCockpit offline path
+
+test("personalizeRecipient tailors ONE recipient into recipientBodies; shared body unchanged", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com", "alice@example.com"] });
+  await call(t, planId, "draftBody", { intent: `${PERS} shared hello` });
+  const shared = (await readPlan(t, planId))?.body;
+  expect(shared).toBeTruthy();
+
+  const res = await call(t, planId, "personalizeRecipient", {
+    index: 1,
+    instructions: `${PERS} make it warmer`,
+  });
+  expect(res).toMatch(/#1/); // a label referencing the index
+  expect(res).not.toContain("@"); // never an address (§2-D)
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipientBodies?.["bob@example.com"]).toBeTruthy(); // override landed for #1
+  expect(plan?.recipientBodies?.["alice@example.com"]).toBeUndefined(); // #2 untouched
+  expect(plan?.body).toBe(shared); // the SHARED body is unchanged
+});
+
+test("personalizeRecipient bounces an out-of-range #index and does NOT patch", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com", "alice@example.com"] });
+
+  const oob = await call(t, planId, "personalizeRecipient", {
+    index: 99,
+    instructions: `${PERS} nope`,
+  });
+  expect(oob).toMatch(/no recipient|reject/i);
+  expect((await readPlan(t, planId))?.recipientBodies ?? {}).toEqual({}); // no write
+});
+
+test("personalizeRecipient merges — tailoring #2 preserves #1's override", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com", "alice@example.com"] });
+
+  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} for bob` });
+  await call(t, planId, "personalizeRecipient", { index: 2, instructions: `${PERS} for alice` });
+
+  const rb = (await readPlan(t, planId))?.recipientBodies ?? {};
+  expect(rb["bob@example.com"]).toBeTruthy(); // #1's override survives the #2 write (merge, not replace)
+  expect(rb["alice@example.com"]).toBeTruthy();
+});
+
+test("buildAgentContext surfaces personalized/shared by #index, never an address (§2-D)", () => {
+  const ctx = buildAgentContext({
+    recipients: ["bob@example.com", "alice@example.com"],
+    recipientBodies: { "bob@example.com": "Hi Bob, warmer wording." },
+  });
+  expect(ctx).toMatch(/#1:.*personalized/); // #1 is flagged personalized
+  expect(ctx).toMatch(/#2:.*shared body/); // #2 falls back to the shared body
+  expect(ctx).not.toContain("@"); // no raw address in the model-facing context
 });
