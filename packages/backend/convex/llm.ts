@@ -587,7 +587,10 @@ export function buildCockpitTools(
           });
           return `I couldn't read the mailbox to look up "${name}". Ask the user for the email address directly.`;
         }
-        const matches = rankCandidates(name, res.records);
+        // The SMOKE:: search sentinel (offline fixture trigger) must not pollute name-matching —
+        // strip it so ranking scores against the real name. Production names never carry it (no-op).
+        const rankName = name.replace(/^SMOKE::(?:[^:]*::)*/, "").trim() || name;
+        const matches = rankCandidates(rankName, res.records);
         if (matches.length === 0)
           // Accuracy: no confident match → say so plainly and ask. NEVER substitute a different
           // contact for the name the user gave (a wrong recipient is a liability, not a convenience).
