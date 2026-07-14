@@ -17,6 +17,7 @@
     "smoke:guardrails": "node ./scripts/run-smoke-guardrails.mjs",
     "smoke:pipeline": "node ./scripts/run-smoke-pipeline.mjs",
     "smoke:reviewgate": "node ./scripts/run-smoke-reviewgate.mjs",
+    "smoke:vault": "node ./scripts/run-smoke-vault.mjs",
     "smoke:worm": "node ./scripts/run-smoke-worm.mjs"
   },
   "dependencies": {
