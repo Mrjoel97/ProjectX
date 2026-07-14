@@ -202,7 +202,12 @@ Plans:
   2. The PLAN card shows the resolved absolute time in the user's timezone before the single Approve; ambiguous times are re-asked, never guessed.
   3. Approve schedules (never immediately starts) the existing `deliverApprovedPlan` fan-out; nothing sends before the scheduled time; audit/telemetry/DLQ paths are reused unchanged.
   4. A scheduled plan is cancellable any time before it fires (halt control), with the cancellation audited; a token dead at fire time lands `awaiting_reauth` + notification exactly like an immediate send.
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 03.5-01-PLAN.md — pure parseSendTime (@pikar/core) + plans schema/status/sendAt foundation (Wave 1)
+- [ ] 03.5-02-PLAN.md — setSendTime tool + clientContext threading + SMOKE sendTime= + §4 scan + cockpit-agent Scheduling skill (Wave 2)
+- [ ] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
+- [ ] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
 
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
