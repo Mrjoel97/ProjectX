@@ -213,6 +213,29 @@ export const getDoc = internalQuery({
   },
 });
 
+/**
+ * Resolve a set of doc ids to their {_id, title, category}, KEEPING ONLY the ones this tenant owns.
+ * The tenant-scope seam shared by the offline grounding SMOKE path (vaultGround) and vaultSearch —
+ * a cross-tenant / missing id silently drops out, mirroring how `namespace = tenantId` would never
+ * surface another tenant's entry (VALT-03 isolation). Carries no raw text (§4).
+ */
+export const ownedDocsMeta = internalQuery({
+  args: { tenantId: v.string(), docIds: v.array(v.id("vaultDocuments")) },
+  handler: async (
+    ctx,
+    { tenantId, docIds },
+  ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string }[]> => {
+    const out: { _id: Id<"vaultDocuments">; title: string; category: string }[] = [];
+    for (const id of docIds) {
+      const doc = await ctx.db.get(id);
+      if (doc && doc.tenantId === tenantId) {
+        out.push({ _id: doc._id, title: doc.title, category: doc.category });
+      }
+    }
+    return out;
+  },
+});
+
 /** Terminal success: the doc is embedded + extracted → groundable. */
 export const markReady = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments"), ragEntryId: v.string() },
