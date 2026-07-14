@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-07-14T16:45:23.038Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 15
+  completed_phases: 5
+  total_plans: 57
+  completed_plans: 52
+  percent: 91
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 05-04-PLAN.md
 last_updated: "2026-07-14T16:27:37.753Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
-  total_phases: 15
+  [█████████░] 91%
   completed_phases: 5
   total_plans: 57
   completed_plans: 51
@@ -133,6 +149,7 @@ Progress: [█████████░] 94%
 | Phase 05 P02 | 9 | 3 tasks | 10 files |
 | Phase 05 P03 | 6 | 2 tasks | 4 files |
 | Phase 05 P04 | 15 | 3 tasks | 6 files |
+| Phase 05 P05 | 9 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -223,6 +240,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-03: getDocText seam in vaultLlm.ts (not vaultGraph) for atomic Task-1 typecheck; expand builds tenant-scoped adjacency via by_tenant_fromNode prefix + pure bfsNeighbors
 - [Phase 05]: Vault ingest embeds redacted safeText; embedding cost priced at 0 (negligible vs graph-extract)
 - [Phase 05]: Ingest is a durable workflow started ONLY by vault.ts mutations; preCall governed stop marks row failed, never DLQ
+- [Phase 05]: vaultGround SMOKE seeds resolve through tenant-scoped ownedDocsMeta so the offline path enforces the same cross-tenant isolation as namespace=tenantId (VALT-03)
+- [Phase 05]: vaultGround returns @pikar/vault fuse FusionResult verbatim; vaultSearch reuses the same rag.search hybrid primitive post-filtered to a category (one surface, two callers)
 
 ### Roadmap Evolution
 
@@ -240,8 +259,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T16:27:37.079Z
-Stopped at: Completed 05-04-PLAN.md
+Last session: 2026-07-14T16:45:22.443Z
+Stopped at: Completed 05-05-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
