@@ -73,6 +73,13 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **IMPR-02**: Feedback threshold breach triggers the autonomous prompt-optimization loop, gated by automated eval checks, with one-click rollback and a kill switch
 - [ ] **IMPR-03**: Prompts are versioned; every optimization records before/after versions and the triggering evidence
 
+### Agent Evaluation
+
+*Added 2026-07-14 from the agent-eval-gate design (`.planning/design/agent-eval-gate.md`). Pulls the eval substrate ahead of Phase 8 so agent-skill activations stop being blind; IMPR-02's optimizer later plugs into this harness instead of building its own.*
+
+- [ ] **EVAL-01**: A golden set of scripted cockpit conversations runs on demand against the live model and asserts on resulting plan/tool state (never reply text), with a hard cost cap and zero possibility of a real send; activating a never-before-active version of a gated agent skill requires a recorded passing eval run (evidence on the skill row, refs/counts only), while rollback to a previously-active version is structurally exempt and always works
+- [ ] **EVAL-02**: Production eval signals — approve/edit/reject rates, regenerate count, fallback count, DLQ rate, cost per delivered plan — are readable on the ops page from existing telemetry/audit data, with no new write paths
+
 ### Governance & Operations
 
 - [x] **OPSG-01**: Per-request telemetry captures tokens, cost, duration, decision/retry counters, and review outcome
@@ -164,6 +171,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IMPR-01 | Phase 8 | Pending |
 | IMPR-02 | Phase 8 | Pending |
 | IMPR-03 | Phase 8 | Pending |
+| EVAL-01 | Phase 3.6 | Pending |
+| EVAL-02 | Phase 3.6 | Pending |
 | OPSG-01 | Phase 2 | Complete |
 | OPSG-02 | Phase 1 | Complete |
 | OPSG-03 | Phase 7 | Pending |
@@ -179,10 +188,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
-- v1 requirements: **44 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send)
-- Mapped to phases: 44
+- v1 requirements: **46 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6)
+- Mapped to phases: 46
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44*
+*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46*

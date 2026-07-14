@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
+- [ ] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
@@ -198,6 +199,18 @@ Plans:
   4. A scheduled plan is cancellable any time before it fires (halt control), with the cancellation audited; a token dead at fire time lands `awaiting_reauth` + notification exactly like an immediate send.
 **Plans**: TBD
 
+### Phase 3.6: Agent Eval Gate (INSERTED)
+**Goal**: Agent behavior changes stop being blind — a golden set of scripted conversations evaluates every new agent-skill version against the live model before it can be activated, and the production eval signals already being written (review outcomes, regenerate/fallback counts, DLQ rate, cost) become readable on the ops page; this is the continuous-evaluation ring between the mock-model CI tests (Phase 3.2.1) and SkillOpt (Phase 8), which plugs into this harness instead of building its own.
+**Depends on**: Phase 3.2.1 (agent tool-loop + SMOKE harness); Phase 3.3 (attachment tools in golden-set scope)
+**Requirements**: EVAL-01, EVAL-02 (minted 2026-07-14)
+**Design**: `.planning/design/agent-eval-gate.md`
+**Success Criteria** (what must be TRUE):
+  1. A golden set of scripted cockpit conversations (fixtures, ~15–25 cases incl. edit, bounce, attachment, and injection-probe paths) runs on demand against the live model via `pnpm eval:golden`, asserting on resulting plan/tool state (never reply text), with a hard per-run cost cap and zero possibility of a real send or mailbox read.
+  2. `activateSkill` refuses to activate a never-before-active (candidate) version of a gated skill without a recorded passing eval run (evidence ref on the skill row, refs/counts only); re-activating a previously-active version (rollback) is structurally exempt and always works.
+  3. The ops page shows production eval signals — approve/edit/reject rates, regenerate count, fallback count, DLQ rate, cost per delivered plan — from existing telemetry/audit data, with no new write paths.
+  4. The legacy `executive-agent.classifier` skill row is archived, and the agent-runtime playbook's "no live-model eval gate" gap is closed (playbook updated in the same phase).
+**Plans**: TBD (suggested 3 plans / 2 waves — see the design record)
+
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
 **Depends on**: Phase 2 (pipeline); guardrails from Phase 3 apply to enriched context
@@ -265,7 +278,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â 3.3 â 3.4 â 4 â 5 â 6 â 7 â 8 â 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -277,6 +290,8 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
+| 3.5 Deferred Send (INSERTED) | 0/TBD | Not started | - |
+| 3.6 Agent Eval Gate (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
