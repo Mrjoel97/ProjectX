@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Completed 05-07-PLAN.md (Phase 5 all 7 plans executed; live UI verify deferred to /gsd:verify-work)"
-last_updated: "2026-07-14T19:07:51.319Z"
-last_activity: "2026-07-14 — Phase 5 Wave 7: 05-07 executed (vault E2E + live smoke:vault gate + playbook close). Task-3 human-verify APPROVED from automated evidence; live 1:1 UI check DEFERRED to /gsd:verify-work. Phase 5 all 7 plans executed — orchestrator owns verify_phase_goal + phase-complete."
+stopped_at: "Phase 5 COMPLETE + LIVE-VERIFIED. 05-07 executed; then a real-user browser human-verify (Claude-in-Chrome) confirmed the vault route 1:1 + a Brain Dump ingesting end-to-end to `ready` with correct entity extraction. The live run caught + FIXED a P0 (fix 05a7ed6): vaultRag passed a spec-v4 embedding model to RAG's ai@6 → AI_UnsupportedModelVersionError → ingest hung; replaced with a v2 openaiEmbeddingV2 REST adapter + static guard. Also noted: ingest needs skills:seedSkills run against the deployment."
+last_updated: "2026-07-14T21:00:00.000Z"
+last_activity: "2026-07-14 — Phase 5 LIVE-VERIFIED in-browser (real user via Claude-in-Chrome, worktree functions deployed to the shared local backend over self-hosted HTTP, web on :3000). Vault renders 1:1 (brand-024242/258); a pasted Brain Dump ingested embed→graph-extract→ready and the preview modal surfaced Meridian Health/CareLink/Vantage Systems (org) + Alan Ford/Nina Osei (person) + a `led by` relationship. Caught+fixed P0 05a7ed6 (v4→v2 embedding adapter; the offline SMOKE suite bypassed the real embed so unit tests stayed green while runtime ingest was broken). Deployment blocker + the fix captured in memory/ + docs/playbooks/vault.md (Last verified → 05-07b)."
 progress:
   total_phases: 15
   completed_phases: 6
