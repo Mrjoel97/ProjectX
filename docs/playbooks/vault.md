@@ -1,6 +1,7 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 05-04 — the durable ingest spine landed: `vault.ts` (tenant `vaultIngestText`/`vaultUpload` hash-dedup + accept-but-defer + `deleteVaultDoc` cascade/orphan-GC; internal `getDoc`/`markReady`/`markFailed`), `vaultIngest.ts` (`workflow.define` store→embed→extract→upsertGraph→recordSpend→ready with a `preCall` gate), and `vaultRag.embedDoc` (rag.add + hash dedup + `SMOKE::` bypass), covered by `vault.test.ts` + the `vaultRedaction.test.ts` §4 static scan
+> Last verified: 05-05 — the READ plane landed: `vaultGround.ts` (`vaultGround` tenantAction — `rag.search` hybrid seeds → map entries to docIds → hop-capped `expand` → `fuse`, `namespace=tenantId` + tenant-scoped expand isolation, `SMOKE::<docId,…>` offline seam via `ownedDocsMeta`) and the `vault.ts` read surfaces (`listVaultDocs`/`vaultStats`/`vaultDownloadUrl` bearer-capability guard/`docEntities`/`vaultSearch` — the same `rag.search` hybrid primitive post-filtered to a category), covered by `vaultGround.test.ts`
+> Prior: 05-04 — the durable ingest spine: `vault.ts` (tenant `vaultIngestText`/`vaultUpload` hash-dedup + accept-but-defer + `deleteVaultDoc` cascade/orphan-GC; internal `getDoc`/`markReady`/`markFailed`), `vaultIngest.ts` (`workflow.define` store→embed→extract→upsertGraph→recordSpend→ready with a `preCall` gate), and `vaultRag.embedDoc` (rag.add + hash dedup + `SMOKE::` bypass), covered by `vault.test.ts` + the `vaultRedaction.test.ts` §4 static scan
 > Prior: 05-03 — the graph plane: `vaultLlm.ts` (V8 `extractGraph` — redact-then-extract + registry prompt + `SMOKE::graph::` seam) and `vaultGraph.ts` (`upsertGraph` cross-doc dedup + degree; `expand` hop-capped tenant-scoped BFS over `bfsNeighbors`)
 > Build history: `.planning/phases/05-knowledge-vault-graphrag/` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
@@ -19,7 +20,7 @@ bespoke Convex graph plane (`graphNodes`/`graphEdges`), with domain logic in the
 
 Pure packages:
 - `packages/vault/src/normalize.ts` — `normalizeName` (case/whitespace collapse → cross-doc dedup key).
-- `packages/vault/src/categories.ts` — `categoryFor(source, mimeType)` (→ one of 6 vault categories), `isSearchable(mimeType)` (Phase-5 searchable set TXT/MD/CSV).
+- `packages/vault/src/categories.ts` — `categoryFor(source, mimeType)` (→ one of 6 vault categories), `isSearchable(mimeType)` (Phase-5 searchable set TXT/MD/CSV), `VAULT_CATEGORIES` (the fixed-6 runtime tuple → the `vaultStats.categories` count + UI tabs).
 - `packages/vault/src/traversal.ts` — `bfsNeighbors(adjacency, seeds, hopCap)` (pure hop-capped BFS, no Convex import).
 - `packages/vault/src/fusion.ts` — `fuse(...)` vector-seed + graph-expand merge/dedupe/rank.
 - `packages/vault/src/constants.ts` — `VAULT_FILE_CAP_BYTES`, `GRAPH_HOP_CAP` (= 2).
@@ -30,9 +31,9 @@ Backend adapters (thin):
 - `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
 - `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
 - `packages/backend/convex/vaultRag.embedDoc` (05-04) — the ingest embed step: reads the doc via `internal.vault.getDoc`, `scanText` fail-closed BEFORE `rag.add`, hash-dedups on `(namespace=tenantId, key=contentHash)`, `SMOKE::` bypass (no network). Returns `{entryId, costUsd}`.
-- `packages/backend/convex/vault.ts` (05-04) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), and the internal lifecycle (`getDoc`/`markReady`/`markFailed`). SOLE starter of the ingest workflow.
+- `packages/backend/convex/vault.ts` (05-04/05-05) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), the internal lifecycle (`getDoc`/`markReady`/`markFailed`), and (05-05) the READ plane: `listVaultDocs`/`vaultStats` (cheap, no vectors), `vaultDownloadUrl` (owner-only signed URL, bearer capability, never logged §4), `docEntities` (owner-guarded per-doc nodes/edges), `vaultSearch` (the `rag.search` hybrid primitive post-filtered to a category), and `ownedDocsMeta` (the tenant-scope resolve seam shared by grounding + search). SOLE starter of the ingest workflow.
 - `packages/backend/convex/vaultIngest.ts` (05-04) — `ingestDoc = workflow.define(...)`: `preCall` gate (governed stop → `markFailed`, never a DLQ throw) → `embedDoc` → `extractGraph` → `upsertGraph` → `recordSpend` → `markReady`.
-- `packages/backend/convex/vaultGround.ts` — thin Convex orchestration over `@pikar/vault` + rag + workflow (later plan).
+- `packages/backend/convex/vaultGround.ts` (05-05) — the standalone grounding action `vaultGround({query})`: `rag.search` hybrid seeds → map entries to `vaultDocuments` ids → hop-capped `internal.vaultGraph.expand` → `fuse` merge/dedupe/rank → one context block. `namespace=tenantId` + tenant-scoped expand = a different tenant's corpus never enters. `SMOKE::<docId,…>` offline seam resolves seeds through the tenant-scoped `ownedDocsMeta` (no embedding call). Cockpit/pipeline call-site DEFERRED (Lane A).
 
 Frontend (later plans):
 - `apps/web/app/(app)/dashboard/vault/` — the Knowledge Vault route + components (match the brand screenshots 1:1).
@@ -74,7 +75,7 @@ Run `graphify query "vault"` for the current subgraph. Couplings graphify cannot
 
 - `pnpm --filter @pikar/vault test` — pure-domain tests (normalize, categories, traversal, fusion).
 - `pnpm --filter @pikar/vault typecheck` — clean.
-- `pnpm --filter @pikar/backend test vault` — the Convex adapter tests (later plans).
+- `pnpm --filter @pikar/backend test vault vaultGround` — the Convex adapter tests: ingest/dedup/cascade + the read plane (grounding fusion, hop-cap, cross-tenant isolation, browse/stats/download-guard/docEntities/category-search).
 - `smoke:vault` — the live-deployment ingest→ground phase gate (later plans).
 - The Playwright vault spec — the browse/search/preview/download UI (later plans).
 

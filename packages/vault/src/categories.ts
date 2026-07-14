@@ -7,6 +7,16 @@ export type VaultCategory =
   | "videos"
   | "google-docs";
 
+/** The 6 vault categories as a runtime tuple (single source of truth for the count + UI tabs). */
+export const VAULT_CATEGORIES = [
+  "my-uploads",
+  "brain-dumps",
+  "workspace-docs",
+  "images",
+  "videos",
+  "google-docs",
+] as const satisfies readonly VaultCategory[];
+
 /** Where a vault item came from. */
 export type VaultSource = "upload" | "paste" | "agent" | "google";
 
