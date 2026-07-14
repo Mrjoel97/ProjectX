@@ -116,6 +116,9 @@ importers:
       '@pikar/cost':
         specifier: workspace:*
         version: link:../cost
+      '@pikar/extraction':
+        specifier: workspace:*
+        version: link:../extraction
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
