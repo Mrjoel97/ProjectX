@@ -140,3 +140,31 @@ export function ListIcon({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function XIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+export function DownloadIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M12 3v12" />
+      <path d="M8 11l4 4 4-4" />
+      <path d="M4 19h16" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2" />
+      <path d="M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12" />
+    </svg>
+  );
+}

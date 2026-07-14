@@ -4,9 +4,10 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { CategoryTabs } from "./CategoryTabs";
-import { DocGrid } from "./DocGrid";
+import { DocGrid, type VaultDoc } from "./DocGrid";
 import { Dropzone } from "./Dropzone";
 import { RefreshIcon } from "./icons";
+import { PreviewModal } from "./PreviewModal";
 import { VaultStats } from "./VaultStats";
 
 // The Knowledge Vault route (VALT-04) — matches brand-024242 / brand-024258 1:1: the "Knowledge
@@ -55,6 +56,9 @@ function VaultBody({
   const stats = useQuery(api.vault.vaultStats);
   const docs = useQuery(api.vault.listVaultDocs, { category });
   const loading = stats === undefined || docs === undefined;
+
+  // The selected doc opens the in-place preview modal (Task 3) — not a route change.
+  const [selected, setSelected] = useState<VaultDoc | null>(null);
 
   return (
     <>
@@ -117,7 +121,9 @@ function VaultBody({
 
       <Dropzone />
 
-      <DocGrid docs={docs ?? []} category={category} />
+      <DocGrid docs={docs ?? []} category={category} onOpen={setSelected} />
+
+      {selected && <PreviewModal doc={selected} onClose={() => setSelected(null)} />}
     </>
   );
 }

@@ -32,7 +32,7 @@ function statusBadge(status: string): { bg: string; fg: string; label: string } 
 }
 
 const MB = 1024 * 1024;
-function fmtSize(n: number): string {
+export function fmtSize(n: number): string {
   if (n >= MB) return `${(n / MB).toFixed(1)} MB`;
   if (n >= 1024) return `${Math.round(n / 1024)} KB`;
   return `${n} B`;
