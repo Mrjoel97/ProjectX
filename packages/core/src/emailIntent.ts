@@ -289,7 +289,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
   const rel = t.match(/\bin\s+(\d+)\s*(hours?|hrs?|minutes?|mins?)\b/);
   if (rel) {
     const n = Number(rel[1]);
-    const ms = /^h/.test(rel[2]) ? n * 3_600_000 : n * 60_000;
+    const ms = /^h/.test(rel[2] ?? "") ? n * 3_600_000 : n * 60_000;
     const epochMs = nowMs + ms;
     return epochMs <= nowMs + SEND_TIME_EPSILON_MS ? { kind: "past" } : { kind: "resolved", epochMs };
   }
@@ -301,9 +301,10 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
   else if (/\btomorrow\b/.test(t)) anchor = "tomorrow";
   else {
     const wd = t.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
-    if (wd) {
+    const name = wd?.[1];
+    if (name) {
       anchor = "weekday";
-      weekdayDow = WEEKDAYS[wd[1]];
+      weekdayDow = WEEKDAYS[name] ?? -1;
     }
   }
 
