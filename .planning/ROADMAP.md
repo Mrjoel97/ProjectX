@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.1: Cockpit Core** (INSERTED) - Two-pane chat cockpit: guided slot-filling conversation â single plan-approval â hands-off multi-recipient governed send â live per-recipient report; reuses the Phase 2 engine, retires the /submit form + /review queue
 - [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
 - [x] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) â 2026-07-13 - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
-- [ ] **Phase 3.3: Attachment Generation** (INSERTED) - Agent generates a document and attaches it to an outgoing email
+- [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
@@ -175,7 +175,7 @@ Plans:
 - [x] 03.3-03-PLAN.md — multipart buildMime + send loads storage bytes + getForDelivery resolves refs (Wave 1)
 - [x] 03.3-04-PLAN.md — generate/regenerate/remove attachment tools + proposePlan cap/render gate + SMOKE ops (Wave 2)
 - [x] 03.3-05-PLAN.md — executePlan fan-out propagation + PLAN/REPORT card attachment rows (Wave 3)
-- [ ] 03.3-06-PLAN.md — smoke:fanout/guardrails + cockpit-attachment E2E + human-verify + playbook close (Wave 4)
+- [x] 03.3-06-PLAN.md — smoke:fanout/guardrails + cockpit-attachment E2E + human-verify + playbook close (Wave 4) — 2026-07-14
 
 ### Phase 3.4: Per-Recipient Personalization (INSERTED)
 **Goal**: A multi-recipient send can tailor wording per recipient, moving beyond slice-1 same-content-to-all while keeping the single plan-approval gate.
@@ -275,7 +275,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.1 Cockpit Core (INSERTED) | 8/9 | In Progress (Waves 1â4 done; Wave 5 E2E + human checkpoint next) | 2026-07-12 |
 | 3.2 Inbox Reading (INSERTED) | 6/6 | Complete | 2026-07-12 |
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
-| 3.3 Attachment Generation (INSERTED) | 5/6 | In Progress | - |
+| 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
