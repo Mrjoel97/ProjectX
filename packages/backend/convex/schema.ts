@@ -266,4 +266,33 @@ export default defineSchema({
     tenantId: v.string(),
     label: v.string(),
   }).index("by_tenant", ["tenantId"]),
+
+  // ── Phase-4 inbound intake plane (Lane B) ────────────────────────────
+  // INBOUND ingestion — distinct from OUTBOUND plans.attachments (CKPT-02) and the
+  // request-scoped `attachments` table. Thread-scoped: ingestion happens DURING the
+  // cockpit conversation, before any request/plan exists. `extracted` holds REDACTED
+  // safeText only (never raw); raw bytes live in _storage, referenced by storageId.
+  intakeArtifacts: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(),
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    kind: v.union(
+      v.literal("image"),
+      v.literal("pdf"),
+      v.literal("audio"),
+      v.literal("document"),
+      v.literal("unknown"),
+    ),
+    status: v.union(
+      v.literal("uploaded"),
+      v.literal("extracting"),
+      v.literal("extracted"),
+      v.literal("failed"),
+    ),
+    extracted: v.optional(v.string()), // REDACTED safeText (content plane; §4 keeps it out of audit)
+    createdAt: v.number(),
+  }).index("by_thread", ["tenantId", "threadId"]),
 });

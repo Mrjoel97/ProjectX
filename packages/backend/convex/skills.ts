@@ -7,6 +7,7 @@
 // patched (only `status` and `evidence` may change).
 
 import {
+  ATTACHMENT_EXTRACTOR_SKILL,
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
@@ -16,6 +17,7 @@ import {
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
 } from "@pikar/contracts/skill";
+import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
@@ -100,6 +102,7 @@ export const seedSkills = internalMutation({
       { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
       { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
       { name: DOCUMENT_DRAFTER_SKILL, body: documentDrafterSkillBody },
+      { name: ATTACHMENT_EXTRACTOR_SKILL, body: attachmentExtractorSkillBody },
     ];
 
     for (const { name, body } of seeds) {

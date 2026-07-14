@@ -43,6 +43,19 @@ export function priceUsage(
   return estimateCostUsd(model, usage.inputTokens ?? 0, usage.outputTokens ?? 0);
 }
 
+// gpt-4o-transcribe per-audio-minute pricing (OpenAI published rate, verified 2026-07-14).
+export const TRANSCRIPTION_PRICING: { perMinuteUsd: number } = { perMinuteUsd: 0.006 };
+
+/** INTK-03: prices audio transcription per-audio-minute (billed in whole minutes,
+ *  rounded up — matches OpenAI's per-minute billing). Fail-closed: non-finite or
+ *  negative seconds → Err (never NaN/throw), so recordSpend can never silently
+ *  under-count and bypass the kill switch (Pitfall 5). */
+export function priceTranscription(seconds: number): Result<number, CostError> {
+  if (!Number.isFinite(seconds) || seconds < 0) return err({ code: "over_budget" });
+  const minutes = Math.ceil(seconds / 60);
+  return ok(minutes * TRANSCRIPTION_PRICING.perMinuteUsd);
+}
+
 /** GRDL-03: default model if it fits budgetUsdPerRequest; else downgrade to CHEAP_MODEL;
  *  else Err over_budget. Any unknown-model Err propagates (fail closed). Accepts SafeText
  *  ONLY — cost is always estimated from redacted text (GRDL-02/03). */

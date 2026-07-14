@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
+  TRANSCRIPTION_PRICING,
   chooseModel,
   estimateCostUsd,
   estimateTokens,
+  priceTranscription,
   priceUsage,
 } from "./cost";
 
@@ -71,5 +73,36 @@ describe("chooseModel", () => {
   it("NaN / negative budget → over_budget (fail closed)", () => {
     expect(chooseModel(safe, Number.NaN).ok).toBe(false);
     expect(chooseModel(safe, -1).ok).toBe(false);
+  });
+});
+
+describe("priceTranscription", () => {
+  it("0 seconds → ok(0), no charge for the minimum billable", () => {
+    const r = priceTranscription(0);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toBe(0);
+  });
+  it("30s (partial minute) → ok(1 minute rate) — bills per-minute rounded up", () => {
+    const r = priceTranscription(30);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toBeCloseTo(TRANSCRIPTION_PRICING.perMinuteUsd, 10);
+  });
+  it("90s → ok(2 * rate) — ceil(90/60) = 2 minutes", () => {
+    const r = priceTranscription(90);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toBeCloseTo(TRANSCRIPTION_PRICING.perMinuteUsd * 2, 10);
+  });
+  it("negative seconds → err (fail closed)", () => {
+    const r = priceTranscription(-1);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("over_budget");
+  });
+  it("NaN seconds → err, never NaN (fail closed)", () => {
+    const r = priceTranscription(Number.NaN);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("over_budget");
+  });
+  it("Infinity seconds → err (fail closed, non-finite)", () => {
+    expect(priceTranscription(Number.POSITIVE_INFINITY).ok).toBe(false);
   });
 });

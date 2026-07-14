@@ -116,6 +116,9 @@ importers:
       '@pikar/cost':
         specifier: workspace:*
         version: link:../cost
+      '@pikar/extraction':
+        specifier: workspace:*
+        version: link:../extraction
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
@@ -176,6 +179,12 @@ importers:
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
+  packages/extraction:
     devDependencies:
       vitest:
         specifier: 3.2.7
