@@ -4,33 +4,44 @@ import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
 import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
-import { ArrowIcon } from "../../../(auth)/icons";
+import {
+  BoltIcon,
+  BrainIcon,
+  ChevronDownIcon,
+  MicIcon,
+  SendIcon,
+  UserIcon,
+} from "../../../(auth)/icons";
 import { AttachmentPicker, type UploadedAttachment } from "../../_components/AttachmentPicker";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
 // copy are saved assistant turns on the agent thread (cockpit.ts is deterministic — the thread
 // is a message store, the LLM only drafts the body), surfaced here via @convex-dev/agent/react
 // `useThreadMessages` bound to the active threadId. The composer calls `sendCockpitMessage`
-// (tenantAction → { threadId }); the first send mints the thread and lifts its id to the page so
-// this pane and the cards share it. Convex reactivity refreshes the list — no polling.
+// (tenantAction → { threadId }); the first send mints the thread and lifts its id + label to
+// the page so this pane, the tab strip, and the cards share it. Convex reactivity refreshes
+// the list — no polling.
 //
-// Bubbles follow BRAND.md §5 (brand-024149): user = teal-900 fill, white text, right-aligned;
-// agent = white card, ink text, left-aligned. The composer is a rounded card with a circular
-// teal Send; the "can make mistakes" disclaimer below it is brand-mandated (§1).
+// Chrome replicates brand-024149: agent turns get the gradient avatar + "Pikar AI" name label
+// and a white card bubble; user turns get the teal-900 bubble, person avatar, and a hover Copy
+// chip. The composer is one rounded card — "Auto" model pill, brain/attach/mic icons, circular
+// teal Send — with the brand-mandated §1 disclaimer below. Enter-to-send unchanged (the e2e
+// path). Model pill / brain / mic are disabled until their capabilities exist (their titles
+// say so) — routing is genuinely automatic today.
 //
 // ponytail: static message list (non-streaming). Token-by-token rendering is a later upgrade to
 // `useUIMessages` + a `syncStreams` query (research §4) — the deterministic control here has no
 // streaming model to render, so the list is the right ceiling for slice 1.
 
 const bubble = (mine: boolean) => ({
-  alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
-  maxWidth: "85%",
   padding: "0.6rem 0.85rem",
   borderRadius: mine ? "1rem 1rem 0.25rem 1rem" : "1rem 1rem 1rem 0.25rem",
   background: mine ? "var(--teal-900)" : "var(--card)",
   color: mine ? "#fff" : "var(--ink)",
   border: mine ? "none" : "1px solid var(--rule)",
-  boxShadow: mine ? "none" : "0 8px 24px -20px rgb(14 20 25 / 45%)",
+  boxShadow: mine
+    ? "0 10px 24px -16px rgb(11 79 74 / 70%)"
+    : "0 8px 24px -20px rgb(14 20 25 / 45%)",
   whiteSpace: "pre-wrap" as const,
 });
 
@@ -45,7 +56,13 @@ function messageText(content: unknown): string {
   return "";
 }
 
-export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: (id: string) => void }) {
+export function ChatPane({
+  threadId,
+  onThread,
+}: {
+  threadId?: string;
+  onThread: (id: string, firstText: string) => void;
+}) {
   const send = useAction(api.cockpit.sendCockpitMessage);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
@@ -76,7 +93,7 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
     setBusy(true);
     try {
       const res = await send({ threadId, text: t });
-      if (!threadId) onThread(res.threadId);
+      if (!threadId) onThread(res.threadId, t);
       setText("");
     } finally {
       setBusy(false);
@@ -89,31 +106,59 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "0.75rem" }}>
       {/* Message list */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.7rem" }}>
         {loading ? (
           <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
         ) : empty ? (
           <p style={{ color: "var(--ink-soft)", margin: 0 }}>Tell me who to email and what to say.</p>
         ) : (
-          messages.results.map((m) => (
-            <div key={m.key} data-testid="chat-message" style={bubble(m.message?.role === "user")}>
-              {messageText(m.message?.content)}
-            </div>
-          ))
+          messages.results.map((m) => {
+            const mine = m.message?.role === "user";
+            const body = messageText(m.message?.content);
+            return (
+              <div key={m.key} className={`msg-row${mine ? " is-user" : ""}`}>
+                {!mine && (
+                  <span className="msg-avatar agent" aria-hidden="true">
+                    <BrainIcon size={14} />
+                  </span>
+                )}
+                <div className="msg-col">
+                  {!mine && <span className="msg-name">Pikar AI</span>}
+                  <div className="bubble-wrap">
+                    <div data-testid="chat-message" style={bubble(mine)}>
+                      {body}
+                    </div>
+                    {mine && (
+                      <button
+                        type="button"
+                        className="msg-copy"
+                        onClick={() => void navigator.clipboard?.writeText(body)}
+                      >
+                        Copy
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {mine && (
+                  <span className="msg-avatar user" aria-hidden="true">
+                    <UserIcon size={14} />
+                  </span>
+                )}
+              </div>
+            );
+          })
         )}
-        {activity && (
-          <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", fontStyle: "italic" }}>{activity}</div>
-        )}
+        {activity && <div className="trace-line">{activity}</div>}
       </div>
 
-      {/* Composer — one rounded card: textarea + attach row + circular teal Send */}
+      {/* Composer — one rounded glass card: textarea, then Auto pill + brain/attach/mic + Send */}
       <div style={{ display: "grid", gap: "0.4rem" }}>
         <div
           style={{
             border: "1px solid var(--rule)",
             borderRadius: "1rem",
             padding: "0.6rem 0.75rem",
-            background: "var(--card)",
+            background: "rgb(255 255 255 / 88%)",
             boxShadow: "0 10px 30px -24px rgb(14 20 25 / 45%)",
             display: "grid",
             gap: "0.5rem",
@@ -141,20 +186,26 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
               color: "var(--ink)",
             }}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {/* ponytail: slice-1 upload only — sendCockpitMessage takes no attachments yet; wiring the
-                uploaded storageIds into the plan is a later slice (INTK-02, Phase 4). */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <AttachmentPicker attachments={attachments} onChange={setAttachments} />
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+            <button type="button" className="composer-pill" disabled title="Model routing is automatic">
+              <BoltIcon size={13} /> Auto <ChevronDownIcon size={12} />
+            </button>
+            <span style={{ flex: 1 }} />
+            <button type="button" className="icon-btn" disabled title="Thought process — coming soon">
+              <BrainIcon size={17} />
+            </button>
+            <AttachmentPicker attachments={attachments} onChange={setAttachments} />
+            <button type="button" className="icon-btn" disabled title="Voice dictation arrives in a later phase">
+              <MicIcon size={17} />
+            </button>
             <button
               type="button"
               aria-label={busy ? "Sending" : "Send"}
               disabled={busy || text.trim() === ""}
               onClick={() => void onSend()}
               style={{
-                width: "2.6rem",
-                height: "2.6rem",
+                width: "2.5rem",
+                height: "2.5rem",
                 flex: "none",
                 borderRadius: "999px",
                 background: "var(--teal-600)",
@@ -164,9 +215,10 @@ export function ChatPane({ threadId, onThread }: { threadId?: string; onThread: 
                 placeItems: "center",
                 cursor: busy || text.trim() === "" ? "default" : "pointer",
                 opacity: busy || text.trim() === "" ? 0.5 : 1,
+                boxShadow: "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
               }}
             >
-              <ArrowIcon size={18} />
+              <SendIcon size={16} />
             </button>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
-import { BrainIcon } from "../../../(auth)/icons";
+import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
 import { CardList } from "./cards";
 import { ChatPane } from "./ChatPane";
 import { SplitPane } from "./SplitPane";
@@ -18,8 +18,12 @@ import { SplitPane } from "./SplitPane";
 // (unconnected → teal Connect-Gmail CTA). The panels always render (shell independent of mailbox
 // state). SplitPane + the (app) auth gate are untouched (plan 05).
 //
-// Pane chrome follows BRAND.md §4/§5 (brand-024113/024149): left = "Pikar AI / Executive
-// Assistant & Orchestrator" chat header; right = AGENT WORKSPACE caps label + "Live work canvas".
+// Chrome replicates brand-024113/024149: chat header ("Pikar AI / Executive Assistant &
+// Orchestrator" + history/menu), a chat-tab strip, AGENT WORKSPACE canvas header with the
+// time-of-day greeting on an empty canvas and "Live work canvas" once a thread is active,
+// and a dark "Clear workspace" pill. Tabs/Clear are thin thread-switching over the existing
+// engine: a tab = a threadId; "New chat"/"Clear workspace" = fresh thread on next send.
+// ponytail: tabs are session-state only — persist them once a real thread-list query exists.
 
 const panel = {
   display: "flex",
@@ -28,7 +32,6 @@ const panel = {
   minHeight: 0,
   gap: "0.75rem",
   padding: "1.1rem 1.25rem",
-  background: "var(--card)",
   borderRadius: "1.1rem",
   boxShadow: "0 14px 40px -30px rgb(14 20 25 / 40%)",
 };
@@ -42,9 +45,22 @@ const capsTeal = {
   color: "var(--teal-600)",
 };
 
+type Tab = { id: string; label: string };
+
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
+  const [tabs, setTabs] = useState<Tab[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+
+  // First send on a fresh chat mints the thread — register its tab, labeled by the message.
+  const registerThread = (id: string, firstText: string) => {
+    setTabs((t) => [...t, { id, label: firstText.trim().slice(0, 24) || "New chat" }]);
+    setThreadId(id);
+  };
+  const newChat = () => setThreadId(undefined);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     // Concrete height so the % / 1fr grid columns have something to fill (plan 05).
@@ -52,7 +68,7 @@ export default function WorkspacePage() {
     <div style={{ height: "calc(100vh - 5rem)" }}>
       <SplitPane
         left={
-          <section data-testid="chat-pane" style={panel}>
+          <section data-testid="chat-pane" className="pane-glass" style={panel}>
             <header style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
               <span
                 aria-hidden="true"
@@ -65,21 +81,74 @@ export default function WorkspacePage() {
                   placeItems: "center",
                   color: "#fff",
                   background: "linear-gradient(135deg, var(--teal-400), var(--teal-600))",
+                  boxShadow: "0 6px 14px -6px rgb(0 150 137 / 60%), inset 0 1px 2px rgb(255 255 255 / 40%)",
                 }}
               >
                 <BrainIcon size={20} />
               </span>
-              <div>
-                <h2 style={{ margin: 0, fontSize: "1.05rem", letterSpacing: "-0.01em" }}>Pikar AI</h2>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "1.02rem",
+                    letterSpacing: "-0.01em",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  Pikar AI
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.74rem",
+                    color: "var(--ink-soft)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
                   Executive Assistant &amp; Orchestrator
                 </p>
               </div>
+              <div className="chat-head-icons">
+                <button type="button" className="icon-btn" disabled title="Chat history — coming soon">
+                  <ClockIcon size={17} />
+                </button>
+                <button type="button" className="icon-btn" disabled title="Options — coming soon">
+                  <DotsIcon size={17} />
+                </button>
+              </div>
             </header>
+
+            {/* Chat tabs: one per minted thread this session + the New-chat pill. */}
+            <div className="chat-tabs">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`chat-tab${t.id === threadId ? " is-active" : ""}`}
+                  title={t.label}
+                  onClick={() => setThreadId(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`chat-tab${threadId === undefined ? " is-active" : ""}`}
+                aria-label="New chat"
+                onClick={newChat}
+              >
+                {tabs.length === 0 ? "+ New chat" : "+"}
+              </button>
+            </div>
+
             {status === undefined ? (
               <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
             ) : status.connected ? (
-              <ChatPane threadId={threadId} onThread={setThreadId} />
+              <ChatPane threadId={threadId} onThread={registerThread} />
             ) : (
               <Link
                 href="/connect-gmail"
@@ -100,23 +169,36 @@ export default function WorkspacePage() {
           </section>
         }
         right={
-          <section data-testid="workspace-pane" style={panel}>
-            <header>
-              <p style={capsTeal}>Agent workspace</p>
-              <h2
-                style={{
-                  margin: "0.35rem 0 0.2rem",
-                  fontFamily: "var(--font-display), system-ui, sans-serif",
-                  fontWeight: 800,
-                  fontSize: "1.5rem",
-                  letterSpacing: "-0.02em",
-                }}
+          <section data-testid="workspace-pane" className="pane-glass" style={panel}>
+            <header style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={capsTeal}>Agent workspace</p>
+                <h2
+                  style={{
+                    margin: "0.35rem 0 0.2rem",
+                    fontFamily: "var(--font-display), system-ui, sans-serif",
+                    fontWeight: 800,
+                    fontSize: "1.5rem",
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {threadId ? "Live work canvas" : `${greeting}, Executive.`}
+                </h2>
+                <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
+                  {threadId
+                    ? "Plans, drafts, and delivery reports render here live as the agent works."
+                    : "Start from chat and the agent will stream its work here — plans, drafts, and delivery reports."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="cta-dark"
+                style={{ margin: 0, padding: "0.55rem 1rem", fontSize: "0.85rem", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+                title="Clears this canvas by starting a new chat"
+                onClick={newChat}
               >
-                Live work canvas
-              </h2>
-              <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
-                Plans, drafts, and delivery reports render here live as the agent works.
-              </p>
+                <TrashIcon size={15} /> Clear workspace
+              </button>
             </header>
             <CardList threadId={threadId} />
           </section>

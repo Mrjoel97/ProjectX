@@ -9,6 +9,7 @@ import {
 import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex/react";
 import { useRef, useState } from "react";
+import { PaperclipIcon } from "../../(auth)/icons";
 
 // The exact descriptor the submit mutation accepts (branded storageId included) — derived
 // from the api so the picker and requests.submit share one source of truth, no dataModel import.
@@ -77,23 +78,45 @@ export function AttachmentPicker({
     setError(null);
   }
 
+  // display:contents — the paperclip trigger sits inline in the composer's icon row while
+  // the error/chips block wraps to a full-width line below it (flexBasis 100%).
   return (
-    <div>
+    <div style={{ display: "contents" }}>
       <input
         ref={inputRef}
         type="file"
         multiple
+        style={{ display: "none" }}
         disabled={busy || attachments.length >= MAX_ATTACHMENTS}
         onChange={(e) => void onPick(e)}
       />
-      {busy && <span style={{ marginLeft: "0.5rem", fontSize: "0.85rem" }}>Uploading…</span>}
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label="Attach files"
+        title="Attach files"
+        disabled={busy || attachments.length >= MAX_ATTACHMENTS}
+        onClick={() => inputRef.current?.click()}
+      >
+        <PaperclipIcon size={17} />
+      </button>
+      {busy && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Uploading…</span>}
       {error && (
-        <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.4rem 0 0" }}>
+        <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.4rem 0 0", flexBasis: "100%" }}>
           {error}
         </p>
       )}
       {attachments.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0, margin: "0.6rem 0 0", display: "grid", gap: "0.4rem" }}>
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: "0.4rem 0 0",
+            display: "grid",
+            gap: "0.4rem",
+            flexBasis: "100%",
+          }}
+        >
           {attachments.map((a) => (
             <li
               key={a.storageId}

@@ -112,6 +112,69 @@ export function ShieldIcon({ size = 22 }: IconProps) {
   );
 }
 
+// ---- cockpit chrome icons (BRAND.md §5 composer/header, brand-024149) ----
+
+export function SendIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M3.5 11.3L20.5 3.5l-4.6 17-4.4-6.6z" />
+      <path d="M11.5 13.9l9-10.4" />
+    </svg>
+  );
+}
+
+export function MicIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" />
+    </svg>
+  );
+}
+
+export function PaperclipIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M8.2 12.3l6.8-6.8a3.4 3.4 0 014.8 4.8l-8.3 8.3a5.4 5.4 0 01-7.6-7.6L11 4" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+export function DotsIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="currentColor" stroke="none" aria-hidden="true">
+      <circle cx="12" cy="5.5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="18.5" r="1.6" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M4.5 6.5h15M9.5 6.5V4.8a1.3 1.3 0 011.3-1.3h2.4a1.3 1.3 0 011.3 1.3v1.7M7 6.5l1 13a1.5 1.5 0 001.5 1.4h5a1.5 1.5 0 001.5-1.4l1-13" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M6 9.5l6 6 6-6" />
+    </svg>
+  );
+}
+
 // ---- app-shell rail icons (BRAND.md §4 nav) ----
 
 export function GridIcon({ size = 18 }: IconProps) {
