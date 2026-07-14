@@ -200,6 +200,7 @@ Plans:
 
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
+> **SUPERSEDED (2026-07-14, 04-06):** the "Python sidecar" phrasing above is stale. The shipped extraction engine is Path A — hosted OpenAI API calls, NO `services/*` Python sidecar. See STATE.md Decisions ("[Phase 4 — sidecar-killed, 04-06]") for the full reasoning; this note amends the Goal line without rewriting it.
 **Depends on**: Phase 2 (pipeline); guardrails from Phase 3 apply to enriched context
 **Requirements**: INTK-02, INTK-03
 **Success Criteria** (what must be TRUE):

@@ -1,6 +1,10 @@
 # Playbook: Attachment & Voice-Dictation Intake
 
-> Last verified: 2026-07-14 against 04-05
+> Last verified: 2026-07-14 against 04-06 (pre-checkpoint bless: full offline suite
+> confirmed green — extraction 28/28, cost 17/17, intake convex-test 5/5, skills
+> drift 13/13, web typecheck clean, `check-playbooks.mjs` exit 0, `intake.spec.ts`
+> Playwright-discovered 2/2. The live human-verify (SC3) + Lane A `ChatPane.tsx`
+> mount are the sole remaining checkpoint — see Known gaps below.)
 > Build history: `.planning/phases/04-attachment-voice-intake/` · Related ADRs: none
 
 ## Purpose
