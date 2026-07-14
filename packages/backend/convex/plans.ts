@@ -78,6 +78,7 @@ export const patchPlan = internalMutation({
     body: v.optional(v.string()),
     status: v.optional(PLAN_STATUS),
     greetingName: v.optional(v.string()), // resolve path persists the drafter greeting through patchPlan
+    recipientBodies: v.optional(v.record(v.string(), v.string())), // address(lowercased) → tailored body override (CKPT-03); the tool passes the full merged map
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
