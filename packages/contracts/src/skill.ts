@@ -42,3 +42,6 @@ export const COCKPIT_AGENT_SKILL = "cockpit-agent" as const;
 
 /** Registry name of the document drafter skill (CKPT-02 — attachment generation). */
 export const DOCUMENT_DRAFTER_SKILL = "document-drafter" as const;
+
+/** Registry name of the graph extractor skill (VALT-02 — GraphRAG entity/relationship extraction). */
+export const GRAPH_EXTRACTOR_SKILL = "graph-extractor" as const;
