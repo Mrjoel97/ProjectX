@@ -112,6 +112,100 @@ export function ShieldIcon({ size = 22 }: IconProps) {
   );
 }
 
+// ---- app-shell rail icons (BRAND.md §4 nav) ----
+
+export function GridIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+export function BellIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M6 9.5a6 6 0 0112 0c0 4 1.5 5.5 1.5 5.5h-15S6 13.5 6 9.5z" />
+      <path d="M10 18.5a2 2 0 004 0" />
+    </svg>
+  );
+}
+
+export function WalletIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <rect x="3" y="6.5" width="18" height="13" rx="2.5" />
+      <path d="M3 9.5h18M16.5 14.5h1.5" />
+    </svg>
+  );
+}
+
+export function FileIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M6 3.5h8l4 4v13H6z" />
+      <path d="M14 3.5v4h4M9 12h6M9 15.5h6" />
+    </svg>
+  );
+}
+
+export function TrendIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M3.5 17.5l5.5-6 3.5 3.5 7.5-8" />
+      <path d="M15 7h5v5" />
+    </svg>
+  );
+}
+
+export function PieIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M12 3.5a8.5 8.5 0 108.5 8.5H12z" />
+      <path d="M15 3.9a8.5 8.5 0 015.1 5.1H15z" />
+    </svg>
+  );
+}
+
+export function VaultIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </svg>
+  );
+}
+
+export function GlobeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5c-2.5-2.3-3.8-5.2-3.8-8.5s1.3-6.2 3.8-8.5z" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M14.5 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function SignOutIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M14 4.5H6.5v15H14" />
+      <path d="M10.5 12h10M17 8.5l3.5 3.5-3.5 3.5" />
+    </svg>
+  );
+}
+
 // Google "G" — brand colors, so it keeps its own fills (not currentColor).
 export function GoogleIcon({ size = 18 }: IconProps) {
   return (

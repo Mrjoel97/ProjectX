@@ -34,7 +34,8 @@ export default function WorkspacePage() {
 
   return (
     // Concrete height so the % / 1fr grid columns have something to fill (plan 05).
-    <div style={{ height: "calc(100vh - 8rem)" }}>
+    // 5rem ≈ the canvas-main padding now that the shell is a side rail, not a top bar.
+    <div style={{ height: "calc(100vh - 5rem)" }}>
       <SplitPane
         left={
           <section data-testid="chat-pane" style={panel}>

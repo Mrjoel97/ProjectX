@@ -537,6 +537,352 @@ a {
   margin-left: auto;
 }
 
+/* ---------- authed app shell: teal rail + light canvas (BRAND.md §4, brand-024016) ----------
+   The authed app is deliberately light-only — the screenshots are the ground truth;
+   dark-scheme tokens above serve the public landing pages. */
+
+.app-frame {
+  display: flex;
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.rail {
+  width: 15.5rem;
+  flex: none;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+  background: var(--teal-900);
+  color: #fff;
+  transition: width 160ms ease;
+}
+
+.rail.is-collapsed {
+  width: 4.6rem;
+}
+
+.rail.is-collapsed .rail-label,
+.rail.is-collapsed .rail-soon,
+.rail.is-collapsed .rail-word {
+  display: none;
+}
+
+.rail.is-collapsed .rail-item {
+  justify-content: center;
+  padding: 0.65rem 0;
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.25rem 0.4rem 0.6rem;
+  color: #fff;
+  text-decoration: none;
+}
+
+.rail-logo {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.8rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--teal-400), var(--teal-600));
+  box-shadow: 0 0 18px rgb(64 202 208 / 45%);
+}
+
+.rail-word {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: none;
+  color: rgb(255 255 255 / 82%);
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+a.rail-item:hover,
+button.rail-item:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+
+.rail-item.is-active {
+  background: var(--teal-600);
+  color: #fff;
+  font-weight: 600;
+}
+
+.rail-item.is-soon {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rail-item svg {
+  flex: none;
+}
+
+.rail-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-soon {
+  margin-left: auto;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+}
+
+/* OPSG-07: the live unresolved-DLQ count. Never auto-clears; red on purpose. */
+.rail-badge {
+  margin-left: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail.is-collapsed .rail-badge {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.35rem;
+  margin: 0;
+  transform: scale(0.85);
+}
+
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-top: 1px solid rgb(255 255 255 / 14%);
+  padding-top: 0.6rem;
+}
+
+.canvas-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-main {
+  flex: 1;
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+@media (max-width: 48rem) {
+  .rail {
+    width: 4.6rem;
+  }
+
+  .rail .rail-label,
+  .rail .rail-soon,
+  .rail .rail-word {
+    display: none;
+  }
+
+  .rail .rail-item {
+    justify-content: center;
+    padding: 0.65rem 0;
+  }
+
+  .rail .rail-badge {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.35rem;
+    margin: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* ---------- command center home (brand-024016) ---------- */
+
+.cc {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.caps-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.9rem;
+}
+
+.cc-hero {
+  background: linear-gradient(115deg, #ffffff 30%, #eef0fb 75%, #ece9f8);
+  border-radius: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  box-shadow: 0 18px 45px -30px rgb(14 20 25 / 35%);
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 62rem) {
+  .cc-hero {
+    grid-template-columns: 1.3fr 0.7fr;
+    align-items: start;
+  }
+}
+
+.cc-hero h1 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.9rem, 1.2rem + 2.4vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.cc-lede {
+  color: var(--ink-soft);
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem);
+  max-width: 44ch;
+  margin: 0;
+}
+
+.next-move {
+  background: var(--card);
+  border-radius: 1rem;
+  padding: 1.4rem;
+  box-shadow: 0 14px 40px -28px rgb(14 20 25 / 45%);
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.next-move h2 {
+  margin: 0;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.next-move p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+/* Dark navy = the HEAVY CTA (BRAND.md §2); teal stays the default primary. */
+.cta-dark {
+  justify-self: start;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.3rem;
+  border-radius: 999px;
+  transition: transform 120ms ease;
+}
+
+.cta-dark:hover {
+  transform: translateY(-1px);
+}
+
+.stat-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.stat-tile {
+  background: var(--card);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 14px 40px -30px rgb(14 20 25 / 40%);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.stat-tile .caps-label {
+  margin: 0;
+}
+
+.stat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.stat-badge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  flex: none;
+  background: linear-gradient(135deg, var(--teal-400), var(--teal-600));
+}
+
+.stat-value {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.stat-value.is-text {
+  font-size: 1.2rem;
+}
+
 /* ---------- quality floor ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -558,5 +904,17 @@ a {
 
   .cta {
     transition: none;
+  }
+
+  .rail {
+    transition: none;
+  }
+
+  .cta-dark {
+    transition: none;
+  }
+
+  .cta-dark:hover {
+    transform: none;
   }
 }

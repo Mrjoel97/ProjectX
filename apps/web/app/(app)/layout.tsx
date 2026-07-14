@@ -4,82 +4,154 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@pikar/backend/api";
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import {
+  BellIcon,
+  BoltIcon,
+  BrainIcon,
+  ChevronLeftIcon,
+  FileIcon,
+  GlobeIcon,
+  GridIcon,
+  MailIcon,
+  PieIcon,
+  ShieldIcon,
+  SignOutIcon,
+  TrendIcon,
+  VaultIcon,
+  WalletIcon,
+} from "../(auth)/icons";
 import { ReconnectBanner } from "./_components/ReconnectBanner";
 
-// The authenticated shell. Nav targets Submit/Requests/Review/Ops/Connect Gmail land in
-// plans 02-08/09 — the links exist now, the pages arrive with them.
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/workspace", label: "Workspace" },
-  { href: "/submit", label: "Submit" },
-  { href: "/requests", label: "Requests" },
-  { href: "/review", label: "Review queue" },
-  { href: "/ops", label: "Ops" },
-  { href: "/connect-gmail", label: "Connect Gmail" },
+// The authenticated shell: the brand's dark-teal left nav rail + light canvas
+// (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
+// pages don't exist yet render disabled with a "Soon" tag — honest, no dead links.
+// The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
+// the pages stay on disk and reachable by URL.
+const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
+  { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
+  { label: "Approvals", icon: <BellIcon />, soon: true },
+  { label: "Finance", icon: <WalletIcon />, soon: true },
+  { label: "Content", icon: <FileIcon />, soon: true },
+  { label: "Sales Pipeline", icon: <TrendIcon />, soon: true },
+  { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
+  { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
+  { label: "Reports", icon: <PieIcon />, soon: true },
+  { label: "Knowledge Vault", icon: <VaultIcon />, soon: true },
+  { label: "Join Community", icon: <GlobeIcon />, soon: true },
 ];
+
+const RAIL_KEY = "pikar:rail-collapsed";
 
 // OPSG-07: a failure nobody sees is a failure nobody fixes. This is an unread-mail
 // badge, not a toast — `newCount` is a LIVE query, so the count reflects the DB and
 // only falls when an operator marks the letter resolved. It never auto-clears and
 // never dismisses on click. `undefined` = still loading → render nothing (no flash).
+// It lives on the Compliance (/ops) rail item and stays visible when the rail collapses.
 function DeadLetterBadge() {
   const count = useQuery(api.deadLetters.newCount);
   if (!count) return null;
   return (
-    <Link
-      href="/ops"
+    <span
+      className="rail-badge"
       title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: "1.5rem",
-        height: "1.5rem",
-        padding: "0 0.4rem",
-        borderRadius: "999px",
-        background: "#dc2626",
-        color: "#fff",
-        fontSize: "0.8rem",
-        fontWeight: 700,
-        textDecoration: "none",
-      }}
     >
       {count}
-    </Link>
+    </span>
   );
 }
 
 function Shell({ children }: { children: ReactNode }) {
   const { signOut } = useAuthActions();
+  const pathname = usePathname();
+  // Collapsed state persists per browser. Read after mount (SSR has no localStorage);
+  // the brief expanded-first paint is acceptable.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem(RAIL_KEY) === "1");
+  }, []);
+  const toggle = () =>
+    setCollapsed((c) => {
+      localStorage.setItem(RAIL_KEY, c ? "0" : "1");
+      return !c;
+    });
+
+  // Exact match for /dashboard (it prefixes everything); prefix match elsewhere so
+  // e.g. /review/[id]-style child routes keep their parent item lit.
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1.5rem",
-          padding: "0.75rem 1.5rem",
-          borderBottom: "1px solid var(--border, #e5e5e5)",
-        }}
-      >
-        <Link href="/dashboard" style={{ fontWeight: 800, textDecoration: "none" }}>
-          Pikar
+    <div className="app-frame">
+      <nav className={`rail${collapsed ? " is-collapsed" : ""}`} aria-label="Primary">
+        <Link href="/dashboard" className="rail-brand">
+          <span className="rail-logo">
+            <BrainIcon size={22} />
+          </span>
+          <span className="rail-word">Pikar AI</span>
         </Link>
-        <nav style={{ display: "flex", gap: "1rem", flex: 1 }}>
-          {NAV.map((item) => (
-            <Link key={item.href} href={item.href} style={{ textDecoration: "none" }}>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <DeadLetterBadge />
-        <button type="button" onClick={() => void signOut()} style={{ cursor: "pointer" }}>
-          Sign out
-        </button>
-      </header>
-      <ReconnectBanner />
-      <main style={{ flex: 1, padding: "1.5rem" }}>{children}</main>
+
+        <div className="rail-nav">
+          {NAV.map((item) =>
+            item.href ? (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`rail-item${isActive(item.href) ? " is-active" : ""}`}
+                title={collapsed ? item.label : undefined}
+              >
+                {item.icon}
+                <span className="rail-label">{item.label}</span>
+                {item.href === "/ops" && <DeadLetterBadge />}
+              </Link>
+            ) : (
+              <span key={item.label} className="rail-item is-soon" aria-disabled="true">
+                {item.icon}
+                <span className="rail-label">{item.label}</span>
+                <span className="rail-soon">Soon</span>
+              </span>
+            ),
+          )}
+        </div>
+
+        <div className="rail-foot">
+          <Link
+            href="/connect-gmail"
+            className={`rail-item${isActive("/connect-gmail") ? " is-active" : ""}`}
+            title={collapsed ? "Connect Gmail" : undefined}
+          >
+            <MailIcon />
+            <span className="rail-label">Connect Gmail</span>
+          </Link>
+          <button
+            type="button"
+            className="rail-item"
+            onClick={toggle}
+            aria-expanded={!collapsed}
+            title={collapsed ? "Expand" : undefined}
+          >
+            <span style={{ display: "inline-flex", transform: collapsed ? "rotate(180deg)" : undefined }}>
+              <ChevronLeftIcon />
+            </span>
+            <span className="rail-label">Collapse</span>
+          </button>
+          <button
+            type="button"
+            className="rail-item"
+            onClick={() => void signOut()}
+            title={collapsed ? "Sign Out" : undefined}
+          >
+            <SignOutIcon />
+            <span className="rail-label">Sign Out</span>
+          </button>
+        </div>
+      </nav>
+
+      <div className="canvas-col">
+        <ReconnectBanner />
+        <main className="canvas-main">{children}</main>
+      </div>
     </div>
   );
 }
@@ -124,10 +196,10 @@ function AuthGate({ variant }: { variant: "loading" | "signedout" }) {
         {variant === "signedout" ? (
           <>
             <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Your session ended</h1>
-            <p style={{ color: "#555", margin: 0 }}>Please sign in again to continue.</p>
+            <p style={{ color: "var(--ink-soft)", margin: 0 }}>Please sign in again to continue.</p>
           </>
         ) : (
-          <p style={{ color: "#555", margin: 0 }}>{stalled ? "Still connecting…" : "Loading…"}</p>
+          <p style={{ color: "var(--ink-soft)", margin: 0 }}>{stalled ? "Still connecting…" : "Loading…"}</p>
         )}
         {showSignIn && (
           <Link
@@ -136,7 +208,7 @@ function AuthGate({ variant }: { variant: "loading" | "signedout" }) {
               display: "inline-block",
               padding: "0.6rem 1.4rem",
               borderRadius: "0.5rem",
-              background: "#009689",
+              background: "var(--teal-600)",
               color: "#fff",
               textDecoration: "none",
               fontWeight: 600,
