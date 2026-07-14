@@ -392,3 +392,69 @@ test("proposePlan is unaffected for a GROUP plan with NO personalization (today'
   expect(res).toMatch(/proposed/i);
   expect((await readPlan(t, planId))?.status).toBe("proposed");
 });
+
+// ── 03.5-02 Task 1: setSendTime tool (NL time → sendAt) + send-time context surfacing (SCHD-01) ─
+// The tool parses a volunteered natural-language time with the CLIENT's clock+zone (never the
+// model's, §2-D) and writes plan.sendAt ONLY on a resolved future instant; an ambiguous/past parse
+// re-asks and writes nothing (SC2). The clock is threaded in via the __invokeCockpitTool shim's
+// optional clientContext (pinned deterministically here — the same trick runCockpitAgent's SMOKE
+// path uses offline).
+
+// Pinned clock: 2020-01-01 12:00:00 UTC — a fixed "now" so every parse below is deterministic.
+const PIN_CLOCK = { tz: "UTC", nowMs: Date.UTC(2020, 0, 1, 12, 0, 0) };
+const callClock = (
+  t: T,
+  planId: Id<"plans">,
+  toolName: string,
+  input: unknown,
+  clientContext: { tz: string; nowMs: number } = PIN_CLOCK,
+): Promise<string> =>
+  t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName,
+    input,
+    clientContext,
+  });
+
+test("setSendTime resolves a relative time and patches sendAt (client clock, not the model's)", async () => {
+  const { t, planId } = await setup();
+  const res = await callClock(t, planId, "setSendTime", { text: "in 2 hours" });
+  expect(res).not.toMatch(/ambiguous|passed|couldn't/i);
+  // resolved off the pinned nowMs — 2h later, deterministic (the model NEVER supplies "now", §2-D).
+  expect((await readPlan(t, planId))?.sendAt).toBe(PIN_CLOCK.nowMs + 2 * 3_600_000);
+});
+
+test("setSendTime re-asks on an AMBIGUOUS time and writes NOTHING (SC2 — never guess)", async () => {
+  const { t, planId } = await setup();
+  const res = await callClock(t, planId, "setSendTime", { text: "4am" }); // bare AM, no day → ambiguous
+  expect(res).toMatch(/ambiguous/i);
+  expect((await readPlan(t, planId))?.sendAt).toBeUndefined(); // no write
+});
+
+test("setSendTime re-asks on a PAST time and writes NOTHING (SC2 — never silently send)", async () => {
+  const { t, planId } = await setup();
+  const res = await callClock(t, planId, "setSendTime", { text: "today at 8am" }); // before the pinned noon
+  expect(res).toMatch(/pass/i);
+  expect((await readPlan(t, planId))?.sendAt).toBeUndefined(); // no write
+});
+
+test("setSendTime without a client clock points to the picker and writes NOTHING (§2-D)", async () => {
+  const { t, planId } = await setup();
+  // `call` builds the tools with NO clientContext — the tool refuses to invent a clock and defers
+  // to the date picker (Wave 3's confirm-source-of-truth), never taking "now"/tz from the model.
+  const res = await call(t, planId, "setSendTime", { text: "in 2 hours" });
+  expect(res).toMatch(/picker|timezone/i);
+  expect((await readPlan(t, planId))?.sendAt).toBeUndefined();
+});
+
+test("buildAgentContext surfaces the resolved send time as an absolute instant (user tz)", () => {
+  const ctx = buildAgentContext({ sendAt: Date.UTC(2020, 0, 1, 14, 0, 0) }, "UTC");
+  expect(ctx).toMatch(/Send time:/);
+  expect(ctx).toMatch(/2020/); // the absolute date the model confirms — not a raw epoch
+});
+
+test("buildAgentContext shows immediate-on-approve when no sendAt is set", () => {
+  const ctx = buildAgentContext({});
+  expect(ctx).toMatch(/Send time:.*immediate/i);
+});

@@ -146,6 +146,20 @@ test("SMOKE::agent attachment ops drive the tools offline (attach -> regenerate 
   expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
 });
 
+test("SMOKE::agent::sendTime drives setSendTime offline with a pinned clock (SCHD-01)", async () => {
+  const { t, planId } = await setup();
+  // The SMOKE path pins a deterministic {tz:"UTC", nowMs} so the NL time resolves offline — the
+  // model never supplies "now"/tz (§2-D). A relative "in 3 hours" always resolves to a future instant.
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    text: "SMOKE::agent::sendTime=in 3 hours",
+  });
+  expect(res.reply).not.toMatch(/ambiguous|picker|passed/i);
+  expect((await readPlan(t, planId))?.sendAt).toBeTruthy(); // sendAt landed via the governed tool
+});
+
 test("fallback: an eligible primary failure retries on the CHEAP model", async () => {
   const { t, planId } = await setup();
 
