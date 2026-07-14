@@ -283,7 +283,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
-| 4. Attachment & Voice-Dictation Intake | 3/6 | In Progress|  |
+| 4. Attachment & Voice-Dictation Intake | 4/6 | In Progress|  |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
