@@ -1,6 +1,6 @@
 # Playbook: Attachment & Voice-Dictation Intake
 
-> Last verified: 2026-07-14 against 04-04
+> Last verified: 2026-07-14 against 04-05
 > Build history: `.planning/phases/04-attachment-voice-intake/` · Related ADRs: none
 
 ## Purpose
@@ -28,8 +28,14 @@ itself. This closes the multi-modal intake gap (INTK-02 attachments, INTK-03 voi
   `ctx.runQuery(internal.skills.getActiveSkill, ...)` — §5, no hardcoded prompt, fails closed
   unseeded). The merge is a CALL to the existing public `api.cockpit.sendCockpitMessage` —
   `intake.ts` never imports `cockpit.ts`/`llm.ts` internals (ZERO edits to either).
-- **Frontend (lands in later Phase-4 plans):**
-  `apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx` (attach/record UI).
+- **Frontend:** `apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx` (Plan 05) — a
+  self-contained attach picker + one-shot MediaRecorder dictation button, wired through
+  `intakeDb.generateUploadUrl` → POST → `intake.attachToThread`/`intake.dictateToThread`.
+  Takes `threadId: string` as a prop; renders no conversation output itself (the merge is
+  server-side and the existing chat/card views pick it up reactively). Its one-line mount into
+  `ChatPane.tsx`'s composer (`<IntakeControls threadId={threadId} />`, once `threadId` is
+  truthy) is Lane A's responsibility — `apps/web/e2e/intake.spec.ts` (Plan 05) drives it
+  directly via its own test ids ahead of that mount landing.
 
 ## Dependencies & blast radius
 
@@ -40,9 +46,11 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
 
 ## Data flow
 
-1. User attaches a file or records dictation in the cockpit composer (`IntakeControls.tsx`,
-   Plan 05) — client PUTs bytes to an `intakeDb.generateUploadUrl` URL, then calls
-   `intake.attachToThread`/`intake.dictateToThread` with the resulting `storageId`.
+1. User attaches a file or records dictation in the cockpit composer (`IntakeControls.tsx`)
+   — client PUTs bytes to an `intakeDb.generateUploadUrl` URL, then calls
+   `intake.attachToThread`/`intake.dictateToThread` with the resulting `storageId`. A client-side
+   size guard mirrors `INTAKE_UPLOAD_CAP_BYTES` (UX only — the server always re-derives the cap
+   from the real loaded bytes).
 2. `runIntake` (the shared spine both actions call) gates on `guardrails.preCall`
    (kill-switch/budget) BEFORE anything else — a stop is a conversational paused reply merged
    via `sendCockpitMessage`, never a throw; NO `intakeArtifacts` row is created on a stop.
@@ -119,8 +127,10 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
   dictation verbatim-frame contract. (`pnpm --filter @pikar/backend test -- intake` does NOT
   narrow to the file — the package's `test` script is plain `vitest run`; use the `npx vitest
   run` form above, same pre-existing script quirk noted in 04-02's summary.)
-- **E2E (once 04-05 lands):** `pnpm --filter @pikar/web exec playwright test intake` over the
-  `SMOKE::` grammar.
+- **E2E:** `pnpm --filter @pikar/web exec playwright test intake` — `intake.spec.ts` drives
+  attach + dictate over the `SMOKE::` grammar via `IntakeControls`'s own test ids
+  (`attach-file-input`, `dictation-test-input`); Playwright-discovered + type-loads as of
+  Plan 05, LIVE run deferred to Plan 06 alongside the Lane A `ChatPane.tsx` mount.
 - **Manual-only:** delivered-email-reflects-attachment/dictation-content-past-guardrails is a
   live human-verify checkpoint (04-06 · T2) — see `.planning/phases/04-attachment-voice-intake/04-VALIDATION.md`.
 
@@ -140,7 +150,9 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
 
 ## Known gaps & deferred work
 
-- `apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx` (the attach/record UI) does not
-  exist yet as of this plan (04-04) — the watched path is pre-registered so the §9 Stop hook
-  does not block Plan 05, which creates it and wires `IntakeControls.tsx` to
-  `intakeDb.generateUploadUrl` + `intake.attachToThread`/`intake.dictateToThread`.
+- **The one-line `ChatPane.tsx` mount is not yet in place.** `IntakeControls.tsx` is fully
+  built and self-contained (Plan 05), but Lane A owns mounting
+  `<IntakeControls threadId={threadId} />` (rendered once `threadId` is truthy) into the
+  composer. Until that mount lands, `intake.spec.ts`'s live run stays deferred (Plan 06).
+- Live human-verify (real OCR/transcription accuracy + real Gmail delivery reflecting
+  attached/dictated content, SC3) remains the sole manual verification (04-06 · T2).
