@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
-- [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
+- [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (completed 2026-07-14)
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [ ] **Phase 7: Resilience & Operations Hardening** - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
@@ -284,7 +284,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
-| 4. Attachment & Voice-Dictation Intake | 5/6 | In Progress |  |
+| 4. Attachment & Voice-Dictation Intake | 5/6 | Complete    | 2026-07-14 |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
