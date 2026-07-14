@@ -1,6 +1,6 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 05-02 — the three vault tables (`vaultDocuments`/`graphNodes`/`graphEdges`) landed in `schema.ts` and the single `rag` instance (`vaultRag.ts`, `text-embedding-3-small`@1536) is constructed; backend now depends on `@pikar/vault`
+> Last verified: 05-03 — the graph plane landed: `vaultLlm.ts` (V8 `extractGraph` — redact-then-extract + registry prompt + `SMOKE::graph::` seam) and `vaultGraph.ts` (`upsertGraph` cross-doc dedup + degree; `expand` hop-capped tenant-scoped BFS over `bfsNeighbors`), covered by `vaultGraph.test.ts`
 > Build history: `.planning/phases/05-knowledge-vault-graphrag/` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -24,9 +24,11 @@ Pure packages:
 - `packages/vault/src/constants.ts` — `VAULT_FILE_CAP_BYTES`, `GRAPH_HOP_CAP` (= 2).
 - `packages/vault/src/index.ts` — re-exports the package surface.
 
-Backend adapters (thin, added by later Phase-5 plans):
-- `packages/backend/convex/vault.ts` / `vaultRag.ts` / `vaultIngest.ts` / `vaultGraph.ts` / `vaultGround.ts` — thin Convex orchestration over `@pikar/vault` + rag + workflow.
-- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) graph-extractor call (NEVER a second `"use node"` module).
+Backend adapters (thin):
+- `packages/backend/convex/vaultRag.ts` — the single `rag` construction site (05-02).
+- `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
+- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader (Plan 04's `internal.vault.getDoc` supersedes it).
+- `packages/backend/convex/vault.ts` / `vaultIngest.ts` / `vaultGround.ts` — thin Convex orchestration over `@pikar/vault` + rag + workflow (later plans).
 
 Frontend (later plans):
 - `apps/web/app/(app)/dashboard/vault/` — the Knowledge Vault route + components (match the brand screenshots 1:1).
