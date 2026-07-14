@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Phase 5 context gathered (20+ decisions; brand-matched vault UI)
+last_updated: "2026-07-14T14:41:16.400Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 15
+  completed_phases: 5
+  total_plans: 50
+  completed_plans: 47
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Phase 3.3 COMPLETE (6/6) — CKPT-02 human-verified + goal-verified (passed). Next: plan Phase 3.4 (Per-Recipient Personalization)
 last_updated: "2026-07-14T09:16:09.095Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
@@ -214,9 +229,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T08:56:56.033Z
-Stopped at: Completed 03.3-06-PLAN.md (Phase 3.3 COMPLETE — CKPT-02 human-verified)
-Resume file: None
+Last session: 2026-07-14T14:41:16.386Z
+Stopped at: Phase 5 context gathered (20+ decisions; brand-matched vault UI)
+Resume file: .planning/phases/05-knowledge-vault-graphrag/05-CONTEXT.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
