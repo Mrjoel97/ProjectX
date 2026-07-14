@@ -51,7 +51,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 *Added 2026-07-12 from the scheduled-send design (`.planning/design/scheduled-send.md`). Tier 1 only; recurring/standing-instruction sends are out of v1 scope (7-day Testing-mode tokens + unmade re-draft governance decision — see the design record).*
 
-- [ ] **SCHD-01**: A plan can carry a user-specified future send time expressed in natural language — the PLAN card shows the resolved absolute time (user's timezone) before the single Approve; approval schedules (never immediately starts) the same governed delivery fan-out; the user can cancel any time before it fires (cancellation audited); a token dead at fire time degrades to `awaiting_reauth` + notification exactly like an immediate send
+- [x] **SCHD-01**: A plan can carry a user-specified future send time expressed in natural language — the PLAN card shows the resolved absolute time (user's timezone) before the single Approve; approval schedules (never immediately starts) the same governed delivery fan-out; the user can cancel any time before it fires (cancellation audited); a token dead at fire time degrades to `awaiting_reauth` + notification exactly like an immediate send
 
 ### Knowledge Vault
 
@@ -152,7 +152,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Complete |
 | CKPT-03 | Phase 3.4 | Complete (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure) |
-| SCHD-01 | Phase 3.5 | Pending |
+| SCHD-01 | Phase 3.5 | Complete |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
 | VALT-03 | Phase 5 | Pending |

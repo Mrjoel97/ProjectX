@@ -3,14 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "03.4-04 automated tasks complete (E2E + smoke:fanout distinct-body + playbook close); CKPT-03 human-verify PENDING"
-last_updated: "2026-07-14T15:41:08.555Z"
+stopped_at: Completed 03.5-01-PLAN.md
+last_updated: "2026-07-14T18:31:33.427Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 15
   completed_phases: 6
-  total_plans: 54
-  completed_plans: 51
+  total_plans: 58
+  completed_plans: 52
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.5-01-PLAN.md
+last_updated: "2026-07-14T18:30:10.254Z"
+last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 1: 03.5-01 executed (pure parseSendTime in @pikar/core + plans sendAt/scheduledFunctionId fields + scheduled/canceled status literals mirrored across schema.ts and plans.ts). Lane A. Foundation only. NEXT: Wave 2 (03.5-02 — setSendTime tool)."
+progress:
+  total_phases: 15
+  completed_phases: 6
+  total_plans: 58
+  completed_plans: 52
 ---
 
 ---
@@ -70,6 +85,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 **Current focus:** Phase 3.1 — Cockpit Core (all 5 waves / plans 01–09 executed; ready for /gsd:verify-work)
 
 ## Current Position
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 1 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.5-01 COMPLETE (Wave 1 — the deterministic FOUNDATION for SCHD-01; TWO append-only, no-migration additions; no behavior change to the existing spine). (1) `@pikar/core` `emailIntent.ts` gained the PURE `parseSendTime(text, nowMs, ianaTz)` → `{kind:"resolved";epochMs} | "ambiguous" | "past" | "none"` — the CLIENT injects the trusted clock + IANA zone (the model NEVER supplies "now", §2-D); zone wall-clock↔epoch via `Intl.DateTimeFormat` (no `Date.now`, no dependency — ponytail rung 6/7, NOT chrono-node). Slice-1 grammar: relative "in N hours/minutes"; today/tomorrow/weekday + optional time (09:00 default); a bare PM time ("4pm") resolves today-if-future-else-tomorrow; a bare AM time ("4am") or meridiem-less bare hour ("at 4") with no day → `ambiguous` (RE-ASK, never guess — locked bound 3, reconciling the plan's two behavior examples); a concrete day+time already passed → `past`. Stores ONE absolute epoch ms (Tier-1 rule — never a wall-clock string/tz pair). 34 core cases green (full core 77/77). (2) The `plans` content plane gained `sendAt: v.optional(v.number())` (the ONE deferred-send source of truth, nullable = immediate) + `scheduledFunctionId: v.optional(v.id("_scheduled_functions"))` (cancel handle, mirrors review.ts pendingTimeouts.scheduledId), and the PINNED status union APPENDED `scheduled` (after `approved`) + `canceled` (after `done`) — the hand-maintained `PLAN_STATUS` mirror in plans.ts carries the SAME two literals in the same order (RESEARCH Pitfall 5) or setPlanStatus/patchPlan reject them at runtime. `patchPlan` gained one optional `sendAt`; the drop-undefined handler is UNCHANGED (a subject-only patch preserves a stored `sendAt`). 10 plans cases green. cockpit.md §9 Last verified → 03.5-01; check-playbooks exit 0. Commits 79e6937 (test RED parser), 383b7da (feat GREEN parser), 1e166bd (fix strict-index — the ONE deviation, Rule 1), a205035 (test RED plans), 5c168e3 (feat GREEN schema+plans+playbook). ONE deviation (parseSendTime not clean under `noUncheckedIndexedAccess` — guarded regex-group access; necessary for the "backend source typechecks" done-criterion, no scope creep). Full backend suite 128/132 — the 4 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered + runCockpitAgent×2/cockpitDraft cold-start timeout flakes, proven 8/8 in isolation at `--testTimeout=30000`), NOT regressions (my changes are additive optional fields + a new pure fn; none of those paths touch parseSendTime/sendAt/the status literals). FOUNDATION ONLY — no `setSendTime` tool (Wave 2), no `executePlan` scheduler branch/cancel mutation (Wave 3), no picker/ScheduledCard (Wave 4). NEXT: Wave 2 (03.5-02 — `setSendTime` tool calls parseSendTime + writes `plan.sendAt`; agent Scheduling skill; §4 scan).
 
 Phase: 3.4 (Per-Recipient Personalization) — IN PROGRESS. Wave 4 (Lane A worktree, branch lane-a/cockpit-send) — automated tasks COMPLETE, CKPT-03 human-verify PENDING.
 Plan: 03.4-04 AUTOMATED TASKS COMPLETE (Wave 4 — phase close; CKPT-03 human-verify PENDING). Built the automated half of the phase close: (1) `apps/web/e2e/cockpit-personalize.spec.ts` — the CKPT-03 offline E2E mirroring `cockpit-attachment.spec.ts`: `add=alice@example.com,bob@example.com` → `subject=Q3 sync` → `body=SMOKE::route=direct_llm::…` → `mode=individual` → `personalize=1:SMOKE::route=direct_llm::…` → `propose`, asserting the PLAN card PER-RECIPIENT BODY section shows alice **tailored** + bob **shared body** (two DISTINCT bodies) BEFORE the single Approve, nothing sent before Approve, then Approve → REPORT fills per-recipient; Playwright-discovered + type-loads (`playwright test cockpit-personalize --list` = 1 test); the live green run deferred to verify-work. The personalize intent carries the `SMOKE::route` sentinel so the tailored draft is deterministic offline AND differs from the shared body (different safeText → different hash → different `Smoke draft for <hash>`). (2) `smoke:fanout` distinct-body extension: `seedFanout` gained an OPTIONAL append-only `recipientBodies` arg (distinct per-recipient `draft`, SHARED subject — the `#i` disambiguator dropped, absent ⇒ historic single-body seeding unchanged); `smokeAssert.ts` gained `assertFanoutBodiesDistinct` (every draft unique + every subject identical, stripping the delivery-only `SMOKE::fail ` prefix — the mirror-INVERSE of `assertFanoutAttachmentShared`); `run-smoke-fanout.mjs` seeds N distinct `TAILORED-SECRET-<i>` needles, asserts distinctness after the seed, and feeds each needle to `assertNoRawPiiFanout` so every tailored body is proven ABSENT from any audit/DLQ/telemetry row (§4). Live smoke run DEFERRED to /gsd:verify-work (no CONVEX_DEPLOYMENT in this headless session — phase-wide convention; source typechecks clean, mirrors the proven shared-attachment pattern). (3) `cockpit.md` §9 phase close: `Last verified` → 03.4-04 + three personalization invariants (per-recipient wording rides the existing spine — INVERSE of the shared-attachment fan-out; personalization requires individual mode — proposePlan refuses group+tailoring; guardrail parity is by construction — personalizeRecipient reuses draftBody's scanText→draftCockpit, per-recipient correlationId already isolates audit/telemetry, no new audit event) + Key-files/Tests/How-to-verify/Manual-only CKPT-03 row updates; check-playbooks exit 0. Verifies: core 64/64 green; backend 121/126 — the 5 reds across 4 files are ALL pre-existing/environmental (audit.test.ts auditCounts-unregistered + runCockpitAgent/cockpitDraft cold-start 5000ms timeout flakes), NOT regressions (proven: `vitest run runCockpitAgent --testTimeout=30000` = 5/5, mock loop 9240ms; my Wave-4 changes touch ONLY an E2E spec + live smoke helpers imported by no test + a node script + docs — zero vitest-covered production TS). Commits d725e2c (E2E), 30dba6b (smoke distinct-body), d561344 (playbook close). NO deviations. A merge from main (81b5277) landed between the T1 and T2 commits (background hook) — all three commits + all five files intact (grep-verified). CKPT-03 stays IN PROGRESS: the sole live-only proof is the human-verify (real 2-inbox distinct-wording send under a shared subject, audit refs-only) — PENDING. NEXT: CKPT-03 human-verify sign-off → orchestrator marks Phase 3.4 complete.
@@ -167,6 +185,7 @@ Progress: [█████████░] 94%
 | Phase 03.4 P01 | 4 | 2 tasks | 4 files |
 | Phase 03.4 P02 | 15 | 3 tasks | 7 files |
 | Phase 03.4 P03 | 37 | 2 tasks | 4 files |
+| Phase 03.5-deferred-send P01 | 16 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -257,6 +276,8 @@ Recent decisions affecting current work:
 - [Phase 03.4]: personalizeRecipient omits greetingName on tailored drafts (Pitfall 4) — instruction carries greeting intent; per-recipient greeting map is a ceiling
 - [Phase 03.4]: proposePlan refuses (not force-individual) a group plan carrying personalization — explicit consent to individual sends (locked decision)
 - [Phase 03.4]: 03.4-03: executePlan seeds draft: (plan.recipientBodies ?? {})[recipient] ?? body — distinct tailored body per recipient, shared subject/attachmentRefs; delivery spine + single workflow.start untouched (one-line change)
+- [Phase 03.5-deferred-send]: parseSendTime: bare PM resolves today-or-tomorrow; bare AM / meridiem-less bare hour with no day → ambiguous (locked bound 3: never guess a day)
+- [Phase 03.5-deferred-send]: Deferred send stores ONE absolute epoch ms (plans.sendAt, nullable=immediate) — never a wall-clock string or tz pair (Tier-1 rule)
 
 ### Roadmap Evolution
 
@@ -274,8 +295,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T12:22:56.459Z
-Stopped at: 03.4-04 automated tasks complete (E2E + smoke:fanout distinct-body + playbook close); CKPT-03 human-verify PENDING
+Last session: 2026-07-14T18:30:10.234Z
+Stopped at: Completed 03.5-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

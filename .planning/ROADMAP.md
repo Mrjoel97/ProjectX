@@ -204,7 +204,7 @@ Plans:
   4. A scheduled plan is cancellable any time before it fires (halt control), with the cancellation audited; a token dead at fire time lands `awaiting_reauth` + notification exactly like an immediate send.
 **Plans**: 4 plans
 Plans:
-- [ ] 03.5-01-PLAN.md — pure parseSendTime (@pikar/core) + plans schema/status/sendAt foundation (Wave 1)
+- [x] 03.5-01-PLAN.md — pure parseSendTime (@pikar/core) + plans schema/status/sendAt foundation (Wave 1)
 - [ ] 03.5-02-PLAN.md — setSendTime tool + clientContext threading + SMOKE sendTime= + §4 scan + cockpit-agent Scheduling skill (Wave 2)
 - [ ] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
 - [ ] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
