@@ -8,7 +8,7 @@
 // proposed→delivering path by registering the workflow + workflow/workpool components (the same
 // pattern cockpitTools.test.ts uses for the aggregate). smoke:fanout remains the live coverage.
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -205,5 +205,87 @@ describe("executePlan per-recipient personalization (CKPT-03 — distinct bodies
     expect(byRecipient["c@example.com"]?.draft).toBe("Here is the Q3 update.");
     // The subject (goal) is SHARED across every recipient regardless of body tailoring.
     for (const r of reqs) expect(r.goal).toBe("Q3 update");
+  });
+});
+
+/** Seed a proposed plan carrying a future (or unset) sendAt for the scheduler-branch tests. */
+async function seedSchedulable(
+  t: ReturnType<typeof convexTest>,
+  sendAt: number | undefined,
+  tenantId = TENANT,
+) {
+  return t.run((ctx) =>
+    ctx.db.insert("plans", {
+      tenantId,
+      threadId: "thread_1",
+      status: "proposed" as const,
+      recipients: ["a@example.com", "b@example.com"],
+      mode: "individual" as const,
+      subject: "Q3 update",
+      body: "Here is the Q3 update.",
+      sendAt,
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+const listScheduled = (t: ReturnType<typeof convexTest>) =>
+  t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+
+describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at the moment)", () => {
+  test("future sendAt: freezes the requests rows, arms the scheduler, sends nothing before fire; fires the same fan-out at the send time", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const sendAt = Date.now() + 60_000; // one minute out
+      const planId = await seedSchedulable(t, sendAt);
+
+      const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+      expect(res).toEqual({ ok: true, scheduled: true });
+
+      // Content is frozen AT APPROVE (rows seeded) but nothing advanced past "approved".
+      const reqs = await countRequests(t);
+      expect(reqs).toHaveLength(2);
+      for (const r of reqs) expect(r.status).toBe("approved");
+
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe("scheduled");
+      expect(plan?.scheduledFunctionId).toBeDefined();
+
+      // A live scheduled-function system row exists (the scheduler is armed).
+      expect((await listScheduled(t)).length).toBeGreaterThanOrEqual(1);
+
+      // Fire it → the SAME fan-out starts (status → delivering, set synchronously by startFanout).
+      vi.advanceTimersByTime(60_001);
+      await t.finishInProgressScheduledFunctions();
+      const after = await t.run((ctx) => ctx.db.get(planId));
+      expect(after?.status).toBe("delivering");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("immediate path unchanged: an unset sendAt starts synchronously (status delivering, no scheduled row)", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const planId = await seedSchedulable(t, undefined);
+
+      const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+      expect(res.ok).toBe(true);
+      expect("workflowId" in res && res.workflowId).toBeTruthy();
+      expect("scheduled" in res).toBe(false);
+
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe("delivering");
+      // No scheduler was armed on the immediate path (the workflow schedules its OWN steps, so
+      // assert there is no scheduled callback pointing at startScheduledDelivery specifically).
+      const scheduled = await listScheduled(t);
+      expect(scheduled.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
