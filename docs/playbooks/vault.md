@@ -1,6 +1,7 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 05-03 — the graph plane landed: `vaultLlm.ts` (V8 `extractGraph` — redact-then-extract + registry prompt + `SMOKE::graph::` seam) and `vaultGraph.ts` (`upsertGraph` cross-doc dedup + degree; `expand` hop-capped tenant-scoped BFS over `bfsNeighbors`), covered by `vaultGraph.test.ts`
+> Last verified: 05-04 — the durable ingest spine landed: `vault.ts` (tenant `vaultIngestText`/`vaultUpload` hash-dedup + accept-but-defer + `deleteVaultDoc` cascade/orphan-GC; internal `getDoc`/`markReady`/`markFailed`), `vaultIngest.ts` (`workflow.define` store→embed→extract→upsertGraph→recordSpend→ready with a `preCall` gate), and `vaultRag.embedDoc` (rag.add + hash dedup + `SMOKE::` bypass), covered by `vault.test.ts` + the `vaultRedaction.test.ts` §4 static scan
+> Prior: 05-03 — the graph plane: `vaultLlm.ts` (V8 `extractGraph` — redact-then-extract + registry prompt + `SMOKE::graph::` seam) and `vaultGraph.ts` (`upsertGraph` cross-doc dedup + degree; `expand` hop-capped tenant-scoped BFS over `bfsNeighbors`)
 > Build history: `.planning/phases/05-knowledge-vault-graphrag/` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -27,8 +28,11 @@ Pure packages:
 Backend adapters (thin):
 - `packages/backend/convex/vaultRag.ts` — the single `rag` construction site (05-02).
 - `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
-- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader (Plan 04's `internal.vault.getDoc` supersedes it).
-- `packages/backend/convex/vault.ts` / `vaultIngest.ts` / `vaultGround.ts` — thin Convex orchestration over `@pikar/vault` + rag + workflow (later plans).
+- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
+- `packages/backend/convex/vaultRag.embedDoc` (05-04) — the ingest embed step: reads the doc via `internal.vault.getDoc`, `scanText` fail-closed BEFORE `rag.add`, hash-dedups on `(namespace=tenantId, key=contentHash)`, `SMOKE::` bypass (no network). Returns `{entryId, costUsd}`.
+- `packages/backend/convex/vault.ts` (05-04) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), and the internal lifecycle (`getDoc`/`markReady`/`markFailed`). SOLE starter of the ingest workflow.
+- `packages/backend/convex/vaultIngest.ts` (05-04) — `ingestDoc = workflow.define(...)`: `preCall` gate (governed stop → `markFailed`, never a DLQ throw) → `embedDoc` → `extractGraph` → `upsertGraph` → `recordSpend` → `markReady`.
+- `packages/backend/convex/vaultGround.ts` — thin Convex orchestration over `@pikar/vault` + rag + workflow (later plan).
 
 Frontend (later plans):
 - `apps/web/app/(app)/dashboard/vault/` — the Knowledge Vault route + components (match the brand screenshots 1:1).
