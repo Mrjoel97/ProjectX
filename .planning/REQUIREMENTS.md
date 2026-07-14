@@ -46,6 +46,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **CKPT-01**: Agent can search/read the user's connected mailbox (via the already-granted `gmail.modify` scope) to surface people and context into the guided conversation — scoped to the requesting user only, with reads audited as refs/ids/counts (never raw message content), and nothing sent as a side effect of reading
 - [x] **CKPT-02**: Agent can generate a document and attach it to an outgoing email within an approved plan, flowing through the same governed send (audit, telemetry, DLQ) — distinct from INTK-02, which is *inbound* attachment ingestion
 - [ ] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
+- [ ] **CKPT-04**: Agent can, on demand, read and summarize the user's inbox into a time-grouped briefing (today/yesterday/this week — grouped in pure code from message timestamps, never by the model) with a "Needs you" triage section — under the **toolless-ingestion invariant**: raw message bodies only ever reach an LLM inside toolless, schema-validated digest calls (no tool-bearing agent loop ingests raw bodies); reads are capped and snippet-first, audited refs/ids/counts only, with zero mailbox writes and zero sends; any action seeded from the briefing crosses the normal PLAN → human Approve gate *(minted 2026-07-14 from `.planning/design/inbox-briefing.md`, beyond the original four cockpit slices)*
 
 ### Scheduling
 
@@ -160,6 +161,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Complete |
 | CKPT-03 | Phase 3.4 | In Progress (03.4-01 foundation: recipientBodies field; Waves 2–4 pending) |
+| CKPT-04 | Phase 3.7 | Pending |
 | SCHD-01 | Phase 3.5 | Pending |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
@@ -189,10 +191,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
-- v1 requirements: **46 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6)
-- Mapped to phases: 46
+- v1 requirements: **47 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7)
+- Mapped to phases: 47
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46*
+*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46; CKPT-04 minted (inbox briefing, Phase 3.7, 2026-07-14), count 46→47*

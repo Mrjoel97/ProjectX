@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content) (all 4 plans built 2026-07-14; CKPT-03 human-verify PENDING)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
 - [ ] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness
+- [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
@@ -217,6 +218,19 @@ Plans:
   4. The legacy `executive-agent.classifier` skill row is archived, and the agent-runtime playbook's "no live-model eval gate" gap is closed (playbook updated in the same phase).
 **Plans**: TBD (suggested 3 plans / 2 waves — see the design record)
 
+### Phase 3.7: Inbox Briefing (INSERTED)
+**Goal**: The agent converts the already-granted mailbox scope into daily chief-of-staff value — on demand it reads the inbox, groups messages by time in pure code, summarizes content only through toolless schema-validated digest calls, and renders a triaged BRIEFING card — with zero mailbox writes, nothing sent, and any briefing-seeded action crossing the normal Approve gate.
+**Depends on**: Phase 3.2 (gmail.ts search/token infra), Phase 3.2.1 (agent engine), Phase 3.6 (golden-set eval covers the new tools, incl. the injection-probe fixture)
+**Requirements**: CKPT-04 (minted 2026-07-14)
+**Design**: `.planning/design/inbox-briefing.md`
+**Success Criteria** (what must be TRUE):
+  1. Asking for a briefing in the cockpit produces a BRIEFING card grouped today/yesterday/this week, computed in pure tested code from `internalDate` + user timezone; each item shows timestamp, sender, and a one-line gist.
+  2. The **toolless-ingestion invariant** holds and is enforced: raw message bodies reach an LLM only inside toolless, schema-validated digest calls; the tool-bearing loop sees structured digests only (unit test + static scan, and the invariant is added to the agent-runtime playbook).
+  3. Reads are capped and snippet-first (full bodies only for digest-selected messages), audited refs/ids/counts only, with zero mailbox writes and zero sends; a briefing-seeded action goes through the normal conversation → PLAN → human Approve gate.
+  4. A "Needs you" triage section surfaces needsReply/deadline items as suggestions (never actions), from the digest schema.
+  5. The 3.6 golden set gains briefing cases including an injection-probe fixture: an email body containing send/forward instructions yields zero tool actions and no `proposePlan`.
+**Plans**: TBD (suggested 4 plans / 3 waves — see the design record)
+
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
 **Depends on**: Phase 2 (pipeline); guardrails from Phase 3 apply to enriched context
@@ -284,7 +298,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -298,6 +312,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | CKPT-03 human-verify pending | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 0/TBD | Not started | - |
 | 3.6 Agent Eval Gate (INSERTED) | 0/TBD | Not started | - |
+| 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
