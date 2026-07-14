@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Phase 3.3 COMPLETE (6/6) — CKPT-02 human-verified + goal-verified (passed). Next: plan Phase 3.4 (Per-Recipient Personalization)
-last_updated: "2026-07-14T09:16:09.095Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Completed 03.4-01-PLAN.md
+last_updated: "2026-07-14T10:40:40.470Z"
+last_activity: "2026-07-14 — Phase 3.4 Wave 1: 03.4-01 executed (plans.recipientBodies optional address-keyed body-override field + patchPlan arg + tests; CKPT-03 foundation). Lane A. Next: Wave 2 (personalizeRecipient tool)."
 progress:
   total_phases: 15
   completed_phases: 5
-  total_plans: 50
-  completed_plans: 47
-  percent: 94
+  total_plans: 54
+  completed_plans: 48
+  percent: 89
 ---
 
 # Project State
@@ -24,6 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 **Current focus:** Phase 3.1 — Cockpit Core (all 5 waves / plans 01–09 executed; ready for /gsd:verify-work)
 
 ## Current Position
+
+Phase: 3.4 (Per-Recipient Personalization) — IN PROGRESS. Wave 1 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.4-01 COMPLETE (Wave 1 — the content-plane FOUNDATION for CKPT-03). Added `plans.recipientBodies` — an OPTIONAL address-keyed map (`v.record(v.string(), v.string())`, lowercased address → that recipient's tailored body override; missing key = the shared `body`) added additively next to `greetingName` (NO migration, mirrors attachments/candidates/greetingName) — content-plane only, NEVER audited (§4). `patchPlan` gained one optional `recipientBodies` arg; the handler is UNCHANGED (the existing Object.fromEntries drop-undefined pattern persists the new key and preserves a stored map on a partial patch). Address-keyed (not index) survives mid-conversation recipient edits; orphan keys filter harmlessly at seed (Pitfall 2). Personalization is the INVERSE of the 3.3 attachment fan-out — each recipient carries a DISTINCT body while sharing subject/mode/attachments. BUILD-TIME CONFIRMATION RESOLVED: `v.record(v.string(),v.string())` is accepted by pinned Convex 1.42.1 (already used in telemetry.ts) — the documented array fallback was NOT needed, so Waves 2/3 use the record shape (one address lookup, no `.find`). plans.test.ts +3 cases (write+read-back, subject-only-patch preserves the map, second patch replaces wholesale) — 7/7 green. Backend source typecheck clean; check-playbooks exit 0. cockpit.md §9 Last verified → 03.4-01. Commits 7a4583f (test RED), f7b00fe (feat GREEN schema+patchPlan), 703833e (docs playbook). NO deviations. FOUNDATION ONLY — no tool (Wave 2 personalizeRecipient), no executePlan seed line (Wave 3), no PLAN-card render (Wave 4). Full backend 114/116: the 2 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered known red; runCockpitAgent mock-loop cold-start flake — ~4009ms tips the default 5000ms timeout only under full-suite load, passes 5/5 at 30s), NOT regressions. NEXT: Wave 2 (03.4-02 — personalizeRecipient tool reads/writes recipientBodies).
 
 Phase: 3.3 (Attachment Generation) — COMPLETE (6/6). Plans 03.3-01/02/03 (Wave 1, concurrent); 03.3-04 (Wave 2); 03.3-05 (Wave 3); 03.3-06 (Wave 4 — phase close + CKPT-02 human-verify, APPROVED). CKPT-02 satisfied + human-verified. Next: orchestrator runs verify_phase_goal + marks Phase 3.3 complete; then /gsd:verify-work.
 Plan: 03.3-06 COMPLETE (Wave 4 — phase close + CKPT-02 HUMAN-VERIFIED). Task 1 (cb2b394): smoke:fanout materializes ONE shared attachment ref fanned to every recipient (`assertFanoutAttachmentShared`) — forced-fail row dead-letters ALONE, terminals write-once, ZERO file bytes/base64 in any audit/deadLetters/telemetry row (§4, V6); smoke:guardrails gained a section (V8) — a generation turn under the kill switch returns the paused reply from `runCockpitAgent.preCall` BEFORE `generateAttachment` runs (NO attachment stored, NO deadLetters row, plan unapprovable, `assertNoAttachmentStored`); both green live. Task 2 (52d3a52): `cockpit-attachment.spec.ts` drives the offline `SMOKE::agent::attach` flow end-to-end (chat→attach→PLAN filename+download+no-attachmentError→Approve→REPORT delivered-with-attachment re-download) + a removeAttachment variant (V9); type-loads + Playwright-discovered (live run deferred to verify-work). §9 (c808bb7): cockpit.md attachment invariants + Last verified → 03.3-06 (check-playbooks exit 0). Task 3 human-verify APPROVED on the live Gmail-connected backend: a plan with a generated PDF attachment was Approved and the email ARRIVED in the recipient inbox WITH the PDF attached, opened correctly, audit refs-only (V10). THREE live-only gap-closure defects fixed + committed DURING verify (already deployed — NOT re-committed): (1) efdecd3 — cockpit-agent prompt reworked to read the WHOLE message and honor every intent (incl. an explicitly-asked attachment) instead of a rigid recipients→subject→body→mode pipeline (5-file mirror + seedSkills publish-on-change, live-verified); (2) 846fa81 — `rankCandidates` returns [] on no name-match (never substitutes an unrelated correspondent), `resolveContacts` reports the miss and asks for the address (core 21/21, USER-VERIFIED); (3) 59e740d — professional `markdownToPdf` (accent title block+rule, colored headings+section rules, square-bullet+numbered lists, inline **bold** run-aware wrap, GitHub pipe tables) + `tokenizeMarkdown`/`inlineRuns` strip stray */# so raw markdown never reaches the page; deterministic (byte-identity held); document-drafter skill relaxed for structured output (core documentGen 16/16, renderer smoke 6/6, skills 12/12, USER-VERIFIED). DEVIATIONS: all three above are Rule-1/2 gap-closure surfaced by the human-verify (live-only, offline suite could not catch) — correctness/quality requirements for CKPT-02, no scope creep. Phase 3.3 Attachment Generation COMPLETE. NEXT: orchestrator verify_phase_goal + phase-complete; then /gsd:verify-work.
@@ -112,6 +115,7 @@ Progress: [█████████░] 94%
 | Phase 03.3 P04 | 40 | 3 tasks | 7 files |
 | Phase 03.3 P05 | 30 | 2 tasks | 5 files |
 | Phase 03.3 P06 | 240 | 3 tasks | 14 files |
+| Phase 03.4 P01 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -197,6 +201,8 @@ Recent decisions affecting current work:
 - [Phase 03.3]: [Phase 03.3] toWinAnsi sanitizes conservatively (keep 0x20-0x7E + 0xA0-0xFF, map known LLM offenders, drop the rest) so pdf-lib drawText can never throw on smart-punct/astral input (V2)
 - [Phase 03.3]: executePlan fans one generated document set to all recipients via shared attachment ids (CKPT-02); convex-test drives the successful path by registering workflow/workpool (test-only workpool devDep)
 - [Phase 03.3]: 03.3-06 PHASE CLOSE + CKPT-02 HUMAN-VERIFIED: a generated PDF rides the governed fan-out to every recipient with refs-only logs (smoke:fanout/guardrails green live, V6/V8), cockpit-attachment E2E asserts the PLAN/REPORT card rows (V9), and a real PDF was delivered attached into a Gmail inbox with audit refs-only (V10). Three live-only gap-closure fixes during human-verify: (1) efdecd3 cockpit-agent prompt reads the whole message and honors every intent incl. an explicitly-asked attachment; (2) 846fa81 rankCandidates returns [] on no name-match (honest 'not found, what is their email?' over substituting a stranger); (3) 59e740d professional markdownToPdf renderer (title block, colored headings, bullets/numbered lists, inline bold, pipe tables) + inlineRuns strips stray markers, deterministic byte-identity held. Phase 3.3 Attachment Generation COMPLETE (6/6).
+- [Phase 03.4]: recipientBodies keyed by lowercased ADDRESS (not index) — survives mid-conversation recipient edits; orphan keys filter at seed (03.4-01)
+- [Phase 03.4]: v.record(v.string(),v.string()) accepted by pinned Convex 1.42.1 (used in telemetry.ts) — no array fallback needed for recipientBodies (03.4-01)
 
 ### Roadmap Evolution
 
@@ -214,8 +220,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T08:56:56.033Z
-Stopped at: Completed 03.3-06-PLAN.md (Phase 3.3 COMPLETE — CKPT-02 human-verified)
+Last session: 2026-07-14T10:40:23.055Z
+Stopped at: Completed 03.4-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

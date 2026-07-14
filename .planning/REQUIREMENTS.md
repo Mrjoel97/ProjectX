@@ -151,7 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DLVR-03 | Phase 2 | Complete |
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Complete |
-| CKPT-03 | Phase 3.4 | Pending |
+| CKPT-03 | Phase 3.4 | In Progress (03.4-01 foundation: recipientBodies field; Waves 2–4 pending) |
 | SCHD-01 | Phase 3.5 | Pending |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
