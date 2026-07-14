@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
 - [x] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) â 2026-07-13 - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
 - [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
-- [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content)
+- [ ] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content) (all 4 plans built 2026-07-14; CKPT-03 human-verify PENDING)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
 - [ ] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline
 - [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
@@ -187,10 +187,10 @@ Plans:
 **Plans**: 4 plans in 4 waves (planned 2026-07-14)
 
 Plans:
-- [ ] 03.4-01-PLAN.md — plans.recipientBodies schema field + patchPlan arg + tests (Wave 1)
-- [ ] 03.4-02-PLAN.md — personalizeRecipient tool + buildAgentContext + proposePlan group gate + cockpit-agent skill + SMOKE op (Wave 2)
-- [ ] 03.4-03-PLAN.md — executePlan per-recipient seed override + PLAN card per-recipient body section (Wave 3)
-- [ ] 03.4-04-PLAN.md — cockpit-personalize E2E + smoke:fanout distinct-body + playbook close + CKPT-03 human-verify (Wave 4)
+- [x] 03.4-01-PLAN.md — plans.recipientBodies schema field + patchPlan arg + tests (Wave 1)
+- [x] 03.4-02-PLAN.md — personalizeRecipient tool + buildAgentContext + proposePlan group gate + cockpit-agent skill + SMOKE op (Wave 2)
+- [x] 03.4-03-PLAN.md — executePlan per-recipient seed override + PLAN card per-recipient body section (Wave 3)
+- [~] 03.4-04-PLAN.md — cockpit-personalize E2E + smoke:fanout distinct-body + playbook close (BUILT); CKPT-03 human-verify PENDING (Wave 4)
 
 ### Phase 3.5: Deferred Send (INSERTED)
 **Goal**: A plan can carry a user-specified future send time, so the chief-of-staff promise covers *when* as well as *what* â approve once, and the governed send fires at the requested moment, cancellable until then.
@@ -282,7 +282,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.2 Inbox Reading (INSERTED) | 6/6 | Complete | 2026-07-12 |
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
-| 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
+| 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | CKPT-03 human-verify pending | 2026-07-14 |
 | 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
