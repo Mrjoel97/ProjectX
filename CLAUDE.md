@@ -99,6 +99,16 @@ playbook from `docs/playbooks/TEMPLATE.md` and registering it, or acknowledging 
 under `"_unassigned"`). New playbooks must register their watched path prefixes in
 `watch.json` or the hook cannot protect them.
 
+## 10. Frontend brand & UI — read `docs/design/BRAND.md`
+
+Before building or changing any user-facing UI, read `docs/design/BRAND.md`. It is the single
+committed source of truth for how Pikar AI looks and sounds — color tokens (keyed to
+`apps/web/app/globals.css`), typography, layout, component patterns, content voice, and
+accessibility rules — plus real product screenshots in `docs/design/brand/`. Design direction and
+screenshots shared in a chat do NOT reach other sessions; only this committed file does. Use the
+`globals.css` CSS variables (never hardcode a hex a token covers) and match the screenshots before
+inventing new patterns. The app deliberately has no component library yet — don't add one without asking.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
