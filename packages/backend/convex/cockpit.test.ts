@@ -165,3 +165,45 @@ describe("executePlan attachment fan-out (CKPT-02 — one byte set shared across
     expect(await t.run((ctx) => ctx.db.query("attachments").collect())).toHaveLength(0);
   });
 });
+
+describe("executePlan per-recipient personalization (CKPT-03 — distinct bodies, shared subject)", () => {
+  test("each recipient's draft is its tailored override; a non-personalized recipient falls back to the shared body; the goal (subject) is shared", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    // 3 recipients, 2 tailored + 1 without an override; an ORPHAN key (z@) no longer in recipients
+    // is simply never looked up (no error, no extra row). Keyed by the RAW recipients[i] value —
+    // the same value the seed loop iterates from plan.recipients (Wave 2 write/read alignment).
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "proposed",
+        recipients: ["a@example.com", "b@example.com", "c@example.com"],
+        mode: "individual",
+        subject: "Q3 update", // SHARED goal for every row
+        body: "Here is the Q3 update.", // the shared fallback body
+        recipientBodies: {
+          "a@example.com": "Dear A, your Q3 numbers.",
+          "b@example.com": "Yo B, quick Q3 hit.",
+          "z@example.com": "orphaned — not in recipients", // ignored harmlessly at seed
+        },
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+
+    const reqs = await t.run((ctx) => ctx.db.query("requests").collect());
+    expect(reqs).toHaveLength(3); // one row per recipient — the orphan key adds nothing
+    const byRecipient = Object.fromEntries(reqs.map((r) => [r.recipient, r]));
+
+    // Distinct tailored bodies land in their OWN request row...
+    expect(byRecipient["a@example.com"]?.draft).toBe("Dear A, your Q3 numbers.");
+    expect(byRecipient["b@example.com"]?.draft).toBe("Yo B, quick Q3 hit.");
+    // ...and the non-personalized recipient falls back to the shared body (no error, no duplication).
+    expect(byRecipient["c@example.com"]?.draft).toBe("Here is the Q3 update.");
+    // The subject (goal) is SHARED across every recipient regardless of body tailoring.
+    for (const r of reqs) expect(r.goal).toBe("Q3 update");
+  });
+});
