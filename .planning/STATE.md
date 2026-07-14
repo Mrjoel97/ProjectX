@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-07-14T15:37:21.758Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-07-14T15:49:43.862Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 15
   completed_phases: 5
   total_plans: 57
-  completed_plans: 48
+  completed_plans: 49
 ---
 
 ---
@@ -128,6 +128,7 @@ Progress: [█████████░] 94%
 | Phase 03.3 P05 | 30 | 2 tasks | 5 files |
 | Phase 03.3 P06 | 240 | 3 tasks | 14 files |
 | Phase 05 P01 | 6 | 3 tasks | 9 files |
+| Phase 05 P02 | 9 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -214,6 +215,7 @@ Recent decisions affecting current work:
 - [Phase 03.3]: executePlan fans one generated document set to all recipients via shared attachment ids (CKPT-02); convex-test drives the successful path by registering workflow/workpool (test-only workpool devDep)
 - [Phase 03.3]: 03.3-06 PHASE CLOSE + CKPT-02 HUMAN-VERIFIED: a generated PDF rides the governed fan-out to every recipient with refs-only logs (smoke:fanout/guardrails green live, V6/V8), cockpit-attachment E2E asserts the PLAN/REPORT card rows (V9), and a real PDF was delivered attached into a Gmail inbox with audit refs-only (V10). Three live-only gap-closure fixes during human-verify: (1) efdecd3 cockpit-agent prompt reads the whole message and honors every intent incl. an explicitly-asked attachment; (2) 846fa81 rankCandidates returns [] on no name-match (honest 'not found, what is their email?' over substituting a stranger); (3) 59e740d professional markdownToPdf renderer (title block, colored headings, bullets/numbered lists, inline bold, pipe tables) + inlineRuns strips stray markers, deterministic byte-identity held. Phase 3.3 Attachment Generation COMPLETE (6/6).
 - [Phase 05]: Vault domain logic lives in pure @pikar/vault (zero Convex imports); convex/vault* adapters stay thin (§1)
+- [Phase 05]: 05-02: derive RAG EmbeddingModel via ConstructorParameters<typeof RAG> to absorb the ai@6(rag)/ai@7(backend) type skew — no version-pinned import, mirrors llm.ts LanguageModel casts
 
 ### Roadmap Evolution
 
@@ -231,8 +233,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T15:37:21.740Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-07-14T15:49:35.127Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
