@@ -31,5 +31,11 @@
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
     "packages/backend/scripts/run-seed.mjs"
+  ],
+  "intake.md": [
+    "packages/extraction/",
+    "packages/backend/convex/intake.ts",
+    "packages/backend/convex/intakeDb.ts",
+    "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx"
   ]
 }
