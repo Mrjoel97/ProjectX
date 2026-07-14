@@ -13,6 +13,7 @@ import {
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_AGENT_CLASSIFIER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
+  GRAPH_EXTRACTOR_SKILL,
   type LoadedSkill,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
@@ -21,6 +22,7 @@ import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachment
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
+import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { v } from "convex/values";
@@ -103,6 +105,7 @@ export const seedSkills = internalMutation({
       { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
       { name: DOCUMENT_DRAFTER_SKILL, body: documentDrafterSkillBody },
       { name: ATTACHMENT_EXTRACTOR_SKILL, body: attachmentExtractorSkillBody },
+      { name: GRAPH_EXTRACTOR_SKILL, body: graphExtractorSkillBody },
     ];
 
     for (const { name, body } of seeds) {

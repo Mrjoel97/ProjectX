@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness
 - [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (code-complete 2026-07-14; SC3 live-verify + 04-06 close pending)
-- [ ] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user
+- [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [ ] **Phase 7: Resilience & Operations Hardening** - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
 - [ ] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch
@@ -262,7 +262,16 @@ Plans:
   2. Graphify extracts entities/relationships from vault content at ingestion; the resulting nodes/edges are stored and queryable in Convex `graphNodes`/`graphEdges` tables.
   3. A request is grounded using hybrid retrieval â vector similarity plus hop-capped graph traversal â scoped to only the requesting user's data.
   4. User can browse and search their own vault contents.
-**Plans**: TBD
+**Plans**: 7 plans in 7 waves (Lane C, planned 2026-07-14)
+
+Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (P0 embedding-adapter fix recorded at close).
+- [x] 05-01-PLAN.md — vault playbook + watch.json registration + @pikar/vault pure domain (normalize/BFS/fusion/categories/constants) (Wave 1)
+- [x] 05-02-PLAN.md — schema (vaultDocuments/graphNodes/graphEdges) + single RAG instance + graph-extractor skill 5-file mirror (Wave 2)
+- [x] 05-03-PLAN.md — graph plane: extractGraph (V8 generateObject) + upsert dedup/degree/GC + hop-capped BFS expand (Wave 3)
+- [x] 05-04-PLAN.md — ingest workflow (store→embed→extract→ready) + rag.add embed + lifecycle mutations + delete-cascade + §4 redaction scan (Wave 4)
+- [x] 05-05-PLAN.md — vaultGround hybrid vector+graph retrieval + browse/stats/category-search/signed-download/docEntities read plane (Wave 5)
+- [x] 05-06-PLAN.md — /dashboard/vault route matching brand-024242/024258 (stat tiles, tabs, dropzone, search, grid/list, preview modal) + nav (Wave 6)
+- [x] 05-07-PLAN.md — Playwright vault E2E + live smoke:vault + playbook/STATE/ROADMAP close + human-verify (Wave 7)
 
 ### Phase 6: Live Voice Sessions
 **Goal**: Users can hold a live strategy conversation with the Executive Agent that safely becomes a durable brief and, optionally, an executable plan â the product's identity feature, isolated from the durable pipeline and cost-metered.
@@ -321,12 +330,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.2 Inbox Reading (INSERTED) | 6/6 | Complete | 2026-07-12 |
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
-| 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | CKPT-03 human-verify pending | 2026-07-14 |
-| 3.5 Deferred Send (INSERTED) | 0/TBD | Not started | - |
+| 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
+| 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
 | 3.6 Agent Eval Gate (INSERTED) | 0/TBD | Not started | - |
 | 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 5/6 | Code-complete; SC3 live-verify + 04-06 close pending | 2026-07-14 |
-| 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
+| 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
 | 8. Self-Improvement | 0/TBD | Not started | - |

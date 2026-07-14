@@ -56,10 +56,10 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Knowledge Vault
 
-- [ ] **VALT-01**: Briefs and documents are stored and embedded (text-embedding-3-small @1536) for vector retrieval
-- [ ] **VALT-02**: Graphify extracts entities/relationships from vault content at ingestion; nodes/edges stored in Convex
-- [ ] **VALT-03**: Request grounding uses hybrid retrieval — vector similarity plus hop-capped graph traversal — scoped to the requesting user
-- [ ] **VALT-04**: User can browse and search their vault contents
+- [x] **VALT-01**: Briefs and documents are stored and embedded (text-embedding-3-small @1536) for vector retrieval
+- [x] **VALT-02**: Graphify extracts entities/relationships from vault content at ingestion; nodes/edges stored in Convex
+- [x] **VALT-03**: Request grounding uses hybrid retrieval — vector similarity plus hop-capped graph traversal — scoped to the requesting user
+- [x] **VALT-04**: User can browse and search their vault contents
 
 ### Live Voice Sessions
 
@@ -163,10 +163,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-03 | Phase 3.4 | Complete (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure) |
 | CKPT-04 | Phase 3.7 | Pending |
 | SCHD-01 | Phase 3.5 | Complete |
-| VALT-01 | Phase 5 | Pending |
-| VALT-02 | Phase 5 | Pending |
-| VALT-03 | Phase 5 | Pending |
-| VALT-04 | Phase 5 | Pending |
+| VALT-01 | Phase 5 | Complete |
+| VALT-02 | Phase 5 | Complete |
+| VALT-03 | Phase 5 | Complete |
+| VALT-04 | Phase 5 | Complete |
 | VOIC-01 | Phase 6 | Pending |
 | VOIC-02 | Phase 6 | Pending |
 | VOIC-03 | Phase 6 | Pending |

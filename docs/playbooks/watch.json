@@ -38,5 +38,18 @@
     "packages/backend/convex/intake.ts",
     "packages/backend/convex/intakeDb.ts",
     "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx"
+  ],
+  "vault.md": [
+    "packages/vault/",
+    "packages/backend/convex/vault.ts",
+    "packages/backend/convex/vaultRag.ts",
+    "packages/backend/convex/vaultIngest.ts",
+    "packages/backend/convex/vaultLlm.ts",
+    "packages/backend/convex/vaultGraph.ts",
+    "packages/backend/convex/vaultGround.ts",
+    "packages/backend/convex/vaultSmoke.ts",
+    "apps/web/app/(app)/dashboard/vault/",
+    "apps/web/e2e/vault.spec.ts",
+    "packages/backend/scripts/run-smoke-vault.mjs"
   ]
 }

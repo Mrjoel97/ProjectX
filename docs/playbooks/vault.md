@@ -1,0 +1,102 @@
+# Playbook: Knowledge Vault & GraphRAG
+
+> Last verified: 05-07b — LIVE browser human-verify (real user, Claude-in-Chrome): the vault route renders a 1:1 brand match; a pasted Brain Dump ingested end-to-end through the REAL pipeline (embed → graph-extract → upsert → `ready`), and the preview modal surfaced the correctly-extracted entities (Meridian Health/CareLink/Vantage Systems `org`, Alan Ford/Nina Osei `person`) + a typed `led by` relationship. The live run CAUGHT + FIXED a P0 the offline SMOKE suite could not: `vaultRag.ts` passed a spec-"v4" `openai.embedding(...)` model to RAG's ai@6 (`AI_UnsupportedModelVersionError`) — replaced with a v2 `openaiEmbeddingV2` REST adapter (+ a `vaultRedaction.test.ts` static guard). Also surfaced: ingest needs `skills:seedSkills` run against the deployment (`NO_ACTIVE_SKILL: graph-extractor` otherwise).
+>
+> Prior: 05-07 — phase close (VALT-01/03/04): the Playwright vault E2E (`apps/web/e2e/vault.spec.ts` — honest-zero → paste a `SMOKE::graph::` Brain Dump → processing→ready reactively → search → preview with entity chips → delete → empty, over the OFFLINE SMOKE:: ingest, Playwright-discovered + type-loads) and the live `smoke:vault` gate (`packages/backend/scripts/run-smoke-vault.mjs` + `packages/backend/convex/vaultSmoke.ts`: seed 2 briefs sharing an entity with a REAL `rag.add` embed → poll ready → assert live hybrid `rag.search` returns the seed → assert `vaultGround`'s live path merges the graph neighbor reached via the shared entity → assert no raw brief text in any audit/deadLetters row §4; a try/finally purge). The human-verify against `brand-024242`/`brand-024258` is the phase gate. `vaultSmoke.ts` is a smoke-only internal helper (explicit `tenantId` — the CLI carries no identity); its live run is the runnable check (no colocated convex-test — the rag/workflow components don't run under it).
+> Prior: 05-06 — the Knowledge Vault UI route landed (VALT-04): `apps/web/app/(app)/dashboard/vault/` — `page.tsx` (headline + teal Refresh + Loading pill + lifted category/selected state), `VaultStats.tsx` (4 tiles), `CategoryTabs.tsx` (the 6 tabs), `Dropzone.tsx` (generateUploadUrl→vaultUpload + Brain-Dump paste→vaultIngestText), `DocGrid.tsx` (search via `vaultSearch` + N ITEMS + grid/list), and `PreviewModal.tsx` (in-place Esc/X modal: text/image/video preview + metadata + this-doc `docEntities` chips/edges + on-demand `vaultDownloadUrl` browser download + `deleteVaultDoc` reactive-remove + Open-in-workspace link). A signed download/media URL is rendered into `<img>`/`<video>`/`<a>` ONLY, never logged (§4). Nav entry added in `(app)/layout.tsx`; tokens only (globals.css)
+> Prior: 05-05 — the READ plane landed: `vaultGround.ts` (`vaultGround` tenantAction — `rag.search` hybrid seeds → map entries to docIds → hop-capped `expand` → `fuse`, `namespace=tenantId` + tenant-scoped expand isolation, `SMOKE::<docId,…>` offline seam via `ownedDocsMeta`) and the `vault.ts` read surfaces (`listVaultDocs`/`vaultStats`/`vaultDownloadUrl` bearer-capability guard/`docEntities`/`vaultSearch` — the same `rag.search` hybrid primitive post-filtered to a category), covered by `vaultGround.test.ts`
+> Prior: 05-04 — the durable ingest spine: `vault.ts` (tenant `vaultIngestText`/`vaultUpload` hash-dedup + accept-but-defer + `deleteVaultDoc` cascade/orphan-GC; internal `getDoc`/`markReady`/`markFailed`), `vaultIngest.ts` (`workflow.define` store→embed→extract→upsertGraph→recordSpend→ready with a `preCall` gate), and `vaultRag.embedDoc` (rag.add + hash dedup + `SMOKE::` bypass), covered by `vault.test.ts` + the `vaultRedaction.test.ts` §4 static scan
+> Prior: 05-03 — the graph plane: `vaultLlm.ts` (V8 `extractGraph` — redact-then-extract + registry prompt + `SMOKE::graph::` seam) and `vaultGraph.ts` (`upsertGraph` cross-doc dedup + degree; `expand` hop-capped tenant-scoped BFS over `bfsNeighbors`)
+> Build history: `.planning/phases/05-knowledge-vault-graphrag/` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
+
+## Purpose
+
+A per-user **Knowledge Vault** with **GraphRAG** grounding (VALT-01..04). Briefs/documents are
+stored, embedded, and entity/relationship-extracted at ingestion; requests can be grounded via
+**hybrid vector + hop-capped graph retrieval** scoped to the requesting user; and the user can
+browse, preview, search, and download their own vault contents through the committed brand UI
+(`docs/design/brand/brand-024242.png` / `brand-024258.png`). Built on the installed
+`@convex-dev/rag@0.7.5` (vector + hybrid search) + `@convex-dev/workflow` durable ingest + a
+bespoke Convex graph plane (`graphNodes`/`graphEdges`), with domain logic in the pure-TS
+`@pikar/vault` package.
+
+## Key files
+
+Pure packages:
+- `packages/vault/src/normalize.ts` — `normalizeName` (case/whitespace collapse → cross-doc dedup key).
+- `packages/vault/src/categories.ts` — `categoryFor(source, mimeType)` (→ one of 6 vault categories), `isSearchable(mimeType)` (Phase-5 searchable set TXT/MD/CSV), `VAULT_CATEGORIES` (the fixed-6 runtime tuple → the `vaultStats.categories` count + UI tabs).
+- `packages/vault/src/traversal.ts` — `bfsNeighbors(adjacency, seeds, hopCap)` (pure hop-capped BFS, no Convex import).
+- `packages/vault/src/fusion.ts` — `fuse(...)` vector-seed + graph-expand merge/dedupe/rank.
+- `packages/vault/src/constants.ts` — `VAULT_FILE_CAP_BYTES`, `GRAPH_HOP_CAP` (= 2).
+- `packages/vault/src/index.ts` — re-exports the package surface.
+
+Backend adapters (thin):
+- `packages/backend/convex/vaultRag.ts` — the single `rag` construction site (05-02).
+- `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
+- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
+- `packages/backend/convex/vaultRag.embedDoc` (05-04) — the ingest embed step: reads the doc via `internal.vault.getDoc`, `scanText` fail-closed BEFORE `rag.add`, hash-dedups on `(namespace=tenantId, key=contentHash)`, `SMOKE::` bypass (no network). Returns `{entryId, costUsd}`.
+- `packages/backend/convex/vault.ts` (05-04/05-05) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), the internal lifecycle (`getDoc`/`markReady`/`markFailed`), and (05-05) the READ plane: `listVaultDocs`/`vaultStats` (cheap, no vectors), `vaultDownloadUrl` (owner-only signed URL, bearer capability, never logged §4), `docEntities` (owner-guarded per-doc nodes/edges), `vaultSearch` (the `rag.search` hybrid primitive post-filtered to a category), and `ownedDocsMeta` (the tenant-scope resolve seam shared by grounding + search). SOLE starter of the ingest workflow.
+- `packages/backend/convex/vaultIngest.ts` (05-04) — `ingestDoc = workflow.define(...)`: `preCall` gate (governed stop → `markFailed`, never a DLQ throw) → `embedDoc` → `extractGraph` → `upsertGraph` → `recordSpend` → `markReady`.
+- `packages/backend/convex/vaultGround.ts` (05-05) — the standalone grounding action `vaultGround({query})`: `rag.search` hybrid seeds → map entries to `vaultDocuments` ids → hop-capped `internal.vaultGraph.expand` → `fuse` merge/dedupe/rank → one context block. `namespace=tenantId` + tenant-scoped expand = a different tenant's corpus never enters. `SMOKE::<docId,…>` offline seam resolves seeds through the tenant-scoped `ownedDocsMeta` (no embedding call). Cockpit/pipeline call-site DEFERRED (Lane A).
+
+Phase gate (05-07):
+- `apps/web/e2e/vault.spec.ts` — the Playwright browse/search/preview/delete loop (VALT-04) over the offline `SMOKE::graph::` ingest (paste → processing→ready → entity chips → delete). Under the shared e2e harness (also cockpit.md's watch); the live green run may defer to `/gsd:verify-work` (auth-harness precedent).
+- `packages/backend/scripts/run-smoke-vault.mjs` + `packages/backend/convex/vaultSmoke.ts` — the live-deployment gate (VALT-01/03): REAL embed + hybrid `rag.search` + `vaultGround` graph-neighbor merge for tenant "smoke", refs-only §4 scan, failure-proof purge. Internal-only (the CLI has no identity), so every helper takes `tenantId` explicitly.
+
+Frontend (05-06):
+- `apps/web/app/(app)/dashboard/vault/` — the Knowledge Vault route + components (match the brand screenshots 1:1): `page.tsx` (composition + lifted category/selected state, Refresh re-subscribes via a `nonce` key), `VaultStats.tsx`, `CategoryTabs.tsx`, `Dropzone.tsx` (upload + Brain-Dump paste), `DocGrid.tsx` (search + N ITEMS + grid/list; exports `VaultDoc`/`fmtSize`), `PreviewModal.tsx` (in-place preview + `docEntities` + on-demand download + reactive delete), `icons.tsx` (inline SVGs, no icon library).
+
+## Dependencies & blast radius
+
+Run `graphify query "vault"` for the current subgraph. Couplings graphify cannot see:
+- `@convex-dev/rag@0.7.5` (pinned, §6) — `namespace = tenantId` per-user isolation (VALT-03).
+- `@convex-dev/workflow@0.4.4` (pinned, §6) — durable `store → embed → extract → ready` ingest.
+- `convex/lib/functions.ts` tenant wrappers (§2), `convex/lib/hash.ts` `contentHash` dedup, `convex/guardrails.ts` + `@convex-dev/rate-limiter` + `packages/cost` (governance), `packages/pii` `scanText` (redaction).
+- The `graph-extractor` registry skill (§5) — versioned skill row, no hardcoded prompt.
+
+## Data flow
+
+1. Ingest mutation writes a `vaultDocuments` row `status:'processing'` + stores text (raw content lives ONLY here + rag chunks — the tenant-scoped content plane, NOT the §4 honeypot).
+2. `@convex-dev/workflow` runs `store → embed → extract → ready`: `pii.scanText` (fail-closed) → embed `safeText` via rag → `vaultLlm` graph-extractor emits typed entities/relationships → upsert `graphNodes`/`graphEdges`.
+3. Grounding: `vaultGround({query})` → rag vector search (top-K seed chunks) → map to graph nodes → `bfsNeighbors` hop-capped expansion → `fuse` merge/dedupe/rank → one grounding context block.
+4. Delete cascades: remove the row + rag chunks + `graphEdges` with `sourceDocId = doc`; nodes whose `degree` hits 0 are garbage-collected.
+
+## Invariants — what must never break
+
+- **Domain logic in `@pikar/vault`, thin `convex/vault*` adapters (§1)** — the pure package has ZERO Convex imports; enforced by the colocated `packages/vault` tests running with no backend.
+- **`namespace = tenantId` per-user isolation (VALT-03)** — every rag `add/search/delete` is namespaced by the tenant; reads/writes go through the `tenantQuery/tenantMutation/tenantAction` wrappers.
+- **rag runtime split** — `rag.add/search/delete` are ACTION-only; `addAsync/deleteAsync/list/getEntry/findEntryByContentHash` are mutation/query-safe.
+- **The graph-extractor lives in a DEFAULT-runtime (V8) `vaultLlm.ts`** — NEVER a second `"use node"` module.
+- **Redact-then-extract (§4)** — the extractor receives `safeText`; graph/audit/deadLetter payloads carry refs + hashes + counts ONLY. Raw text lives ONLY in `vaultDocuments.text` + rag chunks.
+- **Cross-doc dedup** — same entity across docs upserts to ONE node on `(tenantId, type, normalizedName)` via `normalizeName`, so the graph actually connects documents.
+- **Hop cap = 2 (`GRAPH_HOP_CAP`)** — `bfsNeighbors` never expands past the cap; enforced by `traversal.test.ts`.
+- **Pinned `rag`/`workflow` versions must not be bumped (§6)** — pre-1.0 API churn.
+
+## How to change safely
+
+- **New graph traversal / fusion behavior** → change `@pikar/vault`, add a colocated test, keep it Convex-free. The Convex `vaultGraph.expand` query builds the adjacency and calls `bfsNeighbors`; `vaultGround` calls `fuse`.
+- **New category / searchable format** → edit `categories.ts` + its test; do NOT scatter category strings into adapters.
+- **New ingest step** → add a durable workflow step; keep the redact-before-LLM ordering.
+- **Schema change** → new tables / optional fields, no migration (prior-phase discipline).
+
+## How to verify
+
+- `pnpm --filter @pikar/vault test` — pure-domain tests (normalize, categories, traversal, fusion).
+- `pnpm --filter @pikar/vault typecheck` — clean.
+- `pnpm --filter @pikar/backend test vault vaultGround` — the Convex adapter tests: ingest/dedup/cascade + the read plane (grounding fusion, hop-cap, cross-tenant isolation, browse/stats/download-guard/docEntities/category-search). Windows note: convex-test files crash on parallel-fork teardown ("Cannot set properties of undefined (setting 'exit')") → false red; each file passes run alone.
+- `pnpm --filter @pikar/backend smoke:vault` — the live-deployment gate (VALT-01/03): REAL embed + hybrid search + `vaultGround` graph-neighbor merge on a running `convex dev` deployment (needs its OPENAI_API_KEY).
+- `pnpm --filter @pikar/web exec playwright test vault --list` — the vault E2E is Playwright-discovered + type-loads; a full green run needs the running local stack + the auth harness (may defer to verify-work).
+
+## Operational notes
+
+- Embedding model `text-embedding-3-small` @ 1536 dims (under Convex's 2048 cap).
+- **RAG needs a v2-spec embedding model.** `@convex-dev/rag@0.7.5` bundles ai@6, whose `embedMany` accepts ONLY an `EmbeddingModelV2` (`specificationVersion: "v2"`). The backend's `@ai-sdk/openai@4` produces a spec-**"v4"** model (correct for ai@7 / `llm.ts`), which RAG REJECTS at ingest time with `AI_UnsupportedModelVersionError` — a runtime skew a `as unknown as` type-cast silences but does NOT fix. `vaultRag.ts` therefore hands RAG a hand-rolled v2 adapter (`openaiEmbeddingV2`) that calls OpenAI's `/v1/embeddings` REST API directly. NEVER pass `openai.embedding(...)` straight into the RAG constructor (guarded by the `vaultRedaction.test.ts` v2-spec static scan). Drop the adapter when the pinned RAG realigns to ai@7 (§6).
+- Ingest requires the `graph-extractor` skill SEEDED in the deployment (`skills:seedSkills`) — an unseeded deployment fails the extract step with `NO_ACTIVE_SKILL: graph-extractor` (a seeding step, not a code defect; runs at boot).
+- Per-file cap `VAULT_FILE_CAP_BYTES`; no per-tenant total quota this phase (single-owner beta).
+- Phase-5 wires TXT/MD/CSV + Brain Dumps end-to-end; PDF/DOCX/XLSX/PPTX/Images are accept-but-defer (stored + `pending extraction`), their text arriving via the `vaultIngestText` seam when Phase 4 lands.
+
+## Known gaps & deferred work
+
+- The `vaultGround` cockpit/pipeline call-site is deferred (Lane A integration phase).
+- Binary + OCR extraction is Lane B / Phase 4 (`vaultIngestText(docId, extractedText)` seam).
+- Per-tenant storage quota, external sharing, per-item agent toggle, in-place re-embed editing — all deferred.

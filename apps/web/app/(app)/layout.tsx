@@ -27,6 +27,7 @@ import { ReconnectBanner } from "./_components/ReconnectBanner";
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
 // pages don't exist yet render disabled with a "Soon" tag — honest, no dead links.
+// Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
 const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
@@ -38,7 +39,7 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Reports", icon: <PieIcon />, soon: true },
-  { label: "Knowledge Vault", icon: <VaultIcon />, soon: true },
+  { label: "Knowledge Vault", href: "/dashboard/vault", icon: <VaultIcon /> },
   { label: "Join Community", icon: <GlobeIcon />, soon: true },
 ];
 

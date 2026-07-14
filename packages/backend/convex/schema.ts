@@ -295,4 +295,63 @@ export default defineSchema({
     extracted: v.optional(v.string()), // REDACTED safeText (content plane; §4 keeps it out of audit)
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
+
+  // ── Phase-5 knowledge-vault plane ──────────────────────────────────────────
+  // Per-user Knowledge Vault + GraphRAG (VALT-01..04). New tables + optional
+  // fields only → no migration (prior-phase discipline). Every table is
+  // tenant-scoped and carries the index its adapter query needs.
+
+  // A stored vault document. Raw content lives in `text` (the tenant-scoped
+  // content plane, CLAUDE.md §4 — the user's OWN private data, NEVER an
+  // audit/DLQ payload). `ragEntryId` links the embedded rag entry; the graph
+  // extraction runs off the redacted text at ingest.
+  vaultDocuments: defineTable({
+    tenantId: v.string(),
+    title: v.string(),
+    kind: v.string(), // logical kind (e.g. brief, brain_dump, upload)
+    category: v.string(), // one of the 6 vault categories (categoryFor)
+    source: v.string(), // ingest source (upload / paste / seam)
+    mimeType: v.string(),
+    size: v.number(),
+    contentHash: v.string(), // sha-256 hex → cross-doc dedup
+    storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
+    text: v.optional(v.string()), // raw extracted text (content plane, §4)
+    ragEntryId: v.optional(v.string()), // the embedded rag entry id
+    status: v.union(
+      v.literal("processing"), // ingest workflow running (embed → extract)
+      v.literal("ready"), // embedded + extracted, groundable
+      v.literal("failed"), // ingest failed (see failureReason)
+      v.literal("pending_extraction"), // stored, text not yet available (binary/OCR seam)
+    ),
+    failureReason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"]) // browse
+    .index("by_tenant_contentHash", ["tenantId", "contentHash"]), // dedup
+
+  // A typed entity extracted from vault documents. Cross-doc dedup upserts to
+  // ONE node on (tenantId, normalizedName) [type filtered in-handler] via
+  // normalizeName, so the graph actually connects documents. `degree` supports
+  // orphan GC on delete-cascade.
+  graphNodes: defineTable({
+    tenantId: v.string(),
+    type: v.string(), // person / org / project / place / topic / other
+    name: v.string(), // surface form
+    normalizedName: v.string(), // normalizeName(name) → dedup key
+    degree: v.number(),
+  }).index("by_tenant_normalized", ["tenantId", "normalizedName"]), // upsert/dedup
+
+  // A relationship between two graphNodes, attributed to its source document.
+  // fromNode/toNode indexes drive hop-capped BFS traversal; by_tenant_source
+  // drives the delete-cascade (remove edges whose sourceDocId = deleted doc).
+  graphEdges: defineTable({
+    tenantId: v.string(),
+    fromNodeId: v.id("graphNodes"),
+    toNodeId: v.id("graphNodes"),
+    rel: v.string(),
+    sourceDocId: v.id("vaultDocuments"),
+  })
+    .index("by_tenant_fromNode", ["tenantId", "fromNodeId"]) // BFS forward
+    .index("by_tenant_toNode", ["tenantId", "toNodeId"]) // BFS reverse
+    .index("by_tenant_source", ["tenantId", "sourceDocId"]), // delete-cascade
 });

@@ -122,6 +122,9 @@ importers:
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
+      '@pikar/vault':
+        specifier: workspace:*
+        version: link:../vault
       ai:
         specifier: 7.0.20
         version: 7.0.20(zod@4.4.3)
@@ -195,6 +198,12 @@ importers:
       '@pikar/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
+  packages/vault:
     devDependencies:
       vitest:
         specifier: 3.2.7

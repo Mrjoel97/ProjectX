@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: 03.5-04 automated tasks complete (cockpit-schedule E2E + cockpit.md phase close); SCHD-01 human-verify PENDING
-last_updated: "2026-07-14T19:31:32.875Z"
-last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 4: 03.5-04 automated tasks executed (cockpit-schedule.spec.ts offline schedule→cancel E2E + cockpit.md phase close). Lane A. SCHD-01 human-verify PENDING (the sole live-only proof — real future fire / real cancel / dead-token-at-fire → awaiting_reauth). Next: human-verify sign-off, then orchestrator marks Phase 3.5 complete."
+stopped_at: "Lanes A/B/C merged to main (2026-07-15) — see last_activity for the consolidated position"
+last_updated: "2026-07-15T00:00:00.000Z"
+last_activity: "2026-07-15 — LANE CONSOLIDATION: all three worktree lanes merged to main. Lane A (cockpit-send): Phases 3.4 (CKPT-03 human-verified) + 3.5 (SCHD-01) COMPLETE. Lane B (intake-voice): Phase 4 CODE-COMPLETE 5/6 — 04-06 phase close + SC3 live human-verify still pending; extraction is Path A (hosted OpenAI, sidecar killed). Lane C (knowledge-vault): Phase 5 COMPLETE 7/7, live in-browser verified incl. P0 embedding-adapter fix; /dashboard/vault live and wired into the rail nav. Also on main (2026-07-15, outside GSD phases): the BRAND.md teal app shell (rail + Command Center home), the cockpit brand-chrome + full-bleed fusion (screenshot-verified), ADR-004 + agent-runtime playbook, and specs for inserted Phases 3.6 (agent eval gate, EVAL-01/02) + 3.7 (inbox briefing, CKPT-04). NEXT: 04-06 phase close + SC3 human-verify, then plan 3.6 (/gsd:plan-phase 3.6) before further skill edits."
 progress:
-  total_phases: 15
-  completed_phases: 7
-  total_plans: 58
-  completed_plans: 55
-  percent: 95
+  total_phases: 17
+  completed_phases: 9
+  total_plans: 71
+  completed_plans: 67
+  percent: 94
 ---
 
 ---

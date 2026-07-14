@@ -45,3 +45,6 @@ export const DOCUMENT_DRAFTER_SKILL = "document-drafter" as const;
 
 /** Registry name of the attachment extractor OCR/extraction skill (INTK-02). */
 export const ATTACHMENT_EXTRACTOR_SKILL = "attachment-extractor" as const;
+
+/** Registry name of the graph extractor skill (VALT-02 — GraphRAG entity/relationship extraction). */
+export const GRAPH_EXTRACTOR_SKILL = "graph-extractor" as const;
