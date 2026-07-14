@@ -206,7 +206,13 @@ Plans:
   1. User attaches an image, PDF, audio, or document and the system classifies it and OCRs/extracts/transcribes it, merging the result into the request context.
   2. User dictates a request by voice; it is recorded, transcribed, and enters the same pipeline as a typed request.
   3. A delivered result reflects content that originated from an attachment or a dictated recording, having passed the same PII/cost/review guardrails.
-**Plans**: TBD
+**Plans**: 6 plans (4 waves)
+- [ ] 04-01-PLAN.md — pure @pikar/extraction (classify + frame) + intake §9 playbook + watch.json (Wave 1)
+- [ ] 04-02-PLAN.md — attachment-extractor skill (5-file mirror) + skill-registry.md bump (Wave 1)
+- [ ] 04-03-PLAN.md — intakeArtifacts schema table + @pikar/cost transcription pricing (Wave 1)
+- [ ] 04-04-PLAN.md — convex intakeDb + intake.ts spine: classify→extract→redact→cost→audit→persist→merge (Wave 2)
+- [ ] 04-05-PLAN.md — IntakeControls.tsx (attach + one-shot dictation) + Playwright E2E over SMOKE:: (Wave 3)
+- [ ] 04-06-PLAN.md — phase close + SC3 live human-verify + sidecar-killed decision log (Wave 4)
 
 ### Phase 5: Knowledge Vault & GraphRAG
 **Goal**: The system remembers â briefs and documents become groundable, searchable memory scoped to each user via hybrid vector + graph retrieval.
