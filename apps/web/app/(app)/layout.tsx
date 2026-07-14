@@ -12,6 +12,7 @@ import { ReconnectBanner } from "./_components/ReconnectBanner";
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/workspace", label: "Workspace" },
+  { href: "/dashboard/vault", label: "Knowledge Vault" },
   { href: "/submit", label: "Submit" },
   { href: "/requests", label: "Requests" },
   { href: "/review", label: "Review queue" },
