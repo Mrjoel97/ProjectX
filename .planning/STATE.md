@@ -3,30 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: 04-06-PLAN.md Task 1 complete (Wave 4, Lane B — offline suite green + sidecar-killed decision + intake.md bump). PAUSED at Task 2 (SC3 live human-verify checkpoint, blocking — requires the Lane A ChatPane.tsx mount + a live backend). Task 3 (tick Phase 4 complete) follows approval.
-last_updated: "2026-07-14T19:02:22.224Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Phase 4 (Attachment & Voice-Dictation Intake, Lane B) CODE-COMPLETE (6/6 plans) + goal-verified PASSED (04-VERIFICATION.md, 7/7 code truths). SC3 live human-verify DEFERRED by design — blocked on Lane A mounting <IntakeControls threadId={threadId}/> into ChatPane.tsx (cross-lane prereq; Lane B shipped the component but did not cross the boundary). Lane B's Phase 4 work is done; Phase 5 (next_phase per bookkeeping) is Lane C's lane, NOT Lane B's.
+last_updated: "2026-07-14T21:40:00.000Z"
+last_activity: "2026-07-14 — Phase 04 COMPLETE (Lane B, code-complete): Waves 1–3 executed + verified (extraction 28/28, cost 17/17, intake+skills convex-test 18/18, web typecheck clean, check-playbooks exit 0, intake.spec.ts Playwright-discovered 2/2). Full inbound intake spine: attach/dictate → classify → extract → scanText redact (fail-closed) → cost → refs-only audit → persist safeText → merge via api.cockpit.sendCockpitMessage. Path A (hosted OpenAI, NO Python sidecar) chosen + logged. Lane B boundary held (zero edits to llm.ts/cockpit.ts/plans.ts/gmail.ts; one docs-only cockpit.md Last-verified bump from watch.json dir-adjacency). SC3 live human-verify DEFERRED pending Lane A ChatPane mount + a live backend."
 progress:
   total_phases: 15
   completed_phases: 6
   total_plans: 56
   completed_plans: 53
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: ready
-stopped_at: 04-06-PLAN.md Task 1 complete (Wave 4, Lane B — offline suite reconfirmed green + sidecar-killed decision logged + intake.md bumped). PAUSED at Task 2 — the SC3 live human-verify checkpoint (blocking; requires the Lane A ChatPane.tsx mount + a live backend).
-last_updated: "2026-07-14T21:20:00.000Z"
-last_activity: "2026-07-14 — Phase 04 Wave 4: 04-06 Task 1 executed (Lane B, phase-close pre-checkpoint work, INTK-02/INTK-03). Full offline suite reconfirmed green (extraction 28/28, cost 17/17, intake+skills convex-test 18/18, web typecheck clean, check-playbooks exit 0, intake.spec.ts Playwright-discovered 2/2; isolated full-backend re-run 119/121, the 2 red both documented pre-existing/concurrent-load flakes, not regressions). Sidecar-killed decision logged (Path A hosted OpenAI, no Python services/* sidecar). intake.md Last verified -> 04-06. PAUSED at Task 2 (SC3 live human-verify, blocking) — requires the Lane A ChatPane.tsx mount of <IntakeControls threadId={threadId}/> + a live backend in this worktree."
-progress:
-  total_phases: 15
-  completed_phases: 5
-  total_plans: 56
-  completed_plans: 52
-  percent: 93
+  percent: 95
 ---
 
 # Project State
