@@ -25,6 +25,8 @@ import { SplitPane } from "./SplitPane";
 // engine: a tab = a threadId; "New chat"/"Clear workspace" = fresh thread on next send.
 // ponytail: tabs are session-state only — persist them once a real thread-list query exists.
 
+// Anchored surfaces, not floating cards: square corners, no shadow — the pane classes
+// (.pane-chat / .pane-canvas) own the backgrounds; only the artifacts inside float.
 const panel = {
   display: "flex",
   flexDirection: "column" as const,
@@ -32,8 +34,6 @@ const panel = {
   minHeight: 0,
   gap: "0.75rem",
   padding: "1.1rem 1.25rem",
-  borderRadius: "1.1rem",
-  boxShadow: "0 14px 40px -30px rgb(14 20 25 / 40%)",
 };
 
 const capsTeal = {
@@ -63,12 +63,13 @@ export default function WorkspacePage() {
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    // Concrete height so the % / 1fr grid columns have something to fill (plan 05).
-    // 5rem ≈ the canvas-main padding now that the shell is a side rail, not a top bar.
-    <div style={{ height: "calc(100vh - 5rem)" }}>
+    // Full-bleed: <main> is the is-bleed scroll-locked frame, so 100% fills it exactly —
+    // the panes touch the rail, the top, and the bottom of the viewport (plan 05's
+    // concrete-height requirement, now supplied by the fixed-height shell chain).
+    <div style={{ height: "100%" }}>
       <SplitPane
         left={
-          <section data-testid="chat-pane" className="pane-glass" style={panel}>
+          <section data-testid="chat-pane" className="pane-chat" style={panel}>
             <header style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
               <span
                 aria-hidden="true"
@@ -169,7 +170,7 @@ export default function WorkspacePage() {
           </section>
         }
         right={
-          <section data-testid="workspace-pane" className="pane-glass" style={panel}>
+          <section data-testid="workspace-pane" className="pane-canvas" style={{ ...panel, padding: "1.25rem 1.6rem" }}>
             <header style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={capsTeal}>Agent workspace</p>

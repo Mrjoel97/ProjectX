@@ -150,7 +150,11 @@ function Shell({ children }: { children: ReactNode }) {
 
       <div className="canvas-col">
         <ReconnectBanner />
-        <main className="canvas-main">{children}</main>
+        {/* The cockpit fuses full-bleed to the rail (no canvas padding — one surface,
+            only the work floats); every other page stays cards-on-canvas. */}
+        <main className={`canvas-main${pathname.startsWith("/dashboard/workspace") ? " is-bleed" : ""}`}>
+          {children}
+        </main>
       </div>
     </div>
   );

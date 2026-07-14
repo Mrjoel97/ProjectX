@@ -104,7 +104,13 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onKeyDown={onKeyDown}
-        style={{ cursor: "col-resize", background: "var(--teal-600)", touchAction: "none" }}
+        // Quiet seam (brand-024149): a 1px hairline centered in the 6px grab zone —
+        // the panes read as one surface; the divider is felt, not seen.
+        style={{
+          cursor: "col-resize",
+          background: "linear-gradient(to right, transparent 2px, var(--rule) 2px, var(--rule) 3px, transparent 3px)",
+          touchAction: "none",
+        }}
       />
       <div data-testid="split-right" style={{ minWidth: 0, overflow: "auto" }}>
         {right}

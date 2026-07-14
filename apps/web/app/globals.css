@@ -541,9 +541,11 @@ a {
    The authed app is deliberately light-only — the screenshots are the ground truth;
    dark-scheme tokens above serve the public landing pages. */
 
+/* Fixed-height frame: the rail is permanent furniture and the canvas scrolls inside
+   <main> — this is what lets the cockpit route fuse full-bleed to the rail. */
 .app-frame {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--canvas);
   color: var(--ink);
 }
@@ -723,13 +725,24 @@ button.rail-item:hover {
 .canvas-col {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .canvas-main {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+/* Full-bleed routes (the cockpit): the workspace is part of the shell, not a card on
+   the canvas — no outer padding, panes own their surfaces, nothing floats but the work. */
+.canvas-main.is-bleed {
+  padding: 0;
+  background: none;
+  overflow: hidden;
 }
 
 @media (max-width: 48rem) {
@@ -766,12 +779,20 @@ button.rail-item:hover {
     radial-gradient(50rem 30rem at -10% 110%, rgb(0 150 137 / 10%), transparent 60%);
 }
 
-.pane-glass {
-  background: rgb(255 255 255 / 78%);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border: 1px solid rgb(255 255 255 / 70%);
+/* Cockpit panes are anchored surfaces, not floating cards (brand-024113/024149):
+   the chat column is the rail's lighter sibling; the canvas pane carries the aura
+   and lets its artifact cards do the floating. */
+.pane-chat {
+  background: var(--card);
   container-type: inline-size;
+}
+
+.pane-canvas {
+  container-type: inline-size;
+  background:
+    radial-gradient(50rem 26rem at 90% -8%, rgb(64 202 208 / 12%), transparent 60%),
+    radial-gradient(44rem 26rem at -8% 108%, rgb(0 150 137 / 8%), transparent 60%),
+    var(--canvas);
 }
 
 /* Header icon cluster collapses before the pane title does. */
