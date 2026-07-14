@@ -191,3 +191,45 @@ test("cockpit's only delivery-audit crossing (workflow.start context payload) ca
     );
   }
 });
+
+// ── 03.5-02: the deferred-send scheduling fields stay on the content plane (§4) ───────────────────
+// setSendTime resolves a natural-language time to an absolute sendAt on the plan row. sendAt +
+// scheduledFunctionId (and the raw NL time text) are content/handle plane — exactly like body/
+// recipientBodies — and must NEVER reach an audit/deadLetters/telemetry payload (CLAUDE.md §4). The
+// runtime proof is the live smoke fan-out's assertNoRawPiiFanout; these are the static complement.
+
+test("the setSendTime tool crosses ONLY into patchPlan — no audit/DLQ/telemetry write (§4)", () => {
+  const src = readSource("llm.ts");
+  const start = src.indexOf("setSendTime: tool(");
+  expect(start, "setSendTime tool not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("setMode: tool(");
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+  // The send time is content plane: its ONLY persistence crossing is patchPlan. No log-plane write
+  // may live in the tool — so sendAt / the raw NL time can never leak to a log from here.
+  expect(block, "setSendTime writes a log-plane row").not.toMatch(
+    /audit\.log\b|\.insert\(\s*["'](?:audit|deadLetters|telemetry)["']|deadLetter/,
+  );
+  expect(block, "setSendTime does not persist via patchPlan").toMatch(/patchPlan/);
+});
+
+test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/telemetry write (§4)", () => {
+  // Like body/subject/recipientBodies, the scheduling fields must never appear in a log-plane
+  // payload or insert. Scan the model + orchestration + adapter surfaces (llm.ts / cockpit.ts /
+  // plans.ts) for any audit/deadLetters/telemetry write carrying them.
+  for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
+    const src = readSource(file);
+    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+      expect(p, `${file} log payload leaks a scheduling field: ${p}`).not.toMatch(
+        /sendAt|scheduledFunctionId/,
+      );
+    }
+    for (const ins of src.match(
+      /\.insert\(\s*["'](?:audit|deadLetters|telemetry)["'][\s\S]{0,400}?\)/g,
+    ) ?? []) {
+      expect(ins, `${file} log insert leaks a scheduling field`).not.toMatch(
+        /sendAt|scheduledFunctionId/,
+      );
+    }
+  }
+});

@@ -11,15 +11,20 @@
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { tenantQuery } from "./lib/functions";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 
-// PINNED plan lifecycle (schema.ts): collecting → proposed → approved → delivering → done.
+// PINNED plan lifecycle (schema.ts): collecting → proposed → approved → (scheduled|delivering) → done,
+// plus the 03.5 deferred-send states scheduled (armed, pre-fire) and canceled (terminal, halted).
+// HAND-MAINTAINED mirror of the schema status union — it MUST carry the same literals in the same
+// order or setPlanStatus/patchPlan reject the new states at runtime (RESEARCH Pitfall 5).
 const PLAN_STATUS = v.union(
   v.literal("collecting"),
   v.literal("proposed"),
   v.literal("approved"),
+  v.literal("scheduled"),
   v.literal("delivering"),
   v.literal("done"),
+  v.literal("canceled"),
 );
 
 // Mirrors plans.candidates in schema.ts (mirrors @pikar/core ContactMatch/NameCandidates, Plan 01).
@@ -79,11 +84,27 @@ export const patchPlan = internalMutation({
     status: v.optional(PLAN_STATUS),
     greetingName: v.optional(v.string()), // resolve path persists the drafter greeting through patchPlan
     recipientBodies: v.optional(v.record(v.string(), v.string())), // address(lowercased) → tailored body override (CKPT-03); the tool passes the full merged map
+    sendAt: v.optional(v.number()), // 03.5: absolute epoch ms deferred send time (drop-undefined preserves a stored value on a partial patch)
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch(planId, fields);
+  },
+});
+
+/**
+ * The PLAN-card date picker's tenant-guarded writer (03.5 deferred send). `sendAt` is the ONE
+ * source of truth (absolute epoch ms); passing undefined CLEARS the field → send immediately on
+ * Approve. Tenant-guarded (no cross-tenant write). Content-plane only — NEVER audited (§4). The
+ * agent's setSendTime tool (Plan 02) writes the same field via patchPlan; this is the UI path.
+ */
+export const setPlanSendTime = tenantMutation({
+  args: { planId: v.id("plans"), sendAt: v.optional(v.number()) },
+  handler: async (ctx, { planId, sendAt }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant write
+    await ctx.db.patch(planId, { sendAt }); // undefined removes the field → immediate
   },
 });
 

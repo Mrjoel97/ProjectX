@@ -3,6 +3,67 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: 03.5-04 automated tasks complete (cockpit-schedule E2E + cockpit.md phase close); SCHD-01 human-verify PENDING
+last_updated: "2026-07-14T19:31:32.875Z"
+last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 4: 03.5-04 automated tasks executed (cockpit-schedule.spec.ts offline schedule→cancel E2E + cockpit.md phase close). Lane A. SCHD-01 human-verify PENDING (the sole live-only proof — real future fire / real cancel / dead-token-at-fire → awaiting_reauth). Next: human-verify sign-off, then orchestrator marks Phase 3.5 complete."
+progress:
+  total_phases: 15
+  completed_phases: 7
+  total_plans: 58
+  completed_plans: 55
+  percent: 95
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.5-03-PLAN.md
+last_updated: "2026-07-14T19:15:06.457Z"
+last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 3: 03.5-03 executed (executePlan scheduler branch + cancel + card surface, SCHD-01/SC3/SC4). Extracted the SOLE workflow.start(deliverApprovedPlan) into startFanout (shared by the immediate approve path AND startScheduledDelivery); a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); startScheduledDelivery fires the SAME fan-out at the moment (awaiting_reauth/DLQ/telemetry free); cancelScheduledPlan CAS-guarded scheduler.cancel + status canceled + refs-only plan.canceled audit (idempotent, tenant-guarded); setPlanSendTime picker writer; cards.tsx datetime-local picker + resolved absolute time/tz + ScheduledCard/CanceledCard + CardList dispatch. cockpit.test/plans.test 23/23 green; web typecheck clean; ONE real workflow.start( in cockpit.ts inside startFanout; refs-only §4 asserted; check-playbooks exit 0. Commits d6734f8/46539b6 (T1), 78613fc/c527a41 (T2), d9c4cd0 (T3). NO code deviations (the naive workflow.start grep proxy over-counts pre-existing unrelated workflows in requests.ts/smoke.ts). Lane A. NEXT: Wave 4 (03.5-04 — cockpit-schedule E2E + smoke + deferred-send human-verify)."
+progress:
+  [██████████] 95%
+  completed_phases: 6
+  total_plans: 58
+  completed_plans: 54
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.5-02-PLAN.md
+last_updated: "2026-07-14T18:53:44.866Z"
+last_activity: "2026-07-14 — Phase 3.5 Wave 2: 03.5-02 executed (setSendTime governed tool — parses a volunteered NL time with the CLIENT's clock+zone §2-D, writes plan.sendAt on resolved, re-asks no-write on ambiguous/past SC2; clientContext threaded sendCockpitMessage→runCockpitAgent→buildCockpitTools; buildAgentContext Send-time line; SMOKE sendTime= op; §4 scans; cockpit-agent ## Scheduling section). Lane A. NEXT: Wave 3 (03.5-03 — executePlan scheduler branch + cancel)."
+progress:
+  total_phases: 15
+  completed_phases: 6
+  total_plans: 58
+  completed_plans: 53
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.5-01-PLAN.md
+last_updated: "2026-07-14T18:30:10.254Z"
+last_activity: "2026-07-14 — Phase 3.5 Deferred Send, Wave 1: 03.5-01 executed (pure parseSendTime in @pikar/core + plans sendAt/scheduledFunctionId fields + scheduled/canceled status literals mirrored across schema.ts and plans.ts). Lane A. Foundation only. NEXT: Wave 2 (03.5-02 — setSendTime tool)."
+progress:
+  total_phases: 15
+  completed_phases: 6
+  total_plans: 58
+  completed_plans: 52
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: "03.4-04 automated tasks complete (E2E + smoke:fanout distinct-body + playbook close); CKPT-03 human-verify PENDING"
 last_updated: "2026-07-14T12:22:56.552Z"
 last_activity: "2026-07-14 — Phase 3.4 Wave 4: 03.4-04 automated tasks executed (cockpit-personalize E2E + smoke:fanout assertFanoutBodiesDistinct + cockpit.md phase close). Lane A. CKPT-03 human-verify PENDING (the sole live-only proof — real 2-inbox distinct-wording send). Next: human-verify sign-off, then orchestrator marks Phase 3.4 complete."
@@ -55,6 +116,18 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 **Current focus:** Phase 3.1 — Cockpit Core (all 5 waves / plans 01–09 executed; ready for /gsd:verify-work)
 
 ## Current Position
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 4 (Lane A worktree, branch lane-a/cockpit-send) — automated tasks COMPLETE, SCHD-01 human-verify PENDING.
+Plan: 03.5-04 AUTOMATED TASKS COMPLETE (Wave 4 — phase close; SCHD-01 human-verify PENDING). Built the automated half of the phase close: (1) `apps/web/e2e/cockpit-schedule.spec.ts` — the offline schedule→cancel E2E mirroring `cockpit-personalize.spec.ts`. Test 1: `add=alice` → `subject=Q3 sync` → `body=SMOKE::route=direct_llm::…` → `sendTime=in 2 hours` → `propose`, asserting the PLAN card SEND TIME picker carries a resolved concrete value + the Approve button reads "Approve & schedule" BEFORE the single Approve (SC2, nothing sent), THEN filling the `datetime-local` picker with a real-future `2035-06-01T10:00` (so `executePlan` takes the scheduled branch) → Approve & schedule → `ScheduledCard` ("SCHEDULED" + "Scheduled for …" + Cancel, no REPORT, PLAN card unmounted) → Cancel → `CanceledCard` ("CANCELED" + "canceled"), never a REPORT (SC3/SC4). Test 2: no send time → bare "Approve" (not "Approve & schedule") → immediate REPORT (SC1 default unchanged). Playwright-discovered + type-loads (`playwright test cockpit-schedule --list` = 2 tests); the live green run deferred to verify-work (phase-wide convention). KEY DECISION/DEVIATION (Rule 3 — blocking, no production code): the ScheduledCard is reached via the datetime PICKER, not `sendTime=`, because `SMOKE_NOW_MS` is pinned to 2020-01-01 12:00 UTC, so `in 2 hours` resolves to a 2020 instant that `executePlan` (real `Date.now`) treats as PAST → immediate branch (no ScheduledCard, offline OR live); the picker (`setPlanSendTime`, no NL past-guard) is the confirm source-of-truth. The `sendTime=` op still runs first to prove the NL fast path resolves a concrete absolute time into the picker before Approve (and satisfies the `contains:'sendTime='` artifact). (2) `cockpit.md` §9 phase close: `Last verified` → 03.5-04 + five deferred-send invariants (schedule-on-future-`sendAt`; single `workflow.start` via `startFanout`; CAS-guarded refs-only cancel; fire-time failure inherited; client-clock send time) + Key-files (`startFanout`/`startScheduledDelivery`/`cancelScheduledPlan`, `setPlanSendTime`, datetime picker/`ScheduledCard`/`CanceledCard`, `parseSendTime`) + How-to-verify (fake-timer scheduler tests + `cockpit-schedule` spec + smoke:fanout-UNCHANGED note) + SCHD-01 Manual-only human-verify. check-playbooks exit 0. Verifies: `playwright test cockpit-schedule --list` = 2 tests discovered + type-load; check-playbooks exit 0; `smoke:fanout` (run-smoke-fanout.mjs) UNCHANGED (empty diff — it still proves the spine the scheduled fire reuses, SC3). Commits c1590ea (T1 E2E), f002bd6 (T2 playbook close). ONE deviation (Rule 3 spec-construction adaptation — pinned SMOKE clock; no production code touched, no architectural change). SCHD-01 stays PENDING: the sole live-only proof is the human-verify (real future send fires at the requested moment / real cancel halts before fire, audited refs-only / dead-token-at-fire → awaiting_reauth + notification exactly like an immediate send) — fake timers cannot observe real inbox arrival or real token expiry at fire. NEXT: SCHD-01 human-verify sign-off → orchestrator runs verify_phase_goal + marks Phase 3.5 complete.
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 3 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.5-03 COMPLETE (Wave 3 — the load-bearing structural change: `executePlan` SCHEDULES instead of STARTS on a future send time; SCHD-01/SC3/SC4). BACKEND: the `workflow.start(deliverApprovedPlan)` + status→delivering block was extracted into a module-level `startFanout(ctx, {planId, tenantId, requestIds, correlationIds, planCid})` — the SOLE real `workflow.start(` in cockpit.ts, now shared by BOTH the immediate approve path AND the scheduled callback (NO second call site). After the UNCHANGED seed loop (requests rows frozen AT APPROVE), `executePlan` branches: a FUTURE `plan.sendAt` → `ctx.scheduler.runAt(sendAt, internal.cockpit.startScheduledDelivery, args)` + status `scheduled` + store `scheduledFunctionId` (nothing sends before fire, returns `{ok:true, scheduled:true}`); else immediate `startFanout` (sendAt unset OR ≤ now — byte-identical to today, Open Question 2). `startScheduledDelivery` (internalMutation) fires the SAME frozen fan-out at the moment (a dead token at fire inherits `awaiting_reauth`/DLQ/telemetry FOR FREE, SC4). `cancelScheduledPlan` (tenantMutation) is CAS-guarded on `status==='scheduled'` (else `{alreadyResolved:true}` — the guard that keeps `scheduler.cancel` from throwing on an already-fired id, Pitfall 1) → `scheduler.cancel` → status `canceled` → ONE refs-only `plan.canceled` audit (`payload {planId}` ONLY, insert-only §3/§4); idempotent + tenant-guarded. `plans.setPlanSendTime` (tenantMutation) is the PLAN-card date picker's tenant-guarded writer (undefined clears `sendAt` → immediate). FRONTEND (`cards.tsx`): the PLAN card gained a native `<input type="datetime-local">` bound to `plan.sendAt` (epoch↔local wall-clock via the browser tz — no hand-rolled tz math, Pattern 6) + a "Send immediately" clear + the resolved ABSOLUTE time/tz shown before the single Approve (SC2); `ScheduledCard` ("Scheduled for <abs, tz>" + Cancel, busy no-op) + `CanceledCard`; `CardList` dispatches `scheduled`→ScheduledCard / `canceled`→CanceledCard and suppresses the DraftCard under both (Open Question 3). TESTS: offline fake-timer scheduler (`vi.useFakeTimers` + `t.finishInProgressScheduledFunctions`) — arm→fire, cancel-before-fire (refs-only audit + nothing sent + double-cancel no-op + cross-tenant refused), immediate-path-unchanged, `setPlanSendTime` tenant-guard; `withDelivery()` now ALSO registers the `auditCounts` aggregate so the cancel audit insert runs in-test. Verifies: `cockpit.test`/`plans.test` 23/23 green; web typecheck clean; ONE real `await workflow.start(` in cockpit.ts inside `startFanout` (AST-free count = 1); refs-only §4 asserted (planId present, subject/body/recipient absent); check-playbooks exit 0. cockpit.md §9 Last verified → 03.5-03. Commits d6734f8 (T1 test RED), 46539b6 (T1 feat GREEN startFanout+branch+startScheduledDelivery), 78613fc (T2 test RED), c527a41 (T2 feat GREEN cancel+setPlanSendTime), d9c4cd0 (T3 feat picker+ScheduledCard+playbook). NO code deviations — the plan's naive `git grep -c 'workflow.start('` verify over-counts because the requests pipeline (requests.ts) + the smoke harness (smoke.ts) legitimately start their OWN workflows; the load-bearing invariant (one real workflow.start in cockpit.ts, shared by both approve branches) holds. The runCockpitAgent cold-start timeout flake (matched by the `cockpit` glob) is pre-existing/environmental, NOT a regression. STRUCTURE + cancel + picker/ScheduledCard ONLY — the E2E + smoke + human-verify land in Wave 4. NEXT: Wave 4 (03.5-04 — cockpit-schedule E2E + smoke + deferred-send human-verify: real future send fires, real cancel halts, real dead-token-at-fire → awaiting_reauth).
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 1 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.5-01 COMPLETE (Wave 1 — the deterministic FOUNDATION for SCHD-01; TWO append-only, no-migration additions; no behavior change to the existing spine). (1) `@pikar/core` `emailIntent.ts` gained the PURE `parseSendTime(text, nowMs, ianaTz)` → `{kind:"resolved";epochMs} | "ambiguous" | "past" | "none"` — the CLIENT injects the trusted clock + IANA zone (the model NEVER supplies "now", §2-D); zone wall-clock↔epoch via `Intl.DateTimeFormat` (no `Date.now`, no dependency — ponytail rung 6/7, NOT chrono-node). Slice-1 grammar: relative "in N hours/minutes"; today/tomorrow/weekday + optional time (09:00 default); a bare PM time ("4pm") resolves today-if-future-else-tomorrow; a bare AM time ("4am") or meridiem-less bare hour ("at 4") with no day → `ambiguous` (RE-ASK, never guess — locked bound 3, reconciling the plan's two behavior examples); a concrete day+time already passed → `past`. Stores ONE absolute epoch ms (Tier-1 rule — never a wall-clock string/tz pair). 34 core cases green (full core 77/77). (2) The `plans` content plane gained `sendAt: v.optional(v.number())` (the ONE deferred-send source of truth, nullable = immediate) + `scheduledFunctionId: v.optional(v.id("_scheduled_functions"))` (cancel handle, mirrors review.ts pendingTimeouts.scheduledId), and the PINNED status union APPENDED `scheduled` (after `approved`) + `canceled` (after `done`) — the hand-maintained `PLAN_STATUS` mirror in plans.ts carries the SAME two literals in the same order (RESEARCH Pitfall 5) or setPlanStatus/patchPlan reject them at runtime. `patchPlan` gained one optional `sendAt`; the drop-undefined handler is UNCHANGED (a subject-only patch preserves a stored `sendAt`). 10 plans cases green. cockpit.md §9 Last verified → 03.5-01; check-playbooks exit 0. Commits 79e6937 (test RED parser), 383b7da (feat GREEN parser), 1e166bd (fix strict-index — the ONE deviation, Rule 1), a205035 (test RED plans), 5c168e3 (feat GREEN schema+plans+playbook). ONE deviation (parseSendTime not clean under `noUncheckedIndexedAccess` — guarded regex-group access; necessary for the "backend source typechecks" done-criterion, no scope creep). Full backend suite 128/132 — the 4 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered + runCockpitAgent×2/cockpitDraft cold-start timeout flakes, proven 8/8 in isolation at `--testTimeout=30000`), NOT regressions (my changes are additive optional fields + a new pure fn; none of those paths touch parseSendTime/sendAt/the status literals). FOUNDATION ONLY — no `setSendTime` tool (Wave 2), no `executePlan` scheduler branch/cancel mutation (Wave 3), no picker/ScheduledCard (Wave 4). NEXT: Wave 2 (03.5-02 — `setSendTime` tool calls parseSendTime + writes `plan.sendAt`; agent Scheduling skill; §4 scan).
+
+Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 2 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.5-02 COMPLETE (Wave 2 — the fast-path NL time intake, SCHD-01). `buildCockpitTools` gained `setSendTime({text})` mirroring `setSubject`/`draftBody`: `@pikar/core parseSendTime(text, clientContext.nowMs, clientContext.tz)` → `resolved` writes `plan.sendAt` via `patchPlan` + returns the ABSOLUTE time (`Intl.DateTimeFormat`, user tz) for the model to confirm; `ambiguous`/`past` re-ask with NO write (SC2 — never guess/never silently send); `none` notes immediate-on-approve; absent `clientContext` (off SMOKE) defers to the plan-card date picker rather than invent a clock. The §2-D linchpin: `nowMs`+`ianaTz` ride a NEW optional 4th `clientContext {tz, nowMs}` arg on `buildCockpitTools`, supplied by the TRUSTED client, NEVER the model — threaded `sendCockpitMessage`→`runCockpitAgent`→`buildCockpitTools` (append-only; existing callers unchanged). `buildAgentContext` gained a `Send time:` line (resolved absolute instant in user tz via an optional `tz` 2nd arg, else `(immediate on approve)`; the Intl expression hoisted to a `const` to stay under the 200-char inline-string ceiling). `SMOKE::agent::sendTime=<expr>` drives the tool offline on a pinned `{tz:"UTC", nowMs:2020-01-01T12:00:00Z}` (tools built AFTER the smoke-op parse). §4 intact: `sendAt`/`scheduledFunctionId`/raw NL text never reach an audit/DLQ/telemetry payload — setSendTime crosses ONLY into `patchPlan` (2 new `llmRedaction.test.ts` scans). `cockpit-agent` skill gained a "## Scheduling" section via the 5-file mirror (call setSendTime on a volunteered time, CONFIRM the absolute time back, ASK on ambiguous/past never guess, say nothing when no time mentioned; `seedSkills` publishes v-next; drift test green — skills.ts/skills.test.ts needed NO edit since publish-on-change is computed). Verifies: target suites 71/71 green (cockpitTools 30 incl. +6, cockpit 7, llmRedaction 13 incl. +2, skills 12, runCockpitAgent 6 incl. +1); core emailIntent 34/34 (parser unchanged); backend source typechecks (remaining tsc errors are pre-existing .test.ts-only noise); check-playbooks exit 0. cockpit.md + skill-registry.md Last verified → 03.5-02. Commits b3ee43d (test RED), cb975fa (feat GREEN), af1fa33 (test §4), 50c358a (docs skill+playbooks). ONE auto-fix (Rule 3 — inline-string ceiling hoist) + a plan file-list divergence (skills.ts/skills.test.ts not needed; runCockpitAgent.test.ts added for the SMOKE case). NO scheduling yet — Approve still sends immediately until Wave 3 adds the executePlan branch. NEXT: Wave 3 (03.5-03 — executePlan reads sendAt → ctx.scheduler.runAt → status scheduled + scheduledFunctionId; cancelScheduledPlan → canceled).
 
 Phase: 3.4 (Per-Recipient Personalization) — IN PROGRESS. Wave 4 (Lane A worktree, branch lane-a/cockpit-send) — automated tasks COMPLETE, CKPT-03 human-verify PENDING.
 Plan: 03.4-04 AUTOMATED TASKS COMPLETE (Wave 4 — phase close; CKPT-03 human-verify PENDING). Built the automated half of the phase close: (1) `apps/web/e2e/cockpit-personalize.spec.ts` — the CKPT-03 offline E2E mirroring `cockpit-attachment.spec.ts`: `add=alice@example.com,bob@example.com` → `subject=Q3 sync` → `body=SMOKE::route=direct_llm::…` → `mode=individual` → `personalize=1:SMOKE::route=direct_llm::…` → `propose`, asserting the PLAN card PER-RECIPIENT BODY section shows alice **tailored** + bob **shared body** (two DISTINCT bodies) BEFORE the single Approve, nothing sent before Approve, then Approve → REPORT fills per-recipient; Playwright-discovered + type-loads (`playwright test cockpit-personalize --list` = 1 test); the live green run deferred to verify-work. The personalize intent carries the `SMOKE::route` sentinel so the tailored draft is deterministic offline AND differs from the shared body (different safeText → different hash → different `Smoke draft for <hash>`). (2) `smoke:fanout` distinct-body extension: `seedFanout` gained an OPTIONAL append-only `recipientBodies` arg (distinct per-recipient `draft`, SHARED subject — the `#i` disambiguator dropped, absent ⇒ historic single-body seeding unchanged); `smokeAssert.ts` gained `assertFanoutBodiesDistinct` (every draft unique + every subject identical, stripping the delivery-only `SMOKE::fail ` prefix — the mirror-INVERSE of `assertFanoutAttachmentShared`); `run-smoke-fanout.mjs` seeds N distinct `TAILORED-SECRET-<i>` needles, asserts distinctness after the seed, and feeds each needle to `assertNoRawPiiFanout` so every tailored body is proven ABSENT from any audit/DLQ/telemetry row (§4). Live smoke run DEFERRED to /gsd:verify-work (no CONVEX_DEPLOYMENT in this headless session — phase-wide convention; source typechecks clean, mirrors the proven shared-attachment pattern). (3) `cockpit.md` §9 phase close: `Last verified` → 03.4-04 + three personalization invariants (per-recipient wording rides the existing spine — INVERSE of the shared-attachment fan-out; personalization requires individual mode — proposePlan refuses group+tailoring; guardrail parity is by construction — personalizeRecipient reuses draftBody's scanText→draftCockpit, per-recipient correlationId already isolates audit/telemetry, no new audit event) + Key-files/Tests/How-to-verify/Manual-only CKPT-03 row updates; check-playbooks exit 0. Verifies: core 64/64 green; backend 121/126 — the 5 reds across 4 files are ALL pre-existing/environmental (audit.test.ts auditCounts-unregistered + runCockpitAgent/cockpitDraft cold-start 5000ms timeout flakes), NOT regressions (proven: `vitest run runCockpitAgent --testTimeout=30000` = 5/5, mock loop 9240ms; my Wave-4 changes touch ONLY an E2E spec + live smoke helpers imported by no test + a node script + docs — zero vitest-covered production TS). Commits d725e2c (E2E), 30dba6b (smoke distinct-body), d561344 (playbook close). NO deviations. A merge from main (81b5277) landed between the T1 and T2 commits (background hook) — all three commits + all five files intact (grep-verified). CKPT-03 stays IN PROGRESS: the sole live-only proof is the human-verify (real 2-inbox distinct-wording send under a shared subject, audit refs-only) — PENDING. NEXT: CKPT-03 human-verify sign-off → orchestrator marks Phase 3.4 complete.
@@ -152,6 +225,9 @@ Progress: [█████████░] 94%
 | Phase 03.4 P01 | 4 | 2 tasks | 4 files |
 | Phase 03.4 P02 | 15 | 3 tasks | 7 files |
 | Phase 03.4 P03 | 37 | 2 tasks | 4 files |
+| Phase 03.5-deferred-send P01 | 16 | 2 tasks | 6 files |
+| Phase 03.5 P02 | 24min | 3 tasks | 9 files |
+| Phase 03.5-deferred-send P03 | 14min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -242,6 +318,12 @@ Recent decisions affecting current work:
 - [Phase 03.4]: personalizeRecipient omits greetingName on tailored drafts (Pitfall 4) — instruction carries greeting intent; per-recipient greeting map is a ceiling
 - [Phase 03.4]: proposePlan refuses (not force-individual) a group plan carrying personalization — explicit consent to individual sends (locked decision)
 - [Phase 03.4]: 03.4-03: executePlan seeds draft: (plan.recipientBodies ?? {})[recipient] ?? body — distinct tailored body per recipient, shared subject/attachmentRefs; delivery spine + single workflow.start untouched (one-line change)
+- [Phase 03.5-deferred-send]: parseSendTime: bare PM resolves today-or-tomorrow; bare AM / meridiem-less bare hour with no day → ambiguous (locked bound 3: never guess a day)
+- [Phase 03.5-deferred-send]: Deferred send stores ONE absolute epoch ms (plans.sendAt, nullable=immediate) — never a wall-clock string or tz pair (Tier-1 rule)
+- [Phase 03.5]: setSendTime parses a volunteered NL time with the TRUSTED client's clock+zone (§2-D), never the model's; resolved writes plan.sendAt, ambiguous/past re-ask with no write (SC2)
+- [Phase 03.5-deferred-send]: 03.5-03: startFanout is the SOLE workflow.start(deliverApprovedPlan) call site, shared by the immediate approve path AND startScheduledDelivery — no second call site added
+- [Phase 03.5-deferred-send]: 03.5-03: a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); cancelScheduledPlan is CAS-guarded + refs-only audited
+- [Phase 03.5]: 03.5-04 E2E reaches the ScheduledCard via the datetime-local picker (real-future time), not SMOKE sendTime= — the pinned 2020 SMOKE clock makes any NL time real-past so executePlan would take the immediate branch; the picker (setPlanSendTime, no past-guard) is the confirm source-of-truth
 
 ### Roadmap Evolution
 
@@ -259,8 +341,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T12:22:56.459Z
-Stopped at: 03.4-04 automated tasks complete (E2E + smoke:fanout distinct-body + playbook close); CKPT-03 human-verify PENDING
+Last session: 2026-07-14T19:31:22.722Z
+Stopped at: 03.5-04 automated tasks complete (cockpit-schedule E2E + cockpit.md phase close); SCHD-01 human-verify PENDING
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

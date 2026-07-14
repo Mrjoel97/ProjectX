@@ -37,6 +37,7 @@ import {
   type InlineRun,
   inlineRuns,
   isFallbackEligible,
+  parseSendTime,
   type RecipientEdit,
   rankCandidates,
   tokenizeMarkdown,
@@ -443,18 +444,25 @@ type PlanRow = {
  * Recipients render as the index+label view from buildRecipientView — an address NEVER appears
  * (§2-D: the raw email does not reach the model). Pure — takes the row, returns a string.
  */
-export function buildAgentContext(plan: {
-  recipients?: string[];
-  subject?: string;
-  body?: string;
-  mode?: "individual" | "group";
-  attachments?: { filename: string }[];
-  attachmentError?: string;
-  recipientBodies?: Record<string, string>;
-  // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
-  // ONLY the name + matches.length — never a field inside a match (§2-D/§4).
-  candidates?: { name: string; matches: { address: string; displayName?: string }[] }[];
-}): string {
+export function buildAgentContext(
+  plan: {
+    recipients?: string[];
+    subject?: string;
+    body?: string;
+    mode?: "individual" | "group";
+    attachments?: { filename: string }[];
+    attachmentError?: string;
+    recipientBodies?: Record<string, string>;
+    // Absolute send instant (epoch ms) once a time is resolved; absent = immediate on approve.
+    sendAt?: number;
+    // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
+    // ONLY the name + matches.length — never a field inside a match (§2-D/§4).
+    candidates?: { name: string; matches: { address: string; displayName?: string }[] }[];
+  },
+  // The user's IANA zone (from the trusted client, §2-D) used ONLY to format sendAt for the model to
+  // confirm; the model never supplies it. Defaults to UTC when a turn carries no client clock.
+  tz = "UTC",
+): string {
   const bodies = plan.recipientBodies ?? {};
   const addrs = plan.recipients ?? [];
   const view = buildRecipientView(addrs.map((address) => ({ address })));
@@ -493,6 +501,17 @@ export function buildAgentContext(plan: {
     `Subject: ${plan.subject ?? "(not set)"}`,
     `Body drafted: ${plan.body ? "yes" : "no"}`,
     `Send mode: ${plan.mode ?? "(not set)"}`,
+    // Send time: the ABSOLUTE resolved instant in the user's zone (so the model confirms it, never
+    // invents a clock); nothing set = immediate on approve (the default, SC1).
+    `Send time: ${
+      plan.sendAt === undefined
+        ? "(immediate on approve)"
+        : new Intl.DateTimeFormat("en-US", {
+            timeZone: tz,
+            dateStyle: "full",
+            timeStyle: "short",
+          }).format(plan.sendAt)
+    }`,
     "Attachments (reason about these by #index/filename):",
     attachments,
     ...(plan.attachmentError
@@ -510,6 +529,10 @@ export function buildCockpitTools(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   planId: Id<"plans">,
+  // The TRUSTED client's clock + IANA zone (§2-D): setSendTime reads nowMs/ianaTz from HERE, never
+  // from the model. Append-only 4th arg — every existing caller keeps working. Absent (and not the
+  // SMOKE path) → setSendTime defers to the plan-card date picker (Wave 3's confirm source-of-truth).
+  clientContext?: { tz: string; nowMs: number },
 ) {
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -696,6 +719,47 @@ export function buildCockpitTools(
       execute: async ({ subject }): Promise<string> => {
         await ctx.runMutation(internal.plans.patchPlan, { planId, subject });
         return "Subject set.";
+      },
+    }),
+    setSendTime: tool({
+      description:
+        'Set when to send the email from a natural-language phrase like "in 2 hours" or ' +
+        '"tomorrow at 4pm". The app supplies the current time and timezone — you never provide ' +
+        "them. An ambiguous or past time is not set; you re-ask instead.",
+      inputSchema: jsonSchema<{ text: string }>({
+        type: "object",
+        properties: {
+          text: { type: "string", description: "The user's natural-language send time." },
+        },
+        required: ["text"],
+        additionalProperties: false,
+      }),
+      execute: async ({ text }): Promise<string> => {
+        // §2-D trust boundary: nowMs + ianaTz come from the TRUSTED client, NEVER the model. With no
+        // client clock (and off the SMOKE path) defer to the plan-card date picker — Wave 3's
+        // confirm source-of-truth — rather than invent a clock/zone.
+        if (!clientContext)
+          return "I couldn't read your timezone — use the date picker on the plan card to set a send time.";
+        // Parse with the client's clock+zone. Resolved → write plan.sendAt; ambiguous/past/none →
+        // write NOTHING and hand back a re-ask/note (SC2 — never guess a time, never silently send).
+        const parsed = parseSendTime(text, clientContext.nowMs, clientContext.tz);
+        switch (parsed.kind) {
+          case "resolved": {
+            await ctx.runMutation(internal.plans.patchPlan, { planId, sendAt: parsed.epochMs });
+            const when = new Intl.DateTimeFormat("en-US", {
+              timeZone: clientContext.tz,
+              dateStyle: "full",
+              timeStyle: "short",
+            }).format(parsed.epochMs);
+            return `Send time set to ${when}. Confirm this exact time back to the user.`;
+          }
+          case "ambiguous":
+            return "That time is ambiguous — ask which day and time they meant (never guess). Nothing was scheduled.";
+          case "past":
+            return "That time has already passed — ask the user for a future time. Nothing was scheduled.";
+          default: // "none" — no time expressed
+            return "I didn't detect a specific time — the email sends immediately on approve unless the user gives one.";
+        }
       },
     }),
     setMode: tool({
@@ -1011,7 +1075,10 @@ async function runAgentLoop(
 //   SMOKE::agent::add=a@x.com,b@x.com | resolve=Name | subject=... | mode=individual|group
 //                | body=<intent> | remove=<1-based index> | propose
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
-//                | personalize=<1-based index>:<intent>
+//                | personalize=<1-based index>:<intent> | sendTime=<natural-language time>
+// SMOKE_NOW_MS pins the clock so a `sendTime=in N hours` op resolves deterministically offline (the
+// model never supplies "now"/tz, §2-D) — the send-time analogue of the 1970-01-01 attachment pinning.
+const SMOKE_NOW_MS = Date.UTC(2020, 0, 1, 12, 0, 0); // 2020-01-01 12:00:00 UTC
 type AgentSmokeOp =
   | { kind: "add"; addresses: string[] }
   | { kind: "resolve"; name: string }
@@ -1023,7 +1090,8 @@ type AgentSmokeOp =
   | { kind: "attach"; topic: string }
   | { kind: "regenerate"; index: number; topic: string }
   | { kind: "removeAttachment"; index: number }
-  | { kind: "personalize"; index: number; instructions: string };
+  | { kind: "personalize"; index: number; instructions: string }
+  | { kind: "sendTime"; text: string };
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
@@ -1063,6 +1131,8 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
     }
     case "removeAttachment":
       return { kind: "removeAttachment", index: Number(val) };
+    case "sendTime":
+      return { kind: "sendTime", text: val };
     case "personalize": {
       // <1-based index>:<intent> — split on the FIRST colon (the intent may carry a SMOKE:: prefix).
       const c = val.indexOf(":");
@@ -1099,6 +1169,8 @@ function runAgentSmokeOp(
       return invokeTool(tools, "regenerateAttachment", { index: op.index, topic: op.topic });
     case "removeAttachment":
       return invokeTool(tools, "removeAttachment", { index: op.index });
+    case "sendTime":
+      return invokeTool(tools, "setSendTime", { text: op.text });
     case "personalize":
       return invokeTool(tools, "personalizeRecipient", {
         index: op.index,
@@ -1124,10 +1196,13 @@ export const runCockpitAgent = internalAction({
     planId: v.id("plans"),
     text: v.string(),
     model: v.optional(v.string()),
+    // The trusted client's clock+zone for setSendTime (§2-D). Optional — a turn without it simply
+    // cannot call setSendTime (it defers to the picker). The SMOKE path pins its own below.
+    clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
   },
   handler: async (
     ctx,
-    { tenantId, planId, text, model },
+    { tenantId, planId, text, model, clientContext },
   ): Promise<{ reply: string; blocked?: "kill_switch" | "daily_budget_exhausted" }> => {
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
     const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
@@ -1141,10 +1216,12 @@ export const runCockpitAgent = internalAction({
 
     // 3. Current plan state → the model-facing context (index+label recipients, address-free §2-D).
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
-    const tools = buildCockpitTools(ctx, tenantId, planId);
 
-    // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText.
+    // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
+    //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
     const smokeOp = parseAgentSmoke(text);
+    const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
+    const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext);
     if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp) };
 
     // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
@@ -1153,7 +1230,7 @@ export const runCockpitAgent = internalAction({
       tenantId,
       planId,
       system: skill.body,
-      prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: ${text}`,
+      prompt: `${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
       primary: { model: resolveModel(primaryId), id: primaryId },
       fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
     });
@@ -1169,9 +1246,16 @@ export const runCockpitAgent = internalAction({
  * ctx a query/mutation test ctx cannot provide.
  */
 export const __invokeCockpitTool = internalAction({
-  args: { tenantId: v.string(), planId: v.id("plans"), toolName: v.string(), input: v.any() },
-  handler: async (ctx, { tenantId, planId, toolName, input }): Promise<string> =>
-    invokeTool(buildCockpitTools(ctx, tenantId, planId), toolName, input),
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    toolName: v.string(),
+    input: v.any(),
+    // Optional pinned clock+zone so setSendTime tests drive parseSendTime deterministically (§2-D).
+    clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
+  },
+  handler: async (ctx, { tenantId, planId, toolName, input, clientContext }): Promise<string> =>
+    invokeTool(buildCockpitTools(ctx, tenantId, planId, clientContext), toolName, input),
 });
 
 /**

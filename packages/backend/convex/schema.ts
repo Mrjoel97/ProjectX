@@ -138,8 +138,10 @@ export default defineSchema({
       v.literal("collecting"), // slots still filling during the guided conversation
       v.literal("proposed"), // all slots filled + body drafted → PLAN card, awaiting Approve
       v.literal("approved"), // executePlan CAS passed (set immediately before workflow.start)
+      v.literal("scheduled"), // 03.5: approved + a future sendAt; scheduler armed, nothing sent yet
       v.literal("delivering"), // fan-out workflow started (requests rows seeded)
       v.literal("done"), // fan-out complete
+      v.literal("canceled"), // 03.5: terminal — a scheduled send halted before fire (audited)
     ),
     // Slot content (accumulated during the conversation; all optional until filled):
     recipients: v.optional(v.array(v.string())), // validated, deduped emails
@@ -188,6 +190,13 @@ export default defineSchema({
     // mid-conversation recipient edits; orphan keys filter harmlessly at seed. Optional → no
     // migration (mirrors attachments/candidates/greetingName). Content-plane ONLY, NEVER audited (§4).
     recipientBodies: v.optional(v.record(v.string(), v.string())),
+    // Deferred send (03.5 SCHD-01). `sendAt` is the ONE source of truth — an absolute epoch ms
+    // (nullable = immediate on Approve, today's default); never a wall-clock string or a tz pair
+    // (the Tier-1-compatibility rule, scheduled-send.md). `scheduledFunctionId` is the scheduler
+    // handle used to cancel before fire (mirrors review.ts pendingTimeouts.scheduledId). Both
+    // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
+    sendAt: v.optional(v.number()),
+    scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),

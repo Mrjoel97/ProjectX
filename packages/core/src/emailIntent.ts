@@ -193,3 +193,184 @@ export function rankCandidates(name: string, records: readonly HeaderRecord[]): 
     .sort((a, b) => score(b) - score(a) || b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
     .slice(0, 5);
 }
+
+// ─── Pure NL send-time parser (03.5 SCHD-01 — the deferred-send foundation) ─────────────────────────
+// Co-located here (not a sibling module) so it stays under the cockpit.md §9 playbook watch, exactly
+// like the contact helpers above. PURE by discipline (CLAUDE.md §1): the CLIENT injects `nowMs` (the
+// trusted clock — the model must never invent "now", §2-D) and `ianaTz` (the user's zone). It stores
+// ONE absolute epoch ms — never a wall-clock string or a tz pair (the Tier-1 rule, scheduled-send.md).
+// ponytail (rung 6/7): a small deterministic reducer over slice-1's grammar — NOT chrono-node/a date
+// lib (none installed; a dep is non-deterministic across versions and can't be tz-injected cleanly).
+// Upgrade path: widen the grammar (ranges, "next week", explicit dates) or adopt a lib only when a
+// demonstrated user phrasing falls through to `none`/`ambiguous`.
+
+/** The four outcomes of parsing a natural-language send time. */
+export type SendTimeParse =
+  | { kind: "resolved"; epochMs: number } // a concrete future instant → schedule
+  | { kind: "ambiguous" } // grammar can't anchor it (bare AM / no meridiem, no day) → RE-ASK, never guess
+  | { kind: "past" } // a concrete instant at/before now → RE-ASK, never silently send
+  | { kind: "none" }; // no time expressed → immediate send (today's default, SC1)
+
+const SEND_TIME_EPSILON_MS = 60_000; // a time within a minute of "now" counts as past (clock skew slack)
+
+const WEEKDAYS: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/** The wall-clock parts of an instant IN the given IANA zone (hour in 24h; midnight normalized to 0). */
+function tzParts(epochMs: number, ianaTz: string) {
+  const p: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-US", {
+    timeZone: ianaTz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(epochMs))) {
+    if (part.type !== "literal") p[part.type] = part.value;
+  }
+  const hour = Number(p.hour);
+  return {
+    year: Number(p.year),
+    month: Number(p.month),
+    day: Number(p.day),
+    hour: hour === 24 ? 0 : hour, // some engines emit "24" for midnight
+    minute: Number(p.minute),
+    second: Number(p.second),
+  };
+}
+
+/** The zone's UTC offset (ms) at a given instant, derived by round-tripping through its wall clock. */
+function tzOffsetMs(epochMs: number, ianaTz: string): number {
+  const p = tzParts(epochMs, ianaTz);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - epochMs;
+}
+
+/** Convert a wall clock (Y/M/D H:M) IN `ianaTz` to absolute epoch ms; one refine pass handles DST. */
+function zonedWallClockToEpoch(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  ianaTz: string,
+): number {
+  const asUTC = Date.UTC(year, month - 1, day, hour, minute, 0);
+  // First guess using the offset at the naive-UTC instant, then refine once at the candidate instant
+  // so a DST transition between the two resolves correctly (minute-granularity is all slice 1 needs).
+  const epoch1 = asUTC - tzOffsetMs(asUTC, ianaTz);
+  return asUTC - tzOffsetMs(epoch1, ianaTz);
+}
+
+/**
+ * Parse a natural-language send time against an injected clock + zone. Slice-1 grammar:
+ *   - relative:      "in N hours" / "in N minutes"                      → resolved (offset from now)
+ *   - day anchor:    "today" / "tomorrow" / a weekday, + optional time  → resolved (default 09:00)
+ *   - bare PM time:  "4pm" / "4:30pm" (no day)                          → today if future, else tomorrow
+ *   - bare AM time:  "4am" (no day)  ·  bare hour "at 4" (no meridiem)  → ambiguous (RE-ASK, never guess)
+ *   - a day+time already in the past ("today 4am" at noon)             → past (RE-ASK)
+ *   - anything unrecognized / no time                                  → none (immediate send)
+ * PURE — no Date.now / no `new Date()` without an explicit ms. Bound 3 (locked): never guess a day.
+ */
+export function parseSendTime(text: string, nowMs: number, ianaTz: string): SendTimeParse {
+  const t = text.trim().toLowerCase();
+  if (!t) return { kind: "none" };
+
+  // Relative offsets are tz-independent — resolve directly off nowMs.
+  const rel = t.match(/\bin\s+(\d+)\s*(hours?|hrs?|minutes?|mins?)\b/);
+  if (rel) {
+    const n = Number(rel[1]);
+    const ms = /^h/.test(rel[2] ?? "") ? n * 3_600_000 : n * 60_000;
+    const epochMs = nowMs + ms;
+    return epochMs <= nowMs + SEND_TIME_EPSILON_MS ? { kind: "past" } : { kind: "resolved", epochMs };
+  }
+
+  // Day anchor.
+  let anchor: "today" | "tomorrow" | "weekday" | null = null;
+  let weekdayDow = -1;
+  if (/\btoday\b/.test(t)) anchor = "today";
+  else if (/\btomorrow\b/.test(t)) anchor = "tomorrow";
+  else {
+    const wd = t.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+    const name = wd?.[1];
+    if (name) {
+      anchor = "weekday";
+      weekdayDow = WEEKDAYS[name] ?? -1;
+    }
+  }
+
+  // Time of day. A meridiem (am/pm) makes an hour concrete; a bare "at 4" cannot be anchored to am/pm.
+  const mer = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  const bare = mer ? null : t.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\b/);
+  let hour: number | null = null;
+  let minute = 0;
+  let meridiem: "am" | "pm" | null = null;
+  if (mer) {
+    const h = Number(mer[1]);
+    if (h >= 1 && h <= 12) {
+      meridiem = mer[3] as "am" | "pm";
+      minute = mer[2] ? Number(mer[2]) : 0;
+      hour = meridiem === "pm" ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h;
+    }
+  }
+
+  const now = tzParts(nowMs, ianaTz);
+  const nowDow = new Date(Date.UTC(now.year, now.month - 1, now.day)).getUTCDay();
+
+  if (anchor !== null) {
+    // A bare hour with no am/pm cannot be anchored even with a day → re-ask.
+    if (bare) return { kind: "ambiguous" };
+    const h = hour ?? 9; // default 09:00 when a day is named without a time
+    const mi = hour === null ? 0 : minute;
+    let deltaDays: number;
+    if (anchor === "today") deltaDays = 0;
+    else if (anchor === "tomorrow") deltaDays = 1;
+    else {
+      deltaDays = (weekdayDow - nowDow + 7) % 7;
+      if (deltaDays === 0) deltaDays = 7; // "Monday" on a Monday means NEXT Monday
+    }
+    const d = new Date(Date.UTC(now.year, now.month - 1, now.day + deltaDays));
+    const epochMs = zonedWallClockToEpoch(
+      d.getUTCFullYear(),
+      d.getUTCMonth() + 1,
+      d.getUTCDate(),
+      h,
+      mi,
+      ianaTz,
+    );
+    return epochMs <= nowMs + SEND_TIME_EPSILON_MS ? { kind: "past" } : { kind: "resolved", epochMs };
+  }
+
+  // No day anchor.
+  if (hour !== null) {
+    // A bare AM time with no day is the classic ambiguous case (its today-occurrence has usually
+    // passed, so resolving to "tomorrow" would be a guess). A bare PM time reads as "later today,
+    // else tomorrow" — the low-risk interpretation people expect ("send at 4pm" = this afternoon).
+    if (meridiem === "am") return { kind: "ambiguous" };
+    let epochMs = zonedWallClockToEpoch(now.year, now.month, now.day, hour, minute, ianaTz);
+    if (epochMs <= nowMs + SEND_TIME_EPSILON_MS) {
+      const d = new Date(Date.UTC(now.year, now.month - 1, now.day + 1));
+      epochMs = zonedWallClockToEpoch(
+        d.getUTCFullYear(),
+        d.getUTCMonth() + 1,
+        d.getUTCDate(),
+        hour,
+        minute,
+        ianaTz,
+      );
+    }
+    return { kind: "resolved", epochMs };
+  }
+
+  if (bare) return { kind: "ambiguous" }; // "at 4" — hour with no meridiem, no day
+  return { kind: "none" };
+}

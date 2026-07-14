@@ -4,6 +4,7 @@ import {
   buildRecipientView,
   type HeaderRecord,
   parseAddress,
+  parseSendTime,
   rankCandidates,
 } from "./emailIntent";
 
@@ -164,5 +165,125 @@ describe("applyRecipientEdit — add/remove/set with validation bounce + index r
     const res = applyRecipientEdit(["a@x.com"], { op: "set", addresses: ["nope", "bad@"] });
     expect(res.ok).toBe(false);
     expect(res.recipients).toEqual(["a@x.com"]); // unchanged
+  });
+});
+
+describe("parseSendTime — pure NL time → resolved | ambiguous | past | none (03.5 SCHD-01)", () => {
+  const TZ = "America/New_York";
+  // A FIXED instant: 2024-06-10T16:00:00Z = 12:00 (noon) Monday June 10 2024 in America/New_York (EDT, UTC-4).
+  // Every case is deterministic against this injected clock — the parser NEVER reads the real clock.
+  const NOW = Date.UTC(2024, 5, 10, 16, 0, 0);
+
+  /** Read an epoch back into its wall-clock parts in TZ (mirrors what the picker shows the user). */
+  function wallClock(epochMs: number) {
+    const p: Record<string, string> = {};
+    for (const part of new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      weekday: "long",
+    }).formatToParts(new Date(epochMs))) {
+      if (part.type !== "literal") p[part.type] = part.value;
+    }
+    return {
+      year: Number(p.year),
+      month: Number(p.month),
+      day: Number(p.day),
+      hour: p.hour === "24" ? 0 : Number(p.hour),
+      minute: Number(p.minute),
+      weekday: p.weekday,
+    };
+  }
+
+  test('empty / whitespace / no time expression → { kind: "none" } (immediate-send default, SC1)', () => {
+    expect(parseSendTime("", NOW, TZ)).toEqual({ kind: "none" });
+    expect(parseSendTime("   ", NOW, TZ)).toEqual({ kind: "none" });
+    expect(parseSendTime("please send the proposal to the team", NOW, TZ)).toEqual({ kind: "none" });
+  });
+
+  test('"in 2 hours" → resolved epoch exactly nowMs + 7_200_000 (tz-independent offset)', () => {
+    const r = parseSendTime("in 2 hours", NOW, TZ);
+    expect(r).toEqual({ kind: "resolved", epochMs: NOW + 7_200_000 });
+  });
+
+  test('"in 30 minutes" → resolved epoch exactly nowMs + 1_800_000', () => {
+    const r = parseSendTime("send it in 30 minutes", NOW, TZ);
+    expect(r).toEqual({ kind: "resolved", epochMs: NOW + 1_800_000 });
+  });
+
+  test('"tomorrow 9am" → resolved, next day at 09:00 wall-clock, strictly after now', () => {
+    const r = parseSendTime("tomorrow 9am", NOW, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    expect(r.epochMs).toBeGreaterThan(NOW);
+    const w = wallClock(r.epochMs);
+    expect({ day: w.day, hour: w.hour, minute: w.minute }).toEqual({ day: 11, hour: 9, minute: 0 });
+  });
+
+  test('"tomorrow" with no time → resolved, next day at the 09:00 default', () => {
+    const r = parseSendTime("tomorrow", NOW, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    const w = wallClock(r.epochMs);
+    expect({ day: w.day, hour: w.hour, minute: w.minute }).toEqual({ day: 11, hour: 9, minute: 0 });
+  });
+
+  test('"Monday 9am" → next Monday (7 days ahead of this Monday) at 09:00, after now', () => {
+    const r = parseSendTime("Monday 9am", NOW, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    expect(r.epochMs).toBeGreaterThan(NOW);
+    const w = wallClock(r.epochMs);
+    expect(w.weekday).toBe("Monday");
+    expect({ day: w.day, hour: w.hour }).toEqual({ day: 17, hour: 9 }); // next Monday = June 17
+  });
+
+  test('"Monday" with no time → next Monday at the 09:00 default', () => {
+    const r = parseSendTime("Monday", NOW, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    const w = wallClock(r.epochMs);
+    expect(w.weekday).toBe("Monday");
+    expect(w.hour).toBe(9);
+  });
+
+  test('"4pm" (concrete PM anchor, no day) → today 16:00 since it is still future — NOT ambiguous', () => {
+    const r = parseSendTime("4pm", NOW, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    const w = wallClock(r.epochMs);
+    expect({ day: w.day, hour: w.hour, minute: w.minute }).toEqual({ day: 10, hour: 16, minute: 0 });
+  });
+
+  test('a bare PM time already past today → rolls to tomorrow (never a past send)', () => {
+    // now is noon; "9pm" is still future today, so use one that already passed: none in PM after noon.
+    // Instead prove the roll with a morning-equivalent by pinning now to the evening.
+    const evening = Date.UTC(2024, 5, 10, 23, 30, 0); // 19:30 EDT Monday
+    const r = parseSendTime("4pm", evening, TZ);
+    expect(r.kind).toBe("resolved");
+    if (r.kind !== "resolved") return;
+    const w = wallClock(r.epochMs);
+    expect({ day: w.day, hour: w.hour }).toEqual({ day: 11, hour: 16 }); // tomorrow 4pm
+  });
+
+  test('"4am" (bare AM, no day anchor) → { kind: "ambiguous" } — re-ask, never guess (locked bound 3)', () => {
+    expect(parseSendTime("4am", NOW, TZ)).toEqual({ kind: "ambiguous" });
+    expect(parseSendTime("send at 4 am", NOW, TZ)).toEqual({ kind: "ambiguous" });
+  });
+
+  test('a bare hour with no am/pm and no day ("at 4") → { kind: "ambiguous" }', () => {
+    expect(parseSendTime("at 4", NOW, TZ)).toEqual({ kind: "ambiguous" });
+  });
+
+  test('a concrete day+time that already passed ("today 4am" at noon) → { kind: "past" }', () => {
+    expect(parseSendTime("today 4am", NOW, TZ)).toEqual({ kind: "past" });
+  });
+
+  test("is deterministic — two calls with identical args return equal results (no Date.now)", () => {
+    expect(parseSendTime("tomorrow 9am", NOW, TZ)).toEqual(parseSendTime("tomorrow 9am", NOW, TZ));
   });
 });
