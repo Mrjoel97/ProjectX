@@ -109,3 +109,34 @@ export function RefreshIcon({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function SearchIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+export function GridIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+export function ListIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M8 6h12M8 12h12M8 18h12" />
+      <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

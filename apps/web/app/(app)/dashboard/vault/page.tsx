@@ -4,6 +4,8 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { CategoryTabs } from "./CategoryTabs";
+import { DocGrid } from "./DocGrid";
+import { Dropzone } from "./Dropzone";
 import { RefreshIcon } from "./icons";
 import { VaultStats } from "./VaultStats";
 
@@ -112,6 +114,10 @@ function VaultBody({
       <VaultStats stats={stats} />
 
       <CategoryTabs active={category} onChange={onCategory} />
+
+      <Dropzone />
+
+      <DocGrid docs={docs ?? []} category={category} />
     </>
   );
 }
