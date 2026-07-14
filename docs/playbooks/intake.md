@@ -1,6 +1,6 @@
 # Playbook: Attachment & Voice-Dictation Intake
 
-> Last verified: 2026-07-14 against fe64bd7
+> Last verified: 2026-07-14 against 04-04
 > Build history: `.planning/phases/04-attachment-voice-intake/` · Related ADRs: none
 
 ## Purpose
@@ -17,11 +17,17 @@ itself. This closes the multi-modal intake gap (INTK-02 attachments, INTK-03 voi
   sniff → `image | pdf | audio | document | unknown`), `packages/extraction/src/frame.ts`
   (`frameForConversation` — wraps extracted text as the synthetic merge turn; dictation
   passes through verbatim), `packages/extraction/src/index.ts` (public exports).
-- **Backend (thin adapters, land in later Phase-4 plans):** `packages/backend/convex/intake.ts`
-  (classify → extract/OCR/transcribe orchestration action), `packages/backend/convex/intakeDb.ts`
-  (upload URL + `intakeArtifacts` CRUD), the `intakeArtifacts` table region in
-  `packages/backend/convex/schema.ts`, the `attachment-extractor` registry skill
-  (`packages/contracts/skills/`, loaded via §5 — no hardcoded prompt).
+- **Backend (thin adapters):** `packages/backend/convex/intake.ts` — `"use node"`, ACTIONS ONLY
+  (`attachToThread`, `dictateToThread`; the SC3-ordered `runIntake` spine + the
+  `transcribeAudio`/`extractVisual` extraction helpers with their `SMOKE::transcribe::`/
+  `SMOKE::extract::` offline short-circuits). `packages/backend/convex/intakeDb.ts` — the DB
+  module `intake.ts` reaches via `ctx.runQuery`/`ctx.runMutation` (`generateUploadUrl`,
+  `insertArtifact`/`patchArtifact`/`getArtifact` internal, `byThread` tenant-scoped). The
+  `intakeArtifacts` table region in `packages/backend/convex/schema.ts` (04-03). The
+  `attachment-extractor` registry skill (`packages/contracts/skills/`, loaded via
+  `ctx.runQuery(internal.skills.getActiveSkill, ...)` — §5, no hardcoded prompt, fails closed
+  unseeded). The merge is a CALL to the existing public `api.cockpit.sendCockpitMessage` —
+  `intake.ts` never imports `cockpit.ts`/`llm.ts` internals (ZERO edits to either).
 - **Frontend (lands in later Phase-4 plans):**
   `apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx` (attach/record UI).
 
@@ -34,25 +40,36 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
 
 ## Data flow
 
-1. User attaches a file or records dictation in the cockpit composer (`IntakeControls.tsx`).
-2. Bytes upload to Convex storage via an `intakeDb` upload URL; an `intakeArtifacts` row is
-   created (`status: pending`, no content yet).
+1. User attaches a file or records dictation in the cockpit composer (`IntakeControls.tsx`,
+   Plan 05) — client PUTs bytes to an `intakeDb.generateUploadUrl` URL, then calls
+   `intake.attachToThread`/`intake.dictateToThread` with the resulting `storageId`.
+2. `runIntake` (the shared spine both actions call) gates on `guardrails.preCall`
+   (kill-switch/budget) BEFORE anything else — a stop is a conversational paused reply merged
+   via `sendCockpitMessage`, never a throw; NO `intakeArtifacts` row is created on a stop.
 3. `packages/extraction` `classify(bytes, mimeType, filename)` (pure, no Convex/API import)
-   decides the path: image/pdf/document → OCR/extract; audio → transcribe; unknown → reject
-   conversationally with NO model call.
-4. `intake.ts` orchestrates the extraction/transcription model call, then redacts the raw
-   output via `@pikar/pii` `scanText` BEFORE anything is persisted or audited.
-5. The redacted `safeText` is written to `intakeArtifacts.extracted`; `frameForConversation`
-   turns it into a synthetic user turn (attachment: named-file frame; dictation: verbatim
-   passthrough) that merges into the cockpit conversation exactly like a typed message.
-6. Cost is recorded for the extraction/transcription call (kill-switch respected, same as
-   any other model call); audit carries refs/hashes/counts only.
+   decides the path: image/pdf/document → OCR/extract; audio → transcribe (dictation always
+   forces the audio path); unknown → reject conversationally with NO model call. An
+   `intakeArtifacts` row is inserted (`status: "uploaded"` → `"extracting"`).
+4. `intake.ts` runs the extraction/transcription model call (the bounded GRDL-01 exception —
+   `transcribeAudio`/`extractVisual`, each with a `SMOKE::transcribe::`/`SMOKE::extract::`
+   offline short-circuit), then redacts the RAW output via `@pikar/pii` `scanText`
+   FAIL-CLOSED before anything is persisted or audited. On Err: `status: "failed"`, NO
+   `extracted` field, NO merge — but ONE refs-only `intake.extraction_failed` audit row
+   records the failure itself (OPSG-02).
+5. On Ok, the redacted `safeText` is written to `intakeArtifacts.extracted`
+   (`status: "extracted"`); a refs/counts-only `intake.extracted` audit row is written;
+   `frameForConversation` turns `safeText` into a synthetic user turn (attachment: named-file
+   frame; dictation: verbatim passthrough) merged into the cockpit conversation via the
+   EXISTING public `api.cockpit.sendCockpitMessage` — `intake.ts` never imports
+   `cockpit.ts`/`llm.ts` internals.
+6. Cost is recorded for the extraction/transcription call (`priceUsage`/`priceTranscription` →
+   `guardrails.recordSpend`; kill-switch/budget respected, same as any other model call).
 
 ## Invariants — what must never break
 
 1. **Extracted content is REDACTED via `@pikar/pii` `scanText` BEFORE any audit write or
-   conversation merge** (CLAUDE.md §4 / GRDL-01). Enforced in the Phase-4 `intake.ts`
-   convex-test suite (`SMOKE::extract::` fail-closed + PII-poison cases, 04-04 plan).
+   conversation merge** (CLAUDE.md §4 / GRDL-01). Enforced in `intake.test.ts`
+   (`SMOKE::extract::` + PII-poison fail-closed cases, 04-04).
 2. **The extraction MODEL call is the bounded GRDL-01 chicken/egg exception**: un-redacted
    bytes/text go ONLY to the zero-retention OpenAI processor performing OCR/transcription;
    its OUTPUT is redacted before anything downstream sees it. This is the ONE place in the
@@ -63,6 +80,16 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
    text.** Audit and dead-letter payloads carry refs/hashes/counts only (CLAUDE.md §4).
 4. **`packages/extraction` stays pure** — no Convex/AI/OpenAI import (CLAUDE.md §1). The
    classifier and framer must be testable offline with zero network/DB access.
+5. **A `scanText` Err is NOT silent** — the redaction FAILURE itself is recorded as exactly
+   ONE refs-only audit row (`{ artifactId, kind, reason: "pii_scan_failed" }`, no raw/redacted
+   text) so a fail-closed stop is observable in the audit trail (OPSG-02 / §4).
+6. **The merge is a CALL, never an edit** — `intake.ts` reaches the cockpit conversation ONLY
+   through the existing public `api.cockpit.sendCockpitMessage`. It must never import
+   `cockpit.ts`/`llm.ts` internals or duplicate their logic (the Lane-B/Lane-A boundary).
+7. **`intake.ts` is `"use node"` — ACTIONS ONLY.** Every DB read/write goes through
+   `intakeDb.ts` via `ctx.runQuery`/`ctx.runMutation`; the skill body loads via
+   `ctx.runQuery(internal.skills.getActiveSkill, ...)`, never `loadSkill`/`ctx.db` directly
+   (CLAUDE.md §2/§96).
 
 ## How to change safely
 
@@ -73,18 +100,25 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
   audio/dictation path a verbatim passthrough (the transcript IS the request, not an
   "attached file").
 - **Adding a new intake source (backend/schema/UI):** extend the `intakeArtifacts` schema
-  region, `intake.ts`/`intakeDb.ts`, or `IntakeControls.tsx` per the later Phase-4 plans;
-  re-run the redact-before-persist invariant check (`SMOKE::extract::` in the backend suite)
-  and re-verify no raw bytes/text reach `audit`/`deadLetters`.
+  region, `intake.ts`/`intakeDb.ts`, or `IntakeControls.tsx` (Plan 05); re-run the
+  redact-before-persist invariant check (`SMOKE::extract::` + the PII-poison case in
+  `intake.test.ts`) and re-verify no raw bytes/text reach `audit`/`deadLetters`.
+- **Changing the extraction model/skill:** `transcribeAudio`/`extractVisual` in `intake.ts`;
+  the OCR/vision prompt is the `attachment-extractor` registry skill (§5 — edit via the 5-file
+  mirror, never hardcode a prompt string in `intake.ts`).
 - Any change under the watched paths below must bump this playbook's `Last verified` line
   in the same commit/phase (CLAUDE.md §9).
 
 ## How to verify
 
 - **Unit (pure):** `pnpm --filter @pikar/extraction test` — classify + frame, offline, <1s.
-- **Convex-test (once 04-04 lands):** `pnpm --filter @pikar/backend test -- intake` — upload
-  URL + artifact CRUD round-trip, extract→redact→persist, fail-closed redaction, cost
-  recording, cockpit merge.
+- **Convex-test:** `cd packages/backend && npx vitest run convex/intake.test.ts` — upload URL +
+  artifact CRUD round-trip, extract→redact→persist (§4 honeypot: no raw PII anywhere in
+  audit), fail-closed redaction (ONE refs-only failure audit row, OPSG-02), kill-switch/cost
+  gate, the merge seam (a framed turn lands in the thread via `sendCockpitMessage`), and the
+  dictation verbatim-frame contract. (`pnpm --filter @pikar/backend test -- intake` does NOT
+  narrow to the file — the package's `test` script is plain `vitest run`; use the `npx vitest
+  run` form above, same pre-existing script quirk noted in 04-02's summary.)
 - **E2E (once 04-05 lands):** `pnpm --filter @pikar/web exec playwright test intake` over the
   `SMOKE::` grammar.
 - **Manual-only:** delivered-email-reflects-attachment/dictation-content-past-guardrails is a
@@ -92,16 +126,21 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
 
 ## Operational notes
 
-- No new env vars for the pure package. The extraction model call (later plan) reuses the
-  existing OpenAI credentials/zero-retention configuration already used by the cockpit LLM
-  gateway — no new secret plane.
+- No new env vars. The extraction model call reuses the existing `OPENAI_API_KEY`/
+  zero-retention configuration already used by the cockpit LLM gateway — no new secret plane.
 - `packages/extraction` has zero runtime dependencies beyond `vitest` as a devDependency
   (pure hand-rolled magic-byte sniff — no `file-type` package, per ponytail rung 6/3).
+- `intake.test.ts` registers the `agent`/`rateLimiter`/`auditCounts` components (the Wave-0
+  seed helper) so the merge seam (`sendCockpitMessage` → `runCockpitAgent`) runs end-to-end
+  offline with ZERO real API calls: the suite never seeds the skill registry, so
+  `runCockpitAgent`'s `cockpit-agent` skill lookup fails closed (`NO_ACTIVE_SKILL`) before it
+  would ever reach a model call; `sendCockpitMessage`'s own try/catch converts that into a
+  conversational error turn. This is intentional, not a gap — it proves the merge call fires
+  without needing a live gateway.
 
 ## Known gaps & deferred work
 
-- `packages/backend/convex/intake.ts`, `intakeDb.ts`, the `intakeArtifacts` schema region,
-  and `IntakeControls.tsx` do not exist yet as of this plan (04-01) — the watched paths below
-  are pre-registered so the §9 Stop hook does not block the plans that create them (04-02
-  through 04-06). This playbook's Data-flow/Invariants sections describe the intended
-  contract those plans must satisfy.
+- `apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx` (the attach/record UI) does not
+  exist yet as of this plan (04-04) — the watched path is pre-registered so the §9 Stop hook
+  does not block Plan 05, which creates it and wires `IntakeControls.tsx` to
+  `intakeDb.generateUploadUrl` + `intake.attachToThread`/`intake.dictateToThread`.
