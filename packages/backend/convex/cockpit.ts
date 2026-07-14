@@ -17,7 +17,7 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -194,20 +194,74 @@ export const proposeEmailPlan = internalMutation({
   },
 });
 
+/** The args frozen at Approve and carried to the fan-out (immediately OR via the scheduler). */
+type FanoutArgs = {
+  planId: Id<"plans">;
+  tenantId: string;
+  requestIds: Id<"requests">[];
+  correlationIds: string[];
+  planCid: string;
+};
+
+/**
+ * The SOLE `workflow.start(deliverApprovedPlan)` call site (the grep-able zero-sends-before-Approve
+ * invariant). A plain helper (not a Convex fn) so BOTH the immediate approve path and the scheduled
+ * callback fire the SAME governed fan-out — a mutation ctx works identically for each. Starts the
+ * workflow, then patches the plan → delivering with the pipeline correlationId + workflowId.
+ */
+async function startFanout(
+  ctx: MutationCtx,
+  { planId, tenantId, requestIds, correlationIds, planCid }: FanoutArgs,
+): Promise<string> {
+  const workflowId = await workflow.start(
+    ctx,
+    internal.deliverApprovedPlan.deliverApprovedPlan,
+    { planId, tenantId, requestIds, correlationIds },
+    {
+      onComplete: internal.deadLetter.onPipelineComplete,
+      context: { tenantId, correlationId: planCid, payload: { planId } }, // refs only (§4)
+    },
+  );
+  await ctx.db.patch(planId, { status: "delivering", correlationId: planCid, workflowId });
+  return workflowId;
+}
+
+/**
+ * The scheduled callback (03.5 deferred send). At the requested moment, ctx.scheduler fires this
+ * and it ONLY starts the frozen fan-out — the identical spine as an immediate approve (so a dead
+ * token at fire → awaiting_reauth/DLQ/telemetry come for free). Internal-only; the args were
+ * validated + frozen at Approve time inside executePlan.
+ */
+export const startScheduledDelivery = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    tenantId: v.string(),
+    requestIds: v.array(v.id("requests")),
+    correlationIds: v.array(v.string()),
+    planCid: v.string(),
+  },
+  handler: (ctx, args) => startFanout(ctx, args),
+});
+
 /**
  * The human approve gate (SC4). Idempotent CAS on plan.status: only the FIRST proposed→approved
  * transition seeds rows + starts the fan-out; a double-approve re-reads a non-proposed status
  * and no-ops (send once). Seeds ONE requests row per recipient (individual) or one comma-joined
  * row (group), each with its OWN server-minted correlationId (never client-supplied — mirrors
  * requests.submit) so per-recipient audit/telemetry/DLQ stay isolated. The SOLE starter of
- * deliverApprovedPlan (zero sends before Approve). Explicit return type dodges TS7022.
+ * deliverApprovedPlan (zero sends before Approve). With a future plan.sendAt it ARMS the scheduler
+ * instead of starting (status → scheduled; nothing sends before fire, SC3). Explicit return type
+ * dodges TS7022.
  */
 export const executePlan = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (
     ctx,
     { planId },
-  ): Promise<{ ok: true; workflowId?: string; alreadyStarted?: true } | { ok: false; reason: "gmail_not_connected" }> => {
+  ): Promise<
+    | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
+    | { ok: false; reason: "gmail_not_connected" }
+  > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
     // Idempotent no-op (double-approve): only "proposed" proceeds. Convex mutations are
@@ -273,16 +327,22 @@ export const executePlan = tenantMutation({
     }
 
     const planCid = crypto.randomUUID();
-    const workflowId = await workflow.start(
-      ctx,
-      internal.deliverApprovedPlan.deliverApprovedPlan,
-      { planId, tenantId: ctx.tenantId, requestIds, correlationIds },
-      {
-        onComplete: internal.deadLetter.onPipelineComplete,
-        context: { tenantId: ctx.tenantId, correlationId: planCid, payload: { planId } }, // refs only (§4)
-      },
-    );
-    await ctx.db.patch(planId, { status: "delivering", correlationId: planCid, workflowId });
+    const args: FanoutArgs = { planId, tenantId: ctx.tenantId, requestIds, correlationIds, planCid };
+
+    // Deferred send (SC3): a future sendAt ARMS the scheduler and returns — the rows are frozen
+    // (seeded above) but nothing starts. sendAt unset OR already past ⇒ start immediately (today's
+    // behavior, RESEARCH Open Question 2). At fire, startScheduledDelivery runs the SAME startFanout.
+    if (plan.sendAt !== undefined && plan.sendAt > Date.now()) {
+      const scheduledFunctionId = await ctx.scheduler.runAt(
+        plan.sendAt,
+        internal.cockpit.startScheduledDelivery,
+        args,
+      );
+      await ctx.db.patch(planId, { status: "scheduled", scheduledFunctionId });
+      return { ok: true, scheduled: true };
+    }
+
+    const workflowId = await startFanout(ctx, args);
     return { ok: true, workflowId };
   },
 });
