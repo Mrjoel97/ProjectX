@@ -184,7 +184,13 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. For a multi-recipient plan, each recipient can receive individually tailored wording, shown per recipient on the PLAN card before the single Approve.
   2. Personalized content passes the same PII/cost/review guardrails and per-recipient audit/telemetry as same-content sends.
-**Plans**: TBD
+**Plans**: 4 plans in 4 waves (planned 2026-07-14)
+
+Plans:
+- [ ] 03.4-01-PLAN.md — plans.recipientBodies schema field + patchPlan arg + tests (Wave 1)
+- [ ] 03.4-02-PLAN.md — personalizeRecipient tool + buildAgentContext + proposePlan group gate + cockpit-agent skill + SMOKE op (Wave 2)
+- [ ] 03.4-03-PLAN.md — executePlan per-recipient seed override + PLAN card per-recipient body section (Wave 3)
+- [ ] 03.4-04-PLAN.md — cockpit-personalize E2E + smoke:fanout distinct-body + playbook close + CKPT-03 human-verify (Wave 4)
 
 ### Phase 3.5: Deferred Send (INSERTED)
 **Goal**: A plan can carry a user-specified future send time, so the chief-of-staff promise covers *when* as well as *what* â approve once, and the governed send fires at the requested moment, cancellable until then.
