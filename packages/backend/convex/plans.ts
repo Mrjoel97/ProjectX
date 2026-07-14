@@ -99,6 +99,14 @@ export const setPlanStatus = internalMutation({
  * TRANSIENT candidate writer (cockpit calls after a name search). Holds fetched
  * candidates + same-turn pendingValid addresses on the content plane so the resolution
  * card renders across turns. Content-plane only — never audited (CLAUDE.md §4).
+ *
+ * ADDITIVE (upsert-by-name): resolveContacts searches ONE name per call, but the agent
+ * resolves EACH named person in a multi-name turn ("Sarah and Zach") with its own call.
+ * A wholesale replace let the second search obliterate the first — one name silently
+ * dropped from the ResolutionCard while the agent's reply claimed both (the disconnect).
+ * So we MERGE: incoming names upsert by name (a re-search of the same name replaces just
+ * that name's matches — never a duplicate section), other parked names are preserved, and
+ * pendingValid unions in (case-insensitive). clearCandidates still wipes both on pick.
  */
 export const writeCandidates = internalMutation({
   args: {
@@ -107,7 +115,21 @@ export const writeCandidates = internalMutation({
     pendingValid: v.array(v.string()),
   },
   handler: async (ctx, { planId, candidates, pendingValid }) => {
-    await ctx.db.patch(planId, { candidates, pendingValid });
+    const plan = await ctx.db.get(planId);
+    // Upsert each incoming name into the parked set: drop any existing entry with the same
+    // name (re-search replaces its matches), keep every other name, then append the incoming.
+    const incomingNames = new Set(candidates.map((c) => c.name));
+    const kept = (plan?.candidates ?? []).filter((c) => !incomingNames.has(c.name));
+    const mergedCandidates = [...kept, ...candidates];
+    // Union pendingValid case-insensitively (a second search must not wipe held valid addresses).
+    const seen = new Set((plan?.pendingValid ?? []).map((a) => a.toLowerCase()));
+    const mergedValid = [...(plan?.pendingValid ?? [])];
+    for (const a of pendingValid) {
+      if (seen.has(a.toLowerCase())) continue;
+      seen.add(a.toLowerCase());
+      mergedValid.push(a);
+    }
+    await ctx.db.patch(planId, { candidates: mergedCandidates, pendingValid: mergedValid });
   },
 });
 

@@ -108,6 +108,31 @@ test("resolveContacts writes candidates and returns a refs-only summary (NO addr
   expect(plan?.candidates?.length).toBeGreaterThan(0); // held on the content plane for the card
 });
 
+test("resolveContacts is ADDITIVE — two names in ONE turn both survive (the 'Sarah and Zach' drop bug)", async () => {
+  const { t, planId } = await setup();
+  // The agent resolves each named person with its own resolveContacts call in a single turn.
+  // Both must persist on the plan row so the ResolutionCard offers BOTH names — the second search
+  // must NOT obliterate the first (writeCandidates used to patch the array wholesale).
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" });
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sara" });
+
+  const plan = await readPlan(t, planId);
+  const names = (plan?.candidates ?? []).map((c) => c.name);
+  expect(names).toContain("SMOKE::Sarah"); // the FIRST name is not dropped by the second search
+  expect(names).toContain("SMOKE::Sara");
+  expect(plan?.candidates?.length).toBe(2); // both names held for the card — no wholesale overwrite
+});
+
+test("resolveContacts re-search of the SAME name REPLACES that name's matches (upsert, no dupes)", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" });
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" }); // re-resolve the same name
+
+  const plan = await readPlan(t, planId);
+  const sarahEntries = (plan?.candidates ?? []).filter((c) => c.name === "SMOKE::Sarah");
+  expect(sarahEntries.length).toBe(1); // upsert by name — never a duplicate section for one name
+});
+
 // ── 03.3-04 Task 1: generated attachment tools (CKPT-02) ──────────────────────
 // Each tool is the governance boundary: scan → draft → render → store → record. Drive them
 // through the real primitives offline (SMOKE:: draftDocument returns fixed markdown → markdownToPdf
