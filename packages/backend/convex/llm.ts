@@ -587,7 +587,9 @@ export function buildCockpitTools(
         }
         const matches = rankCandidates(name, res.records);
         if (matches.length === 0)
-          return `No contacts matched "${name}". Ask the user for the email address directly.`;
+          // Accuracy: no confident match → say so plainly and ask. NEVER substitute a different
+          // contact for the name the user gave (a wrong recipient is a liability, not a convenience).
+          return `I searched the mailbox and found no contact matching "${name}". Tell the user plainly that you could not find "${name}", and ask them for that person's email address. Do NOT offer or attach a different contact in their place.`;
         // Hold the candidates on the content plane so the ResolutionCard renders; the human picks a
         // chip → resolveRecipients folds the real address in (the model never sees it).
         await ctx.runMutation(internal.plans.writeCandidates, {

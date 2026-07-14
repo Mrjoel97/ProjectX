@@ -184,10 +184,12 @@ export function rankCandidates(name: string, records: readonly HeaderRecord[]): 
     if (q && hay.includes(q)) return 2;
     return tokens.some((t) => hay.includes(t)) ? 1 : 0;
   };
-  const all = [...byAddr.values()];
-  const named = all.filter((c) => score(c) > 0);
-  const pool = named.length > 0 ? named : all; // show only name-matches when any exist, else all
-  return pool
+  // Accuracy over convenience: return ONLY contacts that actually match the searched name. If none
+  // match, return NONE — the caller then asks the user for the address rather than presenting an
+  // unrelated correspondent as the named person. A wrong recipient on a proposal/deal is a
+  // liability, so "I couldn't find them, what's their email?" beats a confident wrong guess.
+  const named = [...byAddr.values()].filter((c) => score(c) > 0);
+  return named
     .sort((a, b) => score(b) - score(a) || b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
     .slice(0, 5);
 }

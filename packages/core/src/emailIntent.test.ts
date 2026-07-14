@@ -66,14 +66,15 @@ describe("rankCandidates — dedupe + rank contacts from header metadata", () =>
     expect(ranked.map((m) => m.address)).toEqual(["sarah.li@acme.com"]);
   });
 
-  test("no name-match anywhere → falls back to the frequency ranking (never empty when records exist)", () => {
+  test("no name-match anywhere → [] (accuracy: never present an unrelated contact as the named person)", () => {
     const recs: HeaderRecord[] = [
       { from: "Bob <bob@x.com>", date: "2024-01-01T00:00:00Z" },
       { from: "Bob <bob@x.com>", date: "2024-02-01T00:00:00Z" },
       { from: "Al <al@x.com>", date: "2024-03-01T00:00:00Z" },
     ];
-    // "Zara" matches neither → fall back to count-desc so the user still sees SOMETHING to pick.
-    expect(rankCandidates("Zara", recs).map((m) => m.address)).toEqual(["bob@x.com", "al@x.com"]);
+    // "Zara" matches neither Bob nor Al → return NOTHING. The caller asks the user for the address
+    // rather than surfacing a stranger as "Zara" (the live liability bug: a wrong recipient guess).
+    expect(rankCandidates("Zara", recs)).toEqual([]);
   });
 
   test("parses From/To/Cc and ignores unparseable / missing fields", () => {
