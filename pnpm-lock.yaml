@@ -119,6 +119,9 @@ importers:
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
+      '@pikar/vault':
+        specifier: workspace:*
+        version: link:../vault
       ai:
         specifier: 7.0.20
         version: 7.0.20(zod@4.4.3)

@@ -1,6 +1,6 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 05-01 against the Phase-5 Lane-C vault foundation
+> Last verified: 05-02 — the three vault tables (`vaultDocuments`/`graphNodes`/`graphEdges`) landed in `schema.ts` and the single `rag` instance (`vaultRag.ts`, `text-embedding-3-small`@1536) is constructed; backend now depends on `@pikar/vault`
 > Build history: `.planning/phases/05-knowledge-vault-graphrag/` · Related ADRs: [001](../decisions/001-convex-data-orchestration-plane.md), [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
