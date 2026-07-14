@@ -117,7 +117,7 @@ test("resolveContacts is ADDITIVE — two names in ONE turn both survive (the 'S
   await call(t, planId, "resolveContacts", { name: "SMOKE::Sara" });
 
   const plan = await readPlan(t, planId);
-  const names = (plan?.candidates ?? []).map((c) => c.name);
+  const names = (plan?.candidates ?? []).map((c: { name: string }) => c.name);
   expect(names).toContain("SMOKE::Sarah"); // the FIRST name is not dropped by the second search
   expect(names).toContain("SMOKE::Sara");
   expect(plan?.candidates?.length).toBe(2); // both names held for the card — no wholesale overwrite
@@ -129,7 +129,7 @@ test("resolveContacts re-search of the SAME name REPLACES that name's matches (u
   await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" }); // re-resolve the same name
 
   const plan = await readPlan(t, planId);
-  const sarahEntries = (plan?.candidates ?? []).filter((c) => c.name === "SMOKE::Sarah");
+  const sarahEntries = (plan?.candidates ?? []).filter((c: { name: string }) => c.name === "SMOKE::Sarah");
   expect(sarahEntries.length).toBe(1); // upsert by name — never a duplicate section for one name
 });
 
@@ -324,6 +324,30 @@ test("buildAgentContext surfaces personalized/shared by #index, never an address
   expect(ctx).toMatch(/#1:.*personalized/); // #1 is flagged personalized
   expect(ctx).toMatch(/#2:.*shared body/); // #2 falls back to the shared body
   expect(ctx).not.toContain("@"); // no raw address in the model-facing context
+});
+
+test("buildAgentContext surfaces names AWAITING a pick (name + count) — the agent sees resolution-in-progress", () => {
+  const ctx = buildAgentContext({
+    recipients: ["zach@example.com"],
+    // A resolution is mid-flight: Sarah searched, matches parked, waiting for the user's card pick.
+    candidates: [
+      {
+        name: "Sarah",
+        matches: [
+          { address: "sarah@example.com", displayName: "Sarah Smoke" },
+          { address: "sara@example.org", displayName: "Sara Test" },
+        ],
+      },
+    ],
+  });
+  // The agent MUST see that Sarah is pending — so it won't claim "already added" (nothing written)
+  // nor blindly re-resolve; it tells the user to pick from the card. This is the fix for the
+  // agent↔workspace disconnect: the model's view of the shared plan state is now complete.
+  expect(ctx).toContain("Sarah"); // the pending name is visible
+  expect(ctx).toMatch(/await/i); // framed as awaiting the user's pick
+  expect(ctx).toContain("2"); // the count of found contacts (refs-only)
+  expect(ctx).not.toContain("sarah@example.com"); // §2-D: no candidate address to the model
+  expect(ctx).not.toContain("Sarah Smoke"); // §4: match hints are USER-only, never to the model
 });
 
 // ── 03.4-02 Task 2: proposePlan group-mode refusal gate (CKPT-03, locked decision) ────────────

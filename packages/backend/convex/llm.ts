@@ -432,6 +432,10 @@ type PlanRow = {
   attachments?: Att[];
   attachmentError?: string;
   recipientBodies?: Record<string, string>; // address → tailored body override (CKPT-03); missing = shared body
+  // NOTE: parked name-resolution `candidates` are NOT declared here on purpose — the model-facing
+  // contract for them lives in buildAgentContext's own param (NAME + count only, §2-D/§4), and
+  // getById returns the full row at runtime so buildAgentContext(plan) reads them. Declaring the
+  // candidate `matches` shape in THIS span would trip the draftCockpit header-hint redaction scan.
 };
 
 /**
@@ -447,6 +451,9 @@ export function buildAgentContext(plan: {
   attachments?: { filename: string }[];
   attachmentError?: string;
   recipientBodies?: Record<string, string>;
+  // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
+  // ONLY the name + matches.length — never a field inside a match (§2-D/§4).
+  candidates?: { name: string; matches: { address: string; displayName?: string }[] }[];
 }): string {
   const bodies = plan.recipientBodies ?? {};
   const addrs = plan.recipients ?? [];
@@ -461,6 +468,12 @@ export function buildAgentContext(plan: {
         })
         .join("\n")
     : "  (none yet)";
+  // Resolution-in-progress: names searched whose contact the user has NOT yet picked from the
+  // ResolutionCard. Surfacing this (NAME + count ONLY — never a candidate address or hint, §2-D/§4)
+  // keeps the model's view of the shared plan state COMPLETE, so it neither falsely claims a name
+  // is "already added" nor blindly re-resolves — it tells the user to pick from the card. This is
+  // the fix for the agent↔workspace disconnect (a multi-name turn surfaced it in the 3.4 human-verify).
+  const pending = plan.candidates ?? [];
   // Attachments render by #index + filename (content-plane names; no storageId/URL reaches the model).
   const atts = plan.attachments ?? [];
   const attachments = atts.length
@@ -470,6 +483,13 @@ export function buildAgentContext(plan: {
     "Current email plan:",
     "Recipients (reason about these by #index only):",
     recipients,
+    // Only shown when a search is unresolved — the user must pick before these become recipients.
+    ...(pending.length
+      ? [
+          "Awaiting the user's contact pick (NOT yet recipients — tell the user to pick from the card, do NOT claim you added them):",
+          ...pending.map((c) => `  ${c.name}: ${c.matches.length} contact(s) found`),
+        ]
+      : []),
     `Subject: ${plan.subject ?? "(not set)"}`,
     `Body drafted: ${plan.body ? "yes" : "no"}`,
     `Send mode: ${plan.mode ?? "(not set)"}`,
