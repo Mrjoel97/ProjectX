@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 03.4-02-PLAN.md
-last_updated: "2026-07-14T11:03:01.920Z"
-last_activity: "2026-07-14 — Phase 3.4 Wave 2: 03.4-02 executed (personalizeRecipient tool + buildAgentContext surfacing + proposePlan group gate + SMOKE op + cockpit-agent Personalization skill; CKPT-03 engine). Lane A. Next: Wave 3 (executePlan seed line)."
+stopped_at: Completed 03.4-03-PLAN.md
+last_updated: "2026-07-14T11:47:31.756Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 15
+  completed_phases: 5
+  total_plans: 54
+  completed_plans: 50
+  percent: 93
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.4-03-PLAN.md
+last_updated: "2026-07-14T11:44:26.000Z"
+last_activity: "2026-07-14 — Phase 3.4 Wave 3: 03.4-03 executed (executePlan seed reads recipientBodies[recipient] ?? body — distinct tailored body per recipient, shared subject; PLAN card PlanRecipientBodies section; distinct-draft test). Lane A. Next: Wave 4 (E2E + smoke:fanout distinct-body + human-verify + phase close; CKPT-03 stays In Progress)."
+progress:
+  [█████████░] 93%
   completed_phases: 5
   total_plans: 54
   completed_plans: 49
@@ -25,7 +41,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.4 (Per-Recipient Personalization) — IN PROGRESS. Wave 2 (Lane A worktree, branch lane-a/cockpit-send).
+Phase: 3.4 (Per-Recipient Personalization) — IN PROGRESS. Wave 3 (Lane A worktree, branch lane-a/cockpit-send).
+Plan: 03.4-03 COMPLETE (Wave 3 — the two CONSUMER ends of the `recipientBodies` field, CKPT-03). BACKEND (one-line change): `executePlan`'s per-recipient seed loop now reads `draft: (plan.recipientBodies ?? {})[recipient] ?? body` — each recipient's `requests.draft` carries its DISTINCT tailored body (keyed by the RAW iterated `recipient` value = the SAME string `personalizeRecipient` wrote in Wave 2, so the lookup can't miss), while `goal` (subject) + `attachmentRefs` stay SHARED. A non-personalized recipient falls back to the shared `body`; an orphaned key (address no longer in `recipients`) is never read (harmless); group mode's comma-joined `recipient` misses the address key → shared body. The delivery spine is ALREADY per-recipient (`getForDelivery` reads `body := editedBody ?? draft` per request row) so `deliverApprovedPlan`/`gmail.send`/the CAS/the Gmail pre-check/the per-recipient server-minted correlationId/the SINGLE `workflow.start(deliverApprovedPlan)` call site (cockpit.ts:268, grep-verified sole starter) are ALL untouched. FRONTEND: `cards.tsx` `PlanRecipientBodies` mirrors `PlanAttachments` — one row per recipient (address chip + "tailored"/"shared body" tag + body `.slice(0,240)`), read-only (tailoring is chat-driven like `DraftCard`), rendered in `PlanCard` after PREVIEW; renders NOTHING when no override exists (shared PREVIEW covers same-content), the breakdown appears only when tailoring exists (SC1). TEST: `cockpit.test.ts` distinct-draft case (3 recipients, 2 tailored + 1 fallback + 1 orphan `z@` key via the `withDelivery()` workflow-component registration) asserts distinct drafts, shared goal, fallback, 3 rows. Verifies: `test cockpit.test` 7/7 green; web typecheck clean; check-playbooks exit 0; single `workflow.start(deliverApprovedPlan)` intact. Full-suite `test cockpit` 35/36 — the 1 red is the documented `runCockpitAgent.test.ts` cold-start timeout flake (passes in isolation), NOT a regression. cockpit.md §9 Last verified → 03.4-03. Commits d8daa77 (test RED), 1f5ae2b (feat GREEN seed), ac687b6 (feat PLAN card + playbook). NO deviations. Seed + card + test ONLY — E2E/smoke/human-verify/phase-close are Wave 4. CKPT-03 stays IN PROGRESS (Wave 4 closes it). NEXT: Wave 4 (03.4-04 — cockpit-personalize E2E + smoke:fanout distinct-body assertion + human-verify + phase close).
 Plan: 03.4-02 COMPLETE (Wave 2 — the personalizeRecipient TOOL + group gate, the CKPT-03 engine). `buildCockpitTools` gained `personalizeRecipient({index, instructions})` — tailors ONE recipient's wording by 1-based `#index` (address resolved server-side, §2-D, like `removeRecipient`), MIRRORS `draftBody` VERBATIM (`scanText` fail-closed → `draftCockpit` → patch) so PII redaction + cost `preCall`/`recordSpend` parity is FREE (SC2), but the tailored body lands in `recipientBodies[address]` via a merge-spread `{...existing, [address]: draft.body}` (NOT the shared `body`, which is untouched); out-of-range index refuses with NO write; the tailored draft OMITS `greetingName` (shared greeting is pick-#1's — Pitfall 4; per-recipient greeting is a ceiling). `buildAgentContext` annotates each recipient `— personalized`/`— shared body` by `#index` (address used ONLY to look up the flag, never emitted). `proposePlan` REFUSES a group plan carrying any `recipientBodies` (locked decision: refuse — explicit consent to individual sends — not silent force-individual; facts from the ROW). `SMOKE::agent::personalize=<i>:<intent>` drives the tool offline. `cockpit-agent` skill gained a "## Personalization" section via the 5-file mirror (canonical `.md` + byte-identical derived `cockpitAgentSkillBody`; `seedSkills` publish-on-change ships v-next; drift test.each green): SUGGEST-then-confirm, reason by `#index`, individual-mode requirement. Tests: cockpitTools.test.ts +7 (patch recipientBodies not body, index bounce, merge, buildAgentContext address-free, group-refusal/individual-proceeds/group-no-personalization), llmRedaction.test.ts +2 static (personalize scan-before-draft, recipientBodies never in a log payload). Target suites 44/44 green (cockpitTools 21, llmRedaction 11, skills 12); check-playbooks exit 0. Full backend 123/125: the 3 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered; cockpitDraft + runCockpitAgent cold-start timeout flakes — both pass 8/8 in isolation), NOT regressions. cockpit.md + skill-registry.md §9 Last verified → 03.4-02. Commits fc662d7 (test RED T1), 7416a23 (feat GREEN T1 tool+context+SMOKE), 06aba25 (test RED T2), b1f263b (feat GREEN T2 group gate), 730f9f2 (docs T3 skill+playbooks). NO deviations. TOOL + gate + skill ONLY — no executePlan seed line (Wave 3), no PLAN-card render (Wave 4). CKPT-03 stays IN PROGRESS (Wave 4 closes it). NEXT: Wave 3 (03.4-03 — executePlan seed loop reads `recipientBodies[recipient] ?? body`).
 Plan: 03.4-01 COMPLETE (Wave 1 — the content-plane FOUNDATION for CKPT-03). Added `plans.recipientBodies` — an OPTIONAL address-keyed map (`v.record(v.string(), v.string())`, lowercased address → that recipient's tailored body override; missing key = the shared `body`) added additively next to `greetingName` (NO migration, mirrors attachments/candidates/greetingName) — content-plane only, NEVER audited (§4). `patchPlan` gained one optional `recipientBodies` arg; the handler is UNCHANGED (the existing Object.fromEntries drop-undefined pattern persists the new key and preserves a stored map on a partial patch). Address-keyed (not index) survives mid-conversation recipient edits; orphan keys filter harmlessly at seed (Pitfall 2). Personalization is the INVERSE of the 3.3 attachment fan-out — each recipient carries a DISTINCT body while sharing subject/mode/attachments. BUILD-TIME CONFIRMATION RESOLVED: `v.record(v.string(),v.string())` is accepted by pinned Convex 1.42.1 (already used in telemetry.ts) — the documented array fallback was NOT needed, so Waves 2/3 use the record shape (one address lookup, no `.find`). plans.test.ts +3 cases (write+read-back, subject-only-patch preserves the map, second patch replaces wholesale) — 7/7 green. Backend source typecheck clean; check-playbooks exit 0. cockpit.md §9 Last verified → 03.4-01. Commits 7a4583f (test RED), f7b00fe (feat GREEN schema+patchPlan), 703833e (docs playbook). NO deviations. FOUNDATION ONLY — no tool (Wave 2 personalizeRecipient), no executePlan seed line (Wave 3), no PLAN-card render (Wave 4). Full backend 114/116: the 2 reds are pre-existing/environmental (audit.test.ts auditCounts-unregistered known red; runCockpitAgent mock-loop cold-start flake — ~4009ms tips the default 5000ms timeout only under full-suite load, passes 5/5 at 30s), NOT regressions. NEXT: Wave 2 (03.4-02 — personalizeRecipient tool reads/writes recipientBodies).
 
@@ -118,6 +135,7 @@ Progress: [█████████░] 94%
 | Phase 03.3 P06 | 240 | 3 tasks | 14 files |
 | Phase 03.4 P01 | 4 | 2 tasks | 4 files |
 | Phase 03.4 P02 | 15 | 3 tasks | 7 files |
+| Phase 03.4 P03 | 37 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -207,6 +225,7 @@ Recent decisions affecting current work:
 - [Phase 03.4]: v.record(v.string(),v.string()) accepted by pinned Convex 1.42.1 (used in telemetry.ts) — no array fallback needed for recipientBodies (03.4-01)
 - [Phase 03.4]: personalizeRecipient omits greetingName on tailored drafts (Pitfall 4) — instruction carries greeting intent; per-recipient greeting map is a ceiling
 - [Phase 03.4]: proposePlan refuses (not force-individual) a group plan carrying personalization — explicit consent to individual sends (locked decision)
+- [Phase 03.4]: 03.4-03: executePlan seeds draft: (plan.recipientBodies ?? {})[recipient] ?? body — distinct tailored body per recipient, shared subject/attachmentRefs; delivery spine + single workflow.start untouched (one-line change)
 
 ### Roadmap Evolution
 
@@ -224,8 +243,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T11:02:45.032Z
-Stopped at: Completed 03.4-02-PLAN.md
+Last session: 2026-07-14T11:47:06.115Z
+Stopped at: Completed 03.4-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
