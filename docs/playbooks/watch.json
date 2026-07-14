@@ -40,7 +40,9 @@
     "packages/backend/convex/vaultLlm.ts",
     "packages/backend/convex/vaultGraph.ts",
     "packages/backend/convex/vaultGround.ts",
+    "packages/backend/convex/vaultSmoke.ts",
     "apps/web/app/(app)/dashboard/vault/",
+    "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs"
   ]
 }
