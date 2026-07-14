@@ -207,9 +207,9 @@ Plans:
   2. User dictates a request by voice; it is recorded, transcribed, and enters the same pipeline as a typed request.
   3. A delivered result reflects content that originated from an attachment or a dictated recording, having passed the same PII/cost/review guardrails.
 **Plans**: 6 plans (4 waves)
-- [ ] 04-01-PLAN.md — pure @pikar/extraction (classify + frame) + intake §9 playbook + watch.json (Wave 1)
+- [x] 04-01-PLAN.md — pure @pikar/extraction (classify + frame) + intake §9 playbook + watch.json (Wave 1)
 - [ ] 04-02-PLAN.md — attachment-extractor skill (5-file mirror) + skill-registry.md bump (Wave 1)
-- [ ] 04-03-PLAN.md — intakeArtifacts schema table + @pikar/cost transcription pricing (Wave 1)
+- [x] 04-03-PLAN.md — intakeArtifacts schema table + @pikar/cost transcription pricing (Wave 1)
 - [ ] 04-04-PLAN.md — convex intakeDb + intake.ts spine: classify→extract→redact→cost→audit→persist→merge (Wave 2)
 - [ ] 04-05-PLAN.md — IntakeControls.tsx (attach + one-shot dictation) + Playwright E2E over SMOKE:: (Wave 3)
 - [ ] 04-06-PLAN.md — phase close + SC3 live human-verify + sidecar-killed decision log (Wave 4)
@@ -283,7 +283,7 @@ Phases execute in numeric order: 1 â 2 â 3 â 3.1 â 3.2 â�
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 0/TBD | Not started | - |
-| 4. Attachment & Voice-Dictation Intake | 0/TBD | Not started | - |
+| 4. Attachment & Voice-Dictation Intake | 3/6 | In Progress|  |
 | 5. Knowledge Vault & GraphRAG | 0/TBD | Not started | - |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
