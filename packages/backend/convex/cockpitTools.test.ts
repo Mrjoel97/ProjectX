@@ -300,3 +300,46 @@ test("buildAgentContext surfaces personalized/shared by #index, never an address
   expect(ctx).toMatch(/#2:.*shared body/); // #2 falls back to the shared body
   expect(ctx).not.toContain("@"); // no raw address in the model-facing context
 });
+
+// ── 03.4-02 Task 2: proposePlan group-mode refusal gate (CKPT-03, locked decision) ────────────
+// Personalization is exclusive with a group send (a group is ONE combined email). proposePlan
+// REFUSES a group plan that carries any personalization, telling the agent to switch to individual
+// (explicit consent to individual sends) — facts read from the ROW, like the attachmentError gate.
+
+async function fillTwoProposable(t: T, planId: Id<"plans">): Promise<void> {
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com", "alice@example.com"] });
+  await call(t, planId, "setSubject", { subject: "Hi" });
+  await call(t, planId, "draftBody", { intent: `${PERS} hello all` });
+}
+
+test("proposePlan refuses a GROUP plan that carries personalization (individual required)", async () => {
+  const { t, planId } = await setup();
+  await fillTwoProposable(t, planId);
+  await call(t, planId, "setMode", { mode: "group" });
+  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/individual/i); // tells the agent to switch to individual
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed"); // not proposed
+});
+
+test("proposePlan PROCEEDS for an INDIVIDUAL plan that carries personalization", async () => {
+  const { t, planId } = await setup();
+  await fillTwoProposable(t, planId);
+  await call(t, planId, "setMode", { mode: "individual" });
+  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/proposed/i);
+  expect((await readPlan(t, planId))?.status).toBe("proposed");
+});
+
+test("proposePlan is unaffected for a GROUP plan with NO personalization (today's behavior)", async () => {
+  const { t, planId } = await setup();
+  await fillTwoProposable(t, planId);
+  await call(t, planId, "setMode", { mode: "group" });
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/proposed/i);
+  expect((await readPlan(t, planId))?.status).toBe("proposed");
+});
