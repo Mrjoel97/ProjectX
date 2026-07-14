@@ -43,8 +43,15 @@ const cockpitAgent = new Agent(components.agent, {
  * the client binds the chat hooks + `plans.byThread`. Explicit return type (guidelines §96).
  */
 export const sendCockpitMessage = tenantAction({
-  args: { threadId: v.optional(v.string()), text: v.string() },
-  handler: async (ctx, { threadId, text }): Promise<{ threadId: string }> => {
+  args: {
+    threadId: v.optional(v.string()),
+    text: v.string(),
+    // The trusted client's clock+zone (§2-D) so the agent's setSendTime tool parses a volunteered
+    // natural-language time against the USER's now/zone — never the model's. Optional: a turn
+    // without it just can't set a send time by chat (the plan-card picker remains the writer).
+    clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
+  },
+  handler: async (ctx, { threadId, text, clientContext }): Promise<{ threadId: string }> => {
     // 1. Ensure a thread + its single plans row (first turn creates both; userId = tenantId).
     let tid = threadId;
     if (!tid) {
@@ -69,6 +76,7 @@ export const sendCockpitMessage = tenantAction({
         threadId: tid,
         planId: plan._id,
         text,
+        clientContext,
       });
       reply = res.reply;
     } catch {
