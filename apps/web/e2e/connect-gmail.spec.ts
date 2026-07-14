@@ -24,7 +24,7 @@ test("workspace gate resolves (no eternal spinner) — the 18c8442 fix", async (
   await page.goto("/dashboard/workspace");
 
   // The shell renders regardless of mailbox state (both panes present).
-  await expect(page.getByRole("heading", { name: "Conversation" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pikar AI" })).toBeVisible();
 
   // The composer gate resolves to EITHER the composer OR the Connect-Gmail CTA — never stuck loading.
   await expect(

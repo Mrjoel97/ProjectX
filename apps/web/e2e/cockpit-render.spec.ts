@@ -6,8 +6,9 @@ test("cockpit renders both panes under the auth gate", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
   // Both titled panes are present (the shell renders regardless of Gmail state).
-  await expect(page.getByRole("heading", { name: "Conversation" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
+  // Headings follow the brand chrome: "Pikar AI" (chat) + "Live work canvas" (workspace).
+  await expect(page.getByRole("heading", { name: "Pikar AI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live work canvas" })).toBeVisible();
   await expect(page.getByTestId("split-handle")).toBeVisible();
 
   // No eternal spinner: the gate resolves to EITHER the composer OR the Connect-Gmail CTA.
