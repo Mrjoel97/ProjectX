@@ -146,6 +146,60 @@ describe("patchPlan recipientBodies (3.4 — per-recipient body override, conten
   });
 });
 
+describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send content plane)", () => {
+  /** Seed an approved plan with two recipients + a shared body; return its id. */
+  async function seedPlan(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "approved",
+        recipients: ["bob@x.com", "amy@x.com"],
+        subject: "Q3 sync",
+        body: "Shared body.",
+        createdAt: Date.now(),
+      }),
+    );
+  }
+
+  test("patchPlan writes sendAt (absolute epoch ms); getById reads it back verbatim", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const sendAt = Date.UTC(2030, 0, 1, 14, 0, 0);
+
+    await t.mutation(internal.plans.patchPlan, { planId, sendAt });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.sendAt).toBe(sendAt);
+  });
+
+  test("a later subject-only patch preserves the stored sendAt (drop-undefined)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const sendAt = Date.UTC(2030, 0, 1, 14, 0, 0);
+
+    await t.mutation(internal.plans.patchPlan, { planId, sendAt });
+    await t.mutation(internal.plans.patchPlan, { planId, subject: "New subject" });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.subject).toBe("New subject");
+    expect(plan?.sendAt).toBe(sendAt); // untouched by the partial patch
+  });
+
+  test("setPlanStatus can move a plan approved → scheduled → canceled (the mirror carries both literals)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await t.mutation(internal.plans.setPlanStatus, { planId, status: "scheduled" });
+    let plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.status).toBe("scheduled");
+
+    await t.mutation(internal.plans.setPlanStatus, { planId, status: "canceled" });
+    plan = await t.query(internal.plans.getById, { planId });
+    expect(plan?.status).toBe("canceled");
+  });
+});
+
 describe("reportForPlan attachment extension (per-recipient delivered attachment url)", () => {
   test("each report row gains attachments derived from the request's attachmentRefs", async () => {
     const t = convexTest(schema, modules);
