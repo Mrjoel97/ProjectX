@@ -29,6 +29,21 @@ const chip = {
 type Plan = NonNullable<FunctionReturnType<typeof api.plans.byThread>>;
 type PlanId = Plan["_id"];
 
+// Deferred send (SCHD-01) time helpers. The browser IS in the user's tz, so the native
+// datetime-local input round-trips epoch ms ↔ local wall-clock without any tz math of our own
+// (RESEARCH Pattern 6 — "don't hand-roll timezones"). `sendAt` (epoch ms) is the ONE source of truth.
+const pad = (n: number) => String(n).padStart(2, "0");
+/** epoch ms → the local "YYYY-MM-DDTHH:mm" a datetime-local input expects. */
+function toLocalInputValue(epoch: number): string {
+  const d = new Date(epoch);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+/** The absolute instant a user reads before Approve — full local date/time + the resolved tz. */
+function formatAbsolute(epoch: number): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return `${new Date(epoch).toLocaleString()} (${tz})`;
+}
+
 // Live REPORT status → badge colour. Fan-out rows seed at "approved" and move
 // delivering → sent | awaiting_reauth | failed (requests.status, schema.ts).
 function badge(status: string) {
@@ -190,11 +205,13 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
 
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
+  const setSendTime = useMutation(api.plans.setPlanSendTime);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const recipients = plan.recipients ?? [];
   const mode = plan.mode ?? "individual";
   const body = plan.body ?? "";
+  const sendAt = plan.sendAt;
 
   // Single Approve gate (REVW-01). The busy flag makes a second click a client-side no-op;
   // the server CAS (proposed→approved) makes a double-approve send exactly once (idempotent).
@@ -233,19 +250,90 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           Send to {recipients.length} recipient{recipients.length === 1 ? "" : "s"} ({mode})
         </li>
       </ol>
+      <div style={{ margin: "0 0 0.75rem" }}>
+        <div style={label}>SEND TIME</div>
+        <input
+          type="datetime-local"
+          value={sendAt ? toLocalInputValue(sendAt) : ""}
+          min={toLocalInputValue(Date.now())}
+          onChange={(e) =>
+            void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
+          }
+          style={{ ...btn, cursor: "auto", border: "1px solid #e5e5e5", marginTop: "0.35rem" }}
+        />
+        {sendAt ? (
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>
+            Sends {formatAbsolute(sendAt)}{" · "}
+            <button
+              type="button"
+              onClick={() => void setSendTime({ planId: plan._id, sendAt: undefined })}
+              style={{ ...btn, padding: "0.1rem 0.5rem", border: "1px solid #e5e5e5", background: "transparent", color: "var(--teal-600)" }}
+            >
+              Send immediately
+            </button>
+          </p>
+        ) : (
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>Sends immediately on approve.</p>
+        )}
+      </div>
       <button
         type="button"
         disabled={busy}
         onClick={() => void approve()}
         style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
       >
-        {busy ? "Approving…" : "Approve"}
+        {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
       {note && (
         <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
           {note}
         </p>
       )}
+    </div>
+  );
+}
+
+/** A plan that has been approved with a future send time (SC2/SC4): shows the absolute moment and a
+ * Cancel that halts it until it fires. The busy flag makes a double-click a client-side no-op (the
+ * server CAS on status==="scheduled" makes a double-cancel idempotent). */
+function ScheduledCard({ plan }: { plan: Plan }) {
+  const cancel = useMutation(api.cockpit.cancelScheduledPlan);
+  const [busy, setBusy] = useState(false);
+
+  async function doCancel() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await cancel({ planId: plan._id });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={box}>
+      <div style={label}>SCHEDULED</div>
+      <p style={{ margin: "0.5rem 0", color: "#444" }}>
+        Scheduled for <strong>{plan.sendAt ? formatAbsolute(plan.sendAt) : "—"}</strong>. Nothing sends before then.
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void doCancel()}
+        style={{ ...btn, border: "1px solid #dc2626", background: "transparent", color: "#dc2626", fontWeight: 600 }}
+      >
+        {busy ? "Canceling…" : "Cancel"}
+      </button>
+    </div>
+  );
+}
+
+/** A scheduled send that was halted before fire — terminal, refs-only audited server-side. */
+function CanceledCard() {
+  return (
+    <div style={box}>
+      <div style={label}>CANCELED</div>
+      <p style={{ ...dim, margin: "0.5rem 0 0" }}>This scheduled send was canceled. Nothing was sent.</p>
     </div>
   );
 }
@@ -423,8 +511,10 @@ export function CardList({ threadId }: { threadId?: string }) {
   if (plan === undefined) return <p style={muted}>Loading…</p>;
   if (plan === null) return <p style={muted}>No plan yet — answer the questions to build one.</p>;
 
-  const hasDraft = Boolean(plan.body) || Boolean(plan.subject);
   const reporting = plan.status === "delivering" || plan.status === "done";
+  // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
+  const halted = plan.status === "scheduled" || plan.status === "canceled";
+  const hasDraft = (Boolean(plan.body) || Boolean(plan.subject)) && !halted;
   // Resolution happens during "collecting", BEFORE the PLAN — render the pick card whenever the
   // cockpit has parked candidates and the plan hasn't been proposed/delivered yet.
   const resolving = Boolean(plan.candidates?.length) && plan.status !== "proposed" && !reporting;
@@ -433,6 +523,8 @@ export function CardList({ threadId }: { threadId?: string }) {
     <div style={{ display: "grid", gap: "1rem" }}>
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
+      {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
+      {plan.status === "canceled" && <CanceledCard />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
     </div>
