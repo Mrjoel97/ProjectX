@@ -45,7 +45,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 - [x] **CKPT-01**: Agent can search/read the user's connected mailbox (via the already-granted `gmail.modify` scope) to surface people and context into the guided conversation — scoped to the requesting user only, with reads audited as refs/ids/counts (never raw message content), and nothing sent as a side effect of reading
 - [x] **CKPT-02**: Agent can generate a document and attach it to an outgoing email within an approved plan, flowing through the same governed send (audit, telemetry, DLQ) — distinct from INTK-02, which is *inbound* attachment ingestion
-- [ ] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
+- [x] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
 
 ### Scheduling
 
@@ -151,7 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DLVR-03 | Phase 2 | Complete |
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Complete |
-| CKPT-03 | Phase 3.4 | In Progress (03.4-01 foundation: recipientBodies field; Waves 2–4 pending) |
+| CKPT-03 | Phase 3.4 | Complete (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure) |
 | SCHD-01 | Phase 3.5 | Pending |
 | VALT-01 | Phase 5 | Pending |
 | VALT-02 | Phase 5 | Pending |
