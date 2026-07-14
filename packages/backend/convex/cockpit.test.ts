@@ -16,6 +16,10 @@ import schema from "./schema";
 // (workpool is a test-only devDep pinned to the version @convex-dev/workflow already resolves).
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+// cancelScheduledPlan writes a refs-only plan.canceled audit; the SOLE audit-insert surface counts
+// the auditCounts aggregate, so register the component (relative import — the package blocks the
+// deep specifier), same pattern as cockpitTools.test.ts.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -23,6 +27,8 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
 
 const TENANT = "tenant_a";
 
@@ -31,6 +37,7 @@ function withDelivery() {
   const t = convexTest(schema, modules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 }
 
@@ -264,6 +271,63 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("cancelScheduledPlan halts a scheduled send: status canceled, scheduler row gone, refs-only plan.canceled audit, nothing sends after; double-cancel no-ops", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const planId = await seedSchedulable(t, Date.now() + 60_000);
+      const asT = t.withIdentity({ subject: TENANT });
+
+      await asT.mutation(api.cockpit.executePlan, { planId }); // arm
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+
+      const res = await asT.mutation(api.cockpit.cancelScheduledPlan, { planId });
+      expect(res).toEqual({ ok: true, canceled: true });
+
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe("canceled");
+
+      // No live (pending) scheduled callback remains — the send was canceled before fire.
+      const pending = (await listScheduled(t)).filter((s) => s.state.kind === "pending");
+      expect(pending.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
+
+      // refs-only §4: the plan.canceled audit payload carries planId ONLY (no subject/body/recipients).
+      const audits = await t.run((ctx) =>
+        ctx.db.query("audit").filter((q) => q.eq(q.field("eventType"), "plan.canceled")).collect(),
+      );
+      expect(audits).toHaveLength(1);
+      const payloadStr = JSON.stringify(audits[0]?.payload);
+      expect(payloadStr).toContain(planId);
+      expect(payloadStr).not.toContain("Q3 update"); // no subject
+      expect(payloadStr).not.toContain("Here is the Q3 update"); // no body
+      expect(payloadStr).not.toContain("a@example.com"); // no recipient
+
+      // Advancing past the send time sends NOTHING (the scheduler was canceled).
+      vi.advanceTimersByTime(60_001);
+      await t.finishInProgressScheduledFunctions();
+      for (const r of await countRequests(t)) expect(r.status).toBe("approved");
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
+
+      // Idempotent: a second cancel (a non-scheduled plan) no-ops without throwing.
+      expect(await asT.mutation(api.cockpit.cancelScheduledPlan, { planId })).toEqual({
+        ok: true,
+        alreadyResolved: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("cancelScheduledPlan tenant guard: another tenant cannot cancel (plan not found)", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, Date.now() + 60_000, "tenant_b");
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.cancelScheduledPlan, { planId }),
+    ).rejects.toThrow(/plan not found/);
   });
 
   test("immediate path unchanged: an unset sendAt starts synchronously (status delivering, no scheduled row)", async () => {

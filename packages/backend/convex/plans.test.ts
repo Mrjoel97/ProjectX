@@ -186,6 +186,28 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
     expect(plan?.sendAt).toBe(sendAt); // untouched by the partial patch
   });
 
+  test("setPlanSendTime tenant-guards then writes sendAt; passing undefined clears it (→ immediate)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const sendAt = Date.UTC(2030, 0, 1, 14, 0, 0);
+    const asT = t.withIdentity({ subject: TENANT });
+
+    await asT.mutation(api.plans.setPlanSendTime, { planId, sendAt });
+    expect((await t.query(internal.plans.getById, { planId }))?.sendAt).toBe(sendAt);
+
+    // Clearing the picker (undefined) removes the field → send immediately on Approve.
+    await asT.mutation(api.plans.setPlanSendTime, { planId });
+    expect((await t.query(internal.plans.getById, { planId }))?.sendAt).toBeUndefined();
+  });
+
+  test("setPlanSendTime tenant guard: another tenant cannot write the picker (plan not found)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t); // tenant_a
+    await expect(
+      t.withIdentity({ subject: "tenant_b" }).mutation(api.plans.setPlanSendTime, { planId, sendAt: 1 }),
+    ).rejects.toThrow(/plan not found/);
+  });
+
   test("setPlanStatus can move a plan approved → scheduled → canceled (the mirror carries both literals)", async () => {
     const t = convexTest(schema, modules);
     const planId = await seedPlan(t);
