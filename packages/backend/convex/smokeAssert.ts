@@ -468,6 +468,40 @@ export const assertFanoutAttachmentShared = internalQuery({
   },
 });
 
+/** CKPT-03 (03.4-04): the INVERSE of assertFanoutAttachmentShared — per-recipient personalization
+ *  fans DISTINCT bodies under a SHARED subject. Every row's `draft` is unique (no two recipients got
+ *  the same tailored body) AND every row's subject (`goal`, minus the delivery-only SMOKE::fail
+ *  prefix) is identical (one shared subject). Proves the distinct-body seed rode the governed fan-out
+ *  to per-recipient rows (executePlan's seed is unit-tested; this is the live delivery-plane proof). */
+export const assertFanoutBodiesDistinct = internalQuery({
+  args: { correlationIds: v.array(v.string()) },
+  handler: async (ctx, { correlationIds }) => {
+    const drafts: string[] = [];
+    const subjects = new Set<string>();
+    for (const cid of correlationIds) {
+      const req = await ctx.db
+        .query("requests")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
+        .first();
+      if (!req) throw new Error(`fanout-bodies: no request for ${cid}`);
+      drafts.push(req.draft ?? "");
+      // Strip the delivery-only SMOKE::fail sentinel so the SHARED subject is what's compared.
+      subjects.add((req.goal ?? "").replace(/^SMOKE::fail /, ""));
+    }
+    if (new Set(drafts).size !== drafts.length) {
+      throw new Error(
+        `fanout-bodies: drafts not all distinct (${drafts.length} rows, ${new Set(drafts).size} unique) — personalization must give each recipient its OWN body`,
+      );
+    }
+    if (subjects.size !== 1) {
+      throw new Error(
+        `fanout-bodies: ${subjects.size} distinct subjects across rows, expected 1 (shared subject)`,
+      );
+    }
+    return { ok: true, distinct: drafts.length };
+  },
+});
+
 /** V8: a governed stop (kill switch / budget) during attachment GENERATION paused as data —
  *  NO attachment was stored on the plan, NO attachmentError set, and NO deadLetters row exists
  *  for the tenant (a pause never touches the DLQ). */

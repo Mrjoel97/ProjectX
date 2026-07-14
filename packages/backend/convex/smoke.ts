@@ -218,16 +218,24 @@ export const seedFanout = internalMutation({
     failIndex: v.number(), // this row's goal gets the SMOKE::fail throw sentinel
     subjectNeedle: v.string(), // embedded in goal → must NEVER appear in a log plane
     bodyNeedle: v.string(), // embedded in draft → must NEVER appear in a log plane
+    // CKPT-03 (03.4-04): when present, each row's `draft` is that recipient's DISTINCT tailored
+    // body (parallel to recipients) while the SUBJECT stays SHARED — the INVERSE of the shared-
+    // attachment fan-out. Append-only optional arg: absent ⇒ the historic single-shared-body path
+    // (draft = `SMOKE:: <bodyNeedle> #i`, subject includes the `#i` disambiguator).
+    recipientBodies: v.optional(v.array(v.string())),
     attachment: v.optional(
       v.object({ storageId: v.id("_storage"), filename: v.string(), size: v.number() }),
     ),
   },
   handler: async (
     ctx,
-    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle, attachment },
+    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle, recipientBodies, attachment },
   ): Promise<{ planId: Id<"plans">; attachmentId?: Id<"attachments"> }> => {
     if (recipients.length !== correlationIds.length) {
       throw new Error("seedFanout: recipients/correlationIds length mismatch");
+    }
+    if (recipientBodies && recipientBodies.length !== correlationIds.length) {
+      throw new Error("seedFanout: recipientBodies/correlationIds length mismatch");
     }
     const now = Date.now();
     const planId = await ctx.db.insert("plans", {
@@ -255,14 +263,19 @@ export const seedFanout = internalMutation({
       if (correlationId === undefined || recipient === undefined) {
         throw new Error(`seedFanout: missing row ${i}`);
       }
+      // Distinct-body mode (CKPT-03): the DISTINCTNESS rides `draft` (per-recipient tailored body)
+      // and the SUBJECT is SHARED (drop the `#i` disambiguator). The SMOKE::fail sentinel still
+      // prefixes the fail row's goal (delivery plumbing — assertFanoutBodiesDistinct strips it
+      // before comparing subjects). Absent ⇒ the historic single-shared-body seeding, unchanged.
+      const distinct = recipientBodies !== undefined;
       requestIds.push(
         await ctx.db.insert("requests", {
           tenantId: "smoke",
           correlationId,
           // SMOKE:: draft body means no LLM key is needed (delivery never routes/drafts).
-          goal: `${i === failIndex ? "SMOKE::fail " : ""}${subjectNeedle} #${i}`,
+          goal: `${i === failIndex ? "SMOKE::fail " : ""}${subjectNeedle}${distinct ? "" : ` #${i}`}`,
           recipient,
-          draft: `SMOKE:: ${bodyNeedle} #${i}`,
+          draft: distinct ? recipientBodies[i]! : `SMOKE:: ${bodyNeedle} #${i}`,
           status: "approved",
           attachmentRefs: sharedRefs, // SAME shared id for every recipient (V6 fan-out)
           planId,
