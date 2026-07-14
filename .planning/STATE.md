@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-07-14T16:45:23.038Z"
+stopped_at: Completed 05-06-PLAN.md
+last_updated: "2026-07-14T18:07:48.272Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 15
   completed_phases: 5
   total_plans: 57
-  completed_plans: 52
+  completed_plans: 53
   percent: 91
 ---
 
@@ -150,6 +150,7 @@ Progress: [█████████░] 94%
 | Phase 05 P03 | 6 | 2 tasks | 4 files |
 | Phase 05 P04 | 15 | 3 tasks | 6 files |
 | Phase 05 P05 | 9 | 2 tasks | 6 files |
+| Phase 05 P06 | 25 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,7 @@ Recent decisions affecting current work:
 - [Phase 05]: Ingest is a durable workflow started ONLY by vault.ts mutations; preCall governed stop marks row failed, never DLQ
 - [Phase 05]: vaultGround SMOKE seeds resolve through tenant-scoped ownedDocsMeta so the offline path enforces the same cross-tenant isolation as namespace=tenantId (VALT-03)
 - [Phase 05]: vaultGround returns @pikar/vault fuse FusionResult verbatim; vaultSearch reuses the same rag.search hybrid primitive post-filtered to a category (one surface, two callers)
+- [Phase 05]: 05-06: Vault UI PreviewModal downloads via an on-demand useConvex().query URL (never logged, §4) while media previews subscribe a conditional useQuery('skip') signed URL; selected-doc state lifted into the keyed VaultBody so Refresh closes the modal.
 
 ### Roadmap Evolution
 
@@ -259,8 +261,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T16:45:22.443Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-07-14T18:07:27.243Z
+Stopped at: Completed 05-06-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
