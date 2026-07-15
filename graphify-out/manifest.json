@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1784070925.9568717,
-    "ast_hash": "d37eacae7e058443194cae98006030b2",
+    "mtime": 1784081803.7446792,
+    "ast_hash": "d15d0a125edb7e2bafedece967ccb0e0",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1784070982.741961,
-    "ast_hash": "cf5ad5fbe1521dc541dad15b8649432d",
+    "mtime": 1784081846.2323093,
+    "ast_hash": "9b8226d72cf31f30e9e67e6911a76630",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1070,8 +1070,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/layout.tsx": {
-    "mtime": 1784070462.3882995,
-    "ast_hash": "385f09871e1a172beddd277890f77670",
+    "mtime": 1784082415.290772,
+    "ast_hash": "204145a2088b02b509da8abf2d6b884e",
     "semantic_hash": ""
   },
   "apps/web/middleware.ts": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/page.tsx": {
-    "mtime": 1784069731.1316855,
-    "ast_hash": "8829b8c0c0ed27af95a7680a027fd828",
+    "mtime": 1784082334.9191844,
+    "ast_hash": "fc33eea36cb787e66b4e170f14815d34",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitDraft.test.ts": {
@@ -1505,8 +1505,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpit.ts": {
-    "mtime": 1784062846.4040086,
-    "ast_hash": "870e79eb4511e66684a78e5fd98b1100",
+    "mtime": 1784081930.609163,
+    "ast_hash": "51a79f26cc6be8605e59788bdebec6e7",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpit.test.ts": {
@@ -1520,8 +1520,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/ChatPane.tsx": {
-    "mtime": 1784066514.4448867,
-    "ast_hash": "f70a2fbe0fc7e192080435ff948cf5c3",
+    "mtime": 1784076469.0034752,
+    "ast_hash": "a7e81b53ed130918475119646f5ed5ee",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/cards.tsx": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1784070770.1666884,
-    "ast_hash": "99cf36adf5f83a31d11707f85e4482dc",
+    "mtime": 1784082896.100484,
+    "ast_hash": "22054c96711634e3c9dd3113f9f14ff4",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -2100,8 +2100,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/intake.md": {
-    "mtime": 1784070124.4351647,
-    "ast_hash": "c91a9e1a5f65d8a2b2485d779824ce6d",
+    "mtime": 1784077768.2113264,
+    "ast_hash": "d76a4e6d9e00e97beabef7505bd46e2a",
     "semantic_hash": ""
   },
   ".planning/phases/04-attachment-voice-intake/deferred-items.md": {
@@ -2185,7 +2185,7 @@
     "semantic_hash": ""
   },
   "packages/backend/.convex/local/default/config.json": {
-    "mtime": 1784062925.0066085,
+    "mtime": 1784074242.057108,
     "ast_hash": "de9e9f5cb8657f33d8729ddc7b6e3b62",
     "semantic_hash": ""
   },
@@ -2325,13 +2325,13 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx": {
-    "mtime": 1784070124.3101642,
-    "ast_hash": "14f7a2b9a7829a392ac8ba9552109258",
+    "mtime": 1784076380.8071914,
+    "ast_hash": "834db0e1e410d5056dd2e45126eb9f98",
     "semantic_hash": ""
   },
   "apps/web/e2e/intake.spec.ts": {
-    "mtime": 1784070124.3101642,
-    "ast_hash": "8ac132d4d2822b9e8d436c3ea3658278",
+    "mtime": 1784077789.584888,
+    "ast_hash": "d2440901a2bbcd8bf1ef09f6a290998c",
     "semantic_hash": ""
   },
   ".planning/phases/04-attachment-voice-intake/04-04-SUMMARY.md": {
@@ -2355,18 +2355,18 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/CategoryTabs.tsx": {
-    "mtime": 1784070420.4607427,
-    "ast_hash": "9bda20d324968c973a15d5c0efa84193",
+    "mtime": 1784084668.4453123,
+    "ast_hash": "70ce783b2ce9888a1455a8fc6bcead58",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/DocGrid.tsx": {
-    "mtime": 1784070420.476382,
-    "ast_hash": "7bfd71a63ccc40628c1a4250c84fbcf7",
+    "mtime": 1784084704.9576342,
+    "ast_hash": "f4b34de936d488d763855b139fcd8d7f",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/Dropzone.tsx": {
-    "mtime": 1784070420.476382,
-    "ast_hash": "11d9e7675931df1a41c086518cfae169",
+    "mtime": 1784084747.6655843,
+    "ast_hash": "4ab60a70473284187659083186ab81be",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/PreviewModal.tsx": {
@@ -2375,8 +2375,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/VaultStats.tsx": {
-    "mtime": 1784070420.476382,
-    "ast_hash": "25c22b394464ed0ee5cb03a9a039ba26",
+    "mtime": 1784084648.8900824,
+    "ast_hash": "8cb36f48ed41e8a853f814c9aa4c1a8d",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/icons.tsx": {
@@ -2385,8 +2385,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/page.tsx": {
-    "mtime": 1784070420.476382,
-    "ast_hash": "195435cca194cc13d7b9bae2e6ebd634",
+    "mtime": 1784082490.125116,
+    "ast_hash": "1e5850a4185f7fe32b269b99373c1fad",
     "semantic_hash": ""
   },
   "apps/web/e2e/vault.spec.ts": {
@@ -2610,8 +2610,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vault.md": {
-    "mtime": 1784070420.5392506,
-    "ast_hash": "aa6dd723cc974ffa681912a651748f20",
+    "mtime": 1784084871.3587153,
+    "ast_hash": "9ff6eb801ab00fa25e129cc06dedc803",
     "semantic_hash": ""
   },
   "packages/contracts/skills/graph-extractor.md": {
