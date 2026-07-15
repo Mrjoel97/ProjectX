@@ -439,6 +439,11 @@ type PlanRow = {
   // candidate `matches` shape in THIS span would trip the draftCockpit header-hint redaction scan.
 };
 
+// One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
+// and setSendTime's confirmation string (same zone rules, one place to change them).
+const fmtSendInstant = (ms: number, tz?: string) =>
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+
 /**
  * Format the current plan state for the model (Plan 04 feeds this into the loop each turn).
  * Recipients render as the index+label view from buildRecipientView — an address NEVER appears
@@ -503,15 +508,7 @@ export function buildAgentContext(
     `Send mode: ${plan.mode ?? "(not set)"}`,
     // Send time: the ABSOLUTE resolved instant in the user's zone (so the model confirms it, never
     // invents a clock); nothing set = immediate on approve (the default, SC1).
-    `Send time: ${
-      plan.sendAt === undefined
-        ? "(immediate on approve)"
-        : new Intl.DateTimeFormat("en-US", {
-            timeZone: tz,
-            dateStyle: "full",
-            timeStyle: "short",
-          }).format(plan.sendAt)
-    }`,
+    `Send time: ${plan.sendAt === undefined ? "(immediate on approve)" : fmtSendInstant(plan.sendAt, tz)}`,
     "Attachments (reason about these by #index/filename):",
     attachments,
     ...(plan.attachmentError
@@ -746,11 +743,7 @@ export function buildCockpitTools(
         switch (parsed.kind) {
           case "resolved": {
             await ctx.runMutation(internal.plans.patchPlan, { planId, sendAt: parsed.epochMs });
-            const when = new Intl.DateTimeFormat("en-US", {
-              timeZone: clientContext.tz,
-              dateStyle: "full",
-              timeStyle: "short",
-            }).format(parsed.epochMs);
+            const when = fmtSendInstant(parsed.epochMs, clientContext.tz);
             return `Send time set to ${when}. Confirm this exact time back to the user.`;
           }
           case "ambiguous":

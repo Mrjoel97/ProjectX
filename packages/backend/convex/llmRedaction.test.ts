@@ -53,16 +53,25 @@ test("llm.ts uses ONLY skill.body as the system prompt (no hardcoded prompts)", 
 
 test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction-safe by construction)", () => {
   // The plan/draft content plane must never itself write a log-plane row — those writes belong
-  // ONLY to the shared governed delivery layer (keyed by correlationId, refs-only). If cockpit.ts
-  // and plans.ts insert nothing into audit/deadLetters/telemetry and call no audit.log, raw
-  // recipient/subject/body cannot structurally leak to a log from here (CLAUDE.md §4).
+  // ONLY to the shared governed delivery layer (keyed by correlationId, refs-only). plans.ts
+  // stays audit-free. cockpit.ts's SINGLE allowed crossing is the refs-only plan.canceled cancel
+  // audit (03.5-03; payload {planId} only) — asserted the way gmail.ts's mailbox.searched is:
+  // the call may exist, its payload must carry no raw content field (CLAUDE.md §4).
   for (const file of ["cockpit.ts", "plans.ts"]) {
     const src = readSource(file);
     expect(src, `${file} inserts into a log-plane table`).not.toMatch(
       /\.insert\(\s*["'](audit|deadLetters|telemetry)["']/,
     );
-    expect(src, `${file} calls audit.log`).not.toMatch(/audit\.log\b/);
   }
+  expect(readSource("plans.ts"), "plans.ts calls audit.log").not.toMatch(/audit\.log\b/);
+  const cockpit = readSource("cockpit.ts");
+  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(1);
+  const m = cockpit.match(/eventType:\s*["']plan\.canceled["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "plan.canceled audit payload not found").not.toBeNull();
+  const payload = m![1].replace(/\/\/[^\n]*/g, "");
+  expect(payload, `plan.canceled payload must be refs-only: ${m![1]}`).not.toMatch(
+    /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
+  );
 });
 
 // ── 03.2-04: the read-side (mailbox search) audit + drafter greeting stay refs-only (SC3) ────────
