@@ -1012,14 +1012,17 @@ function invokeTool(
 
 // Price the reasoning call's usage → consume the daily-spend window (guarded: unknown model / zero
 // cost skip; recordSpend itself also no-ops at cents<=0, so a ZERO_USAGE turn never drains budget).
+// Returns the priced USD (0 on the guarded paths) so the loop can surface per-turn cost (EVAL-01
+// Pattern 4 — the rate-limiter window is global and unreadable from the eval runner).
 async function recordModelSpend(
   ctx: GenericActionCtx<DataModel>,
   id: string,
   usage: { inputTokens?: number; outputTokens?: number },
-): Promise<void> {
+): Promise<number> {
   const priced = priceUsage(id, usage);
-  if (!priced.ok) return;
+  if (!priced.ok) return 0;
   await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+  return priced.value;
 }
 
 // The governed generateText loop shared by runCockpitAgent (a gateway model string) and the
@@ -1036,10 +1039,16 @@ async function runAgentLoop(
     primary: PricedModel;
     fallback: PricedModel;
   },
-): Promise<{ reply: string }> {
+): Promise<{ reply: string; costUsd: number }> {
   const { tenantId, planId, system, prompt, primary, fallback } = args;
   const tools = buildCockpitTools(ctx, tenantId, planId);
-  const run = async (m: PricedModel, maxRetries: number): Promise<{ reply: string }> => {
+  // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
+  // still counts toward the turn's total the eval runner caps on (Pattern 4).
+  let costUsd = 0;
+  const run = async (
+    m: PricedModel,
+    maxRetries: number,
+  ): Promise<{ reply: string; costUsd: number }> => {
     const res = await generateText({
       model: m.model,
       system,
@@ -1049,8 +1058,8 @@ async function runAgentLoop(
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       maxRetries,
     });
-    await recordModelSpend(ctx, m.id, res.usage);
-    return { reply: res.text };
+    costUsd += await recordModelSpend(ctx, m.id, res.usage);
+    return { reply: res.text, costUsd };
   };
   try {
     return await run(primary, 1);
@@ -1196,7 +1205,13 @@ export const runCockpitAgent = internalAction({
   handler: async (
     ctx,
     { tenantId, planId, text, model, clientContext },
-  ): Promise<{ reply: string; blocked?: "kill_switch" | "daily_budget_exhausted" }> => {
+  ): Promise<{
+    reply: string;
+    blocked?: "kill_switch" | "daily_budget_exhausted";
+    // Per-turn priced USD (a count — §4-safe in a return value): 0 on the no-model paths, absent
+    // on a governed stop (nothing spent). The eval runner sums this against its hard cost cap.
+    costUsd?: number;
+  }> => {
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
     const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
       await ctx.runMutation(internal.guardrails.preCall, {});
@@ -1215,11 +1230,11 @@ export const runCockpitAgent = internalAction({
     const smokeOp = parseAgentSmoke(text);
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
     const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext);
-    if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp) };
+    if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp), costUsd: 0 }; // no model call
 
     // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
     const primaryId = model ?? DEFAULT_MODEL;
-    const { reply } = await runAgentLoop(ctx, {
+    const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
@@ -1227,7 +1242,7 @@ export const runCockpitAgent = internalAction({
       primary: { model: resolveModel(primaryId), id: primaryId },
       fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
     });
-    return { reply };
+    return { reply, costUsd };
   },
 });
 
@@ -1269,7 +1284,7 @@ export const __runCockpitAgentWithScript = internalAction({
   handler: async (
     ctx,
     { tenantId, planId, primary, fallback, failPrimary },
-  ): Promise<{ reply: string }> => {
+  ): Promise<{ reply: string; costUsd: number }> => {
     const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: COCKPIT_AGENT_SKILL,
     });
