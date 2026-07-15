@@ -79,7 +79,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 *Added 2026-07-14 from the agent-eval-gate design (`.planning/design/agent-eval-gate.md`). Pulls the eval substrate ahead of Phase 8 so agent-skill activations stop being blind; IMPR-02's optimizer later plugs into this harness instead of building its own.*
 
 - [ ] **EVAL-01**: A golden set of scripted cockpit conversations runs on demand against the live model and asserts on resulting plan/tool state (never reply text), with a hard cost cap and zero possibility of a real send; activating a never-before-active version of a gated agent skill requires a recorded passing eval run (evidence on the skill row, refs/counts only), while rollback to a previously-active version is structurally exempt and always works
-- [ ] **EVAL-02**: Production eval signals — approve/edit/reject rates, regenerate count, fallback count, DLQ rate, cost per delivered plan — are readable on the ops page from existing telemetry/audit data, with no new write paths
+- [x] **EVAL-02**: Production eval signals — approve/edit/reject rates, regenerate count, fallback count, DLQ rate, cost per delivered plan — are readable on the ops page from existing telemetry/audit data, with no new write paths
 
 ### Governance & Operations
 
@@ -175,7 +175,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IMPR-02 | Phase 8 | Pending |
 | IMPR-03 | Phase 8 | Pending |
 | EVAL-01 | Phase 3.6 | Pending |
-| EVAL-02 | Phase 3.6 | Pending |
+| EVAL-02 | Phase 3.6 | Complete |
 | OPSG-01 | Phase 2 | Complete |
 | OPSG-02 | Phase 1 | Complete |
 | OPSG-03 | Phase 7 | Pending |

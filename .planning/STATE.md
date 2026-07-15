@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.6-02-PLAN.md
+last_updated: "2026-07-15T15:40:07.562Z"
+last_activity: "2026-07-15 — Phase 3.6 Agent Eval Gate, Wave 1: 03.6-02 executed (EVAL-02 read side). NEW read-only convex/opsSignals.ts — evalSignals tenantQuery computes the five locked signal families (gate decisionCounts sums, reviewOutcome distribution, regenerate/llm.fallback/DLQ counts, pipeline LLM cost per delivered send) from EXISTING telemetry/audit/deadLetters rows; telemetry gained by_tenant_created (the ONLY schema change — an index, not a write path); audit read WINDOWED via by_tenant_ts (never un-windowed); zero db writes in the module (grep-proven); refs/counts-only return shape structurally asserted. opsSignals.test.ts 6/6 green (rates, windowed fallback filter, DLQ new/total, cross-tenant all-zeros, telemetry windowing, refs-only shape). Ops page gained the Eval signals stat grid ABOVE the untouched legacy dead-letter list (globals.css tokens, tracked-caps labels; honest lane labels per Pitfall 6 — gate decisions '(legacy pipeline lane)', reviewOutcomes as the cockpit approve-proxy, cost titled with the rate-limiter caveat); web typecheck clean. watch.json: opsSignals paths registered under agent-runtime.md (list was reserved for 3.6); agent-runtime.md EVAL-02 note + Last verified → 03.6-02; check-playbooks exit 0. Commits 388af70 (T1 test RED), dccc349 (T1 feat GREEN index+query), c8d0b66 (T1 docs watch+playbook), 61aafd1 (T2 feat ops card). ONE deviation (Rule 3 — npx convex codegen to refresh git-ignored _generated bindings for the new module; nothing committed). EVAL-02 marked complete in REQUIREMENTS.md. NEXT: remaining Wave-1 sibling 03.6-01, then waves 2-4 (03/04/05)."
+progress:
+  total_phases: 17
+  completed_phases: 9
+  total_plans: 76
+  completed_plans: 69
+  percent: 91
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: "Lanes A/B/C merged to main (2026-07-15) — see last_activity for the consolidated position"
 last_updated: "2026-07-15T00:00:00.000Z"
 last_activity: "2026-07-15 — LANE CONSOLIDATION: all three worktree lanes merged to main. Lane A (cockpit-send): Phases 3.4 (CKPT-03 human-verified) + 3.5 (SCHD-01) COMPLETE. Lane B (intake-voice): Phase 4 CODE-COMPLETE 5/6 — 04-06 phase close + SC3 live human-verify still pending; extraction is Path A (hosted OpenAI, sidecar killed). Lane C (knowledge-vault): Phase 5 COMPLETE 7/7, live in-browser verified incl. P0 embedding-adapter fix; /dashboard/vault live and wired into the rail nav. Also on main (2026-07-15, outside GSD phases): the BRAND.md teal app shell (rail + Command Center home), the cockpit brand-chrome + full-bleed fusion (screenshot-verified), ADR-004 + agent-runtime playbook, and specs for inserted Phases 3.6 (agent eval gate, EVAL-01/02) + 3.7 (inbox briefing, CKPT-04). NEXT: 04-06 phase close + SC3 human-verify, then plan 3.6 (/gsd:plan-phase 3.6) before further skill edits."
 progress:
-  total_phases: 17
+  [█████████░] 91%
   completed_phases: 9
   total_plans: 71
   completed_plans: 67
@@ -116,6 +132,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 **Current focus:** Phase 3.1 — Cockpit Core (all 5 waves / plans 01–09 executed; ready for /gsd:verify-work)
 
 ## Current Position
+
+Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Wave 1 (main), 1/5 plans complete.
+Plan: 03.6-02 COMPLETE (Wave 1 — EVAL-02 read side). Read-only `convex/opsSignals.ts` `evalSignals` tenantQuery over EXISTING telemetry/audit/deadLetters rows (five locked signal families; tenant-scoped, 30-day-windowed, refs/counts only; audit read windowed via by_tenant_ts, never un-windowed; zero db writes grep-proven); telemetry `by_tenant_created` index (the sole schema change); ops-page Eval signals stat grid above the untouched dead-letter list (brand tokens, honest lane labels — Pitfall 6). opsSignals.test 6/6, web typecheck clean, check-playbooks exit 0. Commits 388af70/dccc349/c8d0b66 (T1 TDD+docs), 61aafd1 (T2 card). ONE deviation (Rule 3 — codegen refresh, nothing committed). EVAL-02 ✓. NEXT: sibling 03.6-01 (Wave 1), then 03.6-03/04/05.
 
 Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 4 (Lane A worktree, branch lane-a/cockpit-send) — automated tasks COMPLETE, SCHD-01 human-verify PENDING.
 Plan: 03.5-04 AUTOMATED TASKS COMPLETE (Wave 4 — phase close; SCHD-01 human-verify PENDING). Built the automated half of the phase close: (1) `apps/web/e2e/cockpit-schedule.spec.ts` — the offline schedule→cancel E2E mirroring `cockpit-personalize.spec.ts`. Test 1: `add=alice` → `subject=Q3 sync` → `body=SMOKE::route=direct_llm::…` → `sendTime=in 2 hours` → `propose`, asserting the PLAN card SEND TIME picker carries a resolved concrete value + the Approve button reads "Approve & schedule" BEFORE the single Approve (SC2, nothing sent), THEN filling the `datetime-local` picker with a real-future `2035-06-01T10:00` (so `executePlan` takes the scheduled branch) → Approve & schedule → `ScheduledCard` ("SCHEDULED" + "Scheduled for …" + Cancel, no REPORT, PLAN card unmounted) → Cancel → `CanceledCard` ("CANCELED" + "canceled"), never a REPORT (SC3/SC4). Test 2: no send time → bare "Approve" (not "Approve & schedule") → immediate REPORT (SC1 default unchanged). Playwright-discovered + type-loads (`playwright test cockpit-schedule --list` = 2 tests); the live green run deferred to verify-work (phase-wide convention). KEY DECISION/DEVIATION (Rule 3 — blocking, no production code): the ScheduledCard is reached via the datetime PICKER, not `sendTime=`, because `SMOKE_NOW_MS` is pinned to 2020-01-01 12:00 UTC, so `in 2 hours` resolves to a 2020 instant that `executePlan` (real `Date.now`) treats as PAST → immediate branch (no ScheduledCard, offline OR live); the picker (`setPlanSendTime`, no NL past-guard) is the confirm source-of-truth. The `sendTime=` op still runs first to prove the NL fast path resolves a concrete absolute time into the picker before Approve (and satisfies the `contains:'sendTime='` artifact). (2) `cockpit.md` §9 phase close: `Last verified` → 03.5-04 + five deferred-send invariants (schedule-on-future-`sendAt`; single `workflow.start` via `startFanout`; CAS-guarded refs-only cancel; fire-time failure inherited; client-clock send time) + Key-files (`startFanout`/`startScheduledDelivery`/`cancelScheduledPlan`, `setPlanSendTime`, datetime picker/`ScheduledCard`/`CanceledCard`, `parseSendTime`) + How-to-verify (fake-timer scheduler tests + `cockpit-schedule` spec + smoke:fanout-UNCHANGED note) + SCHD-01 Manual-only human-verify. check-playbooks exit 0. Verifies: `playwright test cockpit-schedule --list` = 2 tests discovered + type-load; check-playbooks exit 0; `smoke:fanout` (run-smoke-fanout.mjs) UNCHANGED (empty diff — it still proves the spine the scheduled fire reuses, SC3). Commits c1590ea (T1 E2E), f002bd6 (T2 playbook close). ONE deviation (Rule 3 spec-construction adaptation — pinned SMOKE clock; no production code touched, no architectural change). SCHD-01 stays PENDING: the sole live-only proof is the human-verify (real future send fires at the requested moment / real cancel halts before fire, audited refs-only / dead-token-at-fire → awaiting_reauth + notification exactly like an immediate send) — fake timers cannot observe real inbox arrival or real token expiry at fire. NEXT: SCHD-01 human-verify sign-off → orchestrator runs verify_phase_goal + marks Phase 3.5 complete.
@@ -228,6 +247,7 @@ Progress: [█████████░] 94%
 | Phase 03.5-deferred-send P01 | 16 | 2 tasks | 6 files |
 | Phase 03.5 P02 | 24min | 3 tasks | 9 files |
 | Phase 03.5-deferred-send P03 | 14min | 3 tasks | 6 files |
+| Phase 03.6 P02 | 10min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -324,6 +344,7 @@ Recent decisions affecting current work:
 - [Phase 03.5-deferred-send]: 03.5-03: startFanout is the SOLE workflow.start(deliverApprovedPlan) call site, shared by the immediate approve path AND startScheduledDelivery — no second call site added
 - [Phase 03.5-deferred-send]: 03.5-03: a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); cancelScheduledPlan is CAS-guarded + refs-only audited
 - [Phase 03.5]: 03.5-04 E2E reaches the ScheduledCard via the datetime-local picker (real-future time), not SMOKE sendTime= — the pinned 2020 SMOKE clock makes any NL time real-past so executePlan would take the immediate branch; the picker (setPlanSendTime, no past-guard) is the confirm source-of-truth
+- [Phase 03.6]: opsSignals read side: signals computed from existing rows only, zero new write paths; audit reads always windowed via by_tenant_ts; lane-skewed metrics labeled honestly (decision counts pipeline-only, reviewOutcome as cockpit approve-proxy)
 
 ### Roadmap Evolution
 
@@ -341,8 +362,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-15 (resumed)
-Stopped at: Phase 4 COMPLETE (6/6) — SC3 live human-verify APPROVED by owner 2026-07-15 (attach + dictate → delivered email reflected the content, guardrails intact); ROADMAP + status table ticked. Now: owner-directed cockpit-header + Knowledge-Vault UI polish pass (shrink logo, header dividers, live clock/kebab past-chat menus backed by a new cockpit.listThreads query, vault fused full-bleed to the shell with the workspace glass/clay). Then /gsd:plan-phase 3.6.
+Last session: 2026-07-15T15:40:07.549Z
+Stopped at: Completed 03.6-02-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
