@@ -11,7 +11,6 @@ import {
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
-  EXECUTIVE_AGENT_CLASSIFIER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   GRAPH_EXTRACTOR_SKILL,
   hasPassingEvidence,
@@ -25,7 +24,6 @@ import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
-import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
@@ -150,16 +148,18 @@ export const getSkillVersion = internalQuery({
 /**
  * Seed + PUBLISH the agent skills from the registry-bound markdown sources (via
  * the derived constants) — no agent prompt is hardcoded here. First run inserts
- * each as v1/active. Re-running is idempotent when a body is UNCHANGED, and when
- * a body has been edited it publishes a NEW version (maxVersion+1) and activates
- * it — never mutating a prior row (immutable-per-version, CLAUDE.md §5). This is
- * the path a skill-prompt edit takes to production; rollback stays activateSkill.
+ * each as v1/active (bootstrap — a fresh clone must never fail closed). Re-running
+ * is idempotent when a body is UNCHANGED vs the NEWEST row. An edited body
+ * publishes a NEW version (maxVersion+1), never mutating a prior row
+ * (immutable-per-version, CLAUDE.md §5): GATED skills publish as CANDIDATE (the
+ * active row stays active; activation flows through activateSkill's EVAL_GATE
+ * after a green eval run — EVAL-01), non-gated skills publish-and-activate as
+ * before. Rollback stays activateSkill on a prior version.
  */
 export const seedSkills = internalMutation({
   args: {},
   handler: async (ctx) => {
     const seeds = [
-      { name: EXECUTIVE_AGENT_CLASSIFIER_SKILL, body: executiveAgentClassifierSkillBody },
       { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
       { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
       { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
@@ -185,13 +185,29 @@ export const seedSkills = internalMutation({
         continue;
       }
 
-      const active = rows.find((r) => r.status === "active");
-      if (active && active.body === body) continue; // unchanged → nothing to publish (idempotent)
+      // Idempotence vs the NEWEST row (not just the active one): covers
+      // active-unchanged AND an already-published gated candidate, so repeated
+      // dev boots after one edit never mint candidate N+1, N+2 (Pitfall 1).
+      const newest = rows.reduce((a, b) => (b.version > a.version ? b : a));
+      if (newest.body === body) continue;
 
-      // Body changed (a skill edit): publish a NEW immutable version and activate it — never mutate
-      // the old row (immutable-per-version, CLAUDE.md §5). This is the "publish a skill edit" path;
-      // rollback stays activateSkill on a prior version. Version = max existing + 1 (dedup-safe).
       const maxVersion = Math.max(...rows.map((r) => r.version));
+      if (isGatedSkill(name)) {
+        // Gated: publish as CANDIDATE; the active row stays active. Activation
+        // flows through activateSkill (the EVAL_GATE choke point) after a green
+        // eval run — a gated edit can never auto-activate through a dev boot.
+        await ctx.db.insert("skills", {
+          name,
+          version: maxVersion + 1,
+          body,
+          status: "candidate",
+          createdAt: Date.now(),
+        });
+        continue;
+      }
+
+      // Non-gated: publish-and-activate, unchanged behavior.
+      const active = rows.find((r) => r.status === "active");
       if (active) await ctx.db.patch(active._id, { status: "archived" });
       await ctx.db.insert("skills", {
         name,
@@ -201,5 +217,27 @@ export const seedSkills = internalMutation({
         createdAt: Date.now(),
       });
     }
+  },
+});
+
+/**
+ * One-off retirement flip: archive the single active row of a skill (no-op when
+ * none is active). Used to retire the dead executive-agent.classifier live via
+ * `npx convex run skills:archiveSkill '{"name":"executive-agent.classifier"}'` —
+ * with its seeds entry removed above, a re-seed cannot resurrect it (Pitfall 5).
+ * Status is one of the two sanctioned patchable fields; nothing else is touched.
+ */
+export const archiveSkill = internalMutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const active = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+      .unique();
+
+    if (active === null) return { archived: false };
+
+    await ctx.db.patch(active._id, { status: "archived" });
+    return { archived: true };
   },
 });
