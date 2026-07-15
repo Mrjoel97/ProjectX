@@ -55,7 +55,10 @@ export const sendCockpitMessage = tenantAction({
     // 1. Ensure a thread + its single plans row (first turn creates both; userId = tenantId).
     let tid = threadId;
     if (!tid) {
-      const created = await cockpitAgent.createThread(ctx, { userId: ctx.tenantId });
+      // Title the thread from the first message so the header's past-chats menu (listThreads)
+      // has a real label across reloads — the session tab strip is derived the same way.
+      const title = text.trim().replace(/\s+/g, " ").slice(0, 60) || "New chat";
+      const created = await cockpitAgent.createThread(ctx, { userId: ctx.tenantId, title });
       tid = created.threadId;
       await ctx.runMutation(internal.plans.insertPlan, { tenantId: ctx.tenantId, threadId: tid });
     }
@@ -173,6 +176,30 @@ export const listThreadMessages = tenantQuery({
       .unique();
     if (!owns) return { page: [], isDone: true, continueCursor: "" };
     return await listMessages(ctx, components.agent, { threadId, paginationOpts });
+  },
+});
+
+/**
+ * Past chats for the header history menu — the tenant's cockpit threads, newest first.
+ * `userId === tenantId` (set at createThread), so listing by it is inherently tenant-scoped —
+ * no cross-tenant read of another owner's threads. Labels come from the thread `title` set on the
+ * first send; a titleless legacy thread falls back to a stamp so the menu never shows a blank row.
+ * ponytail: fixed most-recent slice (no pagination) — the dropdown shows recent history; wire a
+ * cursor here if the menu ever needs infinite scroll.
+ */
+export const listThreads = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<Array<{ threadId: string; title: string; createdAt: number }>> => {
+    const res = await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
+      userId: ctx.tenantId,
+      order: "desc",
+      paginationOpts: { cursor: null, numItems: 30 },
+    });
+    return res.page.map((t) => ({
+      threadId: t._id,
+      title: (t.title ?? "").trim() || "Untitled chat",
+      createdAt: t._creationTime,
+    }));
   },
 });
 

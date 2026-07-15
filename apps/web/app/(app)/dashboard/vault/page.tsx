@@ -24,22 +24,20 @@ export default function VaultPage() {
   const [category, setCategory] = useState<string>("my-uploads");
   const [nonce, setNonce] = useState(0);
 
+  // Fused full-bleed to the shell (layout.tsx is-bleed), sharing the workspace canvas's teal
+  // aura (.pane-canvas) so the vault reads as one surface with the cockpit — its stat tiles and
+  // doc cards do the floating, matching the command center / workspace glass-over-clay look.
+  // Owns its own scroll because is-bleed locks the outer <main>.
   return (
-    <div
-      style={{
-        position: "relative",
-        background: "var(--card)",
-        borderRadius: "1.25rem",
-        padding: "2rem 2.5rem",
-        boxShadow: "0 10px 40px -28px rgb(14 20 25 / 35%)",
-      }}
-    >
-      <VaultBody
-        key={nonce}
-        category={category}
-        onCategory={setCategory}
-        onRefresh={() => setNonce((n) => n + 1)}
-      />
+    <div className="vault-surface pane-canvas">
+      <div className="vault-scroll">
+        <VaultBody
+          key={nonce}
+          category={category}
+          onCategory={setCategory}
+          onRefresh={() => setNonce((n) => n + 1)}
+        />
+      </div>
     </div>
   );
 }
@@ -66,8 +64,8 @@ function VaultBody({
         <span
           style={{
             position: "absolute",
-            top: "-1rem",
-            right: "0",
+            top: "0.25rem",
+            right: "0.5rem",
             padding: "0.3rem 0.9rem",
             borderRadius: "999px",
             background: "var(--ink)",

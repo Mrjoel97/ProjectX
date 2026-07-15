@@ -151,9 +151,13 @@ function Shell({ children }: { children: ReactNode }) {
 
       <div className="canvas-col">
         <ReconnectBanner />
-        {/* The cockpit fuses full-bleed to the rail (no canvas padding — one surface,
-            only the work floats); every other page stays cards-on-canvas. */}
-        <main className={`canvas-main${pathname.startsWith("/dashboard/workspace") ? " is-bleed" : ""}`}>
+        {/* The cockpit and the vault fuse full-bleed to the rail (no canvas padding — one
+            surface, only the work floats); every other page stays cards-on-canvas. */}
+        <main
+          className={`canvas-main${
+            /^\/dashboard\/(workspace|vault)/.test(pathname) ? " is-bleed" : ""
+          }`}
+        >
           {children}
         </main>
       </div>

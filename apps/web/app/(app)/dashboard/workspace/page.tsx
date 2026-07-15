@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
 import { CardList } from "./cards";
 import { ChatPane } from "./ChatPane";
@@ -47,14 +47,57 @@ const capsTeal = {
 
 type Tab = { id: string; label: string };
 
+// Header dropdown: an icon button that toggles a light-dismiss menu. The scrim is a real
+// full-screen button so an outside click (or its focus) closes the menu — no document listener.
+function HeaderMenu({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={label}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {icon}
+      </button>
+      {open && (
+        <>
+          <button type="button" className="menu-scrim" aria-hidden tabIndex={-1} onClick={close} />
+          <div className="head-menu">{children(close)}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
+  // Past chats for the header history menu — persisted, tenant-scoped, newest first (cockpit.ts).
+  const history = useQuery(api.cockpit.listThreads);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
 
   // First send on a fresh chat mints the thread — register its tab, labeled by the message.
   const registerThread = (id: string, firstText: string) => {
     setTabs((t) => [...t, { id, label: firstText.trim().slice(0, 24) || "New chat" }]);
+    setThreadId(id);
+  };
+  // Open a past chat from the history menu — add a session tab if it isn't already showing.
+  const openThread = (id: string, label: string) => {
+    setTabs((t) => (t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }]));
     setThreadId(id);
   };
   const newChat = () => setThreadId(undefined);
@@ -70,28 +113,15 @@ export default function WorkspacePage() {
       <SplitPane
         left={
           <section data-testid="chat-pane" className="pane-chat" style={panel}>
-            <header style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-              <span
-                aria-hidden="true"
-                style={{
-                  width: "2.4rem",
-                  height: "2.4rem",
-                  borderRadius: "0.8rem",
-                  flex: "none",
-                  display: "grid",
-                  placeItems: "center",
-                  color: "#fff",
-                  background: "linear-gradient(135deg, var(--teal-400), var(--teal-600))",
-                  boxShadow: "0 6px 14px -6px rgb(0 150 137 / 60%), inset 0 1px 2px rgb(255 255 255 / 40%)",
-                }}
-              >
-                <BrainIcon size={20} />
+            <header className="chat-head" style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <span aria-hidden="true" className="chat-logo">
+                <BrainIcon size={16} />
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h2
                   style={{
                     margin: 0,
-                    fontSize: "1.02rem",
+                    fontSize: "0.92rem",
                     letterSpacing: "-0.01em",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -103,7 +133,7 @@ export default function WorkspacePage() {
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "0.74rem",
+                    fontSize: "0.66rem",
                     color: "var(--ink-soft)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -114,16 +144,55 @@ export default function WorkspacePage() {
                 </p>
               </div>
               <div className="chat-head-icons">
-                <button type="button" className="icon-btn" disabled title="Chat history — coming soon">
-                  <ClockIcon size={17} />
-                </button>
-                <button type="button" className="icon-btn" disabled title="Options — coming soon">
-                  <DotsIcon size={17} />
-                </button>
+                {/* Clock → past chats (persisted history); kebab → chat options. */}
+                <HeaderMenu label="Past chats" icon={<ClockIcon size={16} />}>
+                  {(close) => (
+                    <div role="menu" aria-label="Past chats">
+                      {history === undefined ? (
+                        <p className="head-menu-empty">Loading…</p>
+                      ) : history.length === 0 ? (
+                        <p className="head-menu-empty">No past chats yet.</p>
+                      ) : (
+                        history.map((t) => (
+                          <button
+                            key={t.threadId}
+                            type="button"
+                            role="menuitem"
+                            className={`head-menu-item${t.threadId === threadId ? " is-active" : ""}`}
+                            title={t.title}
+                            onClick={() => {
+                              openThread(t.threadId, t.title);
+                              close();
+                            }}
+                          >
+                            {t.title}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </HeaderMenu>
+                <HeaderMenu label="Chat options" icon={<DotsIcon size={16} />}>
+                  {(close) => (
+                    <div role="menu" aria-label="Chat options">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="head-menu-item"
+                        onClick={() => {
+                          newChat();
+                          close();
+                        }}
+                      >
+                        + New chat
+                      </button>
+                    </div>
+                  )}
+                </HeaderMenu>
               </div>
             </header>
 
-            {/* Chat tabs: one per minted thread this session + the New-chat pill. */}
+            {/* Chat tabs: one per minted thread this session + the compact New-chat pill. */}
             <div className="chat-tabs">
               {tabs.map((t) => (
                 <button
@@ -138,11 +207,12 @@ export default function WorkspacePage() {
               ))}
               <button
                 type="button"
-                className={`chat-tab${threadId === undefined ? " is-active" : ""}`}
+                className={`chat-tab is-new${threadId === undefined ? " is-active" : ""}`}
                 aria-label="New chat"
+                title="New chat"
                 onClick={newChat}
               >
-                {tabs.length === 0 ? "+ New chat" : "+"}
+                +
               </button>
             </div>
 
