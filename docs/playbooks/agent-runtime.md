@@ -1,6 +1,6 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
-> Last verified: 2026-07-14 against 630f622
+> Last verified: 2026-07-15 against 03.6-02
 > Build history: `.planning/phases/` (3.2.1 agent-driven cockpit, 3.3 attachment generation) · Related ADRs: ADR-003 (skills registry), ADR-004 (agents/humans as peer actors)
 
 ## Purpose
@@ -31,6 +31,15 @@ Backend (`packages/backend/convex/`):
 - `cockpit.ts` — thin driver `sendCockpitMessage` (save turn → preCall → loop → save reply). `@convex-dev/agent` is used **as a message store only** (`createThread`/`saveMessage`/`listMessages`); its own reasoning engine is deliberately inert.
 - `guardrails.ts` — `preCall` gate (kill switch, budget, rate limit) + `recordSpend`.
 - `skills.ts` — fail-closed skill loading + `activateSkill` + `seedSkills` (see `skill-registry.md`).
+- `opsSignals.ts` — EVAL-02 read side: `evalSignals` tenantQuery computes the production
+  eval signals (decision counts, `reviewOutcome` distribution, regenerate/`llm.fallback`/DLQ
+  counts, cost per delivered send) from EXISTING telemetry/audit/deadLetters rows for the
+  ops page. READ-ONLY by design (no new write path); the audit read is ALWAYS windowed via
+  `by_tenant_ts` (the table is unbounded — never an un-windowed collect). Honesty caveat:
+  cockpit send rows carry `costUsd: 0` / `decisionCounts: {}` / `regenerateCount: 0`, so
+  decision-count sums are pipeline-only and the `reviewOutcome` distribution is the
+  approve-proxy for cockpit sends — the card labels each metric accordingly. Tested by
+  `opsSignals.test.ts` (rates, tenant isolation, windowing, refs-only shape).
 
 Pure packages:
 - `packages/contracts/src/skill.ts` + `packages/contracts/skills/*.md` — skill contract + canonical prompt bodies.
@@ -114,4 +123,4 @@ this is the highest-blast-radius change type in the file.
 - **`sub_agent` route has no runtime** — the routing contract admits it; `document-drafter` (skill + sub-call orchestrated by a parent tool) is the pattern to copy when one is needed.
 - **`@convex-dev/rag` installed, registered, zero usage** until Phase 5 — when adopted, wrap it behind our own retrieval function (pinned pre-1.0; keep the replaceable-surface small, as done with `@convex-dev/agent`).
 - **No external agent interop (MCP server / A2A) — deliberate v2 shelf (EXPN-07).** Internal agents never get a free-form messaging protocol: they coordinate through shared governed state, workflows, and parent-tool sub-calls (unauditable inter-agent chat defeats the tool boundary, escapes the step/cost caps, and degrades audit to "two models talked"). When external interop is validated post-beta, it arrives as an *adapter over the existing tool boundary*: MCP server exposure of governed tools first (Approve gate, tenancy, refs-only audit apply automatically), inbound external agents as a third principal class with their own auth + scoped grants (deferred capabilities #2/#3). Never a second door around the boundary.
-- **watch.json registration is deliberately empty** for this playbook — the runtime files are already owned by `cockpit.md`/`skill-registry.md` (single-owner avoids double-update on every `llm.ts` edit). Phase 3.6 eval-harness paths register here when built.
+- **watch.json registration covers only Phase 3.6 eval paths** for this playbook (`opsSignals.ts` + its test so far) — the runtime files are already owned by `cockpit.md`/`skill-registry.md` (single-owner avoids double-update on every `llm.ts` edit). Remaining eval-harness paths register here as they land.

@@ -1,6 +1,9 @@
 {
   "_unassigned": [],
-  "agent-runtime.md": [],
+  "agent-runtime.md": [
+    "packages/backend/convex/opsSignals.ts",
+    "packages/backend/convex/opsSignals.test.ts"
+  ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
     "apps/web/app/(app)/connect-gmail/",
