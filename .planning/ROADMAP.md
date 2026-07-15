@@ -221,7 +221,14 @@ Plans:
   2. `activateSkill` refuses to activate a never-before-active (candidate) version of a gated skill without a recorded passing eval run (evidence ref on the skill row, refs/counts only); re-activating a previously-active version (rollback) is structurally exempt and always works.
   3. The ops page shows production eval signals — approve/edit/reject rates, regenerate count, fallback count, DLQ rate, cost per delivered plan — from existing telemetry/audit data, with no new write paths.
   4. The legacy `executive-agent.classifier` skill row is archived, and the agent-runtime playbook's "no live-model eval gate" gap is closed (playbook updated in the same phase).
-**Plans**: TBD (suggested 3 plans / 2 waves — see the design record)
+**Plans**: 5 plans in 4 waves (planned 2026-07-15)
+
+Plans:
+- [ ] 03.6-01-PLAN.md — EVAL_GATE on activateSkill + recordEvalEvidence + getSkillVersion + seedSkills candidate-publish + classifier archival + skill-registry.md (Wave 1)
+- [ ] 03.6-02-PLAN.md — Ops eval-signals read-side: telemetry by_tenant_created index + opsSignals tenantQuery + tests + ops-page card [EVAL-02] (Wave 1)
+- [ ] 03.6-03-PLAN.md — Agent-loop threading: skillVersions candidate pin (runCockpitAgent→buildCockpitTools→draftDocument) + costUsd in the loop return (Wave 2)
+- [ ] 03.6-04-PLAN.md — Golden-set harness: 15 NL fixtures + run-eval-golden.mjs (cost cap, flake retry, evidence write) + assertEvalCaseClean + pnpm eval:golden wiring + agent-runtime.md/watch.json close (Wave 3)
+- [ ] 03.6-05-PLAN.md — Phase close: automated sweep + live human-verify (first golden run, full gate cycle, classifier archival, ops card) (Wave 4)
 
 ### Phase 3.7: Inbox Briefing (INSERTED)
 **Goal**: The agent converts the already-granted mailbox scope into daily chief-of-staff value — on demand it reads the inbox, groups messages by time in pure code, summarizes content only through toolless schema-validated digest calls, and renders a triaged BRIEFING card — with zero mailbox writes, nothing sent, and any briefing-seeded action crossing the normal Approve gate.
