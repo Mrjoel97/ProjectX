@@ -19,7 +19,9 @@ import { loadSkill } from "./skills";
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob("./**/*.*s");
 
-const SKILL_NAME = "executive-agent.classifier";
+// A seeded, NON-gated skill for the generic loader/activation cases.
+const SKILL_NAME = "executive-router";
+const CLASSIFIER = "executive-agent.classifier";
 
 // Normalize line endings so a CRLF checkout of the .md never drifts from the
 // LF-authored .ts constant (and vice versa).
@@ -67,12 +69,12 @@ describe("skills registry loader + activation", () => {
     expect(rows[0]!.status).toBe("active");
   });
 
-  test("seedSkills publishes a NEW version when the active body has drifted from the constant", async () => {
+  test("seedSkills publishes-and-activates a NEW version when a NON-gated active body has drifted", async () => {
     const t = convexTest(schema, modules);
     // Simulate an older prompt already seeded before an edit.
     await t.run((ctx) =>
       ctx.db.insert("skills", {
-        name: "cockpit-agent",
+        name: "email-drafter",
         version: 1,
         body: "OLD STALE BODY",
         status: "active",
@@ -83,13 +85,13 @@ describe("skills registry loader + activation", () => {
     await t.mutation(internal.skills.seedSkills, {});
 
     // The edited constant is published as v2/active; the stale v1 is archived, never mutated.
-    const active = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
+    const active = await t.run((ctx) => loadSkill(ctx, "email-drafter"));
     expect(active.version).toBe(2);
-    expect(active.body).toBe(lf(cockpitAgentSkillBody));
+    expect(active.body).toBe(lf(emailDrafterSkillBody));
     const v1 = await t.run((ctx) =>
       ctx.db
         .query("skills")
-        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 1))
+        .withIndex("by_name_version", (q) => q.eq("name", "email-drafter").eq("version", 1))
         .unique(),
     );
     expect(v1!.status).toBe("archived");
@@ -335,6 +337,114 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
     await expect(
       t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 99 }),
     ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+  });
+});
+
+describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", () => {
+  const cockpitRows = (t: ReturnType<typeof convexTest>, name: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect(),
+    );
+
+  test("a changed GATED body publishes as a CANDIDATE; the active row STAYS active", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "cockpit-agent",
+        version: 1,
+        body: "OLD STALE BODY",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+
+    await t.mutation(internal.skills.seedSkills, {});
+
+    // The old row is untouched and still what the loader serves (Pitfall 1: the
+    // gate would be decorative if seedSkills auto-activated gated edits).
+    const active = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
+    expect(active.version).toBe(1);
+    expect(active.body).toBe("OLD STALE BODY");
+
+    const v2 = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 2))
+        .unique(),
+    );
+    expect(v2!.status).toBe("candidate");
+    expect(v2!.body).toBe(lf(cockpitAgentSkillBody));
+  });
+
+  test("gated candidate-publish is idempotent: two seeds after ONE edit mint ONE candidate", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "cockpit-agent",
+        version: 1,
+        body: "OLD STALE BODY",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+
+    await t.mutation(internal.skills.seedSkills, {});
+    await t.mutation(internal.skills.seedSkills, {});
+
+    const rows = await cockpitRows(t, "cockpit-agent");
+    expect(rows).toHaveLength(2); // v1 active + exactly ONE v2 candidate — never v3
+    expect(rows.filter((r) => r.status === "candidate")).toHaveLength(1);
+    expect(rows.filter((r) => r.status === "active")).toHaveLength(1);
+  });
+
+  test("bootstrap unchanged: a never-seeded gated skill seeds as v1 ACTIVE", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    const loaded = await t.run((ctx) => loadSkill(ctx, "document-drafter"));
+    expect(loaded.version).toBe(1);
+    expect(loaded.body.length).toBeGreaterThan(0);
+  });
+
+  test("seedSkills no longer seeds executive-agent.classifier", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    expect(await cockpitRows(t, CLASSIFIER)).toHaveLength(0);
+  });
+
+  test("archiveSkill flips the active row to archived; a re-seed does NOT resurrect it", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: CLASSIFIER,
+        version: 1,
+        body: "classifier body",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+
+    await t.mutation(internal.skills.archiveSkill, { name: CLASSIFIER });
+
+    let rows = await cockpitRows(t, CLASSIFIER);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("archived");
+
+    await t.mutation(internal.skills.seedSkills, {});
+
+    rows = await cockpitRows(t, CLASSIFIER);
+    expect(rows).toHaveLength(1); // no new row (SC4 — the seeds entry is gone)
+    expect(rows.find((r) => r.status === "active")).toBeUndefined();
+  });
+
+  test("archiveSkill is a no-op when no active row exists", async () => {
+    const t = convexTest(schema, modules);
+    const result = await t.mutation(internal.skills.archiveSkill, { name: CLASSIFIER });
+    expect(result).toEqual({ archived: false });
   });
 });
 
