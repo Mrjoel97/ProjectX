@@ -224,7 +224,7 @@ Plans:
 **Plans**: 5 plans in 4 waves (planned 2026-07-15)
 
 Plans:
-- [ ] 03.6-01-PLAN.md — EVAL_GATE on activateSkill + recordEvalEvidence + getSkillVersion + seedSkills candidate-publish + classifier archival + skill-registry.md (Wave 1)
+- [x] 03.6-01-PLAN.md — EVAL_GATE on activateSkill + recordEvalEvidence + getSkillVersion + seedSkills candidate-publish + classifier archival + skill-registry.md [EVAL-01] (Wave 1) — completed 2026-07-15
 - [x] 03.6-02-PLAN.md — Ops eval-signals read-side: telemetry by_tenant_created index + opsSignals tenantQuery + tests + ops-page card [EVAL-02] (Wave 1) — completed 2026-07-15
 - [ ] 03.6-03-PLAN.md — Agent-loop threading: skillVersions candidate pin (runCockpitAgent→buildCockpitTools→draftDocument) + costUsd in the loop return (Wave 2)
 - [ ] 03.6-04-PLAN.md — Golden-set harness: 15 NL fixtures + run-eval-golden.mjs (cost cap, flake retry, evidence write) + assertEvalCaseClean + pnpm eval:golden wiring + agent-runtime.md/watch.json close (Wave 3)

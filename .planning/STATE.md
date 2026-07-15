@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.6-01-PLAN.md
+last_updated: "2026-07-15T15:59:23.678Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 17
+  completed_phases: 9
+  total_plans: 76
+  completed_plans: 70
+  percent: 92
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.6-02-PLAN.md
 last_updated: "2026-07-15T15:40:07.562Z"
 last_activity: "2026-07-15 — Phase 3.6 Agent Eval Gate, Wave 1: 03.6-02 executed (EVAL-02 read side). NEW read-only convex/opsSignals.ts — evalSignals tenantQuery computes the five locked signal families (gate decisionCounts sums, reviewOutcome distribution, regenerate/llm.fallback/DLQ counts, pipeline LLM cost per delivered send) from EXISTING telemetry/audit/deadLetters rows; telemetry gained by_tenant_created (the ONLY schema change — an index, not a write path); audit read WINDOWED via by_tenant_ts (never un-windowed); zero db writes in the module (grep-proven); refs/counts-only return shape structurally asserted. opsSignals.test.ts 6/6 green (rates, windowed fallback filter, DLQ new/total, cross-tenant all-zeros, telemetry windowing, refs-only shape). Ops page gained the Eval signals stat grid ABOVE the untouched legacy dead-letter list (globals.css tokens, tracked-caps labels; honest lane labels per Pitfall 6 — gate decisions '(legacy pipeline lane)', reviewOutcomes as the cockpit approve-proxy, cost titled with the rate-limiter caveat); web typecheck clean. watch.json: opsSignals paths registered under agent-runtime.md (list was reserved for 3.6); agent-runtime.md EVAL-02 note + Last verified → 03.6-02; check-playbooks exit 0. Commits 388af70 (T1 test RED), dccc349 (T1 feat GREEN index+query), c8d0b66 (T1 docs watch+playbook), 61aafd1 (T2 feat ops card). ONE deviation (Rule 3 — npx convex codegen to refresh git-ignored _generated bindings for the new module; nothing committed). EVAL-02 marked complete in REQUIREMENTS.md. NEXT: remaining Wave-1 sibling 03.6-01, then waves 2-4 (03/04/05)."
 progress:
-  total_phases: 17
+  [█████████░] 92%
   completed_phases: 9
   total_plans: 76
   completed_plans: 69
@@ -133,8 +149,10 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Wave 1 (main), 1/5 plans complete.
-Plan: 03.6-02 COMPLETE (Wave 1 — EVAL-02 read side). Read-only `convex/opsSignals.ts` `evalSignals` tenantQuery over EXISTING telemetry/audit/deadLetters rows (five locked signal families; tenant-scoped, 30-day-windowed, refs/counts only; audit read windowed via by_tenant_ts, never un-windowed; zero db writes grep-proven); telemetry `by_tenant_created` index (the sole schema change); ops-page Eval signals stat grid above the untouched dead-letter list (brand tokens, honest lane labels — Pitfall 6). opsSignals.test 6/6, web typecheck clean, check-playbooks exit 0. Commits 388af70/dccc349/c8d0b66 (T1 TDD+docs), 61aafd1 (T2 card). ONE deviation (Rule 3 — codegen refresh, nothing committed). EVAL-02 ✓. NEXT: sibling 03.6-01 (Wave 1), then 03.6-03/04/05.
+Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Wave 1 (main) COMPLETE, 2/5 plans complete.
+Plan: 03.6-01 COMPLETE (Wave 1 — EVAL-01's gate half). `activateSkill` now refuses a `candidate` version of a GATED skill (GATED_SKILLS in @pikar/contracts: cockpit-agent, document-drafter) without recorded passing evidence pinning EXACTLY that version (`hasPassingEvidence` — fail-closed JSON parse: absent/unparseable/pass:false/stale-pin all refuse); `archived`/`rolled_back` targets are STRUCTURALLY exempt by status (rollback never blocked by a broken harness). New `recordEvalEvidence` (evidence-only patch, refs/counts-only JSON §4 — the plan-04 runner's write) + `getSkillVersion` (version-pinned read, any status — the plan-03 pin thread). `seedSkills` is gated-aware (Pitfall 1 closed): a changed GATED body publishes as CANDIDATE (active untouched), idempotent vs the NEWEST row (two boots after one edit = ONE candidate); non-gated publish-and-activate + v1-active bootstrap byte-compatible. Classifier de-seeded (Pitfall 5: re-seed cannot resurrect) + `archiveSkill` one-off flip (live archival runs in plan 05's checkpoint). skills.test 30/30 green; backend source typecheck clean; check-playbooks exit 0; skill-registry.md fully closed (restated sole-status-writer invariant, gated publish→eval→activate flow, retirement recipe; folded the interim 464fe0f note from the 03.6-02 executor rather than duplicating). Commits 6dd7b09/810c06d (T1 TDD, first executor session), 42162d1/a7ac21e (T2 TDD), 5e65609 (T3 playbook). NO plan deviations (continuation after a transient API kill — T1 verified green before resuming). EVAL-01 ✓. NEXT: Wave 2 (03.6-03 — pin threading).
+
+Phase: 3.6 (Agent Eval Gate) — Plan: 03.6-02 COMPLETE (Wave 1 — EVAL-02 read side). Read-only `convex/opsSignals.ts` `evalSignals` tenantQuery over EXISTING telemetry/audit/deadLetters rows (five locked signal families; tenant-scoped, 30-day-windowed, refs/counts only; audit read windowed via by_tenant_ts, never un-windowed; zero db writes grep-proven); telemetry `by_tenant_created` index (the sole schema change); ops-page Eval signals stat grid above the untouched dead-letter list (brand tokens, honest lane labels — Pitfall 6). opsSignals.test 6/6, web typecheck clean, check-playbooks exit 0. Commits 388af70/dccc349/c8d0b66 (T1 TDD+docs), 61aafd1 (T2 card). ONE deviation (Rule 3 — codegen refresh, nothing committed). EVAL-02 ✓. NEXT: sibling 03.6-01 (Wave 1), then 03.6-03/04/05.
 
 Phase: 3.5 (Deferred Send) — IN PROGRESS. Wave 4 (Lane A worktree, branch lane-a/cockpit-send) — automated tasks COMPLETE, SCHD-01 human-verify PENDING.
 Plan: 03.5-04 AUTOMATED TASKS COMPLETE (Wave 4 — phase close; SCHD-01 human-verify PENDING). Built the automated half of the phase close: (1) `apps/web/e2e/cockpit-schedule.spec.ts` — the offline schedule→cancel E2E mirroring `cockpit-personalize.spec.ts`. Test 1: `add=alice` → `subject=Q3 sync` → `body=SMOKE::route=direct_llm::…` → `sendTime=in 2 hours` → `propose`, asserting the PLAN card SEND TIME picker carries a resolved concrete value + the Approve button reads "Approve & schedule" BEFORE the single Approve (SC2, nothing sent), THEN filling the `datetime-local` picker with a real-future `2035-06-01T10:00` (so `executePlan` takes the scheduled branch) → Approve & schedule → `ScheduledCard` ("SCHEDULED" + "Scheduled for …" + Cancel, no REPORT, PLAN card unmounted) → Cancel → `CanceledCard` ("CANCELED" + "canceled"), never a REPORT (SC3/SC4). Test 2: no send time → bare "Approve" (not "Approve & schedule") → immediate REPORT (SC1 default unchanged). Playwright-discovered + type-loads (`playwright test cockpit-schedule --list` = 2 tests); the live green run deferred to verify-work (phase-wide convention). KEY DECISION/DEVIATION (Rule 3 — blocking, no production code): the ScheduledCard is reached via the datetime PICKER, not `sendTime=`, because `SMOKE_NOW_MS` is pinned to 2020-01-01 12:00 UTC, so `in 2 hours` resolves to a 2020 instant that `executePlan` (real `Date.now`) treats as PAST → immediate branch (no ScheduledCard, offline OR live); the picker (`setPlanSendTime`, no NL past-guard) is the confirm source-of-truth. The `sendTime=` op still runs first to prove the NL fast path resolves a concrete absolute time into the picker before Approve (and satisfies the `contains:'sendTime='` artifact). (2) `cockpit.md` §9 phase close: `Last verified` → 03.5-04 + five deferred-send invariants (schedule-on-future-`sendAt`; single `workflow.start` via `startFanout`; CAS-guarded refs-only cancel; fire-time failure inherited; client-clock send time) + Key-files (`startFanout`/`startScheduledDelivery`/`cancelScheduledPlan`, `setPlanSendTime`, datetime picker/`ScheduledCard`/`CanceledCard`, `parseSendTime`) + How-to-verify (fake-timer scheduler tests + `cockpit-schedule` spec + smoke:fanout-UNCHANGED note) + SCHD-01 Manual-only human-verify. check-playbooks exit 0. Verifies: `playwright test cockpit-schedule --list` = 2 tests discovered + type-load; check-playbooks exit 0; `smoke:fanout` (run-smoke-fanout.mjs) UNCHANGED (empty diff — it still proves the spine the scheduled fire reuses, SC3). Commits c1590ea (T1 E2E), f002bd6 (T2 playbook close). ONE deviation (Rule 3 spec-construction adaptation — pinned SMOKE clock; no production code touched, no architectural change). SCHD-01 stays PENDING: the sole live-only proof is the human-verify (real future send fires at the requested moment / real cancel halts before fire, audited refs-only / dead-token-at-fire → awaiting_reauth + notification exactly like an immediate send) — fake timers cannot observe real inbox arrival or real token expiry at fire. NEXT: SCHD-01 human-verify sign-off → orchestrator runs verify_phase_goal + marks Phase 3.5 complete.
@@ -248,6 +266,7 @@ Progress: [█████████░] 94%
 | Phase 03.5 P02 | 24min | 3 tasks | 9 files |
 | Phase 03.5-deferred-send P03 | 14min | 3 tasks | 6 files |
 | Phase 03.6 P02 | 10min | 2 tasks | 6 files |
+| Phase 03.6 P01 | 45min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -345,6 +364,8 @@ Recent decisions affecting current work:
 - [Phase 03.5-deferred-send]: 03.5-03: a future plan.sendAt arms ctx.scheduler.runAt(startScheduledDelivery) + status scheduled (rows frozen at approve, nothing sent before fire); cancelScheduledPlan is CAS-guarded + refs-only audited
 - [Phase 03.5]: 03.5-04 E2E reaches the ScheduledCard via the datetime-local picker (real-future time), not SMOKE sendTime= — the pinned 2020 SMOKE clock makes any NL time real-past so executePlan would take the immediate branch; the picker (setPlanSendTime, no past-guard) is the confirm source-of-truth
 - [Phase 03.6]: opsSignals read side: signals computed from existing rows only, zero new write paths; audit reads always windowed via by_tenant_ts; lane-skewed metrics labeled honestly (decision counts pipeline-only, reviewOutcome as cockpit approve-proxy)
+- [Phase 03.6]: Eval evidence validity = pass:true + exact skillVersions version pin, fail-closed parse, no freshness window in v1
+- [Phase 03.6]: seedSkills idempotence keys on the NEWEST row body so repeated dev boots after one gated edit mint exactly one candidate
 
 ### Roadmap Evolution
 
@@ -362,8 +383,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-15T15:40:07.549Z
-Stopped at: Completed 03.6-02-PLAN.md
+Last session: 2026-07-15T15:59:23.660Z
+Stopped at: Completed 03.6-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
