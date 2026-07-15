@@ -226,7 +226,7 @@ Plans:
 Plans:
 - [x] 03.6-01-PLAN.md — EVAL_GATE on activateSkill + recordEvalEvidence + getSkillVersion + seedSkills candidate-publish + classifier archival + skill-registry.md [EVAL-01] (Wave 1) — completed 2026-07-15
 - [x] 03.6-02-PLAN.md — Ops eval-signals read-side: telemetry by_tenant_created index + opsSignals tenantQuery + tests + ops-page card [EVAL-02] (Wave 1) — completed 2026-07-15
-- [ ] 03.6-03-PLAN.md — Agent-loop threading: skillVersions candidate pin (runCockpitAgent→buildCockpitTools→draftDocument) + costUsd in the loop return (Wave 2)
+- [x] 03.6-03-PLAN.md — Agent-loop threading: skillVersions candidate pin (runCockpitAgent→buildCockpitTools→draftDocument) + costUsd in the loop return (Wave 2) — completed 2026-07-15
 - [ ] 03.6-04-PLAN.md — Golden-set harness: 15 NL fixtures + run-eval-golden.mjs (cost cap, flake retry, evidence write) + assertEvalCaseClean + pnpm eval:golden wiring + agent-runtime.md/watch.json close (Wave 3)
 - [ ] 03.6-05-PLAN.md — Phase close: automated sweep + live human-verify (first golden run, full gate cycle, classifier archival, ops card) (Wave 4)
 
@@ -339,7 +339,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
-| 3.6 Agent Eval Gate (INSERTED) | 0/TBD | Not started | - |
+| 3.6 Agent Eval Gate (INSERTED) | 3/5 | In Progress|  |
 | 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |

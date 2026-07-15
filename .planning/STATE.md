@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.6-03-PLAN.md
+last_updated: "2026-07-15T16:15:49.957Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 17
+  completed_phases: 9
+  total_plans: 76
+  completed_plans: 71
+  percent: 93
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.6-01-PLAN.md
 last_updated: "2026-07-15T15:59:23.678Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
-  total_phases: 17
+  [█████████░] 93%
   completed_phases: 9
   total_plans: 76
   completed_plans: 70
@@ -149,7 +165,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Wave 1 (main) COMPLETE, 2/5 plans complete.
+Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Waves 1-2 COMPLETE, 3/5 plans complete.
+
+Phase: 3.6 (Agent Eval Gate) — Plan: 03.6-03 COMPLETE (Wave 2 — EVAL-01 pin + cost threading). The two eval-runner seams thread the agent loop in `llm.ts`: (1) `skillVersions` optional version-pin on `runCockpitAgent` (internal-only — the model can never supply it): a pinned cockpit-agent version loads via `getSkillVersion` as the system prompt and the pin threads runCockpitAgent → runAgentLoop → buildCockpitTools (append-only 5th param) → renderAndStore's `draftDocument` call (scalar `skillVersion` arg), so `pnpm eval:golden --skill name@version` (plan 04) evaluates the CANDIDATE body it records evidence against (Pitfall 2 closed); a missing (name, version) FAILS CLOSED with NO_SUCH_SKILL_VERSION — never a silent fallback to active; no pin = byte-identical. (2) `costUsd` in the loop return (Pattern 4): `recordModelSpend` returns the priced USD, `runAgentLoop` sums both attempts into one accumulator, `runCockpitAgent` propagates (SMOKE path 0, blocked path absent) — the runner's hard cost-cap read without touching the global rate-limiter window. Shims (`__runCockpitAgentWithScript` returns the loaded skillVersion, `__invokeCockpitTool`) extended for offline pin tests. Zero caller changes (clientContext append-only precedent). runCockpitAgent.test 9/9, cockpitTools+llmRedaction 43/43, source typecheck clean, check-playbooks exit 0; cockpit.md Last verified → 03.6-03. Commits 5824cd9/48f57ed (T1 TDD), d404a77/5f06e2f (T2 TDD+docs). NO deviations. NEXT: Wave 3 (03.6-04 — the eval runner), then 03.6-05.
 Plan: 03.6-01 COMPLETE (Wave 1 — EVAL-01's gate half). `activateSkill` now refuses a `candidate` version of a GATED skill (GATED_SKILLS in @pikar/contracts: cockpit-agent, document-drafter) without recorded passing evidence pinning EXACTLY that version (`hasPassingEvidence` — fail-closed JSON parse: absent/unparseable/pass:false/stale-pin all refuse); `archived`/`rolled_back` targets are STRUCTURALLY exempt by status (rollback never blocked by a broken harness). New `recordEvalEvidence` (evidence-only patch, refs/counts-only JSON §4 — the plan-04 runner's write) + `getSkillVersion` (version-pinned read, any status — the plan-03 pin thread). `seedSkills` is gated-aware (Pitfall 1 closed): a changed GATED body publishes as CANDIDATE (active untouched), idempotent vs the NEWEST row (two boots after one edit = ONE candidate); non-gated publish-and-activate + v1-active bootstrap byte-compatible. Classifier de-seeded (Pitfall 5: re-seed cannot resurrect) + `archiveSkill` one-off flip (live archival runs in plan 05's checkpoint). skills.test 30/30 green; backend source typecheck clean; check-playbooks exit 0; skill-registry.md fully closed (restated sole-status-writer invariant, gated publish→eval→activate flow, retirement recipe; folded the interim 464fe0f note from the 03.6-02 executor rather than duplicating). Commits 6dd7b09/810c06d (T1 TDD, first executor session), 42162d1/a7ac21e (T2 TDD), 5e65609 (T3 playbook). NO plan deviations (continuation after a transient API kill — T1 verified green before resuming). EVAL-01 ✓. NEXT: Wave 2 (03.6-03 — pin threading).
 
 Phase: 3.6 (Agent Eval Gate) — Plan: 03.6-02 COMPLETE (Wave 1 — EVAL-02 read side). Read-only `convex/opsSignals.ts` `evalSignals` tenantQuery over EXISTING telemetry/audit/deadLetters rows (five locked signal families; tenant-scoped, 30-day-windowed, refs/counts only; audit read windowed via by_tenant_ts, never un-windowed; zero db writes grep-proven); telemetry `by_tenant_created` index (the sole schema change); ops-page Eval signals stat grid above the untouched dead-letter list (brand tokens, honest lane labels — Pitfall 6). opsSignals.test 6/6, web typecheck clean, check-playbooks exit 0. Commits 388af70/dccc349/c8d0b66 (T1 TDD+docs), 61aafd1 (T2 card). ONE deviation (Rule 3 — codegen refresh, nothing committed). EVAL-02 ✓. NEXT: sibling 03.6-01 (Wave 1), then 03.6-03/04/05.
@@ -267,6 +285,7 @@ Progress: [█████████░] 94%
 | Phase 03.5-deferred-send P03 | 14min | 3 tasks | 6 files |
 | Phase 03.6 P02 | 10min | 2 tasks | 6 files |
 | Phase 03.6 P01 | 45min | 3 tasks | 4 files |
+| Phase 03.6 P03 | 10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -366,6 +385,8 @@ Recent decisions affecting current work:
 - [Phase 03.6]: opsSignals read side: signals computed from existing rows only, zero new write paths; audit reads always windowed via by_tenant_ts; lane-skewed metrics labeled honestly (decision counts pipeline-only, reviewOutcome as cockpit approve-proxy)
 - [Phase 03.6]: Eval evidence validity = pass:true + exact skillVersions version pin, fail-closed parse, no freshness window in v1
 - [Phase 03.6]: seedSkills idempotence keys on the NEWEST row body so repeated dev boots after one gated edit mint exactly one candidate
+- [Phase 03.6]: Eval-runner seams ride internalAction args/returns only (skillVersions pin + costUsd); pin fails closed via getSkillVersion, never a silent fallback to active
+- [Phase 03.6]: Script shim proves the pin by returning the loaded skill version; one costUsd accumulator across primary+fallback attempts
 
 ### Roadmap Evolution
 
@@ -383,8 +404,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-15T15:59:23.660Z
-Stopped at: Completed 03.6-01-PLAN.md
+Last session: 2026-07-15T16:15:49.941Z
+Stopped at: Completed 03.6-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
