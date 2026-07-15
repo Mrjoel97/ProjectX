@@ -95,14 +95,13 @@ export function DocGrid({
   return (
     <div>
       <div
+        className="clay-card"
         style={{
           display: "flex",
           alignItems: "center",
           gap: "1rem",
           padding: "0.75rem 1rem",
           borderRadius: "1rem",
-          border: "1px solid var(--rule)",
-          background: "var(--card)",
         }}
       >
         <span aria-hidden="true" style={{ color: "var(--ink-soft)", display: "inline-flex" }}>
@@ -181,6 +180,7 @@ export function DocGrid({
               key={doc._id}
               type="button"
               onClick={() => onOpen?.(doc)}
+              className="clay-card"
               style={{
                 display: "flex",
                 gap: "0.75rem",
@@ -188,8 +188,6 @@ export function DocGrid({
                 width: "100%",
                 padding: "1rem",
                 borderRadius: "0.85rem",
-                border: "1px solid var(--rule)",
-                background: "var(--card)",
                 cursor: onOpen ? "pointer" : "default",
                 flexDirection: view === "grid" ? "column" : "row",
                 alignItems: view === "grid" ? "flex-start" : "center",
@@ -197,6 +195,7 @@ export function DocGrid({
             >
               <span
                 aria-hidden="true"
+                className="clay-badge"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -204,7 +203,7 @@ export function DocGrid({
                   width: "2.5rem",
                   height: "2.5rem",
                   borderRadius: "0.6rem",
-                  background: "color-mix(in srgb, var(--teal-400) 15%, transparent)",
+                  background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
                   color: "var(--teal-600)",
                   flex: "none",
                 }}

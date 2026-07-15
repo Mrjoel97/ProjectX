@@ -121,6 +121,7 @@ export function Dropzone() {
           void handleFiles(e.dataTransfer.files);
         }}
         aria-label="Click to upload or drag and drop"
+        className="clay-dropzone"
         style={{
           width: "100%",
           display: "flex",
@@ -130,12 +131,14 @@ export function Dropzone() {
           padding: "2.5rem 1rem",
           borderRadius: "1rem",
           border: `2px dashed ${dragOver ? "var(--teal-600)" : "var(--rule)"}`,
-          background: dragOver ? "color-mix(in srgb, var(--teal-400) 8%, transparent)" : "transparent",
+          // On drag-over, a teal tint overrides the class fill; otherwise the frosted glass shows.
+          background: dragOver ? "color-mix(in srgb, var(--teal-400) 12%, transparent)" : undefined,
           cursor: "pointer",
         }}
       >
         <span
           aria-hidden="true"
+          className="clay-badge"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -143,7 +146,7 @@ export function Dropzone() {
             width: "3.5rem",
             height: "3.5rem",
             borderRadius: "999px",
-            background: "color-mix(in srgb, var(--teal-400) 18%, transparent)",
+            background: "color-mix(in srgb, var(--teal-400) 28%, var(--card))",
             color: "var(--teal-600)",
           }}
         >

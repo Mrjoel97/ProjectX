@@ -36,14 +36,13 @@ export function CategoryTabs({
     <div
       role="tablist"
       aria-label="Vault categories"
+      className="clay-card"
       style={{
         display: "flex",
         flexWrap: "wrap",
         gap: "0.4rem",
         padding: "0.4rem",
         borderRadius: "1rem",
-        border: "1px solid var(--rule)",
-        background: "var(--card)",
       }}
     >
       {VAULT_TABS.map(({ label, category, Icon }) => {

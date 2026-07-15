@@ -813,6 +813,54 @@ button.rail-item:hover {
   padding: clamp(1.5rem, 2.5vw, 2.25rem) clamp(1.5rem, 3vw, 2.75rem);
 }
 
+/* ---------- glass-over-clay tiles (shared: vault board, and any card that should read
+   as extruded frosted glass against the .pane-canvas aura) ---------- */
+
+/* A frosted translucent pane, extruded with an outer drop shadow, an inner top light edge,
+   and a soft inner bottom shade — the rail's clay + the cockpit's glass, factored out. The
+   backdrop blur frosts the teal aura behind it, so this only reads right on .pane-canvas.
+   Radius stays on the element (tiles and cards differ). */
+.clay-card {
+  background: rgb(255 255 255 / 66%);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid rgb(255 255 255 / 60%);
+  box-shadow:
+    0 16px 34px -20px rgb(14 20 25 / 50%),
+    inset 0 1px 0 rgb(255 255 255 / 75%),
+    inset 0 -8px 16px -12px rgb(14 20 25 / 14%);
+}
+
+/* Interactive clay card (e.g. doc cards) — lifts on hover. */
+button.clay-card {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+button.clay-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 24px 42px -20px rgb(14 20 25 / 55%),
+    inset 0 1px 0 rgb(255 255 255 / 82%),
+    inset 0 -8px 16px -12px rgb(14 20 25 / 14%);
+}
+
+/* Extruded clay icon badge — outer glow + inner top highlight + inner bottom shade (mirrors
+   .rail-logo). Pair with a fill (token or accent) set on the element. */
+.clay-badge {
+  box-shadow:
+    0 8px 16px -8px rgb(0 0 0 / 40%),
+    inset 0 2px 3px rgb(255 255 255 / 45%),
+    inset 0 -3px 5px rgb(0 0 0 / 22%);
+}
+
+/* Dropzone: a lighter frosted panel so the dashed drop target still reads, on glass. */
+.clay-dropzone {
+  background: rgb(255 255 255 / 45%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+
 /* Header icon cluster collapses before the pane title does. */
 .chat-head-icons {
   display: flex;

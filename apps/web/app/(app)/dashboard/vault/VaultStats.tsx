@@ -49,12 +49,10 @@ export function VaultStats({ stats }: { stats: Stats | undefined }) {
       {TILES.map(({ key, label, badge, Icon }) => (
         <div
           key={key}
+          className="clay-card"
           style={{
-            background: "var(--card)",
-            border: "1px solid var(--rule)",
             borderRadius: "1rem",
             padding: "1.25rem 1.5rem",
-            boxShadow: "0 6px 20px -14px rgb(14 20 25 / 25%)",
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
@@ -78,6 +76,7 @@ export function VaultStats({ stats }: { stats: Stats | undefined }) {
           </div>
           <span
             aria-hidden="true"
+            className="clay-badge"
             style={{
               display: "inline-flex",
               alignItems: "center",
