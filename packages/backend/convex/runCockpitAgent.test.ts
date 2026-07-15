@@ -181,3 +181,72 @@ test("fallback: an eligible primary failure retries on the CHEAP model", async (
   expect(typeof reply.costUsd).toBe("number");
   expect(reply.costUsd).toBeGreaterThanOrEqual(0);
 });
+
+// ── skillVersions pin (EVAL-01, RESEARCH Pitfall 2) ──────────────────────────
+// The eval runner must evaluate the CANDIDATE body, not whatever is active. The shim surfaces the
+// loaded skill version alongside reply so the pin is observable without capturing the raw prompt.
+
+const insertCandidate = (t: T, name: string, version: number) =>
+  t.run(async (ctx) => {
+    await ctx.db.insert("skills", {
+      name,
+      version,
+      body: `${name} v${version} candidate body`,
+      status: "candidate",
+      createdAt: Date.now(),
+    });
+  });
+
+test("skillVersions pin: a pinned cockpit-agent candidate loads as the system prompt; no pin = active", async () => {
+  const { t, planId } = await setup(); // seedSkills → cockpit-agent v1 ACTIVE
+  await insertCandidate(t, "cockpit-agent", 2);
+
+  // No pin → behavior unchanged: the ACTIVE v1 loads.
+  const unpinned = await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [textStep("hello", 0, 0)],
+  });
+  expect(unpinned.skillVersion).toBe(1);
+
+  // Pin → the CANDIDATE v2 row loads (its body becomes `system` — same loaded row).
+  const pinned = await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [textStep("hello", 0, 0)],
+    skillVersions: { "cockpit-agent": 2 },
+  });
+  expect(pinned.skillVersion).toBe(2);
+});
+
+test("skillVersions pin: a missing (name, version) fails CLOSED — never silently falls back to active", async () => {
+  const { t, planId } = await setup();
+  await expect(
+    t.action(internal.llm.__runCockpitAgentWithScript, {
+      tenantId: "t1",
+      planId,
+      primary: [textStep("hello", 0, 0)],
+      skillVersions: { "cockpit-agent": 99 },
+    }),
+  ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+});
+
+test("draftDocument pin: loads the pinned drafter version, fails closed on a missing one", async () => {
+  const { t } = await setup(); // seedSkills → document-drafter v1 ACTIVE
+  const args = {
+    tenantId: "t1",
+    safeText: "SMOKE::route=direct_llm:: quarterly report", // SMOKE keeps the model un-called
+    safeTextHash: "hash-eval-pin",
+  };
+
+  // Only v1 exists → a pinned 99 refuses (fail closed, Pitfall 2).
+  await expect(t.action(internal.llm.draftDocument, { ...args, skillVersion: 99 })).rejects.toThrow(
+    /NO_SUCH_SKILL_VERSION/,
+  );
+
+  // A real candidate row → the pinned load succeeds; the load happens BEFORE the smoke
+  // short-circuit, so the pinned lookup itself is exercised offline.
+  await insertCandidate(t, "document-drafter", 2);
+  const doc = await t.action(internal.llm.draftDocument, { ...args, skillVersion: 2 });
+  expect(doc.title).toBe("Smoke Document");
+});
