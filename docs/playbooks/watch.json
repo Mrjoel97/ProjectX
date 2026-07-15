@@ -2,7 +2,9 @@
   "_unassigned": [],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
-    "packages/backend/convex/opsSignals.test.ts"
+    "packages/backend/convex/opsSignals.test.ts",
+    "packages/backend/scripts/run-eval-golden.mjs",
+    "packages/backend/scripts/eval-cases/"
   ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
