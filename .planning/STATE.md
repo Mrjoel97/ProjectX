@@ -341,8 +341,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T19:31:22.722Z
-Stopped at: 03.5-04 automated tasks complete (cockpit-schedule E2E + cockpit.md phase close); SCHD-01 human-verify PENDING
+Last session: 2026-07-15 (resumed)
+Stopped at: IntakeControls→ChatPane composer mount COMMITTED (dc2f3a9) — the SC3 cross-lane prerequisite is closed; next = 04-06 SC3 live human-verify checkpoint (Task 2, blocking, needs live backend + Gmail), then Task 3 phase close, then /gsd:plan-phase 3.6
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
