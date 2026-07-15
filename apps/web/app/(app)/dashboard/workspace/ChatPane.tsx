@@ -9,10 +9,11 @@ import {
   BrainIcon,
   ChevronDownIcon,
   MicIcon,
+  PaperclipIcon,
   SendIcon,
   UserIcon,
 } from "../../../(auth)/icons";
-import { AttachmentPicker, type UploadedAttachment } from "../../_components/AttachmentPicker";
+import { IntakeControls } from "./IntakeControls";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
 // copy are saved assistant turns on the agent thread (cockpit.ts is deterministic — the thread
@@ -26,8 +27,10 @@ import { AttachmentPicker, type UploadedAttachment } from "../../_components/Att
 // and a white card bubble; user turns get the teal-900 bubble, person avatar, and a hover Copy
 // chip. The composer is one rounded card — "Auto" model pill, brain/attach/mic icons, circular
 // teal Send — with the brand-mandated §1 disclaimer below. Enter-to-send unchanged (the e2e
-// path). Model pill / brain / mic are disabled until their capabilities exist (their titles
-// say so) — routing is genuinely automatic today.
+// path). Model pill / brain are disabled until their capabilities exist (their titles say so).
+// Attach + mic are the Phase-4 IntakeControls (INTK-02/03 — upload/dictate → classify →
+// extract → redact → merge into this thread); they need a minted threadId, so before the
+// first send they render as disabled placeholders whose titles say to send a message first.
 //
 // ponytail: static message list (non-streaming). Token-by-token rendering is a later upgrade to
 // `useUIMessages` + a `syncStreams` query (research §4) — the deterministic control here has no
@@ -65,7 +68,6 @@ export function ChatPane({
 }) {
   const send = useAction(api.cockpit.sendCockpitMessage);
   const [text, setText] = useState("");
-  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [busy, setBusy] = useState(false);
 
   const messages = useThreadMessages(
@@ -194,10 +196,18 @@ export function ChatPane({
             <button type="button" className="icon-btn" disabled title="Thought process — coming soon">
               <BrainIcon size={17} />
             </button>
-            <AttachmentPicker attachments={attachments} onChange={setAttachments} />
-            <button type="button" className="icon-btn" disabled title="Voice dictation arrives in a later phase">
-              <MicIcon size={17} />
-            </button>
+            {threadId ? (
+              <IntakeControls threadId={threadId} />
+            ) : (
+              <>
+                <button type="button" className="icon-btn" disabled title="Send a message first — then attach files">
+                  <PaperclipIcon size={17} />
+                </button>
+                <button type="button" className="icon-btn" disabled title="Send a message first — then dictate">
+                  <MicIcon size={17} />
+                </button>
+              </>
+            )}
             <button
               type="button"
               aria-label={busy ? "Sending" : "Send"}

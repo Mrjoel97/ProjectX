@@ -4,10 +4,11 @@ import { api } from "@pikar/backend/api";
 import type { FunctionArgs } from "convex/server";
 import { useAction, useMutation } from "convex/react";
 import { useRef, useState } from "react";
+import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 
 // The intake-specific composer controls (INTK-02 attach / INTK-03 one-shot dictate). Fully
-// self-contained — Lane A mounts ONE line `<IntakeControls threadId={threadId} />` into
-// ChatPane.tsx's composer once `threadId` is minted (cross-lane note, 04-05-SUMMARY.md).
+// self-contained — ChatPane.tsx's composer mounts ONE line `<IntakeControls threadId={threadId} />`
+// once `threadId` is minted (cross-lane note, 04-05-SUMMARY.md; mount landed post-merge).
 //
 // Upload flow mirrors AttachmentPicker.tsx/requests.ts's precedent: generateUploadUrl -> POST
 // the raw bytes -> the resulting storageId feeds the governed intake action, which classifies,
@@ -27,18 +28,6 @@ const CAP_LABEL = `${Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024))}MB`;
 const ATTACH_ACCEPT = "image/*,application/pdf,audio/*,text/plain";
 
 type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
-
-const iconBtn = (active: boolean) =>
-  ({
-    padding: "0.4rem 0.6rem",
-    borderRadius: "0.375rem",
-    border: "1px solid #e5e5e5",
-    background: active ? "var(--teal-600)" : "var(--card)",
-    color: active ? "#fff" : "inherit",
-    cursor: "pointer",
-    fontSize: "1rem",
-    lineHeight: 1,
-  }) as const;
 
 /**
  * Attach picker + one-shot MediaRecorder dictation, wired through generateUploadUrl -> POST ->
@@ -158,8 +147,10 @@ export function IntakeControls({ threadId }: { threadId: string }) {
 
   const locked = busy || recording;
 
+  // display:contents — the paperclip/mic triggers sit inline in the composer's icon row
+  // (BRAND.md §5, same idiom as AttachmentPicker) while the error line wraps full-width below.
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+    <div style={{ display: "contents" }}>
       <input
         ref={fileInputRef}
         type="file"
@@ -168,17 +159,29 @@ export function IntakeControls({ threadId }: { threadId: string }) {
         data-testid="attach-file-input"
         disabled={locked}
         onChange={onPickFile}
-        style={{ fontSize: "0.8rem", maxWidth: "9rem" }}
+        style={{ display: "none" }}
       />
       <button
         type="button"
+        className="icon-btn"
+        aria-label="Attach a file"
+        title="Attach a file — its content joins the conversation"
+        disabled={locked}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <PaperclipIcon size={17} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
         aria-label={recording ? "Stop recording" : "Record dictation"}
         aria-pressed={recording}
+        title={recording ? "Stop recording" : "Record dictation"}
         disabled={busy && !recording}
         onClick={() => void toggleRecord()}
-        style={iconBtn(recording)}
+        style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
       >
-        {recording ? "⏹" : "🎤"}
+        <MicIcon size={17} />
       </button>
       {recording && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>}
       {busy && !recording && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>}

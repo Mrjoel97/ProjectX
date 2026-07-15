@@ -1,10 +1,13 @@
 # Playbook: Attachment & Voice-Dictation Intake
 
-> Last verified: 2026-07-14 against 04-06 (pre-checkpoint bless: full offline suite
-> confirmed green — extraction 28/28, cost 17/17, intake convex-test 5/5, skills
-> drift 13/13, web typecheck clean, `check-playbooks.mjs` exit 0, `intake.spec.ts`
-> Playwright-discovered 2/2. The live human-verify (SC3) + Lane A `ChatPane.tsx`
-> mount are the sole remaining checkpoint — see Known gaps below.)
+> Last verified: 2026-07-15 against the post-merge `ChatPane.tsx` composer mount
+> (`<IntakeControls threadId={threadId} />` renders once `threadId` is minted; disabled
+> paperclip/mic placeholders before the first send; the controls reshaped to the composer's
+> `icon-btn` idiom — hidden file input triggered by a paperclip button, `MicIcon` dictate
+> toggle, `display: contents` wrapper; both `intake.spec.ts` test ids unchanged; web
+> typecheck clean. The live human-verify (SC3) is now the SOLE remaining checkpoint — see
+> Known gaps below. Prior bless 2026-07-14 against 04-06: extraction 28/28, cost 17/17,
+> intake convex-test 5/5, skills drift 13/13, `intake.spec.ts` Playwright-discovered 2/2.)
 > Build history: `.planning/phases/04-attachment-voice-intake/` · Related ADRs: none
 
 ## Purpose
@@ -38,8 +41,9 @@ itself. This closes the multi-modal intake gap (INTK-02 attachments, INTK-03 voi
   Takes `threadId: string` as a prop; renders no conversation output itself (the merge is
   server-side and the existing chat/card views pick it up reactively). Its one-line mount into
   `ChatPane.tsx`'s composer (`<IntakeControls threadId={threadId} />`, once `threadId` is
-  truthy) is Lane A's responsibility — `apps/web/e2e/intake.spec.ts` (Plan 05) drives it
-  directly via its own test ids ahead of that mount landing.
+  truthy) LANDED post-merge (2026-07-15) — before the first send the composer shows disabled
+  paperclip/mic placeholders whose titles say to send a message first.
+  `apps/web/e2e/intake.spec.ts` (Plan 05) drives the controls via their own test ids.
 
 ## Dependencies & blast radius
 
@@ -154,9 +158,8 @@ result; `@pikar/cost` prices the extraction/transcription call same as any other
 
 ## Known gaps & deferred work
 
-- **The one-line `ChatPane.tsx` mount is not yet in place.** `IntakeControls.tsx` is fully
-  built and self-contained (Plan 05), but Lane A owns mounting
-  `<IntakeControls threadId={threadId} />` (rendered once `threadId` is truthy) into the
-  composer. Until that mount lands, `intake.spec.ts`'s live run stays deferred (Plan 06).
+- ~~The one-line `ChatPane.tsx` mount~~ **CLOSED 2026-07-15**: the composer now mounts
+  `<IntakeControls threadId={threadId} />` once `threadId` is truthy (disabled placeholders
+  before the first send). `intake.spec.ts`'s live run is unblocked.
 - Live human-verify (real OCR/transcription accuracy + real Gmail delivery reflecting
   attached/dictated content, SC3) remains the sole manual verification (04-06 · T2).

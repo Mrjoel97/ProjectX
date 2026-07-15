@@ -15,8 +15,9 @@ import { expect, test } from "@playwright/test";
 // cockpit-resolve/cockpit-report/cockpit-attachment all shipped their specs the same way ahead
 // of their live runs).
 //
-// Selectors target IntakeControls' own test ids: "attach-file-input" (the real, visible file
-// input) and "dictation-test-input" (a hidden headless-safe seam — a real mic can't be granted
+// Selectors target IntakeControls' own test ids: "attach-file-input" (the real file input —
+// hidden behind the composer's paperclip button; setInputFiles drives hidden file inputs
+// directly) and "dictation-test-input" (a hidden headless-safe seam — a real mic can't be granted
 // in a headless Playwright run, so dictation is driven the same way MediaRecorder's own onstop
 // handler would: upload the blob -> intake.dictateToThread).
 
