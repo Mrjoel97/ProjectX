@@ -342,7 +342,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-07-15 (resumed)
-Stopped at: IntakeControls→ChatPane composer mount COMMITTED (dc2f3a9) — the SC3 cross-lane prerequisite is closed; next = 04-06 SC3 live human-verify checkpoint (Task 2, blocking, needs live backend + Gmail), then Task 3 phase close, then /gsd:plan-phase 3.6
+Stopped at: Phase 4 COMPLETE (6/6) — SC3 live human-verify APPROVED by owner 2026-07-15 (attach + dictate → delivered email reflected the content, guardrails intact); ROADMAP + status table ticked. Now: owner-directed cockpit-header + Knowledge-Vault UI polish pass (shrink logo, header dividers, live clock/kebab past-chat menus backed by a new cockpit.listThreads query, vault fused full-bleed to the shell with the workspace glass/clay). Then /gsd:plan-phase 3.6.
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

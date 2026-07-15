@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
 - [ ] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness
 - [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
-- [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (code-complete 2026-07-14; SC3 live-verify + 04-06 close pending)
+- [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [ ] **Phase 7: Resilience & Operations Hardening** - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
@@ -245,13 +245,13 @@ Plans:
   1. User attaches an image, PDF, audio, or document and the system classifies it and OCRs/extracts/transcribes it, merging the result into the request context.
   2. User dictates a request by voice; it is recorded, transcribed, and enters the same pipeline as a typed request.
   3. A delivered result reflects content that originated from an attachment or a dictated recording, having passed the same PII/cost/review guardrails.
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 - [x] 04-01-PLAN.md — pure @pikar/extraction (classify + frame) + intake §9 playbook + watch.json (Wave 1)
 - [x] 04-02-PLAN.md — attachment-extractor skill (5-file mirror) + skill-registry.md bump (Wave 1)
 - [x] 04-03-PLAN.md — intakeArtifacts schema table + @pikar/cost transcription pricing (Wave 1)
 - [x] 04-04-PLAN.md — convex intakeDb + intake.ts spine: classify→extract→redact→cost→audit→persist→merge (Wave 2)
 - [x] 04-05-PLAN.md — IntakeControls.tsx (attach + one-shot dictation) + Playwright E2E over SMOKE:: (Wave 3)
-- [ ] 04-06-PLAN.md — phase close + SC3 live human-verify + sidecar-killed decision log (Wave 4)
+- [x] 04-06-PLAN.md — phase close + SC3 live human-verify (APPROVED 2026-07-15) + sidecar-killed decision log (Wave 4)
 
 ### Phase 5: Knowledge Vault & GraphRAG
 **Goal**: The system remembers â briefs and documents become groundable, searchable memory scoped to each user via hybrid vector + graph retrieval.
@@ -334,7 +334,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
 | 3.6 Agent Eval Gate (INSERTED) | 0/TBD | Not started | - |
 | 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
-| 4. Attachment & Voice-Dictation Intake | 5/6 | Code-complete; SC3 live-verify + 04-06 close pending | 2026-07-14 |
+| 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
