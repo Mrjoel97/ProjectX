@@ -146,6 +146,198 @@ describe("skills registry loader + activation", () => {
   });
 });
 
+describe("eval gate on activateSkill (EVAL-01)", () => {
+  type SkillStatus = "active" | "candidate" | "rolled_back" | "archived";
+
+  const insertSkill = (
+    t: ReturnType<typeof convexTest>,
+    fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
+  ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
+
+  const passingEvidence = (name: string, version: number, overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "r1",
+      pass: true,
+      casesPassed: 15,
+      casesTotal: 15,
+      retriedCases: [],
+      costUsd: 0.08,
+      model: "openai/gpt-4o-mini",
+      skillVersions: { [name]: version },
+      ts: Date.now(),
+      ...overrides,
+    });
+
+  const statusOf = (t: ReturnType<typeof convexTest>, name: string, version: number) =>
+    t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+        .unique();
+      return row!.status;
+    });
+
+  test("gated candidate with NO evidence is refused (EVAL_GATE) and the active row stays active", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "v2", status: "candidate" });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("candidate");
+  });
+
+  test("gated candidate with passing evidence pinning the exact version activates (v1 archived, v2 active)", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: passingEvidence("cockpit-agent", 2),
+    });
+
+    await t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 2 });
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("archived");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("active");
+  });
+
+  test("gated candidate with pass:false evidence is refused", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: passingEvidence("cockpit-agent", 2, { pass: false }),
+    });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+  });
+
+  test("gated candidate with evidence pinning a DIFFERENT version is refused (stale evidence)", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: passingEvidence("cockpit-agent", 1), // pins v1, not v2
+    });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+  });
+
+  test("gated candidate with unparseable evidence is refused (fail closed)", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: "not json {{",
+    });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+  });
+
+  test("rollback exemption: an archived target activates with NO evidence (by status alone)", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "archived" });
+    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "v2", status: "active" });
+
+    await t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 1 });
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("archived");
+  });
+
+  test("rollback exemption: a rolled_back target activates with NO evidence", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "v1", status: "rolled_back" });
+    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "v2", status: "active" });
+
+    await t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 1 });
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("archived");
+  });
+
+  test("non-gated skill candidate activates without any gate", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "email-drafter", version: 1, body: "v1", status: "active" });
+    await insertSkill(t, { name: "email-drafter", version: 2, body: "v2", status: "candidate" });
+
+    await t.mutation(internal.skills.activateSkill, { name: "email-drafter", version: 2 });
+
+    expect(await statusOf(t, "email-drafter", 1)).toBe("archived");
+    expect(await statusOf(t, "email-drafter", 2)).toBe("active");
+  });
+
+  test("recordEvalEvidence patches ONLY evidence on the pinned row; throws NO_SUCH_SKILL_VERSION when missing", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "v2", status: "candidate" });
+
+    const evidence = passingEvidence("cockpit-agent", 2);
+    await t.mutation(internal.skills.recordEvalEvidence, {
+      name: "cockpit-agent",
+      version: 2,
+      evidence,
+    });
+
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 2))
+        .unique(),
+    );
+    expect(row!.evidence).toBe(evidence);
+    expect(row!.body).toBe("v2"); // nothing else patched
+    expect(row!.status).toBe("candidate");
+
+    await expect(
+      t.mutation(internal.skills.recordEvalEvidence, {
+        name: "cockpit-agent",
+        version: 99,
+        evidence,
+      }),
+    ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+  });
+
+  test("getSkillVersion returns {body, version, skillId} regardless of status; throws NO_SUCH_SKILL_VERSION when missing", async () => {
+    const t = convexTest(schema, modules);
+    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "archived body", status: "archived" });
+    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "candidate body", status: "candidate" });
+
+    const v1 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 1 });
+    expect(v1.body).toBe("archived body");
+    expect(v1.version).toBe(1);
+    expect(typeof v1.skillId).toBe("string");
+
+    const v2 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 2 });
+    expect(v2.body).toBe("candidate body");
+
+    await expect(
+      t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 99 }),
+    ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+  });
+});
+
 describe("no hardcoded agent prompts in convex/", () => {
   test.each([
     ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
