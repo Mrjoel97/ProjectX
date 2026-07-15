@@ -228,7 +228,11 @@ export default defineSchema({
     regenerateCount: v.number(),
     reviewOutcome: v.string(),
     createdAt: v.number(),
-  }).index("by_correlation", ["correlationId"]),
+  })
+    .index("by_correlation", ["correlationId"])
+    // EVAL-02 read side: tenant-scoped, time-windowed signal reads (opsSignals.ts).
+    // An index is not a write path; Convex backfills it automatically.
+    .index("by_tenant_created", ["tenantId", "createdAt"]),
 
   // In-app notifications (INTK-04 seam; OPSG-05 grows channels onto these rows in Phase 7).
   notifications: defineTable({
