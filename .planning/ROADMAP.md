@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
 - [x] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content) (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure)
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
-- [ ] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness
+- [x] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness (completed 2026-07-15)
 - [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
@@ -228,7 +228,7 @@ Plans:
 - [x] 03.6-02-PLAN.md — Ops eval-signals read-side: telemetry by_tenant_created index + opsSignals tenantQuery + tests + ops-page card [EVAL-02] (Wave 1) — completed 2026-07-15
 - [x] 03.6-03-PLAN.md — Agent-loop threading: skillVersions candidate pin (runCockpitAgent→buildCockpitTools→draftDocument) + costUsd in the loop return (Wave 2) — completed 2026-07-15
 - [x] 03.6-04-PLAN.md — Golden-set harness: 15 NL fixtures + run-eval-golden.mjs (cost cap, flake retry, evidence write) + assertEvalCaseClean + pnpm eval:golden wiring + agent-runtime.md/watch.json close (Wave 3) — completed 2026-07-15
-- [ ] 03.6-05-PLAN.md — Phase close: automated sweep + live human-verify (first golden run, full gate cycle, classifier archival, ops card) (Wave 4)
+- [x] 03.6-05-PLAN.md — Phase close: automated sweep + live human-verify (first golden run, full gate cycle, classifier archival, ops card) (Wave 4) — completed 2026-07-15
 
 ### Phase 3.7: Inbox Briefing (INSERTED)
 **Goal**: The agent converts the already-granted mailbox scope into daily chief-of-staff value — on demand it reads the inbox, groups messages by time in pure code, summarizes content only through toolless schema-validated digest calls, and renders a triaged BRIEFING card — with zero mailbox writes, nothing sent, and any briefing-seeded action crossing the normal Approve gate.
@@ -339,7 +339,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
-| 3.6 Agent Eval Gate (INSERTED) | 3/5 | In Progress|  |
+| 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
 | 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |

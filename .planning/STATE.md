@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
+last_updated: "2026-07-15T18:05:08.621Z"
+last_activity: "2026-07-15 — Phase 3.6 Agent Eval Gate COMPLETE (5/5): 03.6-05 phase gate executed, human-verify APPROVED. Task 1 offline sweep: skills/opsSignals/runCockpitAgent 45/45; full backend 214/215 (sole red = documented pre-existing audit.test.ts); web typecheck clean; runner --self-check + check-playbooks exit 0; all grep guards pass. Task 2 live proofs on local:local-joel_feruzi-pikar_ai_50c69: SC4 classifier archived (archiveSkill → archived:true; seedSkills does NOT resurrect; getActiveSkill throws NO_ACTIVE_SKILL). SC1 first live golden run 049b868e — 15/15, $0.0453 (cap $1.00), zero sends/mailbox reads. SC2 full gate cycle: trailing-newline edit → seedSkills published candidate v6 (v5 active) → activateSkill v6 REFUSED EVAL_GATE → pnpm eval:golden --skill cockpit-agent@6 run 1ce0cf85 15/15 $0.0462 (retried 12-attach-remove, DNS EAI_AGAIN) → refs-only evidence on v6 row → activateSkill v6 SUCCEEDED (v5 archived) → rollback activateSkill v5 (archived, no evidence) immediate success → rolled forward to v6; mirror committed 6f0274f, skills suite 30/30 after. SC3 /ops eval-signals card verified in browser (note: page is /ops via (app) group, NOT /dashboard/ops). Total live spend ~$0.16. OPERATIONAL: eval runs need a persistent npx convex dev (per-command cold starts → InternalServerError + banner-contaminated output); 03-happy-group flaked once (model chose individual mode) — judged nondeterministic, watch. NEXT: orchestrator verify_phase_goal for 3.6, then Phase 3.7 (inbox briefing) planning."
+progress:
+  total_phases: 17
+  completed_phases: 10
+  total_plans: 76
+  completed_plans: 73
+  percent: 96
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.6-04-PLAN.md
 last_updated: "2026-07-15T16:32:39.553Z"
 last_activity: "2026-07-15 — Phase 3.6 Agent Eval Gate, Wave 3: 03.6-04 executed (EVAL-01 harness half). pnpm eval:golden [--skill name@version] built: run-eval-golden.mjs (smokeRun must() conventions; sequential cases on a throwaway eval-<runid> tenant; per-turn blocked/cap checks — governed stops + the strict->$1.00 cost cap abort exit 2 as ENVIRONMENT, never case failures; one-retry flake policy on a fresh plan; all-green --skill runs write the exact EvalEvidence JSON hasPassingEvidence parses via skills:recordEvalEvidence); 15 plain-NL JSON fixtures in scripts/eval-cases/ (happy x3, edit x3, bounce x2, resolve-degradation, attachment x3, injection x2, no-send-time; closed expect vocabulary; golden.example needles; zero SMOKE::); smokeAssert:assertEvalCaseClean (zero requests rows via by_tenant_status prefix + refs-only needle scan over audit/deadLetters/telemetry); eval:golden wired at backend + root (flags forward). --self-check exit 0 (offline, zero convex calls); source typecheck clean (pre-existing .test.ts noise only); check-playbooks exit 0; agent-runtime.md invariant 9 flipped to the live EVAL_GATE invariant + eval-harness section + Last verified 03.6-04; watch.json got run-eval-golden.mjs + eval-cases/. Commits ec58d7d (T1), 8d874bc (T2), 3ed1d62 (T3). NO deviations. Live pnpm eval:golden run deferred to 03.6-05's checkpoint (phase gate). NEXT: Wave 4 (03.6-05 — phase close: first live golden run, full gate cycle, classifier archival, ops card human-verify)."
 progress:
-  total_phases: 17
+  [██████████] 96%
   completed_phases: 9
   total_plans: 76
   completed_plans: 72
@@ -303,6 +319,7 @@ Progress: [█████████░] 94%
 | Phase 03.6 P01 | 45min | 3 tasks | 4 files |
 | Phase 03.6 P03 | 10min | 2 tasks | 3 files |
 | Phase 03.6 P04 | 18min | 3 tasks | 21 files |
+| Phase 03.6 P05 | ~85min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -406,6 +423,9 @@ Recent decisions affecting current work:
 - [Phase 03.6]: Script shim proves the pin by returning the loaded skill version; one costUsd accumulator across primary+fallback attempts
 - [Phase 03.6]: Eval cost cap is strictly greater-than $1.00, summed across both attempts of a retried case; governed stops and the cap abort as environment (exit 2), never case failures
 - [Phase 03.6]: No convex-test file for assertEvalCaseClean (smoke-support module, ponytail) — offline proof is source typecheck + the runner's --self-check; live proof is plan 05's phase-gate run
+- [Phase 03.6]: Kept cockpit-agent v6 (gate-cycle candidate, trailing-newline edit) live-active with recorded eval evidence; mirror committed 6f0274f so repo matches deployment
+- [Phase 03.6]: Eval runs require a persistent npx convex dev process — per-command cold starts fail cases with InternalServerError (operational prerequisite, not a harness bug)
+- [Phase 03.6]: 03-happy-group one-off failure judged a nondeterministic model flake (passed all subsequent runs) — no fixture tightening, watch on future runs
 
 ### Roadmap Evolution
 
@@ -423,8 +443,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-15T16:32:22.833Z
-Stopped at: Completed 03.6-04-PLAN.md
+Last session: 2026-07-15T18:05:08.602Z
+Stopped at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
