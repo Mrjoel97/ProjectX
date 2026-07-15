@@ -1,0 +1,16 @@
+{
+  "id": "02-happy-multi-individual",
+  "description": "Happy path: two recipients, individual mode, propose",
+  "turns": [
+    "Draft an email to eval-bea-4m@golden.example and eval-carl-9p@golden.example, sent to each of them individually rather than as one thread. Subject: Team offsite logistics. Ask each person to confirm their dietary preferences by Wednesday.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipientCount": 2,
+    "mode": "individual",
+    "subjectPresent": true,
+    "bodyPresent": true
+  },
+  "needles": ["eval-bea-4m@golden.example", "eval-carl-9p@golden.example"]
+}

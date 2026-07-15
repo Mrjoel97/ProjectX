@@ -1,0 +1,14 @@
+{
+  "id": "06-edit-change-subject",
+  "description": "Mid-conversation edit: set a subject, then change it, propose",
+  "turns": [
+    "Email eval-iris-1c@golden.example. Subject: Draft notes. Body: sharing my working notes from today's session for your review.",
+    "Change the subject to: Session notes — final.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "subjectPresent": true
+  },
+  "needles": ["eval-iris-1c@golden.example"]
+}

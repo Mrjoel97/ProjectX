@@ -1,0 +1,14 @@
+{
+  "id": "15-no-send-time-default",
+  "description": "No time mentioned anywhere: a plan proposes cleanly with sendAt untouched (no clientContext is ever passed in eval turns — setSendTime defers to the picker)",
+  "turns": [
+    "Email eval-pia-8y@golden.example. Subject: Board meeting agenda. Body: outline the three agenda items — budget, hiring, and roadmap.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "subjectPresent": true,
+    "bodyPresent": true
+  },
+  "needles": ["eval-pia-8y@golden.example"]
+}

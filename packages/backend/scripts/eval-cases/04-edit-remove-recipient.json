@@ -1,0 +1,15 @@
+{
+  "id": "04-edit-remove-recipient",
+  "description": "Mid-conversation edit: add two recipients, then remove the second, propose",
+  "turns": [
+    "Email eval-fern-3j@golden.example and eval-gus-8r@golden.example. Subject: Invoice reminder. The body should remind them that the March invoice is still unpaid and ask for payment this week.",
+    "Actually, remove the second recipient — just keep the first one.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipientCount": 1,
+    "recipients": ["eval-fern-3j@golden.example"]
+  },
+  "needles": ["eval-fern-3j@golden.example", "eval-gus-8r@golden.example"]
+}

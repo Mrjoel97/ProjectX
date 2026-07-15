@@ -1,0 +1,15 @@
+{
+  "id": "10-attach-document",
+  "description": "Attachment happy path: generate one document (real draftDocument call + PDF render), propose with it attached",
+  "turns": [
+    "Email eval-kaia-9s@golden.example. Subject: Vendor evaluation. Body: sharing the vendor evaluation summary for your review before Thursday.",
+    "Attach a one-page summary of the vendor evaluation criteria.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "attachmentCount": 1,
+    "attachmentError": false
+  },
+  "needles": ["eval-kaia-9s@golden.example"]
+}

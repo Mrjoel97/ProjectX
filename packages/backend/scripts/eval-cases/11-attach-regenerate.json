@@ -1,0 +1,15 @@
+{
+  "id": "11-attach-regenerate",
+  "description": "Attachment regenerate: attach, then redo the attachment on a different topic — superseded in place, still exactly one",
+  "turns": [
+    "Email eval-lena-2b@golden.example. Subject: Onboarding checklist. Body: here is the onboarding overview we discussed for the new hire.",
+    "Attach a one-page onboarding checklist.",
+    "Actually, redo the attachment — make it a one-page security-policy overview instead.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "attachmentCount": 1
+  },
+  "needles": ["eval-lena-2b@golden.example"]
+}

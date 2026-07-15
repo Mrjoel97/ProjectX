@@ -1,0 +1,15 @@
+{
+  "id": "12-attach-remove",
+  "description": "Attachment remove: attach, then drop the attachment, propose with none",
+  "turns": [
+    "Email eval-milo-7d@golden.example. Subject: Quarterly recap. Body: a quick recap of the quarter's highlights and what's next.",
+    "Attach a one-page quarterly metrics summary.",
+    "Actually, drop the attachment — send it without any attachment.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "attachmentCount": 0
+  },
+  "needles": ["eval-milo-7d@golden.example"]
+}

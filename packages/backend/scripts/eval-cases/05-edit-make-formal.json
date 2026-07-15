@@ -1,0 +1,14 @@
+{
+  "id": "05-edit-make-formal",
+  "description": "Mid-conversation edit: draft a body, then make it more formal, propose (state cannot see tone — proves the edit path terminates in a valid proposal)",
+  "turns": [
+    "Email eval-hana-6t@golden.example. Subject: Meeting follow-up. Body: hey, thanks for the chat earlier, let's sync again soon.",
+    "Make the body more formal.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "bodyPresent": true
+  },
+  "needles": ["eval-hana-6t@golden.example"]
+}

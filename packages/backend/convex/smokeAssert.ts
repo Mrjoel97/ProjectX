@@ -527,6 +527,61 @@ export const assertNoAttachmentStored = internalQuery({
   },
 });
 
+// ── 03.6-04 golden-set eval standing invariants (EVAL-01) ─────────────────────
+
+/** EVAL-01 standing invariants, checked after EVERY eval case for the throwaway
+ *  eval tenant: (1) ZERO `requests` rows — structural zero-send proof (only the
+ *  human-only executePlan seeds requests rows, and the eval never approves);
+ *  (2) refs-only needle scan — no fixture needle (recipient addresses, names)
+ *  appears in any audit/deadLetters/telemetry row for the tenant (§4). Needle
+ *  values are NEVER echoed back — only their index — mirroring assertNoRawPii.
+ *  The eval tenant is throwaway-per-run, so these tenant-prefix reads are tiny. */
+export const assertEvalCaseClean = internalQuery({
+  args: { tenant: v.string(), needles: v.array(v.string()) },
+  handler: async (ctx, { tenant, needles }) => {
+    // 1. Zero requests rows for the tenant (tenantId-prefix read across all statuses).
+    const reqs = await ctx.db
+      .query("requests")
+      .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenant))
+      .collect();
+    if (reqs.length !== 0) {
+      throw new Error(
+        `eval tenant ${tenant} has ${reqs.length} requests row(s) — a send path was reached (zero-send invariant broken)`,
+      );
+    }
+
+    // 2. Needle scan across the three log planes (refs-only §4).
+    const audits = await ctx.db
+      .query("audit")
+      .withIndex("by_tenant_ts", (q) => q.eq("tenantId", tenant))
+      .collect();
+    const dls = await ctx.db
+      .query("deadLetters")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenant))
+      .collect();
+    const tels = await ctx.db
+      .query("telemetry")
+      .withIndex("by_tenant_created", (q) => q.eq("tenantId", tenant))
+      .collect();
+    const planes: Array<[string, string[]]> = [
+      ["audit", audits.map((r) => JSON.stringify(r))],
+      ["deadLetters", dls.map((r) => JSON.stringify(r))],
+      ["telemetry", tels.map((r) => JSON.stringify(r))],
+    ];
+    let rowsScanned = 0;
+    for (const [table, blobs] of planes) {
+      rowsScanned += blobs.length;
+      for (let n = 0; n < needles.length; n++) {
+        const needle = needles[n];
+        if (needle && blobs.some((b) => b.includes(needle))) {
+          throw new Error(`refs-only leak: needle #${n} found in ${table} for eval tenant ${tenant}`);
+        }
+      }
+    }
+    return { ok: true, requestsCount: 0, rowsScanned };
+  },
+});
+
 /** OPSG-06: the first migration ran and recorded a completed (success) state. */
 export const assertMigrationRan = internalQuery({
   args: {},

@@ -1,0 +1,15 @@
+{
+  "id": "08-bounce-then-correct",
+  "description": "Bounce then recover: invalid address first, then a valid one, propose — only the valid address survives",
+  "turns": [
+    "Email bogus-eval-addr-x5v about the roadmap update. Subject: Roadmap update. Body: the Q4 roadmap review moved to Monday morning.",
+    "Sorry about that — the right address is eval-jude-4n@golden.example. Use that.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipientCount": 1,
+    "recipients": ["eval-jude-4n@golden.example"]
+  },
+  "needles": ["bogus-eval-addr-x5v", "eval-jude-4n@golden.example"]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "07-bounce-invalid-address",
+  "description": "Bounce path: an invalid address (no @/TLD) must never land in recipients — applyRecipientEdit bounces it and the agent re-asks",
+  "turns": [
+    "Send an email to bogus-eval-address-q2z about the company picnic. Subject: Company picnic. Body: the picnic is Saturday at noon in the park."
+  ],
+  "expect": {
+    "statusAtMost": "proposed",
+    "recipientCount": 0
+  },
+  "needles": ["bogus-eval-address-q2z"]
+}

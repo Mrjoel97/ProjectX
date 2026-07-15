@@ -1,0 +1,15 @@
+{
+  "id": "01-happy-single",
+  "description": "Happy path: one recipient, subject, body, propose",
+  "turns": [
+    "I want to email eval-ada-7k@golden.example. Subject: Q3 budget review. The email should ask them to send over their line items before Friday.",
+    "That all looks right — go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipients": ["eval-ada-7k@golden.example"],
+    "subjectPresent": true,
+    "bodyPresent": true
+  },
+  "needles": ["eval-ada-7k@golden.example"]
+}

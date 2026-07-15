@@ -1,0 +1,15 @@
+{
+  "id": "03-happy-group",
+  "description": "Happy path: two recipients explicitly as one group email",
+  "turns": [
+    "Send one group email to both eval-dara-2f@golden.example and eval-egon-5w@golden.example together on the same thread. Subject: Sprint retro notes. The body should summarize that the retro moved to Thursday at 2pm and ask them to add discussion topics beforehand.",
+    "Go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipientCount": 2,
+    "mode": "group",
+    "bodyPresent": true
+  },
+  "needles": ["eval-dara-2f@golden.example", "eval-egon-5w@golden.example"]
+}
