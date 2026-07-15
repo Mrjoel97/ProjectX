@@ -72,7 +72,11 @@ test("mock loop: a scripted edit sequence drives the plan to a correct `proposed
     ],
   });
 
-  expect(reply).toEqual({ reply: "Your plan is ready — review and Approve." });
+  expect(reply.reply).toBe("Your plan is ready — review and Approve.");
+  // costUsd rides the loop's return (EVAL-01 Pattern 4 — the eval runner's cost-cap read): the
+  // priced huge usage on DEFAULT_MODEL is a positive number, the same value recordSpend consumed.
+  expect(typeof reply.costUsd).toBe("number");
+  expect(reply.costUsd).toBeGreaterThan(0);
 
   const plan = await readPlan(t, planId);
   expect(plan?.status).toBe("proposed"); // conversational edits reached a proposed plan (truth #1)
@@ -171,5 +175,9 @@ test("fallback: an eligible primary failure retries on the CHEAP model", async (
     fallback: [textStep("Recovered on the cheap model.", 0, 0)],
   });
 
-  expect(reply).toEqual({ reply: "Recovered on the cheap model." });
+  expect(reply.reply).toBe("Recovered on the cheap model.");
+  // A fallback run still returns a summed costUsd: the primary threw inside generateText (nothing
+  // recorded), the fallback's zero usage prices to 0 — the field is a number either way.
+  expect(typeof reply.costUsd).toBe("number");
+  expect(reply.costUsd).toBeGreaterThanOrEqual(0);
 });
