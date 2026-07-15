@@ -530,6 +530,10 @@ export function buildCockpitTools(
   // from the model. Append-only 4th arg — every existing caller keeps working. Absent (and not the
   // SMOKE path) → setSendTime defers to the plan-card date picker (Wave 3's confirm source-of-truth).
   clientContext?: { tz: string; nowMs: number },
+  // EVAL-01 version pin (append-only 5th arg, internal-only — never model-suppliable): the eval
+  // runner pins the CANDIDATE skill row it is evaluating, so a pinned document-drafter version is
+  // what renderAndStore's draftDocument call loads. Absent = active skill, byte-identical to today.
+  skillVersions?: Record<string, number>,
 ) {
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -553,7 +557,13 @@ export function buildCockpitTools(
     const safeText = scan.value.safeText;
     const draft: { title: string; markdown: string } = await ctx.runAction(
       internal.llm.draftDocument,
-      { tenantId, safeText, safeTextHash: await contentHash(safeText) },
+      {
+        tenantId,
+        safeText,
+        safeTextHash: await contentHash(safeText),
+        // The eval runner's document-drafter pin rides HERE (EVAL-01) — undefined = active skill.
+        skillVersion: skillVersions?.[DOCUMENT_DRAFTER_SKILL],
+      },
     );
     const setError = async (message: string): Promise<{ ok: false; message: string }> => {
       // Render-fail / over-cap → mark the plan not-proposable, add NO ref (block-on-render-fail).
@@ -1038,10 +1048,12 @@ async function runAgentLoop(
     prompt: string;
     primary: PricedModel;
     fallback: PricedModel;
+    // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
+    skillVersions?: Record<string, number>;
   },
 ): Promise<{ reply: string; costUsd: number }> {
-  const { tenantId, planId, system, prompt, primary, fallback } = args;
-  const tools = buildCockpitTools(ctx, tenantId, planId);
+  const { tenantId, planId, system, prompt, primary, fallback, skillVersions } = args;
+  const tools = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions);
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
@@ -1201,10 +1213,14 @@ export const runCockpitAgent = internalAction({
     // The trusted client's clock+zone for setSendTime (§2-D). Optional — a turn without it simply
     // cannot call setSendTime (it defers to the picker). The SMOKE path pins its own below.
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
+    // EVAL-01 version pin (internal-only surface — this is an internalAction, so the model can
+    // never supply it, §2-D analog): the eval runner pins the CANDIDATE row it evaluates. A missing
+    // (name, version) FAILS CLOSED (getSkillVersion throws) — never silently falls back to active.
+    skillVersions: v.optional(v.record(v.string(), v.number())),
   },
   handler: async (
     ctx,
-    { tenantId, planId, text, model, clientContext },
+    { tenantId, planId, text, model, clientContext, skillVersions },
   ): Promise<{
     reply: string;
     blocked?: "kill_switch" | "daily_budget_exhausted";
@@ -1218,9 +1234,15 @@ export const runCockpitAgent = internalAction({
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
-    const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
-      name: COCKPIT_AGENT_SKILL,
-    });
+    //    A pinned version loads AS ITSELF (EVAL-01 — the eval must observe the candidate body).
+    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const skill: { body: string } =
+      pin !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: COCKPIT_AGENT_SKILL,
+            version: pin,
+          })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name: COCKPIT_AGENT_SKILL });
 
     // 3. Current plan state → the model-facing context (index+label recipients, address-free §2-D).
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -1229,7 +1251,7 @@ export const runCockpitAgent = internalAction({
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
     const smokeOp = parseAgentSmoke(text);
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
-    const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext);
+    const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext, skillVersions);
     if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp), costUsd: 0 }; // no model call
 
     // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
@@ -1241,6 +1263,7 @@ export const runCockpitAgent = internalAction({
       prompt: `${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
       primary: { model: resolveModel(primaryId), id: primaryId },
       fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
+      skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
     });
     return { reply, costUsd };
   },
@@ -1261,9 +1284,18 @@ export const __invokeCockpitTool = internalAction({
     input: v.any(),
     // Optional pinned clock+zone so setSendTime tests drive parseSendTime deterministically (§2-D).
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
+    // Optional EVAL-01 version pin so the drafter-pin thread is testable offline.
+    skillVersions: v.optional(v.record(v.string(), v.number())),
   },
-  handler: async (ctx, { tenantId, planId, toolName, input, clientContext }): Promise<string> =>
-    invokeTool(buildCockpitTools(ctx, tenantId, planId, clientContext), toolName, input),
+  handler: async (
+    ctx,
+    { tenantId, planId, toolName, input, clientContext, skillVersions },
+  ): Promise<string> =>
+    invokeTool(
+      buildCockpitTools(ctx, tenantId, planId, clientContext, skillVersions),
+      toolName,
+      input,
+    ),
 });
 
 /**
@@ -1280,14 +1312,22 @@ export const __runCockpitAgentWithScript = internalAction({
     primary: v.array(v.any()),
     fallback: v.optional(v.array(v.any())),
     failPrimary: v.optional(v.boolean()),
+    // Optional EVAL-01 version pin (mirrors runCockpitAgent) so the pin is testable offline; the
+    // loaded skill version rides the return so tests observe WHICH row became the system prompt.
+    skillVersions: v.optional(v.record(v.string(), v.number())),
   },
   handler: async (
     ctx,
-    { tenantId, planId, primary, fallback, failPrimary },
-  ): Promise<{ reply: string; costUsd: number }> => {
-    const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
-      name: COCKPIT_AGENT_SKILL,
-    });
+    { tenantId, planId, primary, fallback, failPrimary, skillVersions },
+  ): Promise<{ reply: string; costUsd: number; skillVersion: number }> => {
+    const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
+    const skill: { body: string; version: number } =
+      pin !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: COCKPIT_AGENT_SKILL,
+            version: pin,
+          })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name: COCKPIT_AGENT_SKILL });
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
     const primaryModel = failPrimary
       ? new MockLanguageModelV4({
@@ -1297,14 +1337,16 @@ export const __runCockpitAgentWithScript = internalAction({
         })
       : new MockLanguageModelV4({ doGenerate: primary as never });
     const fallbackModel = new MockLanguageModelV4({ doGenerate: (fallback ?? primary) as never });
-    return await runAgentLoop(ctx, {
+    const res = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
       primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
       fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
+      skillVersions,
     });
+    return { ...res, skillVersion: skill.version };
   },
 });
 
@@ -1460,19 +1502,24 @@ export const draftDocument = internalAction({
     tenantId: v.string(),
     safeText: v.string(),
     safeTextHash: v.string(),
+    // EVAL-01 version pin (internal-only): the eval runner evaluates a pinned drafter CANDIDATE.
+    // A missing (name, version) FAILS CLOSED — never silently falls back to the active row.
+    skillVersion: v.optional(v.number()),
   },
   handler: async (
     ctx,
-    { safeText, safeTextHash },
+    { safeText, safeTextHash, skillVersion },
   ): Promise<{ title: string; markdown: string }> => {
-    // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL)
-    // when unseeded, so a hardcoded fallback can never sneak in.
-    const skill: { body: string; version: number } = await ctx.runQuery(
-      internal.skills.getActiveSkill,
-      {
-        name: DOCUMENT_DRAFTER_SKILL,
-      },
-    );
+    // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL
+    // unseeded / NO_SUCH_SKILL_VERSION on a missing pin), so a hardcoded fallback can never sneak
+    // in — and the pinned lookup runs BEFORE the smoke short-circuit, so it is exercised offline.
+    const skill: { body: string; version: number } =
+      skillVersion !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: DOCUMENT_DRAFTER_SKILL,
+            version: skillVersion,
+          })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name: DOCUMENT_DRAFTER_SKILL });
     const smoke = parseSmoke(safeText);
 
     try {
