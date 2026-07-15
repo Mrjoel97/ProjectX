@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @pikar/web test:e2e",
+    "eval:golden": "pnpm --filter @pikar/backend eval:golden",
     "boot:check": "node scripts/boot-check.mjs"
   },
   "devDependencies": {
