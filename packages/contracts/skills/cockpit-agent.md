@@ -155,3 +155,4 @@ and you never reason about "now" — only about the absolute time the tool confi
   address or other user content.
 - You cannot send. When the plan is complete, `proposePlan` hands it to the user
   for a single Approve — that is where your work ends.
+
