@@ -14,6 +14,8 @@ import {
   EXECUTIVE_AGENT_CLASSIFIER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   GRAPH_EXTRACTOR_SKILL,
+  hasPassingEvidence,
+  isGatedSkill,
   type LoadedSkill,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
@@ -72,6 +74,21 @@ export const activateSkill = internalMutation({
       throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
     }
 
+    // EVAL_GATE (EVAL-01): a never-before-active version of a gated skill may only
+    // activate with recorded passing evidence pinning EXACTLY this version. The
+    // candidate-vs-rollback distinction is PURELY the target row's status —
+    // archived/rolled_back were active before and are exempt BY STATUS (rollback
+    // must always work mid-incident, never blocked by a broken eval harness).
+    if (
+      isGatedSkill(name) &&
+      target.status === "candidate" &&
+      !hasPassingEvidence(target.evidence, name, version)
+    ) {
+      throw new Error(
+        `EVAL_GATE: ${name} v${version} has no recorded passing eval run (run pnpm eval:golden --skill ${name}@${version})`,
+      );
+    }
+
     const current = await ctx.db
       .query("skills")
       .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
@@ -84,6 +101,49 @@ export const activateSkill = internalMutation({
     if (target.status !== "active") {
       await ctx.db.patch(target._id, { status: "active" });
     }
+  },
+});
+
+/**
+ * Record eval-run evidence on the exact (name, version) row (EVAL-01). Written
+ * by the eval runner after a run; the activateSkill gate reads it. Evidence is
+ * one of the two sanctioned patchable fields (with status) — patches NOTHING
+ * else. Payload is refs/counts-only JSON (CLAUDE.md §4), never raw content.
+ */
+export const recordEvalEvidence = internalMutation({
+  args: { name: v.string(), version: v.number(), evidence: v.string() },
+  handler: async (ctx, { name, version, evidence }) => {
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+
+    if (row === null) {
+      throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    }
+
+    await ctx.db.patch(row._id, { evidence });
+  },
+});
+
+/**
+ * Load a skill body pinned to an EXACT version, regardless of status — the
+ * version-pin read the eval runner threads into the agent loop so a candidate
+ * evaluates as itself. Same LoadedSkill shape as getActiveSkill.
+ */
+export const getSkillVersion = internalQuery({
+  args: { name: v.string(), version: v.number() },
+  handler: async (ctx, { name, version }): Promise<LoadedSkill> => {
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+
+    if (row === null) {
+      throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    }
+
+    return { body: row.body, version: row.version, skillId: row._id };
   },
 });
 

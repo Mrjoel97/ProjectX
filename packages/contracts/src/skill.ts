@@ -48,3 +48,60 @@ export const ATTACHMENT_EXTRACTOR_SKILL = "attachment-extractor" as const;
 
 /** Registry name of the graph extractor skill (VALT-02 — GraphRAG entity/relationship extraction). */
 export const GRAPH_EXTRACTOR_SKILL = "graph-extractor" as const;
+
+/**
+ * Skills whose CANDIDATE versions may only activate through a recorded passing
+ * eval run (EVAL-01). Locked v1 list — email-drafter/executive-router deferred.
+ * Rollback (archived/rolled_back targets) is structurally exempt by status.
+ */
+export const GATED_SKILLS: readonly string[] = [COCKPIT_AGENT_SKILL, DOCUMENT_DRAFTER_SKILL];
+
+/** Whether activation of a candidate version of this skill requires eval evidence. */
+export function isGatedSkill(name: string): boolean {
+  return GATED_SKILLS.includes(name);
+}
+
+/**
+ * Evidence recorded on a skills row by a green eval run (refs/hashes/ids/counts
+ * ONLY — never raw prompts, outputs, or PII; CLAUDE.md §4). Written by the eval
+ * runner (plan 04) via recordEvalEvidence, read by the activateSkill gate.
+ */
+export type EvalEvidence = {
+  /** The runner that produced this evidence (e.g. "eval:golden"). */
+  runner: string;
+  /** Opaque id of the eval run. */
+  runId: string;
+  /** Whether the run passed overall. */
+  pass: boolean;
+  casesPassed: number;
+  casesTotal: number;
+  /** Case ids that needed a retry to pass. */
+  retriedCases: string[];
+  costUsd: number;
+  /** Model id the run executed against. */
+  model: string;
+  /** Exact skill versions the run executed with — the gate pins on these. */
+  skillVersions: Record<string, number>;
+  /** Epoch ms the evidence was recorded. */
+  ts: number;
+};
+
+/**
+ * Parse an evidence JSON string and decide whether it proves a PASSING eval run
+ * for EXACTLY this (name, version). Fails closed: absent, unparseable, pass!==true,
+ * or a skillVersions pin on any other version → false. No freshness window in v1
+ * (presence + exact version pin is the whole check).
+ */
+export function hasPassingEvidence(
+  evidence: string | undefined,
+  name: string,
+  version: number,
+): boolean {
+  if (evidence === undefined) return false;
+  try {
+    const parsed = JSON.parse(evidence) as Partial<EvalEvidence>;
+    return parsed.pass === true && parsed.skillVersions?.[name] === version;
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
