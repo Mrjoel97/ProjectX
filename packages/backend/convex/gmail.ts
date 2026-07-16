@@ -325,7 +325,11 @@ const INBOX_LIST_CAP = 50;
 const INBOX_QUERY = "in:inbox newer_than:7d";
 
 type ListInboxResult =
-  | { ok: true; messages: InboxMessageMeta[]; fixture: boolean }
+  // `offlineDigest` rides the fixture row (03.7-03): it tells briefInbox to short-circuit the
+  // digest to a deterministic offline one (the Playwright E2E) instead of calling the model. The
+  // eval injection probe seeds it FALSE — a LIVE digest over the injected body is the whole point.
+  // Absent/false on every live-mailbox read, so a real briefing can never take the offline path.
+  | { ok: true; messages: InboxMessageMeta[]; fixture: boolean; offlineDigest?: boolean }
   | { ok: false; reason: "not_connected" | "reauth" };
 
 type FetchBodiesResult =
@@ -400,7 +404,7 @@ export const listInbox = internalAction({
         isUnread: m.isUnread ?? false,
       }));
       await audit(messages.length);
-      return { ok: true, messages, fixture: true };
+      return { ok: true, messages, fixture: true, offlineDigest: fixture.offlineDigest };
     }
 
     const access = await freshAccessToken(ctx, tenantId);

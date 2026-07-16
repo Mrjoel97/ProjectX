@@ -28,18 +28,28 @@ import {
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
+  INBOX_DIGEST_SKILL,
 } from "@pikar/contracts/skill";
 import {
   applyRecipientEdit,
+  type BriefingItem,
+  BRIEFING_BODY_CAP,
+  bucket,
+  type Bucket,
   buildDocFilename,
   buildRecipientView,
+  type DigestItem,
   exceedsByteCap,
+  type InboxMessageMeta,
   type InlineRun,
   inlineRuns,
   isFallbackEligible,
+  joinDigest,
+  parseAddress,
   parseSendTime,
   type RecipientEdit,
   rankCandidates,
+  selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
 } from "@pikar/core";
@@ -425,6 +435,9 @@ type Att = { storageId: Id<"_storage">; filename: string; mimeType: string; size
 
 type PlanRow = {
   tenantId: string;
+  // Structural fact (plans are indexed by_thread) — briefInbox keys the briefings row on it so the
+  // BRIEFING card renders on the right cockpit thread. Never model-facing.
+  threadId: string;
   recipients?: string[];
   subject?: string;
   body?: string;
@@ -517,6 +530,9 @@ export function buildAgentContext(
   ].join("\n");
 }
 
+/** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
+const INBOX_PEEK_CAP = 10;
+
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
  * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
@@ -539,6 +555,18 @@ export function buildCockpitTools(
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
     if (!plan || plan.tenantId !== tenantId) throw new Error("cockpit: plan row missing"); // no cross-tenant
     return plan;
+  };
+
+  // Shared read-failure branch for the briefing tools (the resolveContacts precedent): light the
+  // reconnect banner AND hand the model a conversational fallback — a mailbox we cannot read is a
+  // recoverable conversation, never a throw out of the governed loop.
+  const mailboxUnavailable = async (what: string): Promise<string> => {
+    await ctx.runMutation(internal.notifications.notify, {
+      tenantId,
+      kind: "gmail_reconnect",
+      message: "I couldn't read your mailbox — reconnect Gmail so I can brief your inbox.",
+    });
+    return `I couldn't ${what} — the mailbox isn't reachable. Tell the user plainly and suggest they reconnect Gmail.`;
   };
 
   // Shared generate path for generateAttachment/regenerateAttachment (CKPT-02): scan (fail-closed)
@@ -987,6 +1015,149 @@ export function buildCockpitTools(
         return "Plan proposed — the user can now review and Approve it.";
       },
     }),
+    // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
+    // `range` is an ENUM, never a free string: it flows into gmail.listInbox's refs-only
+    // mailbox.listed audit payload, so user/model prose reaching it would be a §4 leak.
+    listInbox: tool({
+      description:
+        "Peek at the user's inbox for a quick question like \"anything from Sarah today?\". Returns sender names and subject lines only — you never see message contents. Read-only: it cannot reply, forward, label, or send.",
+      inputSchema: jsonSchema<{ range: "today" | "yesterday" | "week" }>({
+        type: "object",
+        properties: {
+          range: {
+            type: "string",
+            enum: ["today", "yesterday", "week"],
+            description: "How far back to look.",
+          },
+        },
+        required: ["range"],
+        additionalProperties: false,
+      }),
+      execute: async ({ range }): Promise<string> => {
+        // correlationId = planId: the stable ref for the refs-only mailbox.listed audit (§4).
+        const res = await ctx.runAction(internal.gmail.listInbox, {
+          tenantId,
+          correlationId: planId,
+          range,
+        });
+        if (!res.ok) return mailboxUnavailable("list the inbox");
+        // ponytail: reuse selectForDigest for the recency sort + cap — the list arrives in Gmail's
+        // order and a peek only wants the newest handful. No second sort helper.
+        const shown = selectForDigest(res.messages, INBOX_PEEK_CAP);
+        if (shown.length === 0) return `No messages in the inbox for ${range}.`;
+        // Sender LABELS only (§2-D — an address never crosses to the model, exactly as with
+        // recipients) and NO snippet: a snippet is third-party content too, and the strictest
+        // reading of the toolless-ingestion invariant keeps it out of the tool-bearing loop.
+        const lines = shown
+          .map((m) => `- ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`)
+          .join("\n");
+        return `${res.messages.length} message(s) in the inbox for ${range}. The ${shown.length} most recent:\n${lines}`;
+      },
+    }),
+    briefInbox: tool({
+      description:
+        'Summarize the user\'s inbox into a briefing for "what happened in my inbox / brief me / catch me up" style asks. The briefing renders in the workspace panel — you get counts back, NOT the contents, so do not try to recite it. Read-only: it cannot reply, forward, label, or send.',
+      inputSchema: jsonSchema<{ range: "today" | "yesterday" | "week" }>({
+        type: "object",
+        properties: {
+          range: {
+            type: "string",
+            enum: ["today", "yesterday", "week"],
+            description: "Which window to brief.",
+          },
+        },
+        required: ["range"],
+        additionalProperties: false,
+      }),
+      execute: async ({ range }): Promise<string> => {
+        const plan = await readPlan(); // threadId + the cross-tenant guard
+        const listRes = await ctx.runAction(internal.gmail.listInbox, {
+          tenantId,
+          correlationId: planId,
+          range,
+        });
+        if (!listRes.ok) return mailboxUnavailable("read the inbox");
+
+        // Pure core owns time (ADR-004). No clientContext → UTC: the documented buildAgentContext
+        // default, and a briefing is read-only so a zone miss is cosmetic (unlike setSendTime).
+        const nowMs = clientContext?.nowMs ?? Date.now();
+        const tz = clientContext?.tz ?? "UTC";
+        // Drop anything outside the 7-day window BEFORE the cap, so a stale message never displaces
+        // a fresh one from the digest selection.
+        const inWindow = listRes.messages.filter(
+          (m: InboxMessageMeta) => bucket(m.internalDate, nowMs, tz) !== null,
+        );
+        const selected = selectForDigest(inWindow, BRIEFING_BODY_CAP);
+        if (selected.length === 0)
+          return `Briefing ready: no messages in the inbox for ${range}. Tell the user their inbox is clear for that window.`;
+
+        // THE boundary. `rawBodies` is the only body-bearing value in this block, and it flows into
+        // EXACTLY ONE place: the toolless digestInbox call below. It must never reach a return
+        // template or a log payload — llmRedaction.test.ts scans this block for precisely that.
+        const bodiesRes = await ctx.runAction(internal.gmail.fetchInboxBodies, {
+          tenantId,
+          ids: selected.map((m) => m.id),
+        });
+        if (!bodiesRes.ok) return mailboxUnavailable("read the inbox");
+        // Zip by id, never by position: fetchInboxBodies DROPS unknown ids, so bodies.length can be
+        // < ids.length. A missing/empty body falls back to Gmail's own snippet.
+        const rawBodies = new Map(bodiesRes.bodies.map((b) => [b.id, b.body]));
+        const digestInput = selected.map((m, index) => ({
+          index,
+          from: m.from,
+          subject: m.subject,
+          body: rawBodies.get(m.id) || m.snippet,
+        }));
+
+        const digest: { items: DigestItem[] } = await ctx.runAction(internal.llm.digestInbox, {
+          tenantId,
+          messages: digestInput,
+          // EVAL-01 pin (renderAndStore precedent) — undefined = the active skill row.
+          skillVersion: skillVersions?.[INBOX_DIGEST_SKILL],
+          // Offline deterministic digest ONLY on the fixture seam (the E2E). The eval probe seeds
+          // offlineDigest:false so a LIVE digest runs over the injected body — that IS the probe.
+          smoke: listRes.fixture && listRes.offlineDigest === true,
+        });
+
+        // joinDigest welds the gists onto the CODE-owned sender/ts/bucket by index (ADR-004): a
+        // model-invented index produces nothing, and a model-supplied sender has nowhere to land.
+        const items: BriefingItem[] = joinDigest(selected, digest.items, nowMs, tz);
+        const briefingId = await ctx.runMutation(internal.briefings.insert, {
+          tenantId,
+          threadId: plan.threadId,
+          range,
+          tz,
+          items,
+          listedCount: listRes.messages.length,
+          createdAt: Date.now(),
+        });
+        // ONE refs-only audit: ids + counts, never a sender/subject/gist (§4).
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: planId,
+          eventType: "briefing.created",
+          actor: "system",
+          payload: {
+            briefingId,
+            range,
+            listedCount: listRes.messages.length,
+            digestedCount: items.length,
+          },
+        });
+
+        // COUNTS ONLY (SC-2). Bodies AND gists stay out of the tool-bearing loop — a polluted gist
+        // never even reaches the model's context, and the card is the source of truth (the
+        // resolveContacts/ResolutionCard precedent).
+        const n = (b: Bucket) => items.filter((i) => i.bucket === b).length;
+        const needsYou = items.filter((i) => i.needsReply).length;
+        return (
+          `Briefing ready: ${items.length} messages summarized ` +
+          `(${n("today")} today, ${n("yesterday")} yesterday, ${n("thisWeek")} this week), ` +
+          `${needsYou} need attention — it is shown in the workspace panel. ` +
+          "Do not repeat its contents; point the user at the panel."
+        );
+      },
+    }),
   };
 }
 
@@ -1090,8 +1261,11 @@ async function runAgentLoop(
 //                | body=<intent> | remove=<1-based index> | propose
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
 //                | personalize=<1-based index>:<intent> | sendTime=<natural-language time>
+//                | brief=today|yesterday|week
 // SMOKE_NOW_MS pins the clock so a `sendTime=in N hours` op resolves deterministically offline (the
 // model never supplies "now"/tz, §2-D) — the send-time analogue of the 1970-01-01 attachment pinning.
+// It is ALSO the baseMs the inbox fixture is seeded at (smoke.seedInboxFixture), so a `brief=today`
+// op buckets deterministically over that fixture with zero model calls.
 const SMOKE_NOW_MS = Date.UTC(2020, 0, 1, 12, 0, 0); // 2020-01-01 12:00:00 UTC
 type AgentSmokeOp =
   | { kind: "add"; addresses: string[] }
@@ -1105,7 +1279,8 @@ type AgentSmokeOp =
   | { kind: "regenerate"; index: number; topic: string }
   | { kind: "removeAttachment"; index: number }
   | { kind: "personalize"; index: number; instructions: string }
-  | { kind: "sendTime"; text: string };
+  | { kind: "sendTime"; text: string }
+  | { kind: "brief"; range: "today" | "yesterday" | "week" };
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
@@ -1147,6 +1322,13 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
       return { kind: "removeAttachment", index: Number(val) };
     case "sendTime":
       return { kind: "sendTime", text: val };
+    case "brief":
+      // Same enum the tool's inputSchema enforces — an unknown range defaults to today rather
+      // than sending prose into the refs-only mailbox.listed audit payload (§4).
+      return {
+        kind: "brief",
+        range: val === "yesterday" || val === "week" ? val : "today",
+      };
     case "personalize": {
       // <1-based index>:<intent> — split on the FIRST colon (the intent may carry a SMOKE:: prefix).
       const c = val.indexOf(":");
@@ -1185,6 +1367,8 @@ function runAgentSmokeOp(
       return invokeTool(tools, "removeAttachment", { index: op.index });
     case "sendTime":
       return invokeTool(tools, "setSendTime", { text: op.text });
+    case "brief":
+      return invokeTool(tools, "briefInbox", { range: op.range });
     case "personalize":
       return invokeTool(tools, "personalizeRecipient", {
         index: op.index,
@@ -1554,6 +1738,145 @@ export const draftDocument = internalAction({
         maxRetries: 0,
       });
       return { title: object.title, markdown: object.markdown };
+    }
+  },
+});
+
+// ── The TOOLLESS inbox digest (CKPT-04 / SC-2) ───────────────────────────────
+//
+// THE load-bearing security boundary of the briefing feature. Raw message bodies — untrusted
+// third-party content — reach an LLM ONLY here, and this call has NO tools. A prompt injection in
+// a message body therefore has nothing to inject INTO: generateObject cannot send mail, cannot read
+// a plan, cannot call anything. Its worst case is a misleading gist rendered on a card for a human
+// to read. The tool-bearing loop (runAgentLoop/generateText) never sees a body: briefInbox hands it
+// a counts-only string. The prompt line telling the model to treat content as data is defense in
+// depth; TOOLLESSNESS is the actual defense (llmRedaction.test.ts asserts both structurally).
+//
+// Copies draftDocument's shape exactly: fail-closed skill load FIRST (a pin → getSkillVersion,
+// else getActiveSkill), SMOKE short-circuit AFTER the load (so the load is exercised offline),
+// then DEFAULT_MODEL → isFallbackEligible → one CHEAP_MODEL retry.
+
+// Index-keyed BY DESIGN (ADR-004): no sender, no ts, no bucket. The model summarizes; the code
+// owns identity and time, and @pikar/core's joinDigest welds them together by index. A model that
+// emits a sender has nowhere to put it. `deadline` is a suggestion STRING, rendered as text and
+// never parsed into an action (SC-4).
+const digestSchema = jsonSchema<{
+  items: {
+    index: number;
+    gist: string;
+    category: "action" | "fyi" | "newsletter" | "other";
+    needsReply: boolean;
+    deadline?: string;
+  }[];
+}>({
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          index: { type: "number" },
+          gist: { type: "string" },
+          category: { type: "string", enum: ["action", "fyi", "newsletter", "other"] },
+          needsReply: { type: "boolean" },
+          deadline: { type: "string" },
+        },
+        required: ["index", "gist", "category", "needsReply"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+});
+
+/** One message block for the digest prompt. Bodies arrive already truncated (BODY_TRUNCATE_CHARS). */
+type DigestInput = { index: number; from: string; subject: string; body: string };
+
+export const digestInbox = internalAction({
+  args: {
+    tenantId: v.string(),
+    messages: v.array(
+      v.object({
+        index: v.number(),
+        from: v.string(),
+        subject: v.string(),
+        body: v.string(),
+      }),
+    ),
+    // EVAL-01 version pin (internal-only): a missing (name, version) FAILS CLOSED.
+    skillVersion: v.optional(v.number()),
+    // Offline deterministic digest for the E2E — set ONLY from the inboxFixtures seam's
+    // offlineDigest flag, never by a model or a user (it is an internalAction arg).
+    smoke: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { messages, skillVersion, smoke }): Promise<{ items: DigestItem[] }> => {
+    // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
+    // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
+    const skill: { body: string; version: number } =
+      skillVersion !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: INBOX_DIGEST_SKILL,
+            version: skillVersion,
+          })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name: INBOX_DIGEST_SKILL });
+
+    // Belt-and-braces at the boundary: an out-of-range index cannot address a real message.
+    // joinDigest guards this too — a model must not be able to invent a briefing row (ADR-004).
+    const inRange = (items: DigestItem[]): DigestItem[] =>
+      items.filter(
+        (it) => Number.isInteger(it.index) && it.index >= 0 && it.index < messages.length,
+      );
+
+    if (smoke === true) {
+      // Deterministic offline digest: one item per input index. #0 needsReply + a deadline so the
+      // E2E always renders a "Needs you" row. No model call, no spend.
+      return {
+        items: messages.map((m, i) => ({
+          index: m.index,
+          gist: `Offline digest of "${m.subject}".`,
+          category: i === 0 ? "action" : "fyi",
+          needsReply: i === 0,
+          ...(i === 0 ? { deadline: "tomorrow" } : {}),
+        })),
+      };
+    }
+
+    // The indexed blocks. `[#i]` is the ONLY link between a gist and a real message.
+    const prompt = messages
+      .map((m: DigestInput) => `[#${m.index}]\nFrom: ${m.from}\nSubject: ${m.subject}\n\n${m.body}`)
+      .join("\n\n---\n\n");
+
+    // ponytail: spend is recorded against the budget/kill-switch rails HERE (the digest is the
+    // biggest sub-call in the system — ~25 bodies — so the rails must see it), but it still does
+    // not ride the loop's returned costUsd (tools return strings). That is the same accepted
+    // ceiling as draftDocument, and it leaves the EVAL COST CAP blind to digest spend (research
+    // Pitfall 5). The cap + per-body truncation keep the blind spot structurally small. Upgrade
+    // path: thread a spend accumulator through buildCockpitTools into runAgentLoop's costUsd.
+    try {
+      const { object, usage } = await generateObject({
+        model: resolveModel(DEFAULT_MODEL),
+        schema: digestSchema,
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 1,
+      });
+      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      return { items: inRange(object.items) };
+    } catch (e) {
+      if (!isFallbackEligible(e)) throw e;
+      const { object, usage } = await generateObject({
+        model: resolveModel(CHEAP_MODEL),
+        schema: digestSchema,
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      return { items: inRange(object.items) };
     }
   },
 });
