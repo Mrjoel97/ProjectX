@@ -93,6 +93,79 @@ test("gmail.ts mailbox.searched audit payload is refs-only ({ queryHash, resultC
   );
 });
 
+// ── 03.7-02: the inbox read plane is refs-only-audited and provably WRITE-FREE (CKPT-04/SC-3) ────
+
+test("gmail.ts mailbox.listed audit payload is refs-only ({ range, resultCount })", () => {
+  // The briefing's list audit records THAT a list happened — the caller-supplied `range` LITERAL
+  // (an enum from the tool's inputSchema, never user prose) + a count. A sender/subject/snippet
+  // here would turn the audit into the PII honeypot §4 exists to prevent.
+  const src = readSource("gmail.ts");
+  const m = src.match(/eventType:\s*["']mailbox\.listed["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "mailbox.listed audit payload not found").not.toBeNull();
+  const payload = m![1];
+  expect(payload).toMatch(/range/);
+  expect(payload).toMatch(/resultCount/);
+  expect(payload, `mailbox.listed payload leaks a raw mailbox field: ${payload}`).not.toMatch(
+    /\b(from|to|cc|sender|subject|snippet|gist|body|name|address|messageId)\b/,
+  );
+});
+
+test("gmail.ts performs ZERO mailbox writes — no modify/trash/label endpoint exists", () => {
+  // The briefing is read-only BY CONSTRUCTION (locked decision): the granted gmail.modify scope is
+  // never exercised for a write. These endpoint substrings must be structurally absent — a future
+  // "just mark it read" would have to defeat this test, which is the point.
+  const src = readSource("gmail.ts").replace(/\/\/[^\n]*/g, ""); // prose may name them; CODE may not
+  for (const verb of ["/modify", "/trash", "/untrash", "/batchModify", "/labels"]) {
+    expect(src, `gmail.ts references the mailbox-write endpoint ${verb}`).not.toContain(verb);
+  }
+});
+
+test("the ONLY POST fetches in gmail.ts are TOKEN_ENDPOINT (refresh) and SEND_ENDPOINT (governed send)", () => {
+  // Every mailbox READ is a GET. The two legitimate POSTs are the token refresh and the governed
+  // send; a THIRD POST would be a new write verb reaching Gmail without a governance gate, so the
+  // counts must match exactly — a POST that is not one of these two fails here.
+  const src = readSource("gmail.ts");
+  const postFetches = [...src.matchAll(/fetch\(\s*([^,\s]+)\s*,\s*\{\s*method:\s*["']POST["']/g)].map(
+    (m) => m[1],
+  );
+  expect(postFetches, "the POST fetch targets changed").toEqual(["TOKEN_ENDPOINT", "SEND_ENDPOINT"]);
+  // …and no OTHER `method: "POST"` exists anywhere in the module (e.g. on a template-literal URL).
+  const allPosts = src.match(/method:\s*["']POST["']/g) ?? [];
+  expect(
+    allPosts.length,
+    `gmail.ts has ${allPosts.length} POSTs but only ${postFetches.length} are the sanctioned token/send calls`,
+  ).toBe(postFetches.length);
+});
+
+test("the briefing read actions check the inboxFixtures seam BEFORE the token (no-token test path)", () => {
+  // The seam only works if the fixture check precedes freshAccessToken — otherwise a fixture tenant
+  // dead-ends at not_connected and the offline E2E / eval injection probe silently measure nothing
+  // (research Pitfall 3). Assert the source ORDER inside each action, the draftBody-scan precedent.
+  const src = readSource("gmail.ts");
+  for (const fn of ["export const listInbox", "export const fetchInboxBodies"]) {
+    const start = src.indexOf(fn);
+    expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\nexport const", 1);
+    const block = end >= 0 ? rest.slice(0, end) : rest;
+    const fixtureAt = block.indexOf("getInboxFixture");
+    const tokenAt = block.indexOf("freshAccessToken");
+    expect(fixtureAt, `${fn} never checks the inboxFixtures seam`).toBeGreaterThanOrEqual(0);
+    expect(tokenAt, `${fn} never calls freshAccessToken`).toBeGreaterThanOrEqual(0);
+    expect(fixtureAt, `${fn} must check the fixture BEFORE freshAccessToken`).toBeLessThan(tokenAt);
+  }
+});
+
+test("briefings.ts is content-plane only — it emits NO audit/DLQ/telemetry write (§4)", () => {
+  // The briefing row holds the raw senders + gists. Like plans.ts, this module must never itself
+  // write a log-plane row — the refs-only mailbox.listed event belongs to the ACTING module (gmail.ts).
+  const src = readSource("briefings.ts");
+  expect(src, "briefings.ts inserts into a log-plane table").not.toMatch(
+    /\.insert\(\s*["'](audit|deadLetters|telemetry)["']/,
+  );
+  expect(src, "briefings.ts calls audit.log").not.toMatch(/audit\.log\b/);
+});
+
 test("draftCockpit receives NO mailbox header hints — greetingName is the only mailbox-derived arg", () => {
   // The resolved display NAME reaches the drafter for the greeting; header hints (subject/date/
   // count/the raw matches) must NEVER reach the LLM (SC3). Scope to the draftCockpit block.

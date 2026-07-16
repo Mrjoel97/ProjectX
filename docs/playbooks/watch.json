@@ -12,6 +12,8 @@
     "apps/web/e2e/",
     "packages/backend/convex/cockpit.ts",
     "packages/backend/convex/plans.ts",
+    "packages/backend/convex/briefings.ts",
+    "packages/backend/convex/briefings.test.ts",
     "packages/backend/convex/deliverApprovedPlan.ts",
     "packages/backend/convex/llm.ts",
     "packages/backend/convex/gmail.ts",
