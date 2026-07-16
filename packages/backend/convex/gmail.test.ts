@@ -1,7 +1,34 @@
-// buildMime self-check (V3 multipart structurally correct + V4 zero-attachment byte-identical).
-// Pure-function unit test — no convex-test harness needed; buildMime is a plain exported helper.
+// buildMime self-check (V3 multipart structurally correct + V4 zero-attachment byte-identical),
+// plus the 03.7-02 inbox read plane: the fixture seam, the refs-only mailbox.listed audit, and
+// the pure MIME text/plain picker.
+import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { buildMime } from "./gmail";
+import { BODY_TRUNCATE_CHARS } from "@pikar/core";
+import { internal } from "./_generated/api";
+import schema from "./schema";
+import { buildMime, pickPlainText } from "./gmail";
+// listInbox's refs-only mailbox.listed audit hits the auditCounts aggregate; register the
+// component (relative import — the package blocks the deep specifier) so the REAL audit path runs
+// under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+
+/** convex-test instance with the audit aggregate registered (every listInbox test audits). */
+function harness() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+}
+
+const TENANT = "tenant_inbox";
+// The deterministic smoke clock (llm.ts SMOKE_NOW_MS — 2020-01-01T12:00Z); seeding at a fixed
+// baseMs is what makes the fixture messages land in known buckets offline.
+const BASE_MS = 1_577_880_000_000;
+const b64url = (s: string) => Buffer.from(s, "utf8").toString("base64url");
 
 const TO = "dest@example.com";
 const SUBJECT = "Quarterly update";
@@ -76,5 +103,239 @@ describe("buildMime — multipart/mixed with attachments (V3)", () => {
       { filename: "b.pdf", mimeType: "application/pdf", base64: "Qg==" },
     ]);
     expect(two.match(/Content-Type: application\/pdf/g)?.length).toBe(2);
+  });
+});
+
+// ── 03.7-02: pickPlainText — the ONE new parsing seam (recursive MIME tree, base64url) ────────
+// Pure + exported precisely so it is unit-testable without a mailbox (research Pitfall 4).
+
+describe("pickPlainText (MIME text/plain extraction)", () => {
+  test("nested parts tree → the first text/plain leaf, base64url-decoded", () => {
+    const tree = {
+      mimeType: "multipart/mixed",
+      parts: [
+        { mimeType: "application/pdf", body: { data: b64url("not text") } },
+        {
+          mimeType: "multipart/alternative",
+          parts: [
+            { mimeType: "text/html", body: { data: b64url("<p>ignored</p>") } },
+            { mimeType: "text/plain", body: { data: b64url("the real body") } },
+          ],
+        },
+      ],
+    };
+    expect(pickPlainText(tree)).toBe("the real body");
+  });
+
+  test("a top-level text/plain body (no parts) decodes", () => {
+    expect(pickPlainText({ mimeType: "text/plain", body: { data: b64url("flat body") } })).toBe("flat body");
+  });
+
+  test("base64url alphabet (- and _) decodes — NOT standard base64", () => {
+    // "??>>" base64-encodes to "Pz8+Pg==" → base64url "Pz8-Pg". Decoding it as standard base64
+    // would mangle the bytes; this pins the url-safe alphabet (research Pitfall 4).
+    expect(pickPlainText({ mimeType: "text/plain", body: { data: "Pz8-Pg" } })).toBe("??>>");
+  });
+
+  test("HTML-only tree → null (the caller falls back to the snippet; we NEVER parse HTML)", () => {
+    const tree = {
+      mimeType: "multipart/alternative",
+      parts: [{ mimeType: "text/html", body: { data: b64url("<p>newsletter</p>") } }],
+    };
+    expect(pickPlainText(tree)).toBeNull();
+  });
+
+  test("a text/plain leaf with no data → null (never crashes)", () => {
+    expect(pickPlainText({ mimeType: "multipart/mixed", parts: [{ mimeType: "text/plain", body: {} }] })).toBeNull();
+  });
+});
+
+// ── 03.7-02: the inbox read plane over the fixture seam (SC-3) ─────────────────────────────────
+// The fixture check runs BEFORE freshAccessToken, so these exercise listInbox/fetchInboxBodies
+// end-to-end with NO Gmail token and no network — the same seam the offline E2E and the eval
+// injection probe ride.
+
+describe("listInbox (fixture seam + refs-only audit)", () => {
+  test("a seeded fixture serves messages with fixture:true and NO token", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: true,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.listInbox, {
+      tenantId: TENANT,
+      correlationId: "cid-1",
+      range: "today",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.fixture).toBe(true);
+    expect(res.messages.length).toBeGreaterThan(0);
+    // Mapped to the @pikar/core InboxMessageMeta shape — and the fixture's `body` must NOT ride along.
+    const m = res.messages[0]!;
+    expect(Object.keys(m).sort()).toEqual(["from", "id", "internalDate", "isUnread", "snippet", "subject"]);
+    expect(typeof m.internalDate).toBe("number");
+  });
+
+  test("exactly ONE mailbox.listed audit event, payload refs-only ({ range, resultCount })", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: true,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.listInbox, {
+      tenantId: TENANT,
+      correlationId: "cid-2",
+      range: "today",
+    });
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const listed = rows.filter((r) => r.eventType === "mailbox.listed");
+    expect(listed, "listInbox must write exactly one mailbox.listed event").toHaveLength(1);
+    const payload = listed[0]!.payload as Record<string, unknown>;
+    // The WHOLE payload — a sender/subject/snippet must be structurally absent (CLAUDE.md §4/SC-3).
+    expect(Object.keys(payload).sort()).toEqual(["range", "resultCount"]);
+    expect(payload.range).toBe("today");
+    expect(payload.resultCount).toBe(res.ok ? res.messages.length : -1);
+    expect(JSON.stringify(payload)).not.toMatch(/attacker@evil\.example|@example\.com/);
+  });
+
+  test("no fixture + no token → not_connected, and NO audit event is written", async () => {
+    const t = harness();
+    const res = await t.action(internal.gmail.listInbox, {
+      tenantId: "tenant_with_no_mailbox",
+      correlationId: "cid-3",
+      range: "today",
+    });
+    expect(res).toEqual({ ok: false, reason: "not_connected" });
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(rows.filter((r) => r.eventType === "mailbox.listed"), "a failed list must not audit").toHaveLength(0);
+  });
+});
+
+describe("fetchInboxBodies (fixture bodies, truncated)", () => {
+  test("serves the fixture bodies for the requested ids only", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: true,
+      baseMs: BASE_MS,
+    });
+    const list = await t.action(internal.gmail.listInbox, {
+      tenantId: TENANT,
+      correlationId: "cid-4",
+      range: "today",
+    });
+    if (!list.ok) throw new Error("fixture list failed");
+    const ids = list.messages.slice(0, 2).map((m) => m.id);
+    const res = await t.action(internal.gmail.fetchInboxBodies, { tenantId: TENANT, ids });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.bodies.map((b) => b.id)).toEqual(ids);
+    expect(res.bodies.every((b) => b.body.length > 0)).toBe(true);
+  });
+
+  test("the canonical fixture carries the injection needle in a BODY (the eval probe's payload)", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    const list = await t.action(internal.gmail.listInbox, {
+      tenantId: TENANT,
+      correlationId: "cid-5",
+      range: "week",
+    });
+    if (!list.ok) throw new Error("fixture list failed");
+    const res = await t.action(internal.gmail.fetchInboxBodies, {
+      tenantId: TENANT,
+      ids: list.messages.map((m) => m.id),
+    });
+    if (!res.ok) throw new Error("fixture bodies failed");
+    expect(res.bodies.some((b) => b.body.includes("attacker@evil.example"))).toBe(true);
+    // …and the needle lives ONLY in a body — never in a header/snippet the list surfaces.
+    expect(JSON.stringify(list.messages)).not.toMatch(/attacker@evil\.example/);
+  });
+
+  test("every body is truncated to BODY_TRUNCATE_CHARS", async () => {
+    const t = harness();
+    // A raw insert (audit.test.ts precedent) — the canonical fixture is deliberately short, so
+    // the truncation edge needs its own oversized row.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("inboxFixtures", {
+        tenantId: TENANT,
+        offlineDigest: true,
+        messages: [
+          {
+            id: "long-1",
+            from: "Verbose <v@example.com>",
+            subject: "War and Peace",
+            snippet: "long",
+            internalDate: BASE_MS,
+            body: "x".repeat(BODY_TRUNCATE_CHARS + 500),
+          },
+        ],
+      });
+    });
+    const res = await t.action(internal.gmail.fetchInboxBodies, { tenantId: TENANT, ids: ["long-1"] });
+    if (!res.ok) throw new Error("fixture bodies failed");
+    expect(res.bodies[0]!.body).toHaveLength(BODY_TRUNCATE_CHARS);
+  });
+
+  test("no fixture + no token → not_connected (never throws out of the tool)", async () => {
+    const t = harness();
+    const res = await t.action(internal.gmail.fetchInboxBodies, {
+      tenantId: "tenant_with_no_mailbox",
+      ids: ["x"],
+    });
+    expect(res).toEqual({ ok: false, reason: "not_connected" });
+  });
+});
+
+describe("seedInboxFixture (deterministic + idempotent)", () => {
+  test("re-seeding replaces rather than appends (ONE row per tenant)", async () => {
+    const t = harness();
+    const seed = () =>
+      t.mutation(internal.smoke.seedInboxFixture, { tenantId: TENANT, offlineDigest: true, baseMs: BASE_MS });
+    await seed();
+    await seed();
+    const rows = await t.run((ctx) => ctx.db.query("inboxFixtures").collect());
+    expect(rows, "seedInboxFixture must be idempotent").toHaveLength(1);
+  });
+
+  test("the fixed message set spans today/yesterday/this week and marks one unread", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: true,
+      baseMs: BASE_MS,
+    });
+    const row = await t.run((ctx) => ctx.db.query("inboxFixtures").first());
+    const messages = row!.messages;
+    expect(messages).toHaveLength(5);
+    expect(new Set(messages.map((m) => m.id)).size, "fixture ids must be unique").toBe(5);
+    expect(messages.every((m) => m.internalDate <= BASE_MS), "no fixture message may post-date the clock").toBe(true);
+    expect(messages.some((m) => m.isUnread === true)).toBe(true);
+    // Deterministic: seeded at a fixed baseMs, the buckets are pinned.
+    const dayBefore = BASE_MS - 24 * 3_600_000;
+    expect(messages.filter((m) => m.internalDate > dayBefore).length, "today's messages").toBe(3);
+    expect(messages.some((m) => m.internalDate < BASE_MS - 2 * 24 * 3_600_000), "an older-in-week message").toBe(true);
+  });
+
+  test("fixtures are tenant-scoped (another tenant's list stays token-gated)", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: true,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.listInbox, {
+      tenantId: "some_other_tenant",
+      correlationId: "cid-6",
+      range: "today",
+    });
+    expect(res).toEqual({ ok: false, reason: "not_connected" });
   });
 });

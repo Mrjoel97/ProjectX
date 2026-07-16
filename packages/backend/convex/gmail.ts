@@ -10,6 +10,7 @@
 // (retry) and a dead refresh token routes to awaiting_reauth WITHOUT throwing (the
 // approved draft is preserved and delivery resumes after the user reconnects).
 import { v } from "convex/values";
+import { BODY_TRUNCATE_CHARS, type InboxMessageMeta } from "@pikar/core";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -303,5 +304,199 @@ export const search = internalAction({
 
     await audit(messages.length);
     return { ok: true, records };
+  },
+});
+
+// ── Inbox read plane for the briefing (CKPT-04 / SC-3) ─────────────────────────────────────
+//
+// Two GET-only actions. EVERYTHING here is read-only by construction: no /modify, no /trash, no
+// label write — the only POSTs in this module remain TOKEN_ENDPOINT (refresh) and SEND_ENDPOINT
+// (the governed send), which llmRedaction.test.ts asserts statically.
+//
+// Both check the `inboxFixtures` seam BEFORE the token, so the offline E2E and the eval injection
+// probe run with no mailbox. Real tenants never have fixture rows (smoke.seedInboxFixture is the
+// only writer and it is internal), so the seam cannot shadow a live mailbox.
+
+/** Hard cap on a single list (Gmail maxResults). Bounds quota AND the Promise.all fan-out below. */
+const INBOX_LIST_CAP = 50;
+
+/** Relative window — deliberately NOT after:/before:, whose calendar dates are timezone-ambiguous.
+ *  Over-fetching is harmless: @pikar/core's pure `bucket()` owns the real 7-day boundary. */
+const INBOX_QUERY = "in:inbox newer_than:7d";
+
+type ListInboxResult =
+  | { ok: true; messages: InboxMessageMeta[]; fixture: boolean }
+  | { ok: false; reason: "not_connected" | "reauth" };
+
+type FetchBodiesResult =
+  | { ok: true; bodies: { id: string; body: string }[] }
+  | { ok: false; reason: "not_connected" | "reauth" };
+
+/** Gmail's recursive MessagePart tree (only the fields we read — `body.data` is base64url). */
+export type MessagePart = {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: MessagePart[];
+};
+
+/**
+ * The first `text/plain` leaf of a MessagePart tree, base64url-decoded — or null when the message
+ * has none (HTML-only newsletters), which makes the caller fall back to Gmail's own snippet.
+ *
+ * We NEVER parse HTML: a tag-stripper is a tarpit and the snippet is already Google's plain-text
+ * gist. Exported pure so it is unit-testable without a mailbox. Note `base64url`, not `base64` —
+ * Gmail's alphabet is url-safe and decoding it as standard base64 mangles the bytes.
+ */
+export function pickPlainText(part: MessagePart): string | null {
+  if (part.mimeType === "text/plain" && part.body?.data) {
+    return Buffer.from(part.body.data, "base64url").toString("utf8");
+  }
+  for (const child of part.parts ?? []) {
+    const found = pickPlainText(child);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
+ * List the inbox as headers + snippet + internalDate + unread flag — NEVER bodies (that is
+ * fetchInboxBodies' job, for the digest-selected few only: snippet-first is a locked decision).
+ * Tenant-scoped through freshAccessToken. Zero mailbox writes.
+ *
+ * Writes exactly ONE refs-only `mailbox.listed` audit event per successful list: the `range`
+ * LITERAL (a caller-supplied enum — never user prose) plus a count. Never a sender, subject or
+ * snippet (CLAUDE.md §4 / SC-3). A failed list audits nothing — no read happened.
+ *
+ * Explicit return type (guidelines §96) — see SendResult.
+ */
+export const listInbox = internalAction({
+  args: {
+    tenantId: v.string(),
+    correlationId: v.string(),
+    range: v.string(),
+    maxResults: v.optional(v.number()),
+  },
+  handler: async (ctx, { tenantId, correlationId, range, maxResults }): Promise<ListInboxResult> => {
+    // ONE refs-only audit event per list, shared by the fixture + live paths (mirrors `search`).
+    const audit = (resultCount: number) =>
+      ctx.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId,
+        eventType: "mailbox.listed",
+        actor: "system",
+        payload: { range, resultCount },
+      });
+
+    // FIXTURE FIRST — before the token, so a fixture tenant needs no mailbox at all.
+    const fixture = await ctx.runQuery(internal.smoke.getInboxFixture, { tenantId });
+    if (fixture) {
+      // Map explicitly: the fixture row carries `body`, and it must NOT ride into the meta shape.
+      const messages: InboxMessageMeta[] = fixture.messages.map((m) => ({
+        id: m.id,
+        from: m.from,
+        subject: m.subject,
+        snippet: m.snippet,
+        internalDate: m.internalDate,
+        isUnread: m.isUnread ?? false,
+      }));
+      await audit(messages.length);
+      return { ok: true, messages, fixture: true };
+    }
+
+    const access = await freshAccessToken(ctx, tenantId);
+    if (!access.ok) {
+      // Same non-throwing reauth signal `search` uses — the caller lights the banner and the
+      // agent recovers conversationally. NO audit: nothing was read.
+      return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
+    }
+
+    const cap = Math.min(maxResults ?? INBOX_LIST_CAP, INBOX_LIST_CAP);
+    const listRes = await fetch(
+      `${MESSAGES_ENDPOINT}?maxResults=${cap}&q=${encodeURIComponent(INBOX_QUERY)}`,
+      { headers: { Authorization: `Bearer ${access.token}` } },
+    );
+    // messages.list returns { id, threadId } ONLY — every field below needs a per-id get.
+    const listBody = (await listRes.json()) as { messages?: { id: string }[] };
+    const ids = listBody.messages ?? [];
+
+    // format=metadata rides the top-level snippet/internalDate/labelIds for free — no body is
+    // fetched here. ponytail: Promise.all over the ≤50 cap costs ~250 quota units against a
+    // 6,000/min/user budget (list=5, get=5); a p-limit is the upgrade only if the cap rises.
+    const messages: InboxMessageMeta[] = await Promise.all(
+      ids.map(async ({ id }) => {
+        const res = await fetch(
+          `${MESSAGES_ENDPOINT}/${id}?format=metadata` +
+            META_HEADERS.map((h) => `&metadataHeaders=${h}`).join(""),
+          { headers: { Authorization: `Bearer ${access.token}` } },
+        );
+        const msg = (await res.json()) as {
+          snippet?: string;
+          internalDate?: string;
+          labelIds?: string[];
+          payload?: { headers?: { name: string; value: string }[] };
+        };
+        const headers = toHeaderRecord(msg.payload?.headers ?? []);
+        return {
+          id,
+          from: headers.from ?? "",
+          subject: headers.subject ?? "",
+          snippet: msg.snippet ?? "",
+          // internalDate is a STRING int64 of epoch-ms in the Gmail API — Number() it or every
+          // downstream bucket comparison silently compares strings.
+          internalDate: Number(msg.internalDate ?? 0),
+          isUnread: msg.labelIds?.includes("UNREAD") ?? false,
+        };
+      }),
+    );
+
+    await audit(messages.length);
+    return { ok: true, messages, fixture: false };
+  },
+});
+
+/**
+ * Fetch the plain-text bodies of the digest-SELECTED messages only (the cap is @pikar/core's
+ * BRIEFING_BODY_CAP, applied by the caller). Every body is truncated to BODY_TRUNCATE_CHARS —
+ * a gist never needs more, and it bounds both cost and the digest's eval-cap blind spot.
+ *
+ * No audit here: the briefing's own `briefing.created` event covers the operation, and a second
+ * event per body would be noise. Read-only; GET only. Explicit return type (guidelines §96).
+ */
+export const fetchInboxBodies = internalAction({
+  args: { tenantId: v.string(), ids: v.array(v.string()) },
+  handler: async (ctx, { tenantId, ids }): Promise<FetchBodiesResult> => {
+    const truncate = (s: string) => s.slice(0, BODY_TRUNCATE_CHARS);
+
+    // FIXTURE FIRST (same seam + ordering as listInbox).
+    const fixture = await ctx.runQuery(internal.smoke.getInboxFixture, { tenantId });
+    if (fixture) {
+      const byId = new Map(fixture.messages.map((m) => [m.id, m]));
+      return {
+        ok: true,
+        // Preserve the caller's id order; an unknown id yields nothing rather than an empty body.
+        bodies: ids.flatMap((id) => {
+          const m = byId.get(id);
+          return m ? [{ id, body: truncate(m.body) }] : [];
+        }),
+      };
+    }
+
+    const access = await freshAccessToken(ctx, tenantId);
+    if (!access.ok) {
+      return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
+    }
+
+    const bodies = await Promise.all(
+      ids.map(async (id) => {
+        const res = await fetch(`${MESSAGES_ENDPOINT}/${id}?format=full`, {
+          headers: { Authorization: `Bearer ${access.token}` },
+        });
+        const msg = (await res.json()) as { snippet?: string; payload?: MessagePart };
+        // No text/plain leaf (HTML-only) → Gmail's snippet. Never crash, never parse HTML.
+        const text = (msg.payload ? pickPlainText(msg.payload) : null) ?? msg.snippet ?? "";
+        return { id, body: truncate(text) };
+      }),
+    );
+    return { ok: true, bodies };
   },
 });
