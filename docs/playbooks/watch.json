@@ -19,6 +19,7 @@
     "packages/backend/convex/http.ts",
     "packages/core/src/emailIntent.ts",
     "packages/core/src/documentGen.ts",
+    "packages/core/src/briefing.ts",
     "packages/backend/scripts/run-smoke-fanout.mjs"
   ],
   "audit-dead-letter.md": [
