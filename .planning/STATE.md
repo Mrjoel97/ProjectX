@@ -472,7 +472,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+1 pending:
+- [Port koda-stack content prompts into skills registry](todos/pending/2026-07-16-port-koda-stack-content-prompts-into-skills-registry.md) — harvest MIT-licensed prompt text (brief/script/publish/repurpose) into `packages/contracts/skills/` + seedSkills as a future content-creation phase (area: content)
 
 ### Blockers/Concerns
 
