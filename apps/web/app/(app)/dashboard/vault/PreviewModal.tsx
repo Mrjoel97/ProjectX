@@ -171,6 +171,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               style={{
                 margin: 0,
                 flex: 1,
+                minWidth: 0, // let a long unbroken filename shrink + wrap instead of pushing past the panel
                 fontSize: "1.15rem",
                 fontWeight: 700,
                 lineHeight: 1.3,

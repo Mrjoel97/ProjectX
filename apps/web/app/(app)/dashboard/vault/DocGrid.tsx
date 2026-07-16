@@ -210,7 +210,9 @@ export function DocGrid({
               >
                 <FileTextIcon />
               </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
+              {/* maxWidth caps the cross-axis shrink-to-fit in grid (column) view — without it a
+                  nowrap title sizes this span to the full filename width and paints past the card. */}
+              <span style={{ flex: 1, minWidth: 0, maxWidth: "100%" }}>
                 <span
                   style={{
                     display: "block",
