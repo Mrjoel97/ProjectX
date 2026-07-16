@@ -23,6 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3.5: Deferred Send** (INSERTED) - "Send this at 4 AM": a plan carries a future send time, shown absolute on the PLAN card before the single Approve; execution scheduled through the same governed fan-out, cancellable until it fires (recurring sends stay out of v1 â `.planning/design/scheduled-send.md`)
 - [x] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness (completed 2026-07-15)
 - [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
+- [ ] **Phase 3.8: Vault Document Extraction** (INSERTED) - Wire PDF/DOCX/XLSX/PPTX/CSV/image (OCR) extraction into the vault's `vaultIngestText` seam so non-text uploads become searchable instead of sitting at `pending_extraction` forever
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
@@ -241,7 +242,23 @@ Plans:
   3. Reads are capped and snippet-first (full bodies only for digest-selected messages), audited refs/ids/counts only, with zero mailbox writes and zero sends; a briefing-seeded action goes through the normal conversation → PLAN → human Approve gate.
   4. A "Needs you" triage section surfaces needsReply/deadline items as suggestions (never actions), from the digest schema.
   5. The 3.6 golden set gains briefing cases including an injection-probe fixture: an email body containing send/forward instructions yields zero tool actions and no `proposePlan`.
-**Plans**: TBD (suggested 4 plans / 3 waves — see the design record)
+**Plans**: 5 plans in 5 waves (planned 2026-07-17; sequential — plans share watch.json/playbook files, and the phase close needs its own gate-cycle plan per the 3.6 precedent)
+
+Plans:
+- [ ] 03.7-01-PLAN.md — Pure @pikar/core briefing module (TDD): Intl time-bucketing + selection cap + digest index-join (Wave 1)
+- [ ] 03.7-02-PLAN.md — briefings/inboxFixtures tables + gmail listInbox/fetchInboxBodies (fixture-first, refs-only mailbox.listed, zero-write scans) + seedInboxFixture (Wave 2)
+- [ ] 03.7-03-PLAN.md — inbox-digest skill (gated 5-file mirror) + toolless digestInbox + listInbox/briefInbox tools + SMOKE brief op + invariant enforcement + agent-runtime invariant 10 (Wave 3)
+- [ ] 03.7-04-PLAN.md — BRIEFING card (plan-independent CardList) + offline cockpit-briefing E2E (Wave 4)
+- [ ] 03.7-05-PLAN.md — Golden-set briefing fixtures 16–18 (incl. injection probe) + briefingPresent runner key + live cockpit-agent gate cycle + human-verify (Wave 5)
+
+### Phase 3.8: Vault Document Extraction (INSERTED)
+**Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
+**Depends on**: Phase 5 (vault + `vaultIngestText` late-text seam), Phase 4 (extraction engine — Path A hosted OCR/extraction, `@pikar/extraction`)
+**Requirements**: TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 03.8 to break down)
 
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
