@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.7-01-PLAN.md
+last_updated: "2026-07-16T22:23:27.836Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 18
+  completed_phases: 10
+  total_plans: 81
+  completed_plans: 74
+  percent: 91
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
 last_updated: "2026-07-15T18:21:00.404Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
-  total_phases: 17
+  [█████████░] 91%
   completed_phases: 10
   total_plans: 76
   completed_plans: 73
@@ -212,6 +228,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
+Phase: 3.7 (Inbox Briefing) — IN PROGRESS. Wave 1 of 5 COMPLETE, 1/5 plans complete.
+Plan: 03.7-01 COMPLETE (Wave 1 — the pure FOUNDATION for CKPT-04; TDD, zero Convex surface touched, nothing consumes it yet). NEW `packages/core/src/briefing.ts` lands SC-1's locked decision in code — TIME GROUPING IS PURE CODE, NEVER LLM OUTPUT (ADR-004): `dayKey(ms, tz)` (Intl `en-CA` → YYYY-MM-DD in an IANA zone), `bucket(msgTsMs, nowMs, tz)` → today/yesterday/thisWeek/null (null = outside the 7-day window), `selectForDigest(messages, cap = BRIEFING_BODY_CAP)` (recency-first, non-mutating, 25) and `joinDigest(selected, items, nowMs, tz)` — the trust boundary that welds the toolless digest's INDEX-keyed `{index, gist, category, needsReply, deadline?}` onto the CODE-owned sender/ts/bucket, dropping out-of-range/non-integer/duplicate indexes so the model structurally cannot invent a briefing row or own a timestamp (a rogue model-supplied sender/ts/bucket is ignored — asserted). Constants BRIEFING_BODY_CAP=25 / BODY_TRUNCATE_CHARS=2000. DECISION (research Open Q 4, resolved): yesterday derives from UTC math on today's day-key (`previousDayKey`), NOT the naive `dayKey(now - 86400000)` — the day after a spring-forward is 23 local hours long so the naive form skips a calendar day; pinned by a regression test at LA 2026-03-09 00:30 PDT where naive yields 03-07 vs the true 03-08 (research called this an acceptable ceiling; it cost 3 lines to close). Future-dated msg (clock skew) → today, marked ponytail:. 22 new tests (fixed clocks east Asia/Tokyo + west America/Los_Angeles, the local-midnight boundary in BOTH directions, month 03-01→02-28 + year 01-01→12-31 rollover, DST, 6d/8d window, cap, index-join drops) — `@pikar/core` 99/99 green, core+web typecheck clean, check-playbooks exit 0, ZERO new deps (Intl is the whole date library, ponytail rung 3; barrel scan: 58 unique exports, no collisions). Exported from the core barrel; `packages/core/src/briefing.ts` watch-registered under cockpit.md + playbook Last verified → 03.7-01. Commits 4a695b5 (T1 RED), b55985f (T2 GREEN), 3f99624 (T2 docs). NO deviations. NOTE: CKPT-04 stays PENDING in REQUIREMENTS.md — it spans plans 01-05 (tools/table/card/evals still to come), so marking it complete now would be false. KNOWN/OUT-OF-SCOPE: `pnpm --filter @pikar/backend typecheck` exits 2 — all 29 errors confined to .test.ts, zero in source, zero mentioning briefing (the pre-existing noise documented at 03.6-04). NEXT: Wave 2 (03.7-02 — briefings/inboxFixtures tables + gmail listInbox/fetchInboxBodies + seedInboxFixture).
+
 Phase: 3.6 (Agent Eval Gate) — IN PROGRESS. Waves 1-2 COMPLETE, 3/5 plans complete.
 
 Phase: 3.6 (Agent Eval Gate) — Plan: 03.6-03 COMPLETE (Wave 2 — EVAL-01 pin + cost threading). The two eval-runner seams thread the agent loop in `llm.ts`: (1) `skillVersions` optional version-pin on `runCockpitAgent` (internal-only — the model can never supply it): a pinned cockpit-agent version loads via `getSkillVersion` as the system prompt and the pin threads runCockpitAgent → runAgentLoop → buildCockpitTools (append-only 5th param) → renderAndStore's `draftDocument` call (scalar `skillVersion` arg), so `pnpm eval:golden --skill name@version` (plan 04) evaluates the CANDIDATE body it records evidence against (Pitfall 2 closed); a missing (name, version) FAILS CLOSED with NO_SUCH_SKILL_VERSION — never a silent fallback to active; no pin = byte-identical. (2) `costUsd` in the loop return (Pattern 4): `recordModelSpend` returns the priced USD, `runAgentLoop` sums both attempts into one accumulator, `runCockpitAgent` propagates (SMOKE path 0, blocked path absent) — the runner's hard cost-cap read without touching the global rate-limiter window. Shims (`__runCockpitAgentWithScript` returns the loaded skillVersion, `__invokeCockpitTool`) extended for offline pin tests. Zero caller changes (clientContext append-only precedent). runCockpitAgent.test 9/9, cockpitTools+llmRedaction 43/43, source typecheck clean, check-playbooks exit 0; cockpit.md Last verified → 03.6-03. Commits 5824cd9/48f57ed (T1 TDD), d404a77/5f06e2f (T2 TDD+docs). NO deviations. NEXT: Wave 3 (03.6-04 — the eval runner), then 03.6-05.
@@ -335,6 +354,7 @@ Progress: [█████████░] 94%
 | Phase 03.6 P03 | 10min | 2 tasks | 3 files |
 | Phase 03.6 P04 | 18min | 3 tasks | 21 files |
 | Phase 03.6 P05 | ~85min | 2 tasks | 2 files |
+| Phase 03.7 P01 | 12m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -441,6 +461,9 @@ Recent decisions affecting current work:
 - [Phase 03.6]: Kept cockpit-agent v6 (gate-cycle candidate, trailing-newline edit) live-active with recorded eval evidence; mirror committed 6f0274f so repo matches deployment
 - [Phase 03.6]: Eval runs require a persistent npx convex dev process — per-command cold starts fail cases with InternalServerError (operational prerequisite, not a harness bug)
 - [Phase 03.6]: 03-happy-group one-off failure judged a nondeterministic model flake (passed all subsequent runs) — no fixture tightening, watch on future runs
+- [Phase 03.7]: Yesterday derives from UTC math on today's day-key (previousDayKey), NOT dayKey(now - 86400000): the day after a spring-forward is 23 local hours long so the naive form skips a calendar day (pinned by an LA 2026-03-09 regression test). Resolves research Open Q 4.
+- [Phase 03.7]: joinDigest drops out-of-range, non-integer AND duplicate indexes; sender/ts/bucket always read from the fetched message, never the digest item — the ADR-004 trust boundary in code.
+- [Phase 03.7]: CKPT-04 stays Pending in REQUIREMENTS.md until 03.7-05 — it spans all 5 plans; only the pure foundation shipped in 03.7-01.
 
 ### Roadmap Evolution
 
@@ -459,8 +482,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-15T18:05:08.602Z
-Stopped at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
+Last session: 2026-07-16T22:22:02.830Z
+Stopped at: Completed 03.7-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

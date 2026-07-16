@@ -245,7 +245,7 @@ Plans:
 **Plans**: 5 plans in 5 waves (planned 2026-07-17; sequential — plans share watch.json/playbook files, and the phase close needs its own gate-cycle plan per the 3.6 precedent)
 
 Plans:
-- [ ] 03.7-01-PLAN.md — Pure @pikar/core briefing module (TDD): Intl time-bucketing + selection cap + digest index-join (Wave 1)
+- [x] 03.7-01-PLAN.md — Pure @pikar/core briefing module (TDD): Intl time-bucketing + selection cap + digest index-join (Wave 1)
 - [ ] 03.7-02-PLAN.md — briefings/inboxFixtures tables + gmail listInbox/fetchInboxBodies (fixture-first, refs-only mailbox.listed, zero-write scans) + seedInboxFixture (Wave 2)
 - [ ] 03.7-03-PLAN.md — inbox-digest skill (gated 5-file mirror) + toolless digestInbox + listInbox/briefInbox tools + SMOKE brief op + invariant enforcement + agent-runtime invariant 10 (Wave 3)
 - [ ] 03.7-04-PLAN.md — BRIEFING card (plan-independent CardList) + offline cockpit-briefing E2E (Wave 4)
@@ -255,7 +255,7 @@ Plans:
 **Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
 **Depends on**: Phase 5 (vault + `vaultIngestText` late-text seam), Phase 4 (extraction engine — Path A hosted OCR/extraction, `@pikar/extraction`)
 **Requirements**: TBD
-**Plans:** 0 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 03.8 to break down)
@@ -357,7 +357,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
-| 3.7 Inbox Briefing (INSERTED) | 0/TBD | Not started | - |
+| 3.7 Inbox Briefing (INSERTED) | 1/5 | In Progress|  |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
