@@ -202,6 +202,58 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 
+  // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
+  // New tables only → no migration (prior-phase discipline).
+
+  // The briefing content plane — the read-only sibling of `plans`. Holds the gists the
+  // BRIEFING card renders, per cockpit thread. Raw mailbox content (sender/gist) lives HERE
+  // and NEVER in an audit/DLQ payload (CLAUDE.md §4 — the audit carries counts + the range
+  // literal only). `bucket`/`sender`/`ts` are CODE-owned structural facts welded on by
+  // @pikar/core's joinDigest — the model emits only the gist (ADR-004). Rows are append-only
+  // per thread (a re-brief inserts; byThread reads the latest), and are vault-ingestable
+  // later by construction (plain text, tenant-scoped) — nothing is built for that now.
+  briefings: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(), // renders the BRIEFING card for this thread, like plans
+    range: v.string(), // the requested range literal (enum-ish; caller-supplied, never user prose)
+    tz: v.string(), // the IANA zone the buckets were computed in (display honesty)
+    items: v.array(
+      v.object({
+        bucket: v.union(v.literal("today"), v.literal("yesterday"), v.literal("thisWeek")),
+        sender: v.string(),
+        ts: v.number(), // Gmail internalDate ms (code-owned, never model-owned)
+        gist: v.string(),
+        category: v.string(),
+        needsReply: v.boolean(),
+        deadline: v.optional(v.string()), // a model-extracted SUGGESTION string — rendered, never parsed into an action (SC-4)
+        isUnread: v.optional(v.boolean()),
+      }),
+    ),
+    listedCount: v.number(), // how many the list returned → "summarized N of M" cap honesty
+    createdAt: v.number(),
+  }).index("by_thread", ["tenantId", "threadId"]),
+
+  // The test seam that lets a briefing run with NO Gmail token: gmail.listInbox /
+  // fetchInboxBodies check this table BEFORE freshAccessToken and serve these messages when a
+  // row exists. Written ONLY by smoke.seedInboxFixture (an internalMutation) — real tenants
+  // never have rows, so the live path is unreachable from a fixture and vice versa. Powers
+  // both the offline Playwright E2E and the eval injection probe (whose tenant has no mailbox).
+  inboxFixtures: defineTable({
+    tenantId: v.string(),
+    offlineDigest: v.boolean(), // true = E2E (the digest short-circuits offline); false = eval (a LIVE digest runs, so the injection probe is real)
+    messages: v.array(
+      v.object({
+        id: v.string(),
+        from: v.string(),
+        subject: v.string(),
+        snippet: v.string(),
+        internalDate: v.number(),
+        isUnread: v.optional(v.boolean()),
+        body: v.string(),
+      }),
+    ),
+  }).index("by_tenant", ["tenantId"]),
+
   // File metadata only — the agent sees filename/mimeType/size, never contents.
   // `extracted` is filled by Phase 4 (INTK-02). requestId set after the request insert.
   attachments: defineTable({
