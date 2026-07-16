@@ -445,6 +445,7 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - Phase 03.2.1 (Agent-Driven Cockpit) inserted after Phase 3.2, before Phase 3.3 (2026-07-12). Reshapes the cockpit from the deterministic `emailIntent` FSM to an Executive Agent governed tool-loop (Approach A + §2-D index/label reasoning + clean cutover). Reshapes AGNT-01/AGNT-02 (no new ID). Blocks 3.3 (attachment builds on the agent engine). Design: `.planning/design/agent-driven-cockpit.md`. Vision capabilities #2 (campaign approval) + #3 (standing pre-authorized rules) deferred to a later milestone.
+- Phase 3.8 (Vault Document Extraction) inserted after Phase 3.7 (2026-07-17): wire PDF/DOCX/XLSX/PPTX/CSV/image (OCR) extraction into the vault's `vaultIngestText` late-text seam so non-text uploads become searchable instead of sitting at `pending_extraction` forever (URGENT — user-reported gap: vault PDF uploads show "pending" but no workflow ever runs; the Phase 4 extraction engine exists but nothing calls the vault seam)
 
 ### Pending Todos
 
