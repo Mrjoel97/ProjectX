@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 03.7-01-PLAN.md
-last_updated: "2026-07-16T22:23:27.836Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Completed 03.7-02-PLAN.md
+last_updated: "2026-07-17T02:10:00.000Z"
+last_activity: "2026-07-17 — Phase 3.7 Inbox Briefing, Wave 2: 03.7-02 executed (the gmail READ PLANE + briefing content plane, CKPT-04/SC-3 — data layer only, nothing model-facing yet). gmail.ts gained two GET-only internalActions: listInbox (capped <=50 over the RELATIVE `in:inbox newer_than:7d` — never after:/before:, tz-ambiguous; per-id format=metadata gets riding top-level snippet/internalDate/labelIds; Number()s the STRING internalDate; unread free from labelIds.includes('UNREAD'); ONE refs-only mailbox.listed audit { range, resultCount }; a failed list audits NOTHING) and fetchInboxBodies (format=full for the digest-selected few only, via the exported pure pickPlainText — recursive parts walk to the first text/plain leaf, base64url NOT base64 — snippet fallback for HTML-only mail, never parses HTML, every body truncated to BODY_TRUNCATE_CHARS). New briefings table + briefings.ts adapter (append-only per thread; latest-wins byThread tenantQuery; writes NO log-plane row, mirroring plans.ts) + inboxFixtures table + smoke.seedInboxFixture/getInboxFixture (5 fixed deterministic messages incl. the injection body carrying the attacker@evil.example needle; idempotent; checked BEFORE freshAccessToken — the seam the offline E2E and the eval injection probe ride, since the eval tenant has no mailbox and the runner rejects SMOKE:: turns). llmRedaction.test.ts gained 6 scans: mailbox.listed refs-only; no /modify|/trash|/untrash|/batchModify|/labels endpoint; POST targets+count EXACTLY TOKEN_ENDPOINT+SEND_ENDPOINT; fixture-before-token source ORDER in both actions; briefings.ts log-plane-free. Every new scan MUTATION-CHECKED (a smuggled /modify POST fails both zero-write scans; dropping truncation and leaking a `from` into the audit payload each fail their test). 46/46 green (gmail 24, llmRedaction 18, briefings 4); source typecheck clean; web typecheck clean; check-playbooks exit 0; grep proof POST count = 2. Commits f0cdc13 (T1 RED), b02892d (T1 GREEN), 8da5f5f (T2), a5945f1 (T3 scans + §9 close). ONE deviation (Rule 3 — registered the auditCounts aggregate component in gmail.test.ts; convex-test threw 'component not registered' since listInbox audits; cockpitTools.test.ts pattern). HONESTY: Task 2 did NOT get a clean RED (impl landed before the first successful run) — the mutation checks are the substituted evidence. CKPT-04 stays Pending (data layer only). FULL SUITE 237/240: audit.test.ts = documented pre-existing red; cockpitDraft.test.ts passes in isolation (parallel-load flake); runCockpitAgent.test.ts = a 5000ms TEST TIMEOUT that REPRODUCES IDENTICALLY on base commit 9c75efc with my files reverted → machine-load, NOT a regression (it passed earlier this session under lighter load; watch it). NEXT: Wave 3 (03.7-03 — inbox-digest gated skill + toolless digestInbox + listInbox/briefInbox tools; note listInbox's `range` arg is v.string() and flows into the audit payload, so the tool inputSchema MUST constrain it to an enum, §4)."
 progress:
   total_phases: 18
   completed_phases: 10
   total_plans: 81
-  completed_plans: 74
-  percent: 91
+  completed_plans: 75
+  percent: 93
 ---
 
 ---
