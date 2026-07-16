@@ -4,6 +4,21 @@ milestone: v1.0
 milestone_name: milestone
 status: ready
 stopped_at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
+last_updated: "2026-07-15T18:21:00.404Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 17
+  completed_phases: 10
+  total_plans: 76
+  completed_plans: 73
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
+stopped_at: Completed 03.6-05-PLAN.md (Phase 3.6 human-verify APPROVED)
 last_updated: "2026-07-15T18:05:08.621Z"
 last_activity: "2026-07-15 — Phase 3.6 Agent Eval Gate COMPLETE (5/5): 03.6-05 phase gate executed, human-verify APPROVED. Task 1 offline sweep: skills/opsSignals/runCockpitAgent 45/45; full backend 214/215 (sole red = documented pre-existing audit.test.ts); web typecheck clean; runner --self-check + check-playbooks exit 0; all grep guards pass. Task 2 live proofs on local:local-joel_feruzi-pikar_ai_50c69: SC4 classifier archived (archiveSkill → archived:true; seedSkills does NOT resurrect; getActiveSkill throws NO_ACTIVE_SKILL). SC1 first live golden run 049b868e — 15/15, $0.0453 (cap $1.00), zero sends/mailbox reads. SC2 full gate cycle: trailing-newline edit → seedSkills published candidate v6 (v5 active) → activateSkill v6 REFUSED EVAL_GATE → pnpm eval:golden --skill cockpit-agent@6 run 1ce0cf85 15/15 $0.0462 (retried 12-attach-remove, DNS EAI_AGAIN) → refs-only evidence on v6 row → activateSkill v6 SUCCEEDED (v5 archived) → rollback activateSkill v5 (archived, no evidence) immediate success → rolled forward to v6; mirror committed 6f0274f, skills suite 30/30 after. SC3 /ops eval-signals card verified in browser (note: page is /ops via (app) group, NOT /dashboard/ops). Total live spend ~$0.16. OPERATIONAL: eval runs need a persistent npx convex dev (per-command cold starts → InternalServerError + banner-contaminated output); 03-happy-group flaked once (model chose individual mode) — judged nondeterministic, watch. NEXT: orchestrator verify_phase_goal for 3.6, then Phase 3.7 (inbox briefing) planning."
 progress:
