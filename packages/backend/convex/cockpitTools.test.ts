@@ -458,3 +458,113 @@ test("buildAgentContext shows immediate-on-approve when no sendAt is set", () =>
   const ctx = buildAgentContext({});
   expect(ctx).toMatch(/Send time:.*immediate/i);
 });
+
+// ── 03.7-03: the briefing tools under the TOOLLESS-INGESTION invariant (CKPT-04 / SC-2/3/4) ──────
+// briefInbox is the ONLY path that touches raw message bodies, and it hands the tool-bearing loop a
+// COUNTS-ONLY string — bodies AND gists stay out of the model's tool context. These are the RUNTIME
+// half of the SC-2 enforcement (llmRedaction.test.ts holds the static-scan half).
+//
+// The needle is `attacker@evil.example`, which the seeded fixture carries ONLY inside a message
+// BODY (smoke.seedInboxFixture, 03.7-02) — so its absence from a tool return / audit payload proves
+// no body text crossed that boundary. baseMs is pinned to PIN_CLOCK.nowMs (== llm.ts SMOKE_NOW_MS),
+// so the fixture's today/yesterday/this-week buckets are deterministic offline.
+const NEEDLE = "attacker@evil.example";
+
+async function setupBriefing(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const { t, planId } = await setup();
+  // offlineDigest: true → digestInbox short-circuits to a deterministic digest (zero model calls).
+  await t.mutation(internal.smoke.seedInboxFixture, {
+    tenantId: "t1",
+    offlineDigest: true,
+    baseMs: PIN_CLOCK.nowMs,
+  });
+  return { t, planId };
+}
+
+test("briefInbox returns a COUNTS-ONLY string — no body text reaches the loop (SC-2)", async () => {
+  const { t, planId } = await setupBriefing();
+  const reply = await callClock(t, planId, "briefInbox", { range: "today" });
+
+  // THE invariant: the loop-visible return carries counts, never a body (or even a gist).
+  expect(reply, "briefInbox leaked body text into the tool-bearing loop").not.toContain(NEEDLE);
+  expect(reply).toMatch(/Briefing ready: \d+ messages summarized/);
+  expect(reply).toMatch(/\d+ need attention/);
+  expect(reply).toMatch(/workspace panel/i);
+});
+
+test("briefInbox persists a briefings row whose sender/ts are CODE-owned (ADR-004, SC-4)", async () => {
+  const { t, planId } = await setupBriefing();
+  await callClock(t, planId, "briefInbox", { range: "today" });
+
+  const row = await t.run((ctx) => ctx.db.query("briefings").first());
+  expect(row, "no briefings row was written").not.toBeNull();
+  expect(row!.items.length).toBeGreaterThan(0);
+  expect(row!.tz).toBe("UTC");
+  expect(row!.range).toBe("today");
+
+  // sender + ts come from the FIXTURE META (joinDigest), never from the digest — the model has no
+  // schema field for either. The reply fixture is seeded at baseMs - 1h and asks for a reply.
+  const sarah = row!.items.find((i: { sender: string }) => i.sender.includes("Sarah Chen"));
+  expect(sarah, "the code-owned sender never made it onto the row").toBeDefined();
+  expect(sarah!.sender).toBe("Sarah Chen <sarah.chen@example.com>");
+  expect(sarah!.ts).toBe(PIN_CLOCK.nowMs - 3_600_000);
+  expect(sarah!.bucket).toBe("today");
+
+  // SC-4: the "Needs you" triage comes from the schema-validated digest (needsReply/deadline).
+  const needsYou = row!.items.filter((i: { needsReply: boolean }) => i.needsReply);
+  expect(needsYou.length).toBeGreaterThan(0);
+  expect(needsYou[0]!.deadline).toBeTruthy();
+});
+
+test("briefInbox writes exactly ONE refs-only briefing.created audit row (§4, SC-3)", async () => {
+  const { t, planId } = await setupBriefing();
+  await callClock(t, planId, "briefInbox", { range: "today" });
+
+  const created = await t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .filter((q) => q.eq(q.field("eventType"), "briefing.created"))
+      .collect(),
+  );
+  expect(created).toHaveLength(1);
+  // Counts + ids ONLY — a gist/sender/subject here would make the audit log a PII honeypot (§4).
+  expect(Object.keys(created[0]!.payload as object).sort()).toEqual([
+    "briefingId",
+    "digestedCount",
+    "listedCount",
+    "range",
+  ]);
+  expect(JSON.stringify(created[0]!.payload)).not.toContain(NEEDLE);
+});
+
+test("listInbox returns sender LABELS + subjects + a count — never an address, snippet or body", async () => {
+  const { t, planId } = await setupBriefing();
+  const reply = await callClock(t, planId, "listInbox", { range: "today" });
+
+  expect(reply).toContain("Sarah Chen"); // the display-name LABEL
+  expect(reply).toContain("Re: Q3 numbers"); // the subject
+  expect(reply).toMatch(/\d+ message/);
+  // §2-D: an address never crosses to the model, exactly as with recipients.
+  expect(reply, "listInbox leaked a raw address to the model").not.toContain(
+    "sarah.chen@example.com",
+  );
+  // Snippets are third-party content too — the strictest reading keeps them out of the loop.
+  expect(reply, "listInbox leaked a snippet").not.toContain("before the board call");
+  expect(reply, "listInbox leaked body text").not.toContain(NEEDLE);
+});
+
+test("both briefing tools degrade conversationally with no mailbox — fallback + reconnect, no throw", async () => {
+  // No fixture seeded and no Gmail token → the not_connected branch (resolveContacts precedent).
+  const { t, planId } = await setup();
+
+  for (const toolName of ["listInbox", "briefInbox"]) {
+    const reply = await callClock(t, planId, toolName, { range: "today" });
+    expect(reply, `${toolName} did not degrade conversationally`).toMatch(/mailbox/i);
+    expect(reply).toMatch(/reconnect/i);
+  }
+  // Nothing was read, so nothing may be persisted.
+  expect(await t.run((ctx) => ctx.db.query("briefings").first())).toBeNull();
+
+  const notifs = await t.run((ctx) => ctx.db.query("notifications").collect());
+  expect(notifs.filter((n) => n.kind === "gmail_reconnect").length).toBe(2);
+});
