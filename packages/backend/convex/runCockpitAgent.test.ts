@@ -10,18 +10,26 @@
 //      back to CHEAP_MODEL.
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 // recordSpend drives the rate-limiter component (reserve into the daily-spend window); register it
 // (relative import — the package blocks the deep specifier) so the REAL guardrail path runs under
 // convex-test instead of throwing "component not registered".
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+// The cockpit DRIVERS (sendCockpitMessage / resolveRecipients) additionally touch the agent thread
+// store and the audit aggregate — the intake.test.ts registration set, reused verbatim.
+import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
 
 // A SMOKE:: body-intent survives redaction and short-circuits draftCockpit offline (no gateway).
 const SMOKE_BODY = "SMOKE::route=direct_llm:: say a friendly hello";
@@ -349,6 +357,99 @@ test("activity trace: a SMOKE op leaves ONE terminal row (the offline E2E path �
   expect(steps[0]!.phase).toBe("done");
   expect(steps[0]!.turnId).toBe("turn-smoke");
   expect(typeof steps[0]!.durationMs).toBe("number");
+});
+
+// ── 03.9-02: the DRIVER-owned turn lifecycle — a started step always ends (CKPT-05) ──────────
+//
+// The SDK gives per-tool terminal state for free. What it cannot give is the TURN: the `thinking`
+// row that covers preCall + the skill-registry load + the first model round-trip — all of which
+// happen before any tool event could possibly fire, and which ARE the whole 10-30s wait on the
+// many turns that call no tool at all. These tests pin that the row is minted AND that it is
+// terminal on every exit.
+
+/** The driver spine offline: agent thread store + rate limiter + the audit aggregate. */
+function setupDriver(): T {
+  const t = convexTest(schema, modules);
+  t.registerComponent("agent", agentSchema, agentModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+}
+
+const killSwitchOn = (t: T) =>
+  t.run(async (ctx) => {
+    await ctx.db.insert("guardrailConfig", {
+      killSwitch: true,
+      budgetUsdPerRequest: 0.05,
+      updatedAt: Date.now(),
+    });
+  });
+
+test("turn lifecycle: a GOVERNED STOP terminalizes the thinking row (the EARLY-RETURN path)", async () => {
+  const t = setupDriver();
+  await t.mutation(internal.skills.seedSkills, {});
+  await killSwitchOn(t);
+
+  // THE assertion of this task. A governed stop (kill switch / daily budget) comes back from
+  // runCockpitAgent as DATA through a normal `return` — it is NOT a throw, so it never enters the
+  // driver's `catch`. A catch-only terminalization leaves this row spinning forever, and it would
+  // do so SILENTLY (research Pitfall 2's easy-to-miss mode). Only a `finally` covers it.
+  await t
+    .withIdentity({ subject: "t1" })
+    .action(api.cockpit.sendCockpitMessage, { text: "who should I send this to?" });
+
+  const steps = await readSteps(t);
+  // Also pins the zero-tool turn: a governed stop calls no tool, so the thinking row is the ONLY
+  // thing standing between the user and a blank, frozen-looking workspace.
+  expect(steps, "the driver minted no thinking row").toHaveLength(1);
+  expect(steps[0]!.tool).toBe("thinking");
+  expect(steps[0]!.stepKey).toBe("thinking");
+  expect(steps[0]!.phase, "the thinking row survived a governed stop as `running`").toBe("done");
+  expect(steps[0]!.endedAt).toBeTruthy();
+  expect(
+    steps.filter((s) => s.phase === "running"),
+    "a blocked turn left a row spinning forever",
+  ).toHaveLength(0);
+});
+
+test("turn lifecycle: a THROWN failure out of the loop still terminalizes the thinking row", async () => {
+  const t = setupDriver();
+  // Skills deliberately UNSEEDED: getActiveSkill fails closed (NO_ACTIVE_SKILL) and the throw
+  // propagates out of runCockpitAgent — the same exit a model timeout takes. Zero API calls (the
+  // load happens before any model would be touched). This is the intake.test.ts idiom.
+  await t
+    .withIdentity({ subject: "t1" })
+    .action(api.cockpit.sendCockpitMessage, { text: "draft something" });
+
+  const steps = await readSteps(t);
+  expect(steps).toHaveLength(1);
+  expect(steps[0]!.tool).toBe("thinking");
+  expect(steps[0]!.phase, "a thrown model failure left the thinking row running").toBe("done");
+  expect(steps.filter((s) => s.phase === "running")).toHaveLength(0);
+});
+
+test("turn lifecycle: resolveRecipients (the OTHER agent entry point) terminalizes its turn too", async () => {
+  const t = setupDriver();
+  await t.mutation(internal.skills.seedSkills, {});
+  await killSwitchOn(t);
+  const asT = t.withIdentity({ subject: "t1" });
+
+  const { threadId } = await asT.action(api.cockpit.sendCockpitMessage, { text: "email bob" });
+  // A contact pick is a real 10-30s agent turn the user currently watches in SILENCE after clicking
+  // a chip. Omitting it would leave one of the two agent entry points frozen — which is precisely
+  // what "cross-cutting" in the phase goal exists to prevent.
+  await asT.action(api.cockpit.resolveRecipients, {
+    threadId,
+    picks: [{ name: "Bob", address: "bob@example.com", displayName: "Bob" }],
+  });
+
+  const steps = await readSteps(t);
+  expect(steps, "resolveRecipients minted no thinking row").toHaveLength(2);
+  expect(steps.every((s) => s.tool === "thinking")).toBe(true);
+  expect(steps.every((s) => s.phase === "done")).toBe(true);
+  expect(steps.every((s) => s.threadId === threadId)).toBe(true);
+  // Two turns ⇒ two distinct server-minted turnIds (the trace groups per turn, not per thread).
+  expect(new Set(steps.map((s) => s.turnId)).size).toBe(2);
 });
 
 test("draftDocument pin: loads the pinned drafter version, fails closed on a missing one", async () => {
