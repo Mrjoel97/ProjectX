@@ -47,3 +47,47 @@ describe("extractOfficeText — DOCX (EXTR-C)", () => {
     expect(() => extractOfficeText(docxOf(""), "application/pdf")).toThrow(/^office_parse_failed/);
   });
 });
+
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const sheetXml = (rows: string) =>
+  `<?xml version="1.0"?><worksheet><sheetData>${rows}</sheetData></worksheet>`;
+
+describe("extractOfficeText — XLSX (EXTR-C)", () => {
+  it("resolves t=\"s\" cells through sharedStrings, keeps literal cells, tab-joins rows", () => {
+    const bytes = zipSync({
+      "xl/sharedStrings.xml": strToU8(
+        `<?xml version="1.0"?><sst><si><t>Alpha &amp; Co</t></si><si><t xml:space="preserve">Beta</t></si></sst>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(
+        sheetXml(
+          `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><v>42</v></c></row>` +
+            `<row r="2"><c r="A2" t="s"><v>1</v></c><c r="B2"><v>3.14</v></c></row>`,
+        ),
+      ),
+    });
+    expect(extractOfficeText(bytes, XLSX).text).toBe(
+      "Sheet 1\nAlpha & Co\t42\nBeta\t3.14",
+    );
+  });
+
+  it("orders sheets numerically (sheet2 before sheet10) with Sheet N headers and blank line between", () => {
+    const bytes = zipSync({
+      "xl/worksheets/sheet10.xml": strToU8(sheetXml(`<row><c><v>ten</v></c></row>`)),
+      "xl/worksheets/sheet2.xml": strToU8(sheetXml(`<row><c><v>two</v></c></row>`)),
+    });
+    expect(extractOfficeText(bytes, XLSX).text).toBe("Sheet 2\ntwo\n\nSheet 10\nten");
+  });
+
+  it("flattens literal-only sheets when sharedStrings.xml is absent (it is optional)", () => {
+    const bytes = zipSync({
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml(`<row><c><v>7</v></c><c><v>8</v></c></row>`)),
+    });
+    expect(extractOfficeText(bytes, XLSX).text).toBe("Sheet 1\n7\t8");
+  });
+
+  it("throws on an XLSX-mime zip with no worksheets", () => {
+    const bytes = zipSync({ "xl/other.xml": strToU8("<x/>") });
+    expect(() => extractOfficeText(bytes, XLSX)).toThrow(/^office_parse_failed/);
+  });
+});
