@@ -42,7 +42,8 @@
     "ai": "7.0.20",
     "convex": "1.42.1",
     "convex-helpers": "0.1.120",
-    "pdf-lib": "1.17.1"
+    "pdf-lib": "1.17.1",
+    "unpdf": "1.6.2"
   },
   "devDependencies": {
     "@convex-dev/workpool": "0.4.7",
