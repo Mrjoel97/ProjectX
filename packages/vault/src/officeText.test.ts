@@ -91,3 +91,44 @@ describe("extractOfficeText — XLSX (EXTR-C)", () => {
     expect(() => extractOfficeText(bytes, XLSX)).toThrow(/^office_parse_failed/);
   });
 });
+
+const PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+const slideXml = (runs: string) => `<?xml version="1.0"?><p:sld xmlns:a="http://x">${runs}</p:sld>`;
+
+describe("extractOfficeText — PPTX (EXTR-C)", () => {
+  it("orders slides numerically (1, 2, 10) with Slide N headers, <a:t> runs newline-joined", () => {
+    const bytes = zipSync({
+      "ppt/slides/slide10.xml": strToU8(slideXml(`<a:t>Last</a:t>`)),
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Title</a:t><a:t>Subtitle &amp; more</a:t>`)),
+      "ppt/slides/slide2.xml": strToU8(slideXml(`<a:t xml:space="preserve">Body</a:t>`)),
+    });
+    expect(extractOfficeText(bytes, PPTX).text).toBe(
+      "Slide 1\nTitle\nSubtitle & more\n\nSlide 2\nBody\n\nSlide 10\nLast",
+    );
+  });
+
+  it("throws on a PPTX-mime zip with no ppt/slides/*.xml", () => {
+    const bytes = zipSync({ "ppt/other.xml": strToU8("<x/>") });
+    expect(() => extractOfficeText(bytes, PPTX)).toThrow(/^office_parse_failed/);
+  });
+});
+
+describe("extractOfficeText — determinism (same bytes in, byte-identical text out)", () => {
+  it("DOCX", () => {
+    const bytes = docxOf(`<w:p><w:r><w:t>Stable &amp; sure</w:t></w:r></w:p>`);
+    expect(extractOfficeText(bytes, DOCX).text).toBe(extractOfficeText(bytes, DOCX).text);
+  });
+
+  it("XLSX", () => {
+    const bytes = zipSync({
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml(`<row><c><v>1</v></c></row>`)),
+    });
+    expect(extractOfficeText(bytes, XLSX).text).toBe(extractOfficeText(bytes, XLSX).text);
+  });
+
+  it("PPTX", () => {
+    const bytes = zipSync({ "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>One</a:t>`)) });
+    expect(extractOfficeText(bytes, PPTX).text).toBe(extractOfficeText(bytes, PPTX).text);
+  });
+});
