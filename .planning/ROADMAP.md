@@ -255,7 +255,7 @@ Plans:
 Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gsd:plan-phase 3.7 --gaps`):
 - [x] 03.7-06-PLAN.md — Pure @pikar/core reshape (TDD): buildBriefingView (action-first order + newsletter collapse + code-owned lede composition) + DigestBatch type; time grouping PRESERVED as secondary (Wave 6) — completed 2026-07-17 (115/115 core tests green incl. preserved bucket/joinDigest; typecheck + check-playbooks exit 0; CKPT-04 held open to Wave 9)
 - [x] 03.7-07-PLAN.md — Toolless cross-message synopsis: inbox-digest skill lede section (gated candidate vN) + digestSchema/digestInbox → DigestBatch + briefings.synopsis persisted + SC-2 scans extended to the synopsis (Wave 7) — completed 2026-07-17 (3 target files 95/95; backend+web typecheck clean; fifth mutation-checked SC-2 scan + invariant 10 extended; CKPT-04 held open to Wave 9)
-- [ ] 03.7-08-PLAN.md — Intelligent BRIEFING card: lede-first + action-first + collapsed "N automated notifications" row + visible category, rendered from buildBriefingView; SC-4 intact + offline E2E update (Wave 8)
+- [x] 03.7-08-PLAN.md — Intelligent BRIEFING card: lede-first + action-first + collapsed "N automated notifications" row + visible category, rendered from buildBriefingView; SC-4 intact + offline E2E update (Wave 8) — completed 2026-07-17 (BriefingCard a dumb renderer over buildBriefingView; web typecheck + Biome baseline-diff + Playwright discovery + check-playbooks all clean; CKPT-04 held open to Wave 9's connected human-verify)
 - [ ] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9)
 
 ### Phase 3.8: Vault Document Extraction (INSERTED)
