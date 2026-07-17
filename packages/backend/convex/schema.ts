@@ -235,6 +235,67 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 
+  // ── Phase-3.9 agent activity trace (CKPT-05) ──────────────────────────────
+  //
+  // The step rows the agent loop writes and the browser subscribes to, so a 10-30s turn shows
+  // its work instead of freezing. UI state, NOT an audit trail — agentSteps.ts writes no
+  // log-plane row (the briefings.ts property); the agent's refs-only audit already exists.
+  //
+  // There is deliberately NO label/text/detail/result field. The human-readable verb is a
+  // code-owned map in the UI keyed off `tool`. §4 is enforced by the ABSENCE of a place to put
+  // text — the SDK's tool events carry `messages[]` and `toolOutput.output` (listInbox's return
+  // contains SUBJECTS), and a `count: v.number()` literally cannot hold a subject line. Asserted
+  // statically in llmRedaction.test.ts (Plan 02).
+  agentSteps: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(),
+    turnId: v.string(), // server-minted per turn (crypto.randomUUID) — groups the trace
+    stepKey: v.string(), // toolCall.toolCallId (SDK-owned) | "thinking" — the start↔end join
+    tool: v.union(
+      // CLOSED union of OUR tool names — a model cannot widen it. The model CHOOSES which tool to
+      // call, but the name in the event is a key of our own `tools` record (`ai` throws
+      // NoSuchToolError before execute on a hallucinated name), so this can never legitimately
+      // fail — and it turns "the model can't inject a label" from an argument into a constraint.
+      // Precedent: the PINNED status enum on `plans` (03.1-01).
+      v.literal("thinking"),
+      v.literal("resolveContacts"),
+      v.literal("addRecipients"),
+      v.literal("setRecipients"),
+      v.literal("removeRecipient"),
+      v.literal("setSubject"),
+      v.literal("setMode"),
+      v.literal("setSendTime"),
+      v.literal("draftBody"),
+      v.literal("proposePlan"),
+      v.literal("generateAttachment"),
+      v.literal("regenerateAttachment"),
+      v.literal("removeAttachment"),
+      v.literal("personalizeRecipient"),
+      v.literal("listInbox"),
+      v.literal("briefInbox"),
+    ),
+    phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    // ponytail: declared, UNWRITTEN in v1. Verb labels are the ask (ROADMAP 3.9, amended).
+    // Upgrade path when counts are wanted: an explicit per-turn count recorder threaded into
+    // buildCockpitTools, written by the <=3 tools that KNOW a count (briefInbox/listInbox/
+    // resolveContacts) — never parsed out of a tool's return string (§4).
+    count: v.optional(v.number()),
+  })
+    .index("by_turn", ["tenantId", "turnId"])
+    // by_tenant is ["tenantId"] ALONE, and that is load-bearing. latestTurn finds the newest turn
+    // via `.order("desc").first()`, which relies on _creationTime being the first sort dimension
+    // AFTER the eq'd prefix. An index of ["tenantId", "threadId"] eq'd on tenantId only would sort
+    // by threadId FIRST and return the alphabetically-largest thread's row, not the newest one —
+    // caught by agentSteps.test.ts ("returns ONLY the newest turn's rows"). The briefings.byThread
+    // "index order IS recency" property holds there because it eq's BOTH prefix fields; it does
+    // NOT generalize to a partial prefix. There is no by_thread index because nothing reads by
+    // thread: the UI subscribes to latestTurn (no threadId — the first-turn window) and filters
+    // client-side on the returned threadId.
+    .index("by_tenant", ["tenantId"]),
+
   // The test seam that lets a briefing run with NO Gmail token: gmail.listInbox /
   // fetchInboxBodies check this table BEFORE freshAccessToken and serve these messages when a
   // row exists. Written ONLY by smoke.seedInboxFixture (an internalMutation) — real tenants

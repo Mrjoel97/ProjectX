@@ -1,0 +1,137 @@
+// Agent activity-trace content-plane adapter (CLAUDE.md §1: thin adapter — this module only
+// reads and writes rows; the decision about WHEN a step starts and ends belongs to the SDK's
+// generateText lifecycle callbacks, Plan 02).
+//
+// Mirrors briefings.ts exactly, including its most important property: this module writes NO
+// log-plane row. The trace is UI state, not an audit trail — the agent's refs-only audit trail
+// already exists (mailbox.searched / mailbox.listed / briefing.created), written by the ACTING
+// module. A second, less-governed shadow log here would be a §4 regression with no requirement
+// behind it (03.9-RESEARCH §Anti-patterns).
+//
+// §4 on this path is enforced by the SCHEMA, not by vigilance: the row has no field that can
+// hold text (see schema.ts). The human-readable verb is a code-owned map in the UI keyed off
+// the closed `tool` union.
+//
+// The writers are internal (called from the agent loop); the reader is a tenantQuery so the
+// browser subscribes and the trace fills live, guarded on ctx.tenantId.
+import { v } from "convex/values";
+import { internalMutation } from "./_generated/server";
+import { tenantQuery } from "./lib/functions";
+import schema from "./schema";
+
+// DERIVED from schema.ts — the single source of truth for the closed tool union (the briefings.ts
+// ITEMS precedent: a hand-copied validator is a duplicate that WILL drift, and a drifted literal
+// means a silently swallowed insert, since the SDK eats callback throws). ponytail rung 2.
+const TOOL = schema.tables.agentSteps.validator.fields.tool;
+
+/**
+ * A turn is bounded at <=9 rows by the loop's `stopWhen: stepCountIs(8)` (8 tool steps + the one
+ * driver-owned `thinking` row), so 12 is a real ceiling rather than a truncation. Reads are
+ * ALWAYS bounded — a `.collect()` here is the exact failure Phase 2 documented for `audit`:
+ * it eventually exceeds Convex read limits and hard-fails rather than degrading.
+ */
+const TURN_STEP_CAP = 12;
+
+/** What the UI renders. Named so the client can derive it via FunctionReturnType (cards.tsx). */
+export type StepView = {
+  stepKey: string;
+  tool: string;
+  phase: "running" | "done" | "error";
+  startedAt: number;
+  durationMs?: number;
+};
+
+/**
+ * Open a step. Append-only: every attempt gets its own row, including the ones the fallback
+ * retry re-runs — the trace is the one place a user can see that a retry occurred, and silently
+ * de-duplicating it would hide something that really happened (research Pitfall 3).
+ */
+export const record = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    turnId: v.string(),
+    stepKey: v.string(),
+    tool: TOOL,
+    startedAt: v.number(),
+  },
+  handler: async (ctx, args) => await ctx.db.insert("agentSteps", { ...args, phase: "running" }),
+});
+
+/**
+ * Close a step. Terminal on BOTH success and failure — `onToolExecutionEnd` fires either way,
+ * discriminated by `toolOutput.type`, so a throwing tool cannot leave a spinner running.
+ *
+ * An unmatched (tenantId, turnId, stepKey) is a NO-OP, not a throw: an out-of-order or duplicate
+ * finish must not blow up a mutation, and since the SDK swallows callback exceptions a throw here
+ * would fail SILENTLY in production while every unit test passed (research Pitfall 6).
+ */
+export const finish = internalMutation({
+  args: {
+    tenantId: v.string(),
+    turnId: v.string(),
+    stepKey: v.string(),
+    phase: v.union(v.literal("done"), v.literal("error")),
+    durationMs: v.optional(v.number()),
+    endedAt: v.number(),
+  },
+  handler: async (ctx, { tenantId, turnId, stepKey, phase, durationMs, endedAt }) => {
+    // Indexed + bounded, then found in JS — never an un-indexed .filter (research Pitfall 7).
+    const page = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_turn", (q) => q.eq("tenantId", tenantId).eq("turnId", turnId))
+      .take(TURN_STEP_CAP);
+    const row = page.find((r) => r.stepKey === stepKey);
+    if (!row) return; // no-op
+    await ctx.db.patch(row._id, { phase, durationMs, endedAt });
+  },
+});
+
+/**
+ * The tenant's NEWEST turn → feeds the activity card and the in-progress chat bubble.
+ *
+ * Takes NO threadId, deliberately. On the first message the browser has no threadId until
+ * `sendCockpitMessage` RESOLVES — i.e. until the wait is already over — so a byThread-only read
+ * would be `"skip"` for the entire first turn: blank at exactly the moment a first-time user
+ * decides the product is broken (research Pitfall 1). The client filters on the returned
+ * threadId instead. `tenantQuery({ args: {} })` is an established shape (cockpit.listThreads),
+ * and the wrapper is what scopes this to one tenant (§2 — the multi-tenant linchpin).
+ *
+ * Explicit return type (Convex guidelines §96): inferred through the generated api it would
+ * collapse sibling functions to `any`.
+ */
+export const latestTurn = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<{ threadId: string; steps: StepView[] } | null> => {
+    // Rows are append-only, so index order (_creationTime) IS recency — `.order("desc").first()`
+    // is the whole "newest turn" story, no scan (the briefings.byThread property). This needs
+    // by_tenant (["tenantId"] alone): on an index with a threadId in the prefix, threadId would
+    // dominate the sort and hand back the alphabetically-largest thread instead. See schema.ts.
+    const newest = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .first();
+    if (!newest) return null;
+
+    const steps = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_turn", (q) => q.eq("tenantId", ctx.tenantId).eq("turnId", newest.turnId))
+      .take(TURN_STEP_CAP);
+
+    return {
+      threadId: newest.threadId,
+      // Ascending by startedAt so the UI renders them in the order they happened (insertion order
+      // is close but not guaranteed — the awaited callbacks interleave with the driver's rows).
+      steps: steps
+        .sort((a, b) => a.startedAt - b.startedAt)
+        .map((s) => ({
+          stepKey: s.stepKey,
+          tool: s.tool,
+          phase: s.phase,
+          startedAt: s.startedAt,
+          durationMs: s.durationMs,
+        })),
+    };
+  },
+});
