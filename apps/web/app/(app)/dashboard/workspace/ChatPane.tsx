@@ -116,10 +116,17 @@ export function ChatPane({
     const t = text.trim();
     if (!t || busy) return;
     setBusy(true);
+    // Clear the box IMMEDIATELY (FIX 2) so the turn reads as sent — send() awaits 10-30s and the
+    // old order (setText after the await) left the text sitting there the whole time, looking
+    // unsent. On a throw we RESTORE it: never eat what the user typed (that guarantee is why the
+    // clear was ordered last originally; keep the guarantee, fix the UX).
+    setText("");
     try {
       const res = await send({ threadId, text: t });
       if (!threadId) onThread(res.threadId, t);
-      setText("");
+    } catch (err) {
+      setText(t);
+      throw err;
     } finally {
       setBusy(false);
     }
