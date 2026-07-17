@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed Phase 03.9 (Agent Activity Streaming)
-last_updated: "2026-07-17T15:38:40.847Z"
-last_activity: "2026-07-17 — Phase 3.9 Agent Activity Streaming COMPLETE + human-verified/approved (CKPT-05). 4/4 plans. Verify uncovered + fixed a WorkspacePage crash (slow listThreads threw inside the page → whole cockpit died). gsd-verifier passed 20/20. Next: Phase 3.7 briefing-intelligence gap (/gsd:plan-phase 3.7 --gaps)."
+stopped_at: Completed 03.7-06-PLAN.md
+last_updated: "2026-07-17T16:25:02.178Z"
+last_activity: "2026-07-17 — Phase 3.7 Inbox Briefing, Wave 6 (Gap 1 closure): 03.7-06 executed (TDD) — the briefing INTELLIGENCE moved into pure, tested @pikar/core briefing.ts, where the ordering/collapse/lede logic MUST live (never the card), as the ONE typed contract plans 07 (backend synthesis) + 08 (reshaped card) build against. Three pure transforms over the ALREADY-persisted category/needsReply/bucket axes (no new model call, no re-classification — ponytail §8, the axis is free): composeLede(items, listedCount, synopsis?) — counts CODE-OWNED (total=listedCount, needsYou=items.filter(needsReply||deadline).length) welded to the model's qualitative synopsis clause as ' — {clause}'; a fabricated '99' in the synopsis can NEVER become the count the lede states (Gap 1.1, ADR-004), and empty/blank/absent synopsis degrades to a counts-only lede with no dangling separator (never throws on a pre-delta row). collapseNoise(items) — newsletter rows collapse into ONE collapsedCount so 12 automated notifications never render as 12 rows (Gap 1.3), conservative on BOTH edges: only newsletter collapses (other is NOT hidden) and a needs-you row (needsReply or deadline) is NEVER collapsed even if mis-categorized newsletter (needs-you wins). buildBriefingView(briefing) — needsYou is a SEPARATE top block, never interleaved chronologically (Gap 1.2, action-first); the de-noised remainder groups into timeSections in fixed [today, yesterday, thisWeek] order, empty buckets skipped. LOCKED CONSTRAINT honoured — time grouping RESHAPED not deleted: bucket/joinDigest/selectForDigest left BYTE-untouched and still tested, time is the SECONDARY axis inside the fyi remainder (deleting it needs a roadmap change, not a core/card edit). New DigestBatch{items,synopsis} type for plan 07's digestInbox return; index.ts barrel unchanged (export * re-exports the new symbols — laziest re-export). Commits 9db35df (T1 RED — 13 genuine failures, 'buildBriefingView is not a function'), f366ff2 (T2 GREEN + cockpit.md §9 bump; no REFACTOR — implementation needed no cleanup). NO deviations. VERIFIED: pnpm --filter @pikar/core test -- briefing 115/115 green (incl. the PRESERVED bucket/joinDigest/dayKey/selectForDigest suite — time grouping survives); core typecheck exit 0; node scripts/check-playbooks.mjs exit 0. CKPT-04 stays PENDING — it is the phase-spanning checkpoint that closes only at plan 09's human-verify of the reshaped card (ROADMAP Wave 9); this plan delivers the pure contract, nothing user-facing changed yet. NEXT: Wave 7 (03.7-07 — inbox-digest skill lede section as a gated candidate vN + digestSchema/digestInbox → DigestBatch + briefings.synopsis persisted + SC-2 scans extended to the synopsis)."
 progress:
   total_phases: 19
   completed_phases: 11
-  total_plans: 85
-  completed_plans: 81
+  total_plans: 89
+  completed_plans: 82
 ---
 
 ---
@@ -428,6 +428,7 @@ Progress: [█████████░] 94%
 | Phase 03.6 P04 | 18min | 3 tasks | 21 files |
 | Phase 03.6 P05 | ~85min | 2 tasks | 2 files |
 | Phase 03.7 P01 | 12m | 2 tasks | 5 files |
+| Phase 03.7-inbox-briefing P06 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -558,8 +559,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-16T22:22:02.830Z
-Stopped at: Completed 03.7-01-PLAN.md
+Last session: 2026-07-17T16:25:02.149Z
+Stopped at: Completed 03.7-06-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

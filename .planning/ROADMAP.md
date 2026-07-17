@@ -253,7 +253,7 @@ Plans:
 - [x] 03.7-05-PLAN.md — Golden-set briefing fixtures 16–18 (incl. injection probe) + briefingPresent runner key + live cockpit-agent gate cycle + human-verify (Wave 5) — mechanism ran live 18/18 (cockpit-agent v7); PRESENTATION rejected at the checkpoint → Gap 1 (see 03.7-UAT.md), CKPT-04 held open
 
 Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gsd:plan-phase 3.7 --gaps`):
-- [ ] 03.7-06-PLAN.md — Pure @pikar/core reshape (TDD): buildBriefingView (action-first order + newsletter collapse + code-owned lede composition) + DigestBatch type; time grouping PRESERVED as secondary (Wave 6)
+- [x] 03.7-06-PLAN.md — Pure @pikar/core reshape (TDD): buildBriefingView (action-first order + newsletter collapse + code-owned lede composition) + DigestBatch type; time grouping PRESERVED as secondary (Wave 6) — completed 2026-07-17 (115/115 core tests green incl. preserved bucket/joinDigest; typecheck + check-playbooks exit 0; CKPT-04 held open to Wave 9)
 - [ ] 03.7-07-PLAN.md — Toolless cross-message synopsis: inbox-digest skill lede section (gated candidate vN) + digestSchema/digestInbox → DigestBatch + briefings.synopsis persisted + SC-2 scans extended to the synopsis (Wave 7)
 - [ ] 03.7-08-PLAN.md — Intelligent BRIEFING card: lede-first + action-first + collapsed "N automated notifications" row + visible category, rendered from buildBriefingView; SC-4 intact + offline E2E update (Wave 8)
 - [ ] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9)
