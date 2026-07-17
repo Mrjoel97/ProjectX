@@ -18,6 +18,7 @@
 import type { EntryId } from "@convex-dev/rag";
 import {
   categoryFor,
+  extractionKindFor,
   isSearchable,
   VAULT_CATEGORIES,
   VAULT_FILE_CAP_BYTES,
@@ -152,6 +153,20 @@ export const vaultUpload = tenantMutation({
         tenantId: ctx.tenantId,
         correlationId,
       });
+    } else {
+      // Phase-3.8 auto-extract: a recognized binary schedules its extraction rail immediately.
+      // The row stays pending_extraction here — the action flips it to `extracting` when work
+      // actually starts (honest pill). Unrecognized formats stay storage-only (kind === null).
+      const kind = extractionKindFor(mimeType, filename);
+      if (kind !== null) {
+        await ctx.scheduler.runAfter(
+          0,
+          kind === "transcribe"
+            ? internal.vaultTranscribe.transcribeDoc
+            : internal.vaultExtract.extractDoc,
+          { vaultDocId, tenantId: ctx.tenantId },
+        );
+      }
     }
     return { vaultDocId };
   },
@@ -390,5 +405,72 @@ export const markFailed = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments"), reason: v.string() },
   handler: async (ctx, { vaultDocId, reason }) => {
     await ctx.db.patch(vaultDocId, { status: "failed", failureReason: reason });
+  },
+});
+
+// ── Phase-3.8 extraction lifecycle (Wave-0 seam — called by vaultExtract/vaultTranscribe) ─────
+
+/** The extraction action flips the visible pill when work actually starts (honest pill). */
+export const markExtracting = internalMutation({
+  args: { vaultDocId: v.id("vaultDocuments") },
+  handler: async (ctx, { vaultDocId }) => {
+    await ctx.db.patch(vaultDocId, { status: "extracting" });
+  },
+});
+
+/**
+ * The INTERNAL seam every extraction lane calls (the public vaultIngestText throws
+ * UNAUTHENTICATED for scheduler-invoked actions — Pitfall 3). Mirrors the docId late-text path
+ * above: patch text/hash/size, flip to processing, start the ingest workflow. Stores the RAW
+ * extracted text (consistent with TXT uploads — the content plane holds the user's own data;
+ * scanText at extraction time is the lanes' fail-closed gate + audit-counts source, and every
+ * downstream model path re-scans). Fail-closed tenant guard, like getDoc.
+ */
+export const ingestExtractedText = internalMutation({
+  args: {
+    docId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    text: v.string(),
+    truncated: v.boolean(),
+  },
+  handler: async (ctx, { docId, tenantId, text, truncated }): Promise<null> => {
+    const doc = await ctx.db.get(docId);
+    if (!doc || doc.tenantId !== tenantId) throw new Error("vault: doc not found");
+    await ctx.db.patch(docId, {
+      text,
+      contentHash: await contentHash(text),
+      size: byteLen(text),
+      status: "processing",
+      extractionTruncated: truncated || undefined,
+    });
+    const correlationId = crypto.randomUUID();
+    await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
+      vaultDocId: docId,
+      tenantId,
+      correlationId,
+    });
+    return null;
+  },
+});
+
+/**
+ * The metadata an extraction action needs BEFORE loading bytes. Fail-closed tenant guard.
+ * Bytes are loaded via ctx.storage.get(storageId) INSIDE the action — never passed as args
+ * (node-action args cap at 5 MiB; vault files go to 8 MiB).
+ */
+export const getDocForExtraction = internalQuery({
+  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
+  handler: async (
+    ctx,
+    { vaultDocId, tenantId },
+  ): Promise<{
+    storageId: Id<"_storage"> | undefined;
+    mimeType: string;
+    title: string;
+    status: string;
+  }> => {
+    const doc = await ctx.db.get(vaultDocId);
+    if (!doc || doc.tenantId !== tenantId) throw new Error("vault: doc not found");
+    return { storageId: doc.storageId, mimeType: doc.mimeType, title: doc.title, status: doc.status };
   },
 });

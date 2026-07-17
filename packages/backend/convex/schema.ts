@@ -445,8 +445,10 @@ export default defineSchema({
       v.literal("ready"), // embedded + extracted, groundable
       v.literal("failed"), // ingest failed (see failureReason)
       v.literal("pending_extraction"), // stored, text not yet available (binary/OCR seam)
+      v.literal("extracting"), // Phase-3.8: an extraction action is producing this doc's text
     ),
     failureReason: v.optional(v.string()),
+    extractionTruncated: v.optional(v.boolean()), // Phase-3.8: the per-doc extract cap bit (honesty flag)
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse
