@@ -535,11 +535,70 @@ function fmtItemTime(ts: number, tz: string, bucket: BriefingItem["bucket"]): st
 // path: if the label ever needs the address too, surface it as a separate dim span.
 const senderLabel = (sender: string) => sender.replace(/\s*<[^>]*>\s*$/, "").trim() || sender;
 
-/** One briefing row: unread dot + time + sender + gist. Text only — see BriefingCard's SC-4 note. */
-function BriefingRow({ item, tz }: { item: BriefingItem; tz: string }) {
+// ── The row grid ────────────────────────────────────────────────────────────────────────────
+// The first cut rendered each row as one flex line of "time · sender · gist" — a wall of
+// sentences the human verifier rejected as "crowded, hard to read". The fix is ALIGNMENT, not a
+// table: BRAND §4 says content is cards on the canvas, "never dense tables-on-white". So the rows
+// sit on a shared 3-column grid — sender | subject+gist | time — and the columns line up down the
+// section the way a table's would, with no borders, no header row, and card-native whitespace.
+//
+// `minmax(0, …)` on BOTH text columns is load-bearing, NOT cosmetic: a grid child's default
+// `min-width: auto` refuses to shrink below its content, so a long unbroken subject would push the
+// grid wider than the card and paint outside it — the exact overflow bug fixed in the vault cards
+// at 3bdea02. `minmax(0, …)` + `minWidth: 0` on the inner column is what lets ellipsis engage.
+const ROW_GRID = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 9rem) minmax(0, 1fr) max-content",
+  gap: "0.75rem",
+  alignItems: "baseline",
+  padding: "0.5rem 0", // the crowding was the complaint — let the rows breathe
+} as const;
+
+const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
+
+/** The subject is the row's heading. Gmail permits an empty one — say so rather than render a gap. */
+function SubjectLine({ subject }: { subject: string }) {
+  return subject ? (
+    <div style={{ fontWeight: 600, color: "var(--ink)", ...ellipsis }} title={subject}>
+      {subject}
+    </div>
+  ) : (
+    <div style={{ ...dim, fontStyle: "italic" }}>(no subject)</div>
+  );
+}
+
+// `gist` and `deadline` are the two MODEL-authored strings in the row, and the model summarizes
+// untrusted third-party mail — so their content is, in the limit, attacker-influenced. They wrap
+// rather than ellipsis (a gist must be readable in full), which means an unbroken token has nothing
+// to break on and escapes the column: measured, a 200-char run left the box at `clientWidth: 153`
+// but `scrollWidth: 1964`, dragging the document scrollbar to 2137px on a 420px pane. `minWidth: 0`
+// does NOT fix this — it sizes the BOX, and the box was already right; the TEXT was overflowing it.
+// `overflow-wrap: anywhere` is the fix (it also feeds min-content sizing, which `break-word` does
+// not). The sender/subject don't need it: `overflow: hidden` + ellipsis clips them already.
+const wrapAnywhere = { overflowWrap: "anywhere" } as const;
+
+/** The gist + any deadline suggestion — the flexible middle column's body. */
+function RowBody({ item }: { item: BriefingItem }) {
   return (
-    <li data-testid="briefing-item" style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
-      {/* Unread is marked AND labelled — never colour alone (BRAND §6). */}
+    <div style={{ minWidth: 0 }}>
+      <SubjectLine subject={item.subject} />
+      <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", lineHeight: 1.5, marginTop: "0.15rem", ...wrapAnywhere }}>
+        {item.gist}
+      </div>
+      {/* Emphasis via weight, not amber: --held is spent on the approval gate alone (BRAND §2). */}
+      {item.deadline && (
+        <div style={{ color: "var(--ink)", fontWeight: 700, fontSize: "0.85rem", marginTop: "0.15rem", ...wrapAnywhere }}>
+          Due: {item.deadline}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Sender cell: the unread dot (marked AND labelled — never colour alone, BRAND §6) + the name. */
+function SenderCell({ item }: { item: BriefingItem }) {
+  return (
+    <div style={{ display: "flex", gap: "0.4rem", alignItems: "baseline", minWidth: 0 }}>
       {item.isUnread ? (
         <span
           role="img"
@@ -550,10 +609,42 @@ function BriefingRow({ item, tz }: { item: BriefingItem; tz: string }) {
       ) : (
         <span aria-hidden="true" style={{ width: "0.45rem", flex: "none" }} />
       )}
-      <span style={{ ...dim, flex: "none", fontVariantNumeric: "tabular-nums" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
-      <span style={{ fontWeight: 600, flex: "none" }}>{senderLabel(item.sender)}</span>
-      <span style={{ color: "#444" }}>{item.gist}</span>
+      <span style={{ fontWeight: 600, color: "var(--ink)", ...ellipsis }} title={item.sender}>
+        {senderLabel(item.sender)}
+      </span>
+    </div>
+  );
+}
+
+/** One briefing row: WHO · WHAT (subject over gist) · WHEN. Text only — see BriefingCard's SC-4 note. */
+function BriefingRow({ item, tz, first }: { item: BriefingItem; tz: string; first?: boolean }) {
+  return (
+    <li
+      data-testid="briefing-item"
+      style={{ ...ROW_GRID, ...(first ? {} : { borderTop: "1px solid var(--rule)" }) }}
+    >
+      <SenderCell item={item} />
+      <RowBody item={item} />
+      <span style={{ ...dim, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
     </li>
+  );
+}
+
+/** A titled group of rows on the shared column grid. NO `gap` — the hairline border-top on every
+ *  row after the first IS the separator, and a gap would float the rules off the rows they divide. */
+function BriefingSection({ title, items, tz }: { title: string; items: readonly BriefingItem[]; tz: string }) {
+  return (
+    <>
+      <div style={label}>{title}</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: "0.2rem 0 0", display: "grid" }}>
+        {items.map((item, i) => (
+          // The Gmail message id — the row's real identity. `${ts}-${sender}` was NOT unique: an
+          // automated sender ("Google <no-reply@…>") batching two messages shares both parts and
+          // collided, which React reported as a duplicate-key error. Do not key on ts/sender/index.
+          <BriefingRow key={item.id} item={item} tz={tz} first={i === 0} />
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -580,21 +671,8 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
           card — acting on a briefing goes back through the conversation → PLAN → Approve gate, so
           nothing a third-party email says can become a one-click action. Keep it that way. */}
       {needsYou.length > 0 && (
-        <div data-testid="briefing-needs-you" style={{ marginBottom: "0.75rem" }}>
-          <div style={label}>NEEDS YOU</div>
-          <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.4rem" }}>
-            {needsYou.map((item) => (
-              <li key={`${item.ts}-${item.sender}`} data-testid="briefing-item" style={{ display: "grid", gap: "0.1rem" }}>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600 }}>{senderLabel(item.sender)}</span>
-                  <span style={dim}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
-                </div>
-                <div style={{ color: "#444" }}>{item.gist}</div>
-                {/* Emphasis via weight, not amber: --held is spent on the approval gate alone (BRAND §2). */}
-                {item.deadline && <div style={{ color: "var(--ink)", fontWeight: 700, fontSize: "0.85rem" }}>Due: {item.deadline}</div>}
-              </li>
-            ))}
-          </ul>
+        <div data-testid="briefing-needs-you" style={{ marginBottom: "1rem" }}>
+          <BriefingSection title="NEEDS YOU" items={needsYou} tz={tz} />
           <p style={{ ...dim, margin: "0.5rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
         </div>
       )}
@@ -603,13 +681,8 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
         const rows = items.filter((i) => i.bucket === key);
         if (rows.length === 0) return null; // skip empty groups — no fake sections (BRAND §5)
         return (
-          <div key={key} data-testid={testid} style={{ marginBottom: "0.6rem" }}>
-            <div style={label}>{title}</div>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.3rem" }}>
-              {rows.map((item) => (
-                <BriefingRow key={`${item.ts}-${item.sender}`} item={item} tz={tz} />
-              ))}
-            </ul>
+          <div key={key} data-testid={testid} style={{ marginBottom: "1rem" }}>
+            <BriefingSection title={title} items={rows} tz={tz} />
           </div>
         );
       })}
