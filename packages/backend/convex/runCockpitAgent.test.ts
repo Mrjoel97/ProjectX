@@ -231,6 +231,126 @@ test("skillVersions pin: a missing (name, version) fails CLOSED — never silent
   ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
 });
 
+// ── 03.9-02: the activity trace actually FIRES (CKPT-05) ─────────────────────
+//
+// THE reason these tests are load-bearing rather than nice-to-have: ai@7's `notify` SWALLOWS
+// callback exceptions (`try { await cb(e) } catch {}` — dist/index.js:2636-2639). That is
+// fail-open by design (a broken step writer can never break an agent turn) but it also means the
+// emitter fails SILENTLY: a bad validator, a wrong arg name, a missing index produces no error, no
+// log, and no red test — the feature just quietly renders nothing in production (research
+// Pitfall 6). So every test below asserts the ROWS EXIST. A test that only asserted the loop
+// returned a reply would be green against a completely broken emitter.
+//
+// This shim is the only offline path that can see it: __runCockpitAgentWithScript drives the REAL
+// runAgentLoop → the REAL generateText with a MockLanguageModelV4, so the SDK callbacks genuinely
+// fire (unlike __invokeCockpitTool, which calls tool.execute directly).
+
+const readSteps = (t: T) => t.run((ctx) => ctx.db.query("agentSteps").collect());
+/** The turn identity the driver mints in production (cockpit.ts); supplied here so we can assert on it. */
+const TURN = { turnId: "turn-1", threadId: "thread1" };
+
+test("activity trace: a scripted 2-tool run leaves 2 terminal rows with durations", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    ...TURN,
+    primary: [
+      toolStep("addRecipients", { addresses: ["bob@example.com"] }),
+      toolStep("setSubject", { subject: "Project sync" }),
+      textStep("Done — the plan is coming together.", 0, 0),
+    ],
+  });
+
+  const steps = await readSteps(t);
+  expect(steps, "the emitter wrote no rows — a swallowed callback throw looks exactly like this").toHaveLength(2);
+  expect(steps.map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
+  for (const s of steps) {
+    expect(s.phase, `${s.tool} never terminalized`).toBe("done");
+    expect(typeof s.durationMs, `${s.tool} has no duration`).toBe("number"); // toolExecutionMs (may be 0)
+    expect(s.endedAt).toBeTruthy();
+    expect(s.turnId).toBe("turn-1");
+    expect(s.threadId).toBe("thread1");
+    expect(s.tenantId).toBe("t1");
+  }
+});
+
+test("activity trace: a THROWING tool leaves an `error` row and NO orphan `running`", async () => {
+  const { t, planId } = await setup();
+  // Delete the plan row → proposePlan's readPlan() throws (the tool's first statement). A real
+  // execute() throw, not a mocked one: onToolExecutionEnd fires on tool-error too, discriminated
+  // by toolOutput.type (dist/index.js:2955-2983), so this terminal state is FREE.
+  await t.run((ctx) => ctx.db.delete(planId));
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    ...TURN,
+    // The SDK feeds the tool-error back to the model, which then finishes with text.
+    primary: [toolStep("proposePlan", {}), textStep("I hit a problem with the plan.", 0, 0)],
+  });
+
+  const steps = await readSteps(t);
+  expect(steps).toHaveLength(1);
+  expect(steps[0]!.tool).toBe("proposePlan");
+  expect(steps[0]!.phase, "a throwing tool did not terminalize as `error`").toBe("error");
+  expect(
+    steps.filter((s) => s.phase === "running"),
+    "a step is spinning forever after a tool throw",
+  ).toHaveLength(0);
+});
+
+test("activity trace: the FALLBACK retry's steps are emitted honestly, not suppressed", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    ...TURN,
+    failPrimary: true, // the primary model throws a TimeoutError at doGenerate (isFallbackEligible)
+    primary: [],
+    fallback: [
+      toolStep("addRecipients", { addresses: ["bob@example.com"] }),
+      toolStep("setSubject", { subject: "Recovered subject" }),
+      textStep("Recovered on the cheap model.", 0, 0),
+    ],
+  });
+
+  // The retry's work IS the agent's work — it must appear. Honest: with this shim the primary
+  // throws at its FIRST doGenerate, so it never reached a tool call and has no rows of its own;
+  // what this pins is that a re-entered run() still emits, and that the second attempt's rows are
+  // not swallowed or de-duplicated away. Rows are append-only per toolCallId BY CONSTRUCTION
+  // (agentSteps.record only ever inserts) — hiding a retry would repeat the "computed and
+  // discarded" failure the 03.7 UAT called out (research Pitfall 3).
+  const steps = await readSteps(t);
+  expect(steps).toHaveLength(2);
+  expect(steps.map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
+  for (const s of steps) expect(s.phase).toBe("done");
+});
+
+test("activity trace: a SMOKE op leaves ONE terminal row (the offline E2E path — Pitfall 4)", async () => {
+  const { t, planId } = await setup();
+  // The SMOKE sentinel short-circuits BEFORE generateText, so no SDK callback can fire. Every
+  // offline E2E in the repo drives this path — without its own emission the whole activity surface
+  // would be invisible to all of them and Plan 04's spec would assert on an empty surface.
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    turnId: "turn-smoke",
+    text: "SMOKE::agent::subject=Hi",
+  });
+  expect(res.reply).toBeTruthy();
+
+  const steps = await readSteps(t);
+  expect(steps, "the SMOKE path emitted nothing — the offline E2E would see an empty surface").toHaveLength(1);
+  expect(steps[0]!.tool).toBe("setSubject"); // the op kind mapped to its real tool name
+  expect(steps[0]!.phase).toBe("done");
+  expect(steps[0]!.turnId).toBe("turn-smoke");
+  expect(typeof steps[0]!.durationMs).toBe("number");
+});
+
 test("draftDocument pin: loads the pinned drafter version, fails closed on a missing one", async () => {
   const { t } = await setup(); // seedSkills → document-drafter v1 ACTIVE
   const args = {
