@@ -190,6 +190,23 @@ function isNeedsYou(item: BriefingItem): boolean {
 }
 
 /**
+ * The one recommended next move for a needs-you row — the bridge back to the chat → PLAN → Approve
+ * gate every briefing action is deliberately routed through (SC-4: the card itself can never act).
+ *
+ * CODE-DERIVED, not model-authored: the move is a function of the row's own `deadline`/`needsReply`
+ * axes, so NO new attacker-influenced string crosses the trust boundary (contrast `gist`/`deadline`,
+ * which ARE the model's and are already treated as untrusted). ponytail (rung 2): reuses the axes
+ * the digest already emits — no digest-schema change, no SC-2 scan change, no eval-gate re-run.
+ * Upgrade path: if a per-message *tailored* move is ever wanted, add a `move` SUGGESTION field to the
+ * toolless digest schema (mirroring `deadline`) and extend the llmRedaction SC-2 scans to cover it.
+ */
+export function suggestedMove(item: BriefingItem): string {
+  return item.deadline !== undefined
+    ? "Time-sensitive — ask me to draft a reply, then approve it in chat."
+    : "Ask me to draft a reply, then approve it in chat.";
+}
+
+/**
  * The lede sentence: CODE-OWNED counts welded to the model's qualitative clause (Gap 1.1).
  *
  * `total` is `listedCount` (the mailbox total, cap-honest) and `needsYou` is counted from the
@@ -223,11 +240,15 @@ export function collapseNoise(items: readonly BriefingItem[]): { surfaced: Brief
   return { surfaced, collapsedCount };
 }
 
-/** The reshaped view model the card renders: a lede, a needs-you top block, the time-grouped fyi
- *  remainder (the SECONDARY axis), and the collapsed-noise count. */
+/** A needs-you row plus its CODE-DERIVED recommended next move (`suggestedMove`) — the executive
+ *  report's per-priority action bridge. `move` is chrome-facing text, never a control (SC-4). */
+export type NeedsYouItem = BriefingItem & { move: string };
+
+/** The reshaped view model the card renders: a lede, a needs-you top block (each row carrying its
+ *  recommended move), the time-grouped fyi remainder (the SECONDARY axis), and the collapsed count. */
 export interface BriefingView {
   lede: string;
-  needsYou: BriefingItem[];
+  needsYou: NeedsYouItem[];
   timeSections: { bucket: Bucket; items: BriefingItem[] }[];
   collapsedCount: number;
 }
@@ -248,7 +269,9 @@ export function buildBriefingView(briefing: {
   listedCount: number;
   synopsis?: string;
 }): BriefingView {
-  const needsYou = briefing.items.filter(isNeedsYou);
+  const needsYou: NeedsYouItem[] = briefing.items
+    .filter(isNeedsYou)
+    .map((item) => ({ ...item, move: suggestedMove(item) }));
   const { surfaced, collapsedCount } = collapseNoise(briefing.items.filter((i) => !isNeedsYou(i)));
   const timeSections = BUCKET_ORDER.map((b) => ({
     bucket: b,

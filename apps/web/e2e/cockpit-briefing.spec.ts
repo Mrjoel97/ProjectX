@@ -128,6 +128,15 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   await expect(card.getByTestId("briefing-category")).not.toHaveCount(0);
   await expect(needsYou.getByTestId("briefing-category").first()).toHaveText(/action/i);
 
+  // Gap 2 (Direction A × C) — RECOMMENDED MOVE: every needs-you row carries its code-derived next
+  // move, the bridge back to chat → PLAN → Approve. Present, non-empty, and (fixture index 0 has a
+  // deadline) the time-sensitive variant. It is TEXT — the SC-4 zero-button/link assertions below
+  // already prove it is not a control.
+  const move = needsYou.getByTestId("briefing-move").first();
+  await expect(move).toBeVisible();
+  await expect(move).toContainText("Recommended");
+  await expect(move).toContainText(/ask me to draft a reply/i);
+
   // Gap 1.3 — NOISE COLLAPSED: the one newsletter item renders as ONE count line, not a row. The
   // offline digest guarantees ≥1 newsletter, so the collapsed line is present WITH its count (no
   // absent-branch escape hatch — this is an offline regression lock, not a human-only check).

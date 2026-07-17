@@ -545,6 +545,20 @@ function fmtItemTime(ts: number, tz: string, bucket: BriefingItem["bucket"]): st
 // path: if the label ever needs the address too, surface it as a separate dim span.
 const senderLabel = (sender: string) => sender.replace(/\s*<[^>]*>\s*$/, "").trim() || sender;
 
+// Brand-token text styles — the legibility fix. The shared `box`/`label`/`dim` at the top of this
+// file hardcode #666/#e5e5e5 and set NO background, so the old briefing was grey text on a
+// transparent panel floating over the canvas's teal aura (the "words aren't clear" complaint). The
+// reshaped card renders on its own OPAQUE --card sheet (briefingSheet) with --ink/--ink-soft text
+// and tracked-caps --ink-soft labels — every colour a token (BRAND §8.1), never a raw hex.
+const labelBrand = {
+  fontSize: "0.7rem",
+  color: "var(--ink-soft)",
+  fontWeight: 800,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase" as const,
+} as const;
+const dimBrand = { color: "var(--ink-soft)", fontSize: "0.82rem" } as const;
+
 // ── The row grid ────────────────────────────────────────────────────────────────────────────
 // The first cut rendered each row as one flex line of "time · sender · gist" — a wall of
 // sentences the human verifier rejected as "crowded, hard to read". The fix is ALIGNMENT, not a
@@ -573,7 +587,7 @@ function SubjectLine({ subject }: { subject: string }) {
       {subject}
     </div>
   ) : (
-    <div style={{ ...dim, fontStyle: "italic" }}>(no subject)</div>
+    <div style={{ ...dimBrand, fontStyle: "italic" }}>(no subject)</div>
   );
 }
 
@@ -657,7 +671,7 @@ function BriefingRow({ item, tz, first }: { item: BriefingItem; tz: string; firs
     >
       <SenderCell item={item} />
       <RowBody item={item} />
-      <span style={{ ...dim, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+      <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
     </li>
   );
 }
@@ -667,7 +681,7 @@ function BriefingRow({ item, tz, first }: { item: BriefingItem; tz: string; firs
 function BriefingSection({ title, items, tz }: { title: string; items: readonly BriefingItem[]; tz: string }) {
   return (
     <>
-      <div style={label}>{title}</div>
+      <div style={labelBrand}>{title}</div>
       <ul style={{ listStyle: "none", padding: 0, margin: "0.2rem 0 0", display: "grid" }}>
         {items.map((item, i) => (
           // The Gmail message id — the row's real identity. `${ts}-${sender}` was NOT unique: an
@@ -680,61 +694,170 @@ function BriefingSection({ title, items, tz }: { title: string; items: readonly 
   );
 }
 
+// ── Direction A — the executive report shell (the Gap-2 reshape) ──────────────────────────────
+// The briefing renders as a standing brief, not a lede-then-rows receipt: a teal-900 masthead band
+// carrying the scope + the three code-owned counts as KPIs, then the lede, a NEEDS-YOU hero block
+// (each row with its recommended next move), the time-grouped ledger, and a footer. Two rules the
+// shape must never break: (1) SC-4 — no button/link/onClick anywhere, so a briefing can only re-enter
+// chat → PLAN → Approve; (2) BRAND §2 — no amber: --held is the approval gate's ALONE, so priority is
+// a teal-900 stripe + WEIGHT, never an amber pill.
+
+// The OPAQUE sheet — the other half of the legibility fix. `box` (a bare border, transparent) let the
+// canvas aura bleed through; this is a real --card surface with a soft shadow so text reads on any bg.
+const briefingSheet = {
+  background: "var(--card)",
+  border: "1px solid var(--rule)",
+  borderRadius: "0.9rem",
+  overflow: "hidden",
+  boxShadow: "0 18px 42px -30px rgb(14 20 25 / 45%), 0 2px 6px -3px rgb(14 20 25 / 12%)",
+} as const;
+
+/** One masthead KPI: a code-owned count over an uppercase caps label (BRAND §5 stat tile). White on
+ *  the teal band — high contrast by construction; the "need you" count lifts to --teal-400 so the eye
+ *  lands on it first. All three counts are code-owned (listedCount / needs-you / collapsed), never the
+ *  model's — the same ADR-004 discipline as the lede. */
+function Kpi({ value, caption, hot }: { value: number; caption: string; hot?: boolean }) {
+  return (
+    <div style={{ textAlign: "right" }}>
+      <div style={{ fontSize: "1.45rem", fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums", color: hot ? "var(--teal-400)" : "#fff" }}>
+        {value}
+      </div>
+      <div style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgb(255 255 255 / 70%)", marginTop: "0.28rem" }}>
+        {caption}
+      </div>
+    </div>
+  );
+}
+
+// The needs-you HERO row: a teal-900 priority stripe (frame colour, NOT the teal-600 CTA colour — a
+// stripe must not read as a control, SC-4), sender, subject over gist, the recommended move (the
+// chat-bridge — Direction C's idea, grafted on), and on the right the due emphasis (WEIGHT, not
+// amber) over the category tag and time. Same testids as the ledger rows so the E2E holds, plus
+// briefing-move. `minmax(0, …)` on the text columns is the same overflow guard the ledger grid uses.
+const PRIORITY_GRID = {
+  display: "grid",
+  gridTemplateColumns: "3px minmax(0, 8.5rem) minmax(0, 1fr) max-content",
+  gap: "0.75rem",
+  padding: "0.65rem 0",
+  alignItems: "start",
+} as const;
+
+function PriorityRow({ item, tz, first }: { item: BriefingItem & { move: string }; tz: string; first?: boolean }) {
+  return (
+    <li data-testid="briefing-item" style={{ ...PRIORITY_GRID, ...(first ? {} : { borderTop: "1px solid var(--rule)" }) }}>
+      <span aria-hidden="true" style={{ width: "3px", borderRadius: "2px", background: "var(--teal-900)", alignSelf: "stretch" }} />
+      <SenderCell item={item} />
+      <div style={{ minWidth: 0 }}>
+        <SubjectLine subject={item.subject} />
+        <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", lineHeight: 1.5, marginTop: "0.15rem", ...wrapAnywhere }}>{item.gist}</div>
+        {/* The recommended next move — the bridge back to the gated action. "Recommended" is card
+            chrome (teal-900, legible on white); the sentence is the code-derived suggestedMove. Text
+            only, never a control. */}
+        <div data-testid="briefing-move" style={{ fontSize: "0.8rem", lineHeight: 1.4, marginTop: "0.3rem", color: "var(--ink-soft)", ...wrapAnywhere }}>
+          <span style={{ fontWeight: 800, color: "var(--teal-900)", letterSpacing: "0.01em" }}>Recommended</span> {item.move}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem", textAlign: "right", whiteSpace: "nowrap" }}>
+        {/* Emphasis via WEIGHT, not amber (BRAND §2 — --held is the approval gate's alone). */}
+        {item.deadline && <span style={{ fontWeight: 800, fontSize: "0.78rem", color: "var(--ink)" }}>Due: {item.deadline}</span>}
+        <span data-testid="briefing-category" style={categoryTag}>{item.category}</span>
+        <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+      </div>
+    </li>
+  );
+}
+
 function BriefingCard({ briefing }: { briefing: Briefing }) {
   const { tz, items, listedCount } = briefing;
-  // The intelligent report — lede, action-first needs-you, time-grouped fyi remainder, and the
-  // collapsed-noise count — comes ENTIRELY from the pure view model. The card does not re-derive
-  // ordering, collapse, or the lede (Gap 1.2/1.3/1.4/1.1); it only paints what buildBriefingView says.
+  // The intelligent report — lede, action-first needs-you (each with its recommended move), the
+  // time-grouped fyi remainder, and the collapsed-noise count — comes ENTIRELY from the pure view
+  // model. The card does not re-derive ordering, collapse, the lede, or the move (ADR-004 / cockpit.md).
   const view = buildBriefingView(briefing);
   const createdLabel = new Intl.DateTimeFormat(undefined, {
     timeZone: tz,
     hour: "numeric",
     minute: "2-digit",
   }).format(briefing.createdAt);
+  const scope = `${briefing.range} · ${tz} · built ${createdLabel}`;
 
   return (
-    <div data-testid="briefing-card" style={box}>
-      <div style={label}>INBOX BRIEFING</div>
-      {/* LEDE first (Gap 1.1): the story of the inbox — code-owned counts welded to the model's
-          qualitative synopsis clause — read before any row. Prominent but calm: --ink, medium weight. */}
-      <p data-testid="briefing-lede" style={{ color: "var(--ink)", fontWeight: 500, fontSize: "1rem", lineHeight: 1.4, margin: "0.35rem 0 0.25rem" }}>
-        {view.lede}
-      </p>
-      <div style={{ ...dim, margin: "0 0 0.75rem" }}>
-        {briefing.range} · {tz} · built {createdLabel}
-        {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
-        {listedCount > items.length ? ` · summarized ${items.length} of ${listedCount}` : ""}
+    <div data-testid="briefing-card" style={briefingSheet}>
+      {/* MASTHEAD — the teal-900 frame band. White-on-teal is the legibility fix's other half, and the
+          three code-owned counts give the at-a-glance executive read the old lede-then-rows lacked. */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, var(--teal-900), #0a6a60)",
+          color: "#fff",
+          padding: "0.95rem 1.15rem",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.9rem 1.2rem",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--teal-400)" }}>Inbox Briefing</div>
+          <div style={{ color: "rgb(255 255 255 / 72%)", fontSize: "0.8rem", marginTop: "0.28rem", ...wrapAnywhere }}>{scope}</div>
+        </div>
+        <div style={{ display: "flex", gap: "1.35rem", flex: "none" }}>
+          <Kpi value={listedCount} caption="Messages" />
+          <Kpi value={view.needsYou.length} caption="Need you" hot />
+          <Kpi value={view.collapsedCount} caption="Automated" />
+        </div>
       </div>
 
-      {/* SC-4: suggestions ONLY. There is deliberately no button, link, or onClick anywhere in this
-          card — the collapsed row and the category tags are TEXT, not toggles/links. Acting on a
-          briefing goes back through the conversation → PLAN → Approve gate, so nothing a third-party
-          email says can become a one-click action. Keep it that way. */}
-      {view.needsYou.length > 0 && (
-        <div data-testid="briefing-needs-you" style={{ marginBottom: "1rem" }}>
-          <BriefingSection title="NEEDS YOU" items={view.needsYou} tz={tz} />
-          <p style={{ ...dim, margin: "0.5rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
-        </div>
-      )}
-
-      {/* TIME-GROUPED FYI (the SECONDARY axis) — action-first is satisfied because needs-you sits
-          above. Order + empty-skipping are the view model's; this only maps a bucket to its chrome. */}
-      {view.timeSections.map(({ bucket, items: rows }) => {
-        const meta = SECTION_META[bucket];
-        return (
-          <div key={bucket} data-testid={meta.testid} style={{ marginBottom: "1rem" }}>
-            <BriefingSection title={meta.title} items={rows} tz={tz} />
-          </div>
-        );
-      })}
-
-      {/* COLLAPSED NOISE (Gap 1.3): N automated notifications as ONE muted line — never N rows, and
-          NOT a clickable disclosure (SC-4 — text only). */}
-      {view.collapsedCount > 0 && (
-        <p data-testid="briefing-collapsed" style={{ ...dim, margin: "0.25rem 0 0" }}>
-          {view.collapsedCount} automated notification{view.collapsedCount === 1 ? "" : "s"}
+      <div style={{ padding: "1.05rem 1.15rem 1.2rem" }}>
+        {/* LEDE first (Gap 1.1) — the executive summary line. MUST stay the first briefing-lede/-item
+            element in the card (the E2E asserts lede-first); the masthead above carries no such testid. */}
+        <p data-testid="briefing-lede" style={{ color: "var(--ink)", fontWeight: 500, fontSize: "1rem", lineHeight: 1.45, margin: "0 0 1rem" }}>
+          {view.lede}
         </p>
-      )}
+
+        {/* SC-4: suggestions ONLY. No button, link, or onClick anywhere below — the move line, the
+            category tags, and the collapsed count are TEXT. Acting on a briefing re-enters chat →
+            PLAN → Approve, so nothing a third-party email says can become a one-click action. */}
+        {view.needsYou.length > 0 && (
+          <div data-testid="briefing-needs-you" style={{ marginBottom: "1.15rem" }}>
+            <div style={{ ...labelBrand, color: "var(--teal-900)" }}>Needs you</div>
+            <ul style={{ listStyle: "none", padding: 0, margin: "0.35rem 0 0", display: "grid" }}>
+              {view.needsYou.map((item, i) => (
+                <PriorityRow key={item.id} item={item} tz={tz} first={i === 0} />
+              ))}
+            </ul>
+            <p style={{ ...dimBrand, margin: "0.55rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
+          </div>
+        )}
+
+        {/* TIME-GROUPED LEDGER (the SECONDARY axis) — reuses the quiet BriefingSection/Row. Order +
+            empty-skipping are the view model's; this only maps a bucket to its chrome. */}
+        {view.timeSections.map(({ bucket, items: rows }) => {
+          const meta = SECTION_META[bucket];
+          return (
+            <div key={bucket} data-testid={meta.testid} style={{ marginBottom: "1.1rem" }}>
+              <BriefingSection title={meta.title} items={rows} tz={tz} />
+            </div>
+          );
+        })}
+
+        {/* FOOTER: the collapsed-noise count (Gap 1.3 — its own testid, the E2E asserts it) + cap
+            honesty. One muted line, never N rows; text, not a clickable disclosure (SC-4). */}
+        <div style={{ marginTop: "0.5rem", paddingTop: "0.8rem", borderTop: "1px dashed var(--rule)", display: "flex", flexWrap: "wrap", gap: "0.35rem 1rem", justifyContent: "space-between" }}>
+          {view.collapsedCount > 0 ? (
+            <p data-testid="briefing-collapsed" style={{ ...dimBrand, margin: 0 }}>
+              {view.collapsedCount} automated notification{view.collapsedCount === 1 ? "" : "s"}
+            </p>
+          ) : (
+            <span />
+          )}
+          {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
+          {listedCount > items.length && (
+            <p style={{ ...dimBrand, margin: 0 }}>
+              Summarized {items.length} of {listedCount}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

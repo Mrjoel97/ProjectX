@@ -103,6 +103,7 @@ Tokens live in `globals.css` — use the CSS variables, never hardcode hex. Two 
 - **Help/upsell banner:** full-width gradient (teal→blue) with a white pill CTA ("Ask AI for Help").
 - **Status pills:** small dark pill ("Loading") top-right; type/label pills use uppercase small caps.
 - **Empty states:** honest zeros (`$0`, `0`) rather than fake data.
+- **Executive report card** (the inbox briefing, `cards.tsx` `BriefingCard`; approved direction 2026-07-17): when a card summarizes many items, shape it as a *standing brief*, not a list. A dark **teal-900 masthead band** (white text — high contrast by construction) carries the scope + a short row of code-owned **KPI counts** (BRAND §5 stat tile), then a one-line summary (lede), then a **priority "needs you" hero block** (each row may carry a *recommended next move* that routes back to chat), then the rest demoted to a **quiet ledger** grouped by a secondary axis, then a footer. This refines "never dense tables-on-white" (§4): *structured reports* — aligned columns, ruled sections, card-native whitespace, no gridlines — are the intended pattern; cramped spreadsheets are not. Priority is a neutral stripe + weight, **never amber** (§2 — `--held` is the approval gate's alone). Keep it read-only where the card must not act (the briefing's SC-4: zero button/link/onClick).
 
 ---
 
