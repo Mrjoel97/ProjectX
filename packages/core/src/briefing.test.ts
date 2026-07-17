@@ -2,7 +2,11 @@ import { describe, expect, test } from "vitest";
 import {
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
+  type BriefingItem,
+  buildBriefingView,
   bucket,
+  collapseNoise,
+  composeLede,
   type DigestItem,
   dayKey,
   type InboxMessageMeta,
@@ -243,5 +247,145 @@ describe("joinDigest — the model owns gists, code owns identity and time (ADR-
 
   test("no items → no rows", () => {
     expect(joinDigest(selected, [], now, TOKYO)).toEqual([]);
+  });
+});
+
+// ---- Gap 1 reshape: the intelligent report, not a receipt (03.7-06) ----
+
+/** A briefing row with sensible defaults; only the overridden axes matter per case. */
+const bItem = (id: string, extra: Partial<BriefingItem> = {}): BriefingItem => ({
+  id,
+  bucket: "today",
+  sender: `${id} <${id}@example.com>`,
+  subject: `subject ${id}`,
+  ts: 1_000,
+  gist: `gist ${id}`,
+  category: "fyi",
+  needsReply: false,
+  ...extra,
+});
+
+describe("composeLede — counts are CODE-owned, the synopsis is the model's clause (Gap 1.1, ADR-004)", () => {
+  // 3 of these are "need you" (2 needsReply + 1 deadline); listedCount is the code-owned total.
+  const items = [
+    bItem("a", { needsReply: true }),
+    bItem("b", { needsReply: true }),
+    bItem("c", { deadline: "by Friday" }),
+    bItem("d"),
+    bItem("e"),
+  ];
+
+  test("leads with the code-owned counts, NEVER a number from the synopsis", () => {
+    // The synopsis lies with a "99" — the lede's counts must come from listedCount + the items,
+    // so "99" is never the number the lede states.
+    const lede = composeLede(items, 24, "99 urgent fires, mostly billing");
+    expect(lede.startsWith("24 messages, 3 need you")).toBe(true);
+    expect(lede).not.toMatch(/^99/);
+  });
+
+  test("appends a non-empty synopsis as the qualitative clause", () => {
+    const lede = composeLede(items, 24, "mostly billing notifications and two recruiting threads");
+    expect(lede).toBe("24 messages, 3 need you — mostly billing notifications and two recruiting threads");
+  });
+
+  test("empty synopsis → counts-only lede, no dangling separator, no throw", () => {
+    expect(composeLede(items, 24, "")).toBe("24 messages, 3 need you");
+    expect(composeLede(items, 24, "   ")).toBe("24 messages, 3 need you");
+    expect(composeLede(items, 24, undefined)).toBe("24 messages, 3 need you");
+    expect(composeLede(items, 24)).not.toContain(" — ");
+  });
+
+  test("zero need-you still reads cleanly", () => {
+    expect(composeLede([bItem("x"), bItem("y")], 2)).toBe("2 messages, 0 need you");
+  });
+});
+
+describe("collapseNoise — 12 notifications become ONE count, never 12 rows (Gap 1.3)", () => {
+  test("newsletters are removed from surfaced and counted", () => {
+    const items = Array.from({ length: 12 }, (_, i) => bItem(`n${i}`, { category: "newsletter" }));
+    const { surfaced, collapsedCount } = collapseNoise(items);
+    expect(collapsedCount).toBe(12);
+    expect(surfaced.filter((i) => i.category === "newsletter")).toHaveLength(0);
+    expect(surfaced).toHaveLength(0);
+  });
+
+  test("action / fyi / other stay surfaced — only newsletters collapse (conservative)", () => {
+    const items = [
+      bItem("a", { category: "action" }),
+      bItem("f", { category: "fyi" }),
+      bItem("o", { category: "other" }),
+      bItem("n", { category: "newsletter" }),
+    ];
+    const { surfaced, collapsedCount } = collapseNoise(items);
+    expect(collapsedCount).toBe(1);
+    expect(surfaced.map((i) => i.id)).toEqual(["a", "f", "o"]);
+  });
+
+  test("a needs-you item is NEVER collapsed even if mis-categorized newsletter (needs-you wins)", () => {
+    const items = [
+      bItem("reply", { category: "newsletter", needsReply: true }),
+      bItem("due", { category: "newsletter", deadline: "tomorrow" }),
+    ];
+    const { surfaced, collapsedCount } = collapseNoise(items);
+    expect(collapsedCount).toBe(0);
+    expect(surfaced.map((i) => i.id)).toEqual(["reply", "due"]);
+  });
+});
+
+describe("buildBriefingView — action-first, time preserved as the secondary axis (Gap 1.2, locked constraint)", () => {
+  // 2 need-you, 3 plain fyi across all three buckets, 2 newsletters (noise).
+  const items: BriefingItem[] = [
+    bItem("A", { needsReply: true, bucket: "today" }),
+    bItem("B", { deadline: "Friday", bucket: "yesterday" }),
+    bItem("C", { category: "fyi", bucket: "today" }),
+    bItem("D", { category: "fyi", bucket: "yesterday" }),
+    bItem("E", { category: "fyi", bucket: "thisWeek" }),
+    bItem("F", { category: "newsletter", bucket: "today" }),
+    bItem("G", { category: "newsletter", bucket: "thisWeek" }),
+  ];
+  const briefing = { items, listedCount: 10, synopsis: "mostly newsletters" };
+
+  test("needsYou is a SEPARATE top block, never interleaved into timeSections (action-first)", () => {
+    const view = buildBriefingView(briefing);
+    expect(view.needsYou.map((i) => i.id)).toEqual(["A", "B"]);
+    const timed = view.timeSections.flatMap((s) => s.items.map((i) => i.id));
+    expect(timed).not.toContain("A");
+    expect(timed).not.toContain("B");
+  });
+
+  test("timeSections stay ordered [today, yesterday, thisWeek], each only its bucket's remainder (time PRESERVED)", () => {
+    const view = buildBriefingView(briefing);
+    expect(view.timeSections.map((s) => s.bucket)).toEqual(["today", "yesterday", "thisWeek"]);
+    expect(view.timeSections.find((s) => s.bucket === "today")?.items.map((i) => i.id)).toEqual(["C"]);
+    expect(view.timeSections.find((s) => s.bucket === "yesterday")?.items.map((i) => i.id)).toEqual(["D"]);
+    expect(view.timeSections.find((s) => s.bucket === "thisWeek")?.items.map((i) => i.id)).toEqual(["E"]);
+  });
+
+  test("empty buckets are skipped", () => {
+    const view = buildBriefingView({
+      items: [bItem("C", { category: "fyi", bucket: "today" }), bItem("E", { category: "fyi", bucket: "thisWeek" })],
+      listedCount: 2,
+    });
+    expect(view.timeSections.map((s) => s.bucket)).toEqual(["today", "thisWeek"]);
+  });
+
+  test("newsletters are absent from every timeSection and surface only as collapsedCount (Gap 1.3)", () => {
+    const view = buildBriefingView(briefing);
+    expect(view.collapsedCount).toBe(2);
+    const timed = view.timeSections.flatMap((s) => s.items.map((i) => i.id));
+    expect(timed).not.toContain("F");
+    expect(timed).not.toContain("G");
+    expect(view.needsYou.map((i) => i.id)).not.toContain("F");
+  });
+
+  test("lede equals composeLede over the FULL item set (counts reflect all items incl. collapsed + needs-you)", () => {
+    const view = buildBriefingView(briefing);
+    expect(view.lede).toBe(composeLede(items, 10, "mostly newsletters"));
+    expect(view.lede).toBe("10 messages, 2 need you — mostly newsletters");
+  });
+
+  test("a missing synopsis degrades to a counts-only lede, never throws (pre-delta row)", () => {
+    const view = buildBriefingView({ items, listedCount: 10 });
+    expect(view.lede).toBe("10 messages, 2 need you");
   });
 });
