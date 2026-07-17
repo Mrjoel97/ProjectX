@@ -34,10 +34,16 @@ export interface DigestItem {
   deadline?: string;
 }
 
-/** One briefing row: the model's gist welded onto the code-owned sender/ts/bucket. */
+/** One briefing row: the model's gist welded onto the code-owned id/sender/subject/ts/bucket. */
 export interface BriefingItem {
+  /** The Gmail message id — CODE-owned, from the list response. The row's STABLE IDENTITY: it is
+   *  what the card keys on. `${ts}-${sender}` is not unique (one sender, two messages, same
+   *  internalDate ms is a real and observed case — automated no-reply senders batch). */
+  id: string;
   bucket: Bucket;
   sender: string;
+  /** The Subject header — CODE-owned like `sender`, never the model's. May be "" (Gmail allows it). */
+  subject: string;
   ts: number;
   gist: string;
   category: string;
@@ -112,11 +118,16 @@ export function selectForDigest(
 /**
  * Weld each digest gist onto the message it actually describes, by index.
  *
- * THE TRUST BOUNDARY (ADR-004): `bucket`/`sender`/`ts`/`isUnread` come from `selected[index]` —
- * the message the code fetched — and NEVER from the digest item, even if the model emitted such
- * fields. An index that is out of range, non-integer, or a repeat has no real message behind it and
- * is dropped, so the model cannot invent a briefing row. Messages outside the 7-day window drop too.
- * Output order follows `items`.
+ * THE TRUST BOUNDARY (ADR-004): `id`/`bucket`/`sender`/`subject`/`ts`/`isUnread` come from
+ * `selected[index]` — the message the code fetched — and NEVER from the digest item, even if the
+ * model emitted such fields. An index that is out of range, non-integer, or a repeat has no real
+ * message behind it and is dropped, so the model cannot invent a briefing row. Messages outside the
+ * 7-day window drop too. Output order follows `items`.
+ *
+ * `id` and `subject` ride the SAME rail as `sender`: both are Gmail-header facts the code already
+ * holds, so welding them here costs nothing and keeps the model's surface exactly as narrow as it
+ * was (gist/category/needsReply/deadline). The model must never own either — `id` is row identity
+ * and `subject` is the row's heading; a model-authored one would be a fabrication rendered as fact.
  */
 export function joinDigest(
   selected: readonly InboxMessageMeta[],
@@ -134,8 +145,10 @@ export function joinDigest(
     if (b === null) continue;
     seen.add(item.index);
     out.push({
+      id: message.id,
       bucket: b,
       sender: message.from,
+      subject: message.subject,
       ts: message.internalDate,
       gist: item.gist,
       category: item.category,

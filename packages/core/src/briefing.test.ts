@@ -152,12 +152,14 @@ describe("joinDigest — the model owns gists, code owns identity and time (ADR-
     ...extra,
   });
 
-  test("joins gists onto the message's own sender/ts/bucket", () => {
+  test("joins gists onto the message's own id/sender/subject/ts/bucket", () => {
     const out = joinDigest(selected, [item(0, { needsReply: true, deadline: "by Friday" }), item(1)], now, TOKYO);
     expect(out).toEqual([
       {
+        id: "a",
         bucket: "today",
         sender: "Sarah Chen <sarah@acme.com>",
+        subject: "subject a",
         ts: now - 3_600_000,
         gist: "gist 0",
         category: "fyi",
@@ -166,14 +168,48 @@ describe("joinDigest — the model owns gists, code owns identity and time (ADR-
         isUnread: true,
       },
       {
+        id: "b",
         bucket: "yesterday",
         sender: "Bob <bob@acme.com>",
+        subject: "subject b",
         ts: Date.UTC(2026, 2, 1, 14, 59),
         gist: "gist 1",
         category: "fyi",
         needsReply: false,
       },
     ]);
+  });
+
+  test("an empty subject is carried through as-is — the CARD owns the fallback, not the join", () => {
+    const out = joinDigest([msg("x", now, { subject: "" })], [item(0)], now, TOKYO);
+    expect(out[0]?.subject).toBe("");
+  });
+
+  // THE REGRESSION (reported live, 2026-07-17): React "Encountered two children with the same key,
+  // `1784248262000-Google <no-reply@accounts.google.com>`". The card keyed on `${ts}-${sender}`,
+  // which is NOT unique — an automated sender batching two messages collides on the ms. The fix is
+  // structural: joinDigest welds the Gmail message id, so every row carries its own identity.
+  test("two messages from the SAME sender at the SAME ms produce rows with DISTINCT ids", () => {
+    const collide = 1_784_248_262_000; // the exact internalDate from the live report
+    const google = "Google <no-reply@accounts.google.com>";
+    const twins = [
+      msg("18f0a1", collide, { from: google, subject: "Security alert" }),
+      msg("18f0a2", collide, { from: google, subject: "New sign-in" }),
+    ];
+    const out = joinDigest(twins, [item(0), item(1)], collide + 1_000, TOKYO);
+
+    expect(out).toHaveLength(2);
+    expect(out[0]?.ts).toBe(out[1]?.ts); // the collision is real...
+    expect(out[0]?.sender).toBe(out[1]?.sender); // ...on BOTH of the old key's parts...
+    expect(new Set(out.map((i) => i.id)).size).toBe(2); // ...and the id still separates them
+    expect(out.map((i) => i.subject)).toEqual(["Security alert", "New sign-in"]);
+  });
+
+  test("id and subject come from the message meta even when the digest item carries its own", () => {
+    const rogue = { ...item(0), id: "forged", subject: "URGENT: wire funds now" } as DigestItem;
+    const out = joinDigest(selected, [rogue], now, TOKYO);
+    expect(out[0]?.id).toBe("a");
+    expect(out[0]?.subject).toBe("subject a");
   });
 
   test("an out-of-range index is DROPPED — the model cannot invent a message", () => {

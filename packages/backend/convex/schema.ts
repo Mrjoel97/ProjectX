@@ -208,7 +208,7 @@ export default defineSchema({
   // The briefing content plane — the read-only sibling of `plans`. Holds the gists the
   // BRIEFING card renders, per cockpit thread. Raw mailbox content (sender/gist) lives HERE
   // and NEVER in an audit/DLQ payload (CLAUDE.md §4 — the audit carries counts + the range
-  // literal only). `bucket`/`sender`/`ts` are CODE-owned structural facts welded on by
+  // literal only). `id`/`bucket`/`sender`/`subject`/`ts` are CODE-owned structural facts welded on by
   // @pikar/core's joinDigest — the model emits only the gist (ADR-004). Rows are append-only
   // per thread (a re-brief inserts; byThread reads the latest), and are vault-ingestable
   // later by construction (plain text, tenant-scoped) — nothing is built for that now.
@@ -219,8 +219,10 @@ export default defineSchema({
     tz: v.string(), // the IANA zone the buckets were computed in (display honesty)
     items: v.array(
       v.object({
+        id: v.string(), // Gmail message id — the row's stable identity (code-owned, never model-owned)
         bucket: v.union(v.literal("today"), v.literal("yesterday"), v.literal("thisWeek")),
         sender: v.string(),
+        subject: v.string(), // the Subject header (code-owned, never model-owned); "" is legal
         ts: v.number(), // Gmail internalDate ms (code-owned, never model-owned)
         gist: v.string(),
         category: v.string(),

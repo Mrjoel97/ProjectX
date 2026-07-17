@@ -12,27 +12,20 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import schema from "./schema";
 
-// Mirrors briefings.items in schema.ts (which mirrors @pikar/core's BriefingItem, Plan 01).
-// HAND-MAINTAINED: it must carry the same fields or `insert` rejects a valid row at runtime.
-const ITEMS = v.array(
-  v.object({
-    bucket: v.union(v.literal("today"), v.literal("yesterday"), v.literal("thisWeek")),
-    sender: v.string(),
-    ts: v.number(),
-    gist: v.string(),
-    category: v.string(),
-    needsReply: v.boolean(),
-    deadline: v.optional(v.string()),
-    isUnread: v.optional(v.boolean()),
-  }),
-);
+// DERIVED from schema.ts — the single source of truth for the row shape (which mirrors @pikar/core's
+// BriefingItem, Plan 01). This was a hand-copied duplicate and it did exactly what hand-copied
+// duplicates do: adding `id`/`subject` to the schema left this validator behind, and `insert`
+// rejected rows the schema considered valid ("Unexpected field `id`"). Deriving it means the next
+// field lands in ONE place. ponytail rung 2 — the validator already exists, so don't retype it.
+const ITEMS = schema.tables.briefings.validator.fields.items;
 
 /**
  * Persist one briefing for a thread. Append-only: a re-brief inserts a NEW row rather than
  * patching (the old briefing stays a truthful record of what was said at the time, and
  * `byThread` reads the latest). `items` arrive already joined by @pikar/core's joinDigest —
- * sender/ts/bucket are code-owned facts, never model output (ADR-004).
+ * id/sender/subject/ts/bucket are code-owned facts, never model output (ADR-004).
  */
 export const insert = internalMutation({
   args: {

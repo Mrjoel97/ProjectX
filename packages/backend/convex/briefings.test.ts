@@ -28,8 +28,10 @@ function seed(t: T, over: { tenantId?: string; threadId?: string; createdAt?: nu
     tz: "UTC",
     items: [
       {
+        id: "gmail_msg_1",
         bucket: "today" as const,
         sender: "Sarah <sarah@example.com>",
+        subject: "Q3 numbers",
         ts: NOW,
         gist: over.gist ?? "asks for the Q3 numbers",
         category: "request",
