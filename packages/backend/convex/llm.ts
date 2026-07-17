@@ -1118,7 +1118,7 @@ export function buildCockpitTools(
           body: rawBodies.get(m.id) || m.snippet,
         }));
 
-        const digest: { items: DigestItem[] } = await ctx.runAction(internal.llm.digestInbox, {
+        const digest: DigestBatch = await ctx.runAction(internal.llm.digestInbox, {
           tenantId,
           messages: digestInput,
           // EVAL-01 pin (renderAndStore precedent) — undefined = the active skill row.
@@ -1137,6 +1137,9 @@ export function buildCockpitTools(
           range,
           tz,
           items,
+          // The lede rides the content-plane ROW, alongside the gists — never the counts-only loop
+          // return below, never the refs-only briefing.created audit (SC-2 / §4).
+          synopsis: digest.synopsis,
           listedCount: listRes.messages.length,
           createdAt: Date.now(),
         });

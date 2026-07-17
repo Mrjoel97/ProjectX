@@ -35,6 +35,9 @@ export const insert = internalMutation({
     tz: v.string(),
     items: ITEMS,
     listedCount: v.number(),
+    // The digest's cross-message lede (optional — a pre-07 caller omits it). Content-plane only:
+    // it never rides the counts-only tool return nor the refs-only briefing.created audit (§4).
+    synopsis: v.optional(v.string()),
     createdAt: v.number(),
   },
   handler: async (ctx, args) => await ctx.db.insert("briefings", args),

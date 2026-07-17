@@ -232,6 +232,10 @@ export default defineSchema({
       }),
     ),
     listedCount: v.number(), // how many the list returned → "summarized N of M" cap honesty
+    // The model's ONE cross-message clause (the lede) — qualitative story only, never a count/
+    // sender/date (ADR-004). Optional → no migration; a pre-07 row simply has no synopsis and the
+    // lede degrades to counts-only (@pikar/core composeLede handles the absent case).
+    synopsis: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 

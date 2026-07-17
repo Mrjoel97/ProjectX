@@ -563,6 +563,17 @@ test("digestInbox (smoke) emits a non-empty cross-message synopsis + a collapse-
   expect(batch.items[0]!.needsReply).toBe(true);
 });
 
+test("briefInbox persists the digest synopsis on the briefings row (Gap 1.1)", async () => {
+  const { t, planId } = await setupBriefing();
+  await callClock(t, planId, "briefInbox", { range: "today" });
+
+  const row = await t.run((ctx) => ctx.db.query("briefings").first());
+  expect(row, "no briefings row was written").not.toBeNull();
+  // The synopsis rides the ROW (the content plane), never the counts-only loop return.
+  expect(typeof row!.synopsis).toBe("string");
+  expect(row!.synopsis!.length, "the synopsis did not reach the briefings row").toBeGreaterThan(0);
+});
+
 test("listInbox returns sender LABELS + subjects + a count — never an address, snippet or body", async () => {
   const { t, planId } = await setupBriefing();
   const reply = await callClock(t, planId, "listInbox", { range: "today" });

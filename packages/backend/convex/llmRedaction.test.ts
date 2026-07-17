@@ -314,6 +314,40 @@ test("llm.ts briefing.created audit payload is refs-only ({ briefingId, range, l
   );
 });
 
+test("the digest synopsis rides the briefings row ONLY — never the loop return, never the audit (SC-2)", () => {
+  // The synopsis is model prose over untrusted bodies (Gap 1.1). Like a gist it belongs on the
+  // content-plane ROW, and it must NEVER cross into the counts-only tool return (the tool-bearing
+  // loop's context) NOR the refs-only briefing.created payload (§4). Mirrors the rawBodies scan.
+  // Bound to buildCockpitTools' close — briefInboxBlock() runs to EOF, which would sweep in
+  // digestInbox's OWN synopsis-bearing returns (they are legal there; this scan is about the tool).
+  const full = briefInboxBlock().replace(/\r\n/g, "\n");
+  const closeAt = full.indexOf("\n  };\n}");
+  expect(closeAt, "buildCockpitTools close not found after briefInbox").toBeGreaterThan(0);
+  // Strip line comments — the invariant is about the CODE surface. Prose that documents the
+  // boundary by name (a comment mentioning "return" or "synopsis") must not trip the scan.
+  const block = full.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
+  // Present at all — a rename must not silently void the scan.
+  expect(block, "digest.synopsis is gone from briefInbox").toMatch(/digest\.synopsis|synopsis/);
+  // It reaches the briefings insert — its ONE sanctioned destination.
+  const insertMatch = block.match(/internal\.briefings\.insert,\s*\{[\s\S]*?\}\)/);
+  expect(insertMatch, "briefings.insert call not found in briefInbox").not.toBeNull();
+  expect(insertMatch![0], "synopsis never reaches the briefings row").toMatch(/synopsis/);
+  // THE assertion: no `return` in briefInbox may carry the synopsis into the loop.
+  const returns = block.match(/return\s+[^;]*;/g) ?? [];
+  expect(returns.length, "no return statements found in briefInbox — the scan is vacuous").toBeGreaterThan(0);
+  for (const r of returns) {
+    expect(r, `a briefInbox return references synopsis (model prose would reach the loop): ${r}`).not.toMatch(
+      /synopsis/,
+    );
+  }
+  // And it must NOT appear in the briefing.created audit payload object.
+  const auditPayload = block.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBeNull();
+  expect(auditPayload![1], "synopsis leaked into the refs-only briefing.created payload").not.toMatch(
+    /synopsis/,
+  );
+});
+
 test("draftCockpit receives NO mailbox header hints — greetingName is the only mailbox-derived arg", () => {
   // The resolved display NAME reaches the drafter for the greeting; header hints (subject/date/
   // count/the raw matches) must NEVER reach the LLM (SC3). Scope to the draftCockpit block.
