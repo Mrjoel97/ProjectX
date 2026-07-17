@@ -265,7 +265,7 @@ Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gs
 **Plans:** 6 plans (Wave 1: sequential contract on main; Wave 2: FOUR parallel worktree lanes with pairwise-disjoint file ownership; Wave 3: integration + phase close)
 
 Plans:
-- [ ] 03.8-01-PLAN.md — Wave-0 contract (schema union, internal seam variant, dispatcher stubs, deps+lockfile, watch.json/playbook/PARALLELIZATION) — wave 1, sequential, main
+- [x] 03.8-01-PLAN.md — Wave-0 contract (schema union, internal seam variant, dispatcher stubs, deps+lockfile, watch.json/playbook/PARALLELIZATION) — wave 1, sequential, main — completed 2026-07-18 (all 10 contract items on `main`; vault 27/27 + vault.test 18/18 green; schema.ts/vault.ts/watch.json/package.jsons/lockfile FROZEN; NO skills.ts edit, deliberate absence verified; Wave-2 lanes may start)
 - [ ] 03.8-02-PLAN.md — Lane 1: PDF + image extraction (unpdf text-layer-first + hosted OCR fallback) + live smoke — wave 2, own worktree
 - [ ] 03.8-03-PLAN.md — Lane 2: Office parsers (pure-TS fflate + XML text-walk, DOCX/XLSX/PPTX, zero convex edits) — wave 2, own worktree
 - [ ] 03.8-04-PLAN.md — Lane 3: backlog sweep + retry + vault UI lifecycle (extracting pill / failed+Retry / truncation note) + offline E2E — wave 2, own worktree

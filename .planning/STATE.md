@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Phase 3.8 context gathered
-last_updated: "2026-07-17T21:50:12.407Z"
+stopped_at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
+last_updated: "2026-07-17T22:52:25.551Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 19
   completed_phases: 11
-  total_plans: 89
-  completed_plans: 85
+  total_plans: 95
+  completed_plans: 86
 ---
 
 ---
@@ -306,6 +306,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
+Phase: 3.8 (Vault Document Extraction) — IN PROGRESS. Wave 0 (the sequential contract) COMPLETE on `main`, 1/6 plans complete — Wave-2 lanes may now start in parallel worktrees.
+Plan: 03.8-01 COMPLETE (Wave 0 — the extraction CONTRACT; every shared edit the 4 lanes would fight over landed sequentially, and `schema.ts`/`vault.ts`/`watch.json`/both package.jsons/`pnpm-lock.yaml` are now FROZEN for the phase). `@pikar/vault` gained `extractKind.ts` (barrel-exported `extractionKindFor` — pdf/image/office/transcribe with the octet-stream `.docx/.xlsx/.pptx` extension fallback, classifier deliberately DUMB about containers — plus `VAULT_EXTRACT_CHAR_CAP=400_000`/`VAULT_EXTRACT_PAGE_CAP=50`/`MIN_CHARS_PER_PAGE=25`/`TRANSCRIBABLE_CONTAINER_MIME` (mp4/webm/mpeg video + the audio list, NOT quicktime)) and the `officeText.ts` stub (throws `office_parse_not_implemented`; deliberately OFF the index barrel — the subpath export `@pikar/vault/officeText` keeps fflate structurally out of the V8 bundle). Schema: `vaultDocuments.status` grew `extracting` + `extractionTruncated` optional flag (additive, no migration — Pitfall 2 closed). `vault.ts`: `vaultUpload` now schedules `internal.vaultExtract.extractDoc` / `internal.vaultTranscribe.transcribeDoc` by kind when `!searchable` (row STAYS `pending_extraction` at insert — the action flips it, honest pill; TXT/MD/CSV path regression-guarded, zip stays storage-only); the scheduler-safe seam `ingestExtractedText` (fail-closed tenant guard, stores RAW extracted text per the planner-confirmed Open-Q2 call — extraction-time scanText is the lanes' gate + counts source, downstream re-scans) + `markExtracting` + `getDocForExtraction` closed the identity wall (Pitfall 3 — the public `vaultIngestText` throws UNAUTHENTICATED for scheduler callers). Both `"use node"` lane stubs exist and compile under codegen (`markFailed("not_implemented")` bodies; explicit `Promise<null>` returns, §96). Deps: `unpdf@1.6.2` (backend) + `fflate@0.8.3` (vault) pinned via `pnpm add -E` (caret-free), lockfile committed once (Pitfall 4). Governance: watch.json got the six exact vaultExtract/vaultTranscribe/vaultSweep (+test) paths (Pitfall 5 — prefixes don't glob); vault.md gained the extraction-lifecycle section (status walk, seam invariant, caps, redact-then-audit, bytes-via-storage-never-args) + FOUR per-lane append-only subsections (each lane writes ONLY its own — Stop hook satisfied per-lane, no cross-lane playbook conflicts); PARALLELIZATION.md carries the 3.8 lane table (lane-1/vault-extract, lane-2/office-parsers, lane-3/sweep-ui, lane-4/video-transcribe) + the extended frozen-singleton list. TDD both code tasks: 10 new vault.test.ts tests incl. scheduled-by-kind asserts via `_scheduled_functions` system-table inspection (cockpit.test.ts pattern); vault suite 18/18, @pikar/vault 27/27, touched-file typecheck clean (pre-existing .test.ts noise unchanged), Biome baseline-identical (stash-diffed), check-playbooks exit 0. NO deviations. Deliberately ABSENT (verified): no skills.ts edit — attachment-extractor reused as-is, transcription takes no prompt. GOTCHA: `pnpm --filter @pikar/backend test -- vault.test` does NOT filter (ran the whole suite) — use `pnpm exec vitest run convex/vault.test.ts` per-file. Commits 1f291f2/299d562 (T1 TDD), edbe358/1834e13 (T2 TDD), 9033495 (T3 governance). NEXT: announce Wave-0 merge; spawn the 4 Wave-2 lane sessions (plans 02-05) in parallel worktrees, then 03.8-06 integration close.
+
 Phase: 3.9 (Agent Activity Streaming) — 4/4 PLANS COMPLETE, HUMAN-VERIFIED + APPROVED 2026-07-17. CKPT-05 Complete. The cockpit shows the agent's steps live (LATEST TRACE card + in-progress chat bubble, one `agentSteps.latestTurn` query over Convex reactivity; both `sendCockpitMessage` and `resolveRecipients` traced; step rows carry a closed tool union + phase + numbers, NO free-text field → §4 by schema absence). **The human-verify uncovered a page-crash root cause that was NOT the trace:** `api.cockpit.listThreads` (past-chats menu) breached Convex's 1s query limit under memory pressure, and a throwing `useQuery` throws INSIDE the component → the whole WorkspacePage died ("This page couldn't load"), producing EVERY "stuck" symptom (input never cleared, button stayed green, no steps). Machine was at 0.4GB free/7.9GB (Next dev leaks ~2.4GB over ~45min + Convex + Chrome). FOUR checkpoint-feedback fixes: `0a8b091` listThreads behind a new ErrorBoundary.tsx + numItems 30→10 (THE crash fix — page survives a slow history query), `0ac2f93` setText("") before the await (input clears instantly; restored on throw), `53b4ea9` Send-button spinner while busy (NOT red — BRAND reserves amber for the approval gate + defines no red; spinner is the honest in-brand busy signal, `prefers-reduced-motion` respected), `640f2c6` one `sending` flag lifted to WorkspacePage feeding BOTH ChatPane + CardList so a fresh chat stops showing the previous thread's trace WITHOUT regressing the first-turn trap (gate: `threadId !== undefined ? activity.threadId === threadId : sending`). HONESTY: approval is authoritative for the checkpoint; live "progressive paint during a wait" + the 4 fixes rendering were NOT re-observed under a clean session (machine stayed memory-starved through re-verify + the browser tooling competed for the same RAM), but the emission→row→render chain is proven per-layer (Plans 01–03 tests + the live settled trace "Briefed your inbox · 43.6s"). `cockpit-activity.spec.ts` still UNRUN (carried-in Gmail-connected-user blocker since 03.7-04, not weakened). STANDING ENV NOTE (not a code defect): this 8GB machine cannot comfortably hold the full local stack + a browser; the error boundary stops the CRASH but responsiveness still degrades under memory pressure until freed (close apps/tabs, or recycle the dev server) — worth a durable dev-server-recycle mitigation. NEXT: gsd-verifier for 3.9 → phase close. Then Phase 3.7 briefing-intelligence gap (`/gsd:plan-phase 3.7 --gaps`).
 
 Phase: 3.9 (Agent Activity Streaming) — IN PROGRESS. Wave 2 of 4 COMPLETE, 2/4 plans complete.
@@ -445,6 +448,7 @@ Progress: [█████████░] 94%
 | Phase 03.7 P01 | 12m | 2 tasks | 5 files |
 | Phase 03.7-inbox-briefing P06 | 5min | 2 tasks | 3 files |
 | Phase 03.7 P07 | 40 | 3 tasks | 10 files |
+| Phase 03.8-vault-document-extraction P01 | 13min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -555,6 +559,9 @@ Recent decisions affecting current work:
 - [Phase 03.7]: joinDigest drops out-of-range, non-integer AND duplicate indexes; sender/ts/bucket always read from the fetched message, never the digest item — the ADR-004 trust boundary in code.
 - [Phase 03.7]: CKPT-04 stays Pending in REQUIREMENTS.md until 03.7-05 — it spans all 5 plans; only the pure foundation shipped in 03.7-01.
 - [Phase 03.7]: synopsis rides the toolless digestInbox generateObject boundary as a free DigestBatch field — no new model call/skill/tool; persisted on the briefings row, held out of loop return + audit by a mutation-checked scan (invariant 10 extended)
+- [Phase 03.8-vault-document-extraction]: Extraction seam stores RAW text: scanText at extraction time is the lanes fail-closed gate and audit-counts source, not a persistence transform; downstream re-scans pre-model
+- [Phase 03.8-vault-document-extraction]: officeText stays off the @pikar/vault index barrel: subpath-only import keeps fflate structurally out of the V8 Convex bundle
+- [Phase 03.8-vault-document-extraction]: No skills.ts edit for extraction: attachment-extractor reused as-is, transcription takes no prompt
 
 ### Roadmap Evolution
 
@@ -577,9 +584,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-17T21:50:12.391Z
-Stopped at: Phase 3.8 context gathered
-Resume file: .planning/phases/03.8-vault-document-extraction/03.8-CONTEXT.md
+Last session: 2026-07-17T22:51:30.617Z
+Stopped at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
+Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
