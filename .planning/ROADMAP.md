@@ -243,14 +243,20 @@ Plans:
   3. Reads are capped and snippet-first (full bodies only for digest-selected messages), audited refs/ids/counts only, with zero mailbox writes and zero sends; a briefing-seeded action goes through the normal conversation → PLAN → human Approve gate.
   4. A "Needs you" triage section surfaces needsReply/deadline items as suggestions (never actions), from the digest schema.
   5. The 3.6 golden set gains briefing cases including an injection-probe fixture: an email body containing send/forward instructions yields zero tool actions and no `proposePlan`.
-**Plans**: 5 plans in 5 waves (planned 2026-07-17; sequential — plans share watch.json/playbook files, and the phase close needs its own gate-cycle plan per the 3.6 precedent)
+**Plans**: 9 plans in 9 waves (01–05 planned 2026-07-17; 06–09 added 2026-07-17 as Gap-1 closure — the intelligent-report reshape; sequential — plans share watch.json/playbook files, and the phase close needs its own gate-cycle plan per the 3.6 precedent)
 
 Plans:
 - [x] 03.7-01-PLAN.md — Pure @pikar/core briefing module (TDD): Intl time-bucketing + selection cap + digest index-join (Wave 1)
 - [x] 03.7-02-PLAN.md — briefings/inboxFixtures tables + gmail listInbox/fetchInboxBodies (fixture-first, refs-only mailbox.listed, zero-write scans) + seedInboxFixture (Wave 2)
 - [x] 03.7-03-PLAN.md — inbox-digest skill (gated 5-file mirror) + toolless digestInbox + listInbox/briefInbox tools + SMOKE brief op + invariant enforcement + agent-runtime invariant 10 (Wave 3)
 - [x] 03.7-04-PLAN.md — BRIEFING card (plan-independent CardList) + offline cockpit-briefing E2E (Wave 4) — completed 2026-07-17 (E2E written + Playwright-discovered; live run blocked on a Gmail-connected seeded E2E user — run it in 05's live session)
-- [ ] 03.7-05-PLAN.md — Golden-set briefing fixtures 16–18 (incl. injection probe) + briefingPresent runner key + live cockpit-agent gate cycle + human-verify (Wave 5)
+- [x] 03.7-05-PLAN.md — Golden-set briefing fixtures 16–18 (incl. injection probe) + briefingPresent runner key + live cockpit-agent gate cycle + human-verify (Wave 5) — mechanism ran live 18/18 (cockpit-agent v7); PRESENTATION rejected at the checkpoint → Gap 1 (see 03.7-UAT.md), CKPT-04 held open
+
+Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gsd:plan-phase 3.7 --gaps`):
+- [ ] 03.7-06-PLAN.md — Pure @pikar/core reshape (TDD): buildBriefingView (action-first order + newsletter collapse + code-owned lede composition) + DigestBatch type; time grouping PRESERVED as secondary (Wave 6)
+- [ ] 03.7-07-PLAN.md — Toolless cross-message synopsis: inbox-digest skill lede section (gated candidate vN) + digestSchema/digestInbox → DigestBatch + briefings.synopsis persisted + SC-2 scans extended to the synopsis (Wave 7)
+- [ ] 03.7-08-PLAN.md — Intelligent BRIEFING card: lede-first + action-first + collapsed "N automated notifications" row + visible category, rendered from buildBriefingView; SC-4 intact + offline E2E update (Wave 8)
+- [ ] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9)
 
 ### Phase 3.8: Vault Document Extraction (INSERTED)
 **Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
@@ -374,7 +380,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
-| 3.7 Inbox Briefing (INSERTED) | 4/5 | In Progress|  |
+| 3.7 Inbox Briefing (INSERTED) | 5/9 | In Progress (Gap 1 closure: intelligent-report reshape, plans 06–09) |  |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
