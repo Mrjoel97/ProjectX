@@ -159,3 +159,105 @@ export function joinDigest(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Gap 1 reshape: the intelligent report, not a receipt.
+//
+// The three transforms below turn the already-persisted `category`/`needsReply`/`bucket` axes
+// into an ACTION-FIRST view (Gap 1.2), collapse automated-notification noise into ONE count
+// (Gap 1.3), and compose a lede whose COUNTS ARE CODE-OWNED welded to the model's qualitative
+// synopsis clause (Gap 1.1, ADR-004). All pure — no Date.now(), no I/O — matching this module's
+// discipline; the ordering/collapse logic MUST live here, never in the card.
+//
+// LOCKED CONSTRAINT — time grouping is RESHAPED, NOT DELETED. `bucket`/`joinDigest`/
+// `selectForDigest` are untouched and still tested. Time becomes the SECONDARY axis inside the
+// fyi remainder (below the needs-you block), not the primary chronological spine. Deleting time
+// grouping would need a roadmap change, not a card (or core) edit.
+// ---------------------------------------------------------------------------
+
+/** The toolless digest's full return: the model's INDEX-keyed rows plus its ONE cross-message
+ *  qualitative `synopsis` clause (plan 07's `digestInbox` resolves to this). The `synopsis` is the
+ *  ONLY prose the model owns in the lede — never a count (ADR-004). */
+export interface DigestBatch {
+  items: DigestItem[];
+  synopsis: string;
+}
+
+/** True when a row demands the user's attention — the action-first axis. `deadline` counts too:
+ *  a stated due date is an action even when the model did not flag `needsReply`. */
+function isNeedsYou(item: BriefingItem): boolean {
+  return item.needsReply || item.deadline !== undefined;
+}
+
+/**
+ * The lede sentence: CODE-OWNED counts welded to the model's qualitative clause (Gap 1.1).
+ *
+ * `total` is `listedCount` (the mailbox total, cap-honest) and `needsYou` is counted from the
+ * items — NEVER read from `synopsis`, so a number the model invents can never become the count the
+ * lede states. A non-empty synopsis is appended as " — {clause}"; an empty/blank/absent one
+ * degrades to the counts-only lede with no dangling separator (the view never throws on a
+ * pre-delta row that has no synopsis).
+ */
+export function composeLede(items: readonly BriefingItem[], listedCount: number, synopsis?: string): string {
+  const needsYou = items.filter(isNeedsYou).length;
+  const lede = `${listedCount} messages, ${needsYou} need you`;
+  const clause = synopsis?.trim();
+  return clause ? `${lede} — ${clause}` : lede;
+}
+
+/**
+ * Collapse automated-notification noise into ONE aggregate (Gap 1.3): `newsletter` rows leave
+ * `surfaced` and are counted in `collapsedCount`, so 12 notifications never render as 12 rows.
+ *
+ * Conservative on BOTH edges: only `newsletter` collapses (`action`/`fyi`/`other` stay surfaced —
+ * "other" is not hidden), and a needs-you row (needsReply or a deadline) is NEVER collapsed even
+ * if mis-categorized `newsletter` — needs-you wins.
+ */
+export function collapseNoise(items: readonly BriefingItem[]): { surfaced: BriefingItem[]; collapsedCount: number } {
+  const surfaced: BriefingItem[] = [];
+  let collapsedCount = 0;
+  for (const item of items) {
+    if (item.category === "newsletter" && !isNeedsYou(item)) collapsedCount++;
+    else surfaced.push(item);
+  }
+  return { surfaced, collapsedCount };
+}
+
+/** The reshaped view model the card renders: a lede, a needs-you top block, the time-grouped fyi
+ *  remainder (the SECONDARY axis), and the collapsed-noise count. */
+export interface BriefingView {
+  lede: string;
+  needsYou: BriefingItem[];
+  timeSections: { bucket: Bucket; items: BriefingItem[] }[];
+  collapsedCount: number;
+}
+
+/** Bucket order — the preserved secondary axis, newest first. */
+const BUCKET_ORDER: readonly Bucket[] = ["today", "yesterday", "thisWeek"];
+
+/**
+ * Build the action-first briefing view from a persisted briefing row (Gap 1).
+ *
+ * Needs-you rows are a SEPARATE top block, never interleaved chronologically (Gap 1.2). The
+ * remainder is de-noised (Gap 1.3), then grouped by bucket into `timeSections` in fixed
+ * [today, yesterday, thisWeek] order with empty buckets skipped (time PRESERVED as the secondary
+ * axis). The lede's counts span the FULL item set incl. collapsed + needs-you (Gap 1.1).
+ */
+export function buildBriefingView(briefing: {
+  items: readonly BriefingItem[];
+  listedCount: number;
+  synopsis?: string;
+}): BriefingView {
+  const needsYou = briefing.items.filter(isNeedsYou);
+  const { surfaced, collapsedCount } = collapseNoise(briefing.items.filter((i) => !isNeedsYou(i)));
+  const timeSections = BUCKET_ORDER.map((b) => ({
+    bucket: b,
+    items: surfaced.filter((i) => i.bucket === b),
+  })).filter((s) => s.items.length > 0);
+  return {
+    lede: composeLede(briefing.items, briefing.listedCount, briefing.synopsis),
+    needsYou,
+    timeSections,
+    collapsedCount,
+  };
+}
