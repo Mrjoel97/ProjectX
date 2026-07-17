@@ -24,6 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.6: Agent Eval Gate** (INSERTED) - Golden-set live-model eval for agent skills + eval-gated `activateSkill` (rollback always exempt) + ops-page eval signals — skill activations stop being blind; Phase 8's SkillOpt plugs into this harness (completed 2026-07-15)
 - [ ] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
 - [ ] **Phase 3.8: Vault Document Extraction** (INSERTED) - Wire PDF/DOCX/XLSX/PPTX/CSV/image (OCR) extraction into the vault's `vaultIngestText` seam so non-text uploads become searchable instead of sitting at `pending_extraction` forever
+- [ ] **Phase 3.9: Agent Activity Streaming** (INSERTED) - The workspace shows the agent's steps as it works (and in-progress chat bubbles) instead of freezing for 10–30s — cross-cutting across every agent flow; **executes next** (user decision 2026-07-17)
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
@@ -255,10 +256,21 @@ Plans:
 **Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
 **Depends on**: Phase 5 (vault + `vaultIngestText` late-text seam), Phase 4 (extraction engine — Path A hosted OCR/extraction, `@pikar/extraction`)
 **Requirements**: TBD
-**Plans:** 1/5 plans executed
+**Plans:** 0 plans
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 03.8 to break down)
+
+### Phase 3.9: Agent Activity Streaming (INSERTED)
+**Goal**: The cockpit stops looking frozen — while the Executive Agent runs its tool loop, the workspace shows the steps it is taking as they happen (reading the inbox, summarizing, drafting), and the chat renders in-progress bubbles, so a user never mistakes a working agent for a hung system. Cross-cutting: applies to every agent flow (briefing, send, attachment, personalization), not one feature.
+**Depends on**: Phase 3.2.1 (the agent tool-loop that emits the steps); reuses Convex reactivity (`useQuery`) — no polling, no new transport
+**Requirements**: TBD (likely a new CKPT id — reshapes cockpit UX, no backend governance change)
+**Why now (2026-07-17)**: user-reported during the 03.7 human-verify — a 10–30s tool loop renders nothing until a card materializes; the user reads that as broken and refreshes/resubmits. Sequenced BEFORE the 03.7 intelligent-report gap closure (user decision), so the smarter briefing is watchable while it is produced.
+**Key constraint**: step rows are UI state, but §4 still binds anything audit-bound — steps stay refs/counts-shaped ("Read 12 messages", "Summarizing 8"); no sender/subject/body text may reach an audit or telemetry payload via this path.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 03.9 to break down)
 
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
