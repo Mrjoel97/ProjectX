@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: 03.7-09 Task 1 done + committed (12c0ed5); PAUSED at Task 2/3 checkpoint (live gate cycle + human-verify)
-last_updated: "2026-07-17T21:13:11.277Z"
+stopped_at: Phase 3.8 context gathered
+last_updated: "2026-07-17T21:50:12.407Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 19
@@ -577,9 +577,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-17T17:19:45.637Z
-Stopped at: 03.7-09 Task 1 done + committed (12c0ed5); PAUSED at Task 2/3 checkpoint (live gate cycle + human-verify)
-Resume file: None
+Last session: 2026-07-17T21:50:12.391Z
+Stopped at: Phase 3.8 context gathered
+Resume file: .planning/phases/03.8-vault-document-extraction/03.8-CONTEXT.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
