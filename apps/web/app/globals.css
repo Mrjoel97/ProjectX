@@ -1134,10 +1134,36 @@ button.clay-card:hover {
   flex: none;
 }
 
+/* The send button's busy affordance (FIX 03.9-04). A rotating ring sits INSIDE the teal Send
+   button while a turn is in flight — visible at a glance (the bare `disabled` was invisible, the
+   actual complaint). NO red: BRAND reserves amber (--held) for the approval gate alone, defines no
+   busy/red token, and red means destructive/error — so an honest in-brand spinner, not a colour
+   hijack. The ring reads on the teal fill via a translucent-white track + a solid-white head. */
+.btn-spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-top-color: #fff;
+  animation: btn-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rail-item,
   .msg-copy {
     transition: none;
+  }
+
+  /* No rotation for motion-sensitive users — the ring shape, the disabled dim, and the
+     title/aria-label "Working…" still carry the busy state (never colour alone, BRAND §6). */
+  .btn-spinner {
+    animation: none;
   }
 }
 

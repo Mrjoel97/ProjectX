@@ -290,9 +290,15 @@ export function ChatPane({
                 </button>
               </>
             )}
+            {/* Busy affordance (FIX 3): while a turn is in flight the button shows a spinning ring,
+                stays disabled, and says "Working…" (title + aria-label + aria-busy) — visible at a
+                glance and not colour-dependent (BRAND §6). Deliberately NOT red: BRAND reserves amber
+                for the approval gate alone and defines no busy/red token, and red means destructive. */}
             <button
               type="button"
-              aria-label={busy ? "Sending" : "Send"}
+              aria-label={busy ? "Working…" : "Send"}
+              title={busy ? "Working…" : "Send"}
+              aria-busy={busy}
               disabled={busy || text.trim() === ""}
               onClick={() => void onSend()}
               style={{
@@ -310,7 +316,7 @@ export function ChatPane({
                 boxShadow: "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
               }}
             >
-              <SendIcon size={16} />
+              {busy ? <span className="btn-spinner" aria-hidden="true" /> : <SendIcon size={16} />}
             </button>
           </div>
         </div>
