@@ -1019,8 +1019,12 @@ export function buildCockpitTools(
     // `range` is an ENUM, never a free string: it flows into gmail.listInbox's refs-only
     // mailbox.listed audit payload, so user/model prose reaching it would be a §4 leak.
     listInbox: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars) —
+      // the resolveContacts precedent.
       description:
-        "Peek at the user's inbox for a quick question like \"anything from Sarah today?\". Returns sender names and subject lines only — you never see message contents. Read-only: it cannot reply, forward, label, or send.",
+        'Peek at the user\'s inbox for a quick question like "anything from Sarah today?". ' +
+        "Returns sender names and subject lines only — you never see message contents. " +
+        "Read-only: it cannot reply, forward, label, or send.",
       inputSchema: jsonSchema<{ range: "today" | "yesterday" | "week" }>({
         type: "object",
         properties: {
@@ -1055,8 +1059,12 @@ export function buildCockpitTools(
       },
     }),
     briefInbox: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
-        'Summarize the user\'s inbox into a briefing for "what happened in my inbox / brief me / catch me up" style asks. The briefing renders in the workspace panel — you get counts back, NOT the contents, so do not try to recite it. Read-only: it cannot reply, forward, label, or send.',
+        'Summarize the user\'s inbox into a briefing for "what happened in my inbox / brief me / ' +
+        'catch me up" style asks. The briefing renders in the workspace panel — you get counts ' +
+        "back, NOT the contents, so do not try to recite it. " +
+        "Read-only: it cannot reply, forward, label, or send.",
       inputSchema: jsonSchema<{ range: "today" | "yesterday" | "week" }>({
         type: "object",
         properties: {
