@@ -68,7 +68,7 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { components, internal } from "./_generated/api";
-import type { DataModel, Id } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 
@@ -1185,6 +1185,11 @@ const PAUSED_REPLY =
 // string, so pricing needs the id explicitly (priceUsage keys on the model string).
 type PricedModel = { model: LanguageModel; id: string };
 
+// The activity trace's closed tool union, DERIVED from the schema (agentSteps.ts does the same with
+// the validator) — a hand-copied literal list is a duplicate that WILL drift, and since the SDK eats
+// callback throws a drifted literal means a silently swallowed insert.
+type StepTool = Doc<"agentSteps">["tool"];
+
 // Invoke one built tool by name with a live action ctx (convex-test cannot fabricate one, so both
 // the SMOKE offline path and the test shims route through this). Mirrors the tool-loop's own call.
 function invokeTool(
@@ -1229,9 +1234,17 @@ async function runAgentLoop(
     fallback: PricedModel;
     // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
     skillVersions?: Record<string, number>;
+    // Activity trace (CKPT-05). Append-only optional args — the codebase's signature-evolution
+    // convention (buildCockpitTools' 4th `clientContext` / 5th `skillVersions`): every existing
+    // caller keeps working. A caller that supplies neither simply emits nothing (see the guard in
+    // the callbacks) rather than writing a malformed row. They do NOT reach buildCockpitTools:
+    // the tools don't emit, the SDK does — keep it that way (zero tool-wrapper edits).
+    turnId?: string;
+    threadId?: string;
   },
 ): Promise<{ reply: string; costUsd: number }> {
-  const { tenantId, planId, system, prompt, primary, fallback, skillVersions } = args;
+  const { tenantId, planId, system, prompt, primary, fallback, skillVersions, turnId, threadId } =
+    args;
   const tools = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions);
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
@@ -1248,6 +1261,50 @@ async function runAgentLoop(
       stopWhen: stepCountIs(8),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       maxRetries,
+      // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
+      // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
+      // a native framework feature covers it). Both callbacks are AWAITED by the SDK
+      // (dist/index.js:2633-2642 `notify`, dispatched at :2902 / :2960,:2983), so the `running` row
+      // is committed and on-screen BEFORE the slow tool begins — no ordering hazard.
+      //
+      // ctx.runMutation is not a style choice: actions cannot write (_generated/ai/guidelines.md:266).
+      // It is also the MECHANISM — an action is not a transaction, so each runMutation COMMITS and
+      // pushes to live useQuery subscribers *while this action is still running*. That
+      // non-transactionality is the entire feature.
+      //
+      // §4: NAME + phase ONLY. The event also carries `messages` (the FULL model context) and
+      // `toolOutput.output` (listInbox's return carries SUBJECTS; resolveContacts' carries display-name
+      // labels). The narrow destructure below is deliberate — never widen it to `(event)`, never
+      // spread it, never "log the result for debugging" (research Pitfall 5). The step row has no
+      // field to hold text anyway (schema.ts), and llmRedaction.test.ts scans these two blocks.
+      onToolExecutionStart: async ({ toolCall }) => {
+        // No turn identity (the test shims) ⇒ emit nothing rather than a malformed row.
+        if (turnId === undefined || threadId === undefined) return;
+        await ctx.runMutation(internal.agentSteps.record, {
+          tenantId,
+          threadId,
+          turnId,
+          stepKey: toolCall.toolCallId, // SDK-owned, stable across start↔end, unique within a turn
+          // `toolName` is typed `string` by the SDK but is BY CONSTRUCTION a key of OUR `tools`
+          // record — `ai` throws NoSuchToolError before `execute` on a hallucinated name — so the
+          // closed union can never legitimately fail.
+          tool: toolCall.toolName as StepTool,
+          startedAt: Date.now(),
+        });
+      },
+      onToolExecutionEnd: async ({ toolCall, toolOutput, toolExecutionMs }) => {
+        if (turnId === undefined) return;
+        await ctx.runMutation(internal.agentSteps.finish, {
+          tenantId,
+          turnId,
+          stepKey: toolCall.toolCallId,
+          // Fires on tool-error TOO, discriminated by `type` (dist/index.js:2955-2983) — so the
+          // per-tool terminal state is free: a throwing tool cannot leave a spinner running.
+          phase: toolOutput.type === "tool-error" ? "error" : "done",
+          durationMs: toolExecutionMs, // measured server-side by the SDK; no client ticker needed
+          endedAt: Date.now(),
+        });
+      },
     });
     costUsd += await recordModelSpend(ctx, m.id, res.usage);
     return { reply: res.text, costUsd };
@@ -1348,40 +1405,59 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
   }
 }
 
+// op kind → the real tool it drives. The SINGLE source of that mapping: runAgentSmokeOp reads it
+// for the invoke, and runCockpitAgent's SMOKE step row reads it for `tool` — so the two can never
+// drift (ponytail rung 2: reuse, don't retype the switch). Typed as a total Record over the kind
+// union, so a new SMOKE op cannot compile without naming its tool.
+const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
+  add: "addRecipients",
+  resolve: "resolveContacts",
+  subject: "setSubject",
+  mode: "setMode",
+  body: "draftBody",
+  remove: "removeRecipient",
+  propose: "proposePlan",
+  attach: "generateAttachment",
+  regenerate: "regenerateAttachment",
+  removeAttachment: "removeAttachment",
+  sendTime: "setSendTime",
+  brief: "briefInbox",
+  personalize: "personalizeRecipient",
+};
+
 function runAgentSmokeOp(
   tools: ReturnType<typeof buildCockpitTools>,
   op: AgentSmokeOp,
 ): Promise<string> {
+  const name = SMOKE_OP_TOOL[op.kind]; // the SAME name the step row records
+  // The switch now only carries each op's INPUT shape — its actual job.
   switch (op.kind) {
     case "add":
-      return invokeTool(tools, "addRecipients", { addresses: op.addresses });
+      return invokeTool(tools, name, { addresses: op.addresses });
     case "resolve":
-      return invokeTool(tools, "resolveContacts", { name: op.name });
+      return invokeTool(tools, name, { name: op.name });
     case "subject":
-      return invokeTool(tools, "setSubject", { subject: op.subject });
+      return invokeTool(tools, name, { subject: op.subject });
     case "mode":
-      return invokeTool(tools, "setMode", { mode: op.mode });
+      return invokeTool(tools, name, { mode: op.mode });
     case "body":
-      return invokeTool(tools, "draftBody", { intent: op.intent });
+      return invokeTool(tools, name, { intent: op.intent });
     case "remove":
-      return invokeTool(tools, "removeRecipient", { index: op.index });
+      return invokeTool(tools, name, { index: op.index });
     case "propose":
-      return invokeTool(tools, "proposePlan", {});
+      return invokeTool(tools, name, {});
     case "attach":
-      return invokeTool(tools, "generateAttachment", { topic: op.topic });
+      return invokeTool(tools, name, { topic: op.topic });
     case "regenerate":
-      return invokeTool(tools, "regenerateAttachment", { index: op.index, topic: op.topic });
+      return invokeTool(tools, name, { index: op.index, topic: op.topic });
     case "removeAttachment":
-      return invokeTool(tools, "removeAttachment", { index: op.index });
+      return invokeTool(tools, name, { index: op.index });
     case "sendTime":
-      return invokeTool(tools, "setSendTime", { text: op.text });
+      return invokeTool(tools, name, { text: op.text });
     case "brief":
-      return invokeTool(tools, "briefInbox", { range: op.range });
+      return invokeTool(tools, name, { range: op.range });
     case "personalize":
-      return invokeTool(tools, "personalizeRecipient", {
-        index: op.index,
-        instructions: op.instructions,
-      });
+      return invokeTool(tools, name, { index: op.index, instructions: op.instructions });
   }
 }
 
@@ -1409,10 +1485,13 @@ export const runCockpitAgent = internalAction({
     // never supply it, §2-D analog): the eval runner pins the CANDIDATE row it evaluates. A missing
     // (name, version) FAILS CLOSED (getSkillVersion throws) — never silently falls back to active.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // Activity trace (CKPT-05): the turn identity the DRIVER mints (cockpit.ts) and owns. Optional
+    // so every existing caller keeps working; absent ⇒ this turn emits no step rows.
+    turnId: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { tenantId, planId, text, model, clientContext, skillVersions },
+    { tenantId, threadId, planId, text, model, clientContext, skillVersions, turnId },
   ): Promise<{
     reply: string;
     blocked?: "kill_switch" | "daily_budget_exhausted";
@@ -1444,7 +1523,42 @@ export const runCockpitAgent = internalAction({
     const smokeOp = parseAgentSmoke(text);
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
     const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext, skillVersions);
-    if (smokeOp) return { reply: await runAgentSmokeOp(tools, smokeOp), costUsd: 0 }; // no model call
+    if (smokeOp) {
+      // Emit around the ONE smoke call site (CKPT-05, research Pitfall 4). generateText is never
+      // called here, so no SDK callback can fire — and EVERY offline E2E in the repo drives this
+      // path, so without this the activity surface is invisible to all of them.
+      // NOT inside runAgentSmokeOp, and absolutely NOT inside invokeTool: invokeTool is also the
+      // seam for __invokeCockpitTool / __runCockpitAgentWithScript, so emitting there would make
+      // cockpitTools.test.ts write step rows as a side effect.
+      const stepKey = `smoke-${smokeOp.kind}`;
+      const startedAt = Date.now();
+      if (turnId !== undefined)
+        await ctx.runMutation(internal.agentSteps.record, {
+          tenantId,
+          threadId,
+          turnId,
+          stepKey,
+          tool: SMOKE_OP_TOOL[smokeOp.kind], // the same mapping the invoke below uses
+          startedAt,
+        });
+      let phase: "done" | "error" = "error"; // pessimistic — only a completed op flips it
+      try {
+        const reply = await runAgentSmokeOp(tools, smokeOp); // no model call
+        phase = "done";
+        return { reply, costUsd: 0 };
+      } finally {
+        // `finally` so a THROWING smoke op is terminal too — a started step must never spin forever.
+        if (turnId !== undefined)
+          await ctx.runMutation(internal.agentSteps.finish, {
+            tenantId,
+            turnId,
+            stepKey,
+            phase,
+            durationMs: Date.now() - startedAt,
+            endedAt: Date.now(),
+          });
+      }
+    }
 
     // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
     const primaryId = model ?? DEFAULT_MODEL;
@@ -1456,6 +1570,8 @@ export const runCockpitAgent = internalAction({
       primary: { model: resolveModel(primaryId), id: primaryId },
       fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
+      turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
+      threadId,
     });
     return { reply, costUsd };
   },
@@ -1507,10 +1623,15 @@ export const __runCockpitAgentWithScript = internalAction({
     // Optional EVAL-01 version pin (mirrors runCockpitAgent) so the pin is testable offline; the
     // loaded skill version rides the return so tests observe WHICH row became the system prompt.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // Activity trace (CKPT-05): the driver-owned turn identity, so runCockpitAgent.test.ts can
+    // assert the SDK callbacks actually FIRED against a known turn (the only offline test that can
+    // catch a silently-swallowed emitter). Test-support surface, append-only.
+    turnId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { tenantId, planId, primary, fallback, failPrimary, skillVersions },
+    { tenantId, planId, primary, fallback, failPrimary, skillVersions, turnId, threadId },
   ): Promise<{ reply: string; costUsd: number; skillVersion: number }> => {
     const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
     const skill: { body: string; version: number } =
@@ -1537,6 +1658,8 @@ export const __runCockpitAgentWithScript = internalAction({
       primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
       fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
       skillVersions,
+      turnId,
+      threadId,
     });
     return { ...res, skillVersion: skill.version };
   },
