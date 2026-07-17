@@ -259,13 +259,18 @@ Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gs
 - [x] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9) — completed 2026-07-17 (Task 1 offline: ledePresent wired end-to-end + briefingSynopsisPresent smoke read; Task 2 live gate cycle: activate v2 REFUSED pre-evidence → pnpm eval:golden --skill inbox-digest@2 run d2f541cb 18/18 $0.0682 → evidence recorded → activateSkill v2 SUCCEEDED, inbox-digest v2 ACTIVE; Task 3 human-verify APPROVED — reads as an intelligent executive report, Gap 1 + Gap 2 closed; E2E remains env-blocked (no E2E creds), live human-verify substitutes)
 
 ### Phase 3.8: Vault Document Extraction (INSERTED)
-**Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
-**Depends on**: Phase 5 (vault + `vaultIngestText` late-text seam), Phase 4 (extraction engine — Path A hosted OCR/extraction, `@pikar/extraction`)
-**Requirements**: TBD
-**Plans:** 0 plans
+**Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, images, videos) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable. (CSV is already text-on-upload — out of scope; videos IN per 2026-07-18 user decision, transcription-rail-only.)
+**Depends on**: Phase 5 (vault + `vaultIngestText` late-text seam), Phase 4 (extraction engine — hosted OCR `extractVisual` + `transcribeAudio` patterns)
+**Requirements**: EXTR-A..EXTR-I (derived in planning — see 03.8-RESEARCH.md Phase Requirements → Test Map)
+**Plans:** 6 plans (Wave 1: sequential contract on main; Wave 2: FOUR parallel worktree lanes with pairwise-disjoint file ownership; Wave 3: integration + phase close)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 03.8 to break down)
+- [ ] 03.8-01-PLAN.md — Wave-0 contract (schema union, internal seam variant, dispatcher stubs, deps+lockfile, watch.json/playbook/PARALLELIZATION) — wave 1, sequential, main
+- [ ] 03.8-02-PLAN.md — Lane 1: PDF + image extraction (unpdf text-layer-first + hosted OCR fallback) + live smoke — wave 2, own worktree
+- [ ] 03.8-03-PLAN.md — Lane 2: Office parsers (pure-TS fflate + XML text-walk, DOCX/XLSX/PPTX, zero convex edits) — wave 2, own worktree
+- [ ] 03.8-04-PLAN.md — Lane 3: backlog sweep + retry + vault UI lifecycle (extracting pill / failed+Retry / truncation note) + offline E2E — wave 2, own worktree
+- [ ] 03.8-05-PLAN.md — Lane 4: video transcription (existing hosted rail, honest unsupported-container failure) + live smoke — wave 2, own worktree
+- [ ] 03.8-06-PLAN.md — Integration: merge all lanes, full sweep on main, phase-close human-verify — wave 3
 
 ### Phase 3.9: Agent Activity Streaming (INSERTED)
 **Goal**: The cockpit stops looking frozen — while the Executive Agent runs its tool loop, the workspace shows the steps it is taking as they happen (reading the inbox, summarizing, drafting), and the chat renders in-progress bubbles, so a user never mistakes a working agent for a hung system. Cross-cutting: applies to every agent flow (briefing, send, attachment, personalization), not one feature.
