@@ -13,6 +13,9 @@ import {
   SendIcon,
   UserIcon,
 } from "../../../(auth)/icons";
+// The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
+// stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
+import { stepText, traceText } from "./cards";
 import { IntakeControls } from "./IntakeControls";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
@@ -32,9 +35,14 @@ import { IntakeControls } from "./IntakeControls";
 // extract → redact → merge into this thread); they need a minted threadId, so before the
 // first send they render as disabled placeholders whose titles say to send a message first.
 //
-// ponytail: static message list (non-streaming). Token-by-token rendering is a later upgrade to
-// `useUIMessages` + a `syncStreams` query (research §4) — the deterministic control here has no
-// streaming model to render, so the list is the right ceiling for slice 1.
+// ponytail: static message list (non-streaming). What DID land instead is the tool-step trace
+// (`agentSteps` — CKPT-05, below): the in-progress bubble lists the steps the agent is taking as
+// they happen, which is the half the user actually asked for. Assistant-TOKEN streaming ("watch
+// the reply type itself") is the blocked half, and the door is WELDED SHUT — not a "later
+// upgrade": `@convex-dev/agent@0.6.4` peer-requires `ai@^6`, this repo pins `ai@7`, and 0.6.4 is
+// the LATEST published version, so there is nothing to bump to (and CLAUDE.md §6 forbids bumping
+// these pins anyway). Revisit ONLY if an `ai@7`-compatible `@convex-dev/agent` release ships.
+// (03.9-RESEARCH §Standard Stack; the same correction landed at cockpit.ts:168 in 03.9-02.)
 
 const bubble = (mine: boolean) => ({
   padding: "0.6rem 0.85rem",
@@ -75,11 +83,13 @@ export function ChatPane({
     threadId ? { threadId } : "skip",
     { initialNumItems: 30 },
   );
-  // Minimal live activity chip off the plan status (SC2 "Drafting…/Sending/Sent" feedback).
+  // Minimal MILESTONE chip off the plan status (SC2 "Drafting…/Sending/Sent" feedback).
   // Candidates parked on the row = a name-resolution read is in flight → surface the pick prompt
   // first (it only exists during "collecting", before any status milestone).
+  // This is COMPLEMENTARY to the step trace below, not redundant: it reports milestones and only
+  // lights AFTER the wait is over, whereas the trace is the live one. Both are kept.
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
-  const activity = plan?.candidates?.length
+  const milestone = plan?.candidates?.length
     ? "Searching your mailbox… pick a contact →"
     : plan?.status === "delivering"
       ? "Sending…"
@@ -88,6 +98,19 @@ export function ChatPane({
         : plan?.status === "proposed"
           ? "Plan ready — review it →"
           : null;
+
+  // The in-progress agent bubble (CKPT-05). The SAME query the workspace ActivityCard subscribes
+  // to — one query feeds both surfaces, so the bubble and the canvas can never disagree. NO args:
+  // on the first message there is no threadId until send() resolves (research Pitfall 1).
+  const activity = useQuery(api.agentSteps.latestTurn);
+  const steps = activity && (threadId === undefined || activity.threadId === threadId) ? activity.steps : [];
+  // `latestTurn` returns steps ascending by startedAt, so the LAST running row is the current one.
+  const current = [...steps].reverse().find((s) => s.phase === "running");
+  // null = follow the turn (expanded while running, collapsed once settled — research Open
+  // Question 2, on Plan 04's human-verify list); true/false = the user overrode it via the brain
+  // button. BRAND §5 specifies this exact affordance: agent bubble + collapsible "Thought Process".
+  const [traceOpen, setTraceOpen] = useState<boolean | null>(null);
+  const open = traceOpen ?? Boolean(current);
 
   async function onSend() {
     const t = text.trim();
@@ -150,7 +173,40 @@ export function ChatPane({
             );
           })
         )}
-        {activity && <div className="trace-line">{activity}</div>}
+        {/* The in-progress agent bubble — BRAND §5's specified pattern: agent = white card,
+            --ink text, left-aligned, with an optional collapsible "Thought Process" trace.
+            Reuses the real agent-turn chrome so it reads as a turn, not a foreign widget. */}
+        {steps.length > 0 && (
+          <div className="msg-row" data-testid="agent-activity">
+            <span className="msg-avatar agent" aria-hidden="true">
+              <BrainIcon size={14} />
+            </span>
+            <div className="msg-col">
+              <span className="msg-name">Pikar AI</span>
+              <div className="bubble-wrap">
+                <div style={{ ...bubble(false), display: "grid", gap: "0.4rem" }}>
+                  {/* No aria-live here on purpose: the workspace ActivityCard is always on
+                      screen (the cockpit is two-pane) and already announces these exact rows.
+                      A second live region would read every step TWICE. */}
+                  {open ? (
+                    steps.map((s) => (
+                      <div key={s.stepKey} className="trace-line">
+                        <span style={traceText}>{stepText(s)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="trace-line">
+                      <span style={traceText}>
+                        {current ? stepText(current) : `Thought process · ${steps.length} step${steps.length === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {milestone && <div className="trace-line">{milestone}</div>}
       </div>
 
       {/* Composer — one rounded glass card: textarea, then Auto pill + brain/attach/mic + Send */}
@@ -193,7 +249,26 @@ export function ChatPane({
               <BoltIcon size={13} /> Auto <ChevronDownIcon size={12} />
             </button>
             <span style={{ flex: 1 }} />
-            <button type="button" className="icon-btn" disabled title="Thought process — coming soon">
+            {/* This phase IS the feature this button was waiting for, so its title no longer
+                promises a future one — shipping the trace while the button still called it
+                unbuilt is exactly the small dishonesty BRAND §5's honest-zeros rule prevents
+                (the literal old string is left out so a grep guard stays meaningful). It toggles
+                the bubble's collapsible "Thought Process" trace (BRAND §5, verbatim), and is
+                disabled only while there is genuinely no trace to show. */}
+            <button
+              type="button"
+              className="icon-btn"
+              disabled={steps.length === 0}
+              aria-pressed={open}
+              onClick={() => setTraceOpen(!open)}
+              title={
+                steps.length === 0
+                  ? "Thought process — send a message and the agent's steps show here"
+                  : open
+                    ? "Hide the agent's thought process"
+                    : "Show the agent's thought process"
+              }
+            >
               <BrainIcon size={17} />
             </button>
             {threadId ? (

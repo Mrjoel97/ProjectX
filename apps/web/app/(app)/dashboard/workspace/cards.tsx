@@ -758,7 +758,7 @@ const capsTeal = {
 // A grid/flex child needs minWidth:0 before it will shrink, and minWidth:0 sizes the BOX, not the
 // TEXT — a long word still needs overflow-wrap to break (vault cards 3bdea02, briefing card
 // 44e95c0). The workspace divider is user-resizable, so the trace must survive a narrow pane.
-const traceText = { minWidth: 0, overflowWrap: "anywhere" as const };
+export const traceText = { minWidth: 0, overflowWrap: "anywhere" as const };
 
 /**
  * BRAND §3 names `LATEST TRACE` as a tracked-caps label example; §4 says content is CARDS on the
