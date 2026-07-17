@@ -537,6 +537,32 @@ test("briefInbox writes exactly ONE refs-only briefing.created audit row (§4, S
   expect(JSON.stringify(created[0]!.payload)).not.toContain(NEEDLE);
 });
 
+test("digestInbox (smoke) emits a non-empty cross-message synopsis + a collapse-exercisable newsletter row (Gap 1.1/1.3)", async () => {
+  const { t } = await setup();
+  // The toolless digest itself, driven on its offline path: it returns the DigestBatch that
+  // briefInbox persists. The synopsis is the model's ONE cross-message clause (the lede), and
+  // the offline path must deterministically include ≥1 newsletter item so plan 08's noise-collapse
+  // path is exercisable offline rather than only eyeballed live.
+  const batch = await t.action(internal.llm.digestInbox, {
+    tenantId: "t1",
+    messages: [
+      { index: 0, from: "a@example.com", subject: "Re: contract", body: "please reply" },
+      { index: 1, from: "b@example.com", subject: "Weekly digest", body: "newsletter body" },
+      { index: 2, from: "c@example.com", subject: "FYI", body: "for your information" },
+    ],
+    smoke: true,
+  });
+
+  // A non-empty synopsis string — the lede the briefings row will carry (never a count/sender/date).
+  expect(typeof batch.synopsis).toBe("string");
+  expect(batch.synopsis.length, "digestInbox produced an empty synopsis on the smoke path").toBeGreaterThan(0);
+  // Exactly one newsletter row (the non-needsReply item #1) so collapseNoise has something to fold,
+  // while item #0 stays the needsReply action row.
+  expect(batch.items.filter((i) => i.category === "newsletter").length).toBe(1);
+  expect(batch.items.find((i) => i.category === "newsletter")!.needsReply).toBe(false);
+  expect(batch.items[0]!.needsReply).toBe(true);
+});
+
 test("listInbox returns sender LABELS + subjects + a count — never an address, snippet or body", async () => {
   const { t, planId } = await setupBriefing();
   const reply = await callClock(t, planId, "listInbox", { range: "today" });

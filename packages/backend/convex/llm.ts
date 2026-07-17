@@ -38,6 +38,7 @@ import {
   type Bucket,
   buildDocFilename,
   buildRecipientView,
+  type DigestBatch,
   type DigestItem,
   exceedsByteCap,
   type InboxMessageMeta,
@@ -1905,6 +1906,9 @@ const digestSchema = jsonSchema<{
     needsReply: boolean;
     deadline: string | null;
   }[];
+  // The ONE cross-message clause the model owns (the lede). STRICT-mode: every property must
+  // also be in `required` (30cc949) — `synopsis` is a plain required string, never nullable.
+  synopsis: string;
 }>({
   type: "object",
   properties: {
@@ -1923,8 +1927,9 @@ const digestSchema = jsonSchema<{
         additionalProperties: false,
       },
     },
+    synopsis: { type: "string" },
   },
-  required: ["items"],
+  required: ["items", "synopsis"],
   additionalProperties: false,
 });
 
@@ -1948,7 +1953,9 @@ export const digestInbox = internalAction({
     // offlineDigest flag, never by a model or a user (it is an internalAction arg).
     smoke: v.optional(v.boolean()),
   },
-  handler: async (ctx, { messages, skillVersion, smoke }): Promise<{ items: DigestItem[] }> => {
+  // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
+  // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
+  handler: async (ctx, { messages, skillVersion, smoke }): Promise<DigestBatch> => {
     // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
     const skill: { body: string; version: number } =
@@ -1980,14 +1987,18 @@ export const digestInbox = internalAction({
     if (smoke === true) {
       // Deterministic offline digest: one item per input index. #0 needsReply + a deadline so the
       // E2E always renders a "Needs you" row. No model call, no spend.
+      // Exactly ONE non-needsReply item is flagged `newsletter` (item #1 when present) so the
+      // noise-collapse path (Gap 1.3, plan 08) is deterministically exercisable OFFLINE — without
+      // a newsletter row the collapsed line could only ever be eyeballed live.
       return {
         items: messages.map((m, i) => ({
           index: m.index,
           gist: `Offline digest of "${m.subject}".`,
-          category: i === 0 ? "action" : "fyi",
+          category: i === 0 ? "action" : i === 1 ? "newsletter" : "fyi",
           needsReply: i === 0,
           ...(i === 0 ? { deadline: "tomorrow" } : {}),
         })),
+        synopsis: "Offline briefing synopsis.",
       };
     }
 
@@ -2012,7 +2023,7 @@ export const digestInbox = internalAction({
         maxRetries: 1,
       });
       await recordModelSpend(ctx, DEFAULT_MODEL, usage);
-      return { items: inRange(object.items) };
+      return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
@@ -2024,7 +2035,7 @@ export const digestInbox = internalAction({
         maxRetries: 0,
       });
       await recordModelSpend(ctx, CHEAP_MODEL, usage);
-      return { items: inRange(object.items) };
+      return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
 });
