@@ -225,6 +225,56 @@ test("the digestInbox call is structurally TOOLLESS (generateObject, no tools:)"
   expect(block, "digestInbox does not load the inbox-digest skill").toMatch(/INBOX_DIGEST_SKILL/);
 });
 
+test("every generateObject schema is STRICT-mode legal (all properties required)", () => {
+  // 03.7-05, found by a live eval run: OpenAI structured outputs run in STRICT mode, which
+  // requires every key in `properties` to also appear in `required`. A merely-"optional" field
+  // makes the API reject the SCHEMA — so the call throws 100% of the time, on every input. No
+  // mocked-model unit test can see this (the mock never validates), and the offline smoke path
+  // short-circuits before the call, which is exactly how `deadline` shipped broken: the digest
+  // failed on every live briefing until this scan's fixture caught it.
+  // The way to say "may be absent" is a NULLABLE-and-required field (`type: ["string","null"]`),
+  // normalized back off after the call. This scan holds that line for every jsonSchema in llm.ts.
+  const src = readSource("llm.ts");
+  const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
+  expect(schemas.length, "no jsonSchema definitions found — has the idiom changed?").toBeGreaterThan(0);
+
+  for (const name of schemas) {
+    const start = src.indexOf(`const ${name} = jsonSchema<`);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\n});");
+    const block = rest.slice(0, end >= 0 ? end : undefined);
+
+    // Each `properties: { ... }` object paired with the `required: [...]` that follows it.
+    for (const m of block.matchAll(/properties:\s*\{/g)) {
+      const from = m.index + m[0].length;
+      // Keys at THIS nesting level: a key is `name:` at the object's own depth (depth 1 here).
+      let depth = 1;
+      const keys: string[] = [];
+      let i = from;
+      let lineStart = i;
+      for (; i < block.length && depth > 0; i++) {
+        const c = block[i];
+        if (c === "{" || c === "[") depth++;
+        else if (c === "}" || c === "]") depth--;
+        else if (c === "\n") lineStart = i + 1;
+        if (depth === 1 && c === ":") {
+          const key = block.slice(lineStart, i).trim();
+          if (/^[a-zA-Z_]\w*$/.test(key)) keys.push(key);
+        }
+      }
+      const requiredMatch = /required:\s*\[([^\]]*)\]/.exec(block.slice(i));
+      if (keys.length === 0 || !requiredMatch) continue;
+      const required = [...requiredMatch[1].matchAll(/["'](\w+)["']/g)].map((r) => r[1]);
+      const missing = keys.filter((k) => !required.includes(k));
+      expect(
+        missing,
+        `${name}: ${missing.join(", ")} in properties but not in required — OpenAI strict mode ` +
+          `REJECTS this schema, so the call throws on every input. Make it nullable-and-required.`,
+      ).toEqual([]);
+    }
+  }
+});
+
 test("no body-bearing identifier reaches the tool-bearing loop region of llm.ts (SC-2)", () => {
   // runAgentLoop IS the tool-bearing surface (generateText + tools). Neither the body-bearing
   // variable nor the body-fetch action may appear anywhere in it — the loop consumes counts only.

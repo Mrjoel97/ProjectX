@@ -1768,13 +1768,19 @@ export const draftDocument = internalAction({
 // owns identity and time, and @pikar/core's joinDigest welds them together by index. A model that
 // emits a sender has nowhere to put it. `deadline` is a suggestion STRING, rendered as text and
 // never parsed into an action (SC-4).
+// `deadline` is NULLABLE-AND-REQUIRED, not optional. OpenAI structured outputs run in STRICT
+// mode, which demands every key in `properties` also appear in `required` — a merely-optional
+// `deadline` makes the API reject the whole schema (AI_APICallError: "'required' is required to
+// be supplied and to be an array including every key in properties. Missing 'deadline'"), so the
+// digest throws on EVERY live call. The documented way to say "may be absent" is `["string",
+// "null"]` + required; `toDigestItems` normalizes the null back off (03.7-05).
 const digestSchema = jsonSchema<{
   items: {
     index: number;
     gist: string;
     category: "action" | "fyi" | "newsletter" | "other";
     needsReply: boolean;
-    deadline?: string;
+    deadline: string | null;
   }[];
 }>({
   type: "object",
@@ -1788,9 +1794,9 @@ const digestSchema = jsonSchema<{
           gist: { type: "string" },
           category: { type: "string", enum: ["action", "fyi", "newsletter", "other"] },
           needsReply: { type: "boolean" },
-          deadline: { type: "string" },
+          deadline: { type: ["string", "null"] },
         },
-        required: ["index", "gist", "category", "needsReply"],
+        required: ["index", "gist", "category", "needsReply", "deadline"],
         additionalProperties: false,
       },
     },
@@ -1832,10 +1838,21 @@ export const digestInbox = internalAction({
 
     // Belt-and-braces at the boundary: an out-of-range index cannot address a real message.
     // joinDigest guards this too — a model must not be able to invent a briefing row (ADR-004).
-    const inRange = (items: DigestItem[]): DigestItem[] =>
-      items.filter(
-        (it) => Number.isInteger(it.index) && it.index >= 0 && it.index < messages.length,
-      );
+    // Also normalizes the wire's nullable `deadline` back to absent: DigestItem says
+    // `deadline?: string` and the briefings validator is v.optional(v.string()), so a literal
+    // null would bounce the insert. "" is absent too — an empty suggestion is not a suggestion.
+    const inRange = (
+      items: {
+        index: number;
+        gist: string;
+        category: string;
+        needsReply: boolean;
+        deadline: string | null;
+      }[],
+    ): DigestItem[] =>
+      items
+        .filter((it) => Number.isInteger(it.index) && it.index >= 0 && it.index < messages.length)
+        .map(({ deadline, ...rest }) => (deadline ? { ...rest, deadline } : rest));
 
     if (smoke === true) {
       // Deterministic offline digest: one item per input index. #0 needsReply + a deadline so the
