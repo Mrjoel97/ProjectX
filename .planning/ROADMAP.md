@@ -269,13 +269,13 @@ Plans:
 **Key constraint (amended 2026-07-17 per 03.9 research)**: §4 is enforced by **schema absence, not vigilance** — the step row carries NO free-text field at all (a closed tool-name union + phase enum + numbers); the display verbs live in the UI. This structurally kills the leak class rather than forbidding it, which matters because the SDK's tool events carry `messages[]`/`toolOutput.output` and `listInbox`'s return contains subjects, and invariant 10's existing static scans do not cover a new table. Labels are VERBS ("Reading your inbox", "Summarizing"), per the verbatim user ask — superseding this line's earlier counts-shaped example ("Read 12 messages"), which was wrong: counts exist only in the §4-hazardous return string, not in any tool event.
 **Reuse note**: BRAND already specifies this — §5's collapsible "Thought Process" trace, §3's `LATEST TRACE` label idiom, the existing `.trace-line` CSS (`globals.css:1119`), and the composer's disabled "Thought process — coming soon" button. This is an UNBUILT BRAND PATTERN, not a new one. `ai@7.0.20`'s `onToolExecutionStart`/`onToolExecutionEnd` supply the events (zero tool-wrapper edits); `@convex-dev/agent` 0.6.4 streaming is version-blocked (peer-requires `ai@^6`, repo pins `ai@7`; 0.6.4 is latest — nothing to bump to, §6 moot).
 **No eval gate**: this instruments CODE, not prompts — no skill-body edit, so no cockpit-agent gate cycle (unless planning drifts into a new tool or a changed tool description).
-**Plans:** 4 plans (3/4 executed)
+**Plans:** 4 plans (4/4 executed) — human-verified 2026-07-17
 
 Plans:
 - [x] 03.9-01-PLAN.md — the `agentSteps` table + adapter (record/finish/latestTurn) + unit tests; mint CKPT-05 (Wave 1) — completed 2026-07-17
 - [x] 03.9-02-PLAN.md — emit from ai@7's onToolExecution* callbacks + the SMOKE path; turn lifecycle in both cockpit drivers; §4 static scans (Wave 2) — completed 2026-07-17
 - [x] 03.9-03-PLAN.md — the UI: ActivityCard (LATEST TRACE) + the in-progress chat bubble, off one query — completed 2026-07-17 (both traps dodged: NO-args query rendered above the `!threadId` AND `plan === null` returns; the brain button now toggles the trace instead of claiming it unbuilt. NOT live-verified — that is 04's job)
-- [ ] 03.9-04-PLAN.md — offline E2E + full sweep + human-verify (perceived latency); mark CKPT-05 Complete
+- [x] 03.9-04-PLAN.md — offline E2E + full sweep + human-verify (perceived latency); mark CKPT-05 Complete (Wave 4) — completed 2026-07-17 (human-verify uncovered + fixed a WorkspacePage crash: a slow `listThreads` threw inside the page and killed the whole cockpit — now behind an error boundary; plus input-clears-on-send, Send-button spinner, fresh-chat stale-trace suppression)
 
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
