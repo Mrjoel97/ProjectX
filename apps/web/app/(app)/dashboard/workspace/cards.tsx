@@ -3,6 +3,7 @@
 import { api } from "@pikar/backend/api";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -32,6 +33,9 @@ type PlanId = Plan["_id"];
 // sender/ts/bucket are code-owned facts joined server-side by @pikar/core (ADR-004).
 type Briefing = NonNullable<FunctionReturnType<typeof api.briefings.byThread>>;
 type BriefingItem = Briefing["items"][number];
+// Same derivation for the activity trace (CKPT-05).
+type Activity = NonNullable<FunctionReturnType<typeof api.agentSteps.latestTurn>>;
+export type StepView = Activity["steps"][number];
 
 // Deferred send (SCHD-01) time helpers. The browser IS in the user's tz, so the native
 // datetime-local input round-trips epoch ms ↔ local wall-clock without any tz math of our own
@@ -690,6 +694,102 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
   );
 }
 
+// ---------- LATEST TRACE (CKPT-05) ----------
+
+// THE display verb map — the ONLY place in this feature where a human-readable string exists,
+// and it is CODE-OWNED. Keyed off the CLOSED `tool` union from schema.ts: never model output,
+// never tool output, never mail content. This is why the step row deliberately has no text field
+// (§4 enforced by schema absence, 03.9-01) — there is nowhere for a subject line to hide.
+// An unknown key falls back to "Working…", so a tool added later can never crash the card.
+const VERB: Record<string, [running: string, done: string]> = {
+  thinking: ["Thinking…", "Thought it through"],
+  resolveContacts: ["Looking up a contact…", "Looked up a contact"],
+  addRecipients: ["Adding recipients…", "Added recipients"],
+  setRecipients: ["Setting the recipients…", "Set the recipients"],
+  removeRecipient: ["Removing a recipient…", "Removed a recipient"],
+  setSubject: ["Writing the subject line…", "Wrote the subject line"],
+  setMode: ["Choosing how to send…", "Chose how to send"],
+  setSendTime: ["Setting the send time…", "Set the send time"],
+  draftBody: ["Drafting the email…", "Drafted the email"],
+  proposePlan: ["Putting the plan together…", "Plan ready"],
+  generateAttachment: ["Generating the document…", "Generated the document"],
+  regenerateAttachment: ["Regenerating the document…", "Regenerated the document"],
+  removeAttachment: ["Removing the attachment…", "Removed the attachment"],
+  personalizeRecipient: ["Tailoring a message…", "Tailored a message"],
+  listInbox: ["Checking your inbox…", "Checked your inbox"],
+  briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
+};
+const FALLBACK: [string, string] = ["Working…", "Done"];
+
+/**
+ * A turn is bounded at 45s per model call (llm.ts CALL_TIMEOUT_MS), so a `running` row this old
+ * outlived any live turn: the action was hard-killed (deploy/OOM) and nothing server-side will
+ * ever terminalize it (research Pitfall 2's one uncoverable death mode). This is the WHOLE
+ * mitigation — computed from Date.now() at render, no ticker, no scheduler, no watchdog. A page
+ * refresh already fixes the row; a backend cleanup would be a new failure mode to fix UI state.
+ */
+const STALE_MS = 90_000;
+
+/**
+ * The one place a step becomes words — shared with ChatPane's in-progress bubble so the canvas
+ * and the chat can never word the same row differently (ponytail: one map, one place).
+ */
+export function stepText(step: StepView, now: number = Date.now()): string {
+  const [running, done] = VERB[step.tool] ?? FALLBACK;
+  if (step.phase === "done") return done;
+  // An ERROR shows the ATTEMPT, never the done verb — "Drafted the email" on a step that failed
+  // would be a lie (BRAND §5 honest zeros). No amber, no colour: the meaning is in the text (§6).
+  const attempt = running.replace(/…$/, "");
+  if (step.phase === "error") return `${attempt} — couldn't complete this step`;
+  if (now - step.startedAt > STALE_MS) return `${attempt} — this step may have stalled; try sending again`;
+  return running;
+}
+
+// Mirrors page.tsx:39 — the BRAND §3 tracked-caps section label. Mirrored rather than imported
+// because page.tsx imports THIS file (importing back would be a cycle).
+const capsTeal = {
+  margin: 0,
+  fontSize: "0.68rem",
+  fontWeight: 700,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase" as const,
+  color: "var(--teal-600)",
+};
+// A grid/flex child needs minWidth:0 before it will shrink, and minWidth:0 sizes the BOX, not the
+// TEXT — a long word still needs overflow-wrap to break (vault cards 3bdea02, briefing card
+// 44e95c0). The workspace divider is user-resizable, so the trace must survive a narrow pane.
+const traceText = { minWidth: 0, overflowWrap: "anywhere" as const };
+
+/**
+ * BRAND §3 names `LATEST TRACE` as a tracked-caps label example; §4 says content is CARDS on the
+ * canvas (not chrome bolted onto the pane header). Rows reuse `.trace-line` (globals.css:1119) —
+ * it is already exactly this look, mono/0.75rem/--ink-soft with a teal ring dot. No new CSS, and
+ * deliberately NO animation: the rows arriving one by one IS the motion, and that is the point of
+ * the phase (also why there is nothing to register in the reduced-motion block).
+ */
+function ActivityCard({ steps }: { steps: StepView[] }) {
+  const now = Date.now();
+  return (
+    <div style={box} data-testid="activity-card">
+      <p style={capsTeal}>Latest trace</p>
+      {/* Progress a screen reader can HEAR — a silent progress surface would reproduce the
+          original "is it stuck?" complaint for non-sighted users (BRAND §6). */}
+      <div aria-live="polite" style={{ display: "grid", gap: "0.4rem", marginTop: "0.7rem" }}>
+        {/* Honest zeros (BRAND §5): only steps that actually happened — no predicted "up next". */}
+        {steps.map((s) => (
+          <div key={s.stepKey} className="trace-line">
+            <span style={traceText}>{stepText(s, now)}</span>
+            {s.phase === "done" && s.durationMs !== undefined && (
+              // Measured server-side by the SDK and already in the row — never a setInterval.
+              <span style={{ flex: "none", opacity: 0.7 }}>· {(s.durationMs / 1000).toFixed(1)}s</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
 export function CardList({ threadId }: { threadId?: string }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -697,18 +797,39 @@ export function CardList({ threadId }: { threadId?: string }) {
   // thread's FIRST message, so the briefing must render with no plan row at all. Anything gated
   // behind plan status would simply never appear for the most common briefing flow.
   const briefing = useQuery(api.briefings.byThread, threadId ? { threadId } : "skip");
+  // The THIRD independent query, on the same footing as the other two — and it takes NO ARGS on
+  // purpose. On the first message there is no threadId until sendCockpitMessage RESOLVES, i.e.
+  // until the wait is already over, so a byThread-keyed read is "skip" for the ENTIRE first turn:
+  // blank at exactly the moment a first-time user decides the product is broken (Pitfall 1).
+  const activity = useQuery(api.agentSteps.latestTurn);
+  const showActivity = activity && (threadId === undefined || activity.threadId === threadId);
+  const trace = showActivity ? <ActivityCard steps={activity.steps} /> : null;
+  const running = Boolean(showActivity && activity.steps.some((s) => s.phase === "running"));
 
-  if (!threadId) return <p style={muted}>No artifacts yet.</p>;
-  if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
+  // The trace renders ABOVE every early return below — never under a plan-status branch, and
+  // never gated on `activity === undefined` (that would flash "Loading…" on every render).
+  // 03.7-04's lesson, verbatim from STATE.md: "a status-'collecting' row made the OLD dispatch
+  // render literally nothing" — and `collecting` is where MOST of the waiting happens.
+  const rest = () => {
+    // Keep the idle copy for the genuinely-idle case; just don't let it swallow a live trace.
+    if (!threadId) return running ? null : <p style={muted}>No artifacts yet.</p>;
+    if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
 
-  const brief = briefing ? <BriefingCard briefing={briefing} /> : null;
-  if (plan === null)
-    return brief ? (
-      <div style={{ display: "grid", gap: "1rem" }}>{brief}</div>
-    ) : (
-      <p style={muted}>No plan yet — answer the questions to build one.</p>
-    );
+    const brief = briefing ? <BriefingCard briefing={briefing} /> : null;
+    if (plan === null) return brief ?? (running ? null : <p style={muted}>No plan yet — answer the questions to build one.</p>);
+    return <PlanCards plan={plan} threadId={threadId} brief={brief} />;
+  };
 
+  return (
+    <div style={{ display: "grid", gap: "1rem" }}>
+      {trace}
+      {rest()}
+    </div>
+  );
+}
+
+/** The existing plan-status dispatch, unchanged — lifted out so CardList can render the trace above it. */
+function PlanCards({ plan, threadId, brief }: { plan: Plan; threadId: string; brief: ReactNode }) {
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
