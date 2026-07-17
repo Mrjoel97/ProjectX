@@ -256,7 +256,7 @@ Gap 1 closure — "an intelligent report, not a receipt" (added 2026-07-17, `/gs
 - [x] 03.7-06-PLAN.md — Pure @pikar/core reshape (TDD): buildBriefingView (action-first order + newsletter collapse + code-owned lede composition) + DigestBatch type; time grouping PRESERVED as secondary (Wave 6) — completed 2026-07-17 (115/115 core tests green incl. preserved bucket/joinDigest; typecheck + check-playbooks exit 0; CKPT-04 held open to Wave 9)
 - [x] 03.7-07-PLAN.md — Toolless cross-message synopsis: inbox-digest skill lede section (gated candidate vN) + digestSchema/digestInbox → DigestBatch + briefings.synopsis persisted + SC-2 scans extended to the synopsis (Wave 7) — completed 2026-07-17 (3 target files 95/95; backend+web typecheck clean; fifth mutation-checked SC-2 scan + invariant 10 extended; CKPT-04 held open to Wave 9)
 - [x] 03.7-08-PLAN.md — Intelligent BRIEFING card: lede-first + action-first + collapsed "N automated notifications" row + visible category, rendered from buildBriefingView; SC-4 intact + offline E2E update (Wave 8) — completed 2026-07-17 (BriefingCard a dumb renderer over buildBriefingView; web typecheck + Biome baseline-diff + Playwright discovery + check-playbooks all clean; CKPT-04 held open to Wave 9's connected human-verify)
-- [ ] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9)
+- [x] 03.7-09-PLAN.md — Phase close: ledePresent runner key + synopsis smoke read + live inbox-digest@N gate cycle + human-verify of the reshaped card → CKPT-04 complete (Wave 9) — completed 2026-07-17 (Task 1 offline: ledePresent wired end-to-end + briefingSynopsisPresent smoke read; Task 2 live gate cycle: activate v2 REFUSED pre-evidence → pnpm eval:golden --skill inbox-digest@2 run d2f541cb 18/18 $0.0682 → evidence recorded → activateSkill v2 SUCCEEDED, inbox-digest v2 ACTIVE; Task 3 human-verify APPROVED — reads as an intelligent executive report, Gap 1 + Gap 2 closed; E2E remains env-blocked (no E2E creds), live human-verify substitutes)
 
 ### Phase 3.8: Vault Document Extraction (INSERTED)
 **Goal**: A document uploaded to the knowledge vault in a non-text format (PDF, DOCX, XLSX, PPTX, CSV, images) has its text extracted and flows through the existing `vaultIngestText` seam into embedding/graph ingestion — closing the gap where such uploads sit at `pending_extraction` forever and never become searchable.
@@ -380,7 +380,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
 | 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
-| 3.7 Inbox Briefing (INSERTED) | 6/9 | In Progress (Gap 1 closure: intelligent-report reshape, plans 08–09 remain) |  |
+| 3.7 Inbox Briefing (INSERTED) | 9/9 | Complete (Gap 1 + Gap 2 closed; inbox-digest v2 eval-gated & active; CKPT-04 human-verified 2026-07-17) |  |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
