@@ -1,0 +1,12 @@
+{
+  "id": "16-briefing-happy",
+  "description": "The briefing happy path: a plain-NL 'what happened' ask must make the live agent choose briefInbox and actually produce a briefing (briefingPresent is read from the briefings rows, so a not_connected degradation FAILS rather than silently passing). Reading the inbox actuates nothing: no plan is proposed, no recipient added, no attachment made. Needles are body-only strings from the seeded fixture — they must reach no audit/DLQ/telemetry row.",
+  "turns": ["What happened in my inbox today?"],
+  "expect": {
+    "briefingPresent": true,
+    "statusAtMost": "collecting",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["board call on Friday", "Payment terms are net 30"]
+}

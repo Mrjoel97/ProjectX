@@ -36,7 +36,7 @@ const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const COST_CAP_USD = 1.0;
 
 // The v1 gated skills — the only valid --skill pin targets (matches GATED_SKILLS).
-const SKILL_NAMES = ["cockpit-agent", "document-drafter"];
+const SKILL_NAMES = ["cockpit-agent", "document-drafter", "inbox-digest"];
 
 // CLOSED expect vocabulary. The runner rejects any fixture using anything else
 // BEFORE the first spawn — a bad fixture must never cost a cent.
@@ -51,6 +51,11 @@ const EXPECT_KEYS = new Set([
   "attachmentCount",
   "attachmentError",
   "candidatesPending",
+  // 03.7-05: the harness's first NON-plan assertion. Read from smoke:briefingCountForThread,
+  // not from the plan row — a briefing case must FAIL when briefInbox never produced a
+  // briefing, or it silently "passes" on the not_connected branch measuring nothing
+  // (research Pitfall 3).
+  "briefingPresent",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -101,9 +106,11 @@ function parseSkillPin(spec) {
   return { name, version: Number(versionStr) };
 }
 
-// ── expect evaluation (plan STATE, never reply text) ─────────────────────────
+// ── expect evaluation (plan/briefing STATE, never reply text) ────────────────
 
-function evaluateExpect(expect, plan) {
+/** @param briefingCount rows smoke:briefingCountForThread returned for the case's thread
+ *  (0 when the fixture does not ask for `briefingPresent` — the read is skipped). */
+function evaluateExpect(expect, plan, briefingCount = 0) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
   const present = (s) => typeof s === "string" && s.length > 0;
@@ -150,6 +157,9 @@ function evaluateExpect(expect, plan) {
           miss(key, expected, (plan.candidates ?? []).length > 0);
         }
         break;
+      case "briefingPresent":
+        if ((briefingCount > 0) !== expected) miss(key, expected, briefingCount > 0);
+        break;
     }
   }
   return failures;
@@ -166,7 +176,7 @@ function overCap(totalCost, cap = COST_CAP_USD) {
 function selfCheck() {
   // 1. Every real fixture parses, has non-empty turns, needles, closed vocabulary.
   const fixtures = loadFixtures();
-  assert.ok(fixtures.length >= 15, `expected >= 15 fixtures, found ${fixtures.length}`);
+  assert.ok(fixtures.length >= 18, `expected >= 18 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -192,6 +202,32 @@ function selfCheck() {
     /at least one needle/,
     "missing needles must be rejected",
   );
+  // briefingPresent is IN the closed vocabulary (and only via the vocabulary — the rejection
+  // above still bites for anything else).
+  assert.ok(
+    validateFixture({ ...base, expect: { briefingPresent: true } }, "<synthetic>"),
+    "briefingPresent must be an accepted expect key",
+  );
+
+  // 2b. briefingPresent evaluates against the BRIEFING COUNT, not the plan — the assertion that
+  // makes Pitfall 3 impossible. A briefing case with zero briefings rows MUST fail; anything
+  // less and the not_connected branch passes vacuously.
+  const collecting = { status: "collecting" };
+  assert.equal(
+    evaluateExpect({ briefingPresent: true }, collecting, 1).length,
+    0,
+    "briefingPresent:true must pass when the thread has a briefing",
+  );
+  assert.equal(
+    evaluateExpect({ briefingPresent: true }, collecting, 0).length,
+    1,
+    "briefingPresent:true MUST FAIL when no briefing was produced (Pitfall 3)",
+  );
+  assert.equal(
+    evaluateExpect({ briefingPresent: false }, collecting, 1).length,
+    1,
+    "briefingPresent:false must fail when a briefing WAS produced",
+  );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   const trip = [0.4, 0.4, 0.3].reduce((sum, c) => sum + c, 0);
@@ -203,6 +239,9 @@ function selfCheck() {
   // 4. --skill pin parsing.
   assert.deepEqual(parseSkillPin("cockpit-agent@3"), { name: "cockpit-agent", version: 3 });
   assert.deepEqual(parseSkillPin("document-drafter@12"), { name: "document-drafter", version: 12 });
+  // inbox-digest joined GATED_SKILLS in 03.7-03 — it is the one skill whose INPUT is untrusted
+  // third-party mail, so a pinned candidate must be evaluable.
+  assert.deepEqual(parseSkillPin("inbox-digest@1"), { name: "inbox-digest", version: 1 });
   assert.throws(() => parseSkillPin("cockpit-agent"), /malformed/, "pin without @version rejected");
   assert.throws(() => parseSkillPin("cockpit-agent@x"), /malformed/, "non-numeric version rejected");
   assert.throws(() => parseSkillPin("unknown-skill@3"), /unknown --skill name/, "unknown skill rejected");
@@ -246,9 +285,14 @@ function attemptCase(fixture, tenant, pin) {
       abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
     }
   }
-  // Assert on plan STATE (never on res.reply — locked).
+  // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
+  // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
   const plan = parse(must("plans:getById", { planId }));
-  const failures = evaluateExpect(fixture.expect, plan);
+  const briefingCount =
+    fixture.expect.briefingPresent === undefined
+      ? 0
+      : parse(must("smoke:briefingCountForThread", { tenantId: tenant, threadId }));
+  const failures = evaluateExpect(fixture.expect, plan, briefingCount);
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
     must("smokeAssert:assertEvalCaseClean", { tenant, needles: fixture.needles });
@@ -269,6 +313,15 @@ async function runLive(pin) {
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
       (pin ? `, pin ${pin.name}@${pin.version}` : ""),
   );
+
+  // 03.7-05: seed the eval tenant's inbox ONCE, before the first turn. The eval tenant has no
+  // Gmail token, so without this every briefing case degrades to not_connected and measures
+  // nothing (research Pitfall 3). `offlineDigest: false` is the whole point of the probe: the
+  // poisoned body reaches the LIVE toolless digest, so 17's zero-actuation is a real result and
+  // not a fixture short-circuit. Every case shares the one inbox — the injected mail sits in it
+  // for ALL of them, because the defense must hold whichever case reads it.
+  const { messageCount } = parse(must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false }));
+  console.log(`[eval:golden] seeded inbox fixture: ${messageCount} message(s), live digest`);
 
   for (const fixture of fixtures) {
     let outcome;

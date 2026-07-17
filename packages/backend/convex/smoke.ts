@@ -341,6 +341,21 @@ export const getInboxFixture = internalQuery({
       .first(),
 });
 
+/** 03.7-05: the eval harness's `briefingPresent` read. Count the thread's briefings rows —
+ *  `> 0` proves `briefInbox` actually produced a briefing, so a briefing eval case can never
+ *  silently "pass" on the not_connected branch (research Pitfall 3). Explicit return type per
+ *  Convex guidelines §96. */
+export const briefingCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    (
+      await ctx.db
+        .query("briefings")
+        .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+        .collect()
+    ).length,
+});
+
 /**
  * Seed the FIXED deterministic message set for a tenant (idempotent — replaces any existing
  * rows, so re-running a smoke/eval never doubles the mailbox).
