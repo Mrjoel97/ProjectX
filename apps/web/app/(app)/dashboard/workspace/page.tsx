@@ -140,6 +140,12 @@ export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  // "A turn is in flight" — lifted here so BOTH trace surfaces (ChatPane's bubble + CardList's
+  // ActivityCard) share ONE signal (FIX 4). It is the difference between "no thread, nothing sent"
+  // (a fresh chat — show NO trace, or a previous thread's LATEST turn leaks in) and "no thread, a
+  // first turn is in flight" (sendCockpitMessage hasn't resolved the threadId yet — the trace MUST
+  // show, the first-turn trap). ChatPane owns the send, so it toggles this via onSending.
+  const [sending, setSending] = useState(false);
 
   // First send on a fresh chat mints the thread — register its tab, labeled by the message.
   const registerThread = (id: string, firstText: string) => {
@@ -248,7 +254,7 @@ export default function WorkspacePage() {
             {status === undefined ? (
               <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
             ) : status.connected ? (
-              <ChatPane threadId={threadId} onThread={registerThread} />
+              <ChatPane threadId={threadId} onThread={registerThread} sending={sending} onSending={setSending} />
             ) : (
               <Link
                 href="/connect-gmail"
@@ -300,7 +306,7 @@ export default function WorkspacePage() {
                 <TrashIcon size={15} /> Clear workspace
               </button>
             </header>
-            <CardList threadId={threadId} />
+            <CardList threadId={threadId} sending={sending} />
           </section>
         }
       />

@@ -70,13 +70,20 @@ function messageText(content: unknown): string {
 export function ChatPane({
   threadId,
   onThread,
+  sending,
+  onSending,
 }: {
   threadId?: string;
   onThread: (id: string, firstText: string) => void;
+  // Lifted to the page (FIX 4) so the workspace ActivityCard sees the same in-flight signal — it is
+  // this pane's send-button `busy` AND the "a first turn is in flight" flag the trace gate needs.
+  sending: boolean;
+  onSending: (v: boolean) => void;
 }) {
   const send = useAction(api.cockpit.sendCockpitMessage);
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
+  const busy = sending;
+  const setBusy = onSending;
 
   const messages = useThreadMessages(
     api.cockpit.listThreadMessages,
@@ -103,7 +110,13 @@ export function ChatPane({
   // to — one query feeds both surfaces, so the bubble and the canvas can never disagree. NO args:
   // on the first message there is no threadId until send() resolves (research Pitfall 1).
   const activity = useQuery(api.agentSteps.latestTurn);
-  const steps = activity && (threadId === undefined || activity.threadId === threadId) ? activity.steps : [];
+  // FIX 4: the no-thread case is gated on `sending`, not shown unconditionally. With a threadId we
+  // match on it (a settled turn's LATEST TRACE); WITHOUT one we show the latest turn ONLY while a
+  // first turn is in flight (sending) — otherwise a brand-new/idle chat leaks the PREVIOUS thread's
+  // trace + a phantom "Thought process" bubble. `sending` stays true for the whole first turn (it
+  // is the send-button busy flag), so this does NOT regress the first-turn trap it protects.
+  const steps =
+    activity && (threadId !== undefined ? activity.threadId === threadId : sending) ? activity.steps : [];
   // `latestTurn` returns steps ascending by startedAt, so the LAST running row is the current one.
   const current = [...steps].reverse().find((s) => s.phase === "running");
   // null = follow the turn (expanded while running, collapsed once settled — research Open

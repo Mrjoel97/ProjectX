@@ -791,7 +791,7 @@ function ActivityCard({ steps }: { steps: StepView[] }) {
 }
 
 /** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
-export function CardList({ threadId }: { threadId?: string }) {
+export function CardList({ threadId, sending }: { threadId?: string; sending: boolean }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
   // INDEPENDENT of the plan (research Pitfall 6): "what happened in my inbox?" is typically a
   // thread's FIRST message, so the briefing must render with no plan row at all. Anything gated
@@ -802,7 +802,11 @@ export function CardList({ threadId }: { threadId?: string }) {
   // until the wait is already over, so a byThread-keyed read is "skip" for the ENTIRE first turn:
   // blank at exactly the moment a first-time user decides the product is broken (Pitfall 1).
   const activity = useQuery(api.agentSteps.latestTurn);
-  const showActivity = activity && (threadId === undefined || activity.threadId === threadId);
+  // FIX 4: with a threadId, match on it; WITHOUT one, show the latest turn ONLY while a first turn
+  // is in flight (`sending`, lifted from ChatPane) — an idle/fresh chat must not leak the previous
+  // thread's trace. `sending` stays true across the whole first turn, so the first-turn trap (no
+  // threadId until sendCockpitMessage resolves) is still covered. Both surfaces share this gate.
+  const showActivity = activity && (threadId !== undefined ? activity.threadId === threadId : sending);
   const trace = showActivity ? <ActivityCard steps={activity.steps} /> : null;
   const running = Boolean(showActivity && activity.steps.some((s) => s.phase === "running"));
 
