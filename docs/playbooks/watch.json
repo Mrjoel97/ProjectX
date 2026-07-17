@@ -52,6 +52,12 @@
   "vault.md": [
     "packages/vault/",
     "packages/backend/convex/vault.ts",
+    "packages/backend/convex/vaultExtract.ts",
+    "packages/backend/convex/vaultExtract.test.ts",
+    "packages/backend/convex/vaultTranscribe.ts",
+    "packages/backend/convex/vaultTranscribe.test.ts",
+    "packages/backend/convex/vaultSweep.ts",
+    "packages/backend/convex/vaultSweep.test.ts",
     "packages/backend/convex/vaultRag.ts",
     "packages/backend/convex/vaultIngest.ts",
     "packages/backend/convex/vaultLlm.ts",

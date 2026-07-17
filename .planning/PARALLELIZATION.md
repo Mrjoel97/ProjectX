@@ -22,6 +22,31 @@ owns* (the real conflict source is shared hot files — `llm.ts`, `schema.ts`, `
 **Lane A runs 3.4 then 3.5 sequentially in one session** — they share files, so they must not be
 split across two sessions.
 
+## Phase 3.8 — Vault document extraction (4 lanes, Wave 0 landed 2026-07-18)
+
+Wave 0 (03.8-01, on `main`) froze every shared file and stubbed every lane's file. The four
+Wave-2 lanes are pairwise-disjoint — no lane edits another lane's file or any shared singleton:
+
+| Lane | Branch | Owns (edit freely) | Must NOT touch |
+|------|--------|--------------------|----------------|
+| **1 · PDF + images** | `lane-1/vault-extract` | `convex/vaultExtract.ts`, `convex/vaultExtract.test.ts` | everything else below; `vault.ts`, `schema.ts`, package.jsons |
+| **2 · Office parsers** | `lane-2/office-parsers` | `packages/vault/src/officeText.ts`, `packages/vault/src/officeText.test.ts` | ANY `convex/` file (zero Convex edits); the `@pikar/vault` index barrel |
+| **3 · Sweep + UI + E2E** | `lane-3/sweep-ui` | `convex/vaultSweep.ts`, `convex/vaultSweep.test.ts`, `apps/web/app/(app)/dashboard/vault/`, `apps/web/e2e/vault.spec.ts` | `vaultExtract*`, `vaultTranscribe*`, `officeText*` |
+| **4 · Video transcription** | `lane-4/video-transcribe` | `convex/vaultTranscribe.ts`, `convex/vaultTranscribe.test.ts` | everything else; adds NO deps, NO e2e file (a video E2E row is Lane 3's, via SMOKE sentinel bytes) |
+
+Phase-3.8 additions to the shared-singleton list (beyond the three below):
+
+4. **`pnpm-lock.yaml` + `packages/backend/package.json` + `packages/vault/package.json`** —
+   FROZEN after Wave 0 (unpdf/fflate installed there). No lane runs `pnpm add`.
+5. **`docs/playbooks/watch.json`** — Wave-0-only this phase (all six new convex paths already
+   registered). Lanes do not edit it.
+6. **`docs/playbooks/vault.md`** — append-only, each lane writes ONLY inside its own
+   `### Lane ownership (Phase 3.8)` subsection; on merge conflict keep both (same rule as
+   STATE.md/ROADMAP.md).
+7. **`convex/vault.ts` + `convex/schema.ts`** — Wave-0-owned this phase; already carry the hook,
+   seam, and status union every lane needs. If a lane thinks it needs an edit here, stop and
+   coordinate — that's a contract change.
+
 ## The three shared singletons — append-only discipline
 
 Only these files are touched by every lane. Keep edits **additive and region-scoped** so merges

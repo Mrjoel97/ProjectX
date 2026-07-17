@@ -1,6 +1,6 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-17 — overflow containment fix (user-reported): long unbroken filenames painted past the doc cards. In `DocGrid.tsx` grid (column) view the info span's cross-axis shrink-to-fit sized it to the full nowrap-title width (min-content = max-content for nowrap text), so the ellipsis never engaged — capped with `maxWidth: 100%`; `PreviewModal.tsx`'s title `h2` got `minWidth: 0` so `flex: 1` can actually shrink it and `break-word` wraps instead of pushing past the panel. Visual containment only — no data/query/status changes; web typecheck clean. Prior: 2026-07-15 — owner-directed shell fusion + glass/clay uniformity, in two passes. Pass 1 fused the route full-bleed: `(app)/layout.tsx`'s `is-bleed` match widened to `/^\/dashboard\/(workspace|vault)/`, so `<main>` drops its canvas padding and locks overflow, and `vault/page.tsx`'s root became a `.vault-surface.pane-canvas` (the workspace canvas's teal aura) with an inner `.vault-scroll` owning its own scroll (is-bleed locks `<main>`). Pass 2 gave the board pieces the actual glass-over-clay treatment (the fusion alone left the tiles flat): shared `globals.css` classes `.clay-card` (frosted translucent pane + `backdrop-filter` blur + extruded shadows — an outer drop, an inner top light edge, a soft inner bottom shade; hover-lift for `button.clay-card`), `.clay-badge` (extruded icon badge mirroring `.rail-logo`), and `.clay-dropzone` (lighter frosted panel). Applied by className to the VaultStats tiles + their icon badges, the CategoryTabs container, the DocGrid search bar + doc cards + card icon badges, and the Dropzone panel + its icon (each dropped its inline `var(--card)`/border/flat-shadow; radius + layout stay inline). The `backdrop-filter` frosts the aura, so these only read right on `.pane-canvas`. PreviewModal is intentionally left solid — it sits on a dark scrim, not the aura, so frosting would just muddy the scrim. Internal vault behavior and all `vault.spec.ts` selectors unchanged; web typecheck clean. Prior: 05-07b — LIVE browser human-verify (real user, Claude-in-Chrome): the vault route renders a 1:1 brand match; a pasted Brain Dump ingested end-to-end through the REAL pipeline (embed → graph-extract → upsert → `ready`), and the preview modal surfaced the correctly-extracted entities (Meridian Health/CareLink/Vantage Systems `org`, Alan Ford/Nina Osei `person`) + a typed `led by` relationship. The live run CAUGHT + FIXED a P0 the offline SMOKE suite could not: `vaultRag.ts` passed a spec-"v4" `openai.embedding(...)` model to RAG's ai@6 (`AI_UnsupportedModelVersionError`) — replaced with a v2 `openaiEmbeddingV2` REST adapter (+ a `vaultRedaction.test.ts` static guard). Also surfaced: ingest needs `skills:seedSkills` run against the deployment (`NO_ACTIVE_SKILL: graph-extractor` otherwise).
+> Last verified: 2026-07-18 — Phase 3.8 Wave 0 (03.8-01): the extraction CONTRACT landed on `main` — `vaultDocuments.status` grew `extracting` (+ `extractionTruncated` optional flag), `vaultUpload` now schedules `internal.vaultExtract.extractDoc` / `internal.vaultTranscribe.transcribeDoc` by `extractionKindFor(mimeType, filename)` for non-searchable binaries (TXT/MD/CSV path untouched), and the scheduler-safe internal seam `ingestExtractedText` + `markExtracting` + `getDocForExtraction` sit next to markReady/markFailed. `@pikar/vault` gained `extractKind.ts` (classifier + caps consts, on the barrel) and the `officeText.ts` stub (subpath-only — keeps fflate out of the V8 bundle). `unpdf@1.6.2`/`fflate@0.8.3` pinned; the lockfile, both package.jsons, `schema.ts`, `vault.ts`, and `watch.json` are FROZEN for the rest of the phase (see `## Extraction lifecycle (Phase 3.8)` + `.planning/PARALLELIZATION.md`). Prior: 2026-07-17 — overflow containment fix (user-reported): long unbroken filenames painted past the doc cards. In `DocGrid.tsx` grid (column) view the info span's cross-axis shrink-to-fit sized it to the full nowrap-title width (min-content = max-content for nowrap text), so the ellipsis never engaged — capped with `maxWidth: 100%`; `PreviewModal.tsx`'s title `h2` got `minWidth: 0` so `flex: 1` can actually shrink it and `break-word` wraps instead of pushing past the panel. Visual containment only — no data/query/status changes; web typecheck clean. Prior: 2026-07-15 — owner-directed shell fusion + glass/clay uniformity, in two passes. Pass 1 fused the route full-bleed: `(app)/layout.tsx`'s `is-bleed` match widened to `/^\/dashboard\/(workspace|vault)/`, so `<main>` drops its canvas padding and locks overflow, and `vault/page.tsx`'s root became a `.vault-surface.pane-canvas` (the workspace canvas's teal aura) with an inner `.vault-scroll` owning its own scroll (is-bleed locks `<main>`). Pass 2 gave the board pieces the actual glass-over-clay treatment (the fusion alone left the tiles flat): shared `globals.css` classes `.clay-card` (frosted translucent pane + `backdrop-filter` blur + extruded shadows — an outer drop, an inner top light edge, a soft inner bottom shade; hover-lift for `button.clay-card`), `.clay-badge` (extruded icon badge mirroring `.rail-logo`), and `.clay-dropzone` (lighter frosted panel). Applied by className to the VaultStats tiles + their icon badges, the CategoryTabs container, the DocGrid search bar + doc cards + card icon badges, and the Dropzone panel + its icon (each dropped its inline `var(--card)`/border/flat-shadow; radius + layout stay inline). The `backdrop-filter` frosts the aura, so these only read right on `.pane-canvas`. PreviewModal is intentionally left solid — it sits on a dark scrim, not the aura, so frosting would just muddy the scrim. Internal vault behavior and all `vault.spec.ts` selectors unchanged; web typecheck clean. Prior: 05-07b — LIVE browser human-verify (real user, Claude-in-Chrome): the vault route renders a 1:1 brand match; a pasted Brain Dump ingested end-to-end through the REAL pipeline (embed → graph-extract → upsert → `ready`), and the preview modal surfaced the correctly-extracted entities (Meridian Health/CareLink/Vantage Systems `org`, Alan Ford/Nina Osei `person`) + a typed `led by` relationship. The live run CAUGHT + FIXED a P0 the offline SMOKE suite could not: `vaultRag.ts` passed a spec-"v4" `openai.embedding(...)` model to RAG's ai@6 (`AI_UnsupportedModelVersionError`) — replaced with a v2 `openaiEmbeddingV2` REST adapter (+ a `vaultRedaction.test.ts` static guard). Also surfaced: ingest needs `skills:seedSkills` run against the deployment (`NO_ACTIVE_SKILL: graph-extractor` otherwise).
 >
 > Prior: 05-07 — phase close (VALT-01/03/04): the Playwright vault E2E (`apps/web/e2e/vault.spec.ts` — honest-zero → paste a `SMOKE::graph::` Brain Dump → processing→ready reactively → search → preview with entity chips → delete → empty, over the OFFLINE SMOKE:: ingest, Playwright-discovered + type-loads) and the live `smoke:vault` gate (`packages/backend/scripts/run-smoke-vault.mjs` + `packages/backend/convex/vaultSmoke.ts`: seed 2 briefs sharing an entity with a REAL `rag.add` embed → poll ready → assert live hybrid `rag.search` returns the seed → assert `vaultGround`'s live path merges the graph neighbor reached via the shared entity → assert no raw brief text in any audit/deadLetters row §4; a try/finally purge). The human-verify against `brand-024242`/`brand-024258` is the phase gate. `vaultSmoke.ts` is a smoke-only internal helper (explicit `tenantId` — the CLI carries no identity); its live run is the runnable check (no colocated convex-test — the rag/workflow components don't run under it).
 > Prior: 05-06 — the Knowledge Vault UI route landed (VALT-04): `apps/web/app/(app)/dashboard/vault/` — `page.tsx` (headline + teal Refresh + Loading pill + lifted category/selected state), `VaultStats.tsx` (4 tiles), `CategoryTabs.tsx` (the 6 tabs), `Dropzone.tsx` (generateUploadUrl→vaultUpload + Brain-Dump paste→vaultIngestText), `DocGrid.tsx` (search via `vaultSearch` + N ITEMS + grid/list), and `PreviewModal.tsx` (in-place Esc/X modal: text/image/video preview + metadata + this-doc `docEntities` chips/edges + on-demand `vaultDownloadUrl` browser download + `deleteVaultDoc` reactive-remove + Open-in-workspace link). A signed download/media URL is rendered into `<img>`/`<video>`/`<a>` ONLY, never logged (§4). Nav entry added in `(app)/layout.tsx`; tokens only (globals.css)
@@ -60,6 +60,67 @@ Run `graphify query "vault"` for the current subgraph. Couplings graphify cannot
 2. `@convex-dev/workflow` runs `store → embed → extract → ready`: `pii.scanText` (fail-closed) → embed `safeText` via rag → `vaultLlm` graph-extractor emits typed entities/relationships → upsert `graphNodes`/`graphEdges`.
 3. Grounding: `vaultGround({query})` → rag vector search (top-K seed chunks) → map to graph nodes → `bfsNeighbors` hop-capped expansion → `fuse` merge/dedupe/rank → one grounding context block.
 4. Delete cascades: remove the row + rag chunks + `graphEdges` with `sourceDocId = doc`; nodes whose `degree` hits 0 are garbage-collected.
+
+## Extraction lifecycle (Phase 3.8)
+
+Binary uploads (PDF/image/Office/video/audio) get their text extracted server-side and fed into
+the SAME ingest workflow TXT uploads ride. The Wave-0 contract (03.8-01) fixed these rules:
+
+- **Status walk:** `pending_extraction → extracting → processing → ready | failed(+failureReason)`.
+  The row stays `pending_extraction` at insert; the extraction ACTION flips it to `extracting`
+  via `markExtracting` when work actually starts (honest pill). `processing` onward is the
+  existing embed→graph half, unchanged.
+- **The seam invariant:** an extraction action produces TEXT and calls
+  `internal.vault.ingestExtractedText({docId, tenantId, text, truncated})` — it NEVER writes
+  embeddings, rag entries, or graph rows itself. The seam patches text/hash/size, flips to
+  `processing`, and starts `internal.vaultIngest.ingestDoc` (mirrors the public `vaultIngestText`
+  docId path; internal because scheduler-invoked actions have no identity). Fail-closed tenant
+  guard. Stores RAW extracted text (consistent with TXT uploads — the content plane holds the
+  user's own data; downstream model paths re-scan).
+- **Caps (from `@pikar/vault` `extractKind.ts`):** `VAULT_EXTRACT_CHAR_CAP = 400_000` chars
+  stored via the seam (under Convex's ~1 MiB doc cap — pass `truncated: true` when it bites,
+  which sets `extractionTruncated` for the UI's honesty note); `VAULT_EXTRACT_PAGE_CAP = 50`
+  pages sent hosted for scanned PDFs; `MIN_CHARS_PER_PAGE = 25` garbage-text-layer threshold;
+  `TRANSCRIBABLE_CONTAINER_MIME` = the containers the transcription endpoint accepts (NOT
+  `video/quicktime` — unsupported containers `markFailed("unsupported_video_container")`).
+- **Redact-then-audit ordering (§4):** `scanText` runs on the extracted output FAIL-CLOSED
+  BEFORE any audit write (the intake.ts ordering); audit payloads carry refs/ids/counts ONLY
+  (`vaultDocId`, `kind`, `path`, `piiCounts`, `charCount`, `truncated`) — never text.
+- **Governance:** every extraction action opens with `internal.guardrails.preCall` (kill switch +
+  daily budget); a governed stop is a RETURN + `markFailed(reason)`, never a throw/DLQ.
+- **Bytes via storage, never args:** actions load bytes with `ctx.storage.get(storageId)`
+  (resolved via `getDocForExtraction`) — node-action args cap at 5 MiB, vault files go to 8 MiB.
+
+### Lane ownership (Phase 3.8)
+
+Four parallel Wave-2 worktree lanes fill the Wave-0 stubs. Each lane appends its build notes
+ONLY inside its own subsection below (keeps the Stop hook satisfied per-lane with no cross-lane
+merge conflicts). See `.planning/PARALLELIZATION.md` for the branch/ownership table.
+
+#### Lane 1 — PDF + images (`convex/vaultExtract.ts` + test)
+
+Wave-0 stub in place (`extractDoc` → `markFailed("not_implemented")`). Lane 1 replaces the body:
+preCall → markExtracting → load bytes → SMOKE:: sniff → pdf text-layer (unpdf, garbage
+heuristic) / hosted OCR (extractVisual shape, attachment-extractor skill) / office dispatch →
+scan gate → refs-only audit → seam.
+
+#### Lane 2 — Office parsers (`packages/vault/src/officeText.ts` + test)
+
+Wave-0 stub in place (throws `office_parse_not_implemented`). Lane 2 replaces the body: fflate
+`unzipSync` + attribute-tolerant XML text-walk for DOCX/XLSX/PPTX (entity decode, sharedStrings
+indirection, numeric slide sort). Pure TS, zero Convex edits, NOT on the index barrel.
+
+#### Lane 3 — Sweep + UI + E2E (`convex/vaultSweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)
+
+No stub (new files are Lane 3's to create): migrations-based backlog sweep + `retryExtraction`
+tenantMutation; DocGrid/PreviewModal `extracting` pill + Retry + truncation note; offline E2E.
+
+#### Lane 4 — Video transcription (`convex/vaultTranscribe.ts` + test)
+
+Wave-0 stub in place (`transcribeDoc` → `markFailed("not_implemented")`). Lane 4 replaces the
+body: preCall → markExtracting → load bytes → SMOKE::transcribe:: sniff →
+`TRANSCRIBABLE_CONTAINER_MIME` check (honest failure on e.g. `.mov`) → `experimental_transcribe`
+(intake shape, duration-priced spend) → scan gate → refs-only audit → seam. No skill, no dep.
 
 ## Invariants — what must never break
 
