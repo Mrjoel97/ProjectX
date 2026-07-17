@@ -166,6 +166,104 @@ test("briefings.ts is content-plane only — it emits NO audit/DLQ/telemetry wri
   expect(src, "briefings.ts calls audit.log").not.toMatch(/audit\.log\b/);
 });
 
+// ── 03.7-03: THE TOOLLESS-INGESTION INVARIANT (CKPT-04 / SC-2) ────────────────────────────────
+//
+// The phase's core security boundary, stated once: raw message bodies (any third-party mailbox
+// content) only ever reach an LLM inside toolless, schema-validated calls; no tool-bearing loop
+// ingests raw bodies — the loop consumes structured digests/counts only.
+//
+// Prose cannot hold that, so it is pinned STRUCTURALLY here (agent-runtime.md invariant 10 names
+// these tests). The body-bearing identifier is deliberately named `rawBodies` and the scans key on
+// it — brittle by nature, which is the accepted house style; each scan below asserts the identifier
+// is PRESENT as well as correctly-placed, so a rename fails loudly instead of passing vacuously.
+
+/** Slice the briefInbox tool block: `briefInbox: tool(` → the end of buildCockpitTools. */
+function briefInboxBlock(): string {
+  const src = readSource("llm.ts");
+  const start = src.indexOf("briefInbox: tool(");
+  expect(start, "briefInbox tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
+  return src.slice(start);
+}
+
+test("rawBodies flows ONLY into the toolless digest — never into a briefInbox return (SC-2)", () => {
+  const block = briefInboxBlock();
+  // Present at all (a rename must not silently void every scan below).
+  expect(block, "the body-bearing identifier `rawBodies` is gone from briefInbox").toMatch(
+    /rawBodies/,
+  );
+  // It must reach the digest sub-call — that is its ONE sanctioned destination.
+  expect(block, "rawBodies never reaches internal.llm.digestInbox").toMatch(
+    /runAction\(internal\.llm\.digestInbox/,
+  );
+  // THE assertion: no `return` in this block may reference the body-bearing value. Bodies (and
+  // gists) must never ride the tool's return into the tool-bearing loop's context.
+  const returns = block.match(/return\s+[^;]*;/g) ?? [];
+  expect(returns.length, "no return statements found in briefInbox — the scan is vacuous").toBeGreaterThan(0);
+  for (const r of returns) {
+    expect(r, `a briefInbox return references rawBodies (body text would reach the loop): ${r}`).not.toMatch(
+      /rawBodies/,
+    );
+  }
+});
+
+test("the digestInbox call is structurally TOOLLESS (generateObject, no tools:)", () => {
+  // The whole defense: an injected body reaches a model that CANNOT act. If `tools:` ever appears
+  // in this block, a message body would be ingested by a tool-bearing call and the invariant dies.
+  const src = readSource("llm.ts");
+  const start = src.indexOf("export const digestInbox");
+  expect(start, "digestInbox not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\nexport const", 1);
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+
+  expect(block, "digestInbox does not use generateObject").toMatch(/generateObject/);
+  expect(block, "digestInbox is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(
+    /\btools\s*:/,
+  );
+  // The prompt is registry-loaded (§5) and the schema is index-keyed (ADR-004): a model-supplied
+  // sender/ts would let untrusted content own a structural fact.
+  expect(block, "digestInbox does not load the inbox-digest skill").toMatch(/INBOX_DIGEST_SKILL/);
+});
+
+test("no body-bearing identifier reaches the tool-bearing loop region of llm.ts (SC-2)", () => {
+  // runAgentLoop IS the tool-bearing surface (generateText + tools). Neither the body-bearing
+  // variable nor the body-fetch action may appear anywhere in it — the loop consumes counts only.
+  const src = readSource("llm.ts");
+  const start = src.indexOf("async function runAgentLoop");
+  expect(start, "runAgentLoop not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\n// ── SMOKE::");
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+
+  expect(block, "the tool-bearing loop region is empty — the scan is vacuous").toMatch(
+    /generateText/,
+  );
+  for (const id of ["rawBodies", "fetchInboxBodies"]) {
+    expect(block, `${id} appears in the tool-bearing loop region (raw bodies would be ingested)`).not.toContain(
+      id,
+    );
+  }
+});
+
+test("llm.ts briefing.created audit payload is refs-only ({ briefingId, range, listedCount, digestedCount })", () => {
+  // Clone of the mailbox.searched/mailbox.listed discipline: ids + counts ONLY. A gist or sender
+  // here would make the audit log the PII honeypot §4 exists to prevent.
+  const src = readSource("llm.ts");
+  const m = src.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "briefing.created audit payload not found").not.toBeNull();
+  const payload = m![1];
+  expect(payload).toMatch(/briefingId/);
+  expect(payload).toMatch(/listedCount/);
+  expect(payload).toMatch(/digestedCount/);
+  // `x.length` is a COUNT, not content — strip those before the leak scan, exactly as the
+  // mailbox.searched test strips its contentHash(...) wrapper to HASH. What remains must be
+  // refs/counts only, so `items` surviving the strip WOULD be a real leak.
+  const stripped = payload.replace(/\b[A-Za-z]\w*\.length\b/g, "COUNT");
+  expect(stripped, `briefing.created payload leaks message content: ${payload}`).not.toMatch(
+    /\b(from|to|cc|sender|subject|snippet|gist|body|rawBodies|items|address|messageId)\b/,
+  );
+});
+
 test("draftCockpit receives NO mailbox header hints — greetingName is the only mailbox-derived arg", () => {
   // The resolved display NAME reaches the drafter for the greeting; header hints (subject/date/
   // count/the raw matches) must NEVER reach the LLM (SC3). Scope to the draftCockpit block.
