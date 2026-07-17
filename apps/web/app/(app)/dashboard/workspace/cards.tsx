@@ -1,6 +1,10 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+// The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
+// collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
+// card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
+import { buildBriefingView } from "@pikar/core/briefing";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { ReactNode } from "react";
@@ -518,12 +522,14 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
 // timestamp is rendered in `briefing.tz` — the zone the server bucketed in — so the groups and
 // the clock times can never disagree (display honesty; the browser's own zone is irrelevant).
 
-// The three buckets in reading order (server-side literals — schema.ts briefings.items.bucket).
-const BUCKETS = [
-  { key: "today", title: "TODAY", testid: "briefing-section-today" },
-  { key: "yesterday", title: "YESTERDAY", testid: "briefing-section-yesterday" },
-  { key: "thisWeek", title: "THIS WEEK", testid: "briefing-section-thisweek" },
-] as const;
+// Section title + testid per bucket — the SECONDARY axis inside the fyi remainder. The order and
+// the empty-skipping now come from buildBriefingView.timeSections (already [today, yesterday,
+// thisWeek], empties dropped); this is only the display chrome keyed by the bucket the view emits.
+const SECTION_META: Record<BriefingItem["bucket"], { title: string; testid: string }> = {
+  today: { title: "TODAY", testid: "briefing-section-today" },
+  yesterday: { title: "YESTERDAY", testid: "briefing-section-yesterday" },
+  thisWeek: { title: "THIS WEEK", testid: "briefing-section-thisweek" },
+};
 
 /** Clock time in the briefing's zone for today/yesterday; weekday+date for the older tail. */
 function fmtItemTime(ts: number, tz: string, bucket: BriefingItem["bucket"]): string {
@@ -581,11 +587,33 @@ function SubjectLine({ subject }: { subject: string }) {
 // not). The sender/subject don't need it: `overflow: hidden` + ellipsis clips them already.
 const wrapAnywhere = { overflowWrap: "anywhere" } as const;
 
+// The category the model computes (action/fyi/newsletter/other) — finally SHOWN, not discarded
+// (Gap 1.4). A muted TEXT tag, never a control (SC-4): --ink-soft on a --rule hairline, no amber
+// (--held is the approval gate's alone, BRAND §2). Reuses the label/dim token idiom (no new colour).
+const categoryTag = {
+  flex: "none",
+  fontSize: "0.65rem",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase" as const,
+  color: "var(--ink-soft)",
+  border: "1px solid var(--rule)",
+  borderRadius: "0.35rem",
+  padding: "0 0.3rem",
+} as const;
+
 /** The gist + any deadline suggestion — the flexible middle column's body. */
 function RowBody({ item }: { item: BriefingItem }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <SubjectLine subject={item.subject} />
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "baseline", minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <SubjectLine subject={item.subject} />
+        </div>
+        <span data-testid="briefing-category" style={categoryTag}>
+          {item.category}
+        </span>
+      </div>
       <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", lineHeight: 1.5, marginTop: "0.15rem", ...wrapAnywhere }}>
         {item.gist}
       </div>
@@ -654,8 +682,10 @@ function BriefingSection({ title, items, tz }: { title: string; items: readonly 
 
 function BriefingCard({ briefing }: { briefing: Briefing }) {
   const { tz, items, listedCount } = briefing;
-  // "Needs you" = the digest's triage (needsReply) plus anything carrying a deadline suggestion.
-  const needsYou = items.filter((i) => i.needsReply || i.deadline);
+  // The intelligent report — lede, action-first needs-you, time-grouped fyi remainder, and the
+  // collapsed-noise count — comes ENTIRELY from the pure view model. The card does not re-derive
+  // ordering, collapse, or the lede (Gap 1.2/1.3/1.4/1.1); it only paints what buildBriefingView says.
+  const view = buildBriefingView(briefing);
   const createdLabel = new Intl.DateTimeFormat(undefined, {
     timeZone: tz,
     hour: "numeric",
@@ -665,31 +695,46 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
   return (
     <div data-testid="briefing-card" style={box}>
       <div style={label}>INBOX BRIEFING</div>
-      <div style={{ ...dim, margin: "0.25rem 0 0.75rem" }}>
+      {/* LEDE first (Gap 1.1): the story of the inbox — code-owned counts welded to the model's
+          qualitative synopsis clause — read before any row. Prominent but calm: --ink, medium weight. */}
+      <p data-testid="briefing-lede" style={{ color: "var(--ink)", fontWeight: 500, fontSize: "1rem", lineHeight: 1.4, margin: "0.35rem 0 0.25rem" }}>
+        {view.lede}
+      </p>
+      <div style={{ ...dim, margin: "0 0 0.75rem" }}>
         {briefing.range} · {tz} · built {createdLabel}
         {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
         {listedCount > items.length ? ` · summarized ${items.length} of ${listedCount}` : ""}
       </div>
 
       {/* SC-4: suggestions ONLY. There is deliberately no button, link, or onClick anywhere in this
-          card — acting on a briefing goes back through the conversation → PLAN → Approve gate, so
-          nothing a third-party email says can become a one-click action. Keep it that way. */}
-      {needsYou.length > 0 && (
+          card — the collapsed row and the category tags are TEXT, not toggles/links. Acting on a
+          briefing goes back through the conversation → PLAN → Approve gate, so nothing a third-party
+          email says can become a one-click action. Keep it that way. */}
+      {view.needsYou.length > 0 && (
         <div data-testid="briefing-needs-you" style={{ marginBottom: "1rem" }}>
-          <BriefingSection title="NEEDS YOU" items={needsYou} tz={tz} />
+          <BriefingSection title="NEEDS YOU" items={view.needsYou} tz={tz} />
           <p style={{ ...dim, margin: "0.5rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
         </div>
       )}
 
-      {BUCKETS.map(({ key, title, testid }) => {
-        const rows = items.filter((i) => i.bucket === key);
-        if (rows.length === 0) return null; // skip empty groups — no fake sections (BRAND §5)
+      {/* TIME-GROUPED FYI (the SECONDARY axis) — action-first is satisfied because needs-you sits
+          above. Order + empty-skipping are the view model's; this only maps a bucket to its chrome. */}
+      {view.timeSections.map(({ bucket, items: rows }) => {
+        const meta = SECTION_META[bucket];
         return (
-          <div key={key} data-testid={testid} style={{ marginBottom: "1rem" }}>
-            <BriefingSection title={title} items={rows} tz={tz} />
+          <div key={bucket} data-testid={meta.testid} style={{ marginBottom: "1rem" }}>
+            <BriefingSection title={meta.title} items={rows} tz={tz} />
           </div>
         );
       })}
+
+      {/* COLLAPSED NOISE (Gap 1.3): N automated notifications as ONE muted line — never N rows, and
+          NOT a clickable disclosure (SC-4 — text only). */}
+      {view.collapsedCount > 0 && (
+        <p data-testid="briefing-collapsed" style={{ ...dim, margin: "0.25rem 0 0" }}>
+          {view.collapsedCount} automated notification{view.collapsedCount === 1 ? "" : "s"}
+        </p>
+      )}
     </div>
   );
 }
