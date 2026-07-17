@@ -35,6 +35,14 @@ function withIngest() {
 const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
   t.withIdentity({ subject: tenantId });
 
+/** The extraction actions scheduled so far (cockpit.test.ts's system-table inspection pattern). */
+const extractionScheduled = (t: ReturnType<typeof convexTest>) =>
+  t.run(async (ctx) =>
+    (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) =>
+      /vaultExtract|vaultTranscribe/.test(s.name),
+    ),
+  );
+
 /** Raw-insert a vault doc row (bypasses the ingest mutation) for the cascade/guard tests. */
 const seedDoc = (
   t: ReturnType<typeof convexTest>,
@@ -139,6 +147,169 @@ describe("vaultUpload (file ingest + accept-but-defer)", () => {
     const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
     expect(doc?.status).toBe("pending_extraction");
     expect(doc?.category).toBe("my-uploads");
+  });
+});
+
+describe("vaultUpload extraction scheduling (Phase 3.8 Wave 0 hook)", () => {
+  test("a PDF (no text) stays pending_extraction AND schedules extractDoc with {vaultDocId, tenantId}", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
+      storageId,
+      filename: "scan.pdf",
+      mimeType: "application/pdf",
+      size: 4,
+      contentHash: "pdf-sched",
+    });
+
+    const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
+    expect(doc?.status).toBe("pending_extraction");
+    const sched = await extractionScheduled(t);
+    expect(sched).toHaveLength(1);
+    expect(sched[0]?.name).toContain("vaultExtract");
+    expect(sched[0]?.args[0]).toMatchObject({ vaultDocId, tenantId: TENANT });
+  });
+
+  test("an mp4 schedules transcribeDoc", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["vid"])));
+    const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
+      storageId,
+      filename: "clip.mp4",
+      mimeType: "video/mp4",
+      size: 3,
+      contentHash: "mp4-sched",
+    });
+
+    const sched = await extractionScheduled(t);
+    expect(sched).toHaveLength(1);
+    expect(sched[0]?.name).toContain("vaultTranscribe");
+    expect(sched[0]?.args[0]).toMatchObject({ vaultDocId, tenantId: TENANT });
+  });
+
+  test("regression guard: a searchable TXT with text rides the workflow path — NOTHING scheduled", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["hello"])));
+    const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
+      storageId,
+      filename: "notes.txt",
+      mimeType: "text/plain",
+      size: 5,
+      contentHash: "txt-sched",
+      text: "hello",
+    });
+
+    const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
+    expect(doc?.status).toBe("processing");
+    expect(await extractionScheduled(t)).toHaveLength(0);
+  });
+
+  test("an unrecognized binary (zip) stays pending_extraction, nothing scheduled", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["PK"])));
+    const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
+      storageId,
+      filename: "archive.zip",
+      mimeType: "application/zip",
+      size: 2,
+      contentHash: "zip-sched",
+    });
+
+    const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
+    expect(doc?.status).toBe("pending_extraction");
+    expect(await extractionScheduled(t)).toHaveLength(0);
+  });
+});
+
+describe("extraction lifecycle internals (Phase 3.8 Wave 0 seam)", () => {
+  test("ingestExtractedText patches text/hash/size, flips to processing, starts the ingest workflow", async () => {
+    const t = withIngest();
+    const docId = await seedDoc(t, {
+      status: "pending_extraction",
+      text: undefined,
+      mimeType: "application/pdf",
+      contentHash: "pre-extract",
+    });
+
+    await t.mutation(internal.vault.ingestExtractedText, {
+      docId,
+      tenantId: TENANT,
+      text: "Extracted body",
+      truncated: false,
+    });
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("processing");
+    expect(doc?.text).toBe("Extracted body");
+    expect(doc?.size).toBe(14);
+    expect(doc?.contentHash).not.toBe("pre-extract");
+    expect(doc?.extractionTruncated).toBeUndefined();
+  });
+
+  test("truncated:true sets extractionTruncated (honesty flag)", async () => {
+    const t = withIngest();
+    const docId = await seedDoc(t, { status: "pending_extraction", text: undefined });
+
+    await t.mutation(internal.vault.ingestExtractedText, {
+      docId,
+      tenantId: TENANT,
+      text: "First N chars only",
+      truncated: true,
+    });
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.extractionTruncated).toBe(true);
+  });
+
+  test("ingestExtractedText with the wrong tenantId throws (fail closed)", async () => {
+    const t = withIngest();
+    const docId = await seedDoc(t, { status: "pending_extraction", text: undefined });
+
+    await expect(
+      t.mutation(internal.vault.ingestExtractedText, {
+        docId,
+        tenantId: "tenant_b",
+        text: "stolen",
+        truncated: false,
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("markExtracting flips the status pill to extracting", async () => {
+    const t = withIngest();
+    const docId = await seedDoc(t, { status: "pending_extraction", text: undefined });
+
+    await t.mutation(internal.vault.markExtracting, { vaultDocId: docId });
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("extracting");
+  });
+
+  test("getDocForExtraction returns the action's fields for the owner; cross-tenant throws", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["%PDF"])));
+    const docId = await seedDoc(t, {
+      status: "pending_extraction",
+      text: undefined,
+      mimeType: "application/pdf",
+      storageId,
+      title: "scan.pdf",
+    });
+
+    const meta = await t.query(internal.vault.getDocForExtraction, {
+      vaultDocId: docId,
+      tenantId: TENANT,
+    });
+    expect(meta).toMatchObject({
+      storageId,
+      mimeType: "application/pdf",
+      title: "scan.pdf",
+      status: "pending_extraction",
+    });
+
+    await expect(
+      t.query(internal.vault.getDocForExtraction, { vaultDocId: docId, tenantId: "tenant_b" }),
+    ).rejects.toThrow();
   });
 });
 
