@@ -72,6 +72,22 @@ export const sendCockpitMessage = tenantAction({
     // 3. Drive the governed tool-loop. `blocked` returns AS the paused reply. A thrown failure
     //    (our-bug / config — an eligible model failure retries internally) becomes a conversational
     //    error turn: nothing was sent, the partial plan row stays valid, the user can retry.
+    //
+    //    The activity trace's turn lifecycle (CKPT-05) wraps it: the driver mints the turnId and
+    //    owns the `thinking` row; the SDK owns the per-tool rows inside the loop (llm.ts).
+    const turnId = crypto.randomUUID(); // server-minted, per turn — groups the trace
+    // The `thinking` row is the trace's FLOOR, and it lands within ~ms of the send. preCall, the
+    // skill-registry load and the first model round-trip ALL happen before any tool event could
+    // fire — and many turns (the agent asking "who should I send this to?") call no tool at all,
+    // so a tool-only surface would show NOTHING for exactly the turns that feel most frozen.
+    await ctx.runMutation(internal.agentSteps.record, {
+      tenantId: ctx.tenantId,
+      threadId: tid,
+      turnId,
+      stepKey: "thinking",
+      tool: "thinking",
+      startedAt: Date.now(),
+    });
     let reply: string;
     try {
       const res = await ctx.runAction(internal.llm.runCockpitAgent, {
@@ -80,10 +96,23 @@ export const sendCockpitMessage = tenantAction({
         planId: plan._id,
         text,
         clientContext,
+        turnId,
       });
       reply = res.reply;
     } catch {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+    } finally {
+      // `finally` — NOT the tail of the try, and please do not "simplify" it away. It is the only
+      // construct that terminalizes on EVERY exit: success, the caught throw, AND the governed stop
+      // (kill switch / daily budget), which comes back from runCockpitAgent as DATA through a normal
+      // `return` and so never touches the catch. A step that starts must always end (Pitfall 2).
+      await ctx.runMutation(internal.agentSteps.finish, {
+        tenantId: ctx.tenantId,
+        turnId,
+        stepKey: "thinking",
+        phase: "done",
+        endedAt: Date.now(),
+      });
     }
 
     // 4. Save the assistant reply.
@@ -138,6 +167,18 @@ export const resolveRecipients = tenantAction({
     await ctx.runMutation(internal.plans.clearCandidates, { planId: plan._id }); // wipe-on-pick
 
     // Re-enter the tool-loop so the agent continues from the folded recipients (never a dead hang).
+    // Same turn lifecycle as sendCockpitMessage (CKPT-05): this is the cockpit's OTHER agent entry
+    // point and a real 10-30s wait the user watches after clicking a contact chip — leaving it
+    // untraced would freeze half the surface the phase exists to unfreeze.
+    const turnId = crypto.randomUUID();
+    await ctx.runMutation(internal.agentSteps.record, {
+      tenantId: ctx.tenantId,
+      threadId,
+      turnId,
+      stepKey: "thinking",
+      tool: "thinking",
+      startedAt: Date.now(),
+    });
     let reply: string;
     try {
       const res = await ctx.runAction(internal.llm.runCockpitAgent, {
@@ -145,10 +186,20 @@ export const resolveRecipients = tenantAction({
         threadId,
         planId: plan._id,
         text: RESOLUTION_CONTINUE,
+        turnId,
       });
       reply = res.reply;
     } catch {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+    } finally {
+      // See sendCockpitMessage: `finally` is what covers the governed stop's early RETURN.
+      await ctx.runMutation(internal.agentSteps.finish, {
+        tenantId: ctx.tenantId,
+        turnId,
+        stepKey: "thinking",
+        phase: "done",
+        endedAt: Date.now(),
+      });
     }
     await cockpitAgent.saveMessage(ctx, {
       threadId,
@@ -164,8 +215,14 @@ export const resolveRecipients = tenantAction({
  * `useThreadMessages`). The agent thread is a message store, so the user turns + the agent's
  * saved replies are surfaced here. Tenant-guarded: a thread is only listable when the tenant owns
  * its (tenant-scoped) plans row — no cross-tenant read of another owner's conversation.
- * ponytail: static list (no `streamArgs`/`syncStreams`) — token streaming is a later upgrade
- * via `useUIMessages`/`vStreamArgs` (research §4).
+ * ponytail: static list (no `streamArgs`/`syncStreams`). Assistant-TOKEN streaming is NOT an
+ * available upgrade — it is version-BLOCKED: @convex-dev/agent@0.6.4 peer-requires ai@^6, this repo
+ * pins ai@7, and 0.6.4 is the LATEST published version, so there is nothing to bump to and §6
+ * forbids bumping anyway. Revisit only if an ai@7-compatible agent release ships. (Note the
+ * `new Agent(...)` cast at :27-34 depends on the model never being called here — agent streaming
+ * requires the agent to MAKE the model call, violating that precondition.) The activity trace this
+ * phase ships (agentSteps) is the tool-step half of progress; assistant-token streaming is the
+ * blocked half.
  */
 export const listThreadMessages = tenantQuery({
   args: { threadId: v.string(), paginationOpts: paginationOptsValidator },
