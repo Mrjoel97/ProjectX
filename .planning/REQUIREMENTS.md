@@ -47,6 +47,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **CKPT-02**: Agent can generate a document and attach it to an outgoing email within an approved plan, flowing through the same governed send (audit, telemetry, DLQ) — distinct from INTK-02, which is *inbound* attachment ingestion
 - [x] **CKPT-03**: A multi-recipient send can tailor wording per recipient behind the same single plan approval, with per-recipient content shown on the PLAN card before approval and passing the same PII/cost guardrails and per-recipient audit/telemetry
 - [ ] **CKPT-04**: Agent can, on demand, read and summarize the user's inbox into a time-grouped briefing (today/yesterday/this week — grouped in pure code from message timestamps, never by the model) with a "Needs you" triage section — under the **toolless-ingestion invariant**: raw message bodies only ever reach an LLM inside toolless, schema-validated digest calls (no tool-bearing agent loop ingests raw bodies); reads are capped and snippet-first, audited refs/ids/counts only, with zero mailbox writes and zero sends; any action seeded from the briefing crosses the normal PLAN → human Approve gate *(minted 2026-07-14 from `.planning/design/inbox-briefing.md`, beyond the original four cockpit slices)*
+- [ ] **CKPT-05**: While the Executive Agent runs a turn, the workspace shows the steps it is taking as they happen and the chat shows an in-progress bubble — fed by append-only step rows the agent loop writes and the UI subscribes to via Convex reactivity (no polling, no new transport); step rows carry a closed tool-name enum + phase + counts ONLY (no free text, structurally), so no sender/subject/body can reach an audit or telemetry payload via this path; a step is terminal on success, failure, and fallback-retry — a running step never spins forever *(minted 2026-07-17 from the 03.7 UAT Gap 2 user report; cross-cutting cockpit UX, no backend governance change)*
 
 ### Scheduling
 
@@ -162,6 +163,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-02 | Phase 3.3 | Complete |
 | CKPT-03 | Phase 3.4 | Complete (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure) |
 | CKPT-04 | Phase 3.7 | Pending |
+| CKPT-05 | Phase 3.9 | Pending |
 | SCHD-01 | Phase 3.5 | Complete |
 | VALT-01 | Phase 5 | Complete |
 | VALT-02 | Phase 5 | Complete |
@@ -191,10 +193,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-04 | Phase 2 | Complete |
 
 **Coverage:**
-- v1 requirements: **47 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7)
-- Mapped to phases: 47
+- v1 requirements: **48 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9)
+- Mapped to phases: 48
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46; CKPT-04 minted (inbox briefing, Phase 3.7, 2026-07-14), count 46→47*
+*Last updated: 2026-07-12 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46; CKPT-04 minted (inbox briefing, Phase 3.7, 2026-07-14), count 46→47; CKPT-05 minted (agent activity streaming, Phase 3.9, 2026-07-17), count 47→48*
