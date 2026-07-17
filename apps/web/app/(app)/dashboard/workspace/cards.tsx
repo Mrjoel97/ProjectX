@@ -28,6 +28,10 @@ const chip = {
 // AttachmentPicker/review). byThread returns the row or null; the cards want the non-null row.
 type Plan = NonNullable<FunctionReturnType<typeof api.plans.byThread>>;
 type PlanId = Plan["_id"];
+// Same derivation for the briefing row (CKPT-04). The card renders the row and NOTHING else:
+// sender/ts/bucket are code-owned facts joined server-side by @pikar/core (ADR-004).
+type Briefing = NonNullable<FunctionReturnType<typeof api.briefings.byThread>>;
+type BriefingItem = Briefing["items"][number];
 
 // Deferred send (SCHD-01) time helpers. The browser IS in the user's tz, so the native
 // datetime-local input round-trips epoch ms ↔ local wall-clock without any tz math of our own
@@ -503,13 +507,134 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
   );
 }
 
-/** Reads the thread's single plan row and dispatches PLAN / DRAFT / REPORT cards. */
+// ── BRIEFING card (CKPT-04 / SC-1 + SC-4) ────────────────────────────────────────────────────
+//
+// The briefing row is the source of truth: the tool's loop-visible return is counts only, so
+// what the user reads here NEVER passed through the tool-bearing model context (SC-2). Every
+// timestamp is rendered in `briefing.tz` — the zone the server bucketed in — so the groups and
+// the clock times can never disagree (display honesty; the browser's own zone is irrelevant).
+
+// The three buckets in reading order (server-side literals — schema.ts briefings.items.bucket).
+const BUCKETS = [
+  { key: "today", title: "TODAY", testid: "briefing-section-today" },
+  { key: "yesterday", title: "YESTERDAY", testid: "briefing-section-yesterday" },
+  { key: "thisWeek", title: "THIS WEEK", testid: "briefing-section-thisweek" },
+] as const;
+
+/** Clock time in the briefing's zone for today/yesterday; weekday+date for the older tail. */
+function fmtItemTime(ts: number, tz: string, bucket: BriefingItem["bucket"]): string {
+  const opts: Intl.DateTimeFormatOptions =
+    bucket === "thisWeek"
+      ? { weekday: "short", month: "short", day: "numeric" }
+      : { hour: "numeric", minute: "2-digit" };
+  return new Intl.DateTimeFormat(undefined, { ...opts, timeZone: tz }).format(ts);
+}
+
+// ponytail: the display-name strip is one line over importing an address parser — `sender` is the
+// raw From header the code owns, and "Sarah Chen <sarah@x.com> — gist" reads as noise. Upgrade
+// path: if the label ever needs the address too, surface it as a separate dim span.
+const senderLabel = (sender: string) => sender.replace(/\s*<[^>]*>\s*$/, "").trim() || sender;
+
+/** One briefing row: unread dot + time + sender + gist. Text only — see BriefingCard's SC-4 note. */
+function BriefingRow({ item, tz }: { item: BriefingItem; tz: string }) {
+  return (
+    <li data-testid="briefing-item" style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
+      {/* Unread is marked AND labelled — never colour alone (BRAND §6). */}
+      {item.isUnread ? (
+        <span
+          role="img"
+          title="Unread"
+          aria-label="Unread"
+          style={{ width: "0.45rem", height: "0.45rem", borderRadius: "50%", background: "var(--teal-600)", flex: "none" }}
+        />
+      ) : (
+        <span aria-hidden="true" style={{ width: "0.45rem", flex: "none" }} />
+      )}
+      <span style={{ ...dim, flex: "none", fontVariantNumeric: "tabular-nums" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+      <span style={{ fontWeight: 600, flex: "none" }}>{senderLabel(item.sender)}</span>
+      <span style={{ color: "#444" }}>{item.gist}</span>
+    </li>
+  );
+}
+
+function BriefingCard({ briefing }: { briefing: Briefing }) {
+  const { tz, items, listedCount } = briefing;
+  // "Needs you" = the digest's triage (needsReply) plus anything carrying a deadline suggestion.
+  const needsYou = items.filter((i) => i.needsReply || i.deadline);
+  const createdLabel = new Intl.DateTimeFormat(undefined, {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(briefing.createdAt);
+
+  return (
+    <div data-testid="briefing-card" style={box}>
+      <div style={label}>INBOX BRIEFING</div>
+      <div style={{ ...dim, margin: "0.25rem 0 0.75rem" }}>
+        {briefing.range} · {tz} · built {createdLabel}
+        {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
+        {listedCount > items.length ? ` · summarized ${items.length} of ${listedCount}` : ""}
+      </div>
+
+      {/* SC-4: suggestions ONLY. There is deliberately no button, link, or onClick anywhere in this
+          card — acting on a briefing goes back through the conversation → PLAN → Approve gate, so
+          nothing a third-party email says can become a one-click action. Keep it that way. */}
+      {needsYou.length > 0 && (
+        <div data-testid="briefing-needs-you" style={{ marginBottom: "0.75rem" }}>
+          <div style={label}>NEEDS YOU</div>
+          <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.4rem" }}>
+            {needsYou.map((item) => (
+              <li key={`${item.ts}-${item.sender}`} data-testid="briefing-item" style={{ display: "grid", gap: "0.1rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600 }}>{senderLabel(item.sender)}</span>
+                  <span style={dim}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+                </div>
+                <div style={{ color: "#444" }}>{item.gist}</div>
+                {/* Emphasis via weight, not amber: --held is spent on the approval gate alone (BRAND §2). */}
+                {item.deadline && <div style={{ color: "var(--ink)", fontWeight: 700, fontSize: "0.85rem" }}>Due: {item.deadline}</div>}
+              </li>
+            ))}
+          </ul>
+          <p style={{ ...dim, margin: "0.5rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
+        </div>
+      )}
+
+      {BUCKETS.map(({ key, title, testid }) => {
+        const rows = items.filter((i) => i.bucket === key);
+        if (rows.length === 0) return null; // skip empty groups — no fake sections (BRAND §5)
+        return (
+          <div key={key} data-testid={testid} style={{ marginBottom: "0.6rem" }}>
+            <div style={label}>{title}</div>
+            <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.3rem" }}>
+              {rows.map((item) => (
+                <BriefingRow key={`${item.ts}-${item.sender}`} item={item} tz={tz} />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
 export function CardList({ threadId }: { threadId?: string }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
+  // INDEPENDENT of the plan (research Pitfall 6): "what happened in my inbox?" is typically a
+  // thread's FIRST message, so the briefing must render with no plan row at all. Anything gated
+  // behind plan status would simply never appear for the most common briefing flow.
+  const briefing = useQuery(api.briefings.byThread, threadId ? { threadId } : "skip");
 
   if (!threadId) return <p style={muted}>No artifacts yet.</p>;
-  if (plan === undefined) return <p style={muted}>Loading…</p>;
-  if (plan === null) return <p style={muted}>No plan yet — answer the questions to build one.</p>;
+  if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
+
+  const brief = briefing ? <BriefingCard briefing={briefing} /> : null;
+  if (plan === null)
+    return brief ? (
+      <div style={{ display: "grid", gap: "1rem" }}>{brief}</div>
+    ) : (
+      <p style={muted}>No plan yet — answer the questions to build one.</p>
+    );
 
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
@@ -521,6 +646,7 @@ export function CardList({ threadId }: { threadId?: string }) {
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
+      {brief}
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
