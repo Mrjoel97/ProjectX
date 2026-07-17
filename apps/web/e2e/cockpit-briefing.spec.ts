@@ -27,8 +27,13 @@ const SMOKE_NOW_MS = 1577880000000;
 
 // Fixture facts (smoke.ts seedInboxFixture) — 3 today, 1 yesterday, 1 three days ago; the newest
 // (Sarah Chen) is index 0 after the recency-first selection, and the offline digest pins index 0 to
-// needsReply + a deadline, so a "Needs you" row always renders.
+// needsReply + a deadline (category "action"), so a "Needs you" row always renders. The offline
+// digest also flags exactly ONE non-needs-you item (index 1) `newsletter`, so collapseNoise folds
+// one row into the "1 automated notification" line — Gap 1.3 is an OFFLINE regression lock now.
 const NEEDS_YOU_SENDER = "Sarah Chen";
+// The offline digest's deterministic synopsis (llm.ts smoke branch). composeLede welds it onto the
+// CODE-OWNED counts → a "5 messages, 1 need you — Offline briefing synopsis." lede.
+const LEDE_SYNOPSIS = "Offline briefing synopsis.";
 // Body-only needle from the injection fixture + the offline digest's gist prefix. Neither may ever
 // appear in the chat reply: briefInbox returns COUNTS ONLY, so not even a gist reaches the loop.
 const BODY_NEEDLE = "attacker@evil.example";
@@ -91,8 +96,20 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   const card = workspace.getByTestId("briefing-card");
   await expect(card).toBeVisible({ timeout: 20_000 });
 
+  // Gap 1.1 — LEDE FIRST: the story of the inbox leads. composeLede welds the CODE-OWNED counts
+  // ("N messages, M need you") onto the model's synopsis clause. Assert it is present, non-empty,
+  // and precedes the first briefing row in DOM order (lede-first, not a receipt).
+  const lede = card.getByTestId("briefing-lede");
+  await expect(lede).toBeVisible();
+  await expect(lede).toContainText("need you"); // the code-owned count clause
+  await expect(lede).toContainText(LEDE_SYNOPSIS); // the model's qualitative clause, folded in
+  await expect(card.locator('[data-testid="briefing-lede"], [data-testid="briefing-item"]').first()).toHaveAttribute(
+    "data-testid",
+    "briefing-lede",
+  );
+
   // SC-1: the triage section first, then the pure-code time groups. The fixture's 5 messages bucket
-  // 3/1/1 against the pinned clock, so all three sections render.
+  // 3/1/1 against the pinned clock; index 1 collapses as newsletter, so all three sections still render.
   const needsYou = card.getByTestId("briefing-needs-you");
   await expect(needsYou).toBeVisible();
   await expect(needsYou.getByTestId("briefing-item")).not.toHaveCount(0);
@@ -101,6 +118,23 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   await expect(card.getByTestId("briefing-section-yesterday")).toBeVisible();
   await expect(card.getByTestId("briefing-section-thisweek")).toBeVisible();
   await expect(card.getByTestId("briefing-item")).not.toHaveCount(0);
+
+  // Gap 1.2 — ACTION-FIRST: the needs-you row (Sarah Chen) sits ABOVE the time-grouped fyi rows,
+  // never interleaved chronologically. The FIRST briefing row in the whole card is the needs-you row.
+  await expect(card.getByTestId("briefing-item").first()).toContainText(NEEDS_YOU_SENDER);
+
+  // Gap 1.4 — CATEGORY VISIBLE: the axis the model computes is finally shown as a per-row text tag.
+  // The needs-you (index 0) row is category "action" (CSS uppercases it; textContent stays lower).
+  await expect(card.getByTestId("briefing-category")).not.toHaveCount(0);
+  await expect(needsYou.getByTestId("briefing-category").first()).toHaveText(/action/i);
+
+  // Gap 1.3 — NOISE COLLAPSED: the one newsletter item renders as ONE count line, not a row. The
+  // offline digest guarantees ≥1 newsletter, so the collapsed line is present WITH its count (no
+  // absent-branch escape hatch — this is an offline regression lock, not a human-only check).
+  const collapsed = card.getByTestId("briefing-collapsed");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).toContainText("1");
+  await expect(collapsed).toContainText(/automated notification/i);
 
   // SC-4: "Needs you" is INFORMATIONAL. Nothing in the card can act — no button, no link — so a
   // briefing-seeded action can only re-enter the conversation → PLAN → Approve gate.
