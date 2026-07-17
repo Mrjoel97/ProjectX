@@ -7,6 +7,7 @@ import { type ReactNode, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
 import { CardList } from "./cards";
 import { ChatPane } from "./ChatPane";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { SplitPane } from "./SplitPane";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
@@ -83,10 +84,60 @@ function HeaderMenu({
   );
 }
 
+// Past chats for the header history menu — persisted, tenant-scoped, newest first (cockpit.ts).
+// This is a NICETY; the workspace is the product. It owns its own `useQuery` so that a failing or
+// slow `listThreads` (a cross-component `listThreadsByUserId` call that can exceed Convex's 1s
+// query limit under memory pressure and THROW inside render) is caught by the ErrorBoundary around
+// it (WorkspacePage renders it wrapped) and degrades to "no history" — chat + workspace keep working.
+function PastChats({ threadId, onOpen }: { threadId?: string; onOpen: (id: string, label: string) => void }) {
+  const history = useQuery(api.cockpit.listThreads);
+  return (
+    <HeaderMenu label="Past chats" icon={<ClockIcon size={16} />}>
+      {(close) => (
+        <div role="menu" aria-label="Past chats">
+          {history === undefined ? (
+            <p className="head-menu-empty">Loading…</p>
+          ) : history.length === 0 ? (
+            <p className="head-menu-empty">No past chats yet.</p>
+          ) : (
+            history.map((t) => (
+              <button
+                key={t.threadId}
+                type="button"
+                role="menuitem"
+                className={`head-menu-item${t.threadId === threadId ? " is-active" : ""}`}
+                title={t.title}
+                onClick={() => {
+                  onOpen(t.threadId, t.title);
+                  close();
+                }}
+              >
+                {t.title}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </HeaderMenu>
+  );
+}
+
+// The fallback when the history query throws: keep the clock button (stable layout) but say
+// history is unavailable rather than vanishing the control or crashing the page.
+function PastChatsFallback() {
+  return (
+    <HeaderMenu label="Past chats" icon={<ClockIcon size={16} />}>
+      {() => (
+        <div role="menu" aria-label="Past chats">
+          <p className="head-menu-empty">History unavailable.</p>
+        </div>
+      )}
+    </HeaderMenu>
+  );
+}
+
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
-  // Past chats for the header history menu — persisted, tenant-scoped, newest first (cockpit.ts).
-  const history = useQuery(api.cockpit.listThreads);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
 
@@ -144,34 +195,12 @@ export default function WorkspacePage() {
                 </p>
               </div>
               <div className="chat-head-icons">
-                {/* Clock → past chats (persisted history); kebab → chat options. */}
-                <HeaderMenu label="Past chats" icon={<ClockIcon size={16} />}>
-                  {(close) => (
-                    <div role="menu" aria-label="Past chats">
-                      {history === undefined ? (
-                        <p className="head-menu-empty">Loading…</p>
-                      ) : history.length === 0 ? (
-                        <p className="head-menu-empty">No past chats yet.</p>
-                      ) : (
-                        history.map((t) => (
-                          <button
-                            key={t.threadId}
-                            type="button"
-                            role="menuitem"
-                            className={`head-menu-item${t.threadId === threadId ? " is-active" : ""}`}
-                            title={t.title}
-                            onClick={() => {
-                              openThread(t.threadId, t.title);
-                              close();
-                            }}
-                          >
-                            {t.title}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </HeaderMenu>
+                {/* Clock → past chats (persisted history); kebab → chat options. The history
+                    query is isolated behind an ErrorBoundary — a slow/failed listThreads must
+                    never take the cockpit down (FIX 1), it degrades to "History unavailable". */}
+                <ErrorBoundary label="past-chats" fallback={<PastChatsFallback />}>
+                  <PastChats threadId={threadId} onOpen={openThread} />
+                </ErrorBoundary>
                 <HeaderMenu label="Chat options" icon={<DotsIcon size={16} />}>
                   {(close) => (
                     <div role="menu" aria-label="Chat options">

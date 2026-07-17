@@ -250,7 +250,10 @@ export const listThreads = tenantQuery({
     const res = await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
       userId: ctx.tenantId,
       order: "desc",
-      paginationOpts: { cursor: null, numItems: 30 },
+      // 10, not 30: this cross-component call is the expensive part and can breach Convex's 1s
+      // query limit under memory pressure. The dropdown shows recent history — a shorter slice is
+      // cheaper and the menu never needed 30 (FIX 1; the client boundary handles a throw either way).
+      paginationOpts: { cursor: null, numItems: 10 },
     });
     return res.page.map((t) => ({
       threadId: t._id,
