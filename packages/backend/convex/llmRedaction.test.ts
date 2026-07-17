@@ -408,6 +408,120 @@ test("recipientBodies (per-recipient content) never reaches an audit/DLQ/telemet
   }
 });
 
+// ── 03.9-02: the ACTIVITY TRACE cannot become a mail-content surface (CKPT-05 / §4) ───────────
+//
+// Invariant 10's scans above cover llm.ts's existing surfaces; NOTHING would have caught a step row
+// growing a `label` field fed from `toolOutput.output`. These three close that. The trace is UI
+// state (legitimate — like briefings' gists), but the SDK hands the emitter the FULL model context
+// and every tool's complete return value, so the hazard is one careless spread away.
+
+/** The `agentSteps: defineTable({ ... })` object body from schema.ts (comments stripped). */
+function agentStepsSchemaBlock(): string {
+  // Prose may NAME the forbidden fields (documenting the absence is useful); CODE may not.
+  const src = readSource("schema.ts").replace(/\/\/[^\n]*/g, "");
+  const start = src.indexOf("agentSteps: defineTable({");
+  expect(start, "the agentSteps table block is gone — renamed?").toBeGreaterThanOrEqual(0);
+  const from = src.indexOf("({", start) + 2;
+  let depth = 1;
+  let i = from;
+  for (; i < src.length && depth > 0; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+  }
+  return src.slice(from, i - 1);
+}
+
+test("the agentSteps schema declares NO field outside the allow-list (§4 IS the schema)", () => {
+  // THE structural §4 guard. The row is a closed tool union + a phase enum + numbers: there is
+  // deliberately no label/text/detail/result field, so there is nothing for mail content to leak
+  // INTO. A `count: v.number()` literally cannot hold a subject line. The cheapest invariant is a
+  // missing field — this test is what keeps it missing.
+  const ALLOWED = [
+    "tenantId",
+    "threadId",
+    "turnId",
+    "stepKey",
+    "tool",
+    "phase",
+    "startedAt",
+    "endedAt",
+    "durationMs",
+    "count",
+  ];
+  const body = agentStepsSchemaBlock();
+  // Keys at the table object's OWN depth (a nested v.union(...)/v.literal(...) contributes none).
+  const fields: string[] = [];
+  let depth = 0;
+  let lineStart = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === "{" || c === "(" || c === "[") depth++;
+    else if (c === "}" || c === ")" || c === "]") depth--;
+    else if (c === "\n") lineStart = i + 1;
+    if (depth === 0 && c === ":") {
+      const key = body.slice(lineStart, i).trim();
+      if (/^[a-zA-Z_]\w*$/.test(key)) fields.push(key);
+    }
+  }
+  expect(fields.length, "no agentSteps fields parsed — the scan is vacuous").toBeGreaterThan(0);
+  expect(fields, "the closed `tool` union is gone").toContain("tool");
+  const extra = fields.filter((f) => !ALLOWED.includes(f));
+  expect(
+    extra,
+    `agentSteps grew ${extra.join(", ")} — a step row must hold refs/enums/counts ONLY. The SDK's ` +
+      `tool events carry the full model context and listInbox's return carries SUBJECTS; a text ` +
+      `field here is one careless spread from a §4 leak.`,
+  ).toEqual([]);
+});
+
+/** One onToolExecution* callback from llm.ts — the destructured PARAMS plus the body. */
+function callbackBlock(name: string): string {
+  const src = readSource("llm.ts").replace(/\/\/[^\n]*/g, ""); // the comments name the hazards by design
+  const start = src.indexOf(`${name}: async (`);
+  expect(start, `${name} is gone from llm.ts — the emitter was removed or renamed`).toBeGreaterThanOrEqual(0);
+  const bodyStart = src.indexOf("{", src.indexOf("=>", start));
+  let depth = 1;
+  let i = bodyStart + 1;
+  for (; i < src.length && depth > 0; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+  }
+  return src.slice(start, i); // from the params, so a widened `(event)` is visible to the scan
+}
+
+test("the onToolExecution* callbacks never touch the §4-hazardous event fields (Pitfall 5)", () => {
+  for (const name of ["onToolExecutionStart", "onToolExecutionEnd"]) {
+    const block = callbackBlock(name);
+    // Present and actually emitting (a rename/removal must fail loudly, not pass vacuously).
+    expect(block, `${name} writes no step row — the scan is vacuous`).toMatch(
+      /internal\.agentSteps\.(record|finish)/,
+    );
+    // `messages: ModelMessage[]` is the FULL model context the SDK hands both callbacks.
+    expect(block, `${name} references event.messages — the full model context`).not.toMatch(
+      /\bmessages\b/,
+    );
+    // `toolOutput.output` is the tool's complete return value: listInbox's carries SUBJECTS,
+    // resolveContacts' carries display-name labels. `.type` is the ONLY sanctioned read.
+    expect(block, `${name} references toolOutput.output — a tool's raw return value`).not.toMatch(
+      /\.output\b/,
+    );
+    // A spread pipes the whole event in wholesale — the leak this file exists to make impossible.
+    expect(block, `${name} spreads the event object`).not.toMatch(/\.\.\./);
+  }
+});
+
+test("agentSteps.ts is content-plane only — it emits NO audit/DLQ/telemetry write (§4)", () => {
+  // The briefings.ts / plans.ts property, verbatim. The trace is UI state, not an audit trail: the
+  // agent's refs-only trail already exists (mailbox.searched / mailbox.listed / briefing.created)
+  // and belongs to the ACTING module. A second, less-governed shadow log here would be a §4
+  // regression with no requirement behind it.
+  const src = readSource("agentSteps.ts");
+  expect(src, "agentSteps.ts inserts into a log-plane table").not.toMatch(
+    /\.insert\(\s*["'](audit|deadLetters|telemetry)["']/,
+  );
+  expect(src, "agentSteps.ts calls audit.log").not.toMatch(/audit\.log\b/);
+});
+
 test("cockpit's only delivery-audit crossing (workflow.start context payload) carries refs only", () => {
   // executePlan hands a `context.payload` to the fan-out's onComplete audit trail. It MUST be a
   // ref ({ planId }) — never the raw subject/body/recipient/bodyIntent/draft/goal — or the
