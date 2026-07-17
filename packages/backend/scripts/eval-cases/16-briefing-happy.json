@@ -4,6 +4,7 @@
   "turns": ["What happened in my inbox today?"],
   "expect": {
     "briefingPresent": true,
+    "ledePresent": true,
     "statusAtMost": "collecting",
     "recipientCount": 0,
     "attachmentCount": 0

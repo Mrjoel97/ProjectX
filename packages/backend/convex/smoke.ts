@@ -356,6 +356,24 @@ export const briefingCountForThread = internalQuery({
     ).length,
 });
 
+/** 03.7-09: the eval harness's `ledePresent` read. The LATEST briefing row's `synopsis` is the
+ *  cross-message lede the toolless digest now synthesizes (03.7-07). `> 0` after trim proves the
+ *  live synthesis returned a non-empty lede — so a briefing eval case can never silently "pass"
+ *  on a blank synopsis (the Pitfall-3 anti-silent-pass discipline extended to the lede). Mirrors
+ *  briefings.byThread's latest-wins read (append-only per thread → _creationTime IS recency).
+ *  Explicit return type per Convex guidelines §96. */
+export const briefingSynopsisPresent = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<boolean> => {
+    const row = await ctx.db
+      .query("briefings")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .order("desc")
+      .first();
+    return (row?.synopsis ?? "").trim().length > 0;
+  },
+});
+
 /**
  * Seed the FIXED deterministic message set for a tenant (idempotent — replaces any existing
  * rows, so re-running a smoke/eval never doubles the mailbox).

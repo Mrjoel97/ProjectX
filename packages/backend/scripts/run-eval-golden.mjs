@@ -56,6 +56,10 @@ const EXPECT_KEYS = new Set([
   // briefing, or it silently "passes" on the not_connected branch measuring nothing
   // (research Pitfall 3).
   "briefingPresent",
+  // 03.7-09: the lede assertion. Read from smoke:briefingSynopsisPresent (the latest briefing's
+  // trimmed synopsis is non-empty) — a briefing case must FAIL when the live synthesis returned
+  // a blank lede, the same anti-silent-pass discipline as briefingPresent applied to the synopsis.
+  "ledePresent",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -109,8 +113,10 @@ function parseSkillPin(spec) {
 // ── expect evaluation (plan/briefing STATE, never reply text) ────────────────
 
 /** @param briefingCount rows smoke:briefingCountForThread returned for the case's thread
- *  (0 when the fixture does not ask for `briefingPresent` — the read is skipped). */
-function evaluateExpect(expect, plan, briefingCount = 0) {
+ *  (0 when the fixture does not ask for `briefingPresent` — the read is skipped).
+ *  @param synopsisPresent smoke:briefingSynopsisPresent for the case's thread (false when the
+ *  fixture does not ask for `ledePresent` — the read is skipped). */
+function evaluateExpect(expect, plan, briefingCount = 0, synopsisPresent = false) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
   const present = (s) => typeof s === "string" && s.length > 0;
@@ -160,6 +166,10 @@ function evaluateExpect(expect, plan, briefingCount = 0) {
       case "briefingPresent":
         if ((briefingCount > 0) !== expected) miss(key, expected, briefingCount > 0);
         break;
+      case "ledePresent":
+        // FAIL when the live synthesis returned a blank lede but the fixture expects one.
+        if (synopsisPresent !== expected) miss(key, expected, synopsisPresent);
+        break;
     }
   }
   return failures;
@@ -208,6 +218,10 @@ function selfCheck() {
     validateFixture({ ...base, expect: { briefingPresent: true } }, "<synthetic>"),
     "briefingPresent must be an accepted expect key",
   );
+  assert.ok(
+    validateFixture({ ...base, expect: { ledePresent: true } }, "<synthetic>"),
+    "ledePresent must be an accepted expect key",
+  );
 
   // 2b. briefingPresent evaluates against the BRIEFING COUNT, not the plan — the assertion that
   // makes Pitfall 3 impossible. A briefing case with zero briefings rows MUST fail; anything
@@ -227,6 +241,20 @@ function selfCheck() {
     evaluateExpect({ briefingPresent: false }, collecting, 1).length,
     1,
     "briefingPresent:false must fail when a briefing WAS produced",
+  );
+
+  // 2c. ledePresent evaluates against the SYNOPSIS READ, not the plan — a briefing whose live
+  // synthesis returned a blank lede MUST fail (Pitfall 3 applied to the synopsis). The 4th
+  // positional arg is smoke:briefingSynopsisPresent; the read defaults to false when unasked.
+  assert.equal(
+    evaluateExpect({ ledePresent: true }, collecting, 1, true).length,
+    0,
+    "ledePresent:true must pass when the latest briefing has a non-empty synopsis",
+  );
+  assert.equal(
+    evaluateExpect({ ledePresent: true }, collecting, 1, false).length,
+    1,
+    "ledePresent:true MUST FAIL when the synopsis read is false (empty lede — Pitfall 3)",
   );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.
@@ -292,7 +320,11 @@ function attemptCase(fixture, tenant, pin) {
     fixture.expect.briefingPresent === undefined
       ? 0
       : parse(must("smoke:briefingCountForThread", { tenantId: tenant, threadId }));
-  const failures = evaluateExpect(fixture.expect, plan, briefingCount);
+  const synopsisPresent =
+    fixture.expect.ledePresent === undefined
+      ? false
+      : parse(must("smoke:briefingSynopsisPresent", { tenantId: tenant, threadId }));
+  const failures = evaluateExpect(fixture.expect, plan, briefingCount, synopsisPresent);
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
     must("smokeAssert:assertEvalCaseClean", { tenant, needles: fixture.needles });
