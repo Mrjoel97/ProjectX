@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 3.5 Deferred Send COMPLETE (6/6 plans) — Wave 5 (03.5-05 reschedule-canceled-plan) + Wave 6 (03.5-06 far-future cap) executed 2026-07-19; VERIFICATION.md status: passed (10/10 must-haves)"
-last_updated: "2026-07-19T00:50:00.000Z"
-last_activity: "2026-07-19 — Phase 3.5 Deferred Send CLOSED: the two appended refinement plans landed. 03.5-05 (reschedulePlan): the sole canceled→proposed transition — CAS guard, future-sendAt re-ask (needs_future_time, writes nothing on a past/absent time), by_plan orphan-requests cleanup (keeps reportForPlan honest after re-seed), refs-only plan.rescheduled audit ({planId} only, §3/§4), idempotent + tenant-guarded; re-approve re-arms through the EXISTING executePlan scheduled branch (grep-verified: single workflow.start/scheduler.runAt call site unchanged); CanceledCard gained a datetime picker + busy-guarded Reschedule button, re-ask surfaced via role='alert', success re-renders as ScheduledCard (cancellable again). Commits bfdbdfa, 03034ef, 4f427f8. 03.5-06 (far-future cap): one exported @pikar/core SEND_TIME_HORIZON_MS (7d = Gmail Testing-mode refresh-token life; ponytail knob, raise/remove post verified-OAuth) drives four seams, authoritative guard at the executePlan chokepoint — a beyond-horizon plan.sendAt returns {ok:false, reason:'send_time_too_far'} BEFORE seed/CAS/arm, covering every write path (NL setSendTime, picker setPlanSendTime, Plan 05 reschedule) with ONE guard not one-per-caller; pure parseSendTime gained a tooFar variant via a factored classify() (boundary inclusive, no Date.now); setSendTime re-asks on tooFar with an exhaustive switch (case 'none' replaced the catch-all default → a future variant is a compile error, never a silent immediate-send); both datetime pickers cap max at the shared constant. Commits 59de0a5, bf97a61, b163dfc, ba2ce07. VERIFIED (live, not SUMMARY-trust): emailIntent 39/39, cockpit 73/73 (4 files), cockpitTools 38/38, web typecheck exit 0, check-playbooks exit 0 (cockpit.md carries both invariants, Last verified 03.5-06). Documented non-regressions unchanged (audit.test.ts auditCounts red; runCockpitAgent 5000ms machine-load timeout — passed green here under lighter load). NEXT: pick next open non-inserted phase — Phase 6 live-voice is the remaining major candidate (3.6/3.7/3.8/3.9 already complete)."
+stopped_at: "Completed 03.10-01-PLAN.md (gmail.search fixture seam — Wave 1 of phase 03.10). NEXT: 03.10-02 (Wave 2)"
+last_updated: "2026-07-18T23:44:15.848Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
-  total_phases: 19
+  total_phases: 21
   completed_phases: 12
-  total_plans: 97
-  completed_plans: 93
+  total_plans: 100
+  completed_plans: 94
 ---
 
 ---
@@ -511,6 +511,7 @@ Progress: [█████████░] 94%
 | Phase 03.7 P07 | 40 | 3 tasks | 10 files |
 | Phase 03.8-vault-document-extraction P01 | 13min | 3 tasks | 13 files |
 | Phase 03.8 P02 | 55min | 3 tasks | 3 files |
+| Phase 03.10 P01 | 12min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -624,6 +625,8 @@ Recent decisions affecting current work:
 - [Phase 03.8-vault-document-extraction]: Extraction seam stores RAW text: scanText at extraction time is the lanes fail-closed gate and audit-counts source, not a persistence transform; downstream re-scans pre-model
 - [Phase 03.8-vault-document-extraction]: officeText stays off the @pikar/vault index barrel: subpath-only import keeps fflate structurally out of the V8 Convex bundle
 - [Phase 03.8-vault-document-extraction]: No skills.ts edit for extraction: attachment-extractor reused as-is, transcription takes no prompt
+- [Phase 03.10]: gmail.search fixture-before-token seam: after the SMOKE:: sentinel, before freshAccessToken, reusing the handler's refs-only audit closure — the eval tenant gets HeaderRecords tokenless, live tenants provably fall through unchanged
+- [Phase 03.10]: llmRedaction cockpit.ts audit-count scan is stale (1 vs 2 since 03.5-05 reschedulePlan) — logged as deferred item, not fixed in 03.10-01
 
 ### Roadmap Evolution
 
@@ -631,6 +634,8 @@ Recent decisions affecting current work:
 - Phase 3.9 (Agent Activity Streaming) inserted 2026-07-17: the workspace shows the agent's steps live (plus in-progress chat bubbles) instead of freezing for 10–30s. User-reported at the 03.7 human-verify. Cross-cutting (every agent flow, not just briefing). **Executes NEXT**, before the 03.7 gap closure (user decision — the smarter briefing should be watchable while it is produced). §4 constraint: step rows stay refs/counts-shaped; no sender/subject/body text may reach an audit/telemetry payload via this path.
 - Phase 3.7 (Inbox Briefing) stays OPEN at its human-verify checkpoint (user decision 2026-07-17). Mechanism PASSED live (toolless invariant, injection probe non-vacuous, zero writes, eval gate v7 18/18 `9b613a27`); PRESENTATION rejected — "a receipt, not a report". Root cause is a planning miss: SC-1 specified "timestamp, sender, one-line gist" = a list, and the digest's already-computed `category` (action/fyi/newsletter/other) is rendered nowhere. Gap recorded in `.planning/phases/03.7-inbox-briefing/03.7-UAT.md`; closes via `/gsd:plan-phase 3.7 --gaps` AFTER 3.9. CKPT-04 stays Pending.
 - Phase 3.8 (Vault Document Extraction) inserted after Phase 3.7 (2026-07-17): wire PDF/DOCX/XLSX/PPTX/CSV/image (OCR) extraction into the vault's `vaultIngestText` late-text seam so non-text uploads become searchable instead of sitting at `pending_extraction` forever (URGENT — user-reported gap: vault PDF uploads show "pending" but no workflow ever runs; the Phase 4 extraction engine exists but nothing calls the vault seam)
+- Phase 3.10 (Cockpit Conversation Repair) inserted after Phase 3.9 (2026-07-19): fix two live-UAT defects — BriefingCard/ResolutionCard panel arbitration (stale brief buries the contact picker → resolution stalls → "#1 (no name)" plans) and the cockpit-agent skill's missing stalled-resolution recovery (loops "ready to pick", re-asks a given subject, ignores a stated body intent); the skill edit must ride the 3.6 eval gate with new stalled-resolution fixtures (URGENT — user-reported from live conversation)
+- Phase 3.11 (Inbox Reply) inserted after Phase 3.10 (2026-07-19): "Draft a reply to X" is today silently downgraded to a fresh compose (no reply tool exists — llm.ts inbox tools are read-only by design); new capability makes it a real reply — recipient by message ref (From address, refs-only, no panel round-trip), Re: subject + In-Reply-To/References in-thread threading, body drafted from user intent with the original as toolless-ingested context, unchanged plan → Approve → governed fan-out; depends on 3.10 landing first (owner decision 2026-07-19: fix the conversation bugs, then build Reply on the repaired flow)
 
 ### Pending Todos
 
@@ -646,8 +651,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T21:32:51.399Z
-Stopped at: Completed 03.5-05-PLAN.md (reschedulePlan + CanceledCard reschedule surface)
+Last session: 2026-07-18T23:44:15.830Z
+Stopped at: Completed 03.10-01-PLAN.md (gmail.search fixture seam — Wave 1 of phase 03.10). NEXT: 03.10-02 (Wave 2)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
