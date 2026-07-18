@@ -128,6 +128,20 @@ Wave-0 stub in place (throws `office_parse_not_implemented`). Lane 2 replaces th
 `unzipSync` + attribute-tolerant XML text-walk for DOCX/XLSX/PPTX (entity decode, sharedStrings
 indirection, numeric slide sort). Pure TS, zero Convex edits, NOT on the index barrel.
 
+**Landed (03.8-03, 2026-07-18):** `extractOfficeText(bytes, mimeType)` is real — one
+`unzipSync` + one attribute-tolerant regex text-walk (`<tag ...>...</tag>`, Pitfall 7) shared by
+all three formats; entities decoded (5 named + numeric dec/hex). DOCX: `word/document.xml`,
+runs joined per `</w:p>` paragraph, newline-separated. XLSX: optional `xl/sharedStrings.xml`
+`<t>` index, `t="s"` cells resolved / literal `<v>` kept, tab-joined rows, `Sheet N` headers,
+numeric filename sort (sheet2 < sheet10). PPTX: `ppt/slides/slide*.xml` numeric sort, `Slide N`
+headers, `<a:t>` runs newline-joined. Every failure throws `office_parse_failed: ...` (not a
+zip / missing part / unrecognized mime) — the Lane-1 dispatcher converts to
+`markFailed("office_parse_failed")`. Deterministic (asserted per format). All fixtures built
+in-test with `zipSync`/`strToU8` — no binary fixtures in repo. Verify:
+`pnpm --filter @pikar/vault test` + `tsc -p . --noEmit` (strict-index clean). Known ceiling
+(`ponytail:` comment in source): a rich-text `<si>` with multiple runs indexes as multiple
+sharedStrings entries; per-`<si>` grouping is the upgrade if real workbooks surface it.
+
 #### Lane 3 — Sweep + UI + E2E (`convex/vaultSweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)
 
 No stub (new files are Lane 3's to create): migrations-based backlog sweep + `retryExtraction`

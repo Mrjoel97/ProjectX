@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: 03.8-02 tasks 1-2 complete + live PDF smoke; PAUSED at Task-3 human-verify checkpoint (image OCR)
-last_updated: "2026-07-18T03:11:48.623Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: 03.8-06 integration — merging Phase 3.8 lanes (Lane 1 + Lane 2 in)
+last_updated: "2026-07-18T02:30:00.000Z"
+last_activity: "2026-07-18 — Phase 3.8 Wave 3 (03.8-06 integration): merging the four vault-extraction lanes to main. Lane 1 (PDF+image, vaultExtract) and Lane 2 (office parsers, officeText) merged."
 progress:
   total_phases: 19
   completed_phases: 11
