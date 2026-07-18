@@ -11,9 +11,9 @@
 // vaultTranscribe.transcribeDoc) by kind — never import Lane 1/4 modules.
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
-import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
