@@ -11,7 +11,7 @@
 // before Approve. It is the SOLE `workflow.start(deliverApprovedPlan)` call site (the
 // grep-able zero-sends-before-Approve invariant, RESEARCH-delivery §5).
 import { Agent, listMessages } from "@convex-dev/agent";
-import { applyRecipientEdit } from "@pikar/core";
+import { applyRecipientEdit, SEND_TIME_HORIZON_MS } from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
@@ -347,7 +347,7 @@ export const executePlan = tenantMutation({
     { planId },
   ): Promise<
     | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
-    | { ok: false; reason: "gmail_not_connected" }
+    | { ok: false; reason: "gmail_not_connected" | "send_time_too_far" }
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
@@ -359,6 +359,15 @@ export const executePlan = tenantMutation({
     // the row is checked for existence ONLY and never logged (crown jewels — CLAUDE.md §4).
     const tokens = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
     if (!tokens) return { ok: false, reason: "gmail_not_connected" };
+
+    // Far-future cap (SCHD-01): the AUTHORITATIVE gate. A beyond-horizon sendAt would fire past the
+    // Gmail token's life (design/scheduled-send.md) → dead token. Refuse HERE — the one place the
+    // schedule-vs-immediate decision is made — so every write path (NL setSendTime, picker
+    // setPlanSendTime, Plan 05 reschedule) is covered before any row seeds or the scheduler arms
+    // (mirrors the gmail_not_connected fail-before-mutate guard; the < now guard at :422 only ever
+    // sees an in-window sendAt because of this).
+    if (plan.sendAt !== undefined && plan.sendAt > Date.now() + SEND_TIME_HORIZON_MS)
+      return { ok: false, reason: "send_time_too_far" };
 
     // CAS: flip first. A second concurrent tx re-reads "approved" above and no-ops.
     await ctx.db.patch(planId, { status: "approved" });

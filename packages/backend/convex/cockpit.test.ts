@@ -7,6 +7,7 @@
 // before workflow.start; the attachment fan-out tests (CKPT-02, Plan 05) DO drive the successful
 // proposed→delivering path by registering the workflow + workflow/workpool components (the same
 // pattern cockpitTools.test.ts uses for the aggregate). smoke:fanout remains the live coverage.
+import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
@@ -268,6 +269,33 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       await t.finishInProgressScheduledFunctions();
       const after = await t.run((ctx) => ctx.db.get(planId));
       expect(after?.status).toBe("delivering");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("far-future refusal: a beyond-horizon sendAt returns send_time_too_far BEFORE seeding/arming (the authoritative chokepoint over every write path); a within-horizon control still schedules", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      // One hour PAST the horizon — arrived here from ANY write path (NL tool, picker, reschedule).
+      const tooFar = Date.now() + SEND_TIME_HORIZON_MS + 3_600_000;
+      const planId = await seedSchedulable(t, tooFar);
+
+      const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+      expect(res).toEqual({ ok: false, reason: "send_time_too_far" });
+
+      // Fail-before-mutate: status untouched, NO requests seeded, NO scheduler armed.
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+      expect(await countRequests(t)).toHaveLength(0);
+      expect(await listScheduled(t)).toHaveLength(0);
+
+      // Within-horizon control: still schedules + arms (the guard sits upstream, in-window unaffected).
+      const okId = await seedSchedulable(t, Date.now() + 60_000);
+      const ok = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: okId });
+      expect(ok).toEqual({ ok: true, scheduled: true });
+      expect((await t.run((ctx) => ctx.db.get(okId)))?.status).toBe("scheduled");
     } finally {
       vi.useRealTimers();
     }
