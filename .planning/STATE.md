@@ -2,6 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+status: paused-at-checkpoint
+stopped_at: "03.8-05 (Lane 4, lane-4/video-transcribe worktree) Task 2 checkpoint:human-verify — Task 1 complete (RED d7f68cb, GREEN 69a5c4a; transcribeDoc real spine, 6/6 sentinel tests green), live sentinel smoke automated + passing on the shared local dev deployment (mp4/webm → ready, quicktime → failed/unsupported_video_container, counts-only audit verified live). AWAITING HUMAN: drop a real short mp4 + webm in the vault UI (dev servers left running: convex :3210, web :3000) and confirm transcript/search/spend. Merge to main is plan 06's job."
+last_updated: "2026-07-18T10:05:00.000Z"
+last_activity: "2026-07-18 — Phase 3.8 Lane 4 (03.8-05): transcribeDoc implemented (Pattern-1 spine, intake transcribeAudio shape copied, honest unsupported_video_container failure, counts-only kind:video audit, VAULT_EXTRACT_CHAR_CAP truncation, ingestExtractedText seam). Deviation: truncation-test fixture made word-shaped — @pikar/pii scanText found quadratic on unbroken uniform runs (deferred-items.md; out of lane). Playbook vault.md Lane-4 subsection appended; deferred-items.md created."
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
 status: ready
 stopped_at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
 last_updated: "2026-07-17T22:52:25.551Z"
