@@ -463,3 +463,52 @@ export const cancelScheduledPlan = tenantMutation({
     return { ok: true, canceled: true };
   },
 });
+
+/**
+ * Re-open a canceled plan for a fresh scheduled send (SCHD-01 refinement). `canceled` is terminal
+ * UNLESS the user explicitly re-schedules: this is the ONLY canceled→proposed transition. It requires
+ * a FUTURE plan.sendAt (else it re-asks — a past/absent time never silently un-cancels into an
+ * immediate send, the halt-control guarantee at the trust boundary), deletes the plan's orphaned
+ * requests rows (all "approved", never fanned out — the cancel happened BEFORE startScheduledDelivery,
+ * so reportForPlan would double-count without this cleanup), flips → "proposed", and writes ONE
+ * refs-only plan.rescheduled audit ({planId} ONLY — §3 insert-only, §4 refs-only). It does NOT arm the
+ * scheduler: the re-approve routes back through the EXISTING executePlan scheduled branch (its seed
+ * loop re-freezes content + its runAt is the single arm site — no new call site). Tenant-guarded;
+ * idempotent (a non-canceled plan no-ops). Explicit return type dodges TS7022.
+ */
+export const reschedulePlan = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<
+    | { ok: true; rescheduled?: true; alreadyResolved?: true }
+    | { ok: false; reason: "needs_future_time" }
+  > => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant reschedule
+    if (plan.status !== "canceled") return { ok: true, alreadyResolved: true }; // canceled stays terminal unless re-scheduled; double-click no-ops
+    // The re-ask: a reschedule OUT of canceled requires a future time — write NOTHING on a past/absent
+    // sendAt (no orphan delete, no status flip, no audit) so a stale time can never drive a silent send.
+    if (plan.sendAt === undefined || plan.sendAt <= Date.now()) {
+      return { ok: false, reason: "needs_future_time" };
+    }
+    // Delete the orphaned requests rows (all never-fanned-out — canceled fired before delivery) so the
+    // re-approve's fresh fan-out is the only set reportForPlan counts.
+    const orphans = await ctx.db
+      .query("requests")
+      .withIndex("by_plan", (q) => q.eq("planId", planId))
+      .collect();
+    for (const r of orphans) await ctx.db.delete(r._id);
+    // Flip to "proposed" — the EXISTING executePlan re-approve path re-seeds + re-arms (no new arm site).
+    await ctx.db.patch(planId, { status: "proposed" });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: plan.correlationId ?? String(planId),
+      eventType: "plan.rescheduled",
+      actor: ctx.tenantId,
+      payload: { planId }, // refs only (§4) — never subject/body/recipients/sendAt
+    });
+    return { ok: true, rescheduled: true };
+  },
+});
