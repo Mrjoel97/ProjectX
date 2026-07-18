@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
 import { UploadCloudIcon } from "./icons";
 
@@ -67,7 +67,14 @@ export function Dropzone() {
     });
     if (!res.ok) throw new Error(`${file.name}: upload failed`);
     const { storageId } = (await res.json()) as { storageId: StorageId };
-    await vaultUpload({ storageId, filename: file.name, mimeType, size: file.size, contentHash, text });
+    await vaultUpload({
+      storageId,
+      filename: file.name,
+      mimeType,
+      size: file.size,
+      contentHash,
+      text,
+    });
   }
 
   async function handleFiles(files: FileList | File[]) {
@@ -153,12 +160,13 @@ export function Dropzone() {
           <UploadCloudIcon size={28} />
         </span>
         <span style={{ fontSize: "1.05rem", color: "var(--ink-soft)" }}>
-          <span style={{ color: "var(--teal-600)", fontWeight: 700 }}>Click to upload</span> or drag and drop
+          <span style={{ color: "var(--teal-600)", fontWeight: 700 }}>Click to upload</span> or drag
+          and drop
         </span>
         <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)", textAlign: "center" }}>
-          Searchable: PDF, DOCX, XLSX, CSV, TXT, Markdown
+          Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown
           <br />
-          Storage-only: Images, Videos (not embedded)
+          Images & Videos: text extracted automatically — searchable too
         </span>
         {busy && <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>Uploading…</span>}
       </button>

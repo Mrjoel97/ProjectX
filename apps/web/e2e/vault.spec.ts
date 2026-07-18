@@ -45,7 +45,7 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
 
   // Dropzone copy.
   await expect(page.getByText("Click to upload")).toBeVisible();
-  await expect(page.getByText(/Searchable: PDF, DOCX, XLSX, CSV, TXT, Markdown/)).toBeVisible();
+  await expect(page.getByText(/Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown/)).toBeVisible();
 
   // Empty grid on the default tab.
   await expect(page.getByText(/No documents yet/)).toBeVisible();
@@ -96,4 +96,89 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
   await dialog.getByRole("button", { name: /Delete/ }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText(/No documents yet/)).toBeVisible({ timeout: 15_000 });
+});
+
+// ── EXTR-H — Phase 3.8: a binary upload walks pending → ready via the extraction rail ────────────
+//
+// The uploaded BYTES are extraction sentinels (SMOKE::extract:: / SMOKE::transcribe::), so the
+// Lane-1/4 actions short-circuit with no model call, and the "extracted text" they hand the seam
+// is ITSELF the SMOKE::graph:: ingest sentinel — the downstream embed (SMOKE:: bypass) + graph
+// extract (deterministic fixture) run offline exactly like the paste test above. Ready status +
+// the entity chips ARE the searchable proof (the doc is embedded + graphed; hybrid retrieval
+// quality stays the live smoke:vault gate's job, per the header).
+//
+// SKIP-GUARD (remove during 03.8-06 integration): until Lanes 1/4 merge, the Wave-0 stubs mark a
+// swept/uploaded doc failed("not_implemented") — a valid UI state, but not this walk. The test
+// cleans up its doc, then skips with a clear reason instead of failing the suite.
+async function extractionWalk(
+  page: import("@playwright/test").Page,
+  opts: { filename: string; mimeType: string; bytes: string; tab: string; entity: string },
+) {
+  await page.goto("/dashboard/vault");
+  await expect(page.getByRole("heading", { name: "Knowledge Vault" })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Upload the sentinel bytes through the real Dropzone input (binary mime → accept-but-defer →
+  // the vaultUpload hook schedules the extraction action; NO refresh from here on).
+  await page.locator('input[type="file"]').setInputFiles({
+    name: opts.filename,
+    mimeType: opts.mimeType,
+    buffer: Buffer.from(opts.bytes),
+  });
+
+  const tablist = page.getByRole("tablist", { name: "Vault categories" });
+  await tablist.getByRole("tab", { name: opts.tab }).click();
+
+  const card = page.getByRole("button", { name: new RegExp(opts.filename) });
+  await expect(card).toBeVisible({ timeout: 20_000 });
+
+  // The pill walks reactively: pending → extracting → processing → ready. Terminal is ready —
+  // or failed("not_implemented") while the Wave-0 stubs still stand in for Lanes 1/4.
+  const ready = card.getByText("ready", { exact: true });
+  const failed = card.getByText("failed", { exact: true });
+  await expect(ready.or(failed)).toBeVisible({ timeout: 30_000 });
+  const stubFailed = await failed.isVisible();
+
+  if (!stubFailed) {
+    // Ready without a refresh — now the preview proves the doc landed in the search planes:
+    // the SMOKE::graph:: extracted text produced the deterministic entity chips.
+    await card.click();
+    const dialog = page.getByRole("dialog", { name: /^Preview:/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(opts.entity, { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: /Delete/ }).click();
+    await expect(dialog).toBeHidden();
+  } else {
+    // Clean up the stub-failed row so the honest-zero start of the first test stays true.
+    await card.click();
+    const dialog = page.getByRole("dialog", { name: /^Preview:/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Extraction failed")).toBeVisible(); // the EXTR-F failed panel
+    await dialog.getByRole("button", { name: /Delete/ }).click();
+    await expect(dialog).toBeHidden();
+  }
+  return stubFailed;
+}
+
+test("EXTR-H: a SMOKE::extract:: pdf upload walks pending → ready → searchable", async ({ page }) => {
+  const stubFailed = await extractionWalk(page, {
+    filename: "smoke-extract.pdf",
+    mimeType: "application/pdf",
+    bytes: "SMOKE::extract::SMOKE::graph::Alice|Acme|works_at",
+    tab: "My Uploads",
+    entity: "Alice",
+  });
+  test.skip(stubFailed, "requires lanes 1/4 merged (extractDoc stub → not_implemented)");
+});
+
+test("EXTR-H: a SMOKE::transcribe:: mp4 upload walks pending → ready → searchable", async ({ page }) => {
+  const stubFailed = await extractionWalk(page, {
+    filename: "smoke-transcribe.mp4",
+    mimeType: "video/mp4",
+    bytes: "SMOKE::transcribe::SMOKE::graph::Bob|Initech|works_at",
+    tab: "Videos",
+    entity: "Bob",
+  });
+  test.skip(stubFailed, "requires lanes 1/4 merged (transcribeDoc stub → not_implemented)");
 });

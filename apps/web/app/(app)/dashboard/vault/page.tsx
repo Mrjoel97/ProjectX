@@ -57,6 +57,9 @@ function VaultBody({
 
   // The selected doc opens the in-place preview modal (Task 3) — not a route change.
   const [selected, setSelected] = useState<VaultDoc | null>(null);
+  // Resolve the LIVE row for the modal (the click captures a snapshot; a panel Retry must show
+  // the status/failureReason flip reactively). A row that vanishes unmounts the modal.
+  const liveSelected = selected ? (docs?.find((d) => d._id === selected._id) ?? null) : null;
 
   return (
     <>
@@ -78,7 +81,14 @@ function VaultBody({
         </span>
       )}
 
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
         <h1
           style={{
             margin: 0,
@@ -121,7 +131,7 @@ function VaultBody({
 
       <DocGrid docs={docs ?? []} category={category} onOpen={setSelected} />
 
-      {selected && <PreviewModal doc={selected} onClose={() => setSelected(null)} />}
+      {liveSelected && <PreviewModal doc={liveSelected} onClose={() => setSelected(null)} />}
     </>
   );
 }
