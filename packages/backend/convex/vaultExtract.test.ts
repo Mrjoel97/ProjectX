@@ -16,7 +16,7 @@ import { convexTest } from "convex-test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -38,6 +38,13 @@ const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate
 
 const TENANT = "tenant_extract";
 type T = ReturnType<typeof convexTest>;
+
+// Fake timers: the seam's workflow.start enqueues workpool functions via the scheduler; under
+// real timers they fire AFTER the suite and retry-loop against vitest's torn-down module
+// runner (minutes of "Timeout calling resolveId" teardown drag on Windows). These tests assert
+// the SYNCHRONOUS effects only (vault.test.ts precedent) — the durable steps never need to run.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 function setup(): T {
   const t = convexTest(schema, modules);
@@ -181,7 +188,8 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
 
   test("text over VAULT_EXTRACT_CHAR_CAP truncates at the cap with truncated: true (EXTR-F)", async () => {
     const t = setup();
-    const over = "x".repeat(VAULT_EXTRACT_CHAR_CAP + 500);
+    // Word-shaped filler (a single unbroken run makes the pii email regex backtrack O(n²)).
+    const over = "lorem ipsum ".repeat(Math.ceil((VAULT_EXTRACT_CHAR_CAP + 500) / 12)).slice(0, VAULT_EXTRACT_CHAR_CAP + 500);
     const docId = await uploadBytes(t, `SMOKE::extract::${over}`, "image/png", "big.png");
 
     await runExtract(t, docId);
@@ -212,7 +220,15 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "vaultExtract.ts"), "utf8");
 
   test("spine ordering: preCall -> markExtracting -> bytes -> scanText -> audit -> seam", () => {
-    const order = ["guardrails.preCall", "markExtracting", "storage.get", "scanText(", "audit.log", "ingestExtractedText"];
+    // Call-site needles (runMutation/ctx-prefixed so header comments can't match).
+    const order = [
+      "runMutation(internal.guardrails.preCall",
+      "runMutation(internal.vault.markExtracting",
+      "ctx.storage.get(",
+      "scanText(",
+      "runMutation(internal.audit.log",
+      "runMutation(internal.vault.ingestExtractedText",
+    ];
     const indexes = order.map((needle) => {
       const i = src.indexOf(needle);
       expect(i, `vaultExtract.ts is missing "${needle}"`).toBeGreaterThanOrEqual(0);
