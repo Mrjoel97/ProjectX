@@ -99,10 +99,28 @@ merge conflicts). See `.planning/PARALLELIZATION.md` for the branch/ownership ta
 
 #### Lane 1 — PDF + images (`convex/vaultExtract.ts` + test)
 
-Wave-0 stub in place (`extractDoc` → `markFailed("not_implemented")`). Lane 1 replaces the body:
-preCall → markExtracting → load bytes → SMOKE:: sniff → pdf text-layer (unpdf, garbage
-heuristic) / hosted OCR (extractVisual shape, attachment-extractor skill) / office dispatch →
-scan gate → refs-only audit → seam.
+SHIPPED (03.8-02, 2026-07-18). `extractDoc` is the real dispatcher: preCall gate (governed
+stop = RETURN + `markFailed(reason)`) → `markExtracting` → bytes via `ctx.storage.get` →
+`SMOKE::extract::` sniff (intake grammar; `PII_POISON::` routes scanText's own Err branch) →
+dispatch by `extractionKindFor`: pdf = unpdf text-layer first (free, `path: "text_layer"`),
+hosted gpt-4o-mini fallback when the `MIN_CHARS_PER_PAGE` garbage heuristic trips (sliced to
+`VAULT_EXTRACT_PAGE_CAP` via pdf-lib `copyPages` first); image = hosted with the real
+mediaType (extractVisual shape verbatim, attachment-extractor skill, priceUsage→recordSpend);
+office = `@pikar/vault/officeText` subpath (its throw → `office_parse_failed` — Lane 2's merge
+needs zero Lane-1 changes) → scanText FAIL-CLOSED before any audit write → refs/counts-only
+audit (`vault.extracted` / `vault.extraction_failed`) → `VAULT_EXTRACT_CHAR_CAP` truncation →
+`ingestExtractedText` seam (raw post-gate text). Whole body try/caught → `extract_error:` reason.
+
+Lane-1 gotchas locked in by `vaultExtract.test.ts` (static scans + convex-test):
+- **`Promise.withResolvers` polyfill sits before any unpdf usage** (Pitfall 1 — Convex node
+  actions default to Node 20; only the deployed smoke can surface this).
+- **pdf.js detaches the buffer it is handed** — `getDocumentProxy(bytes.slice())`, never the
+  original, or the hosted-fallback slice reads a zeroed buffer (caught offline).
+- Tests run under **fake timers** (the seam's `workflow.start` otherwise retry-loops against
+  vitest's torn-down module runner for minutes on Windows) and use word-shaped truncation
+  filler (a 400k unbroken alphanumeric run makes the pii email regex backtrack O(n²)).
+- Hosted-branch selection is observed offline via the unseeded registry's fail-closed
+  `NO_ACTIVE_SKILL` (no model call is ever attempted in tests).
 
 #### Lane 2 — Office parsers (`packages/vault/src/officeText.ts` + test)
 

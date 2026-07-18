@@ -11,15 +11,49 @@
 // try/catch so an unexpected throw also lands as markFailed (refs-only reason).
 // NEVER imports llm.ts or vaultTranscribe.ts (§96 circular-inference rule — "use node"
 // modules stay siblings, not imports).
+import { openai } from "@ai-sdk/openai";
+import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
+import { priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { extractionKindFor, VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
+import {
+  extractionKindFor,
+  MIN_CHARS_PER_PAGE,
+  VAULT_EXTRACT_CHAR_CAP,
+  VAULT_EXTRACT_PAGE_CAP,
+} from "@pikar/vault";
 // Subpath import (NOT the barrel) — keeps fflate structurally out of the V8 bundle.
 import { extractOfficeText } from "@pikar/vault/officeText";
+import { generateText } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+
+// Pitfall 1: unpdf bundles pdf.js 5.x, which needs Promise.withResolvers (Node >= 22); Convex
+// node actions default to Node 20. Local Node 24 masks the bug — ONLY the live smoke proves it
+// deployed. Polyfill BEFORE any unpdf usage.
+type WithResolvers = <T>() => {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+// tsconfig lib predates ES2024, so the property is reached via a widened constructor type.
+const PromiseCtor = Promise as PromiseConstructor & { withResolvers?: WithResolvers };
+if (typeof PromiseCtor.withResolvers !== "function") {
+  PromiseCtor.withResolvers = function withResolvers<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
+// Per-call wall-clock ceiling (mirrors llm.ts / intake.ts CALL_TIMEOUT_MS).
+const CALL_TIMEOUT_MS = 45_000;
 
 // SMOKE:: offline seam — the intake.ts grammar verbatim: SMOKE::extract::<text> short-circuits
 // to <text> with NO model call and NO spend. PII_POISON:: routes the extracted output into
@@ -34,18 +68,66 @@ function decodeUtf8(bytes: Uint8Array): string {
 type ExtractPath = "smoke" | "text_layer" | "hosted" | "office";
 type Extracted = { text: string; path: ExtractPath };
 
-/** Task-2 fills this with unpdf text-layer-first + hosted OCR fallback. */
-async function extractPdf(_ctx: GenericActionCtx<DataModel>, _bytes: Uint8Array): Promise<Extracted> {
-  throw new Error("pdf_extract_pending");
+/**
+ * Hosted OCR/visual extraction — the intake.ts extractVisual shape VERBATIM: skill body from
+ * the registry as system (§5 — no hardcoded prompt, fails closed unseeded), gpt-4o-mini file
+ * part with the REAL mediaType, then priceUsage -> recordSpend.
+ */
+async function extractHosted(
+  ctx: GenericActionCtx<DataModel>,
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<string> {
+  const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
+    name: ATTACHMENT_EXTRACTOR_SKILL,
+  });
+  const { text, usage } = await generateText({
+    model: openai("gpt-4o-mini"),
+    system: skill.body,
+    messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],
+    abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    maxRetries: 1,
+  });
+  const priced = priceUsage("openai/gpt-4o-mini", usage);
+  if (priced.ok) {
+    await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+  }
+  return text;
 }
 
-/** Task-2 fills this with the intake.ts extractVisual shape verbatim. */
-async function extractHosted(
-  _ctx: GenericActionCtx<DataModel>,
-  _bytes: Uint8Array,
-  _mimeType: string,
-): Promise<string> {
-  throw new Error("hosted_extract_pending");
+/**
+ * Slice a PDF to its first VAULT_EXTRACT_PAGE_CAP pages with pdf-lib copyPages (Pitfall 8:
+ * pdf-lib CANNOT extract text — fixtures + slicing only). Returns the original bytes untouched
+ * when already under the cap. Exported for the offline page-cap test.
+ */
+export async function slicePdfToPageCap(bytes: Uint8Array): Promise<Uint8Array> {
+  const { PDFDocument } = await import("pdf-lib");
+  const src = await PDFDocument.load(bytes);
+  if (src.getPageCount() <= VAULT_EXTRACT_PAGE_CAP) return bytes;
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(src, Array.from({ length: VAULT_EXTRACT_PAGE_CAP }, (_, i) => i));
+  for (const p of pages) out.addPage(p);
+  return out.save();
+}
+
+/**
+ * PDF: text-layer first (unpdf — free, costUsd 0, no model call), hosted OCR fallback when the
+ * garbage heuristic trips (scans yield ~0 chars/page; real text layers yield hundreds).
+ */
+async function extractPdf(ctx: GenericActionCtx<DataModel>, bytes: Uint8Array): Promise<Extracted> {
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  // pdf.js TRANSFERS (detaches) the buffer it is handed — pass a copy so the hosted-fallback
+  // slice below still sees the real bytes (caught offline: pdf-lib read a zeroed buffer).
+  const pdf = await getDocumentProxy(bytes.slice());
+  const { totalPages, text } = await extractText(pdf, { mergePages: false });
+  const joined = text.join("\n\n");
+  const hasTextLayer =
+    joined.replace(/\s/g, "").length / Math.max(totalPages, 1) >= MIN_CHARS_PER_PAGE;
+  if (hasTextLayer) return { text: joined, path: "text_layer" }; // free — no model, no spend
+  // Hosted fallback for scans: slice oversize PDFs to the page cap, then send the PDF bytes as
+  // a file part (in-repo precedent: intake already sends application/pdf to gpt-4o-mini).
+  const sliced = await slicePdfToPageCap(bytes);
+  return { text: await extractHosted(ctx, sliced, "application/pdf"), path: "hosted" };
 }
 
 export const extractDoc = internalAction({

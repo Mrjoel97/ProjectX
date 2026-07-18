@@ -58,12 +58,14 @@ function setup(): T {
 /** Seed a doc through the REAL vaultUpload path (stores bytes + inserts the row). */
 async function uploadBytes(
   t: T,
-  bytes: BlobPart,
+  bytes: string | Uint8Array,
   mimeType: string,
   filename: string,
 ): Promise<Id<"vaultDocuments">> {
   const asT = t.withIdentity({ subject: TENANT });
-  const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: mimeType })));
+  // .slice() re-homes a Uint8Array<ArrayBufferLike> (pdf-lib output) onto a plain ArrayBuffer.
+  const part: BlobPart = typeof bytes === "string" ? bytes : bytes.slice();
+  const storageId = await t.run((ctx) => ctx.storage.store(new Blob([part], { type: mimeType })));
   const { vaultDocId } = await asT.mutation(api.vault.vaultUpload, {
     storageId,
     filename,
@@ -339,7 +341,7 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
 
   test("Promise.withResolvers polyfill sits BEFORE any unpdf usage (Pitfall 1 — deployed Node 20)", () => {
     const polyfill = src.indexOf("Promise.withResolvers");
-    const unpdf = src.indexOf("unpdf");
+    const unpdf = src.indexOf('import("unpdf")'); // the actual usage site, not a comment mention
     expect(polyfill, "polyfill missing").toBeGreaterThanOrEqual(0);
     expect(unpdf, "unpdf usage missing").toBeGreaterThanOrEqual(0);
     expect(polyfill).toBeLessThan(unpdf);
