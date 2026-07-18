@@ -122,6 +122,23 @@ body: preCall → markExtracting → load bytes → SMOKE::transcribe:: sniff �
 `TRANSCRIBABLE_CONTAINER_MIME` check (honest failure on e.g. `.mov`) → `experimental_transcribe`
 (intake shape, duration-priced spend) → scan gate → refs-only audit → seam. No skill, no dep.
 
+**Built (03.8-05, 2026-07-18):** `transcribeDoc` is live — the full spine above, structured as
+one `internalAction` with a terminal catch-all (`markFailed("transcribe_failed")`, static
+refs-only reason). Invariants proven offline by `vaultTranscribe.test.ts` (6 sentinel tests, no
+video fixtures): the `SMOKE::transcribe::` walk to `processing` via `ingestExtractedText`;
+`audio/*` rides the same spine; `VAULT_EXTRACT_CHAR_CAP` truncation with `truncated: true`
+through the seam; mime-only `video/quicktime` rejection (`unsupported_video_container`) before
+any byte/API work; kill switch as a RETURN (`failed`/`kill_switch`, no throw); `scanText` Err →
+`pii_scan_failed` + exactly ONE refs-only `vault.extraction_failed` audit row. Success audit
+`vault.extracted` carries `{ vaultDocId, kind: "video", durationSeconds, charCount, truncated }`
+— counts only, needle-scanned in-test for transcript absence (§4). The transcription call is a
+COPY of intake.ts's `transcribeAudio` shape (never an import — §96 "use node" rule). Duration
+ceiling is deliberate (`ponytail:` comment): the 8 MiB vault cap bounds duration under the API's
+25 MB limit; chunking is the upgrade path. Known shared-code ceiling found during this lane:
+`@pikar/pii` `scanText` is quadratic on long UNBROKEN uniform character runs (~6 min at 400k
+chars; natural-language text of the same size scans in ~10ms) — logged in the phase's
+`deferred-items.md`, not fixed here (out of lane).
+
 ## Invariants — what must never break
 
 - **Domain logic in `@pikar/vault`, thin `convex/vault*` adapters (§1)** — the pure package has ZERO Convex imports; enforced by the colocated `packages/vault` tests running with no backend.

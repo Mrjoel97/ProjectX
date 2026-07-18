@@ -115,7 +115,12 @@ describe("transcribeDoc — sentinel spine (EXTR-I offline)", () => {
 
   test("a transcript over VAULT_EXTRACT_CHAR_CAP is truncated and the seam told so", async () => {
     const t = setup();
-    const long = "a".repeat(VAULT_EXTRACT_CHAR_CAP + 10);
+    // Word-shaped filler, not "a".repeat(...): scanText is quadratic on unbroken uniform runs
+    // (~6 min at 400k — a pathological non-transcript shape; logged as a @pikar/pii deferred
+    // item). Real transcripts are natural language, which scans in ~10ms at this size.
+    const long = "lorem ipsum dolor sit amet "
+      .repeat(Math.ceil((VAULT_EXTRACT_CHAR_CAP + 10) / 27))
+      .slice(0, VAULT_EXTRACT_CHAR_CAP + 10);
     const vaultDocId = await seedDoc(t, `SMOKE::transcribe::${long}`, "video/mp4");
 
     await runTranscribe(t, vaultDocId);
