@@ -131,11 +131,17 @@ export const transcribeDoc = internalAction({
       // refs-only static reason (§4 — the failureReason/audit never carry the message). But the
       // error MESSAGE (an API/auth/format error, never transcript text) goes to the function log
       // so a `transcribe_failed` is diagnosable instead of a silent dead-end.
-      console.error(
-        "[vaultTranscribe] transcribe_failed:",
-        err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 500) : String(err).slice(0, 500),
+      const msg =
+        err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 500) : String(err).slice(0, 500);
+      console.error("[vaultTranscribe] transcribe_failed:", msg);
+      // whisper's "could not be decoded / format not supported" almost always means the video has
+      // no audio track (verified: a soundless screen-recording mp4 triggers exactly this) — map it
+      // to a specific static reason so the card says the truth instead of a generic failure.
+      return fail(
+        /could not be decoded|format is not supported/i.test(msg)
+          ? "no_audio_track_or_undecodable"
+          : "transcribe_failed",
       );
-      return fail("transcribe_failed");
     }
   },
 });

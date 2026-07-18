@@ -148,11 +148,29 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             <img
               src={mediaUrl}
               alt={doc.title}
-              style={{ maxWidth: "100%", height: "auto", borderRadius: "0.5rem" }}
+              style={{
+                display: "block",
+                margin: "0 auto",
+                maxWidth: "100%",
+                maxHeight: "62vh", // fit inside the pane — the full image is visible, never cropped by the card edge
+                objectFit: "contain",
+                borderRadius: "0.5rem",
+              }}
             />
           ) : media && isVideo(doc.mimeType) && mediaUrl ? (
             // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
-            <video src={mediaUrl} controls style={{ maxWidth: "100%", borderRadius: "0.5rem" }} />
+            <video
+              src={mediaUrl}
+              controls
+              style={{
+                display: "block",
+                margin: "0 auto",
+                maxWidth: "100%",
+                maxHeight: "62vh",
+                objectFit: "contain",
+                borderRadius: "0.5rem",
+              }}
+            />
           ) : doc.text ? (
             <>
               <pre

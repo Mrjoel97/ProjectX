@@ -1327,6 +1327,9 @@ button.clay-card:hover {
 @media (max-width: 48rem) {
   .vault-preview-grid {
     grid-template-columns: 1fr;
+    /* Bound both stacked rows so tall media can't push the detail panel past the card's
+       overflow-hidden edge — each pane keeps its own internal scroll instead. */
+    grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
   }
 
   .vault-preview-main {
