@@ -19,8 +19,11 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
-// Per-call wall-clock ceiling (mirrors intake.ts / llm.ts CALL_TIMEOUT_MS).
-const CALL_TIMEOUT_MS = 45_000;
+// Per-call wall-clock ceiling. NOT intake.ts's 45s (that's tuned for seconds-long mic clips):
+// a vault video runs up to 25 MB ≈ many minutes of audio, and the call = upload + transcription —
+// a 20 MB mp4 was observed aborting at 45s. 8 min sits under Convex's 10-min node-action limit
+// with headroom for the rest of the spine (bytes load, seam mutations, embed scheduling).
+const CALL_TIMEOUT_MS = 480_000;
 
 // ── SMOKE:: offline seam (same sentinel family as intake.ts) ─────────────────────────────
 // Bytes decoding to `SMOKE::transcribe::<text>` short-circuit to `<text>` — no API call,
@@ -132,7 +135,9 @@ export const transcribeDoc = internalAction({
       // error MESSAGE (an API/auth/format error, never transcript text) goes to the function log
       // so a `transcribe_failed` is diagnosable instead of a silent dead-end.
       const msg =
-        err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 500) : String(err).slice(0, 500);
+        err instanceof Error
+          ? `${err.name}: ${err.message}`.slice(0, 500)
+          : String(err).slice(0, 500);
       console.error("[vaultTranscribe] transcribe_failed:", msg);
       // whisper's "could not be decoded / format not supported" almost always means the video has
       // no audio track (verified: a soundless screen-recording mp4 triggers exactly this) — map it
@@ -140,7 +145,9 @@ export const transcribeDoc = internalAction({
       return fail(
         /could not be decoded|format is not supported/i.test(msg)
           ? "no_audio_track_or_undecodable"
-          : "transcribe_failed",
+          : /timeout|aborted/i.test(msg)
+            ? "transcribe_timeout"
+            : "transcribe_failed",
       );
     }
   },

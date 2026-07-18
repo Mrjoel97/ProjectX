@@ -221,11 +221,17 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           )}
         </div>
 
-        {/* Detail panel. */}
-        <div
-          style={{ display: "flex", flexDirection: "column", overflow: "auto", padding: "1.5rem" }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+        {/* Detail panel: fixed header (title + close), scrollable middle, PINNED actions footer —
+            a doc with many entities must never scroll Download/Delete/Workspace out of sight. */}
+        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.75rem",
+              padding: "1.5rem 1.5rem 0",
+            }}
+          >
             <h2
               style={{
                 margin: 0,
@@ -262,164 +268,170 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             </button>
           </div>
 
-          <dl
-            style={{
-              display: "grid",
-              gridTemplateColumns: "auto 1fr",
-              gap: "0.35rem 1rem",
-              margin: "1.25rem 0 0",
-            }}
-          >
-            {metaRows.map(([k, val]) => (
-              <div key={k} style={{ display: "contents" }}>
-                <dt style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>{k}</dt>
-                <dd
-                  style={{
-                    margin: 0,
-                    fontSize: "0.85rem",
-                    color: "var(--ink)",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {val}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          {/* Failed: the honest refs-only reason + the same Retry the card carries (EXTR-F). */}
-          {doc.status === "failed" && (
-            <div
+          {/* Scrollable middle: metadata, failure/truncation notes, entities. */}
+          <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 1.5rem 1.25rem" }}>
+            <dl
               style={{
-                marginTop: "1rem",
-                padding: "0.75rem 1rem",
-                borderRadius: "0.6rem",
-                border: "1px solid #fecaca",
-                background: "#fef2f2",
+                display: "grid",
+                gridTemplateColumns: "auto 1fr",
+                gap: "0.35rem 1rem",
+                margin: "1.25rem 0 0",
               }}
             >
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
-                Extraction failed
-              </p>
-              {doc.failureReason && (
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
-                  Reason: {doc.failureReason.replace(/_/g, " ")}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => void handleRetry()}
-                disabled={busy !== null}
-                style={{
-                  marginTop: "0.6rem",
-                  padding: "0.4rem 1rem",
-                  borderRadius: "999px",
-                  border: "none",
-                  cursor: busy ? "default" : "pointer",
-                  background: "var(--teal-600)",
-                  color: "#fff",
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  opacity: busy === "retry" ? 0.6 : 1,
-                }}
-              >
-                Retry extraction
-              </button>
-            </div>
-          )}
-
-          {/* Truncation honesty (extractionTruncated — EXTR-F). Calm note, no amber (BRAND §2). */}
-          {doc.extractionTruncated && (
-            <p
-              style={{
-                marginTop: "1rem",
-                marginBottom: 0,
-                padding: "0.6rem 1rem",
-                borderRadius: "0.6rem",
-                border: "1px solid var(--rule)",
-                fontSize: "0.85rem",
-                color: "var(--ink-soft)",
-              }}
-            >
-              Extracted the first part of this file — large file truncated.
-            </p>
-          )}
-
-          {/* Entities & relationships from this doc (VALT-02). */}
-          <section style={{ marginTop: "1.5rem" }}>
-            <h3
-              style={{
-                margin: "0 0 0.6rem",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--ink-soft)",
-              }}
-            >
-              Entities & Relationships
-            </h3>
-            {entities === undefined ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
-            ) : entities.nodes.length === 0 ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--ink-soft)", margin: 0 }}>
-                No entities extracted for this document.
-              </p>
-            ) : (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                  {entities.nodes.map((n) => (
-                    <span
-                      key={n._id}
-                      title={n.type}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        padding: "0.2rem 0.6rem",
-                        borderRadius: "999px",
-                        border: "1px solid var(--rule)",
-                        background: "color-mix(in srgb, var(--teal-400) 12%, transparent)",
-                        color: "var(--ink)",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {n.name}
-                      <span style={{ color: "var(--ink-soft)", fontSize: "0.7rem" }}>{n.type}</span>
-                    </span>
-                  ))}
-                </div>
-                {entities.edges.length > 0 && (
-                  <ul
+              {metaRows.map(([k, val]) => (
+                <div key={k} style={{ display: "contents" }}>
+                  <dt style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>{k}</dt>
+                  <dd
                     style={{
-                      listStyle: "none",
-                      margin: "0.75rem 0 0",
-                      padding: 0,
-                      display: "grid",
-                      gap: "0.3rem",
+                      margin: 0,
+                      fontSize: "0.85rem",
+                      color: "var(--ink)",
+                      wordBreak: "break-word",
                     }}
                   >
-                    {entities.edges.map((e) => (
-                      <li key={e._id} style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
-                        {nodeName.get(e.fromNodeId) ?? "?"}{" "}
-                        <span style={{ color: "var(--teal-600)", fontWeight: 600 }}>{e.rel}</span>{" "}
-                        {nodeName.get(e.toNodeId) ?? "?"}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-          </section>
+                    {val}
+                  </dd>
+                </div>
+              ))}
+            </dl>
 
-          {/* Actions. */}
+            {/* Failed: the honest refs-only reason + the same Retry the card carries (EXTR-F). */}
+            {doc.status === "failed" && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "0.6rem",
+                  border: "1px solid #fecaca",
+                  background: "#fef2f2",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
+                  Extraction failed
+                </p>
+                {doc.failureReason && (
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+                    Reason: {doc.failureReason.replace(/_/g, " ")}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleRetry()}
+                  disabled={busy !== null}
+                  style={{
+                    marginTop: "0.6rem",
+                    padding: "0.4rem 1rem",
+                    borderRadius: "999px",
+                    border: "none",
+                    cursor: busy ? "default" : "pointer",
+                    background: "var(--teal-600)",
+                    color: "#fff",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    opacity: busy === "retry" ? 0.6 : 1,
+                  }}
+                >
+                  Retry extraction
+                </button>
+              </div>
+            )}
+
+            {/* Truncation honesty (extractionTruncated — EXTR-F). Calm note, no amber (BRAND §2). */}
+            {doc.extractionTruncated && (
+              <p
+                style={{
+                  marginTop: "1rem",
+                  marginBottom: 0,
+                  padding: "0.6rem 1rem",
+                  borderRadius: "0.6rem",
+                  border: "1px solid var(--rule)",
+                  fontSize: "0.85rem",
+                  color: "var(--ink-soft)",
+                }}
+              >
+                Extracted the first part of this file — large file truncated.
+              </p>
+            )}
+
+            {/* Entities & relationships from this doc (VALT-02). */}
+            <section style={{ marginTop: "1.5rem" }}>
+              <h3
+                style={{
+                  margin: "0 0 0.6rem",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-soft)",
+                }}
+              >
+                Entities & Relationships
+              </h3>
+              {entities === undefined ? (
+                <p style={{ fontSize: "0.85rem", color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
+              ) : entities.nodes.length === 0 ? (
+                <p style={{ fontSize: "0.85rem", color: "var(--ink-soft)", margin: 0 }}>
+                  No entities extracted for this document.
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                    {entities.nodes.map((n) => (
+                      <span
+                        key={n._id}
+                        title={n.type}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "999px",
+                          border: "1px solid var(--rule)",
+                          background: "color-mix(in srgb, var(--teal-400) 12%, transparent)",
+                          color: "var(--ink)",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {n.name}
+                        <span style={{ color: "var(--ink-soft)", fontSize: "0.7rem" }}>
+                          {n.type}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                  {entities.edges.length > 0 && (
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        margin: "0.75rem 0 0",
+                        padding: 0,
+                        display: "grid",
+                        gap: "0.3rem",
+                      }}
+                    >
+                      {entities.edges.map((e) => (
+                        <li key={e._id} style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                          {nodeName.get(e.fromNodeId) ?? "?"}{" "}
+                          <span style={{ color: "var(--teal-600)", fontWeight: 600 }}>{e.rel}</span>{" "}
+                          {nodeName.get(e.toNodeId) ?? "?"}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
+
+          {/* Actions — a pinned footer, always visible (never scrolled away by long content). */}
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
               gap: "0.5rem",
-              margin: "auto 0 0",
-              paddingTop: "1.5rem",
+              flex: "none",
+              padding: "1rem 1.5rem",
+              borderTop: "1px solid var(--rule)",
             }}
           >
             {canDownload && (
