@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Completed 03.10-01-PLAN.md (gmail.search fixture seam — Wave 1 of phase 03.10). NEXT: 03.10-02 (Wave 2)"
-last_updated: "2026-07-18T23:44:15.848Z"
+stopped_at: "Completed 03.10-02-PLAN.md (panel demotion + offline DOM-order E2E — Wave 2 of phase 03.10). NEXT: 03.10-03 (Wave 3 — skill gate cycle + human-verify)"
+last_updated: "2026-07-18T23:52:56.032Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 12
   total_plans: 100
-  completed_plans: 94
+  completed_plans: 95
 ---
 
 ---
@@ -512,6 +512,7 @@ Progress: [█████████░] 94%
 | Phase 03.8-vault-document-extraction P01 | 13min | 3 tasks | 13 files |
 | Phase 03.8 P02 | 55min | 3 tasks | 3 files |
 | Phase 03.10 P01 | 12min | 1 tasks | 5 files |
+| Phase 03.10 P02 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -627,6 +628,8 @@ Recent decisions affecting current work:
 - [Phase 03.8-vault-document-extraction]: No skills.ts edit for extraction: attachment-extractor reused as-is, transcription takes no prompt
 - [Phase 03.10]: gmail.search fixture-before-token seam: after the SMOKE:: sentinel, before freshAccessToken, reusing the handler's refs-only audit closure — the eval tenant gets HeaderRecords tokenless, live tenants provably fall through unchanged
 - [Phase 03.10]: llmRedaction cockpit.ts audit-count scan is stale (1 vs 2 since 03.5-05 reschedulePlan) — logged as deferred item, not fixed in 03.10-01
+- [Phase 03.10]: Defect-A demotion is a pure reorder (composing boolean in PlanCards) — no collapse/<details>, no new field/mutation/query; revisit collapse only if 03.10-03 human-verify asks
+- [Phase 03.10]: Demotion-order E2E lives in cockpit-resolve.spec.ts (extended, not a new spec); DOM order asserted via compareDocumentPosition, viewport-independent
 
 ### Roadmap Evolution
 
@@ -651,8 +654,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T23:44:15.830Z
-Stopped at: Completed 03.10-01-PLAN.md (gmail.search fixture seam — Wave 1 of phase 03.10). NEXT: 03.10-02 (Wave 2)
+Last session: 2026-07-18T23:52:56.016Z
+Stopped at: Completed 03.10-02-PLAN.md (panel demotion + offline DOM-order E2E — Wave 2 of phase 03.10). NEXT: 03.10-03 (Wave 3 — skill gate cycle + human-verify)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
