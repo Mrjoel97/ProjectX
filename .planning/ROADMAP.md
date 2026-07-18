@@ -299,7 +299,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 03.10-01-PLAN.md — Wave 0: gmail.search inboxFixtures seam (fixture-before-token, mirroring listInbox) + unit tests + fixture-09 description (prereq for the Defect-B eval fixture)
+- [x] 03.10-01-PLAN.md — Wave 0: gmail.search inboxFixtures seam (fixture-before-token, mirroring listInbox) + unit tests + fixture-09 description (prereq for the Defect-B eval fixture) — completed 2026-07-19 (fixture branch after the SMOKE:: sentinel, refs-only mailbox.searched audit mutation-checked, live fall-through pinned; gmail.test.ts 28/28)
 - [ ] 03.10-02-PLAN.md — Defect A: composing-aware BriefingCard demotion in PlanCards (reorder + one boolean) + offline DOM-order E2E (SC-4 intact)
 - [ ] 03.10-03-PLAN.md — Defect B via the 3.6 gate: "While a pick is pending" skill mirror edit + fixture 19 + live gate cycle (seed → refused activate → pinned eval → activate) + blocking human-verify UAT-transcript replay (runs the owed live E2Es)
 
