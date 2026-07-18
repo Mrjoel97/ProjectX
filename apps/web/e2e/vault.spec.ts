@@ -45,7 +45,7 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
 
   // Dropzone copy.
   await expect(page.getByText("Click to upload")).toBeVisible();
-  await expect(page.getByText(/Searchable: PDF, DOCX, XLSX, CSV, TXT, Markdown/)).toBeVisible();
+  await expect(page.getByText(/Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown/)).toBeVisible();
 
   // Empty grid on the default tab.
   await expect(page.getByText(/No documents yet/)).toBeVisible();

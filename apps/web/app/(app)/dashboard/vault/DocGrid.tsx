@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useAction } from "convex/react";
 import { useMemo, useState } from "react";
 import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 
@@ -10,12 +10,15 @@ import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 // toggle, and the doc cards/rows off the reactive listVaultDocs. Search runs vault.vaultSearch
 // (the hybrid rag primitive, category-scoped) and filters the metadata rows to its hits — so a
 // result card still shows the full status/size. Per-item status badges reflect the row
-// (processing / ready / pending_extraction / failed). Clicking a card opens the preview (Task 3).
+// (pending_extraction / extracting / processing / ready / failed — the Phase-3.8 walk, all
+// reactive off the subscription). Failed cards carry a Retry (vaultSweep.retryExtraction).
+// Clicking a card opens the preview (Task 3).
 
 export type VaultDoc = FunctionReturnType<typeof api.vault.listVaultDocs>[number];
 
 // status → badge palette (mirrors the cockpit cards idiom; no token covers these small semantic
-// chips, so the literals stand — not a hex a token covers).
+// chips, so the literals stand — not a hex a token covers). The label text carries the meaning,
+// never the color alone (BRAND §6).
 function statusBadge(status: string): { bg: string; fg: string; label: string } {
   switch (status) {
     case "ready":
@@ -24,6 +27,8 @@ function statusBadge(status: string): { bg: string; fg: string; label: string } 
       return { bg: "#fef3c7", fg: "#92400e", label: "processing" };
     case "pending_extraction":
       return { bg: "#f1f5f9", fg: "#334155", label: "pending" };
+    case "extracting":
+      return { bg: "#cffafe", fg: "#155e75", label: "extracting" };
     case "failed":
       return { bg: "#fee2e2", fg: "#991b1b", label: "failed" };
     default:
@@ -66,10 +71,21 @@ export function DocGrid({
   onOpen?: (doc: VaultDoc) => void;
 }) {
   const search = useAction(api.vault.vaultSearch);
+  const retry = useMutation(api.vaultSweep.retryExtraction);
   const [query, setQuery] = useState("");
   const [hitIds, setHitIds] = useState<Set<string> | null>(null);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [searching, setSearching] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  async function runRetry(doc: VaultDoc) {
+    setRetryingId(doc._id);
+    try {
+      await retry({ vaultDocId: doc._id }); // the chip flips reactively via the subscription
+    } finally {
+      setRetryingId(null);
+    }
+  }
 
   async function runSearch() {
     const q = query.trim();
@@ -127,8 +143,17 @@ export function DocGrid({
             color: "var(--ink)",
           }}
         />
-        {searching && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Searching…</span>}
-        <span style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.1em", color: "var(--ink-soft)" }}>
+        {searching && (
+          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Searching…</span>
+        )}
+        <span
+          style={{
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            color: "var(--ink-soft)",
+          }}
+        >
           {rows.length} ITEM{rows.length === 1 ? "" : "S"}
         </span>
         <div style={{ display: "flex", gap: "0.25rem" }}>
@@ -160,7 +185,9 @@ export function DocGrid({
 
       {rows.length === 0 ? (
         <p style={{ color: "var(--ink-soft)", textAlign: "center", margin: "2.5rem 0" }}>
-          {hitIds ? "No matches in this category." : "No documents yet — upload a file or paste a Brain Dump."}
+          {hitIds
+            ? "No matches in this category."
+            : "No documents yet — upload a file or paste a Brain Dump."}
         </p>
       ) : (
         <div
@@ -176,60 +203,95 @@ export function DocGrid({
           }
         >
           {rows.map((doc) => (
-            <button
-              key={doc._id}
-              type="button"
-              onClick={() => onOpen?.(doc)}
-              className="clay-card"
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                textAlign: "left",
-                width: "100%",
-                padding: "1rem",
-                borderRadius: "0.85rem",
-                cursor: onOpen ? "pointer" : "default",
-                flexDirection: view === "grid" ? "column" : "row",
-                alignItems: view === "grid" ? "flex-start" : "center",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="clay-badge"
+            // A relative wrapper so the failed-card Retry is a SIBLING button (never nested
+            // inside the card button — invalid HTML + broken keyboard order), absolutely
+            // positioned over the card's free corner.
+            <div key={doc._id} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => onOpen?.(doc)}
+                className="clay-card"
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "2.5rem",
-                  height: "2.5rem",
-                  borderRadius: "0.6rem",
-                  background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
-                  color: "var(--teal-600)",
-                  flex: "none",
+                  display: "flex",
+                  gap: "0.75rem",
+                  textAlign: "left",
+                  width: "100%",
+                  height: view === "grid" ? "100%" : undefined,
+                  padding: "1rem",
+                  // In list view the Retry sits vertically centered at the right — reserve room.
+                  paddingRight: view === "list" && doc.status === "failed" ? "5rem" : "1rem",
+                  borderRadius: "0.85rem",
+                  cursor: onOpen ? "pointer" : "default",
+                  flexDirection: view === "grid" ? "column" : "row",
+                  alignItems: view === "grid" ? "flex-start" : "center",
                 }}
               >
-                <FileTextIcon />
-              </span>
-              {/* maxWidth caps the cross-axis shrink-to-fit in grid (column) view — without it a
-                  nowrap title sizes this span to the full filename width and paints past the card. */}
-              <span style={{ flex: 1, minWidth: 0, maxWidth: "100%" }}>
                 <span
+                  aria-hidden="true"
+                  className="clay-badge"
                   style={{
-                    display: "block",
-                    fontWeight: 600,
-                    color: "var(--ink)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "2.5rem",
+                    height: "2.5rem",
+                    borderRadius: "0.6rem",
+                    background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+                    color: "var(--teal-600)",
+                    flex: "none",
                   }}
-                  title={doc.title}
                 >
-                  {doc.title}
+                  <FileTextIcon />
                 </span>
-                <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>{fmtSize(doc.size)}</span>
-              </span>
-              <StatusChip status={doc.status} />
-            </button>
+                {/* maxWidth caps the cross-axis shrink-to-fit in grid (column) view — without it a
+                  nowrap title sizes this span to the full filename width and paints past the card. */}
+                <span style={{ flex: 1, minWidth: 0, maxWidth: "100%" }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontWeight: 600,
+                      color: "var(--ink)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={doc.title}
+                  >
+                    {doc.title}
+                  </span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                    {fmtSize(doc.size)}
+                  </span>
+                </span>
+                <StatusChip status={doc.status} />
+              </button>
+              {doc.status === "failed" && (
+                <button
+                  type="button"
+                  onClick={() => void runRetry(doc)}
+                  disabled={retryingId !== null}
+                  aria-label={`Retry extraction: ${doc.title}`}
+                  style={{
+                    position: "absolute",
+                    right: "0.85rem",
+                    ...(view === "grid"
+                      ? { bottom: "0.85rem" }
+                      : { top: "50%", transform: "translateY(-50%)" }),
+                    padding: "0.2rem 0.7rem",
+                    borderRadius: "999px",
+                    border: "none",
+                    cursor: retryingId ? "default" : "pointer",
+                    background: "var(--teal-600)",
+                    color: "#fff",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    opacity: retryingId === doc._id ? 0.6 : 1,
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}

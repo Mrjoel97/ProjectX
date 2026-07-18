@@ -29,7 +29,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const convex = useConvex();
   const entities = useQuery(api.vault.docEntities, { vaultDocId: doc._id });
   const del = useMutation(api.vault.deleteVaultDoc);
-  const [busy, setBusy] = useState<null | "download" | "delete">(null);
+  const retry = useMutation(api.vaultSweep.retryExtraction);
+  const [busy, setBusy] = useState<null | "download" | "delete" | "retry">(null);
 
   const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
   // Only subscribe to a signed URL when we actually render media; text docs never fetch one.
@@ -71,6 +72,15 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
     try {
       await del({ vaultDocId: doc._id });
       onClose(); // the grid drops the row reactively
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRetry() {
+    setBusy("retry");
+    try {
+      await retry({ vaultDocId: doc._id }); // status pill + panel update reactively
     } finally {
       setBusy(null);
     }
@@ -157,7 +167,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>
               {doc.status === "pending_extraction"
                 ? "Stored — text not yet extracted."
-                : "No inline preview for this file. Use Download."}
+                : doc.status === "extracting"
+                  ? "Extracting text from this file…"
+                  : "No inline preview for this file. Use Download."}
             </p>
           )}
         </div>
@@ -227,6 +239,64 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               </div>
             ))}
           </dl>
+
+          {/* Failed: the honest refs-only reason + the same Retry the card carries (EXTR-F). */}
+          {doc.status === "failed" && (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "0.75rem 1rem",
+                borderRadius: "0.6rem",
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
+                Extraction failed
+              </p>
+              {doc.failureReason && (
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+                  Reason: {doc.failureReason.replace(/_/g, " ")}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleRetry()}
+                disabled={busy !== null}
+                style={{
+                  marginTop: "0.6rem",
+                  padding: "0.4rem 1rem",
+                  borderRadius: "999px",
+                  border: "none",
+                  cursor: busy ? "default" : "pointer",
+                  background: "var(--teal-600)",
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  opacity: busy === "retry" ? 0.6 : 1,
+                }}
+              >
+                Retry extraction
+              </button>
+            </div>
+          )}
+
+          {/* Truncation honesty (extractionTruncated — EXTR-F). Calm note, no amber (BRAND §2). */}
+          {doc.extractionTruncated && (
+            <p
+              style={{
+                marginTop: "1rem",
+                marginBottom: 0,
+                padding: "0.6rem 1rem",
+                borderRadius: "0.6rem",
+                border: "1px solid var(--rule)",
+                fontSize: "0.85rem",
+                color: "var(--ink-soft)",
+              }}
+            >
+              Extracted the first part of this file — large file truncated.
+            </p>
+          )}
 
           {/* Entities & relationships from this doc (VALT-02). */}
           <section style={{ marginTop: "1.5rem" }}>
