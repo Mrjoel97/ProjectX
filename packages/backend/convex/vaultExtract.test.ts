@@ -216,6 +216,86 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
   });
 });
 
+// ── Task 2: PDF text-layer-first + hosted fallback + image path (EXTR-B) ──────
+// Fixtures are built IN-TEST with pdf-lib (no binary fixtures in the repo). The skill registry
+// stays unseeded, so a hosted branch fails closed at getActiveSkill with NO_ACTIVE_SKILL —
+// the offline observation that the hosted path was CHOSEN (no model call ever attempted).
+
+/** A real text-layer PDF (pdf-lib drawText). */
+async function textPdf(text: string): Promise<Uint8Array> {
+  const { PDFDocument, StandardFonts } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage();
+  page.setFont(font);
+  page.drawText(text, { x: 40, y: 700, size: 12, lineHeight: 16 });
+  return doc.save();
+}
+
+/** A no-text-layer "scan": N empty pages — trips the garbage heuristic. */
+async function scanPdf(pages: number): Promise<Uint8Array> {
+  const { PDFDocument } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  for (let i = 0; i < pages; i++) doc.addPage();
+  return doc.save();
+}
+
+describe("PDF + image engines (EXTR-B)", () => {
+  test("a text-layer PDF extracts FREE via unpdf — path text_layer, no skill load, no spend", async () => {
+    const t = setup();
+    const bytes = await textPdf(
+      "The quarterly revenue was $1.2M.\nOperating costs held flat at $340K.\nHeadcount grew to twelve people.",
+    );
+    const docId = await uploadBytes(t, bytes, "application/pdf", "report.pdf");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    // Success WITHOUT a seeded skill registry === the hosted path was never touched.
+    expect(doc?.status).toBe("processing");
+    expect(doc?.text).toContain("quarterly revenue");
+    const success = (await auditRows(t)).find((r) => r.eventType === "vault.extracted");
+    expect(success?.payload).toMatchObject({ kind: "pdf", path: "text_layer" });
+  }, 30000);
+
+  test("a no-text-layer scan trips the garbage heuristic and routes HOSTED (fails closed unseeded)", async () => {
+    const t = setup();
+    const docId = await uploadBytes(t, await scanPdf(2), "application/pdf", "scan.pdf");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    // The hosted branch was chosen: it fail-closed at the registry (never a model call offline).
+    expect(doc?.status).toBe("failed");
+    expect(doc?.failureReason).toMatch(/NO_ACTIVE_SKILL/);
+  }, 30000);
+
+  test("an image routes HOSTED with its real mediaType (fails closed unseeded)", async () => {
+    const t = setup();
+    const docId = await uploadBytes(t, "\x89PNG not a sentinel", "image/png", "photo.png");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    expect(doc?.status).toBe("failed");
+    expect(doc?.failureReason).toMatch(/NO_ACTIVE_SKILL/);
+  });
+
+  test("slicePdfToPageCap slices an oversize scan to VAULT_EXTRACT_PAGE_CAP pages before the hosted call", async () => {
+    vi.useRealTimers(); // pure helper test — no scheduler involved; dynamic import needs real timers
+    const { slicePdfToPageCap } = await import("./vaultExtract");
+    const { PDFDocument } = await import("pdf-lib");
+    const { VAULT_EXTRACT_PAGE_CAP } = await import("@pikar/vault");
+
+    const sliced = await slicePdfToPageCap(await scanPdf(VAULT_EXTRACT_PAGE_CAP + 5));
+    expect((await PDFDocument.load(sliced)).getPageCount()).toBe(VAULT_EXTRACT_PAGE_CAP);
+
+    // Under the cap: bytes pass through untouched.
+    const small = await scanPdf(2);
+    expect(await slicePdfToPageCap(small)).toBe(small);
+  }, 30000);
+});
+
 describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern)", () => {
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "vaultExtract.ts"), "utf8");
 
@@ -241,5 +321,27 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
 
   test("never imports llm.ts (the §96 circular-inference rule)", () => {
     expect(src).not.toMatch(/from\s+["']\.\/llm["']/);
+  });
+
+  test("hosted call carries the extractVisual shape verbatim (skill system, gpt-4o-mini, timeout, retries, spend)", () => {
+    for (const needle of [
+      'openai("gpt-4o-mini")',
+      "system: skill.body",
+      "mediaType: mimeType",
+      "AbortSignal.timeout(CALL_TIMEOUT_MS)",
+      "maxRetries: 1",
+      'priceUsage("openai/gpt-4o-mini"',
+      "runMutation(internal.guardrails.recordSpend",
+    ]) {
+      expect(src, `vaultExtract.ts is missing "${needle}"`).toContain(needle);
+    }
+  });
+
+  test("Promise.withResolvers polyfill sits BEFORE any unpdf usage (Pitfall 1 — deployed Node 20)", () => {
+    const polyfill = src.indexOf("Promise.withResolvers");
+    const unpdf = src.indexOf("unpdf");
+    expect(polyfill, "polyfill missing").toBeGreaterThanOrEqual(0);
+    expect(unpdf, "unpdf usage missing").toBeGreaterThanOrEqual(0);
+    expect(polyfill).toBeLessThan(unpdf);
   });
 });
