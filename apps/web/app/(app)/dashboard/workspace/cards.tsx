@@ -1072,16 +1072,24 @@ function PlanCards({ plan, threadId, brief }: { plan: Plan; threadId: string; br
   // Resolution happens during "collecting", BEFORE the PLAN — render the pick card whenever the
   // cockpit has parked candidates and the plan hasn't been proposed/delivered yet.
   const resolving = Boolean(plan.candidates?.length) && plan.status !== "proposed" && !reporting;
+  // Composition-active (UAT-A, 2026-07-19): the moment candidates park (or subject/body/recipients
+  // are set, or the plan moves past collecting) the WORK is the story — a tall BriefingCard pinned
+  // first buried the ResolutionCard and the pick stalled ("where is the list"). Demote the brief
+  // BELOW the plan cards, never destroy it; the briefing-only flow keeps it primary.
+  const composing =
+    Boolean(plan.candidates?.length || plan.subject || plan.body || plan.recipients?.length) ||
+    plan.status !== "collecting";
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
-      {brief}
+      {!composing && brief}
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
       {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
+      {composing && brief /* demoted: still rendered + reachable below the work — never destroyed */}
     </div>
   );
 }
