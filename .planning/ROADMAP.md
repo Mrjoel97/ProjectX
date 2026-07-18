@@ -213,7 +213,7 @@ Plans:
 - [x] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
 - [x] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
 - [ ] 03.5-05-PLAN.md — re-schedule a canceled plan (reschedulePlan canceled→proposed + orphan cleanup + CanceledCard reschedule surface, re-arm via existing executePlan) (Wave 5)
-- [ ] 03.5-06-PLAN.md — far-future cap: SEND_TIME_HORIZON_MS + tooFar parse variant + setSendTime re-ask + native picker max (Wave 5)
+- [ ] 03.5-06-PLAN.md — far-future cap: SEND_TIME_HORIZON_MS + tooFar parse variant + executePlan send_time_too_far refusal + setSendTime re-ask + native picker max (Wave 6)
 
 ### Phase 3.6: Agent Eval Gate (INSERTED)
 **Goal**: Agent behavior changes stop being blind — a golden set of scripted conversations evaluates every new agent-skill version against the live model before it can be activated, and the production eval signals already being written (review outcomes, regenerate/fallback counts, DLQ rate, cost) become readable on the ops page; this is the continuous-evaluation ring between the mock-model CI tests (Phase 3.2.1) and SkillOpt (Phase 8), which plugs into this harness instead of building its own.
