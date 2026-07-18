@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fmtSize, type VaultDoc } from "./DocGrid";
 import { DownloadIcon, TrashIcon, XIcon } from "./icons";
 
@@ -36,6 +36,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const retry = useMutation(api.vaultSweep.retryExtraction);
   const [busy, setBusy] = useState<null | "download" | "delete" | "retry">(null);
   const [expanded, setExpanded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
   // Only subscribe to a signed URL when we actually render media; text docs never fetch one.
@@ -134,11 +135,13 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           boxShadow: "0 24px 70px -24px rgb(14 20 25 / 55%)",
         }}
       >
-        {/* Preview pane — the stored text, or the image/video for those kinds. */}
+        {/* Preview pane — the stored text, or the image/video for those kinds. Media NEVER
+            scrolls (a single image/video always fits the pane — overflow hidden guarantees it);
+            text scrolls, because that's how reading works. */}
         <div
           className="vault-preview-main"
           style={{
-            overflow: "auto",
+            overflow: media ? "hidden" : "auto",
             padding: "1.75rem",
             background: "var(--canvas)",
             // Media floats centered in the fixed-height pane; text stays top-aligned for reading.
@@ -146,18 +149,49 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           }}
         >
           {media && isImage(doc.mimeType) && mediaUrl ? (
-            // biome-ignore lint/performance/noImgElement: signed blob URL, not a static asset (next/image can't sign it)
-            <img
-              src={mediaUrl}
-              alt={doc.title}
+            <div
               style={{
-                display: "block",
-                maxWidth: "100%",
-                maxHeight: "100%", // pane height is definite now — fill it, never crop past the card edge
-                objectFit: "contain",
-                borderRadius: "0.5rem",
+                minHeight: 0,
+                maxHeight: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
               }}
-            />
+            >
+              {/* biome-ignore lint/performance/noImgElement: signed blob URL, not a static asset (next/image can't sign it) */}
+              <img
+                ref={imgRef}
+                src={mediaUrl}
+                alt={doc.title}
+                style={{
+                  display: "block",
+                  minHeight: 0,
+                  maxWidth: "100%",
+                  maxHeight: "100%", // pane height is definite — the whole image is always in view
+                  objectFit: "contain",
+                  borderRadius: "0.5rem",
+                }}
+              />
+              {/* Native fullscreen — the same full-view the video player's control gives. */}
+              <button
+                type="button"
+                onClick={() => void imgRef.current?.requestFullscreen?.()}
+                style={{
+                  flex: "none",
+                  padding: "0.35rem 0.9rem",
+                  borderRadius: "999px",
+                  border: "1px solid var(--rule)",
+                  background: "var(--card)",
+                  color: "var(--teal-600)",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                }}
+              >
+                View full screen
+              </button>
+            </div>
           ) : media && isVideo(doc.mimeType) && mediaUrl ? (
             // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
             <video
