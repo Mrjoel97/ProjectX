@@ -264,6 +264,21 @@ export const search = internalAction({
       return { ok: true, records };
     }
 
+    // FIXTURE FIRST (after the sentinel, before the token) — the SAME `inboxFixtures` seam
+    // listInbox/fetchInboxBodies ride, so resolveContacts can park candidates on the tokenless
+    // eval tenant (03.10-01). Fixture rows only exist for smoke/eval tenants (smoke.seedInboxFixture
+    // is the only writer and it is internal), so the seam cannot shadow a live mailbox.
+    const fixture = await ctx.runQuery(internal.smoke.getInboxFixture, { tenantId });
+    if (fixture) {
+      const records: HeaderRecord[] = fixture.messages.map((m) => ({
+        from: m.from, // "Sarah Chen <sarah.chen@example.com>" — rankCandidates parses this
+        subject: m.subject,
+        date: new Date(m.internalDate).toUTCString(), // rankCandidates Date.parse-es rec.date
+      }));
+      await audit(records.length); // same refs-only shape as the token path (count only)
+      return { ok: true, records };
+    }
+
     const access = await freshAccessToken(ctx, tenantId);
     if (!access.ok) {
       // Not connected → caller gates on it; any refresh failure → reauth. Never throw, never
