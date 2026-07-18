@@ -72,12 +72,16 @@ export const transcribeDoc = internalAction({
       } else if (!TRANSCRIBABLE_CONTAINER_MIME.has(doc.mimeType)) {
         return fail("unsupported_video_container");
       } else {
-        // 6. The transcription call (intake.ts transcribeAudio shape) + duration-priced spend.
+        // 6. The transcription call + duration-priced spend.
+        // Model: whisper-1, NOT gpt-4o-transcribe. gpt-4o-transcribe rejects video-container mp4
+        // ("This model does not support the format you provided") — it wants audio-only input;
+        // whisper-1 demuxes the audio track from mp4/webm/mpeg video. Both bill at 0.006/min
+        // (TRANSCRIPTION_PRICING), so the cost model is unchanged.
         // ponytail: no duration cap — 25 MB of compressed video bounds duration in practice
         // (~a few min typical); audio-extract/chunk is the upgrade path if a >25 MB video (or a
         // duration limit) ever needs to be supported.
         const result = await transcribe({
-          model: openai.transcription("gpt-4o-transcribe"),
+          model: openai.transcription("whisper-1"),
           audio: bytes,
           abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         });
@@ -122,9 +126,15 @@ export const transcribeDoc = internalAction({
         truncated,
       });
       return null;
-    } catch {
-      // Terminal catch-all: any unexpected step error still lands a visible failed pill
-      // (refs-only static reason — an error message could carry content, §4).
+    } catch (err) {
+      // Terminal catch-all: any unexpected step error still lands a visible failed pill with a
+      // refs-only static reason (§4 — the failureReason/audit never carry the message). But the
+      // error MESSAGE (an API/auth/format error, never transcript text) goes to the function log
+      // so a `transcribe_failed` is diagnosable instead of a silent dead-end.
+      console.error(
+        "[vaultTranscribe] transcribe_failed:",
+        err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 500) : String(err).slice(0, 500),
+      );
       return fail("transcribe_failed");
     }
   },
