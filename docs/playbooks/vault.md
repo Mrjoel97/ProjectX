@@ -115,6 +115,27 @@ indirection, numeric slide sort). Pure TS, zero Convex edits, NOT on the index b
 No stub (new files are Lane 3's to create): migrations-based backlog sweep + `retryExtraction`
 tenantMutation; DocGrid/PreviewModal `extracting` pill + Retry + truncation note; offline E2E.
 
+LANDED (03.8-04, 2026-07-18): `vaultSweep.ts` — `sweepPendingExtraction`
+(`migrations.define` over `vaultDocuments`: `pending_extraction` + `storageId` + recognized
+`extractionKindFor(mimeType, title)` → kind-dispatched `scheduler.runAfter` onto the frozen
+stub names; each scheduled action self-gates via `preCall`, so the sweep needs no separate
+rate-limit config), `runSweep` operator one-shot (`npx convex run vaultSweep:runSweep` — the
+production run is 03.8-06's job post-merge), and `retryExtraction` (tenantMutation: owner +
+`failed|pending_extraction` + storageId + kind guards, clears `failureReason` +
+`extractionTruncated`, re-schedules by kind, refs-only `{ok}` return). `vaultSweep.test.ts`
+(10 cases) drives the migration directly in its documented one-batch mode
+(`{cursor: null, oneBatchOnly: true}` — no component round-trip) and asserts scheduled names
+off `_scheduled_functions`. UI: `DocGrid` gained the `extracting` chip + a failed-card Retry
+rendered as a SIBLING button in a relative wrapper (never nested inside the card button —
+invalid HTML); `PreviewModal` gained the failed panel (human-readable `failureReason` +
+Retry) + the `extractionTruncated` honesty note (calm, no amber — §2) + extracting preview
+copy; `page.tsx` resolves the LIVE row for the modal so a panel Retry flips reactively;
+`Dropzone` copy is honest again (PPTX searchable; images/videos extracted + searchable).
+`vault.spec.ts` gained the two EXTR-H SMOKE:: upload rows (`SMOKE::extract::` pdf +
+`SMOKE::transcribe::` mp4, sentinel bytes chaining into the `SMOKE::graph::` ingest seam)
+with a self-cleaning skip-guard while the Wave-0 stubs return `not_implemented` — remove the
+guard at 03.8-06 integration.
+
 #### Lane 4 — Video transcription (`convex/vaultTranscribe.ts` + test)
 
 Wave-0 stub in place (`transcribeDoc` → `markFailed("not_implemented")`). Lane 4 replaces the
