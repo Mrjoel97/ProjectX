@@ -125,9 +125,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
       <div
         className="vault-preview-grid"
         style={{
+          // Height comes from .vault-preview-grid (fixed geometry — identical card for every kind).
           gap: 0,
           width: "min(60rem, 100%)",
-          maxHeight: "85vh",
           overflow: "hidden",
           background: "var(--card)",
           borderRadius: "1.25rem",
@@ -141,6 +141,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             overflow: "auto",
             padding: "1.75rem",
             background: "var(--canvas)",
+            // Media floats centered in the fixed-height pane; text stays top-aligned for reading.
+            ...(media ? { display: "grid", placeItems: "center" } : {}),
           }}
         >
           {media && isImage(doc.mimeType) && mediaUrl ? (
@@ -150,9 +152,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               alt={doc.title}
               style={{
                 display: "block",
-                margin: "0 auto",
                 maxWidth: "100%",
-                maxHeight: "62vh", // fit inside the pane — the full image is visible, never cropped by the card edge
+                maxHeight: "100%", // pane height is definite now — fill it, never crop past the card edge
                 objectFit: "contain",
                 borderRadius: "0.5rem",
               }}
@@ -164,9 +165,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               controls
               style={{
                 display: "block",
-                margin: "0 auto",
                 maxWidth: "100%",
-                maxHeight: "62vh",
+                maxHeight: "100%",
                 objectFit: "contain",
                 borderRadius: "0.5rem",
               }}

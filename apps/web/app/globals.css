@@ -642,7 +642,9 @@ a {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 /* Glass hover: translucent pane + top light edge. */
@@ -791,8 +793,7 @@ button.rail-item:hover {
   container-type: inline-size;
   background:
     radial-gradient(50rem 26rem at 90% -8%, rgb(64 202 208 / 12%), transparent 60%),
-    radial-gradient(44rem 26rem at -8% 108%, rgb(0 150 137 / 8%), transparent 60%),
-    var(--canvas);
+    radial-gradient(44rem 26rem at -8% 108%, rgb(0 150 137 / 8%), transparent 60%), var(--canvas);
 }
 
 /* Knowledge Vault: fused full-bleed to the shell on the shared aura (.pane-canvas), owning
@@ -833,7 +834,9 @@ button.rail-item:hover {
 
 /* Interactive clay card (e.g. doc cards) — lifts on hover. */
 button.clay-card {
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 button.clay-card:hover {
@@ -1314,10 +1317,17 @@ button.clay-card:hover {
 
 /* Two panes on wide screens: preview (left) + detail panel (right). The panel's min width is what
    overflows narrow screens — so below 48rem the modal STACKS to one column (preview on top, detail
-   below) and the pane divider flips from a right border to a bottom border. */
+   below) and the pane divider flips from a right border to a bottom border.
+
+   The card has ONE fixed geometry for every content type (same height, buttons always in the same
+   place): an explicit height + minmax(0, 1fr) rows. A max-height alone lets tall content size the
+   card past the viewport cap and the overflow-hidden edge then AMPUTATES the actions footer —
+   inconsistently, per-doc, which reads as "sometimes the buttons are missing". */
 .vault-preview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: min(85vh, 56rem);
 }
 
 .vault-preview-main {
