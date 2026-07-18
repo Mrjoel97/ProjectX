@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.8-04-PLAN.md (Lane 3 done on lane-3/sweep-ui — awaiting 03.8-06 integration)
+last_updated: "2026-07-18T02:45:00.000Z"
+last_activity: "2026-07-18 — Phase 3.8 Vault Document Extraction, Wave 2 Lane 3 (03.8-04, worktree lane-3/sweep-ui): the sweep, the retry, and the visible half. vaultSweep.ts landed — sweepPendingExtraction (migrations.define over vaultDocuments: pending_extraction + storageId + recognized extractionKindFor → kind-dispatched scheduler.runAfter onto the FROZEN Wave-0 stub names internal.vaultExtract.extractDoc / internal.vaultTranscribe.transcribeDoc; each scheduled action self-gates via preCall so the sweep needs no separate rate-limit config; ponytail batch-100 ceiling, stagger = upgrade path), runSweep operator one-shot (npx convex run vaultSweep:runSweep — the PRODUCTION run is 03.8-06's job post-merge), retryExtraction tenantMutation (owner + failed|pending_extraction + storageId + kind guards, clears failureReason/extractionTruncated, refs-only {ok}). vaultSweep.test.ts 10/10 green offline — the migration is driven DIRECTLY in its documented one-off mode ({cursor: null, oneBatchOnly: true}, no component round-trip); scheduled names asserted off _scheduled_functions. UI (BRAND-read first, tokens only): DocGrid extracting chip + failed-card Retry as a SIBLING absolute button (never nested in the card button — invalid HTML; existing e2e selectors untouched); PreviewModal failed panel (human-readable failureReason + Retry) + extractionTruncated honesty note (calm, NO amber) + extracting preview copy; page.tsx resolves the LIVE row for the modal (panel Retry flips reactively); Dropzone copy honest (PPTX searchable; images/videos extracted + searchable). vault.spec.ts EXTENDED with the two EXTR-H rows — SMOKE::extract:: pdf + SMOKE::transcribe:: mp4 sentinel bytes CHAINED into SMOKE::graph:: so the post-seam ingest runs offline too; self-cleaning skip-guard while the Wave-0 stubs return not_implemented (REMOVE at 03.8-06). Commits a724311 (T1 RED) / 01540de (T1 GREEN) / 7be7aaf (format) / 9eae278 (T2 UI) / c5758f0 (T3 E2E) / b2b344b (playbook Lane-3 notes). VERIFIED: vaultSweep 10/10; web tsc exit 0; Biome clean on touched files (vault.spec.ts CRLF finding reproduces on main — baseline); check-playbooks exit 0; Playwright discovers 4 tests; git diff --stat main confined to the 8 owned files + playbook. E2E RUN BLOCKED as precedented: E2E_USER_EMAIL/PASSWORD absent + no stack on :3111 — documented attempt, no workaround fabricated. Worktree codegen gotcha (Rule 3): CONVEX_DEPLOYMENT=local:… is keyed to the main checkout, `npx convex codegen` fails in worktrees — copied main's git-ignored _generated/ + hand-added the two vaultSweep api.d.ts entries. NEXT: 03.8-06 merges lanes, runs the one-shot sweep live, removes the two E2E skip-guards. NEVER pushed/merged to main from this lane (plan 06's job)."
+progress:
+  total_phases: 19
+  completed_phases: 11
+  total_plans: 95
+  completed_plans: 87
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
 last_updated: "2026-07-17T22:52:25.551Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
