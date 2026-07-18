@@ -37,8 +37,9 @@ function decodeUtf8(bytes: Uint8Array): string {
 /**
  * Transcribe a vault video/audio upload and feed the transcript through the ingest seam.
  * The endpoint accepts mp4/webm/mpeg containers directly (audio track demuxed server-side);
- * the vault's 8 MiB cap sits under the API's 25 MB limit, so every video that can enter the
- * vault fits the API — the only failure path is an unsupported container.
+ * the vault's video cap (VAULT_VIDEO_CAP_BYTES = 25 MB) is enforced at upload and sits at/under
+ * the API's 25 MB limit, so every video that can enter the vault fits the API — the failure paths
+ * are an unsupported container or the governed gate.
  */
 export const transcribeDoc = internalAction({
   args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
@@ -72,8 +73,9 @@ export const transcribeDoc = internalAction({
         return fail("unsupported_video_container");
       } else {
         // 6. The transcription call (intake.ts transcribeAudio shape) + duration-priced spend.
-        // ponytail: no duration cap — 8 MiB of compressed video bounds duration in practice
-        // (~1–4 min typical); chunking is the upgrade path if a duration limit ever surfaces.
+        // ponytail: no duration cap — 25 MB of compressed video bounds duration in practice
+        // (~a few min typical); audio-extract/chunk is the upgrade path if a >25 MB video (or a
+        // duration limit) ever needs to be supported.
         const result = await transcribe({
           model: openai.transcription("gpt-4o-transcribe"),
           audio: bytes,

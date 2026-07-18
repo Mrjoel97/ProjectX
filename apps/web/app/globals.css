@@ -1310,6 +1310,31 @@ button.clay-card:hover {
   font-size: 1.2rem;
 }
 
+/* ---------- vault preview modal ---------- */
+
+/* Two panes on wide screens: preview (left) + detail panel (right). The panel's min width is what
+   overflows narrow screens — so below 48rem the modal STACKS to one column (preview on top, detail
+   below) and the pane divider flips from a right border to a bottom border. */
+.vault-preview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr);
+}
+
+.vault-preview-main {
+  border-right: 1px solid var(--rule);
+}
+
+@media (max-width: 48rem) {
+  .vault-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vault-preview-main {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+}
+
 /* ---------- quality floor ---------- */
 
 @media (prefers-reduced-motion: reduce) {

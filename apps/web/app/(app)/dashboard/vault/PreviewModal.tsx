@@ -18,6 +18,10 @@ import { DownloadIcon, TrashIcon, XIcon } from "./icons";
 // A signed download/media URL is a bearer capability: it is rendered into <img>/<video>/<a> only,
 // and NEVER logged (CLAUDE.md §4). Text docs skip the URL subscription entirely ("skip").
 
+// How much extracted text the modal shows before the "Show full text" expander. Keeps the card
+// readable (and the modal short) instead of dumping a whole document into the preview pane.
+const SNIPPET_CHARS = 1500;
+
 function isImage(mime: string): boolean {
   return mime.startsWith("image/");
 }
@@ -31,6 +35,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const del = useMutation(api.vault.deleteVaultDoc);
   const retry = useMutation(api.vaultSweep.retryExtraction);
   const [busy, setBusy] = useState<null | "download" | "delete" | "retry">(null);
+  const [expanded, setExpanded] = useState(false);
 
   const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
   // Only subscribe to a signed URL when we actually render media; text docs never fetch one.
@@ -118,9 +123,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
       }}
     >
       <div
+        className="vault-preview-grid"
         style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.5fr) minmax(18rem, 1fr)",
           gap: 0,
           width: "min(60rem, 100%)",
           maxHeight: "85vh",
@@ -132,11 +136,11 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
       >
         {/* Preview pane — the stored text, or the image/video for those kinds. */}
         <div
+          className="vault-preview-main"
           style={{
             overflow: "auto",
             padding: "1.75rem",
             background: "var(--canvas)",
-            borderRight: "1px solid var(--rule)",
           }}
         >
           {media && isImage(doc.mimeType) && mediaUrl ? (
@@ -150,19 +154,44 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
             <video src={mediaUrl} controls style={{ maxWidth: "100%", borderRadius: "0.5rem" }} />
           ) : doc.text ? (
-            <pre
-              style={{
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "var(--font-sans), system-ui, sans-serif",
-                fontSize: "0.9rem",
-                lineHeight: 1.6,
-                color: "var(--ink)",
-              }}
-            >
-              {doc.text}
-            </pre>
+            <>
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "var(--font-sans), system-ui, sans-serif",
+                  fontSize: "0.9rem",
+                  lineHeight: 1.6,
+                  color: "var(--ink)",
+                }}
+              >
+                {expanded || doc.text.length <= SNIPPET_CHARS
+                  ? doc.text
+                  : `${doc.text.slice(0, SNIPPET_CHARS)}…`}
+              </pre>
+              {doc.text.length > SNIPPET_CHARS && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  style={{
+                    marginTop: "0.9rem",
+                    padding: "0.35rem 0.9rem",
+                    borderRadius: "999px",
+                    border: "1px solid var(--rule)",
+                    background: "var(--card)",
+                    color: "var(--teal-600)",
+                    fontWeight: 600,
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  {expanded
+                    ? "Show less"
+                    : `Show full text (${Math.ceil(doc.text.length / 1000)}k chars)`}
+                </button>
+              )}
+            </>
           ) : (
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>
               {doc.status === "pending_extraction"

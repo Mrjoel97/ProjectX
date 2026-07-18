@@ -22,6 +22,7 @@ import {
   isSearchable,
   VAULT_CATEGORIES,
   VAULT_FILE_CAP_BYTES,
+  VAULT_VIDEO_CAP_BYTES,
   type VaultSource,
 } from "@pikar/vault";
 import { v } from "convex/values";
@@ -29,8 +30,8 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { workflow } from "./index";
-import { contentHash } from "./lib/hash";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 import { rag } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
@@ -49,14 +50,22 @@ export const vaultIngestText = tenantMutation({
     source: v.optional(v.string()),
     docId: v.optional(v.id("vaultDocuments")),
   },
-  handler: async (ctx, { text, title, source, docId }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+  handler: async (
+    ctx,
+    { text, title, source, docId },
+  ): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
     const hash = await contentHash(text);
 
     // Late-text arrival: a pre-existing (pending_extraction) row gets its text + hash, then ingests.
     if (docId) {
       const existing = await ctx.db.get(docId);
       if (!existing || existing.tenantId !== ctx.tenantId) throw new Error("vault: doc not found");
-      await ctx.db.patch(docId, { text, contentHash: hash, size: byteLen(text), status: "processing" });
+      await ctx.db.patch(docId, {
+        text,
+        contentHash: hash,
+        size: byteLen(text),
+        status: "processing",
+      });
       const correlationId = crypto.randomUUID();
       await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
         vaultDocId: docId,
@@ -100,7 +109,8 @@ export const vaultIngestText = tenantMutation({
 });
 
 /**
- * File upload ingest with ACCEPT-BUT-DEFER. Oversize (> VAULT_FILE_CAP_BYTES) is rejected. A
+ * File upload ingest with ACCEPT-BUT-DEFER. Oversize is rejected per kind (video > 25 MB, else
+ * > 100 MiB). A
  * searchable TXT/MD/CSV WITH text stores `processing` + starts the ingest workflow; a non-searchable
  * MIME (pdf/image/video/…) stores `pending_extraction` and starts NO workflow (its text arrives
  * later via the vaultIngestText `docId` seam). Hash-dedup applies to both (a re-upload of identical
@@ -119,7 +129,14 @@ export const vaultUpload = tenantMutation({
     ctx,
     { storageId, filename, mimeType, size, contentHash: hash, text },
   ): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
-    if (size > VAULT_FILE_CAP_BYTES) throw new Error("vault: file too large");
+    // Per-kind cap: video is bounded by the transcription API's 25 MB limit; everything else by
+    // the 100 MiB storage ceiling. This is the single chokepoint — all video reaches transcribeDoc
+    // only through here, so no downstream size guard is needed.
+    if (mimeType.startsWith("video/")) {
+      if (size > VAULT_VIDEO_CAP_BYTES) throw new Error("vault: video too large (max 25 MB)");
+    } else if (size > VAULT_FILE_CAP_BYTES) {
+      throw new Error("vault: file too large (max 100 MB)");
+    }
 
     // Hash-dedup: identical bytes for this tenant reuse the existing item (no re-store / re-embed).
     const dup = await ctx.db
@@ -206,7 +223,8 @@ export const deleteVaultDoc = tenantMutation({
       if (!node) continue;
       const incident = edges.filter((e) => e.fromNodeId === nodeId || e.toNodeId === nodeId).length;
       const newDegree = node.degree - incident;
-      if (newDegree <= 0) await ctx.db.delete(nodeId); // orphan GC
+      if (newDegree <= 0)
+        await ctx.db.delete(nodeId); // orphan GC
       else await ctx.db.patch(nodeId, { degree: newDegree });
     }
 
@@ -239,7 +257,12 @@ export const vaultStats = tenantQuery({
   args: {},
   handler: async (
     ctx,
-  ): Promise<{ totalFiles: number; processed: number; storageUsedBytes: number; categories: number }> => {
+  ): Promise<{
+    totalFiles: number;
+    processed: number;
+    storageUsedBytes: number;
+    categories: number;
+  }> => {
     const docs = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
@@ -279,7 +302,12 @@ export const docEntities = tenantQuery({
     { vaultDocId },
   ): Promise<{
     nodes: { _id: Id<"graphNodes">; type: string; name: string }[];
-    edges: { _id: Id<"graphEdges">; fromNodeId: Id<"graphNodes">; toNodeId: Id<"graphNodes">; rel: string }[];
+    edges: {
+      _id: Id<"graphEdges">;
+      fromNodeId: Id<"graphNodes">;
+      toNodeId: Id<"graphNodes">;
+      rel: string;
+    }[];
   }> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return { nodes: [], edges: [] };
@@ -328,7 +356,10 @@ export const vaultSearch = tenantAction({
   ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string }[]> => {
     let candidateIds: Id<"vaultDocuments">[];
     if (query.startsWith("SMOKE::")) {
-      candidateIds = query.slice("SMOKE::".length).split(",").filter(Boolean) as Id<"vaultDocuments">[];
+      candidateIds = query
+        .slice("SMOKE::".length)
+        .split(",")
+        .filter(Boolean) as Id<"vaultDocuments">[];
     } else {
       const { entries } = await rag.search(ctx, {
         namespace: ctx.tenantId,
@@ -471,6 +502,11 @@ export const getDocForExtraction = internalQuery({
   }> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== tenantId) throw new Error("vault: doc not found");
-    return { storageId: doc.storageId, mimeType: doc.mimeType, title: doc.title, status: doc.status };
+    return {
+      storageId: doc.storageId,
+      mimeType: doc.mimeType,
+      title: doc.title,
+      status: doc.status,
+    };
   },
 });
