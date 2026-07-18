@@ -294,6 +294,94 @@ describe("fetchInboxBodies (fixture bodies, truncated)", () => {
   });
 });
 
+// ── 03.10-01: gmail.search over the SAME fixture seam (the resolveContacts eval seam) ─────────
+// Mirrors listInbox's fixture-before-token branch so a plain-NL "email Sarah Chen…" turn can
+// park candidates on the tokenless eval tenant. Live tenants (no fixture row) are proven
+// untouched by the fall-through test.
+
+describe("search (fixture seam + refs-only audit)", () => {
+  test("a seeded fixture serves HeaderRecords with NO token (fixture-first)", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.search, {
+      tenantId: TENANT,
+      name: "Sarah Chen",
+      correlationId: "cid-s1",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // One HeaderRecord per fixture message, mapped from/subject/date — no snippet/body rides along.
+    expect(res.records).toHaveLength(5);
+    const r = res.records[0]!;
+    expect(Object.keys(r).sort()).toEqual(["date", "from", "subject"]);
+    expect(r.from).toBe("Sarah Chen <sarah.chen@example.com>");
+    expect(r.subject).toBe("Re: Q3 numbers");
+    // rankCandidates Date.parse-es rec.date — the toUTCString round-trips the fixture's epoch.
+    expect(Date.parse(r.date!)).toBe(BASE_MS - 3_600_000);
+  });
+
+  test("the fixture branch writes exactly ONE refs-only mailbox.searched audit", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    await t.action(internal.gmail.search, {
+      tenantId: TENANT,
+      name: "Sarah Chen",
+      correlationId: "cid-s2",
+    });
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const searched = rows.filter((row) => row.eventType === "mailbox.searched");
+    expect(searched, "search must write exactly one mailbox.searched event").toHaveLength(1);
+    const payload = searched[0]!.payload as Record<string, unknown>;
+    // The WHOLE payload — same shape as the token path: queryHash + count ONLY (CLAUDE.md §4).
+    expect(Object.keys(payload).sort()).toEqual(["queryHash", "resultCount"]);
+    expect(payload.resultCount).toBe(5);
+    // No from/subject/address string may land in the payload (deliberate-leak mutation-checked).
+    expect(JSON.stringify(payload)).not.toMatch(/Sarah|Chen|@example\.com|Q3/);
+  });
+
+  test("no fixture + no token → falls through to not_connected, NO audit (live path unchanged)", async () => {
+    const t = harness();
+    const res = await t.action(internal.gmail.search, {
+      tenantId: "tenant_with_no_mailbox",
+      name: "Sarah Chen",
+      correlationId: "cid-s3",
+    });
+    expect(res).toEqual({ ok: false, reason: "not_connected" });
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(
+      rows.filter((row) => row.eventType === "mailbox.searched"),
+      "a failed search must not audit",
+    ).toHaveLength(0);
+  });
+
+  test("SMOKE:: name-sentinel stays FIRST — routes through the sentinel even on a fixture tenant", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.search, {
+      tenantId: TENANT,
+      name: "SMOKE::resolve",
+      correlationId: "cid-s4",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // The sentinel's two fixed records — NOT the 5 fixture messages.
+    expect(res.records).toHaveLength(2);
+    expect(res.records[0]!.from).toContain("Sarah Smoke");
+  });
+});
+
 describe("seedInboxFixture (deterministic + idempotent)", () => {
   test("re-seeding replaces rather than appends (ONE row per tenant)", async () => {
     const t = harness();
