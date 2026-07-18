@@ -6,6 +6,7 @@ import {
   parseAddress,
   parseSendTime,
   rankCandidates,
+  SEND_TIME_HORIZON_MS,
 } from "./emailIntent";
 
 describe("parseAddress — header value → { displayName?, address }", () => {
@@ -285,5 +286,34 @@ describe("parseSendTime — pure NL time → resolved | ambiguous | past | none 
 
   test("is deterministic — two calls with identical args return equal results (no Date.now)", () => {
     expect(parseSendTime("tomorrow 9am", NOW, TZ)).toEqual(parseSendTime("tomorrow 9am", NOW, TZ));
+  });
+
+  // Far-future cap (SCHD-01 refinement, Plan 06). Horizon = 7 days; the relative grammar ("in N
+  // hours") is the only phrasing that can resolve strictly beyond it deterministically (weekday/
+  // tomorrow max out at 7 days). 168 h == exactly the horizon; 169 h is one hour past it.
+  test("SEND_TIME_HORIZON_MS is the 7-day Gmail-token ceiling (168 hours)", () => {
+    expect(SEND_TIME_HORIZON_MS).toBe(168 * 3_600_000);
+  });
+
+  test('beyond the horizon ("in 169 hours") → { kind: "tooFar" } (re-ask, never a silent clamp)', () => {
+    expect(parseSendTime("in 169 hours", NOW, TZ)).toEqual({ kind: "tooFar" });
+  });
+
+  test('just inside the horizon ("in 167 hours") → resolved (unchanged)', () => {
+    expect(parseSendTime("in 167 hours", NOW, TZ)).toEqual({
+      kind: "resolved",
+      epochMs: NOW + 167 * 3_600_000,
+    });
+  });
+
+  test("exactly at nowMs + SEND_TIME_HORIZON_MS is allowed → resolved (boundary inclusive)", () => {
+    expect(parseSendTime("in 168 hours", NOW, TZ)).toEqual({
+      kind: "resolved",
+      epochMs: NOW + SEND_TIME_HORIZON_MS,
+    });
+  });
+
+  test("within-horizon cases still resolve (no regression from the horizon check)", () => {
+    expect(parseSendTime("in 2 hours", NOW, TZ)).toEqual({ kind: "resolved", epochMs: NOW + 7_200_000 });
   });
 });

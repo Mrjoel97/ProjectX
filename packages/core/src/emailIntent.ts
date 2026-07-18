@@ -204,14 +204,32 @@ export function rankCandidates(name: string, records: readonly HeaderRecord[]): 
 // Upgrade path: widen the grammar (ranges, "next week", explicit dates) or adopt a lib only when a
 // demonstrated user phrasing falls through to `none`/`ambiguous`.
 
-/** The four outcomes of parsing a natural-language send time. */
+/** The outcomes of parsing a natural-language send time. */
 export type SendTimeParse =
   | { kind: "resolved"; epochMs: number } // a concrete future instant → schedule
   | { kind: "ambiguous" } // grammar can't anchor it (bare AM / no meridiem, no day) → RE-ASK, never guess
   | { kind: "past" } // a concrete instant at/before now → RE-ASK, never silently send
+  | { kind: "tooFar" } // beyond the horizon → RE-ASK, never a silent clamp (the connection may expire before then)
   | { kind: "none" }; // no time expressed → immediate send (today's default, SC1)
 
 const SEND_TIME_EPSILON_MS = 60_000; // a time within a minute of "now" counts as past (clock skew slack)
+
+// The far-future cap (SCHD-01 refinement). ponytail — ceiling: Gmail Testing-mode's 7-day refresh-
+// token lifetime (design/scheduled-send.md); a schedule past it finds a DEAD token at fire time. This
+// is a tunable calibration knob, not a hard truth — upgrade path: raise or remove once verified Google
+// OAuth lands (post-Phase-9), when refresh tokens no longer expire on the 7-day Testing-mode clock.
+export const SEND_TIME_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Classify a resolved instant against the injected clock: past (at/before now+epsilon), tooFar
+ * (strictly beyond now+horizon), else resolved. One helper so the three resolve sites share the
+ * SAME two bounds — a bound can never drift between branches.
+ */
+function classify(epochMs: number, nowMs: number): SendTimeParse {
+  if (epochMs <= nowMs + SEND_TIME_EPSILON_MS) return { kind: "past" };
+  if (epochMs > nowMs + SEND_TIME_HORIZON_MS) return { kind: "tooFar" };
+  return { kind: "resolved", epochMs };
+}
 
 const WEEKDAYS: Record<string, number> = {
   sunday: 0,
@@ -291,7 +309,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
     const n = Number(rel[1]);
     const ms = /^h/.test(rel[2] ?? "") ? n * 3_600_000 : n * 60_000;
     const epochMs = nowMs + ms;
-    return epochMs <= nowMs + SEND_TIME_EPSILON_MS ? { kind: "past" } : { kind: "resolved", epochMs };
+    return classify(epochMs, nowMs);
   }
 
   // Day anchor.
@@ -347,7 +365,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
       mi,
       ianaTz,
     );
-    return epochMs <= nowMs + SEND_TIME_EPSILON_MS ? { kind: "past" } : { kind: "resolved", epochMs };
+    return classify(epochMs, nowMs);
   }
 
   // No day anchor.
@@ -368,7 +386,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
         ianaTz,
       );
     }
-    return { kind: "resolved", epochMs };
+    return classify(epochMs, nowMs);
   }
 
   if (bare) return { kind: "ambiguous" }; // "at 4" — hour with no meridiem, no day
