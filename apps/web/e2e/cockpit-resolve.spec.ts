@@ -1,4 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { spawnSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, type Page, test } from "@playwright/test";
 
 // SC2 agent-path proof — the whole name-resolution + edit loop end to end over the OFFLINE
 // `SMOKE::agent::` sentinel grammar (Plan 04/05): the cockpit conversation engine is the governed
@@ -70,4 +73,96 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
 
   // READING/composing phase: nothing sends. Do NOT click Approve. No REPORT card appears.
   await expect(workspace.getByText("REPORT", { exact: true })).toHaveCount(0);
+});
+
+// ── UAT-A demotion-order regression lock (03.10-02) ──────────────────────────────────────────
+//
+// UAT 2026-07-19: a tall BriefingCard pinned first buried the ResolutionCard ("where is the
+// list") and the pick stalled. PlanCards now demotes the brief BELOW the plan cards the moment
+// composition is active (candidates parked / subject / body / recipients / status past
+// collecting) and keeps it primary in the brief-only flow. This test locks BOTH orders on one
+// thread: brief=today (brief primary) → resolve (picker first, brief demoted — never destroyed).
+//
+// Seeding plumbing mirrors cockpit-briefing.spec.ts verbatim (JWT-sub tenantId + the
+// smokeRun.mjs no-shell convention — the tenantId contains a `|` cmd.exe would read as a pipe;
+// success from OUTPUT, not exit code).
+
+const backendDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/backend");
+const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
+
+// llm.ts SMOKE_NOW_MS (2020-01-01T12:00:00Z) — seeding at the agent's pinned clock keeps buckets deterministic.
+const SMOKE_NOW_MS = 1577880000000;
+
+const CLI_FAILURE = /Failed to run function|Uncaught Error|isn't running|not listening/;
+function convexRun(fn: string, args: Record<string, unknown>): string {
+  const res = spawnSync(process.execPath, [convexBin, "run", fn, JSON.stringify(args)], {
+    cwd: backendDir,
+    encoding: "utf8",
+  });
+  if (res.error) throw new Error(`spawn failed for ${fn}: ${res.error.message}`);
+  const err = res.stderr ?? "";
+  if (CLI_FAILURE.test(err)) throw new Error(`${fn} failed:\n${err.trim()}`);
+  return res.stdout ?? "";
+}
+
+/** The signed-in session's tenantId (`identity.subject`), decoded from the Convex Auth JWT's `sub`. */
+async function resolveTenantId(page: Page): Promise<string> {
+  const jwt = await page.evaluate(() => {
+    const key = Object.keys(window.localStorage).find((k) => k.startsWith("__convexAuthJWT"));
+    return key ? window.localStorage.getItem(key) : null;
+  });
+  if (!jwt) throw new Error("No Convex Auth JWT in localStorage — is the storageState session still valid?");
+  const payload = jwt.split(".")[1];
+  if (!payload) throw new Error("Malformed Convex Auth JWT (no payload segment).");
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
+  if (!claims.sub) throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
+  return claims.sub;
+}
+
+test("demotion: brief primary → candidates park → picker precedes the demoted brief (UAT-A)", async ({ page }) => {
+  await page.goto("/dashboard/workspace");
+
+  const composer = page.getByPlaceholder("Describe your goal…");
+  await expect(composer).toBeVisible({ timeout: 15_000 });
+
+  // Seed the fixture mailbox for THIS session's tenant (idempotent — re-runs never double it).
+  const tenantId = await resolveTenantId(page);
+  convexRun("smoke:seedInboxFixture", { tenantId, offlineDigest: true, baseMs: SMOKE_NOW_MS });
+
+  const say = async (text: string) => {
+    await composer.fill(text);
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("", { timeout: 20_000 });
+  };
+
+  const workspace = page.getByTestId("workspace-pane");
+  const briefCard = workspace.getByTestId("briefing-card");
+
+  // 1. Brief-only state: fresh thread, plan at `collecting`, nothing composed → the brief is
+  //    primary and fully rendered (cockpit-briefing.spec.ts owns the full SC-1/SC-4 detail).
+  await say("SMOKE::agent::brief=today");
+  await expect(briefCard).toBeVisible({ timeout: 20_000 });
+
+  // 2. Resolve a name → candidates park on the plan row → composition is ACTIVE: the
+  //    ResolutionCard is the top card of the PlanCards grid, above the demoted brief.
+  await say("SMOKE::agent::resolve=SMOKE::Sarah");
+  const picker = workspace.getByText("PICK A CONTACT", { exact: true });
+  await expect(picker).toBeVisible({ timeout: 15_000 });
+
+  // Demoted, NOT destroyed: the briefing card is still attached and rendered below the work.
+  await expect(briefCard).toBeVisible();
+
+  // DOM order, not layout: the briefing card FOLLOWS the picker (compareDocumentPosition).
+  const pickerHandle = await picker.elementHandle();
+  const briefHandle = await briefCard.elementHandle();
+  if (!pickerHandle || !briefHandle) throw new Error("picker/brief element handle missing");
+  const briefFollowsPicker = await pickerHandle.evaluate(
+    (pickerEl, briefEl) => Boolean(pickerEl.compareDocumentPosition(briefEl) & Node.DOCUMENT_POSITION_FOLLOWING),
+    briefHandle,
+  );
+  expect(briefFollowsPicker).toBe(true);
+
+  // SC-4 re-assert on the DEMOTED card: still informational — zero buttons/links inside it.
+  await expect(briefCard.locator("button")).toHaveCount(0);
+  await expect(briefCard.locator("a")).toHaveCount(0);
 });
