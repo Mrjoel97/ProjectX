@@ -340,12 +340,70 @@ function ScheduledCard({ plan }: { plan: Plan }) {
   );
 }
 
-/** A scheduled send that was halted before fire — terminal, refs-only audited server-side. */
-function CanceledCard() {
+/** A scheduled send that was halted before fire — terminal UNLESS re-scheduled (SCHD-01). Setting a
+ * future time and clicking Reschedule re-approves the plan (canceled→proposed→scheduled) through the
+ * existing executePlan branch; the card then re-renders as ScheduledCard (Cancel available again). A
+ * past/absent time surfaces an inline re-ask and does NOT send (mirrors reschedulePlan's server guard).
+ * Reuses PlanCard's picker idiom + ScheduledCard's busy pattern (one source of truth: plan.sendAt). */
+function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
+  const reschedule = useMutation(api.cockpit.reschedulePlan);
+  const execute = useMutation(api.cockpit.executePlan);
+  const setSendTime = useMutation(api.plans.setPlanSendTime);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const sendAt = plan.sendAt;
+  const futureSet = Boolean(sendAt && sendAt > Date.now());
+
+  async function doReschedule() {
+    if (busy || !futureSet) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await reschedule({ planId: plan._id });
+      if (!r.ok && r.reason === "needs_future_time") {
+        setNote("Pick a future time to reschedule.");
+        return;
+      }
+      await execute({ planId: plan._id }); // re-approve through the EXISTING scheduled branch
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={box}>
       <div style={label}>CANCELED</div>
       <p style={{ ...dim, margin: "0.5rem 0 0" }}>This scheduled send was canceled. Nothing was sent.</p>
+      <div style={{ margin: "0.75rem 0 0" }}>
+        <div style={label}>RESCHEDULE</div>
+        <input
+          type="datetime-local"
+          value={sendAt ? toLocalInputValue(sendAt) : ""}
+          min={toLocalInputValue(Date.now())}
+          onChange={(e) =>
+            void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
+          }
+          style={{ ...btn, cursor: "auto", border: "1px solid #e5e5e5", marginTop: "0.35rem" }}
+        />
+        {futureSet ? (
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>Re-sends {formatAbsolute(sendAt as number)}.</p>
+        ) : (
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>Pick a future time to reschedule this send.</p>
+        )}
+      </div>
+      <button
+        type="button"
+        disabled={busy || !futureSet}
+        onClick={() => void doReschedule()}
+        style={{ ...btn, marginTop: "0.5rem", background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+      >
+        {busy ? "Rescheduling…" : "Reschedule"}
+      </button>
+      {note && (
+        <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
+          {note}
+        </p>
+      )}
     </div>
   );
 }
@@ -1016,7 +1074,7 @@ function PlanCards({ plan, threadId, brief }: { plan: Plan; threadId: string; br
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
-      {plan.status === "canceled" && <CanceledCard />}
+      {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
     </div>
