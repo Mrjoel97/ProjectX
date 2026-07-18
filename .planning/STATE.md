@@ -2,6 +2,21 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+status: ready
+stopped_at: "Phase 3.8 COMPLETE (6/6 plans) — 03.8-06 Task 2 human-verify APPROVED by owner 2026-07-18; VERIFICATION.md status: passed (6/6 must-haves)"
+last_updated: "2026-07-18T20:14:27.058Z"
+last_activity: "2026-07-18 — Phase 3.8 Vault Document Extraction CLOSED: owner live-verified the full walk-through ('Everything is working. The changes we made work. I've seen them myself.') incl. per-kind caps (docs/images 100 MB, video 25 MB), whisper-1 video transcription (real 21 MB mp4 → ready), honest failure reasons (no_audio_track_or_undecodable, transcribe_timeout), 480s transcription timeout, and the fixed-geometry preview modal (media fits pane, image full-screen, pinned actions footer). Post-merge fix chain on main: 510c5e0, 24863cd, db0f485, 5413776, 8775c0c, a085113, 4980c8d. gsd-verifier VERIFICATION.md: passed — offline suites re-run green (vault 42/42, backend 319/320 sole red = documented audit.test.ts), all merge + fix commits ancestors of main, upload→extract/transcribe→scan-gate→refs-only-audit→ingest-seam→embed wiring confirmed end-to-end. Known accepted gaps (playbook): >25 MB video needs audio-extract (deferred), 50–100 MB live extraction untested, vaultGround cockpit call-site deferred. NEXT: pick next phase (3.5 deferred-send or 6 live-voice are the open non-inserted candidates)."
+progress:
+  total_phases: 19
+  completed_phases: 12
+  total_plans: 95
+  completed_plans: 91
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
 status: paused-at-checkpoint
 stopped_at: "03.8-06 (Wave 3 integration) Task 2 checkpoint:human-verify — Task 1 COMPLETE. All four vault-extraction lanes merged to main (four --no-ff merges 3d48d1b/a12dec4/c8db65b/86e81d6; append-only STATE/ROADMAP/vault.md/deferred-items resolved keep-both; ZERO conflicts on owned code files). Merged whole green: backend vitest 317/318 (only red = pre-existing audit.test.ts auditCounts), @pikar/vault 42/42, web typecheck clean, biome lint clean, check-playbooks green. _generated regenerated. EXTR-H E2E un-skip-guarded (e7452ab). Backlog sweep ran on :3210 via self-hosted admin seam: pending_extraction drained ~4 → 0 (post-sweep 98 ready / 19 processing / 10 failed). AWAITING HUMAN: the consolidated phase-close walk-through — drop ONE of each format (text PDF, scanned PDF, image, DOCX, XLSX, PPTX, short mp4) through the real vault UI, confirm each walks pending_extraction → ready reactively + is searchable; verify .mov honest-fail, kill-switch fail + Retry recovery, and oversize truncation note. Merged backend already deployed + running on :3210. Do NOT run gsd phase complete until owner types 'approved'."
 last_updated: "2026-07-18T06:40:00.000Z"
