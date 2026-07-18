@@ -439,6 +439,14 @@ test("setSendTime re-asks on a PAST time and writes NOTHING (SC2 — never silen
   expect((await readPlan(t, planId))?.sendAt).toBeUndefined(); // no write
 });
 
+test("setSendTime re-asks on a TOO-FAR time and writes NOTHING (SCHD-01 — never a silent clamp)", async () => {
+  const { t, planId } = await setup();
+  // 169 hours out is past the 7-day horizon (168h) — beyond what a Gmail token reliably survives.
+  const res = await callClock(t, planId, "setSendTime", { text: "in 169 hours" });
+  expect(res).toMatch(/further out|reliably schedule|sooner/i);
+  expect((await readPlan(t, planId))?.sendAt).toBeUndefined(); // no write — fail fast in conversation
+});
+
 test("setSendTime without a client clock points to the picker and writes NOTHING (§2-D)", async () => {
   const { t, planId } = await setup();
   // `call` builds the tools with NO clientContext — the tool refuses to invent a clock and defers

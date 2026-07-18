@@ -5,6 +5,9 @@ import { api } from "@pikar/backend/api";
 // collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
 // card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
 import { buildBriefingView } from "@pikar/core/briefing";
+// Far-future cap (SCHD-01): the soft UI complement to executePlan's hard send_time_too_far refusal —
+// one shared horizon, so the picker can't offer a time the server will reject.
+import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { ReactNode } from "react";
@@ -268,6 +271,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           type="datetime-local"
           value={sendAt ? toLocalInputValue(sendAt) : ""}
           min={toLocalInputValue(Date.now())}
+          max={toLocalInputValue(Date.now() + SEND_TIME_HORIZON_MS)}
           onChange={(e) =>
             void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
           }
@@ -380,6 +384,7 @@ function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
           type="datetime-local"
           value={sendAt ? toLocalInputValue(sendAt) : ""}
           min={toLocalInputValue(Date.now())}
+          max={toLocalInputValue(Date.now() + SEND_TIME_HORIZON_MS)}
           onChange={(e) =>
             void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
           }

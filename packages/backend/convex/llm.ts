@@ -789,7 +789,9 @@ export function buildCockpitTools(
             return "That time is ambiguous — ask which day and time they meant (never guess). Nothing was scheduled.";
           case "past":
             return "That time has already passed — ask the user for a future time. Nothing was scheduled.";
-          default: // "none" — no time expressed
+          case "tooFar":
+            return "That's further out than I can reliably schedule — the connection may expire before then; ask the user for a sooner time. Nothing was scheduled.";
+          case "none": // no time expressed — exhaustive: a new SendTimeParse variant becomes a TS error, never a silent fall-through to immediate send
             return "I didn't detect a specific time — the email sends immediately on approve unless the user gives one.";
         }
       },
