@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 03.8-03-PLAN.md (Lane 2 done on lane-2/office-parsers — awaiting plan 06 merge)
+last_updated: "2026-07-18T02:30:00.000Z"
+last_activity: "2026-07-18 — Phase 3.8 Vault Document Extraction, Wave 2, Lane 2 (worktree lane-2/office-parsers): 03.8-03 executed (EXTR-C). The Wave-0 extractOfficeText stub is REAL: one fflate unzipSync + one attribute-tolerant regex XML text-walk (`<tag ...>...</tag>`) shared by all three OOXML formats — no XML parser dep, zero Convex edits, zero model calls, NOT on the index barrel (fflate stays out of the V8 bundle; Lane 1 imports the subpath). DOCX: word/document.xml runs joined per </w:p>, newline per paragraph, entities decoded (5 named + numeric dec/hex). XLSX: optional xl/sharedStrings.xml <t> index, t=\"s\" cells resolved / literal <v> kept (numbers are NOT garbage), tab-joined rows, 'Sheet N' headers, numeric filename sort (sheet2 < sheet10). PPTX: ppt/slides/slide*.xml numeric sort, 'Slide N' headers, <a:t> runs newline-joined. Every malformed path throws `office_parse_failed: ...` — the Lane-1 dispatcher converts to markFailed('office_parse_failed') with no change on either side at merge. 15-test suite, ALL fixtures built in-test with zipSync/strToU8 (no binary fixtures in repo), per-format determinism asserted. Six TDD commits (RED/GREEN x3): 0bc772f/8416a14 DOCX, 28e4e3a/88838c1 XLSX, 143ec8b/2c42bb3 PPTX. ONE deviation (Rule 1): 6 noUncheckedIndexedAccess reds surfaced at Task 3's first tsc run — ?? fallbacks on capture groups + numericSorted restructured to Object.entries flatMap; folded into 2c42bb3. Session note: first session killed by session limit mid-PPTX-GREEN (implementation complete but uncommitted); resume inspected the diff, ran the suite green, fixed typecheck, committed — no work redone. VERIFIED: @pikar/vault 42/42 (6 files) + tsc -p . --noEmit exit 0; git diff --stat main = only officeText.ts + officeText.test.ts (+ playbook Lane-2 subsection + bookkeeping); barrel grep clean. Known ceiling (ponytail comment in source): rich-text <si> multi-run indexing — per-<si> grouping if real workbooks surface it. NOT merged, NOT pushed — plan 06 (Wave 3) merges all four lanes and runs the full sweep on main. vault.md build notes appended INSIDE the Lane-2 subsection only (PARALLELIZATION §6; shared Last-verified header untouched to keep the 4-lane merge conflict-free)."
+progress:
+  total_phases: 19
+  completed_phases: 11
+  total_plans: 95
+  completed_plans: 87
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
 last_updated: "2026-07-17T22:52:25.551Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
