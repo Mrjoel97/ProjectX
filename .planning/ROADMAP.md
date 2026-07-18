@@ -212,7 +212,7 @@ Plans:
 - [x] 03.5-02-PLAN.md — setSendTime tool + clientContext threading + SMOKE sendTime= + §4 scan + cockpit-agent Scheduling skill (Wave 2)
 - [x] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
 - [x] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
-- [ ] 03.5-05-PLAN.md — re-schedule a canceled plan (reschedulePlan canceled→proposed + orphan cleanup + CanceledCard reschedule surface, re-arm via existing executePlan) (Wave 5)
+- [x] 03.5-05-PLAN.md — re-schedule a canceled plan (reschedulePlan canceled→proposed + orphan cleanup + CanceledCard reschedule surface, re-arm via existing executePlan) (Wave 5)
 - [ ] 03.5-06-PLAN.md — far-future cap: SEND_TIME_HORIZON_MS + tooFar parse variant + executePlan send_time_too_far refusal + setSendTime re-ask + native picker max (Wave 6)
 
 ### Phase 3.6: Agent Eval Gate (INSERTED)
@@ -385,7 +385,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.2.1 Agent-Driven Cockpit (INSERTED) | 6/6 | Complete (goal-verified + human-verified) | 2026-07-13 |
 | 3.3 Attachment Generation (INSERTED) | 6/6 | Complete (CKPT-02 human-verified) | 2026-07-14 |
 | 3.4 Per-Recipient Personalization (INSERTED) | 4/4 | Complete (CKPT-03 human-verified) | 2026-07-14 |
-| 3.5 Deferred Send (INSERTED) | 4/4 | Complete (SCHD-01) | 2026-07-14 |
+| 3.5 Deferred Send (INSERTED) | 5/6 | In Progress (SCHD-01 done; +2 refinement plans) | 2026-07-19 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
 | 3.7 Inbox Briefing (INSERTED) | 9/9 | Complete (Gap 1 + Gap 2 closed; inbox-digest v2 eval-gated & active; CKPT-04 human-verified 2026-07-17) |  |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |

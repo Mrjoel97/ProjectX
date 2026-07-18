@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: "Completed 03.5-05-PLAN.md (reschedulePlan + CanceledCard reschedule surface) — Wave 5 of Phase 3.5 re-scheduled tail (05/06). NEXT: 03.5-06 (far-future cap: SEND_TIME_HORIZON_MS + tooFar + executePlan send_time_too_far refusal)"
+last_updated: "2026-07-19T00:00:00.000Z"
+last_activity: "2026-07-19 — Phase 3.5 Deferred Send, Wave 5: 03.5-05 executed — canceled is no longer a dead end. reschedulePlan (cockpit.ts) is the ONLY canceled→proposed transition: it requires a FUTURE plan.sendAt (else {ok:false, needs_future_time}, writing nothing — no silent un-cancel into an immediate send), deletes the plan's orphaned requests rows (by_plan — all never-fanned-out 'approved' orphans; reportForPlan would double-count otherwise), flips → 'proposed', and writes ONE refs-only plan.rescheduled audit ({planId} only, §3/§4). It arms NOTHING itself — the re-approve re-seeds + re-arms through the EXISTING executePlan scheduled branch, so git grep confirms one workflow.start (startFanout:303) + one scheduler.runAt (executePlan:423), reschedule added neither (single-arm-site invariant, Plan 03 SC3). Idempotent (non-canceled → alreadyResolved) + tenant-guarded (cross-tenant → 'plan not found'). CanceledCard (cards.tsx) gained a datetime-local picker (reusing PlanCard's toLocalInputValue/setPlanSendTime — one source of truth, plan.sendAt) + a busy-guarded Reschedule button (disabled unless a future time is set) whose handler calls reschedulePlan then, on ok, executePlan; a needs_future_time result surfaces an inline role=alert re-ask and does NOT send, and on success the card re-renders as ScheduledCard (cancellable again). Commits bfdbdfa (T1 mutation + 4 cockpit.test.ts cases), 03034ef (T2 card + cockpit.md invariant + Last verified 03.5-05). NO deviations. VERIFIED: cockpit.test.ts green (reschedule happy path w/ orphan cleanup + fresh-fan-out count + refs-only audit + cancellable-again, the re-ask, idempotent, tenant guard); web typecheck exit 0; cards.tsx Biome baseline unchanged (sole useHookAtTopLevel at ResolutionCard is pre-existing); check-playbooks exit 0. Sole full-suite red = the documented pre-existing runCockpitAgent.test.ts 5000ms machine-load timeout (reproduces on base, touched-file-independent) + the known audit.test.ts auditCounts red — NOT regressions. NEXT: Wave 6 (03.5-06 — far-future horizon cap)."
+progress:
+  total_phases: 19
+  completed_phases: 11
+  total_plans: 97
+  completed_plans: 92
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: "Phase 3.8 COMPLETE (6/6 plans) — 03.8-06 Task 2 human-verify APPROVED by owner 2026-07-18; VERIFICATION.md status: passed (6/6 must-haves)"
 last_updated: "2026-07-18T20:14:27.058Z"
 last_activity: "2026-07-18 — Phase 3.8 Vault Document Extraction CLOSED: owner live-verified the full walk-through ('Everything is working. The changes we made work. I've seen them myself.') incl. per-kind caps (docs/images 100 MB, video 25 MB), whisper-1 video transcription (real 21 MB mp4 → ready), honest failure reasons (no_audio_track_or_undecodable, transcribe_timeout), 480s transcription timeout, and the fixed-geometry preview modal (media fits pane, image full-screen, pinned actions footer). Post-merge fix chain on main: 510c5e0, 24863cd, db0f485, 5413776, 8775c0c, a085113, 4980c8d. gsd-verifier VERIFICATION.md: passed — offline suites re-run green (vault 42/42, backend 319/320 sole red = documented audit.test.ts), all merge + fix commits ancestors of main, upload→extract/transcribe→scan-gate→refs-only-audit→ingest-seam→embed wiring confirmed end-to-end. Known accepted gaps (playbook): >25 MB video needs audio-extract (deferred), 50–100 MB live extraction untested, vaultGround cockpit call-site deferred. NEXT: pick next phase (3.5 deferred-send or 6 live-voice are the open non-inserted candidates)."
@@ -616,8 +631,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T03:11:48.608Z
-Stopped at: 03.8-02 tasks 1-2 complete + live PDF smoke; PAUSED at Task-3 human-verify checkpoint (image OCR)
+Last session: 2026-07-18T21:32:51.399Z
+Stopped at: Completed 03.5-05-PLAN.md (reschedulePlan + CanceledCard reschedule surface)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
