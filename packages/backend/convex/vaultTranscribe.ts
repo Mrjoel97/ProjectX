@@ -1,21 +1,129 @@
 "use node";
 
-// Wave-0 stub — Lane 4 (lane-4/video-transcribe) replaces this body with the transcription rail:
-// preCall gate → markExtracting → load bytes (ctx.storage.get, NEVER via args) →
-// SMOKE::transcribe:: sniff → TRANSCRIBABLE_CONTAINER_MIME check (unsupported container →
-// markFailed("unsupported_video_container"), honest failure) → experimental_transcribe
-// (intake.ts transcribeAudio shape, duration-priced spend) → scanText fail-closed →
-// refs-only audit → ingestExtractedText seam. Exists NOW so codegen + the vaultUpload hook +
-// Lane 3's sweep reference internal.vaultTranscribe.transcribeDoc from day one. NEVER imports
-// llm.ts or vaultExtract.ts (§96 circular-inference rule).
+// Lane 4 (Phase 3.8, EXTR-I) — vault video/audio transcription rail. The Pattern-1 spine:
+// preCall gate → markExtracting → load bytes (ctx.storage.get, NEVER via args — node-action
+// args cap at 5 MiB, vault files go to 8 MiB) → SMOKE::transcribe:: sniff →
+// TRANSCRIBABLE_CONTAINER_MIME check (unsupported container → markFailed, the HONEST failure:
+// a .mov gets a visible reason, never an eternal pending row) → experimental_transcribe
+// (the intake.ts transcribeAudio shape, COPIED — "use node" modules never import each other,
+// §96 circular-inference rule) → scanText fail-closed gate → counts-only audit (§4) →
+// ingestExtractedText seam. Every governed stop is a RETURN, never a throw.
+//
+// No skill row: transcription takes no prompt (§5 does not apply). Zero new deps.
+import { openai } from "@ai-sdk/openai";
+import { priceTranscription } from "@pikar/cost";
+import { scanText } from "@pikar/pii";
+import { TRANSCRIBABLE_CONTAINER_MIME, VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
+import { experimental_transcribe as transcribe } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
+// Per-call wall-clock ceiling (mirrors intake.ts / llm.ts CALL_TIMEOUT_MS).
+const CALL_TIMEOUT_MS = 45_000;
+
+// ── SMOKE:: offline seam (same sentinel family as intake.ts) ─────────────────────────────
+// Bytes decoding to `SMOKE::transcribe::<text>` short-circuit to `<text>` — no API call,
+// no spend. This drives the whole offline test spine deterministically.
+const SMOKE_TRANSCRIBE_PREFIX = "SMOKE::transcribe::";
+// ponytail: offline-only forced-failure hook (mirrors intake.ts) — routes a poisoned fixture
+// into scanText's OWN non-string Err branch; scanText itself is never faked.
+const PII_POISON_SENTINEL = "PII_POISON::";
+
+function decodeUtf8(bytes: Uint8Array): string {
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+/**
+ * Transcribe a vault video/audio upload and feed the transcript through the ingest seam.
+ * The endpoint accepts mp4/webm/mpeg containers directly (audio track demuxed server-side);
+ * the vault's 8 MiB cap sits under the API's 25 MB limit, so every video that can enter the
+ * vault fits the API — the only failure path is an unsupported container.
+ */
 export const transcribeDoc = internalAction({
   args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId }): Promise<null> => {
-    await ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason: "not_implemented" });
-    return null;
+  handler: async (ctx, { vaultDocId, tenantId }): Promise<null> => {
+    const fail = (reason: string): Promise<null> =>
+      ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason }).then(() => null);
+
+    try {
+      // 1. Governed gate BEFORE any byte/model work — a stop is a visible failure, never a throw.
+      const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
+        await ctx.runMutation(internal.guardrails.preCall, {});
+      if (!pre.ok) return fail(pre.reason);
+
+      // 2. Work actually starts → flip the visible pill (honest pill).
+      await ctx.runMutation(internal.vault.markExtracting, { vaultDocId });
+
+      // 3. Metadata + bytes (bytes via storage, never args).
+      const doc = await ctx.runQuery(internal.vault.getDocForExtraction, { vaultDocId, tenantId });
+      const blob = doc.storageId ? await ctx.storage.get(doc.storageId) : null;
+      if (!blob) return fail("missing_bytes");
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+
+      // 4. SMOKE sniff FIRST (offline/dev spine — no API call, no spend), then
+      // 5. the mime-only container check: unsupported → honest failure, no byte work, no spend.
+      const sniffed = decodeUtf8(bytes);
+      let rawText: string;
+      let durationSeconds = 0;
+      if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX)) {
+        rawText = sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
+      } else if (!TRANSCRIBABLE_CONTAINER_MIME.has(doc.mimeType)) {
+        return fail("unsupported_video_container");
+      } else {
+        // 6. The transcription call (intake.ts transcribeAudio shape) + duration-priced spend.
+        // ponytail: no duration cap — 8 MiB of compressed video bounds duration in practice
+        // (~1–4 min typical); chunking is the upgrade path if a duration limit ever surfaces.
+        const result = await transcribe({
+          model: openai.transcription("gpt-4o-transcribe"),
+          audio: bytes,
+          abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        });
+        const priced = priceTranscription(result.durationInSeconds ?? 0);
+        if (priced.ok) {
+          await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+        }
+        rawText = result.text;
+        durationSeconds = result.durationInSeconds ?? 0;
+      }
+
+      // 7. scanText FAIL-CLOSED gate (redact-before-audit ordering, §4). The transcript never
+      // persists past a failed scan; ONE refs-only audit row records the failure.
+      const scan = rawText.includes(PII_POISON_SENTINEL) ? scanText(undefined) : scanText(rawText);
+      if (!scan.ok) {
+        await ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason: "pii_scan_failed" });
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: vaultDocId,
+          eventType: "vault.extraction_failed",
+          actor: "system",
+          payload: { vaultDocId, kind: "video", reason: "pii_scan_failed" },
+        });
+        return null;
+      }
+
+      // 8/9. Truncate at the shared cap, audit COUNTS ONLY (§4 — never transcript text), then
+      // hand the raw (post-gate) transcript to the seam (the content plane holds the user's data).
+      const truncated = rawText.length > VAULT_EXTRACT_CHAR_CAP;
+      const text = truncated ? rawText.slice(0, VAULT_EXTRACT_CHAR_CAP) : rawText;
+      await ctx.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId: vaultDocId,
+        eventType: "vault.extracted",
+        actor: "system",
+        payload: { vaultDocId, kind: "video", durationSeconds, charCount: text.length, truncated },
+      });
+      await ctx.runMutation(internal.vault.ingestExtractedText, {
+        docId: vaultDocId,
+        tenantId,
+        text,
+        truncated,
+      });
+      return null;
+    } catch {
+      // Terminal catch-all: any unexpected step error still lands a visible failed pill
+      // (refs-only static reason — an error message could carry content, §4).
+      return fail("transcribe_failed");
+    }
   },
 });
