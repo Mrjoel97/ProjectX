@@ -206,12 +206,14 @@ Plans:
   2. The PLAN card shows the resolved absolute time in the user's timezone before the single Approve; ambiguous times are re-asked, never guessed.
   3. Approve schedules (never immediately starts) the existing `deliverApprovedPlan` fan-out; nothing sends before the scheduled time; audit/telemetry/DLQ paths are reused unchanged.
   4. A scheduled plan is cancellable any time before it fires (halt control), with the cancellation audited; a token dead at fire time lands `awaiting_reauth` + notification exactly like an immediate send.
-**Plans**: 4 plans
+**Plans**: 6 plans (4 shipped + Wave 5: 2 deferred-item enhancements appended 2026-07-18)
 Plans:
 - [x] 03.5-01-PLAN.md — pure parseSendTime (@pikar/core) + plans schema/status/sendAt foundation (Wave 1)
-- [ ] 03.5-02-PLAN.md — setSendTime tool + clientContext threading + SMOKE sendTime= + §4 scan + cockpit-agent Scheduling skill (Wave 2)
-- [ ] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
-- [ ] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
+- [x] 03.5-02-PLAN.md — setSendTime tool + clientContext threading + SMOKE sendTime= + §4 scan + cockpit-agent Scheduling skill (Wave 2)
+- [x] 03.5-03-PLAN.md — executePlan startFanout/scheduled branch + startScheduledDelivery + cancelScheduledPlan + picker/ScheduledCard (Wave 3)
+- [x] 03.5-04-PLAN.md — cockpit-schedule E2E + cockpit.md phase close + SCHD-01 human-verify (Wave 4)
+- [ ] 03.5-05-PLAN.md — re-schedule a canceled plan (reschedulePlan canceled→proposed + orphan cleanup + CanceledCard reschedule surface, re-arm via existing executePlan) (Wave 5)
+- [ ] 03.5-06-PLAN.md — far-future cap: SEND_TIME_HORIZON_MS + tooFar parse variant + setSendTime re-ask + native picker max (Wave 5)
 
 ### Phase 3.6: Agent Eval Gate (INSERTED)
 **Goal**: Agent behavior changes stop being blind — a golden set of scripted conversations evaluates every new agent-skill version against the live model before it can be activated, and the production eval signals already being written (review outcomes, regenerate/fallback counts, DLQ rate, cost) become readable on the ops page; this is the continuous-evaluation ring between the mock-model CI tests (Phase 3.2.1) and SkillOpt (Phase 8), which plugs into this harness instead of building its own.
