@@ -10,7 +10,7 @@ const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', a
 
 function decodeEntities(s: string): string {
   return s.replace(/&(amp|lt|gt|quot|apos|#x?[0-9a-fA-F]+);/g, (match, e: string) => {
-    if (e[0] !== "#") return NAMED[e];
+    if (e[0] !== "#") return NAMED[e] ?? match;
     const code = e[1] === "x" ? Number.parseInt(e.slice(2), 16) : Number.parseInt(e.slice(1), 10);
     return Number.isNaN(code) ? match : String.fromCodePoint(code);
   });
@@ -19,7 +19,7 @@ function decodeEntities(s: string): string {
 /** All text runs of `<tag ...>...</tag>` — attribute-tolerant (Pitfall 7: xml:space="preserve"). */
 function runsOf(xml: string, tag: string): string[] {
   return [...xml.matchAll(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-    (m) => decodeEntities(m[1]),
+    (m) => decodeEntities(m[1] ?? ""),
   );
 }
 
@@ -38,10 +38,11 @@ function numericSorted(
   entries: Record<string, Uint8Array>,
   re: RegExp,
 ): { xml: string; n: number }[] {
-  return Object.keys(entries)
-    .map((path) => ({ path, m: re.exec(path) }))
-    .filter((x): x is { path: string; m: RegExpExecArray } => x.m !== null)
-    .map(({ path, m }) => ({ xml: strFromU8(entries[path]), n: Number(m[1]) }))
+  return Object.entries(entries)
+    .flatMap(([path, data]) => {
+      const m = re.exec(path);
+      return m ? [{ xml: strFromU8(data), n: Number(m[1]) }] : [];
+    })
     .sort((a, b) => a.n - b.n);
 }
 
@@ -55,11 +56,11 @@ function xlsxText(entries: Record<string, Uint8Array>): string {
   return sheets
     .map(({ xml, n }) => {
       const rows = [...xml.matchAll(/<row(?:\s[^>]*)?>([\s\S]*?)<\/row>/g)].map((row) =>
-        [...row[1].matchAll(/<c(?:\s([^>]*))?>([\s\S]*?)<\/c>/g)]
+        [...(row[1] ?? "").matchAll(/<c(?:\s([^>]*))?>([\s\S]*?)<\/c>/g)]
           .map((cell) => {
-            const v = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/.exec(cell[2]);
+            const v = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/.exec(cell[2] ?? "");
             if (!v) return "";
-            const raw = decodeEntities(v[1]);
+            const raw = decodeEntities(v[1] ?? "");
             return /\bt="s"/.test(cell[1] ?? "") ? (shared[Number(raw)] ?? "") : raw;
           })
           .join("\t"),
@@ -69,8 +70,17 @@ function xlsxText(entries: Record<string, Uint8Array>): string {
     .join("\n\n");
 }
 
+function pptxText(entries: Record<string, Uint8Array>): string {
+  const slides = numericSorted(entries, /^ppt\/slides\/slide(\d+)\.xml$/);
+  if (slides.length === 0) throw new Error("office_parse_failed: no slides");
+  return slides
+    .map(({ xml, n }) => [`Slide ${n}`, ...runsOf(xml, "a:t")].join("\n"))
+    .join("\n\n");
+}
+
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 export function extractOfficeText(bytes: Uint8Array, mimeType: string): { text: string } {
   let entries: Record<string, Uint8Array>;
@@ -81,5 +91,6 @@ export function extractOfficeText(bytes: Uint8Array, mimeType: string): { text: 
   }
   if (mimeType === DOCX_MIME) return { text: docxText(entries) };
   if (mimeType === XLSX_MIME) return { text: xlsxText(entries) };
+  if (mimeType === PPTX_MIME) return { text: pptxText(entries) };
   throw new Error(`office_parse_failed: unrecognized mime ${mimeType}`);
 }
