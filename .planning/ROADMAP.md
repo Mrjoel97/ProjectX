@@ -25,6 +25,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.7: Inbox Briefing** (INSERTED) - On-demand read-and-summarize of the user's inbox into a time-grouped, triaged BRIEFING card under the toolless-ingestion invariant (bodies never enter the tool-bearing loop); read-only, capped, refs-only audit — the first feature converting the restricted scope into recurring chief-of-staff value
 - [x] **Phase 3.8: Vault Document Extraction** (INSERTED) — 2026-07-18 - Wire PDF/DOCX/XLSX/PPTX/CSV/image (OCR) extraction into the vault's `vaultIngestText` seam so non-text uploads become searchable instead of sitting at `pending_extraction` forever (6/6 plans; owner live human-verify APPROVED 2026-07-18 incl. video transcription + preview modal; VERIFICATION.md passed 6/6)
 - [x] **Phase 3.9: Agent Activity Streaming** (INSERTED) — 2026-07-17 - The workspace shows the agent's steps as it works (and in-progress chat bubbles) instead of freezing for 10–30s — cross-cutting across every agent flow (4/4 plans; CKPT-05 human-verified 2026-07-17, incl. the WorkspacePage crash-fix uncovered during verify)
+- [ ] **Phase 3.10: Cockpit Conversation Repair** (INSERTED) - Fix two live-UAT defects (2026-07-19): the BriefingCard/ResolutionCard panel arbitration (a stale brief buries the contact picker → resolution stalls → "#1 (no name)" plans) and the agent's stalled-resolution recovery (loops "ready to pick", re-asks for a given subject, ignores a stated body intent); skill edit rides the 3.6 eval gate with new stalled-resolution fixtures
+- [ ] **Phase 3.11: Inbox Reply** (INSERTED) - "Draft a reply to X" becomes a real reply: recipient by message ref (From address, refs-only — no panel round-trip), `Re:` subject + Gmail in-thread threading, body drafted from user intent with the original as toolless-ingested context, delivered through the unchanged plan → Approve → governed fan-out
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
@@ -290,6 +292,26 @@ Plans:
 - [x] 03.9-03-PLAN.md — the UI: ActivityCard (LATEST TRACE) + the in-progress chat bubble, off one query — completed 2026-07-17 (both traps dodged: NO-args query rendered above the `!threadId` AND `plan === null` returns; the brain button now toggles the trace instead of claiming it unbuilt. NOT live-verified — that is 04's job)
 - [x] 03.9-04-PLAN.md — offline E2E + full sweep + human-verify (perceived latency); mark CKPT-05 Complete (Wave 4) — completed 2026-07-17 (human-verify uncovered + fixed a WorkspacePage crash: a slow `listThreads` threw inside the page and killed the whole cockpit — now behind an error boundary; plus input-clears-on-send, Send-button spinner, fresh-chat stale-trace suppression)
 
+### Phase 3.10: Cockpit Conversation Repair (INSERTED)
+**Goal**: The two shipped defects surfaced by the live UAT conversation of 2026-07-19 are fixed: (1) PANEL DESYNC — CardList/PlanCards (`apps/web/app/(app)/dashboard/workspace/cards.tsx`) pins the BriefingCard above the ResolutionCard and never dismisses/demotes it when the conversation pivots from briefing to composing, so a tall brief buries the contact picker, resolution stalls, and the plan ships with "#1 (no name)"; (2) AGENT STALLED-RESOLUTION RECOVERY — the cockpit-agent skill has no recovery path while a resolveContacts pick is pending: it loops "ready to pick in the panel", re-asks for a subject the user already gave, and fails to call draftBody on a stated body intent. Skill-body edits are registry-gated (seedSkills publish → eval:golden gate → activate, per Phase 3.6); the fix must add eval fixtures reproducing the stalled-resolution conversation so the gate proves the loop is gone.
+**Depends on**: Phase 3.7 (BriefingCard), Phase 3.2.1 (agent tool-loop), Phase 3.6 (eval gate for the skill edit)
+**Requirements**: none minted (UAT gap closure) — internal defect labels UAT-A (panel desync) / UAT-B (stalled-resolution recovery), per 03.10-CONTEXT.md
+**Plans:** 3 plans
+
+Plans:
+- [ ] 03.10-01-PLAN.md — Wave 0: gmail.search inboxFixtures seam (fixture-before-token, mirroring listInbox) + unit tests + fixture-09 description (prereq for the Defect-B eval fixture)
+- [ ] 03.10-02-PLAN.md — Defect A: composing-aware BriefingCard demotion in PlanCards (reorder + one boolean) + offline DOM-order E2E (SC-4 intact)
+- [ ] 03.10-03-PLAN.md — Defect B via the 3.6 gate: "While a pick is pending" skill mirror edit + fixture 19 + live gate cycle (seed → refused activate → pinned eval → activate) + blocking human-verify UAT-transcript replay (runs the owed live E2Es)
+
+### Phase 3.11: Inbox Reply (INSERTED)
+**Goal**: "Draft a reply to X" is a real reply, not a silently-downgraded fresh compose (the live-UAT gap of 2026-07-19). Replying to a mailbox message: (1) targets the original message by ref — the recipient is the message's From address, set by message reference without a resolveContacts panel round-trip (the address stays refs-only to the agent loop, §2-D); (2) the plan carries `Re:` subject and Gmail threading (In-Reply-To/References headers + threadId) so the reply lands in-thread; (3) the reply body is drafted from the user's stated intent WITH the original message as context, honoring the toolless-ingestion invariant (the original body is untrusted third-party content — it reaches an LLM only in a toolless call, never the tool-bearing loop; injection in the original can describe, never actuate); (4) delivery rides the unchanged governed plan → single Approve → fan-out (audit refs-only, zero sends before Approve).
+**Depends on**: Phase 3.7 (gmail read plane: listInbox/fetchInboxBodies + toolless digest precedent), Phase 3.2.1 (agent tool-loop), Phase 3.6 (eval gate for the skill edit), Phase 3.10 (conversation repair lands first — reply UX must not build on the broken panel flow)
+**Requirements**: TBD (new capability — mint a requirement ID at planning, e.g. RPLY-01)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 3.11 to break down)
+
 ### Phase 4: Attachment & Voice-Dictation Intake
 **Goal**: Users can enrich requests with files and speak requests aloud, both flowing through the same governed pipeline â grouped because dictation reuses the attachment audio-transcription path and Python sidecar.
 > **SUPERSEDED (2026-07-14, 04-06):** the "Python sidecar" phrasing above is stale. The shipped extraction engine is Path A — hosted OpenAI API calls, NO `services/*` Python sidecar. See STATE.md Decisions ("[Phase 4 — sidecar-killed, 04-06]") for the full reasoning; this note amends the Goal line without rewriting it.
@@ -373,7 +395,7 @@ Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
