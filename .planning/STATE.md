@@ -3,19 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: paused-at-checkpoint
-stopped_at: "03.8-05 (Lane 4, lane-4/video-transcribe worktree) Task 2 checkpoint:human-verify — Task 1 complete (RED d7f68cb, GREEN 69a5c4a; transcribeDoc real spine, 6/6 sentinel tests green), live sentinel smoke automated + passing on the shared local dev deployment (mp4/webm → ready, quicktime → failed/unsupported_video_container, counts-only audit verified live). AWAITING HUMAN: drop a real short mp4 + webm in the vault UI (dev servers left running: convex :3210, web :3000) and confirm transcript/search/spend. Merge to main is plan 06's job."
-last_updated: "2026-07-18T10:05:00.000Z"
-last_activity: "2026-07-18 — Phase 3.8 Lane 4 (03.8-05): transcribeDoc implemented (Pattern-1 spine, intake transcribeAudio shape copied, honest unsupported_video_container failure, counts-only kind:video audit, VAULT_EXTRACT_CHAR_CAP truncation, ingestExtractedText seam). Deviation: truncation-test fixture made word-shaped — @pikar/pii scanText found quadratic on unbroken uniform runs (deferred-items.md; out of lane). Playbook vault.md Lane-4 subsection appended; deferred-items.md created."
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: ready
-stopped_at: 03.8-06 integration — merging Phase 3.8 lanes (Lanes 1, 2, 3 in)
-last_updated: "2026-07-18T02:45:00.000Z"
-last_activity: "2026-07-18 — Phase 3.8 Wave 3 (03.8-06 integration): merging the four vault-extraction lanes to main. Lane 1 (PDF+image, vaultExtract), Lane 2 (office parsers, officeText), Lane 3 (sweep + retry + vault UI + E2E) merged."
+stopped_at: "03.8-06 (Wave 3 integration) Task 2 checkpoint:human-verify — Task 1 COMPLETE. All four vault-extraction lanes merged to main (four --no-ff merges 3d48d1b/a12dec4/c8db65b/86e81d6; append-only STATE/ROADMAP/vault.md/deferred-items resolved keep-both; ZERO conflicts on owned code files). Merged whole green: backend vitest 317/318 (only red = pre-existing audit.test.ts auditCounts), @pikar/vault 42/42, web typecheck clean, biome lint clean, check-playbooks green. _generated regenerated. EXTR-H E2E un-skip-guarded (e7452ab). Backlog sweep ran on :3210 via self-hosted admin seam: pending_extraction drained ~4 → 0 (post-sweep 98 ready / 19 processing / 10 failed). AWAITING HUMAN: the consolidated phase-close walk-through — drop ONE of each format (text PDF, scanned PDF, image, DOCX, XLSX, PPTX, short mp4) through the real vault UI, confirm each walks pending_extraction → ready reactively + is searchable; verify .mov honest-fail, kill-switch fail + Retry recovery, and oversize truncation note. Merged backend already deployed + running on :3210. Do NOT run gsd phase complete until owner types 'approved'."
+last_updated: "2026-07-18T06:40:00.000Z"
+last_activity: "2026-07-18 — Phase 3.8 Wave 3 (03.8-06 integration): merged Lane 1 (PDF+image vaultExtract), Lane 2 (office parsers officeText), Lane 3 (sweep+retry+vault UI+E2E), Lane 4 (video transcribe) to main; proved the merged whole green; ran the one-shot backlog sweep (pending_extraction → 0); removed the two EXTR-H E2E skip-guards; wrote 03.8-06-SUMMARY.md. Blocking phase-close human-verify pending."
 progress:
   total_phases: 19
   completed_phases: 11
