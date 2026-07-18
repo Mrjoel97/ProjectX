@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: 03.8-02 tasks 1-2 complete + live PDF smoke; PAUSED at Task-3 human-verify checkpoint (image OCR)
+last_updated: "2026-07-18T03:11:48.623Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+progress:
+  total_phases: 19
+  completed_phases: 11
+  total_plans: 95
+  completed_plans: 87
+  percent: 92
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
 last_updated: "2026-07-17T22:52:25.551Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
-  total_phases: 19
+  [█████████░] 92%
   completed_phases: 11
   total_plans: 95
   completed_plans: 86
@@ -449,6 +465,7 @@ Progress: [█████████░] 94%
 | Phase 03.7-inbox-briefing P06 | 5min | 2 tasks | 3 files |
 | Phase 03.7 P07 | 40 | 3 tasks | 10 files |
 | Phase 03.8-vault-document-extraction P01 | 13min | 3 tasks | 13 files |
+| Phase 03.8 P02 | 55min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -584,8 +601,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-17T22:51:30.617Z
-Stopped at: Completed 03.8-01-PLAN.md (Wave 0 merged to main — Wave-2 lanes may start)
+Last session: 2026-07-18T03:11:48.608Z
+Stopped at: 03.8-02 tasks 1-2 complete + live PDF smoke; PAUSED at Task-3 human-verify checkpoint (image OCR)
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
