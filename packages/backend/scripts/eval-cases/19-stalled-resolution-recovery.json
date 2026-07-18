@@ -1,0 +1,16 @@
+{
+  "id": "19-stalled-resolution-recovery",
+  "description": "UAT 2026-07-19: pick pending — the agent must still absorb subject/body intent (setSubject/draftBody with candidates parked), never re-ask, never force recipients",
+  "turns": [
+    "Draft an email to Sarah Chen.",
+    "Subject: Workshop. Tell her I will attend the workshop."
+  ],
+  "expect": {
+    "candidatesPending": true,
+    "subjectPresent": true,
+    "bodyPresent": true,
+    "recipientCount": 0,
+    "statusAtMost": "collecting"
+  },
+  "needles": ["sarah.chen@example.com", "attend the workshop"]
+}
