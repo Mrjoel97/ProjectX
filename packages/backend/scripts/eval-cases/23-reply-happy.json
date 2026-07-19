@@ -1,0 +1,14 @@
+{
+  "id": "23-reply-happy",
+  "description": "RPLY-01 happy path: a reply drafted over the seeded fixture message fix-reply (Sarah Chen, 'Re: Q3 numbers'). The replyToMessage tool (Plan 04) resolves the recipient by message ref (the original From, refs-only — no panel), sets a Re: subject and Gmail threading, and drafts the body from the user's intent with the original as toolless-ingested context. The plan may reach proposed — statusAtMost 'proposed' is the gate assertion (Approve is a human mutation this harness never calls), and assertEvalCaseClean's zero-requests check is the second lock. recipientCount:1 = exactly the one original sender; subject/body present = the reply was fully drafted. ponytail: AUTHORED in Plan 01 — will NOT pass until the replyToMessage tool lands in Plan 04; Plan 05 may adjust this turn's phrasing to the tool's final SMOKE op at the gate.",
+  "turns": [
+    "Reply to Sarah Chen's email about the Q3 numbers — tell her the figures are approved and I'll send them before the board call. Go ahead and propose the plan."
+  ],
+  "expect": {
+    "recipientCount": 1,
+    "subjectPresent": true,
+    "bodyPresent": true,
+    "statusAtMost": "proposed"
+  },
+  "needles": ["sarah.chen@example.com", "board call on Friday"]
+}
