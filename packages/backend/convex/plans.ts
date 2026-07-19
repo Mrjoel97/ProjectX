@@ -84,6 +84,7 @@ export const patchPlan = internalMutation({
     status: v.optional(PLAN_STATUS),
     greetingName: v.optional(v.string()), // resolve path persists the drafter greeting through patchPlan
     recipientBodies: v.optional(v.record(v.string(), v.string())), // address(lowercased) → tailored body override (CKPT-03); the tool passes the full merged map
+    recipientNames: v.optional(v.record(v.string(), v.string())), // address(lowercased) → picked displayName (UAT-F1); the fold passes the full merged map
     sendAt: v.optional(v.number()), // 03.5: absolute epoch ms deferred send time (drop-undefined preserves a stored value on a partial patch)
   },
   handler: async (ctx, { planId, ...patch }) => {
@@ -190,6 +191,7 @@ export const resetPlan = internalMutation({
       pendingValid: undefined,
       greetingName: undefined,
       recipientBodies: undefined,
+      recipientNames: undefined, // explicit clear (UAT-F1) — stale picked names must not re-label the NEXT draft's recipients
       sendAt: undefined,
     });
   },

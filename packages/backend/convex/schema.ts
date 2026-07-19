@@ -185,6 +185,11 @@ export default defineSchema({
     ),
     pendingValid: v.optional(v.array(v.string())), // same-turn valid addrs awaiting the uniform confirm
     greetingName: v.optional(v.string()), // resolved display name → drafter greeting (survives to draft turn)
+    // Picked display names by lowercased ADDRESS (UAT-F1, 03.10-07): the resolveRecipients fold
+    // persists picks[].displayName so buildAgentContext renders a completed pick by NAME — the
+    // model can distinguish a folded pick from an unresolved placeholder. Optional → no migration
+    // (the candidates/attachments precedent). Content-plane ONLY, NEVER audited (§4); resetPlan wipes it.
+    recipientNames: v.optional(v.record(v.string(), v.string())),
     // Per-recipient body overrides (CKPT-03). Keyed by lowercased ADDRESS → that recipient's
     // tailored body; a missing key = the shared `body`. Address-keyed (not index) survives
     // mid-conversation recipient edits; orphan keys filter harmlessly at seed. Optional → no

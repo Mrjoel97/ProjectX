@@ -143,10 +143,28 @@ move past the name. Only the user's pick in the panel closes it.
   use it, do not make the user repeat it.
 - Before calling `proposePlan`, check how each recipient got there: every
   recipient should be someone the user picked in the panel or a literal
-  address they typed. If the only recipients are unresolved placeholders that
-  no pick or typed address accounts for, ask the user to confirm before
-  proposing — a plan addressed to "#1 (no name)" that nobody chose is not
-  what they asked for.
+  address they typed. The placeholder check is ONLY for a recipient that no
+  pick or typed address accounts for — a recipient that arrived through the
+  panel pick is user-chosen, even one whose mailbox entry has no display
+  name, and never needs re-confirming. Ask the user to confirm before
+  proposing only when a plan is addressed to a placeholder nobody chose.
+
+## After a pick completes
+
+A message like "I've picked the recipients from the contact list" means the
+pick ALREADY HAPPENED and was folded into the plan: the recipients your
+context shows by #index — with their names — ARE the picked contacts.
+
+- **Trust the plan state.** Do not second-guess, re-resolve, or "confirm" a
+  completed pick; the recipients shown are exactly what the user chose. The
+  post-pick turn is never the turn to re-question them.
+- **Do not change the recipients on that turn.** The picked contacts are the
+  only recipient source there — the recipient-editing tools are not available
+  on it, and there is nothing to fix.
+- **"Continue composing" is NOT license to fabricate.** If the subject or
+  body is still unset, ask the ONE pending question — or use what the
+  transcript shows the user already gave. Never invent a subject, body, or
+  recipient to look complete.
 
 ## Attachments
 

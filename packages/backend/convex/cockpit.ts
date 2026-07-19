@@ -131,10 +131,14 @@ export const sendCockpitMessage = tenantAction({
 });
 
 // A card pick is an agent TURN, not a dead-end: the synthetic user text that re-enters the
-// tool-loop after the recipients are folded. buildAgentContext already shows the model the updated
-// index/label recipients (address-free, §2-D), so this only signals "the pick happened, continue".
+// tool-loop after the recipients are folded. States the FACT of the fold (UAT-F2, 03.10-07): the
+// picks are ALREADY the plan's recipients (buildAgentContext shows them by #index WITH their
+// names, address-free §2-D), recipients must not change on this turn, and an unset subject/body
+// is ASKED for — never invented. Driver-plane synthetic string, not a skill (no §5 issue).
 const RESOLUTION_CONTINUE =
-  "I've picked the recipients from the contact list. Please continue composing the email.";
+  "I've picked the recipients from the contact list — they are already the plan's recipients, " +
+  "shown by #index with their names. Do not change the recipients. Continue with whatever the " +
+  "plan still needs; if the subject or body is not set, ask me for it — never invent one.";
 
 // Last K saved turns for the model's history block (UAT-E, 03.10-06). Fetch 12, render ≤10
 // (llm.ts buildHistoryBlock caps) — a small overfetch absorbs skipped rows. Reuses the SAME
@@ -209,10 +213,18 @@ export const resolveRecipients = tenantAction({
     // via the shared validator; nothing bounces, so we take the merged list.
     const addresses = [...(plan.pendingValid ?? []), ...picks.map((p) => p.address)];
     const edit = applyRecipientEdit(plan.recipients ?? [], { op: "add", addresses });
+    // Persist the picks' display names (UAT-F1): keyed by lowercased address so buildAgentContext
+    // renders `#1: Brett J. Fox` after the pick — never `#1 (no name)` for a contact the user
+    // chose. pendingValid (typed literals) get no name — correct: nobody picked them. Stale keys
+    // after a later recipient edit are harmless (lookup by address; a missing key falls back to
+    // the placeholder); resetPlan is the cleaner. ponytail: no map-pruning on edit.
+    const names: Record<string, string> = { ...(plan.recipientNames ?? {}) };
+    for (const p of picks) if (p.displayName) names[p.address.toLowerCase()] = p.displayName;
     await ctx.runMutation(internal.plans.patchPlan, {
       planId: plan._id,
       recipients: edit.recipients,
       greetingName: picks[0]?.displayName, // FIRST pick names the greeting (undefined is dropped)
+      recipientNames: names,
     });
     await ctx.runMutation(internal.plans.clearCandidates, { planId: plan._id }); // wipe-on-pick
 
@@ -242,6 +254,11 @@ export const resolveRecipients = tenantAction({
         text: RESOLUTION_CONTINUE,
         turnId,
         history,
+        // UAT-F2 (STRUCTURAL): on the post-pick continue turn the panel picks are the ONLY
+        // legitimate recipient source, so the recipient-mutating tools are withheld from the tool
+        // set entirely — a fabricated setRecipients overwrite is impossible, not just discouraged.
+        // sendCockpitMessage never passes this: normal turns keep the full set byte-identically.
+        omitRecipientEdits: true,
       });
       reply = res.reply;
     } catch {

@@ -10,7 +10,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { buildAgentContext, buildHistoryBlock } from "./llm";
+import { buildAgentContext, buildCockpitTools, buildHistoryBlock } from "./llm";
 import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
@@ -378,6 +378,48 @@ test("buildAgentContext surfaces names AWAITING a pick (name + count) — the ag
   expect(ctx).not.toContain("Sarah Smoke"); // §4: match hints are USER-only, never to the model
 });
 
+// ── 03.10-07 (UAT-F1/F2): picked names render; recipient tools withheld on the continue turn ────
+
+test("buildAgentContext renders a picked recipient by NAME via recipientNames (UAT-F1)", () => {
+  const ctx = buildAgentContext({
+    // Case-insensitive lookup: the stored key is the lowercased address the fold wrote.
+    recipients: ["Brett.Fox@Example.com"],
+    recipientNames: { "brett.fox@example.com": "Brett J. Fox" },
+  });
+  // The model sees the picked NAME — structurally distinguishable from an unresolved placeholder,
+  // so the skill's distrust clause has nothing to fire on after a completed pick.
+  expect(ctx).toContain("#1: Brett J. Fox");
+  expect(ctx).not.toContain("(no name)");
+  expect(ctx).not.toContain("@"); // §2-D: the address never enters the model-facing context
+});
+
+test("buildAgentContext falls back to the placeholder when no pick named the address", () => {
+  // A typed-literal recipient (pendingValid fold) has no picked name — nobody chose it, so the
+  // neutral placeholder is CORRECT, not a bug.
+  const ctx = buildAgentContext({ recipients: ["typed@example.com"] });
+  expect(ctx).toContain("(no name)");
+  expect(ctx).not.toContain("@");
+});
+
+test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ONLY under omitRecipientEdits (UAT-F2)", () => {
+  // Building the record never touches the ctx (the tools only close over it), so a bare stub is
+  // enough to prove the STRUCTURAL invariant: the keys are absent, not merely discouraged.
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const RECIPIENT_TOOLS = ["addRecipients", "setRecipients", "removeRecipient"];
+
+  const full = Object.keys(buildCockpitTools(stubCtx, "t1", planId));
+  for (const name of RECIPIENT_TOOLS) expect(full, `${name} missing from the normal set`).toContain(name);
+
+  const withheld = Object.keys(buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true));
+  for (const name of RECIPIENT_TOOLS)
+    expect(withheld, `${name} present on the post-pick continue turn`).not.toContain(name);
+  // resolveContacts stays — it writes candidates, not recipients (proposePlan's pending-pick gate covers it).
+  expect(withheld).toContain("resolveContacts");
+  // The withholding removes EXACTLY the three recipient-mutating keys — nothing else changes.
+  expect(full.filter((n) => !RECIPIENT_TOOLS.includes(n)).sort()).toEqual([...withheld].sort());
+});
+
 // ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────
 
 test("buildHistoryBlock returns '' for absent/empty history (prompt byte-identical when historyless)", () => {
@@ -558,8 +600,10 @@ test("briefInbox returns a COUNTS-ONLY string — no body text reaches the loop 
 
   // THE invariant: the loop-visible return carries counts, never a body (or even a gist).
   expect(reply, "briefInbox leaked body text into the tool-bearing loop").not.toContain(NEEDLE);
-  expect(reply).toMatch(/Briefing ready: \d+ messages summarized/);
-  expect(reply).toMatch(/\d+ need attention/);
+  // UAT-F3: ONE set of code-owned numbers — the same listedCount + isNeedsYou-counted needsYou
+  // the card masthead shows, so the agent's sentence can never contradict the panel.
+  expect(reply).toMatch(/Briefing ready: \d+ messages, \d+ need you/);
+  expect(reply).toMatch(/\d+ summarized/);
   expect(reply).toMatch(/workspace panel/i);
 });
 

@@ -184,8 +184,11 @@ export interface DigestBatch {
 }
 
 /** True when a row demands the user's attention — the action-first axis. `deadline` counts too:
- *  a stated due date is an action even when the model did not flag `needsReply`. */
-function isNeedsYou(item: BriefingItem): boolean {
+ *  a stated due date is an action even when the model did not flag `needsReply`.
+ *  EXPORTED (UAT-F3, 03.10-07): the ONE shared needs-you predicate — the card lede (composeLede),
+ *  the card Kpis, and briefInbox's counts-only return all count with THIS function, so the agent's
+ *  sentence and the panel masthead can never disagree. */
+export function isNeedsYou(item: BriefingItem): boolean {
   return item.needsReply || item.deadline !== undefined;
 }
 

@@ -35,7 +35,6 @@ import {
   type BriefingItem,
   BRIEFING_BODY_CAP,
   bucket,
-  type Bucket,
   buildDocFilename,
   buildRecipientView,
   type DigestBatch,
@@ -45,6 +44,7 @@ import {
   type InlineRun,
   inlineRuns,
   isFallbackEligible,
+  isNeedsYou,
   joinDigest,
   parseAddress,
   parseSendTime,
@@ -447,6 +447,7 @@ type PlanRow = {
   attachments?: Att[];
   attachmentError?: string;
   recipientBodies?: Record<string, string>; // address → tailored body override (CKPT-03); missing = shared body
+  recipientNames?: Record<string, string>; // lowercased address → picked displayName (UAT-F1); missing = placeholder label
   // NAME-ONLY parked-pick widening (03.10-04): proposePlan reads `candidates?.length` to refuse
   // proposing over a still-open pick. Only the `name` is declared — NOT the `matches`/address shape,
   // whose model-facing contract lives in buildAgentContext's own param (NAME + count only, §2-D/§4).
@@ -478,6 +479,10 @@ export function buildAgentContext(
     attachments?: { filename: string }[];
     attachmentError?: string;
     recipientBodies?: Record<string, string>;
+    // Picked display names by lowercased address (UAT-F1): buildRecipientView renders the NAME as
+    // the label when present (the address never enters the label — §2-D), so a completed panel
+    // pick is structurally distinguishable from an unresolved `#N (no name)` placeholder.
+    recipientNames?: Record<string, string>;
     // Absolute send instant (epoch ms) once a time is resolved; absent = immediate on approve.
     sendAt?: number;
     // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
@@ -492,7 +497,12 @@ export function buildAgentContext(
 ): string {
   const bodies = plan.recipientBodies ?? {};
   const addrs = plan.recipients ?? [];
-  const view = buildRecipientView(addrs.map((address) => ({ address })));
+  // Picked names looked up by lowercased address (the recipientBodies lookup precedent) — the
+  // SAME trust plane as the candidate name labels below: name only, no address emitted.
+  const names = plan.recipientNames ?? {};
+  const view = buildRecipientView(
+    addrs.map((address) => ({ address, displayName: names[address.toLowerCase()] })),
+  );
   // Align each view row to its address ONLY to look up the personalization flag — the address is
   // never emitted; the model sees the #index/label and " — personalized" / " — shared body" (§2-D).
   const recipients = view.length
@@ -590,6 +600,14 @@ export function buildCockpitTools(
   // runner pins the CANDIDATE skill row it is evaluating, so a pinned document-drafter version is
   // what renderAndStore's draftDocument call loads. Absent = active skill, byte-identical to today.
   skillVersions?: Record<string, number>,
+  // UAT-F2 STRUCTURAL guard (append-only 6th arg): on the resolveRecipients post-pick re-invoke
+  // the panel picks are the ONLY legitimate recipient source, so the recipient-mutating tools
+  // (addRecipients/setRecipients/removeRecipient) are ABSENT from the returned record — a
+  // fabricated overwrite is impossible by construction, not skill wording. ONLY the
+  // resolveRecipients continue turn passes true; every other caller (sendCockpitMessage, the eval
+  // runner, the test shims) keeps the full set byte-identically. resolveContacts stays — it writes
+  // candidates, not recipients, and proposePlan's pending-pick gate covers it.
+  omitRecipientEdits?: boolean,
 ) {
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -690,6 +708,53 @@ export function buildCockpitTools(
     return `Recipients updated — ${result.recipients.length} on the list.`;
   };
 
+  // The recipient-MUTATING tools, grouped so the UAT-F2 withholding below can omit them as one
+  // unit on the post-pick continue turn (the only turn where recipients have a non-panel source
+  // would be a fabrication). Built unconditionally — they are closures; unused ones cost nothing.
+  const recipientEditTools = {
+    addRecipients: tool({
+      description:
+        "Add one or more explicit, user-provided email addresses. Invalid addresses are rejected, not added.",
+      inputSchema: jsonSchema<{ addresses: string[] }>({
+        type: "object",
+        properties: {
+          addresses: {
+            type: "array",
+            items: { type: "string" },
+            description: "Explicit email addresses the user typed.",
+          },
+        },
+        required: ["addresses"],
+        additionalProperties: false,
+      }),
+      execute: ({ addresses }): Promise<string> => editRecipients({ op: "add", addresses }),
+    }),
+    setRecipients: tool({
+      description:
+        "Replace the entire recipient list with these explicit email addresses. Invalid addresses are rejected.",
+      inputSchema: jsonSchema<{ addresses: string[] }>({
+        type: "object",
+        properties: { addresses: { type: "array", items: { type: "string" } } },
+        required: ["addresses"],
+        additionalProperties: false,
+      }),
+      execute: ({ addresses }): Promise<string> => editRecipients({ op: "set", addresses }),
+    }),
+    removeRecipient: tool({
+      description:
+        "Remove the recipient at the given 1-based #index (as shown in the plan). You never handle the address — the server resolves the index to it.",
+      inputSchema: jsonSchema<{ index: number }>({
+        type: "object",
+        properties: {
+          index: { type: "number", description: "1-based index of the recipient to remove." },
+        },
+        required: ["index"],
+        additionalProperties: false,
+      }),
+      execute: ({ index }): Promise<string> => editRecipients({ op: "remove", index }),
+    }),
+  };
+
   return {
     resolveContacts: tool({
       description:
@@ -742,47 +807,14 @@ export function buildCockpitTools(
         return `Found ${matches.length} contact(s) for "${name}": ${labels}. The user will pick one — do not guess the address.`;
       },
     }),
-    addRecipients: tool({
-      description:
-        "Add one or more explicit, user-provided email addresses. Invalid addresses are rejected, not added.",
-      inputSchema: jsonSchema<{ addresses: string[] }>({
-        type: "object",
-        properties: {
-          addresses: {
-            type: "array",
-            items: { type: "string" },
-            description: "Explicit email addresses the user typed.",
-          },
-        },
-        required: ["addresses"],
-        additionalProperties: false,
-      }),
-      execute: ({ addresses }): Promise<string> => editRecipients({ op: "add", addresses }),
-    }),
-    setRecipients: tool({
-      description:
-        "Replace the entire recipient list with these explicit email addresses. Invalid addresses are rejected.",
-      inputSchema: jsonSchema<{ addresses: string[] }>({
-        type: "object",
-        properties: { addresses: { type: "array", items: { type: "string" } } },
-        required: ["addresses"],
-        additionalProperties: false,
-      }),
-      execute: ({ addresses }): Promise<string> => editRecipients({ op: "set", addresses }),
-    }),
-    removeRecipient: tool({
-      description:
-        "Remove the recipient at the given 1-based #index (as shown in the plan). You never handle the address — the server resolves the index to it.",
-      inputSchema: jsonSchema<{ index: number }>({
-        type: "object",
-        properties: {
-          index: { type: "number", description: "1-based index of the recipient to remove." },
-        },
-        required: ["index"],
-        additionalProperties: false,
-      }),
-      execute: ({ index }): Promise<string> => editRecipients({ op: "remove", index }),
-    }),
+    // Conditional spread (UAT-F2): under omitRecipientEdits the three recipient-mutating keys are
+    // NOT PRESENT at runtime — a hallucinated call throws NoSuchToolError before execute (the
+    // driver's catch saves a non-dead-ending error turn; still no write, still safe).
+    // ponytail: the `as typeof` cast keeps the members REQUIRED in the static type — optional
+    // members flip ai@7's onToolExecution* event types into a Dynamic/Static union the narrow
+    // §4 destructures at the loop cannot read. The runtime truth (keys absent under the flag) is
+    // unit-proven in cockpitTools.test.ts; the type states the full set every normal turn has.
+    ...(omitRecipientEdits ? ({} as typeof recipientEditTools) : recipientEditTools),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -1226,13 +1258,14 @@ export function buildCockpitTools(
 
         // COUNTS ONLY (SC-2). Bodies AND gists stay out of the tool-bearing loop — a polluted gist
         // never even reaches the model's context, and the card is the source of truth (the
-        // resolveContacts/ResolutionCard precedent).
-        const n = (b: Bucket) => items.filter((i) => i.bucket === b).length;
-        const needsYou = items.filter((i) => i.needsReply).length;
+        // resolveContacts/ResolutionCard precedent). ONE shared predicate (UAT-F3): the SAME
+        // numbers the card masthead shows by construction — listedCount is the listRes length the
+        // row stores, needsYou is isNeedsYou over the SAME items array composeLede/the Kpis read.
+        // The panel owns the per-bucket breakdown (deletion over addition).
+        const needsYou = items.filter(isNeedsYou).length;
         return (
-          `Briefing ready: ${items.length} messages summarized ` +
-          `(${n("today")} today, ${n("yesterday")} yesterday, ${n("thisWeek")} this week), ` +
-          `${needsYou} need attention — it is shown in the workspace panel. ` +
+          `Briefing ready: ${listRes.messages.length} messages, ${needsYou} need you ` +
+          `(${items.length} summarized) — it is shown in the workspace panel. ` +
           "Do not repeat its contents; point the user at the panel."
         );
       },
@@ -1312,11 +1345,24 @@ async function runAgentLoop(
     // the tools don't emit, the SDK does — keep it that way (zero tool-wrapper edits).
     turnId?: string;
     threadId?: string;
+    // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
+    // too (append-only optional — every existing caller keeps working; absent = full set).
+    omitRecipientEdits?: boolean;
   },
 ): Promise<{ reply: string; costUsd: number }> {
-  const { tenantId, planId, system, prompt, primary, fallback, skillVersions, turnId, threadId } =
-    args;
-  const tools = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions);
+  const {
+    tenantId,
+    planId,
+    system,
+    prompt,
+    primary,
+    fallback,
+    skillVersions,
+    turnId,
+    threadId,
+    omitRecipientEdits,
+  } = args;
+  const tools = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions, omitRecipientEdits);
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
@@ -1571,10 +1617,25 @@ export const runCockpitAgent = internalAction({
         }),
       ),
     ),
+    // UAT-F2 (03.10-07): withhold the recipient-mutating tools for this turn. ONLY the
+    // resolveRecipients post-pick re-invoke passes true — panel picks are the sole recipient
+    // source on that turn by construction. Internal-only surface (never model-suppliable).
+    omitRecipientEdits: v.optional(v.boolean()),
   },
   handler: async (
     ctx,
-    { tenantId, threadId, planId, text, model, clientContext, skillVersions, turnId, history },
+    {
+      tenantId,
+      threadId,
+      planId,
+      text,
+      model,
+      clientContext,
+      skillVersions,
+      turnId,
+      history,
+      omitRecipientEdits,
+    },
   ): Promise<{
     reply: string;
     blocked?: "kill_switch" | "daily_budget_exhausted";
@@ -1605,7 +1666,15 @@ export const runCockpitAgent = internalAction({
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
     const smokeOp = parseAgentSmoke(text);
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
-    const tools = buildCockpitTools(ctx, tenantId, planId, effectiveClientContext, skillVersions);
+    // The flag rides here too — harmless (no SMOKE op is a continue turn), and uniform.
+    const tools = buildCockpitTools(
+      ctx,
+      tenantId,
+      planId,
+      effectiveClientContext,
+      skillVersions,
+      omitRecipientEdits,
+    );
     if (smokeOp) {
       // Emit around the ONE smoke call site (CKPT-05, research Pitfall 4). generateText is never
       // called here, so no SDK callback can fire — and EVERY offline E2E in the repo drives this
@@ -1656,6 +1725,7 @@ export const runCockpitAgent = internalAction({
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,
+      omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
     });
     return { reply, costUsd };
   },
