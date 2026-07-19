@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 03.10 execution COMPLETE (7/7 plans) — HUMAN SIGN-OFF 2026-07-19; awaiting phase-goal verification (/gsd:verify-work), then gsd phase complete (orchestrator)"
-last_updated: "2026-07-19T15:23:10.000Z"
-last_activity: "2026-07-19 — Phase 3.10 Cockpit Conversation Repair CLOSED-OUT after HUMAN APPROVAL: the owner replayed the full UAT live and approved verbatim ('I'm satisfied. I've tested everything the way you asked me to test. Everything is good. I approve.') — covering ALL manual rows: UAT-A (panel demotion), UAT-B (stalled-resolution recovery), UAT-C (picker visible / propose-guard / collapsible brief), UAT-D (reset works, no invented subject, no phantom claims), UAT-E (fragment answers absorbed — 'meeting reminder' became the subject without re-asks), UAT-F (briefing counts match the card, picks register visibly by NAME, no fabricated recipients/subject/body on the continue turn, reset carries nothing over). Zero unintended sends. Plans 05 (resetPlan + honesty, 86e5a5f, v9 gate run 7940a9a0 20/20 $0.0791), 06 (history injection + fail-open hotfix, 2e1ffbb/b9da09b, v10 gate run 27efb84d 21/21 $0.0973 after the documented 361d5769 storm), 07 (post-pick trust: recipientNames + structural omitRecipientEdits withholding + isNeedsYou count parity, c10c012, v11 gate run 39d0c4e2 21/21 $0.0871) — SUMMARYs written, VALIDATION.md all rows verified, deferred-items ledger complete (llmRedaction 1→2 tally, reply-grounding rebuild owner-deferred/escalatable, listedCount 50+ polish, dev-server OOM env ceiling). NEXT: /gsd:verify-work 3.10 (orchestrator), then Phase 3.11 Inbox Reply on the repaired flow."
+stopped_at: "Phase 03.10 close-out bookkeeping complete (7/7 plans, human sign-off recorded) — next: /gsd:verify-work 3.10 (orchestrator), then Phase 3.11"
+last_updated: "2026-07-19T15:33:56.905Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 104
   completed_plans: 100
 ---
