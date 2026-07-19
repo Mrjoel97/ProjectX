@@ -36,6 +36,14 @@
     "packages/contracts/src/audit.ts",
     "packages/pii/"
   ],
+  "voice.md": [
+    "packages/voice/",
+    "packages/backend/convex/voice.ts",
+    "packages/backend/convex/voice.test.ts",
+    "packages/backend/convex/voiceToken.ts",
+    "packages/backend/convex/voiceToken.test.ts",
+    "apps/web/app/(app)/dashboard/voice/"
+  ],
   "skill-registry.md": [
     "packages/backend/convex/skills.ts",
     "packages/contracts/src/skill.ts",
