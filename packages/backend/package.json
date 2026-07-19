@@ -39,6 +39,7 @@
     "@pikar/extraction": "workspace:*",
     "@pikar/pii": "workspace:*",
     "@pikar/vault": "workspace:*",
+    "@pikar/voice": "workspace:*",
     "ai": "7.0.20",
     "convex": "1.42.1",
     "convex-helpers": "0.1.120",
