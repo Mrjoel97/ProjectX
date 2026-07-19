@@ -447,10 +447,12 @@ type PlanRow = {
   attachments?: Att[];
   attachmentError?: string;
   recipientBodies?: Record<string, string>; // address → tailored body override (CKPT-03); missing = shared body
-  // NOTE: parked name-resolution `candidates` are NOT declared here on purpose — the model-facing
-  // contract for them lives in buildAgentContext's own param (NAME + count only, §2-D/§4), and
-  // getById returns the full row at runtime so buildAgentContext(plan) reads them. Declaring the
-  // candidate `matches` shape in THIS span would trip the draftCockpit header-hint redaction scan.
+  // NAME-ONLY parked-pick widening (03.10-04): proposePlan reads `candidates?.length` to refuse
+  // proposing over a still-open pick. Only the `name` is declared — NOT the `matches`/address shape,
+  // whose model-facing contract lives in buildAgentContext's own param (NAME + count only, §2-D/§4).
+  // Declaring the candidate `matches`/displayName shape in THIS span would trip the draftCockpit
+  // header-hint redaction scan; getById returns the FULL row at runtime, so the count IS present.
+  candidates?: { name: string }[];
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -993,6 +995,12 @@ export function buildCockpitTools(
           return "Cannot propose yet — no subject is set. Ask the user for the subject.";
         if (!plan.body)
           return "Cannot propose yet — the body has not been drafted. Call draftBody first.";
+        // Pending-pick gate (UAT-C, 03.10-04): parked candidates mean a contact resolution is still
+        // OPEN — proposing over it yields the "#1 (no name)" dead-end (the picker vanishes on
+        // status === 'proposed'). Refuse until the user picks from the card. Facts from the ROW
+        // (DECISION #2); backend owns the invariant, the frontend guard (Task 2) is defense-in-depth.
+        if (plan.candidates?.length)
+          return "Can't propose yet — a contact pick is still pending; tell the user to pick the contact from the card first.";
         // Attachment health gate (V7): a render-failed / over-cap document is structurally
         // not-approvable. Facts come from the ROW; refuse so the agent regenerates/removes first.
         if (plan.attachmentError)
