@@ -1,4 +1,16 @@
 // @pikar/voice — pure-TS voice-session domain (CLAUDE.md §1). No Convex imports.
 // Realtime API shapes, brief composer, session FSM, and metering land here as the
-// Wave 0 foundation every later voice plan imports. Re-exports fill in per task.
-export {};
+// Wave 0 foundation every later voice plan imports.
+export {
+  CALLS_URL,
+  CLIENT_SECRETS_URL,
+  DEFAULT_REALTIME_MODEL,
+  MINI_REALTIME_MODEL,
+  RESPONSE_DONE_USAGE_FIELDS,
+  SESSION_CONFIG_KEYS,
+  TRANSCRIPTION_MODEL,
+  TURN_DETECTION_TYPE,
+  hangupUrl,
+  readUsage,
+} from "./realtime";
+export type { RealtimeUsage } from "./realtime";
