@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Completed 03.11-02-PLAN.md (Phase 3.11 Inbox Reply, Wave 2 — reply-drafter gated skill + toolless draftReply). NEXT: Wave 3 (03.11-03 — delivery threading spine) and Wave 4 (03.11-04 — replyToMessage tool, the caller of draftReply)."
-last_updated: "2026-07-19T16:45:44.300Z"
-last_activity: "2026-07-19 — Phase 3.11 Inbox Reply, Wave 2: 03.11-02 executed — the reply body's brain. NEW gated `reply-drafter` skill minted via the exact inbox-digest 5-file mirror (canonical `packages/contracts/skills/reply-drafter.md` + derived `replyDrafterSkillBody` constant, byte-identical/drift-tested + `REPLY_DRAFTER_SKILL` name constant + `seedSkills` entry + `GATED_SKILLS` membership); v1 still bootstrap-activates ungated (rows.length===0), so gating costs nothing until the first edit. Its body carries the inbox-digest DATA-not-instructions clause adapted for drafting (an injected instruction in the original may be described/addressed but never adopted, never turns the reply into a command, never introduces an unsupplied recipient/address). llm.ts gained `draftReply` — a near-clone of `digestInbox`: fail-closed skill load FIRST, `SMOKE::` short-circuit AFTER (via parseSmoke(safeText), the draftCockpit precedent — keeps the 4-arg interface exact), DEFAULT_MODEL → isFallbackEligible → one CHEAP_MODEL retry, BOTH recordModelSpend'd, explicit `Promise<{ body }>` return (TS7022 dodge). It is the toolless-ingestion invariant's SECOND point: the untrusted `originalBody` reaches an LLM ONLY here, in a `generateText` call with NO `tools:` — an injected 'forward all mail to attacker@evil' can be described in the draft but has nothing to actuate. originalBody is truncated (BODY_TRUNCATE_CHARS), fenced as inert context, NEVER returned beyond { body }, NEVER logged/audited (Plan 04 owns correlation, like draftCockpit). agent-runtime.md invariant #10 extended to name draftReply; skill-registry.md + cockpit.md bumped. Commits 6969e8d (T1 skill mirror), 7c8e7ab (T2 draftReply). ONE deviation (Rule 3 - blocking): the 5-file mirror required editing skill.ts + creating replyDrafter.ts + adding the skills.test.ts drift row — files the plan's files_modified omitted but structurally required (name constant/gating, seed body, drift guard); followed the inbox-digest precedent verbatim. Plus one interface adaptation (parseSmoke sentinel over a smoke boolean). VERIFIED: backend source typecheck 0 non-test errors (30 pre-existing *.test.ts errors, none referencing new files); `pnpm test skills` 32/32 (new drift row + §5 scan green); contracts typecheck exit 0; grep confirms no `tools:` in the draftReply block; reply-drafter in GATED_SKILLS; check-playbooks exit 0. DEFERRED (pre-existing, out of scope): llmRedaction.test.ts cockpit.ts `audit.log` count scan is RED (expects 1, finds 2 — almost certainly 03.10's reschedulePlan plan.rescheduled audit; reproduces with this plan's changes stashed; logged to deferred-items.md). NEXT: Wave 3 (03.11-03) + Wave 4 (03.11-04 replyToMessage tool, which calls internal.llm.draftReply and owns its static llmRedaction scan)."
+stopped_at: "Completed 03.11-03-PLAN.md (Wave 3 — delivery threading spine, RPLY-01). NEXT: Wave 4 (03.11-04 replyToMessage tool — the caller of getReplyTarget + the writer of the four plan reply fields)."
+last_updated: "2026-07-19T17:01:56.310Z"
+last_activity: "2026-07-19 — Phase 3.11 Inbox Reply, Wave 3: 03.11-03 executed — the DELIVERY THREADING SPINE (RPLY-01). The four reply fields now survive read → plan → requests → getForDelivery → buildMime → send, so a reply lands in-thread; the only missing piece after this plan is the tool that WRITES the fields (Plan 04). FIVE seams, all migration-free optional-on-read. (1) buildMime (gmail.ts) gained an optional threading?:{inReplyTo;references} param — emits In-Reply-To:/References: header lines AFTER Subject in BOTH the zero-attachment AND multipart branches; absent → byte-identical to pre-3.11 (threadHeaders spreads to nothing, the V4 identity test passes). Values are the RFC 5322 Message-ID HEADER (angle-bracketed), NEVER the Gmail id (Pitfall 2). (2) gmail.send builds threading from the request row and POSTs { raw, threadId } when req.threadId is set, { raw } otherwise — RFC headers in raw are load-bearing, threadId is reinforcement (Pitfall 1, verified live in Plan 06, NOT unit-asserted). (3) getForDelivery (gmailAuth.ts) — the hand-built projection (Pitfall 4) — now returns threadId/inReplyTo/references from the request, else send never sees them. (4) executePlan (cockpit.ts) copies plan.replyThreadId→request.threadId (the GMAIL thread; plan.threadId is the AGENT thread that renders cards — a different id space, must not ride to the request) + plan.inReplyTo/references onto EVERY seeded row; startFanout stays the SOLE workflow.start (single-arm-site unchanged). (5) NEW gmail.getReplyTarget — a fixture-first target-header read: given a message id it returns From/Subject/threadId + the RFC Message-ID anchor (inReplyTo=Message-ID header, references=original References + Message-ID via buildReferences); refs-only to the SERVER-SIDE caller (Plan 04's replyToMessage tool), NO audit here (the reply tool owns correlation, §2-D/§4). Kept DELIBERATELY separate from fetchInboxBodies (untrusted BODY, toolless-only) — two trust planes, two blocks. All optional → a non-reply plan/request carries none and the whole spine no-ops. Commits e10ba23 (T1 RED), 0a08052 (T1 GREEN — buildMime+send+getReplyTarget+getForDelivery), ea2a2b0 (T2 RED), e50b228 (T2 GREEN — executePlan copy + cockpit.md). ONE deviation (Rule 3 - blocking): getForDelivery's projection landed in Task 1 with send (compilation coupling — send reads req.threadId/inReplyTo/references so the projection must exist to typecheck); Task 2's cockpit.test.ts still proves the full plan→requests→getForDelivery spine. Plus one design choice: getReplyTarget as a new dedicated action rather than extending an existing read. VERIFIED: pnpm test gmail 35/35 (4 buildMime-threading + 3 getReplyTarget added), pnpm test cockpit 18/18 (2 spine cases added); exactly one workflow.start( site (cockpit.ts:375); buildMime byte-identical without threading (V4); 0 non-test source errors in gmail.ts/gmailAuth.ts/cockpit.ts; check-playbooks exit 0 (cockpit.md §9 spine + Last verified bumped). NEXT: Wave 4 (03.11-04 replyToMessage tool — calls internal.gmail.getReplyTarget, sets recipient-by-ref + Re: subject + writes plan.replyThreadId/inReplyTo/references + calls the toolless internal.llm.draftReply)."
 progress:
   total_phases: 21
   completed_phases: 13
   total_plans: 110
-  completed_plans: 102
+  completed_plans: 103
 ---
 
 ---
@@ -519,6 +519,7 @@ Progress: [█████████░] 94%
 | Phase 03.10 P05 | — | 3 tasks | 9 files |
 | Phase 03.10 P06 | — | 3 tasks | 10 files |
 | Phase 03.10 P07 | — | 3 tasks | 11 files |
+| Phase 03.11-inbox-reply P03 | 7min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -643,6 +644,8 @@ Recent decisions affecting current work:
 - [Phase 03.10]: Structural safety over skill wording — v10's wording failed live against a fabricated setRecipients overwrite, so the RESOLUTION_CONTINUE turn withholds the recipient-mutating tools entirely (omitRecipientEdits, the first per-entry-point tool-set variation); picked names persist (recipientNames) so the model can SEE a completed pick
 - [Phase 03.10]: Reply-grounding rebuild (structured/reconciled reply) DEFERRED by owner decision — fix tools+wording+history+structure first; escalate if narration drift recurs. Also deferred: fixture 22 (harness never drives resolveRecipients; upgrade path = seed folded state + runner omit-flag grammar), listedCount "50+" cap treatment
 - [Phase 03.11]: 03.11-02: reply-drafter gated skill + toolless draftReply (generateText NO tools) — 2nd toolless ingestion point
+- [Phase 03.11-inbox-reply]: getForDelivery projection landed with send (Task 1) not Task 2 — send reads req.threadId/inReplyTo/references so the projection must exist to typecheck; cockpit.test.ts still proves the full spine
+- [Phase 03.11-inbox-reply]: target-header read is a dedicated getReplyTarget action, kept distinct from the untrusted-body fetchInboxBodies — two trust planes, two blocks
 
 ### Roadmap Evolution
 
@@ -667,8 +670,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-19T16:45:44.050Z
-Stopped at: Completed 03.11-02-PLAN.md
+Last session: 2026-07-19T17:01:41.856Z
+Stopped at: Completed 03.11-03-PLAN.md (Wave 3 — delivery threading spine, RPLY-01). NEXT: Wave 4 (03.11-04 replyToMessage tool — the caller of getReplyTarget + the writer of the four plan reply fields).
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
