@@ -367,7 +367,16 @@ Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (
   2. A server-side watchdog hard-caps every session at 15 minutes and terminates cleanly even if the tab closes or the network drops, with per-session token metering to prevent cost blowout.
   3. An ended session (clean or abnormal) produces a detailed structured markdown brief that is stored and indexed in the knowledge vault.
   4. At session end the agent asks permission to convert the brief into a step-by-step plan; an approved plan enters the normal request pipeline with the review gate.
-**Plans**: TBD
+**Plans**: 8 plans across 6 waves
+Plans:
+- [ ] 06-01-PLAN.md — Pure foundations: pin Realtime API shapes + packages/voice + priceRealtime + voice playbook (Wave 0)
+- [ ] 06-02-PLAN.md — voiceSessions table + voice-session/voice-brief skills (Wave 0)
+- [ ] 06-03-PLAN.md — voiceToken: mint ephemeral secret + server hangup (Wave 1)
+- [ ] 06-04-PLAN.md — llm.draftVoiceBrief: toolless brief drafting + SMOKE seam (Wave 1)
+- [ ] 06-05-PLAN.md — voice.ts: durable watchdog + end paths + metering + brief store (Wave 2)
+- [ ] 06-06-PLAN.md — Voice UI: WebRTC client + pre-flight + live session (Wave 3)
+- [ ] 06-07-PLAN.md — Post-call summary + brief review/store + plan handoff + e2e (Wave 4)
+- [ ] 06-08-PLAN.md — ADR + playbook finalize + live human-verify gate (Wave 5)
 
 ### Phase 7: Resilience & Operations Hardening
 **Goal**: Every failure path â agent/review timeouts, retry-threshold breaches, dead-letters â is caught, notified, escalated, and archived immutably.
