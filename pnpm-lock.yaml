@@ -38,6 +38,9 @@ importers:
       '@pikar/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pikar/voice':
+        specifier: workspace:*
+        version: link:../../packages/voice
       convex:
         specifier: 1.42.1
         version: 1.42.1(react@19.2.7)

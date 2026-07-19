@@ -17,6 +17,7 @@
     "@pikar/backend": "workspace:*",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
+    "@pikar/voice": "workspace:*",
     "convex": "1.42.1",
     "next": "16.2.10",
     "react": "^19.2.7",

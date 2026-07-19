@@ -60,6 +60,38 @@ export const RESPONSE_DONE_USAGE_FIELDS = {
   text: "text_tokens",
 } as const;
 
+/** Data-channel event `type` strings. The browser client (useVoiceSession) matches inbound
+ *  server events and stamps outbound client events with these — the ONE place the Realtime
+ *  event vocabulary lives, so the transcript/speaking/metering glue never re-hardcodes a literal.
+ *  ponytail: pinned 2026-07-20 from the same Realtime guide as the URLs above (post-cutoff GA,
+ *  MEDIUM confidence). If a transcript stops assembling or the orb never lights, RE-CONFIRM these
+ *  against a live data-channel dump first (esp. the `output_audio_transcript` names — pre-GA they
+ *  were `response.audio_transcript.*`) and fix them HERE. */
+export const REALTIME_EVENTS = {
+  /** User speech → text (final). Carries `transcript`. */
+  inputTranscriptDone: "conversation.item.input_audio_transcription.completed",
+  /** Assistant spoken output → streaming text. Carries `delta`. */
+  outputTranscriptDelta: "response.output_audio_transcript.delta",
+  /** Assistant spoken output → final text for the turn. Carries `transcript`. */
+  outputTranscriptDone: "response.output_audio_transcript.done",
+  /** One per completed agent response — carries `response.usage` (metering, Pattern 4). */
+  responseDone: "response.done",
+  /** Server VAD boundaries — the user side of the speaking orb. */
+  userSpeechStarted: "input_audio_buffer.speech_started",
+  userSpeechStopped: "input_audio_buffer.speech_stopped",
+  /** WebRTC assistant-audio playback boundaries — the agent side of the speaking orb. */
+  assistantAudioStarted: "output_audio_buffer.started",
+  assistantAudioStopped: "output_audio_buffer.stopped",
+} as const;
+
+/** Outbound (client → server) event `type` strings we stamp onto data-channel sends: the
+ *  T-2min wrap-up nudge and the accessibility text-turn fallback (both `response.create`,
+ *  preceded for a typed turn by a `conversation.item.create`). Same pin/re-confirm caveat. */
+export const REALTIME_CLIENT_EVENTS = {
+  createItem: "conversation.item.create",
+  createResponse: "response.create",
+} as const;
+
 /** Shape of `response.done.response.usage` (only the fields we meter). Everything is
  *  optional because a text-only turn omits the audio counts (and vice versa). */
 export type RealtimeUsage = {
