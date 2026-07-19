@@ -52,6 +52,9 @@ export const GRAPH_EXTRACTOR_SKILL = "graph-extractor" as const;
 /** Registry name of the inbox digest skill (CKPT-04 — the toolless briefing summarizer). */
 export const INBOX_DIGEST_SKILL = "inbox-digest" as const;
 
+/** Registry name of the reply drafter skill (RPLY-01 — the toolless reply-body writer). */
+export const REPLY_DRAFTER_SKILL = "reply-drafter" as const;
+
 /**
  * Skills whose CANDIDATE versions may only activate through a recorded passing
  * eval run (EVAL-01). Rollback (archived/rolled_back targets) is structurally
@@ -59,14 +62,16 @@ export const INBOX_DIGEST_SKILL = "inbox-digest" as const;
  *
  * `inbox-digest` (03.7-03) is gated because it is the ONE skill whose input is
  * untrusted third-party content (inbound mail) — exactly the risk the gate
- * exists for, and the golden set covers the briefing path (SC-5). Bootstrap v1
- * still activates ungated via seedSkills' rows.length===0 path, so gating costs
- * nothing until the first edit.
+ * exists for, and the golden set covers the briefing path (SC-5). `reply-drafter`
+ * (03.11-02) is gated for the SAME reason: it ingests the untrusted original body
+ * to write a reply. Bootstrap v1 still activates ungated via seedSkills'
+ * rows.length===0 path, so gating costs nothing until the first edit.
  */
 export const GATED_SKILLS: readonly string[] = [
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   INBOX_DIGEST_SKILL,
+  REPLY_DRAFTER_SKILL,
 ];
 
 /** Whether activation of a candidate version of this skill requires eval evidence. */

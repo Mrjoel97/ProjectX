@@ -19,6 +19,7 @@ import {
   type LoadedSkill,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
+  REPLY_DRAFTER_SKILL,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
@@ -26,6 +27,7 @@ import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafte
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
@@ -169,6 +171,7 @@ export const seedSkills = internalMutation({
       { name: ATTACHMENT_EXTRACTOR_SKILL, body: attachmentExtractorSkillBody },
       { name: GRAPH_EXTRACTOR_SKILL, body: graphExtractorSkillBody },
       { name: INBOX_DIGEST_SKILL, body: inboxDigestSkillBody },
+      { name: REPLY_DRAFTER_SKILL, body: replyDrafterSkillBody },
     ];
 
     for (const { name, body } of seeds) {
