@@ -315,7 +315,7 @@ Plans:
 
 Plans:
 - [x] 03.11-01-PLAN.md — Wave 1: groundwork — optional threading schema fields (plans/requests/inboxFixtures) + closed agentSteps.tool union literal + fixture thread-anchor & injection message + 2 golden eval cases + RPLY-01 mint (completed 2026-07-19; commits 06e5cb1/b7e784d/54b5168)
-- [ ] 03.11-02-PLAN.md — Wave 2: reply-body brain — new gated reply-drafter skill (5-file mirror) + toolless draftReply internalAction (digestInbox clone; original body ingested with NO tools)
+- [x] 03.11-02-PLAN.md — Wave 2: reply-body brain — new gated reply-drafter skill (5-file mirror) + toolless draftReply internalAction (digestInbox clone; original body ingested with NO tools) (completed 2026-07-19; commits 6969e8d/7c8e7ab)
 - [ ] 03.11-03-PLAN.md — Wave 3: delivery threading spine — buildMime In-Reply-To/References + send POST threadId + target-header read + executePlan copies threading to requests + getForDelivery returns it
 - [ ] 03.11-04-PLAN.md — Wave 4: the replyToMessage tool — server-side resolve + recipient-by-ref (no panel) + Re: subject + threading + toolless draft; patchPlan/resetPlan threading writers; mutation-checked toolless-boundary scan
 - [ ] 03.11-05-PLAN.md — Wave 5: cockpit-agent reply guidance edit through the 3.6 eval gate (candidate → pinned eval green incl. injection probe → activate)
@@ -419,7 +419,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.5 Deferred Send (INSERTED) | 6/6 | Complete (SCHD-01 + reschedule/far-future cap refinements) | 2026-07-19 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
 | 3.7 Inbox Briefing (INSERTED) | 9/9 | Complete (Gap 1 + Gap 2 closed; inbox-digest v2 eval-gated & active; CKPT-04 human-verified 2026-07-17) |  |
-| 3.11 Inbox Reply (INSERTED) | 1/6 | In Progress (Wave 1 groundwork done — schema slots + replyToMessage literal + fixture anchors + 2 eval cases + RPLY-01) | - |
+| 3.11 Inbox Reply (INSERTED) | 2/6 | In Progress (Wave 2 done — reply-drafter gated skill + toolless draftReply; NEXT Wave 3 threading spine + Wave 4 replyToMessage tool) | - |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |
