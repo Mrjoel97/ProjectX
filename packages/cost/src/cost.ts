@@ -56,6 +56,38 @@ export function priceTranscription(seconds: number): Result<number, CostError> {
   return ok(minutes * TRANSCRIPTION_PRICING.perMinuteUsd);
 }
 
+// gpt-realtime-2.1 per-MTok pricing. ponytail: rates pinned 2026-07-20 from
+// https://developers.openai.com/api/docs/pricing (post-cutoff GA) — re-fetch if the
+// snapshot or tier moves. `-mini` is ~audio $10/$20 if a cheaper tier is ever adopted.
+export const REALTIME_PRICING: {
+  audioInPerMTok: number;
+  audioOutPerMTok: number;
+  textInPerMTok: number;
+  textOutPerMTok: number;
+} = { audioInPerMTok: 32, audioOutPerMTok: 64, textInPerMTok: 4, textOutPerMTok: 24 };
+
+/** VOIC-02: prices realtime audio/text token counts → USD for recordSpend. Fail-closed
+ *  exactly like priceTranscription: any non-finite or negative count → Err (never
+ *  NaN/throw), so metering can never silently under-count against the daily budget. */
+export function priceRealtime(
+  inAudioTok: number,
+  outAudioTok: number,
+  textInTok: number,
+  textOutTok: number,
+): Result<number, CostError> {
+  for (const n of [inAudioTok, outAudioTok, textInTok, textOutTok]) {
+    if (!Number.isFinite(n) || n < 0) return err({ code: "over_budget" });
+  }
+  const p = REALTIME_PRICING;
+  return ok(
+    (inAudioTok * p.audioInPerMTok +
+      outAudioTok * p.audioOutPerMTok +
+      textInTok * p.textInPerMTok +
+      textOutTok * p.textOutPerMTok) /
+      1_000_000,
+  );
+}
+
 /** GRDL-03: default model if it fits budgetUsdPerRequest; else downgrade to CHEAP_MODEL;
  *  else Err over_budget. Any unknown-model Err propagates (fail closed). Accepts SafeText
  *  ONLY — cost is always estimated from redacted text (GRDL-02/03). */
