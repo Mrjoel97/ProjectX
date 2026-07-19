@@ -106,6 +106,53 @@ describe("buildMime — multipart/mixed with attachments (V3)", () => {
   });
 });
 
+// ── 03.11 RPLY-01: buildMime reply-threading headers (In-Reply-To / References) ───────────────
+// buildMime is pure/exported — assert the header BYTES directly. The threading param carries the
+// RFC 5322 Message-ID header value (angle-bracketed), NEVER the Gmail id (Pitfall 2).
+
+describe("buildMime — reply threading headers (RPLY-01)", () => {
+  const MSG_ID = "<CAF-reply-1@mail.gmail.com>";
+  const GMAIL_ID = "fix-reply"; // the Gmail id — must NEVER appear as In-Reply-To
+  const threading = { inReplyTo: MSG_ID, references: MSG_ID };
+
+  test("zero-attachment: emits In-Reply-To + References after Subject, before MIME-Version", () => {
+    const mime = buildMime(TO, `Re: ${SUBJECT}`, BODY, [], threading);
+    expect(mime).toBe(
+      [
+        `To: ${TO}`,
+        `Subject: Re: ${SUBJECT}`,
+        `In-Reply-To: ${MSG_ID}`,
+        `References: ${MSG_ID}`,
+        "MIME-Version: 1.0",
+        'Content-Type: text/plain; charset="UTF-8"',
+        "",
+        BODY,
+      ].join("\r\n"),
+    );
+  });
+
+  test("multipart: emits In-Reply-To + References after Subject in the attachment branch too", () => {
+    const mime = buildMime(TO, `Re: ${SUBJECT}`, BODY, [
+      { filename: "a.pdf", mimeType: "application/pdf", base64: "QQ==" },
+    ], threading);
+    // The two threading lines sit between Subject and MIME-Version (the header block, before boundary).
+    expect(mime).toContain(`Subject: Re: ${SUBJECT}\r\nIn-Reply-To: ${MSG_ID}\r\nReferences: ${MSG_ID}\r\nMIME-Version: 1.0`);
+  });
+
+  test("no threading arg: NEITHER header appears (a normal compose is unaffected)", () => {
+    const mime = buildMime(TO, SUBJECT, BODY);
+    expect(mime).not.toContain("In-Reply-To:");
+    expect(mime).not.toContain("References:");
+  });
+
+  test("In-Reply-To carries the Message-ID header (angle brackets), NEVER the Gmail id (Pitfall 2)", () => {
+    const mime = buildMime(TO, `Re: ${SUBJECT}`, BODY, [], threading);
+    expect(mime).toContain(`In-Reply-To: ${MSG_ID}`);
+    expect(mime).toMatch(/In-Reply-To: <[^>]+>/); // angle-bracketed
+    expect(mime).not.toContain(`In-Reply-To: ${GMAIL_ID}`); // never the API id
+  });
+});
+
 // ── 03.7-02: pickPlainText — the ONE new parsing seam (recursive MIME tree, base64url) ────────
 // Pure + exported precisely so it is unit-testable without a mailbox (research Pitfall 4).
 
@@ -379,6 +426,52 @@ describe("search (fixture seam + refs-only audit)", () => {
     // The sentinel's two fixed records — NOT the 5 fixture messages.
     expect(res.records).toHaveLength(2);
     expect(res.records[0]!.from).toContain("Sarah Smoke");
+  });
+});
+
+// ── 03.11 RPLY-01: getReplyTarget — the target-header read (From/Message-ID/References/Subject/threadId)
+// server-side over the SAME fixture-before-token seam. These headers/ids are returned to the
+// SERVER-SIDE caller (Plan 04's replyToMessage tool) and NEVER logged — the reply anchor buildMime emits.
+
+describe("getReplyTarget (target-header read over the fixture seam)", () => {
+  test("resolves a fixture message to its From/Subject/threadId + the RFC Message-ID anchor", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.getReplyTarget, { tenantId: TENANT, id: "fix-reply" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.target.from).toBe("Sarah Chen <sarah.chen@example.com>");
+    expect(res.target.subject).toBe("Re: Q3 numbers");
+    expect(res.target.threadId).toBe("thread-reply-1");
+    // In-Reply-To / References carry the RFC Message-ID header (angle brackets), NOT the Gmail id.
+    expect(res.target.inReplyTo).toBe("<CAF-reply-1@mail.gmail.com>");
+    expect(res.target.inReplyTo).not.toBe("fix-reply");
+    // First message in the thread → References is just its own Message-ID.
+    expect(res.target.references).toBe("<CAF-reply-1@mail.gmail.com>");
+  });
+
+  test("an unknown id → not_found (never a silent empty target)", async () => {
+    const t = harness();
+    await t.mutation(internal.smoke.seedInboxFixture, {
+      tenantId: TENANT,
+      offlineDigest: false,
+      baseMs: BASE_MS,
+    });
+    const res = await t.action(internal.gmail.getReplyTarget, { tenantId: TENANT, id: "no-such-id" });
+    expect(res).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  test("no fixture + no token → not_connected (never throws out of the read)", async () => {
+    const t = harness();
+    const res = await t.action(internal.gmail.getReplyTarget, {
+      tenantId: "tenant_with_no_mailbox",
+      id: "fix-reply",
+    });
+    expect(res).toEqual({ ok: false, reason: "not_connected" });
   });
 });
 
