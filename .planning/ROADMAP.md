@@ -370,7 +370,7 @@ Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (
 **Plans**: 8 plans across 6 waves
 Plans:
 - [ ] 06-01-PLAN.md — Pure foundations: pin Realtime API shapes + packages/voice + priceRealtime + voice playbook (Wave 0)
-- [ ] 06-02-PLAN.md — voiceSessions table + voice-session/voice-brief skills (Wave 0)
+- [x] 06-02-PLAN.md — voiceSessions table + voice-session/voice-brief skills (Wave 0)
 - [ ] 06-03-PLAN.md — voiceToken: mint ephemeral secret + server hangup (Wave 1)
 - [ ] 06-04-PLAN.md — llm.draftVoiceBrief: toolless brief drafting + SMOKE seam (Wave 1)
 - [ ] 06-05-PLAN.md — voice.ts: durable watchdog + end paths + metering + brief store (Wave 2)
