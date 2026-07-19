@@ -487,6 +487,14 @@ export const executePlan = tenantMutation({
         draft: (plan.recipientBodies ?? {})[recipient] ?? body,
         status: "approved",
         attachmentRefs, // SAME shared ids for every recipient (one generated document set)
+        // 03.11 RPLY-01: carry the plan's reply-threading anchor onto every seeded row (Pitfall 4 —
+        // a field not copied here never reaches getForDelivery → send, so the reply silently posts
+        // un-threaded). plan.replyThreadId is the GMAIL thread (plan.threadId is the agent thread that
+        // renders cards — a different id space), so it maps to the request's plain `threadId`. All
+        // optional → a non-reply plan copies undefined and the row carries none (unchanged path).
+        threadId: plan.replyThreadId,
+        inReplyTo: plan.inReplyTo,
+        references: plan.references,
         planId,
         createdAt: Date.now(),
       });
