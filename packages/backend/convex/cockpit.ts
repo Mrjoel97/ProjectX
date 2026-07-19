@@ -148,11 +148,19 @@ async function fetchRecentHistory(
   // listMessages hardcodes order:"desc" internally (verified @convex-dev/agent@0.6.4
   // dist/client/messages.js) — the first page is the NEWEST rows, newest-first. Reverse below
   // for the model's oldest-first render.
-  const res = await listMessages(ctx, components.agent, {
-    threadId,
-    paginationOpts: { cursor: null, numItems: HISTORY_FETCH },
-    excludeToolMessages: true,
-  });
+  // FAIL-OPEN (UAT 2026-07-19 hotfix): history is an enhancement, never a precondition. A slow
+  // store read (1s query timeout on a degraded dev deployment) must degrade to a historyless
+  // turn — exactly the pre-03.10-06 prompt — not fail the user's send.
+  let res: Awaited<ReturnType<typeof listMessages>>;
+  try {
+    res = await listMessages(ctx, components.agent, {
+      threadId,
+      paginationOpts: { cursor: null, numItems: HISTORY_FETCH },
+      excludeToolMessages: true,
+    });
+  } catch {
+    return [];
+  }
   const turns: Array<{ role: "user" | "assistant"; content: string }> = [];
   for (const m of res.page) {
     const role = m.message?.role;
