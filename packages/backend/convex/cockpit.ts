@@ -65,7 +65,11 @@ export const sendCockpitMessage = tenantAction({
     const plan = await ctx.runQuery(api.plans.byThread, { threadId: tid });
     if (!plan) throw new Error("cockpit: plan row missing for thread");
 
-    // 2. Persist the user's turn (the agent thread is a message store — DECISION #2 retired; the
+    // 2. Fetch the prior turns BEFORE saving the current one (UAT-E) — otherwise the current turn
+    //    appears twice (as the last history row AND as "The user says:"). A fresh thread yields [].
+    const history = await fetchRecentHistory(ctx, tid);
+
+    //    Persist the user's turn (the agent thread is a message store — DECISION #2 retired; the
     //    reasoning lives in runCockpitAgent, this is display history for the chat pane).
     await cockpitAgent.saveMessage(ctx, { threadId: tid, prompt: text, skipEmbeddings: true });
 
@@ -97,6 +101,7 @@ export const sendCockpitMessage = tenantAction({
         text,
         clientContext,
         turnId,
+        history, // UAT-E: the model sees the conversation so far, not just this turn
       });
       reply = res.reply;
     } catch {
@@ -130,6 +135,43 @@ export const sendCockpitMessage = tenantAction({
 // index/label recipients (address-free, §2-D), so this only signals "the pick happened, continue".
 const RESOLUTION_CONTINUE =
   "I've picked the recipients from the contact list. Please continue composing the email.";
+
+// Last K saved turns for the model's history block (UAT-E, 03.10-06). Fetch 12, render ≤10
+// (llm.ts buildHistoryBlock caps) — a small overfetch absorbs skipped rows. Reuses the SAME
+// listMessages agent-store read the chat pane uses (:235). History is user+assistant CHAT text —
+// model-plane content that already flows to the model; fetchRecentHistory writes nothing (§4).
+const HISTORY_FETCH = 12;
+async function fetchRecentHistory(
+  ctx: Parameters<typeof listMessages>[0],
+  threadId: string,
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  // listMessages hardcodes order:"desc" internally (verified @convex-dev/agent@0.6.4
+  // dist/client/messages.js) — the first page is the NEWEST rows, newest-first. Reverse below
+  // for the model's oldest-first render.
+  const res = await listMessages(ctx, components.agent, {
+    threadId,
+    paginationOpts: { cursor: null, numItems: HISTORY_FETCH },
+    excludeToolMessages: true,
+  });
+  const turns: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const m of res.page) {
+    const role = m.message?.role;
+    if (role !== "user" && role !== "assistant") continue;
+    // Prefer the convenience `text`, else string content, else join the text parts.
+    const content = m.message?.content;
+    const text =
+      m.text ??
+      (typeof content === "string"
+        ? content
+        : (content ?? [])
+            .map((p) => (typeof p === "object" && p !== null && "text" in p ? String(p.text) : ""))
+            .filter(Boolean)
+            .join(" "));
+    if (!text.trim()) continue;
+    turns.push({ role, content: text });
+  }
+  return turns.reverse(); // newest-first page → oldest-first block
+}
 
 /**
  * Fold a contact PICK from the resolution card back into the conversation (SC2). The picked
@@ -179,6 +221,10 @@ export const resolveRecipients = tenantAction({
       tool: "thinking",
       startedAt: Date.now(),
     });
+    // UAT-E: the re-invoke sees the transcript too — this is what lets the post-pick turn honor
+    // everything already discussed. RESOLUTION_CONTINUE is synthetic and never saved, so there is
+    // no current-turn duplication hazard here.
+    const history = await fetchRecentHistory(ctx, threadId);
     let reply: string;
     try {
       const res = await ctx.runAction(internal.llm.runCockpitAgent, {
@@ -187,6 +233,7 @@ export const resolveRecipients = tenantAction({
         planId: plan._id,
         text: RESOLUTION_CONTINUE,
         turnId,
+        history,
       });
       reply = res.reply;
     } catch {

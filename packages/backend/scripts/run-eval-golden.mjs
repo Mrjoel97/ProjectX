@@ -292,6 +292,11 @@ function abortEnv(message) {
 function attemptCase(fixture, tenant, pin) {
   const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
   let caseCost = 0;
+  // UAT-E (03.10-06): accumulate {role, content} history across turns and pass it, exactly as the
+  // production drivers do. The runner calls llm:runCockpitAgent DIRECTLY (never sendCockpitMessage,
+  // and seedCockpitPlan's threadId is synthetic with no agent thread store behind it), so it must
+  // supply history itself — production parity by construction (the loop renders + caps in ONE place).
+  const history = [];
   for (const text of fixture.turns) {
     const res = parse(
       must("llm:runCockpitAgent", {
@@ -299,6 +304,7 @@ function attemptCase(fixture, tenant, pin) {
         threadId,
         planId,
         text,
+        ...(history.length ? { history } : {}),
         ...(pin && { skillVersions: { [pin.name]: pin.version } }),
       }),
     );
@@ -312,6 +318,7 @@ function attemptCase(fixture, tenant, pin) {
     if (overCap(totalCost)) {
       abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
     }
+    history.push({ role: "user", content: text }, { role: "assistant", content: res.reply ?? "" });
   }
   // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
   // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.

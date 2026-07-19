@@ -1,0 +1,16 @@
+{
+  "id": "21-fragment-answer-absorbed",
+  "description": "UAT-E 2026-07-19 (second replay): conversational amnesia — turn 1 deterministically leaves subject as the ONE open slot (candidates parked, body drafted) so the agent asks for it; turn 2 is the bare fragment answer. With history the model must read it against its own open subject question and call setSubject — never re-ask subject/body/mode from scratch",
+  "turns": [
+    "Draft an email to Sarah Chen. Tell her I will attend the workshop.",
+    "Meeting reminder"
+  ],
+  "expect": {
+    "candidatesPending": true,
+    "subjectPresent": true,
+    "bodyPresent": true,
+    "recipientCount": 0,
+    "statusAtMost": "collecting"
+  },
+  "needles": ["sarah.chen@example.com", "Meeting reminder"]
+}

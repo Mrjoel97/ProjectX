@@ -10,7 +10,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { buildAgentContext } from "./llm";
+import { buildAgentContext, buildHistoryBlock } from "./llm";
 import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
@@ -376,6 +376,41 @@ test("buildAgentContext surfaces names AWAITING a pick (name + count) — the ag
   expect(ctx).toContain("2"); // the count of found contacts (refs-only)
   expect(ctx).not.toContain("sarah@example.com"); // §2-D: no candidate address to the model
   expect(ctx).not.toContain("Sarah Smoke"); // §4: match hints are USER-only, never to the model
+});
+
+// ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────
+
+test("buildHistoryBlock returns '' for absent/empty history (prompt byte-identical when historyless)", () => {
+  expect(buildHistoryBlock(undefined)).toBe("");
+  expect(buildHistoryBlock([])).toBe("");
+});
+
+test("buildHistoryBlock keeps only the NEWEST 10 of a longer history (most-recent win)", () => {
+  const history = Array.from({ length: 14 }, (_, i) => ({
+    role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+    content: `turn-${i}`,
+  }));
+  const block = buildHistoryBlock(history);
+  expect(block).not.toContain("turn-3"); // oldest 4 dropped
+  expect(block).toContain("turn-4"); // the newest 10 survive …
+  expect(block).toContain("turn-13"); // … through the most recent
+});
+
+test("buildHistoryBlock truncates a >500-char message with a trailing ellipsis", () => {
+  const block = buildHistoryBlock([{ role: "user", content: "x".repeat(600) }]);
+  expect(block).toContain(`${"x".repeat(500)} …`);
+  expect(block).not.toContain("x".repeat(501));
+});
+
+test("buildHistoryBlock renders the header line first, then User:/Assistant: labels oldest-first", () => {
+  const block = buildHistoryBlock([
+    { role: "user", content: "draft an email" },
+    { role: "assistant", content: "what should the subject be?" },
+  ]);
+  const lines = block.split("\n");
+  expect(lines[0]).toMatch(/^Conversation so far/);
+  expect(lines[1]).toBe("User: draft an email");
+  expect(lines[2]).toBe("Assistant: what should the subject be?");
 });
 
 // ── 03.4-02 Task 2: proposePlan group-mode refusal gate (CKPT-03, locked decision) ────────────

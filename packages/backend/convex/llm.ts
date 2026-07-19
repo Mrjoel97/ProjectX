@@ -539,6 +539,37 @@ export function buildAgentContext(
   ].join("\n");
 }
 
+// ── Conversation-history block (UAT-E, 03.10-06) ─────────────────────────────
+// Bounded transcript window: the caller (cockpit.ts drivers / the eval runner) supplies the prior
+// saved turns; this renders them ABOVE the plan context so a bare fragment answer ("meeting
+// reminder") is readable against the agent's own last question. Placed AFTER buildAgentContext —
+// the draftCockpit header-hint scan (llmRedaction.test.ts) ends at buildAgentContext and must not
+// grow code.
+const HISTORY_MAX_MESSAGES = 10;
+const HISTORY_CHARS_PER_MESSAGE = 500;
+export type HistoryMessage = { role: "user" | "assistant"; content: string };
+
+/** Bounded transcript block for the loop prompt (UAT-E). Empty/absent history ⇒ "" (prompt
+ *  byte-identical to the historyless one). Most-recent messages win; oldest-first render.
+ *  ponytail: a plain-text window, not structured reply-grounding — the model reads its own prior
+ *  prose. Upgrade path: per-turn structured question/answer grounding (owner-deferred, escalatable). */
+export function buildHistoryBlock(history: HistoryMessage[] | undefined): string {
+  if (!history?.length) return "";
+  const lines = history.slice(-HISTORY_MAX_MESSAGES).map((m) => {
+    const text =
+      m.content.length > HISTORY_CHARS_PER_MESSAGE
+        ? `${m.content.slice(0, HISTORY_CHARS_PER_MESSAGE)} …`
+        : m.content;
+    return `${m.role === "user" ? "User" : "Assistant"}: ${text}`;
+  });
+  return [
+    "Conversation so far (oldest first — the newest user message is the one you are answering):",
+    ...lines,
+    "",
+    "",
+  ].join("\n");
+}
+
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
 const INBOX_PEEK_CAP = 10;
 
@@ -1528,10 +1559,22 @@ export const runCockpitAgent = internalAction({
     // Activity trace (CKPT-05): the turn identity the DRIVER mints (cockpit.ts) and owns. Optional
     // so every existing caller keeps working; absent ⇒ this turn emits no step rows.
     turnId: v.optional(v.string()),
+    // UAT-E history injection (03.10-06): prior saved turns, supplied by the CALLER (the drivers
+    // read the agent thread store; the eval runner accumulates from its own turn/reply pairs).
+    // Absent ⇒ no block — the prompt is byte-identical to today's (single-turn fixtures and the
+    // test shims unchanged).
+    history: v.optional(
+      v.array(
+        v.object({
+          role: v.union(v.literal("user"), v.literal("assistant")),
+          content: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (
     ctx,
-    { tenantId, threadId, planId, text, model, clientContext, skillVersions, turnId },
+    { tenantId, threadId, planId, text, model, clientContext, skillVersions, turnId, history },
   ): Promise<{
     reply: string;
     blocked?: "kill_switch" | "daily_budget_exhausted";
@@ -1606,7 +1649,8 @@ export const runCockpitAgent = internalAction({
       tenantId,
       planId,
       system: skill.body,
-      prompt: `${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
+      // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
+      prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
       primary: { model: resolveModel(primaryId), id: primaryId },
       fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
