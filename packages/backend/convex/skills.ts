@@ -20,6 +20,7 @@ import {
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
   REPLY_DRAFTER_SKILL,
+  VOICE_SESSION_SKILL,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
@@ -28,6 +29,7 @@ import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
@@ -172,6 +174,8 @@ export const seedSkills = internalMutation({
       { name: GRAPH_EXTRACTOR_SKILL, body: graphExtractorSkillBody },
       { name: INBOX_DIGEST_SKILL, body: inboxDigestSkillBody },
       { name: REPLY_DRAFTER_SKILL, body: replyDrafterSkillBody },
+      // UNGATED (RESEARCH OQ3): a free-form voice persona the eval gate cannot meaningfully assert.
+      { name: VOICE_SESSION_SKILL, body: voiceSessionSkillBody },
     ];
 
     for (const { name, body } of seeds) {

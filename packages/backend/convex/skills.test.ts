@@ -9,6 +9,7 @@ import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRoute
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
@@ -461,6 +462,7 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["graph-extractor.md", graphExtractorSkillBody],
     ["inbox-digest.md", inboxDigestSkillBody],
     ["reply-drafter.md", replyDrafterSkillBody],
+    ["voice-session.md", voiceSessionSkillBody],
   ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
     const mdPath = fileURLToPath(new URL(`../../contracts/skills/${file}`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
