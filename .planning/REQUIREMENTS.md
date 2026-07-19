@@ -171,7 +171,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-02 | Phase 5 | Complete |
 | VALT-03 | Phase 5 | Complete |
 | VALT-04 | Phase 5 | Complete |
-| VOIC-01 | Phase 6 | In Progress |
+| VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
 | VOIC-02 | Phase 6 | Complete (server engine unit-verified 06-05: watchdog cap + clean/abnormal CAS + fail-closed metering; live 15:00 hangup at phase-gate human-verify) |
 | VOIC-03 | Phase 6 | Complete (server engine unit-verified 06-05: brief → vault ingest, refs-only session audit; live round-trip at phase-gate human-verify) |
 | VOIC-04 | Phase 6 | Pending |
