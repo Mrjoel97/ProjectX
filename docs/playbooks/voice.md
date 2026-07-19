@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-03
+> Last verified: 2026-07-20 against 06-05
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: none
 
 ## Purpose
@@ -30,8 +30,10 @@ Pure packages (`packages/*` — no Convex, unit-testable):
 
 Backend adapters (thin, added in later plans — pre-registered in `watch.json`):
 
-- `packages/backend/convex/voice.ts` — tenant-wrapped `startSession`/`recordUsage`/
-  `endSessionClean`/`forceEndSession`/`storeBrief`/`getActiveSession`; arms the watchdog.
+- `packages/backend/convex/voice.ts` — the session engine (06-05): tenant-wrapped
+  `startSession`/`recordUsage`/`endSessionClean`; internal `forceEndSession` (the watchdog
+  actuator) + `storeBrief`/`persistBrief`/`markEndedClean`/`markEndedAbnormal`/`getActiveSession`.
+  Arms the ONE watchdog, runs the clean/abnormal CAS transitions, meters, and ingests the brief.
 - `packages/backend/convex/voiceToken.ts` — plain-runtime `action` minting the ephemeral
   client secret + `hangupCall`; reads `OPENAI_API_KEY` from env, never returns it.
 
@@ -79,8 +81,29 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   `startSession` arms exactly one timer (later `voice.test.ts`).
 - **The brief BODY is vault content and keeps PII by design; session audit/telemetry/DLQ
   rows are refs/ids/counts ONLY** (CLAUDE.md §4 reconciliation). Do NOT `scanText`-strip
-  the brief body. Enforced by: `ingestDoc` redacts only the vector; a static-scan test on
-  the audit line (later plan, `llmRedaction.test.ts` precedent).
+  the brief body. Enforced by: `ingestDoc` redacts only the vector; the mutation-checked
+  `voice.ts session audit payloads are refs/counts-only` static scan in `llmRedaction.test.ts`
+  (the `voice.session_started`/`session_ended` payloads carry `{sessionId}` + token counts
+  only — never the transcript, the `callId`-as-secret, the client secret, or the brief text).
+- **Exactly ONE session is active per tenant (parallel guard) and it is "active" only WITH a
+  callId** (Pitfall 1). `startSession` force-ends any prior active session (cancel its timer +
+  schedule its abnormal end) before opening a new one. Enforced by: `getActiveSession`
+  (`by_tenant_status`) + the parallel-guard test in `voice.test.ts`.
+- **A clean end cancels the watchdog ONLY under a status CAS; the CAS no-ops on the 0:00 fire
+  race.** `scheduler.cancel` throws on an already-fired id (the `cockpit.cancelScheduledPlan`
+  Pitfall), so `markEndedClean`/`markEndedAbnormal` flip only from `active` and never
+  double-cancel. Enforced by: the CAS + fire-race tests in `voice.test.ts` (fake timers).
+- **Every abnormal end (watchdog fire / gone tab) force-terminates the call AND always yields a
+  brief.** `forceEndSession` CAS-marks `ended_abnormal`, calls `hangupCall` (a failed hangup is
+  swallowed refs-only — it must not block the brief), then auto-stores. A gone-tab end with no
+  captured transcript stores a fixed placeholder (never a model call over an empty transcript).
+  `storeBrief` is idempotent on `briefRef`. Enforced by: the `forceEndSession`/`storeBrief`
+  tests in `voice.test.ts`.
+- **Metering is telemetry + a best-effort budget contribution, NOT the cost bound** (RESEARCH
+  Pattern 4). `recordUsage` folds `response.done` deltas into cumulative counters and prices the
+  DELTA onto `recordSpend`; the 15-min wall-clock cap is the real bound, so there is no
+  server-side usage reconciliation. It fails CLOSED — a non-finite/negative delta patches no
+  counter and records no spend. Enforced by: the `recordUsage` fail-closed test in `voice.test.ts`.
 - **The transcript is welded onto the brief in code, never model-authored.** Enforced by:
   `buildBriefMarkdown` composes it deterministically; `brief.test.ts`.
 - **The live-session + brief prompts load from the skill registry, never hardcoded**
@@ -123,6 +146,9 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
 - `pnpm --filter @pikar/voice test` — pure brief composer, session FSM, metering, and the
   `realtime.ts` self-check (unit; no deployment).
 - `pnpm --filter @pikar/cost test` — `priceRealtime` fail-closed pricing math (unit).
+- `pnpm --filter @pikar/backend test voice` — the session engine (convex-test + fake timers):
+  watchdog arm/fire/cancel, parallel guard, clean/abnormal CAS, `storeBrief` ingest, `recordUsage`.
+- `pnpm --filter @pikar/backend test llmRedaction` — the refs/counts-only session-audit static scan.
 - `node scripts/check-playbooks.mjs` — exits 0 when this playbook is registered and all
   new voice files are covered (static scan).
 - Live session round-trip, barge-in, echo cancellation, multilingual, real 15:00 hangup —

@@ -694,3 +694,32 @@ test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/
     }
   }
 });
+
+// ── 06-05 (VOIC-02/03): the voice-session audit rows stay refs/counts-only (§4) ──────────────────
+// The raw transcript is NEVER server-stored (schema §4-clean); the brief BODY is vault CONTENT (it
+// keeps PII by design). The ONLY log-plane crossings voice.ts makes are the session_started /
+// session_ended audits, and those must carry {sessionId} + token COUNTS only — never the transcript,
+// the callId (a session secret the hangup path uses), the client/API secret, or the brief text. This
+// scan is mutation-checked the 03.7 way: interpolating `transcript`/`callId` into a payload trips it
+// RED (confirmed, then reverted).
+
+test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, no transcript/callId/secret) — §4", () => {
+  const src = readSource("voice.ts");
+  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  // Present at all: the started + clean-ended + abnormal-ended audits (a removal must fail loudly).
+  expect(payloads.length, "no voice audit payloads found — the scan is vacuous").toBeGreaterThanOrEqual(3);
+  // The counts ARE allowed and DO ride the ended payloads — assert one is present so the scan is not
+  // vacuously strict (it proves these are the real session payloads, not empty objects).
+  expect(
+    payloads.some((p) => /inAudioTok/.test(p)),
+    "no voice audit payload carries the token counts — is this the wrong file?",
+  ).toBe(true);
+  for (const p of payloads) {
+    // sessionId is the sanctioned ref; the four *Tok fields are counts. Everything below is a raw
+    // content / secret field that must NEVER enter a voice audit row (§4). `\btext\b` matches a bare
+    // `text:` (the brief body) but NOT the `textInTok`/`textOutTok` count keys (word-boundary).
+    expect(p, `voice audit payload leaks a raw/secret field: ${p}`).not.toMatch(
+      /\b(callId|transcript|clientSecret|secret|apiKey|OPENAI_API_KEY|markdown|briefBody)\b|\btext\b|\bbody\b/,
+    );
+  }
+});
