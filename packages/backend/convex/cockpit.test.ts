@@ -10,7 +10,7 @@
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 // Register the delivery components so executePlan can reach workflow.start under convex-test
@@ -213,6 +213,67 @@ describe("executePlan per-recipient personalization (CKPT-03 — distinct bodies
     expect(byRecipient["c@example.com"]?.draft).toBe("Here is the Q3 update.");
     // The subject (goal) is SHARED across every recipient regardless of body tailoring.
     for (const r of reqs) expect(r.goal).toBe("Q3 update");
+  });
+});
+
+describe("executePlan reply threading (RPLY-01 — the plan → requests → getForDelivery spine)", () => {
+  test("copies the plan's threading anchor onto every seeded request; getForDelivery surfaces it", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    // A reply plan carries the GMAIL thread (plan.replyThreadId — NOT plan.threadId, the agent thread)
+    // and the RFC Message-ID header values. executePlan maps replyThreadId → request.threadId.
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1", // agent/convex thread (renders cards) — must NOT ride to the request
+        status: "proposed",
+        recipients: ["sarah.chen@example.com"],
+        mode: "individual",
+        subject: "Re: Q3 numbers",
+        body: "Approved — sending the figures now.",
+        replyThreadId: "thread-reply-1",
+        replyToMessageId: "fix-reply",
+        inReplyTo: "<CAF-reply-1@mail.gmail.com>",
+        references: "<CAF-reply-1@mail.gmail.com>",
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+
+    const reqs = await t.run((ctx) => ctx.db.query("requests").collect());
+    expect(reqs).toHaveLength(1);
+    const req = reqs[0]!;
+    // The plan's GMAIL thread landed as the request's threadId (agent thread_1 did NOT).
+    expect(req.threadId).toBe("thread-reply-1");
+    expect(req.inReplyTo).toBe("<CAF-reply-1@mail.gmail.com>");
+    expect(req.references).toBe("<CAF-reply-1@mail.gmail.com>");
+
+    // getForDelivery must project the anchor through (Pitfall 4 — else send never threads).
+    const delivery = await t.query(internal.gmailAuth.getForDelivery, { requestId: req._id });
+    expect(delivery?.threadId).toBe("thread-reply-1");
+    expect(delivery?.inReplyTo).toBe("<CAF-reply-1@mail.gmail.com>");
+    expect(delivery?.references).toBe("<CAF-reply-1@mail.gmail.com>");
+  });
+
+  test("a non-reply plan seeds rows with no threading; getForDelivery returns none (unchanged)", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedPlan(t, "proposed"); // no reply fields
+
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+
+    const reqs = await t.run((ctx) => ctx.db.query("requests").collect());
+    for (const r of reqs) {
+      expect(r.threadId).toBeUndefined();
+      expect(r.inReplyTo).toBeUndefined();
+      expect(r.references).toBeUndefined();
+    }
+    const delivery = await t.query(internal.gmailAuth.getForDelivery, { requestId: reqs[0]!._id });
+    expect(delivery?.threadId).toBeUndefined();
+    expect(delivery?.inReplyTo).toBeUndefined();
+    expect(delivery?.references).toBeUndefined();
   });
 });
 
