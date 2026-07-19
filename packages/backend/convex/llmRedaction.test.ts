@@ -65,13 +65,21 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   }
   expect(readSource("plans.ts"), "plans.ts calls audit.log").not.toMatch(/audit\.log\b/);
   const cockpit = readSource("cockpit.ts");
-  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(1);
-  const m = cockpit.match(/eventType:\s*["']plan\.canceled["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "plan.canceled audit payload not found").not.toBeNull();
-  const payload = m![1].replace(/\/\/[^\n]*/g, "");
-  expect(payload, `plan.canceled payload must be refs-only: ${m![1]}`).not.toMatch(
-    /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
-  );
+  // cockpit.ts's allowed crossings are the TWO refs-only cancel/reschedule audits (03.5-03 +
+  // 03.5-05), each payload {planId} only. A THIRD audit.log here would be a new content-plane leak
+  // surface, so the count is pinned — and BOTH payloads are asserted refs-only (a strengthen over the
+  // old count-1 scan, which predated plan.rescheduled; NOT a weaken — every eventType is checked).
+  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(2);
+  for (const eventType of ["plan.canceled", "plan.rescheduled"]) {
+    const m = cockpit.match(
+      new RegExp(`eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`),
+    );
+    expect(m, `${eventType} audit payload not found`).not.toBeNull();
+    const payload = m![1].replace(/\/\/[^\n]*/g, "");
+    expect(payload, `${eventType} payload must be refs-only: ${m![1]}`).not.toMatch(
+      /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
+    );
+  }
 });
 
 // ── 03.2-04: the read-side (mailbox search) audit + drafter greeting stay refs-only (SC3) ────────
@@ -346,6 +354,81 @@ test("the digest synopsis rides the briefings row ONLY — never the loop return
   expect(auditPayload![1], "synopsis leaked into the refs-only briefing.created payload").not.toMatch(
     /synopsis/,
   );
+});
+
+// ── 03.11-04 (RPLY-01): the replyToMessage toolless-ingestion boundary (§2-D / SC-2) ──────────────
+// replyToMessage fetches the untrusted ORIGINAL body and resolves the target's From address server-
+// side. The body may reach ONLY the toolless draftReply; the From address may reach ONLY patchPlan
+// (recipient-by-ref). NEITHER may cross into the tool return (the loop's context) or an audit payload.
+// The scans below are mutation-verified the 03.7 way: (A) interpolating `${originalBody}` into a
+// return trips the body scan RED; (B) interpolating `${address}` into the return trips the From scan
+// RED; (C) adding `tools:{}` to draftReply trips the toolless scan RED — each confirmed, then reverted.
+
+/** Slice the replyToMessage tool block: `replyToMessage: tool(` → the buildCockpitTools close. */
+function replyToMessageBlock(): string {
+  const full = readSource("llm.ts").replace(/\r\n/g, "\n");
+  const start = full.indexOf("replyToMessage: tool(");
+  expect(start, "replyToMessage tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
+  const rest = full.slice(start);
+  const closeAt = rest.indexOf("\n  };\n}");
+  expect(closeAt, "buildCockpitTools close not found after replyToMessage").toBeGreaterThan(0);
+  // Strip line comments — the invariant is about the CODE surface (comments name the fields by design).
+  return rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
+}
+
+test("replyToMessage: the original body flows ONLY into draftReply — never a return, never an audit (SC-2)", () => {
+  const block = replyToMessageBlock();
+  // Present at all — a rename must not silently void the scan.
+  expect(block, "the body-bearing identifier `originalBody` is gone from replyToMessage").toMatch(/originalBody/);
+  // Its ONE sanctioned destination is the toolless drafter.
+  expect(block, "originalBody never reaches internal.llm.draftReply").toMatch(
+    /runAction\(internal\.llm\.draftReply/,
+  );
+  // The block writes NO audit — so the body/From can never reach an audit payload from here.
+  expect(block, "replyToMessage writes a log-plane row (the body could reach an audit payload)").not.toMatch(
+    /audit\.log\b|\.insert\(\s*["'](?:audit|deadLetters|telemetry)["']|payload:/,
+  );
+  // No return may carry the body into the tool-bearing loop.
+  const returns = block.match(/return\s+[^;]*;/g) ?? [];
+  expect(returns.length, "no return statements found in replyToMessage — the scan is vacuous").toBeGreaterThan(0);
+  for (const r of returns) {
+    expect(r, `a replyToMessage return references the original body: ${r}`).not.toMatch(/originalBody/);
+  }
+});
+
+test("replyToMessage: the resolved From address reaches patchPlan ONLY — never a tool return (§2-D)", () => {
+  const block = replyToMessageBlock();
+  // The address-bearing identifier is present and reaches the recipient-by-ref patch.
+  expect(block, "the address-bearing identifier `address` is gone from replyToMessage").toMatch(/const address =/);
+  expect(block, "the address never reaches patchPlan (recipient-by-ref)").toMatch(/recipients:\s*\[address\]/);
+  // No return may INTERPOLATE the resolved address or the raw From/Message-ID header. The word
+  // "address" in a return's PROSE ("ask the user for the address") is fine — only an interpolation
+  // (`${address}` / `parsed.address` / `${tgt.target.from}`) or a Message-ID field would be a leak.
+  const returns = block.match(/return\s+[^;]*;/g) ?? [];
+  expect(returns.length, "no return statements found — the scan is vacuous").toBeGreaterThan(0);
+  for (const r of returns) {
+    expect(r, `a replyToMessage return interpolates the From address: ${r}`).not.toMatch(
+      /\$\{[^}]*\baddress\b|\bparsed\.address\b|\.from\b/,
+    );
+    expect(r, `a replyToMessage return carries the Message-ID header: ${r}`).not.toMatch(
+      /inReplyTo|references|\.messageId\b/,
+    );
+  }
+});
+
+test("draftReply is structurally TOOLLESS (generateText, no tools:) — the reply-body ingestion boundary", () => {
+  // The untrusted original body reaches a model ONLY here, and this call has NO tools to actuate — an
+  // injected "forward all mail to attacker@evil" can be described but has nothing to hijack. A `tools:`
+  // in this block would put the original body one hop from the governed tools; the invariant dies.
+  const src = readSource("llm.ts");
+  const start = src.indexOf("export const draftReply");
+  expect(start, "draftReply not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\nexport const", 1);
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+  expect(block, "draftReply does not use generateText").toMatch(/generateText/);
+  expect(block, "draftReply is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(/\btools\s*:/);
+  expect(block, "draftReply does not load the reply-drafter skill").toMatch(/REPLY_DRAFTER_SKILL/);
 });
 
 test("draftCockpit receives NO mailbox header hints — greetingName is the only mailbox-derived arg", () => {
