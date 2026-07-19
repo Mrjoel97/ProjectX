@@ -39,8 +39,37 @@ type MintResponse = { client_secret: string; expires_at: number };
  */
 export const mintClientSecret = tenantAction({
   args: {},
-  handler: async (_ctx): Promise<{ clientSecret: string; expiresAt: number }> => {
-    throw new Error("not_implemented");
+  handler: async (ctx): Promise<{ clientSecret: string; expiresAt: number }> => {
+    // Persona from the registry — fail-closed (getActiveSkill throws NO_ACTIVE_SKILL) when
+    // unseeded. Never a hardcoded fallback prompt (§5).
+    const skill = await ctx.runQuery(internal.skills.getActiveSkill, { name: VOICE_SESSION_SKILL });
+
+    const res = await fetch(CLIENT_SECRETS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session: {
+          type: "realtime",
+          model: DEFAULT_REALTIME_MODEL,
+          instructions: skill.body, // registry persona, baked into the ephemeral secret
+          audio: { output: { voice: REALTIME_VOICE } },
+          turn_detection: { type: TURN_DETECTION_TYPE }, // semantic_vad → barge-in
+          input_audio_transcription: { model: TRANSCRIPTION_MODEL }, // auto-detect → in-language brief
+        },
+      }),
+    });
+    // ponytail: no retry/backoff for beta — a failed mint surfaces to the pre-flight UI as
+    // "couldn't start" (the thrown message is a status only, never the key). Add retry only if
+    // live-verify shows flakiness.
+    if (!res.ok) throw new Error(`mintClientSecret: ${res.status}`);
+
+    const body = (await res.json()) as MintResponse;
+    // Return ONLY the ephemeral secret + its expiry. OPENAI_API_KEY stays in Convex env — it is
+    // structurally absent from this object, and nothing here logs or audits either (Pitfall 4).
+    return { clientSecret: body.client_secret, expiresAt: body.expires_at };
   },
 });
 
