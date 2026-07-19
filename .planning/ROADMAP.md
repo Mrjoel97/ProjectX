@@ -369,7 +369,7 @@ Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (
   4. At session end the agent asks permission to convert the brief into a step-by-step plan; an approved plan enters the normal request pipeline with the review gate.
 **Plans**: 8 plans across 6 waves
 Plans:
-- [ ] 06-01-PLAN.md — Pure foundations: pin Realtime API shapes + packages/voice + priceRealtime + voice playbook (Wave 0)
+- [x] 06-01-PLAN.md — Pure foundations: pin Realtime API shapes + packages/voice + priceRealtime + voice playbook (Wave 0)
 - [x] 06-02-PLAN.md — voiceSessions table + voice-session/voice-brief skills (Wave 0)
 - [ ] 06-03-PLAN.md — voiceToken: mint ephemeral secret + server hangup (Wave 1)
 - [ ] 06-04-PLAN.md — llm.draftVoiceBrief: toolless brief drafting + SMOKE seam (Wave 1)
