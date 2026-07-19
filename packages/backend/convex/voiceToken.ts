@@ -1,6 +1,6 @@
 // Plan-06 VOIC-01/VOIC-02: the server↔OpenAI Realtime seam. Two PLAIN-runtime actions
-// (deliberately NO "use node" — both are just `fetch` to api.openai.com, and a SECOND node
-// module would re-trip the TS circular-inference cliff llm.ts's header warns about).
+// (deliberately DEFAULT-runtime, no node pragma — both are just `fetch` to api.openai.com, and a
+// SECOND node-runtime module would re-trip the TS circular-inference cliff llm.ts's header warns about).
 //
 //   mintClientSecret — hands the browser a short-lived client secret so OPENAI_API_KEY never
 //     leaves Convex (the browser does the WebRTC SDP handshake with that secret, not the key).
@@ -81,7 +81,14 @@ export const mintClientSecret = tenantAction({
  */
 export const hangupCall = internalAction({
   args: { callId: v.string() },
-  handler: async (_ctx, { callId: _callId }): Promise<{ ended: true }> => {
-    throw new Error("not_implemented");
+  handler: async (_ctx, { callId }): Promise<{ ended: true }> => {
+    const res = await fetch(hangupUrl(callId), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}` },
+    });
+    // 200 = terminated. A non-200 throws with the STATUS only — the watchdog caller logs it
+    // refs-only (never the key or the callId-as-secret, §4).
+    if (!res.ok) throw new Error(`hangupCall: ${res.status}`);
+    return { ended: true };
   },
 });

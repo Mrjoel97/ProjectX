@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 35f2b6f
+> Last verified: 2026-07-20 against 06-03
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: none
 
 ## Purpose
@@ -90,6 +90,19 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   `{clientSecret, expiresAt}`; no audit/log carries either.
 - **`priceRealtime` fails closed** — non-finite/negative token counts → `Err`, never NaN
   (so `recordSpend` cannot silently under-count). Enforced by: `cost.test.ts`.
+- **`voiceToken.ts` is PLAIN-runtime (no `"use node"`).** Mint + hangup are just `fetch` to
+  `api.openai.com`; a second `"use node"` module re-trips the TS circular-inference cliff
+  `llm.ts` warns about. Enforced by: no `"use node"` pragma in the file (static grep) +
+  `voiceToken.test.ts` running the actions under the default V8 runtime.
+- **`mintClientSecret` returns ONLY `{clientSecret, expiresAt}` and injects the registry
+  persona.** `OPENAI_API_KEY` reads from env, rides the `Authorization` header, and is
+  structurally absent from the result — never returned, logged, or audited (Pitfall 4). The
+  `instructions` are the active `voice-session` skill body (fail-closed if unseeded, §5).
+  Enforced by: the no-key-leak + fail-closed assertions in `voiceToken.test.ts`.
+- **`hangupCall` is the ONLY server-side force-terminate** — an `internalAction` (never
+  client-exposed) POSTing `/v1/realtime/calls/{callId}/hangup` with the server key; 200 =
+  ended, a non-200 throws with the STATUS only (refs-only, §4). It is the VOIC-02 watchdog's
+  actuator. Enforced by: `voiceToken.test.ts` (targets the hangup path, 200 success, non-200 throw).
 
 ## How to change safely
 
