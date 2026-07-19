@@ -585,6 +585,17 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
 const INBOX_PEEK_CAP = 10;
 
+/** Max reply-target candidates listed back to the loop when a fuzzy ref matches 2+ messages. */
+const REPLY_CANDIDATE_CAP = 5;
+
+/**
+ * Strip a leading `Re:` (any case, possibly repeated/spaced) so a reply subject becomes `Re: <subj>`
+ * exactly ONCE — never `Re: Re: …`. Pure. ponytail: one regex; upgrade only if `Fwd:` chains matter.
+ */
+export function stripRePrefix(subject: string): string {
+  return subject.replace(/^(?:\s*re\s*:\s*)+/i, "").trim();
+}
+
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
  * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
@@ -1270,6 +1281,125 @@ export function buildCockpitTools(
           `(${items.length} summarized) — it is shown in the workspace panel. ` +
           "Do not repeat its contents; point the user at the panel."
         );
+      },
+    }),
+    // ── replyToMessage (RPLY-01) — turn "reply to X" into a real threaded reply in ONE turn ───────
+    // The loop has NO message ids (listInbox strips them, Pitfall 3), so the model refers to the
+    // target by a FUZZY ref (sender / subject / range) and the tool resolves it SERVER-SIDE. On a
+    // single match it sets the recipient BY REF (recipients=[fromAddr], recipientNames label — the
+    // UAT-F1 flow, NO writeCandidates/panel), the `Re:` subject, and the four threading fields, then
+    // drafts the body TOOLLESSLY (draftReply) from the untrusted original — which flows into that ONE
+    // sub-call and NOWHERE else (never a tool return, never a log; the llmRedaction scan holds that).
+    // 0/2+ matches → clarify and write NOTHING (the resolveContacts no-guess discipline: never
+    // substitute, never guess). The return carries LABELS/COUNTS only — no address, no Message-ID, no
+    // body. `range` is an ENUM (§4 — it flows into gmail.listInbox's refs-only mailbox.listed payload).
+    replyToMessage: tool({
+      description:
+        'Reply to a specific message the user points to by sender, subject, or timeframe (e.g. ' +
+        '"reply to Sarah\'s email about Q3 saying I\'ll send the figures Friday"). Resolves the ' +
+        "message server-side, sets the recipient and threads the reply — you never see the address " +
+        "or message id. Drafts the reply body from the user's intent. Clarifies if 0 or 2+ match.",
+      inputSchema: jsonSchema<{
+        intent: string;
+        sender?: string;
+        subject?: string;
+        range?: "today" | "yesterday" | "week";
+      }>({
+        type: "object",
+        properties: {
+          intent: {
+            type: "string",
+            description: "What the reply should say, in plain language (the user's reply intent).",
+          },
+          sender: { type: "string", description: "The sender to reply to, as the user named them." },
+          subject: { type: "string", description: "A word or phrase from the subject to match." },
+          range: {
+            type: "string",
+            enum: ["today", "yesterday", "week"],
+            description: "How far back to look for the message.",
+          },
+        },
+        required: ["intent"],
+        additionalProperties: false,
+      }),
+      execute: async ({ intent, sender, subject, range }): Promise<string> => {
+        // 1. Resolve SERVER-SIDE via the read plane. listInbox returns FULL metas (with ids) to this
+        //    server-side caller — only its TOOL return strips ids; here we keep them to resolve.
+        const listRes = await ctx.runAction(internal.gmail.listInbox, {
+          tenantId,
+          correlationId: planId,
+          range: range ?? "week",
+        });
+        if (!listRes.ok) return mailboxUnavailable("find that message");
+        const s = sender?.toLowerCase().trim();
+        const subj = subject?.toLowerCase().trim();
+        // Match on the raw From (name OR address substring) and/or a subject substring; newest first.
+        const matches = selectForDigest(
+          listRes.messages.filter((m: InboxMessageMeta) => {
+            const senderHit = !s || m.from.toLowerCase().includes(s);
+            const subjectHit = !subj || m.subject.toLowerCase().includes(subj);
+            return senderHit && subjectHit;
+          }),
+          listRes.messages.length,
+        );
+        // 0 → clarify, write nothing (no-guess). 2+ → list by LABEL and ask (never pick for the user).
+        if (matches.length === 0)
+          return "I couldn't find that message in the inbox. Ask the user which sender or subject to reply to — never guess.";
+        if (matches.length > 1) {
+          const labels = matches
+            .slice(0, REPLY_CANDIDATE_CAP)
+            .map((m, i) => `#${i + 1} ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`)
+            .join(", ");
+          return `I found ${matches.length} messages that could match: ${labels}. Ask the user which one to reply to.`;
+        }
+        const target = matches[0]!;
+
+        // 2. Read the target's threading anchor server-side (refs-only HEADERS, distinct from the body).
+        const tgt = await ctx.runAction(internal.gmail.getReplyTarget, { tenantId, id: target.id });
+        if (!tgt.ok) return mailboxUnavailable("read that message");
+        const parsed = parseAddress(tgt.target.from);
+        if (!parsed)
+          return "I couldn't read the sender's address on that message. Ask the user for the address to reply to.";
+        const address = parsed.address; // already lowercased by parseAddress
+        const displayName = parsed.displayName;
+        const replySubject = `Re: ${stripRePrefix(tgt.target.subject)}`; // never "Re: Re: …"
+
+        // 3. Set recipient BY REF + Re: subject + threading — server-side, NO writeCandidates/panel
+        //    (the UAT-F1 recipientNames label flow reused for a message instead of a contact pick).
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          recipients: [address],
+          recipientNames: { [address]: displayName ?? "" },
+          subject: replySubject,
+          replyToMessageId: target.id,
+          replyThreadId: tgt.target.threadId,
+          inReplyTo: tgt.target.inReplyTo,
+          references: tgt.target.references,
+        });
+
+        // 4. Fetch the untrusted ORIGINAL body — server-side only, for the toolless drafter alone.
+        const bodiesRes = await ctx.runAction(internal.gmail.fetchInboxBodies, {
+          tenantId,
+          ids: [target.id],
+        });
+        const originalBody = bodiesRes.ok ? (bodiesRes.bodies[0]?.body ?? "") : "";
+
+        // 5. Redact the user's intent (GRDL-01, fail-closed — the draftBody precedent), then draft the
+        //    body TOOLLESSLY. `originalBody` flows into draftReply and NOWHERE else — never a return,
+        //    never a log (the toolless-ingestion boundary; llmRedaction.test.ts scans this block).
+        const scan = scanText(intent);
+        if (!scan.ok) throw new Error("cockpit: reply-intent scan failed");
+        const draft: { body: string } = await ctx.runAction(internal.llm.draftReply, {
+          tenantId,
+          safeText: scan.value.safeText,
+          originalBody,
+          skillVersion: skillVersions?.[REPLY_DRAFTER_SKILL],
+        });
+        await ctx.runMutation(internal.plans.patchPlan, { planId, body: draft.body });
+
+        // 6. LABELS/COUNTS only (§2-D/§4): the display-name label + the Re: subject, NEVER the From
+        //    address, NEVER the Message-ID, NEVER the original body.
+        return `Reply set up to #1 (${displayName ?? "no name"}), subject "${replySubject}", body drafted. The user can review and Approve.`;
       },
     }),
   };

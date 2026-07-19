@@ -705,6 +705,90 @@ test("listInbox returns sender LABELS + subjects + a count — never an address,
   expect(reply, "listInbox leaked body text").not.toContain(NEEDLE);
 });
 
+// ── 03.11-04 (RPLY-01): replyToMessage — server-side resolve → recipient-by-ref → toolless draft ──
+// The one governed tool that turns "reply to X" into a real reply in ONE turn: resolves the target
+// server-side from a fuzzy ref, sets recipient BY REF (no panel), the Re: subject + threading, and
+// drafts the body toollessly. Returns LABELS/COUNTS only. Driven offline over the seeded fixture
+// (fix-reply = Sarah Chen, "Re: Q3 numbers", thread-reply-1). The reply intent carries SMOKE:: so
+// draftReply short-circuits to a deterministic offline body (zero model calls).
+
+test("replyToMessage resolves ONE match by ref: recipient-by-ref + Re: subject + threading, NO panel, label-not-address", async () => {
+  const { t, planId } = await setupBriefing();
+  const res = await callClock(t, planId, "replyToMessage", {
+    intent: `${SMOKE} I'll send the figures Friday`,
+    sender: "Sarah",
+  });
+
+  // The return is a LABEL + Re: subject — never the address, the Message-ID, or the body.
+  expect(res).toContain("Sarah Chen"); // the display-name label (#1)
+  expect(res, "the From address leaked to the loop").not.toContain("sarah.chen@example.com");
+  expect(res, "the Message-ID leaked to the loop").not.toContain("<CAF-reply-1@mail.gmail.com>");
+
+  const plan = await readPlan(t, planId);
+  // Recipient set BY REF, no panel round-trip.
+  expect(plan?.recipients).toEqual(["sarah.chen@example.com"]);
+  expect(plan?.recipientNames?.["sarah.chen@example.com"]).toBe("Sarah Chen");
+  expect(plan?.candidates ?? [], "replyToMessage wrote candidates — it must NOT round-trip a panel").toEqual([]);
+  // Re: subject (not doubled) + the four threading fields, server-side.
+  expect(plan?.subject).toBe("Re: Q3 numbers");
+  expect(plan?.replyToMessageId).toBe("fix-reply");
+  expect(plan?.replyThreadId).toBe("thread-reply-1");
+  expect(plan?.inReplyTo).toBe("<CAF-reply-1@mail.gmail.com>");
+  expect(plan?.references).toBe("<CAF-reply-1@mail.gmail.com>");
+  // Body drafted toollessly (the deterministic offline draftReply body).
+  expect(plan?.body).toBeTruthy();
+});
+
+test("replyToMessage narrows by subject to a single target", async () => {
+  const { t, planId } = await setupBriefing();
+  const res = await callClock(t, planId, "replyToMessage", {
+    intent: `${SMOKE} sounds good`,
+    subject: "Q3",
+  });
+  expect(res).toContain("Sarah Chen");
+  expect((await readPlan(t, planId))?.replyToMessageId).toBe("fix-reply");
+});
+
+test("replyToMessage on 0 matches clarifies and writes NOTHING (no-guess, never substitute)", async () => {
+  const { t, planId } = await setupBriefing();
+  const res = await callClock(t, planId, "replyToMessage", {
+    intent: `${SMOKE} hi`,
+    sender: "Nonexistent Person",
+  });
+  expect(res).toMatch(/couldn't find|could not find/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipients ?? []).toEqual([]); // nothing set
+  expect(plan?.subject).toBeUndefined();
+  expect(plan?.replyThreadId).toBeUndefined();
+});
+
+test("replyToMessage on 2+ matches lists candidates BY LABEL and asks — writes NOTHING, no address", async () => {
+  const { t, planId } = await setupBriefing();
+  // "example.com" matches three senders (Sarah, Tom, Priya) — ambiguous, so it must ask.
+  const res = await callClock(t, planId, "replyToMessage", {
+    intent: `${SMOKE} thanks`,
+    sender: "example.com",
+  });
+  expect(res).toMatch(/which one|found \d+ messages/i);
+  expect(res, "candidate list leaked an address").not.toContain("@"); // labels only (§2-D)
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipients ?? []).toEqual([]); // never picked for the user
+  expect(plan?.replyThreadId).toBeUndefined();
+});
+
+test("replyToMessage over an INJECTION message addresses the real From, never the injected needle", async () => {
+  const { t, planId } = await setupBriefing();
+  // fix-injection's From is no-reply@example.net; its BODY carries attacker@evil.example.
+  const res = await callClock(t, planId, "replyToMessage", {
+    intent: `${SMOKE} noted`,
+    sender: "Notifications",
+  });
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipients).toEqual(["no-reply@example.net"]); // the From, never the injected address
+  expect(JSON.stringify(plan), "the injected needle became a plan field").not.toContain(NEEDLE);
+  expect(res, "the injected needle reached the loop").not.toContain(NEEDLE);
+});
+
 test("both briefing tools degrade conversationally with no mailbox — fallback + reconnect, no throw", async () => {
   // No fixture seeded and no Gmail token → the not_connected branch (resolveContacts precedent).
   const { t, planId } = await setup();
