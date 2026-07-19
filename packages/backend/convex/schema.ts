@@ -509,4 +509,38 @@ export default defineSchema({
     .index("by_tenant_fromNode", ["tenantId", "fromNodeId"]) // BFS forward
     .index("by_tenant_toNode", ["tenantId", "toNodeId"]) // BFS reverse
     .index("by_tenant_source", ["tenantId", "sourceDocId"]), // delete-cascade
+
+  // ── Phase-6 live-voice-session plane (VOIC-01..04) ─────────────────────────
+  // One row per live WebRTC voice session. NEW table → no migration. Raw audio is
+  // NEVER stored (discard-audio consent, CONTEXT); the durable transcript+brief live
+  // in `vaultDocuments` (referenced by briefRef), and this row carries only session
+  // control state + refs/counts (§4-clean — no transcript/PII here).
+  voiceSessions: defineTable({
+    tenantId: v.string(),
+    // No "wrapping" status: the T-2min wrap-up is a client-side agent instruction, not
+    // a server state. "active" only once callId is set (Pitfall 1); the watchdog ends
+    // a dropped session as "ended_abnormal" (still briefs), a user/graceful close as "ended_clean".
+    status: v.union(
+      v.literal("active"),
+      v.literal("ended_clean"),
+      v.literal("ended_abnormal"),
+    ),
+    callId: v.optional(v.string()), // realtime provider call/session id — null until the WebRTC handshake relays it
+    startedAt: v.number(),
+    endsAt: v.number(), // wall-clock hard cap (capEndsAt from @pikar/voice) — the watchdog's fire time
+    // The cancellable watchdog scheduler handle (same id-type plans.scheduledFunctionId uses):
+    // cancel it on a clean end so it does not double-fire an abnormal brief.
+    watchdogFnId: v.optional(v.id("_scheduled_functions")),
+    // Cumulative realtime token counters (VOIC-02 metering) — audio + text, in + out.
+    inAudioTok: v.number(),
+    outAudioTok: v.number(),
+    textInTok: v.number(),
+    textOutTok: v.number(),
+    language: v.optional(v.string()), // auto-detected spoken language → brief generated in it
+    briefRef: v.optional(v.id("vaultDocuments")), // the stored brief once generated (VOIC-03)
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"]) // browse
+    // getActiveSession's parallel-session guard reads the single active row for a tenant.
+    .index("by_tenant_status", ["tenantId", "status"]),
 });
