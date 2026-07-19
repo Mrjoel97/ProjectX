@@ -372,7 +372,7 @@ test("buildAgentContext surfaces names AWAITING a pick (name + count) — the ag
   // nor blindly re-resolve; it tells the user to pick from the card. This is the fix for the
   // agent↔workspace disconnect: the model's view of the shared plan state is now complete.
   expect(ctx).toContain("Sarah"); // the pending name is visible
-  expect(ctx).toMatch(/await/i); // framed as awaiting the user's pick
+  expect(ctx).toMatch(/still open|not.*picked/i); // framed as a NEUTRAL open-pick state (03.10-05 — no longer the imperative "Awaiting…tell the user to pick")
   expect(ctx).toContain("2"); // the count of found contacts (refs-only)
   expect(ctx).not.toContain("sarah@example.com"); // §2-D: no candidate address to the model
   expect(ctx).not.toContain("Sarah Smoke"); // §4: match hints are USER-only, never to the model

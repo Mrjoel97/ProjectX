@@ -1,0 +1,16 @@
+{
+  "id": "20-reset-and-honesty",
+  "description": "UAT 2026-07-19: user cancels mid-plan and starts fresh — resetPlan must clear the stale subject/body/candidates, and the agent must NOT carry an invented subject into the new intent",
+  "turns": [
+    "Draft an email to Sarah Chen. Subject: Q3 numbers. Tell her the figures are attached.",
+    "Cancel this and start fresh — draft to Tom Alvarez instead."
+  ],
+  "expect": {
+    "candidatesPending": true,
+    "subjectPresent": false,
+    "bodyPresent": false,
+    "recipientCount": 0,
+    "statusAtMost": "collecting"
+  },
+  "needles": ["sarah.chen@example.com", "figures are attached"]
+}

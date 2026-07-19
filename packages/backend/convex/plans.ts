@@ -167,6 +167,35 @@ export const clearCandidates = internalMutation({
 });
 
 /**
+ * Discard the whole draft and start fresh (UAT-D, 03.10-05). Explicit slot-clear: `patchPlan`
+ * DROPS undefined keys so it can NEVER clear a filled slot — this writer sets every composition
+ * field explicitly (mirrors clearCandidates/recordAttachments). Content-plane only — NEVER audited
+ * (§4). This is a COMPOSITION reset (collecting/proposed stage), NOT a scheduled-send cancel — it
+ * deliberately does NOT touch scheduledFunctionId/correlationId/workflowId (that is
+ * cockpit.cancelScheduledPlan). The tool guards status before calling this (no reset past proposed).
+ */
+export const resetPlan = internalMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    await ctx.db.patch(planId, {
+      status: "collecting",
+      recipients: [],
+      mode: undefined,
+      subject: undefined,
+      bodyIntent: undefined,
+      body: undefined,
+      attachments: undefined,
+      attachmentError: undefined,
+      candidates: undefined,
+      pendingValid: undefined,
+      greetingName: undefined,
+      recipientBodies: undefined,
+      sendAt: undefined,
+    });
+  },
+});
+
+/**
  * The single content-plane write surface for generated attachments (CKPT-02, Plan 04 tools).
  * ALWAYS replaces `attachments` wholesale (supersede/remove = pass the full new array) and
  * sets/clears `attachmentError` directly — passing `attachmentError: undefined` CLEARS it (a

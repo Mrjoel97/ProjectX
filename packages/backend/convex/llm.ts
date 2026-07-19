@@ -453,6 +453,10 @@ type PlanRow = {
   // Declaring the candidate `matches`/displayName shape in THIS span would trip the draftCockpit
   // header-hint redaction scan; getById returns the FULL row at runtime, so the count IS present.
   candidates?: { name: string }[];
+  // Lifecycle stage (schema status union) — resetPlan's tool guard reads it to refuse resetting a
+  // plan past `proposed` (a sent/scheduled plan is cancelled via the plan card, not reset). getById
+  // returns it at runtime; never model-facing (the model reasons about slots, not the raw status).
+  status: "collecting" | "proposed" | "approved" | "scheduled" | "delivering" | "done" | "canceled";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -517,7 +521,7 @@ export function buildAgentContext(
     // Only shown when a search is unresolved — the user must pick before these become recipients.
     ...(pending.length
       ? [
-          "Awaiting the user's contact pick (NOT yet recipients — tell the user to pick from the card, do NOT claim you added them):",
+          "A contact pick is still open (these are NOT yet recipients — the user has not picked from the card yet):",
           ...pending.map((c) => `  ${c.name}: ${c.matches?.length ?? 0} contact(s) found`),
         ]
       : []),
@@ -812,6 +816,26 @@ export function buildCockpitTools(
       execute: async ({ mode }): Promise<string> => {
         await ctx.runMutation(internal.plans.patchPlan, { planId, mode });
         return `Send mode set to ${mode}.`;
+      },
+    }),
+    resetPlan: tool({
+      description:
+        "Discard the current draft and start a fresh plan on this thread when the user wants to " +
+        "cancel and begin again. Clears recipients, subject, body, attachments, and any pending " +
+        "contact pick. Use only before a plan is approved/scheduled.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        // Light status guard via the ROW (never a model arg): reset is a composition reset, so it
+        // refuses a plan that is already sent/scheduled — cancelling those is the plan card's job.
+        const plan = await readPlan();
+        if (["scheduled", "delivering", "done"].includes(plan.status))
+          return "This plan is already sent or scheduled — I can't reset it. Use the plan card to cancel a scheduled send.";
+        await ctx.runMutation(internal.plans.resetPlan, { planId });
+        return "Plan reset to empty. Start collecting the new plan's recipients, subject, and body.";
       },
     }),
     draftBody: tool({
