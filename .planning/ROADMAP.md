@@ -318,7 +318,7 @@ Plans:
 - [x] 03.11-02-PLAN.md — Wave 2: reply-body brain — new gated reply-drafter skill (5-file mirror) + toolless draftReply internalAction (digestInbox clone; original body ingested with NO tools) (completed 2026-07-19; commits 6969e8d/7c8e7ab)
 - [x] 03.11-03-PLAN.md — Wave 3: delivery threading spine — buildMime In-Reply-To/References + send POST threadId + target-header read + executePlan copies threading to requests + getForDelivery returns it (completed 2026-07-19; commits e10ba23/0a08052/ea2a2b0/e50b228)
 - [x] 03.11-04-PLAN.md — Wave 4: the replyToMessage tool — server-side resolve + recipient-by-ref (no panel) + Re: subject + threading + toolless draft; patchPlan/resetPlan threading writers; mutation-checked toolless-boundary scan (completed 2026-07-19; commits f37b74a/e3ccc36/940230c)
-- [ ] 03.11-05-PLAN.md — Wave 5: cockpit-agent reply guidance edit through the 3.6 eval gate (candidate → pinned eval green incl. injection probe → activate)
+- [x] 03.11-05-PLAN.md — Wave 5: cockpit-agent reply guidance edit through the 3.6 eval gate — candidate v12 (2-file mirror) → pnpm eval:golden --skill cockpit-agent@12 23/23 GREEN incl. 23-reply-happy + 24-reply-injection (runId 98ea4f20, $0.1009) → evidence recorded → activateSkill v12 (RPLY-01) (completed 2026-07-19; commits e8e13e0/6ca78f6)
 - [ ] 03.11-06-PLAN.md — Wave 6: phase close + live in-thread reply human-verify (Pitfall 1 empirical threading resolution)
 
 ### Phase 4: Attachment & Voice-Dictation Intake
