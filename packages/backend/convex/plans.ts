@@ -86,6 +86,14 @@ export const patchPlan = internalMutation({
     recipientBodies: v.optional(v.record(v.string(), v.string())), // address(lowercased) → tailored body override (CKPT-03); the tool passes the full merged map
     recipientNames: v.optional(v.record(v.string(), v.string())), // address(lowercased) → picked displayName (UAT-F1); the fold passes the full merged map
     sendAt: v.optional(v.number()), // 03.5: absolute epoch ms deferred send time (drop-undefined preserves a stored value on a partial patch)
+    // 03.11 RPLY-01 reply threading — the replyToMessage tool (Plan 04) sets these server-side so a
+    // reply threads (executePlan copies replyThreadId→request.threadId + inReplyTo/references). All
+    // optional; drop-undefined means a non-reply patch never touches them. replyThreadId is the GMAIL
+    // thread id (NOT the agent thread `threadId`); inReplyTo/references are RFC Message-ID headers.
+    replyToMessageId: v.optional(v.string()),
+    replyThreadId: v.optional(v.string()),
+    inReplyTo: v.optional(v.string()),
+    references: v.optional(v.string()),
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
@@ -193,6 +201,13 @@ export const resetPlan = internalMutation({
       recipientBodies: undefined,
       recipientNames: undefined, // explicit clear (UAT-F1) — stale picked names must not re-label the NEXT draft's recipients
       sendAt: undefined,
+      // 03.11 RPLY-01 (Pitfall 6): a reply then "start over" must NOT leave a stale threadId that
+      // silently threads the next FRESH compose into the old conversation. patchPlan drops undefined,
+      // so — like every field above — each threading field must be named explicitly to clear.
+      replyToMessageId: undefined,
+      replyThreadId: undefined,
+      inReplyTo: undefined,
+      references: undefined,
     });
   },
 });

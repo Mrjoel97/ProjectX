@@ -222,6 +222,54 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
   });
 });
 
+describe("patchPlan reply threading + resetPlan clears it (03.11 RPLY-01, Pitfall 6)", () => {
+  /** Seed a collecting plan; return its id. */
+  async function seedPlan(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "collecting",
+        recipients: [],
+        createdAt: Date.now(),
+      }),
+    );
+  }
+
+  const THREADING = {
+    replyToMessageId: "fix-reply",
+    replyThreadId: "thread-reply-1",
+    inReplyTo: "<CAF-reply-1@mail.gmail.com>",
+    references: "<CAF-reply-1@mail.gmail.com>",
+  };
+
+  test("patchPlan writes all four threading fields; getById reads them back verbatim", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await t.mutation(internal.plans.patchPlan, { planId, ...THREADING });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    expect(plan).toMatchObject(THREADING);
+  });
+
+  test("resetPlan clears all four threading fields (no stale thread on the next fresh compose)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    // A reply set the threading, then the user says "start over".
+    await t.mutation(internal.plans.patchPlan, { planId, subject: "Re: Q3 numbers", ...THREADING });
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    // Every threading field is gone — a fresh compose can never silently thread into the old convo.
+    expect(plan?.replyToMessageId).toBeUndefined();
+    expect(plan?.replyThreadId).toBeUndefined();
+    expect(plan?.inReplyTo).toBeUndefined();
+    expect(plan?.references).toBeUndefined();
+    expect(plan?.subject).toBeUndefined(); // and the reply subject too
+  });
+});
+
 describe("reportForPlan attachment extension (per-recipient delivered attachment url)", () => {
   test("each report row gains attachments derived from the request's attachmentRefs", async () => {
     const t = convexTest(schema, modules);
