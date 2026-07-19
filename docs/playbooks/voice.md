@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-05
+> Last verified: 2026-07-20 against 06-06
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: none
 
 ## Purpose
@@ -22,7 +22,12 @@ Pure packages (`packages/*` — no Convex, unit-testable):
   pure fixed-section markdown composer; empty sections render "None"; transcript welded
   verbatim in code (never model-authored).
 - `packages/voice/src/session.ts` — session status FSM (`active → ended_clean |
-  ended_abnormal`, terminal once ended) + `capEndsAt(startedAt)` / `CAP_MS`.
+  ended_abnormal`, terminal once ended) + `capEndsAt(startedAt)` / `CAP_MS` +
+  `graceExpired(sinceMs, now, windowMs)` (the pure mic-recovery/silence expiry predicate,
+  fail-safe on a bad clock read).
+- `packages/voice/src/realtime.ts` (cont.) — `REALTIME_EVENTS` / `REALTIME_CLIENT_EVENTS`:
+  the pinned data-channel event `type` names the browser client matches (transcript, orb,
+  metering) and stamps (wrap-up nudge, text-turn fallback). Same re-confirm caveat as the URLs.
 - `packages/voice/src/metering.ts` — `accumulateUsage()` folds `response.done` usage
   deltas into cumulative token counters.
 - `packages/cost/src/cost.ts` — `priceRealtime()` + `REALTIME_PRICING` (fail-closed,
@@ -34,11 +39,21 @@ Backend adapters (thin, added in later plans — pre-registered in `watch.json`)
   `startSession`/`recordUsage`/`endSessionClean`; internal `forceEndSession` (the watchdog
   actuator) + `storeBrief`/`persistBrief`/`markEndedClean`/`markEndedAbnormal`/`getActiveSession`.
   Arms the ONE watchdog, runs the clean/abnormal CAS transitions, meters, and ingests the brief.
+  `abortSession` (06-06) is the thin tenant-guarded client gateway that schedules
+  `forceEndSession` (the browser cannot call an internalAction) — the mic-loss / silence
+  fall-through route; it re-uses the abnormal path, it does not add a second one.
 - `packages/backend/convex/voiceToken.ts` — plain-runtime `action` minting the ephemeral
   client secret + `hangupCall`; reads `OPENAI_API_KEY` from env, never returns it.
 
-Frontend (later plan): `apps/web/app/(app)/dashboard/voice/` — pre-flight → live session
-→ post-call summary.
+Frontend (06-06): `apps/web/app/(app)/dashboard/voice/` — the `/dashboard/voice` route
+(nav entry in `layout.tsx`) as a phase machine (`page.tsx`): pre-flight → live → post-call
+(the post-call summary is Plan 07's seam). `useVoiceSession.ts` owns the WebRTC lifecycle
+(mint → getUserMedia → RTCPeerConnection + `oai-events` data channel → `/realtime/calls`
+handshake → relay `call_id` → `startSession`), assembles the two-sided transcript, forwards
+throttled `response.done` usage, drives the countdown + T-2min wrap-up, and runs the
+mic-loss pause/recover + silence expiry. `PreFlight.tsx` (mic permission + level meter +
+consent), `LiveSession.tsx` (transcript + orb + countdown + End confirm + text fallback +
+mic-lost paused banner + a11y).
 
 ## Dependencies & blast radius
 
@@ -79,6 +94,17 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   paused.** A mic-drop grace window consumes cap time. Why: a movable cap can be stalled
   indefinitely by a hung client. Enforced by: `capEndsAt`/`CAP_MS` are pure + unit-tested;
   `startSession` arms exactly one timer (later `voice.test.ts`).
+- **Mic-loss pauses and recovers, but the pause consumes cap time and NEVER re-arms the
+  watchdog.** On mic loss (track `ended` / getUserMedia failure / permission revoke) the client
+  hook enters `paused` and shows "mic lost — reconnect to continue"; `reconnect()` re-acquires
+  the mic and `replaceTrack`s it into the existing sender (no re-handshake). A mic that has not
+  recovered within `MIC_GRACE_MS`, or continued silence past `SILENCE_MS`, falls through to
+  `voice.abortSession` → the EXISTING `forceEndSession` abnormal path (a brief is still
+  generated). `remainingMs` keeps counting down through the pause (RESEARCH Open Question 1 —
+  cap stays wall-clock). Both timers are one decision: the pure, fail-safe `graceExpired`
+  predicate (never ends on a non-finite/negative clock read). Enforced by: `graceExpired` is
+  pure + unit-tested (`session.test.ts`); the real mic-loss recovery UX is the Plan-08 live
+  phase-gate (voice is not unit-testable).
 - **The brief BODY is vault content and keeps PII by design; session audit/telemetry/DLQ
   rows are refs/ids/counts ONLY** (CLAUDE.md §4 reconciliation). Do NOT `scanText`-strip
   the brief body. Enforced by: `ingestDoc` redacts only the vector; the mutation-checked

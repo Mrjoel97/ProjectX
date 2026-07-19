@@ -190,6 +190,24 @@ export const endSessionClean = tenantMutation({
 });
 
 /**
+ * Client-initiated abnormal end (VOIC-01 mic-loss / silence fall-through). `forceEndSession` is an
+ * internalAction the browser cannot call, so this is the thin tenant-guarded gateway to it — it does
+ * NOT re-implement the abnormal path, it just schedules the SAME actuator the parallel guard already
+ * schedules (hangup + auto-store brief; the watchdog is never re-armed). Mirrors startSession's own
+ * `scheduler.runAfter(0, internal.voice.forceEndSession, …)`. Idempotent by construction: a second
+ * call schedules a second forceEndSession whose markEndedAbnormal CAS no-ops on an already-ended row.
+ */
+export const abortSession = tenantMutation({
+  args: { sessionId: v.id("voiceSessions") },
+  handler: async (ctx, { sessionId }): Promise<{ ok: true }> => {
+    const s = await ctx.db.get(sessionId);
+    if (!s || s.tenantId !== ctx.tenantId) throw new Error("voice: session not found"); // no cross-tenant
+    await ctx.scheduler.runAfter(0, internal.voice.forceEndSession, { sessionId });
+    return { ok: true };
+  },
+});
+
+/**
  * The watchdog actuator (VOIC-02) — armed by startSession, fires at endsAt or immediately from the
  * parallel guard / client beacon. CAS-flips the session to ended_abnormal (no-op if a clean end won),
  * force-terminates the OpenAI call, then auto-stores a brief (no human present to gate). A failed

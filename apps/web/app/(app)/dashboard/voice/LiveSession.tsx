@@ -37,7 +37,8 @@ function speakerLabel(s: Speaker | null): string {
 }
 
 export function LiveSession({ session }: { session: VoiceSession }) {
-  const { status, transcript, speaking, remainingMs, nearingCap, end, sendText } = session;
+  const { status, transcript, speaking, remainingMs, nearingCap, end, sendText, reconnect } =
+    session;
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState("");
   const [announce, setAnnounce] = useState("");
@@ -60,6 +61,7 @@ export function LiveSession({ session }: { session: VoiceSession }) {
     prevStatus.current = status;
     if (status === "connecting") setAnnounce("Connecting your session.");
     else if (status === "live") setAnnounce("Session started. You can begin speaking.");
+    else if (status === "paused") setAnnounce("Microphone lost. Reconnect to continue.");
     else if (status === "ended") setAnnounce("Session ended. Your brief is being prepared.");
   }, [status]);
 
@@ -81,8 +83,8 @@ export function LiveSession({ session }: { session: VoiceSession }) {
     <div
       style={{
         width: "min(46rem, 100%)",
-        display: "grid",
-        gridTemplateRows: "auto 1fr auto",
+        display: "flex",
+        flexDirection: "column",
         gap: "1rem",
         height: "min(80vh, 44rem)",
       }}
@@ -162,10 +164,52 @@ export function LiveSession({ session }: { session: VoiceSession }) {
         </button>
       </header>
 
+      {/* Mic-lost paused state — the grace window is still counting cap time, so this is urgent but
+          recoverable. Keyboard-operable Reconnect retries getUserMedia; if it doesn't return in time
+          the hook falls through to the abnormal-end brief. */}
+      {status === "paused" && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            padding: "0.7rem 1rem",
+            borderRadius: "0.75rem",
+            border: "1px solid var(--held-text)",
+            background: "var(--canvas)",
+          }}
+        >
+          <span style={{ color: "var(--held-text)", fontWeight: 600, flex: 1 }}>
+            Mic lost — reconnect to continue.
+          </span>
+          <button
+            type="button"
+            onClick={() => void reconnect()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.45rem 1rem",
+              borderRadius: "999px",
+              border: "none",
+              cursor: "pointer",
+              background: "var(--teal-600)",
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: "0.9rem",
+            }}
+          >
+            <MicIcon size={14} /> Reconnect
+          </button>
+        </div>
+      )}
+
       {/* Transcript */}
       <div
         ref={scrollRef}
         style={{
+          flex: 1,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",

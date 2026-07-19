@@ -4,6 +4,7 @@ import { api } from "@pikar/backend/api";
 import {
   CALLS_URL,
   CAP_MS,
+  graceExpired,
   readUsage,
   REALTIME_CLIENT_EVENTS,
   REALTIME_EVENTS,
@@ -34,6 +35,11 @@ type SessionId = FunctionArgs<typeof api.voice.recordUsage>["sessionId"];
 const USAGE_FLUSH_MS = 5_000;
 // Emphasize + nudge the agent to wrap up at T-2min (RESEARCH Pattern 3). Sent once over the channel.
 const WRAP_UP_MS = 2 * 60_000;
+// Grace/silence windows — Claude's Discretion (CONTEXT). ponytail: 30s mic re-acquire, 90s dead-air
+// (well past the persona's "still there?" check-in). BOTH consume cap time — the watchdog is never
+// re-armed or extended (RESEARCH Open Question 1, cap stays wall-clock). Tune after live-verify.
+const MIC_GRACE_MS = 30_000;
+const SILENCE_MS = 90_000;
 
 export type VoiceStatus = "idle" | "connecting" | "live" | "paused" | "ended" | "error";
 export type Speaker = "user" | "agent";
@@ -70,6 +76,7 @@ export function useVoiceSession(): VoiceSession {
   const startSession = useMutation(api.voice.startSession);
   const recordUsage = useMutation(api.voice.recordUsage);
   const endSessionClean = useMutation(api.voice.endSessionClean);
+  const abortSession = useMutation(api.voice.abortSession);
 
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [transcript, setTranscript] = useState<Turn[]>([]);
@@ -316,6 +323,18 @@ export function useVoiceSession(): VoiceSession {
     if (id) await endSessionClean({ sessionId: id }).catch(() => {});
   }, [teardown, endSessionClean]);
 
+  // Mic-loss / silence fall-through → the EXISTING abnormal-end path (hangup + auto-store brief).
+  // abortSession is the thin client gateway to internal.voice.forceEndSession. The watchdog is NOT
+  // re-armed — the grace window simply consumed cap time (remainingMs kept counting through the pause).
+  const fallThroughAbnormal = useCallback(() => {
+    if (endedRef.current) return;
+    const id = sessionIdRef.current;
+    teardown();
+    setStatus("ended");
+    setSpeaking(null);
+    if (id) void abortSession({ sessionId: id }).catch(() => {});
+  }, [teardown, abortSession]);
+
   // Retry getUserMedia after a mic loss and swap the live track back into the existing sender — no
   // re-handshake, the cap is untouched (the pause consumed wall-clock time).
   const reconnect = useCallback(async () => {
@@ -382,13 +401,29 @@ export function useVoiceSession(): VoiceSession {
         });
       }
 
+      // Silence fall-through: dead air past SILENCE_MS ends the session (protects capped time from a
+      // conversation that has gone quiet). graceExpired fail-safes on a bad clock read (never ends).
+      if (status === "live" && graceExpired(lastActivityRef.current, now, SILENCE_MS)) {
+        fallThroughAbnormal();
+        return;
+      }
+      // Mic-loss grace: a mic that has not recovered within MIC_GRACE_MS falls through to the abnormal
+      // path (brief still generated). The pause consumed cap time; the watchdog was never re-armed.
+      if (
+        status === "paused" &&
+        pausedSinceRef.current !== null &&
+        graceExpired(pausedSinceRef.current, now, MIC_GRACE_MS)
+      ) {
+        fallThroughAbnormal();
+        return;
+      }
       // Cap reached — the server watchdog force-ends; mirror it client-side so the surface settles.
       if (left <= 0) end();
     };
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [status, send, end]);
+  }, [status, send, end, fallThroughAbnormal]);
 
   // Best-effort cleanup on unmount / tab close (the server watchdog is the authoritative backstop).
   useEffect(() => teardown, [teardown]);
