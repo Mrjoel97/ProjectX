@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 03.10-04-PLAN.md
-last_updated: "2026-07-19T03:32:48.330Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: "Phase 03.10 execution COMPLETE (7/7 plans) — HUMAN SIGN-OFF 2026-07-19; awaiting phase-goal verification (/gsd:verify-work), then gsd phase complete (orchestrator)"
+last_updated: "2026-07-19T15:23:10.000Z"
+last_activity: "2026-07-19 — Phase 3.10 Cockpit Conversation Repair CLOSED-OUT after HUMAN APPROVAL: the owner replayed the full UAT live and approved verbatim ('I'm satisfied. I've tested everything the way you asked me to test. Everything is good. I approve.') — covering ALL manual rows: UAT-A (panel demotion), UAT-B (stalled-resolution recovery), UAT-C (picker visible / propose-guard / collapsible brief), UAT-D (reset works, no invented subject, no phantom claims), UAT-E (fragment answers absorbed — 'meeting reminder' became the subject without re-asks), UAT-F (briefing counts match the card, picks register visibly by NAME, no fabricated recipients/subject/body on the continue turn, reset carries nothing over). Zero unintended sends. Plans 05 (resetPlan + honesty, 86e5a5f, v9 gate run 7940a9a0 20/20 $0.0791), 06 (history injection + fail-open hotfix, 2e1ffbb/b9da09b, v10 gate run 27efb84d 21/21 $0.0973 after the documented 361d5769 storm), 07 (post-pick trust: recipientNames + structural omitRecipientEdits withholding + isNeedsYou count parity, c10c012, v11 gate run 39d0c4e2 21/21 $0.0871) — SUMMARYs written, VALIDATION.md all rows verified, deferred-items ledger complete (llmRedaction 1→2 tally, reply-grounding rebuild owner-deferred/escalatable, listedCount 50+ polish, dev-server OOM env ceiling). NEXT: /gsd:verify-work 3.10 (orchestrator), then Phase 3.11 Inbox Reply on the repaired flow."
 progress:
   total_phases: 21
   completed_phases: 12
-  total_plans: 102
-  completed_plans: 96
+  total_plans: 104
+  completed_plans: 100
 ---
 
 ---
@@ -367,6 +367,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
+Phase: 3.10 (Cockpit Conversation Repair) — EXECUTION COMPLETE (7/7 plans), HUMAN SIGN-OFF 2026-07-19; awaiting phase-goal verification (/gsd:verify-work). The owner replayed the full UAT transcript live and approved verbatim ("I'm satisfied. I've tested everything the way you asked me to test. Everything is good. I approve.") — closing UAT-A through UAT-F with zero unintended sends. Plans 01-04 shipped earlier same-day (gmail.search fixture seam; BriefingCard demotion; pending-pick skill + fixture 19; propose-deadlock guard + collapsible brief). Plans 05-07 were live-replay-driven gap closures: 05 = a real resetPlan mutation+tool + neutral pending-pick statement + skill v9 (gate run 7940a9a0, 20/20, $0.0791); 06 = history-injected prompt (buildHistoryBlock last-10/500-chars, fetchRecentHistory in BOTH drivers fetch-before-save, eval-runner accumulation parity) + skill v10 (clean gate run 27efb84d 21/21 $0.0973 after the documented 361d5769 storm — recovered per eval-env-recovery, never activated on red) + the live-found fail-open hotfix b9da09b (a 1s history-read timeout must never take the send down); 07 = post-pick trust repair (recipientNames persisted+rendered so a pick is VISIBLE as `#1: Brett J. Fox`; STRUCTURAL omitRecipientEdits tool withholding on the RESOLUTION_CONTINUE turn — a fabricated overwrite is impossible, not discouraged; honest RESOLUTION_CONTINUE; ONE isNeedsYou predicate giving the agent sentence the card masthead's exact numbers) + skill v11 (gate run 39d0c4e2, 21/21, $0.0871, active confirmed). Fixture 22 explicitly SKIPPED (runner never drives resolveRecipients — upgrade path recorded); mid-execution a fabricated proposed plan from the UAT session (invented brett@example.com/devpost@example.com) was defused via plans:resetPlan before the 07 fixes landed. Deferred ledger: llmRedaction cockpit.ts audit-tally 1→2, the owner-deferred reply-grounding rebuild (escalatable on narration drift), listedCount "50+" polish, workspace-page dev-server OOM (env-only). NEXT: /gsd:verify-work 3.10, then Phase 3.11 (Inbox Reply) on the repaired flow.
+
 Phase: 3.8 (Vault Document Extraction) — IN PROGRESS. Wave 0 (the sequential contract) COMPLETE on `main`, 1/6 plans complete — Wave-2 lanes may now start in parallel worktrees.
 Plan: 03.8-01 COMPLETE (Wave 0 — the extraction CONTRACT; every shared edit the 4 lanes would fight over landed sequentially, and `schema.ts`/`vault.ts`/`watch.json`/both package.jsons/`pnpm-lock.yaml` are now FROZEN for the phase). `@pikar/vault` gained `extractKind.ts` (barrel-exported `extractionKindFor` — pdf/image/office/transcribe with the octet-stream `.docx/.xlsx/.pptx` extension fallback, classifier deliberately DUMB about containers — plus `VAULT_EXTRACT_CHAR_CAP=400_000`/`VAULT_EXTRACT_PAGE_CAP=50`/`MIN_CHARS_PER_PAGE=25`/`TRANSCRIBABLE_CONTAINER_MIME` (mp4/webm/mpeg video + the audio list, NOT quicktime)) and the `officeText.ts` stub (throws `office_parse_not_implemented`; deliberately OFF the index barrel — the subpath export `@pikar/vault/officeText` keeps fflate structurally out of the V8 bundle). Schema: `vaultDocuments.status` grew `extracting` + `extractionTruncated` optional flag (additive, no migration — Pitfall 2 closed). `vault.ts`: `vaultUpload` now schedules `internal.vaultExtract.extractDoc` / `internal.vaultTranscribe.transcribeDoc` by kind when `!searchable` (row STAYS `pending_extraction` at insert — the action flips it, honest pill; TXT/MD/CSV path regression-guarded, zip stays storage-only); the scheduler-safe seam `ingestExtractedText` (fail-closed tenant guard, stores RAW extracted text per the planner-confirmed Open-Q2 call — extraction-time scanText is the lanes' gate + counts source, downstream re-scans) + `markExtracting` + `getDocForExtraction` closed the identity wall (Pitfall 3 — the public `vaultIngestText` throws UNAUTHENTICATED for scheduler callers). Both `"use node"` lane stubs exist and compile under codegen (`markFailed("not_implemented")` bodies; explicit `Promise<null>` returns, §96). Deps: `unpdf@1.6.2` (backend) + `fflate@0.8.3` (vault) pinned via `pnpm add -E` (caret-free), lockfile committed once (Pitfall 4). Governance: watch.json got the six exact vaultExtract/vaultTranscribe/vaultSweep (+test) paths (Pitfall 5 — prefixes don't glob); vault.md gained the extraction-lifecycle section (status walk, seam invariant, caps, redact-then-audit, bytes-via-storage-never-args) + FOUR per-lane append-only subsections (each lane writes ONLY its own — Stop hook satisfied per-lane, no cross-lane playbook conflicts); PARALLELIZATION.md carries the 3.8 lane table (lane-1/vault-extract, lane-2/office-parsers, lane-3/sweep-ui, lane-4/video-transcribe) + the extended frozen-singleton list. TDD both code tasks: 10 new vault.test.ts tests incl. scheduled-by-kind asserts via `_scheduled_functions` system-table inspection (cockpit.test.ts pattern); vault suite 18/18, @pikar/vault 27/27, touched-file typecheck clean (pre-existing .test.ts noise unchanged), Biome baseline-identical (stash-diffed), check-playbooks exit 0. NO deviations. Deliberately ABSENT (verified): no skills.ts edit — attachment-extractor reused as-is, transcription takes no prompt. GOTCHA: `pnpm --filter @pikar/backend test -- vault.test` does NOT filter (ran the whole suite) — use `pnpm exec vitest run convex/vault.test.ts` per-file. Commits 1f291f2/299d562 (T1 TDD), edbe358/1834e13 (T2 TDD), 9033495 (T3 governance). NEXT: announce Wave-0 merge; spawn the 4 Wave-2 lane sessions (plans 02-05) in parallel worktrees, then 03.8-06 integration close.
 
@@ -514,6 +516,9 @@ Progress: [█████████░] 94%
 | Phase 03.10 P01 | 12min | 1 tasks | 5 files |
 | Phase 03.10 P02 | 6min | 2 tasks | 3 files |
 | Phase 03.10-cockpit-conversation-repair P04 | 32min | 2 tasks | 5 files |
+| Phase 03.10 P05 | — | 3 tasks | 9 files |
+| Phase 03.10 P06 | — | 3 tasks | 10 files |
+| Phase 03.10 P07 | — | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -632,6 +637,11 @@ Recent decisions affecting current work:
 - [Phase 03.10]: Defect-A demotion is a pure reorder (composing boolean in PlanCards) — no collapse/<details>, no new field/mutation/query; revisit collapse only if 03.10-03 human-verify asks
 - [Phase 03.10]: Demotion-order E2E lives in cockpit-resolve.spec.ts (extended, not a new spec); DOM order asserted via compareDocumentPosition, viewport-independent
 - [Phase 03.10-cockpit-conversation-repair]: 03.10-04: proposePlan refuses over a parked pick (backend-owned invariant) + name-only PlanRow widening keeps the header-hint redaction scan green; frontend picker-survival + masthead-collapse are defense-in-depth
+- [Phase 03.10]: HUMAN SIGN-OFF 2026-07-19 — owner replayed the full UAT live and approved verbatim ("I'm satisfied. I've tested everything the way you asked me to test. Everything is good. I approve."); covers ALL manual validation rows UAT-A through UAT-F; zero unintended sends. Phase execution complete 7/7 — awaiting /gsd:verify-work.
+- [Phase 03.10]: resetPlan is the explicit-clear reset contract — every slot field set explicitly (patchPlan drops undefined and can never clear); composition reset only (refuses past proposed; scheduled cancel stays cockpit.cancelScheduledPlan); later fields (recipientNames) MUST join its clear list
+- [Phase 03.10]: History injection is caller-supplied, loop-rendered: buildHistoryBlock caps (last 10 msgs / 500 chars) live in ONE place; the eval runner accumulates turn/reply pairs for production parity; fetchRecentHistory FAILS OPEN (returns [] on store-read failure — the send is load-bearing, the transcript is an enhancement; live hotfix b9da09b)
+- [Phase 03.10]: Structural safety over skill wording — v10's wording failed live against a fabricated setRecipients overwrite, so the RESOLUTION_CONTINUE turn withholds the recipient-mutating tools entirely (omitRecipientEdits, the first per-entry-point tool-set variation); picked names persist (recipientNames) so the model can SEE a completed pick
+- [Phase 03.10]: Reply-grounding rebuild (structured/reconciled reply) DEFERRED by owner decision — fix tools+wording+history+structure first; escalate if narration drift recurs. Also deferred: fixture 22 (harness never drives resolveRecipients; upgrade path = seed folded state + runner omit-flag grammar), listedCount "50+" cap treatment
 
 ### Roadmap Evolution
 
@@ -656,8 +666,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-19T03:32:34.068Z
-Stopped at: Completed 03.10-04-PLAN.md
+Last session: 2026-07-19T15:23:10.000Z
+Stopped at: Phase 03.10 close-out bookkeeping complete (7/7 plans, human sign-off recorded) — next: /gsd:verify-work 3.10 (orchestrator), then Phase 3.11
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
