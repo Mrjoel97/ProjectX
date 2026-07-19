@@ -165,7 +165,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CKPT-03 | Phase 3.4 | Complete (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure) |
 | CKPT-04 | Phase 3.7 | Complete (human-verified 2026-07-17 — reads as an intelligent executive report, Gap 1 + Gap 2 (presentation) closed; inbox-digest v2 eval-gated & active) |
 | CKPT-05 | Phase 3.9 | Complete (human-verified 2026-07-17, after 4 checkpoint-feedback fixes — see 03.9-04-SUMMARY) |
-| RPLY-01 | Phase 3.11 | In progress |
+| RPLY-01 | Phase 3.11 | Complete (6/6 plans; owner live human-verify 2026-07-19 — a real "reply to X" landed IN the original Gmail thread with the correct Re: subject, addressed only the original sender) |
 | SCHD-01 | Phase 3.5 | Complete |
 | VALT-01 | Phase 5 | Complete |
 | VALT-02 | Phase 5 | Complete |
