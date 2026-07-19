@@ -311,10 +311,10 @@ Plans:
 **Goal**: "Draft a reply to X" is a real reply, not a silently-downgraded fresh compose (the live-UAT gap of 2026-07-19). Replying to a mailbox message: (1) targets the original message by ref — the recipient is the message's From address, set by message reference without a resolveContacts panel round-trip (the address stays refs-only to the agent loop, §2-D); (2) the plan carries `Re:` subject and Gmail threading (In-Reply-To/References headers + threadId) so the reply lands in-thread; (3) the reply body is drafted from the user's stated intent WITH the original message as context, honoring the toolless-ingestion invariant (the original body is untrusted third-party content — it reaches an LLM only in a toolless call, never the tool-bearing loop; injection in the original can describe, never actuate); (4) delivery rides the unchanged governed plan → single Approve → fan-out (audit refs-only, zero sends before Approve).
 **Depends on**: Phase 3.7 (gmail read plane: listInbox/fetchInboxBodies + toolless digest precedent), Phase 3.2.1 (agent tool-loop), Phase 3.6 (eval gate for the skill edit), Phase 3.10 (conversation repair lands first — reply UX must not build on the broken panel flow)
 **Requirements**: RPLY-01 (minted at planning 2026-07-19)
-**Plans:** 6 plans (fully sequential — cockpit.md §9 watches nearly every impl file, so shared-playbook plans cannot share a wave)
+**Plans:** 1/6 plans executed
 
 Plans:
-- [ ] 03.11-01-PLAN.md — Wave 1: groundwork — optional threading schema fields (plans/requests/inboxFixtures) + closed agentSteps.tool union literal + fixture thread-anchor & injection message + 2 golden eval cases + RPLY-01 mint
+- [x] 03.11-01-PLAN.md — Wave 1: groundwork — optional threading schema fields (plans/requests/inboxFixtures) + closed agentSteps.tool union literal + fixture thread-anchor & injection message + 2 golden eval cases + RPLY-01 mint (completed 2026-07-19; commits 06e5cb1/b7e784d/54b5168)
 - [ ] 03.11-02-PLAN.md — Wave 2: reply-body brain — new gated reply-drafter skill (5-file mirror) + toolless draftReply internalAction (digestInbox clone; original body ingested with NO tools)
 - [ ] 03.11-03-PLAN.md — Wave 3: delivery threading spine — buildMime In-Reply-To/References + send POST threadId + target-header read + executePlan copies threading to requests + getForDelivery returns it
 - [ ] 03.11-04-PLAN.md — Wave 4: the replyToMessage tool — server-side resolve + recipient-by-ref (no panel) + Re: subject + threading + toolless draft; patchPlan/resetPlan threading writers; mutation-checked toolless-boundary scan
@@ -419,6 +419,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.5 Deferred Send (INSERTED) | 6/6 | Complete (SCHD-01 + reschedule/far-future cap refinements) | 2026-07-19 |
 | 3.6 Agent Eval Gate (INSERTED) | 5/5 | Complete   | 2026-07-15 |
 | 3.7 Inbox Briefing (INSERTED) | 9/9 | Complete (Gap 1 + Gap 2 closed; inbox-digest v2 eval-gated & active; CKPT-04 human-verified 2026-07-17) |  |
+| 3.11 Inbox Reply (INSERTED) | 1/6 | In Progress (Wave 1 groundwork done — schema slots + replyToMessage literal + fixture anchors + 2 eval cases + RPLY-01) | - |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 0/TBD | Not started | - |

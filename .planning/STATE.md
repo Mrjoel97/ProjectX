@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 03.10 close-out bookkeeping complete (7/7 plans, human sign-off recorded) — next: /gsd:verify-work 3.10 (orchestrator), then Phase 3.11"
-last_updated: "2026-07-19T15:33:56.905Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: "Completed 03.11-01-PLAN.md (Phase 3.11 Inbox Reply, Wave 1 — groundwork). NEXT: Wave 2 (03.11-02 — reply-drafter gated skill + toolless draftReply internalAction)."
+last_updated: "2026-07-19T16:29:01.744Z"
+last_activity: "2026-07-19 — Phase 3.11 Inbox Reply, Wave 1: 03.11-01 executed — the migration-free groundwork every downstream reply plan samples against. schema.ts: OPTIONAL threading fields on plans (replyToMessageId/replyThreadId/inReplyTo/references), requests (threadId/inReplyTo/references — the delivery-plane copy target executePlan fills at fan-out), and inboxFixtures.messages[] (threadId + RFC angle-bracketed messageId reply anchors) — every field v.optional so no migration and a non-reply send carries none; agentSteps.tool closed union widened by EXACTLY ONE literal replyToMessage (the §4 schema-absence guarantee / CKPT-05 preserved). smoke.ts: fix-reply + fix-injection each gained a threadId + RFC messageId so both are fully-replyable targets — 23-reply-happy resolves against fix-reply, 24-reply-injection replies OVER the existing attacker@evil.example injection body and must address exactly its From (no-reply@example.net), never the attacker. Two golden eval cases authored (23/24) — valid under run-eval-golden --self-check (23 fixtures), RED on a LIVE run until the replyToMessage tool lands (Plan 04); agent-runtime.md notes this so the 2 reds aren't mistaken for a regression. RPLY-01 minted in REQUIREMENTS.md (Email Cockpit + traceability + count 48→49). Commits 06e5cb1 (T1 schema+RPLY-01), b7e784d (T2 fixture anchors), 54b5168 (T3 eval cases+playbook). TWO deviations, both Rule 3 (blocking): (1) plans' Gmail-thread field named replyThreadId not threadId — plans already has a REQUIRED threadId (the agent/convex thread that renders cards); a second same-name key is illegal and reusing the agent thread for a Gmail thread is semantically wrong (requests, with no agent-thread field, keeps the plain threadId as planned; executePlan will map replyThreadId→threadId); (2) the plan's verify regex /replyToMessage/g false-positives on the replyToMessageId field the same task adds, so verified the true invariant instead — exactly one v.literal(\"replyToMessage\") + exactly one replyToMessageId field (both hold). VERIFIED: backend SOURCE typecheck clean (the only tsc reds are pre-existing *.test.ts noise — import.meta.glob, test possibly-undefined, skills.test.ts index drift — none reference the new fields); run-eval-golden --self-check exit 0 (23 fixtures); check-playbooks exit 0. NEXT: Wave 2 (03.11-02 — reply-drafter skill 5-file mirror + toolless draftReply cloning digestInbox: original body ingested with NO tools)."
 progress:
   total_phases: 21
   completed_phases: 13
-  total_plans: 104
-  completed_plans: 100
+  total_plans: 110
+  completed_plans: 101
 ---
 
 ---
