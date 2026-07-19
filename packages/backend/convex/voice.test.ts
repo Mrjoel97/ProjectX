@@ -171,3 +171,139 @@ test("a clean end that races the watchdog fire is a CAS no-op (never a double-ca
     vi.useRealTimers();
   }
 });
+
+// ── Task 2: forceEndSession (hangup + auto-store) + storeBrief (ingest) + recordUsage ───────────
+
+/** Seed an active session row directly (the post-handshake state startSession leaves). */
+function seedActive(t: ReturnType<typeof convexTest>, callId = "call_seed", language?: string) {
+  return t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: TENANT,
+      status: "active" as const,
+      callId,
+      startedAt: Date.now(),
+      endsAt: Date.now() + CAP_MS,
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+      language,
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+test("forceEndSession hangs up the stored callId, marks ended_abnormal, and auto-stores a brief", async () => {
+  let hangupUrl: string | undefined;
+  vi.stubGlobal("fetch", (url: string) => {
+    hangupUrl = String(url);
+    return Promise.resolve(new Response(null, { status: 200 }));
+  });
+  const t = setup();
+  const sessionId = await seedActive(t, "call_force");
+
+  const res = await t.action(internal.voice.forceEndSession, { sessionId });
+  expect(res).toEqual({ ended: true });
+  expect(hangupUrl).toContain("call_force"); // hangupCall targeted the stored callId
+
+  const s = await get(t, sessionId);
+  expect(s?.status).toBe("ended_abnormal");
+  expect(s?.briefRef).toBeDefined(); // auto-stored (no human present to gate)
+  const doc = await t.run((ctx) => ctx.db.get(s!.briefRef!));
+  expect(doc?.kind).toBe("brief");
+  expect(doc?.source).toBe("voice");
+  expect(doc?.status).toBe("processing"); // ingest workflow armed
+});
+
+test("forceEndSession is a CAS no-op on an already-ended session (no double hangup)", async () => {
+  let fetched = false;
+  vi.stubGlobal("fetch", () => {
+    fetched = true;
+    return Promise.resolve(new Response(null, { status: 200 }));
+  });
+  const t = setup();
+  const sessionId = await seedActive(t, "call_done");
+  await t.run((ctx) => ctx.db.patch(sessionId, { status: "ended_clean" })); // a clean end already won
+
+  const res = await t.action(internal.voice.forceEndSession, { sessionId });
+  expect(res).toEqual({ noop: true });
+  expect(fetched).toBe(false); // never re-hangs up an ended session
+  expect((await get(t, sessionId))?.status).toBe("ended_clean"); // unchanged
+});
+
+test("storeBrief drafts via the SMOKE transcript and ingests a kind:brief vault doc (PII/content kept)", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {}); // voice-brief skill (draftVoiceBrief fail-closed load)
+  const sessionId = await seedActive(t, "call_brief", "en");
+
+  const res = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [
+      { speaker: "user", text: "SMOKE::route=direct_llm:: let's plan Q3" },
+      { speaker: "assistant", text: "Sure — here are the decisions." },
+    ],
+    language: "en",
+  });
+  expect("vaultDocId" in res).toBe(true);
+  const vaultDocId = (res as { vaultDocId: Id<"vaultDocuments"> }).vaultDocId;
+
+  const doc = await t.run((ctx) => ctx.db.get(vaultDocId));
+  expect(doc?.kind).toBe("brief");
+  expect(doc?.source).toBe("voice");
+  expect(doc?.mimeType).toBe("text/markdown");
+  expect(doc?.status).toBe("processing"); // ingest workflow armed — durable steps run in vaultIngest's own tests
+  // The brief BODY is vault content: the transcript is welded in verbatim (PII kept, NOT scanText-stripped).
+  expect(doc?.text).toContain("let's plan Q3");
+  // session.briefRef patched to the stored doc.
+  expect((await get(t, sessionId))?.briefRef).toBe(vaultDocId);
+
+  // Idempotent: a second store returns the SAME doc (never a duplicate brief).
+  const again = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [{ speaker: "user", text: "SMOKE::route=direct_llm::" }],
+    language: "en",
+  });
+  expect(again).toEqual({ vaultDocId });
+});
+
+test("recordUsage accumulates the counters and prices the delta onto spend; a bad count fails closed", async () => {
+  const t = setup();
+  const sessionId = await seedActive(t, "call_meter");
+  const asT = asTenant(t);
+
+  const r1 = await asT.mutation(api.voice.recordUsage, {
+    sessionId,
+    inAudioTok: 100,
+    outAudioTok: 200,
+    textInTok: 10,
+    textOutTok: 20,
+  });
+  expect(r1).toEqual({ ok: true });
+  let s = await get(t, sessionId);
+  expect(s?.inAudioTok).toBe(100);
+  expect(s?.outAudioTok).toBe(200);
+  expect(s?.textInTok).toBe(10);
+  expect(s?.textOutTok).toBe(20);
+
+  // A second delta ACCUMULATES onto the cumulative counters (metering.ts fold).
+  await asT.mutation(api.voice.recordUsage, {
+    sessionId,
+    inAudioTok: 50,
+    outAudioTok: 0,
+    textInTok: 0,
+    textOutTok: 0,
+  });
+  expect((await get(t, sessionId))?.inAudioTok).toBe(150);
+
+  // Fail closed: a negative (priceRealtime Err) delta patches NOTHING and records no spend.
+  const before = await get(t, sessionId);
+  const bad = await asT.mutation(api.voice.recordUsage, {
+    sessionId,
+    inAudioTok: -5,
+    outAudioTok: 0,
+    textInTok: 0,
+    textOutTok: 0,
+  });
+  expect(bad).toEqual({ ok: false });
+  expect((await get(t, sessionId))?.inAudioTok).toBe(before?.inAudioTok); // unchanged — no negative counter
+});
