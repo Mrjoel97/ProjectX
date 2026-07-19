@@ -1,8 +1,8 @@
 ---
 phase: 6
 slug: live-voice-sessions
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-20
 ---
@@ -94,4 +94,4 @@ created: 2026-07-20
 - [ ] Feedback latency < 60s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-20 (plan-checker VERIFICATION PASSED; `wave_0_complete` flips true once Wave 0 scaffolds land)
