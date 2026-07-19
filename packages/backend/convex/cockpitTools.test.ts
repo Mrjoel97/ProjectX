@@ -265,6 +265,34 @@ test("proposePlan proceeds with a healthy attachment", async () => {
   expect((await readPlan(t, planId))?.status).toBe("proposed");
 });
 
+// ── 03.10-04 Task 1: proposePlan pending-pick guard (UAT-C deadlock) ────────────
+// A parked contact pick (candidates on the ROW, no user pick yet) is an OPEN resolution — proposing
+// over it produces the "#1 (no name)" dead-end (the picker vanishes on `status === "proposed"`).
+// proposePlan REFUSES while candidates are parked (facts from the ROW, DECISION #2), so the bad state
+// is unreachable for EVERY reader. Backend owns the invariant; the frontend guard (Task 2) is
+// defense-in-depth. The refusal proves proposeEmailPlan never ran (it flips status → 'proposed').
+
+test("proposePlan refuses while a contact pick is still parked (never proposes over a pending pick)", async () => {
+  const { t, planId } = await setup();
+  await fillProposable(t, planId); // recipients + subject + body all set — otherwise proposable
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" }); // park a pick — no user pick yet
+  expect((await readPlan(t, planId))?.candidates?.length).toBeGreaterThan(0);
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/pick is still pending/i); // refuse-and-instruct string
+  expect((await readPlan(t, planId))?.status).not.toBe("proposed"); // proposeEmailPlan never invoked
+});
+
+test("proposePlan proceeds with NO parked pick (control — the guard is scoped to a pending pick)", async () => {
+  const { t, planId } = await setup();
+  await fillProposable(t, planId); // no resolveContacts → no candidates parked
+  expect((await readPlan(t, planId))?.candidates ?? []).toEqual([]);
+
+  const res = await call(t, planId, "proposePlan", {});
+  expect(res).toMatch(/proposed/i); // happy path unregressed — the guard only bites a pending pick
+  expect((await readPlan(t, planId))?.status).toBe("proposed");
+});
+
 // ── 03.4-02 Task 1: personalizeRecipient tool + buildAgentContext surfacing (CKPT-03) ──────────
 // Per-recipient body tailoring by 1-based #index. Mirrors draftBody's scan→draftCockpit→patch, but
 // the tailored wording lands in recipientBodies[address] (address resolved server-side, §2-D) —
