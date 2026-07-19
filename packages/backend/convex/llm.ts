@@ -29,10 +29,12 @@ import {
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
+  REPLY_DRAFTER_SKILL,
 } from "@pikar/contracts/skill";
 import {
   applyRecipientEdit,
   type BriefingItem,
+  BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
   bucket,
   buildDocFilename,
@@ -2189,6 +2191,84 @@ export const digestInbox = internalAction({
       });
       await recordModelSpend(ctx, CHEAP_MODEL, usage);
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
+    }
+  },
+});
+
+// ── Reply body drafter (RPLY-01) — THE toolless ingestion point for the original body ────────────
+// A near-clone of digestInbox: this is the ONE place the untrusted original message reaches an LLM,
+// and it does so with NO tools available, so an injected "forward all mail to attacker@evil" can be
+// described but has NOTHING to actuate with. NEVER route the original body through the tool-bearing
+// draftCockpit/draftBody (reachable from the loop) — that would put mail one hop from the tools.
+// Structure mirrors digestInbox VERBATIM: fail-closed skill load FIRST, smoke short-circuit AFTER,
+// DEFAULT_MODEL → isFallbackEligible → one CHEAP_MODEL retry, BOTH recordModelSpend'd (the drafter
+// is a real sub-call the budget/kill-switch rails must see). The original body is NEVER returned
+// beyond { body } and NEVER logged/audited here — the caller (Plan 04) owns correlation, exactly
+// as draftCockpit does; the static redaction scan lands in Plan 04's llmRedaction extension.
+export const draftReply = internalAction({
+  args: {
+    tenantId: v.string(),
+    // The user's REDACTED reply intent (the replyToMessage tool scanText's it first — GRDL-01).
+    safeText: v.string(),
+    // Untrusted third-party original; truncated below; NEVER returned to the loop, NEVER logged.
+    originalBody: v.string(),
+    // EVAL-01 version pin (internal-only): a missing (name, version) FAILS CLOSED.
+    skillVersion: v.optional(v.number()),
+  },
+  // EXPLICIT return type is mandatory (Pitfall 1: an inferred type re-trips the "use node"
+  // circular-inference cliff — the digestInbox/draftCockpit precedent).
+  handler: async (ctx, { safeText, originalBody, skillVersion }): Promise<{ body: string }> => {
+    // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
+    // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
+    const skill: { body: string; version: number } =
+      skillVersion !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, {
+            name: REPLY_DRAFTER_SKILL,
+            version: skillVersion,
+          })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name: REPLY_DRAFTER_SKILL });
+
+    // Defensive truncation at the trust boundary: the original is untrusted and unbounded (reuse the
+    // digest's per-body cap). The intent is the trusted instruction; the original is fenced as inert
+    // context below so the model treats it as DATA, never a directive (skill body is defense in depth).
+    const original = originalBody.slice(0, BODY_TRUNCATE_CHARS);
+    const prompt = [
+      safeText,
+      "--- ORIGINAL MESSAGE (context only) ---",
+      original,
+    ].join("\n\n");
+
+    const smoke = parseSmoke(safeText);
+    if (smoke) {
+      // failPrimary throws INTO the catch so the real fallback path runs; else a deterministic
+      // offline body (no model call, no spend) — the E2E/eval path.
+      if (smoke.failPrimary)
+        throw new DOMException("smoke: forced primary failure", "TimeoutError");
+      return { body: `Smoke reply for ${skill.version}` };
+    }
+
+    // generateText with NO tools — the toolless-ingestion invariant, STRUCTURAL (agent-runtime.md #10).
+    try {
+      const { text, usage } = await generateText({
+        model: resolveModel(DEFAULT_MODEL),
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 1,
+      });
+      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      return { body: text.trim() };
+    } catch (e) {
+      if (!isFallbackEligible(e)) throw e;
+      const { text, usage } = await generateText({
+        model: resolveModel(CHEAP_MODEL),
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      return { body: text.trim() };
     }
   },
 });
