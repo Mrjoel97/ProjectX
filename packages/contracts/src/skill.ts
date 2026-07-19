@@ -58,6 +58,9 @@ export const REPLY_DRAFTER_SKILL = "reply-drafter" as const;
 /** Registry name of the live voice-session persona skill (VOIC-01 — the realtime call system prompt). */
 export const VOICE_SESSION_SKILL = "voice-session" as const;
 
+/** Registry name of the voice-brief structuring skill (VOIC-03 — the toolless call-to-brief writer). */
+export const VOICE_BRIEF_SKILL = "voice-brief" as const;
+
 /**
  * Skills whose CANDIDATE versions may only activate through a recorded passing
  * eval run (EVAL-01). Rollback (archived/rolled_back targets) is structurally
