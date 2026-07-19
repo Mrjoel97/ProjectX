@@ -119,6 +119,14 @@ export default defineSchema({
     // → no migration (Pitfall-7 optional-on-read, same as safeText). The REPORT
     // projection reads every recipient row for a plan via by_plan.
     planId: v.optional(v.id("plans")),
+    // Reply threading (03.11 RPLY-01), copied from the plan at executePlan so the delivery spine
+    // (getForDelivery → buildMime → send) threads the reply. `threadId` is the GMAIL thread id
+    // (POST body) — requests has no agent-thread field, so no collision here (cf. plans.replyThreadId).
+    // `inReplyTo`/`references` are the RFC Message-ID header values. All optional → no migration; a
+    // non-reply send carries none.
+    threadId: v.optional(v.string()),
+    inReplyTo: v.optional(v.string()),
+    references: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
@@ -202,6 +210,17 @@ export default defineSchema({
     // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
     sendAt: v.optional(v.number()),
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    // Reply threading (03.11 RPLY-01). Set by the replyToMessage tool (Plan 04) when a plan is a
+    // reply, copied to the per-recipient `requests` rows at executePlan (Plan 03). All optional →
+    // no migration; a non-reply send simply carries none (append-only, like sendAt/attachments).
+    // `replyThreadId` is the GMAIL thread id to thread the reply INTO — NOT `threadId` above, which
+    // is the agent/convex thread that renders this plan's cards (a different id space). `inReplyTo`/
+    // `references` are RFC 5322 Message-ID header values (angle-bracketed), never the Gmail id
+    // (Pitfall 5). `replyToMessageId` is the refs-only anchor to the original message.
+    replyToMessageId: v.optional(v.string()),
+    replyThreadId: v.optional(v.string()),
+    inReplyTo: v.optional(v.string()),
+    references: v.optional(v.string()),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
@@ -282,6 +301,7 @@ export default defineSchema({
       v.literal("personalizeRecipient"),
       v.literal("listInbox"),
       v.literal("briefInbox"),
+      v.literal("replyToMessage"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -322,6 +342,11 @@ export default defineSchema({
         internalDate: v.number(),
         isUnread: v.optional(v.boolean()),
         body: v.string(),
+        // Reply-target anchors (03.11 RPLY-01). The reply path needs a GMAIL `threadId` to thread
+        // into AND an RFC 5322 `messageId` (angle-bracketed Message-ID header) for In-Reply-To —
+        // NOT the Gmail `id` above (Pitfall 5). Both optional → pre-3.11 fixtures load unchanged.
+        threadId: v.optional(v.string()),
+        messageId: v.optional(v.string()),
       }),
     ),
   }).index("by_tenant", ["tenantId"]),
