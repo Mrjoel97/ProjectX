@@ -65,9 +65,9 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Live Voice Sessions
 
-- [ ] **VOIC-01**: User can hold a live bidirectional voice conversation with the Executive Agent (WebRTC realtime) with an End-session button
-- [ ] **VOIC-02**: A server-side watchdog hard-caps sessions at 15 minutes and terminates cleanly
-- [ ] **VOIC-03**: Ended sessions are transcribed into a detailed structured markdown brief, stored and indexed in the knowledge vault
+- [x] **VOIC-01**: User can hold a live bidirectional voice conversation with the Executive Agent (WebRTC realtime) with an End-session button
+- [x] **VOIC-02**: A server-side watchdog hard-caps sessions at 15 minutes and terminates cleanly
+- [x] **VOIC-03**: Ended sessions are transcribed into a detailed structured markdown brief, stored and indexed in the knowledge vault
 - [ ] **VOIC-04**: At session end, the agent asks permission to convert the brief into a step-by-step plan; approved plans enter the normal request pipeline (with the review gate)
 
 ### Self-Improvement

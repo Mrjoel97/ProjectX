@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-07-19T22:46:33.975Z"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-07-19T23:00:00.632Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 14
   total_plans: 118
-  completed_plans: 108
+  completed_plans: 110
 ---
 
 ---
@@ -539,6 +539,7 @@ Progress: [█████████░] 94%
 | Phase 03.11 P05 | 27 | 2 tasks | 4 files |
 | Phase 06 P02 | 12 | 3 tasks | 9 files |
 | Phase 06 P01 | 9min | 3 tasks | 17 files |
+| Phase 06 P04 | 14 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -668,6 +669,7 @@ Recent decisions affecting current work:
 - [Phase 03.11-inbox-reply]: replyToMessage tool: fuzzy-ref server-side resolve (no-guess 0/2+/1) -> recipient-by-ref (recipientNames label, no panel) + Re:+threading via patchPlan -> toolless draftReply; labels/counts-only return; RPLY-01 spine writer complete
 - [Phase 06]: 06-02: both voice skills (voice-session, voice-brief) seeded UNGATED per RESEARCH OQ3 — free-form speech / vault-document output the eval gate cannot assert
 - [Phase 06]: 06-01: @pikar/voice foundation — Realtime API shapes pinned in realtime.ts (gpt-realtime-2.1, semantic_vad, response.done usage fields) from RESEARCH-cited live docs with a re-fetch ponytail; buildBriefMarkdown (fixed sections, empty→None, transcript welded in code), session FSM (capEndsAt/CAP_MS, active→ended_clean/abnormal, no wrapping state), accumulateUsage, and fail-closed priceRealtime in @pikar/cost. voice.md playbook + watch.json cover all future voice paths. Flag: plan 03/04 must re-confirm mint/handshake/hangup JSON against a live 200.
+- [Phase 06]: 06-04: draftVoiceBrief is a toolless generateObject clone of digestInbox — fail-closed voice-brief load, SMOKE offline seam, DEFAULT→CHEAP both metered, transcript code-welded via buildBriefMarkdown
 
 ### Roadmap Evolution
 
@@ -692,8 +694,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-19T22:44:19.657Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-07-19T22:59:52.865Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
