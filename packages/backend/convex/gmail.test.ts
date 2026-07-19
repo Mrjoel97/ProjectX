@@ -151,6 +151,22 @@ describe("buildMime — reply threading headers (RPLY-01)", () => {
     expect(mime).toMatch(/In-Reply-To: <[^>]+>/); // angle-bracketed
     expect(mime).not.toContain(`In-Reply-To: ${GMAIL_ID}`); // never the API id
   });
+
+  // 03.11 SECURITY: subject + threading anchor come from INBOUND (attacker-controlled) mail headers.
+  // A crafted CR/LF must NOT smuggle an extra header into the reply the user sends. buildMime strips
+  // CR/LF at the header sink, so the injected "Bcc:" line lands nowhere in the emitted message.
+  test("CRLF in an inbound-derived subject/threading value cannot inject a new header", () => {
+    const evil = "<id@x>\r\nBcc: victim@evil.example";
+    const mime = buildMime(TO, "Re: hi\r\nBcc: victim@evil.example", BODY, [], {
+      inReplyTo: evil,
+      references: evil,
+    });
+    // The security property: "Bcc:" must never BEGIN a header line (no CR/LF in front of it).
+    expect(mime).not.toMatch(/[\r\n]Bcc:/i);
+    // The newline was stripped (not folded), so the attacker's text is inert mid-line, not a header.
+    expect(mime).toContain("Subject: Re: hiBcc: victim@evil.example");
+    expect(mime).toContain("In-Reply-To: <id@x>Bcc: victim@evil.example");
+  });
 });
 
 // ── 03.7-02: pickPlainText — the ONE new parsing seam (recursive MIME tree, base64url) ────────

@@ -85,13 +85,21 @@ export function buildMime(
   // every non-reply send, so a normal compose is byte-identical to the pre-3.11 output (the V4 test).
   threading?: { inReplyTo: string; references: string },
 ): string {
+  // 03.11 SECURITY (RPLY-01): a reply's subject + threading anchor originate from INBOUND mail —
+  // getReplyTarget reads them straight off the attacker-controlled Subject/Message-ID/References
+  // headers. Strip CR/LF at this single header sink so a crafted value can't inject extra headers
+  // (Bcc:, a spoofed From, a premature body) into the reply the user sends. RFC 5322 header values
+  // carry no bare CR/LF once unfolded, so this is lossless for every legitimate To/Subject/Message-ID.
+  const h = (v: string): string => v.replace(/[\r\n]/g, "");
+  const toH = h(to);
+  const subjectH = h(subject);
   const threadHeaders = threading
-    ? [`In-Reply-To: ${threading.inReplyTo}`, `References: ${threading.references}`]
+    ? [`In-Reply-To: ${h(threading.inReplyTo)}`, `References: ${h(threading.references)}`]
     : [];
   if (attachments.length === 0) {
     return [
-      `To: ${to}`,
-      `Subject: ${subject}`,
+      `To: ${toH}`,
+      `Subject: ${subjectH}`,
       ...threadHeaders,
       "MIME-Version: 1.0",
       'Content-Type: text/plain; charset="UTF-8"',
@@ -102,8 +110,8 @@ export function buildMime(
 
   const boundary = `=_pikar_${crypto.randomUUID().replace(/-/g, "")}`;
   const lines: string[] = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
+    `To: ${toH}`,
+    `Subject: ${subjectH}`,
     ...threadHeaders,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
