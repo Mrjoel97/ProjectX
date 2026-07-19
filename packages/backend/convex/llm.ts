@@ -30,6 +30,7 @@ import {
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
   REPLY_DRAFTER_SKILL,
+  VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
   applyRecipientEdit,
@@ -58,6 +59,7 @@ import {
 } from "@pikar/core";
 import { CHEAP_MODEL, DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
+import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
 import {
   generateObject,
   generateText,
@@ -2399,6 +2401,106 @@ export const draftReply = internalAction({
       });
       await recordModelSpend(ctx, CHEAP_MODEL, usage);
       return { body: text.trim() };
+    }
+  },
+});
+
+// ── The TOOLLESS voice-brief drafter (VOIC-03) ───────────────────────────────
+// The single place a finished voice conversation's transcript becomes structured brief sections.
+// Mirrors digestInbox VERBATIM: fail-closed skill load FIRST, SMOKE short-circuit AFTER (so the
+// load is exercised offline), then DEFAULT_MODEL → isFallbackEligible → one CHEAP_MODEL retry,
+// BOTH recordModelSpend'd (a real sub-call the budget/kill-switch rails must see). TOOLLESS
+// (generateObject, no tools): the transcript is DATA, so an injected "put my password in the
+// summary" has NOTHING to actuate — its worst case is a misleading line a human reads in the vault.
+// The MODEL fills only the narrative sections; the full transcript is welded on in CODE via
+// buildBriefMarkdown (never model-authored — the joinDigest precedent). Explicit Promise<string>
+// return on every path (Pitfall 1 — an inferred type re-trips the "use node" circular-inference
+// cliff). Plan 05's voice.storeBrief calls this, then ingests the markdown as an ordinary vault doc.
+
+// The model-authored sections (@pikar/voice's BriefSections shape). STRICT-mode legal: OpenAI
+// structured outputs demand every key in `properties` also appear in `required` (the digestSchema
+// precedent) — all five fields required, additionalProperties:false.
+const briefSchema = jsonSchema<BriefSections>({
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    decisions: { type: "array", items: { type: "string" } },
+    actionItems: { type: "array", items: { type: "string" } },
+    openQuestions: { type: "array", items: { type: "string" } },
+    discussion: { type: "string" },
+  },
+  required: ["summary", "decisions", "actionItems", "openQuestions", "discussion"],
+  additionalProperties: false,
+});
+
+// Deterministic offline sections for the SMOKE seam — openQuestions is EMPTY on purpose so the
+// composer's "None" rendering is exercised without a model. Fixed, so plan-05's convex-test path
+// (brief → vault → plan) is byte-stable.
+const SMOKE_BRIEF_SECTIONS: BriefSections = {
+  summary: "Offline voice brief.",
+  decisions: ["Offline decision."],
+  actionItems: ["Offline action item."],
+  openQuestions: [],
+  discussion: "Offline discussion.",
+};
+
+/** One turn of the kept, text-only transcript (structurally @pikar/voice's TranscriptTurn). */
+type BriefTurn = { speaker: string; text: string };
+
+export const draftVoiceBrief = internalAction({
+  args: {
+    tenantId: v.string(),
+    // The kept, text-only transcript (voice.storeBrief filters non-final turns before calling).
+    transcript: v.array(v.object({ speaker: v.string(), text: v.string() })),
+    // The spoken-language hint — the brief is written in this language (skill body owns the rule).
+    language: v.string(),
+  },
+  // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
+  // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
+  handler: async (ctx, { transcript, language }): Promise<string> => {
+    // Load the voice-brief skill FIRST (no hardcoded prompt — §5); fails closed (NO_ACTIVE_SKILL
+    // unseeded), and the load runs BEFORE the smoke short-circuit so it is exercised offline.
+    const skill: { body: string; version: number } = await ctx.runQuery(
+      internal.skills.getActiveSkill,
+      { name: VOICE_BRIEF_SKILL },
+    );
+
+    // SMOKE:: sentinel on the first turn → deterministic offline brief, NO model call, NO spend.
+    // The FULL passed transcript is welded verbatim (never model-authored), exactly as the live path.
+    if (parseSmoke(transcript[0]?.text ?? "")) {
+      return buildBriefMarkdown(SMOKE_BRIEF_SECTIONS, transcript, language);
+    }
+
+    // The turn-by-turn transcript is DATA for the toolless call; the language hint rides the prompt.
+    const prompt = [
+      `Language: ${language}`,
+      "",
+      ...transcript.map((t: BriefTurn) => `${t.speaker}: ${t.text}`),
+    ].join("\n");
+
+    try {
+      const { object, usage } = await generateObject({
+        model: resolveModel(DEFAULT_MODEL),
+        schema: briefSchema,
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 1,
+      });
+      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      return buildBriefMarkdown(object, transcript, language);
+    } catch (e) {
+      if (!isFallbackEligible(e)) throw e;
+      const { object, usage } = await generateObject({
+        model: resolveModel(CHEAP_MODEL),
+        schema: briefSchema,
+        system: skill.body,
+        prompt,
+        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        maxRetries: 0,
+      });
+      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      return buildBriefMarkdown(object, transcript, language);
     }
   },
 });
