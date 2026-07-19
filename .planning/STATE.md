@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: "Completed 06-03-PLAN.md (voiceToken mint+hangup seam; VOIC-01/VOIC-02) — Wave 1, run in PARALLEL with 06-04 (disjoint files). NEXT: 06-05 (voice.ts adapters: startSession/recordUsage/endSessionClean/forceEndSession/storeBrief + the watchdog that fires hangupCall)."
+last_updated: "2026-07-20T02:05:00.000Z"
+last_activity: "2026-07-20 — Phase 6 Live Voice, Wave 1: 06-03 executed — the server↔OpenAI Realtime seam. voiceToken.ts (PLAIN default-runtime action, global fetch — no 2nd use-node module, avoids the TS circular-inference cliff): (1) mintClientSecret is a tenant-scoped action that loads the voice-session persona from the registry (getActiveSkill, fail-closed NO_ACTIVE_SKILL when unseeded — never a hardcoded prompt, §5), POSTs CLIENT_SECRETS_URL with Bearer OPENAI_API_KEY + the session config from @pikar/voice realtime.ts (DEFAULT_REALTIME_MODEL, semantic_vad turn_detection, gpt-4o-transcribe input_audio_transcription, audio.output.voice='marin'), and returns ONLY {clientSecret, expiresAt} — the key is structurally absent (Pitfall 4). (2) hangupCall is a plain-runtime internalAction (watchdog-only, never client-exposed) POSTing /v1/realtime/calls/{callId}/hangup with the server key; 200=ended, non-200 throws status-only (refs-only, §4) — the VOIC-02 watchdog's actuator. First backend fetch-mock test (vi.stubGlobal captures {url,init}): asserts request URL/Bearer/session.instructions=skill body, a no-key-leak canary (JSON.stringify(result) never contains the key), fail-closed unseeded, and hangup targeting + non-200 throw — 5/5 green. voice.md bumped (plain-runtime / mint no-key-leak / hangup-is-the-only-terminate invariants; Last verified 06-03). RULE 3 deviation: added @pikar/voice as a backend dependency (import resolution) — package.json is shared with the parallel 06-04, identical idempotent line. Commits b14d27c (RED both tasks), 6ae31ae (T1 mint), 192c4da (T2 hangup+voice.md). VERIFIED: voiceToken 5/5; check-playbooks exit 0; no use-node pragma in voiceToken.ts. Live mint/hangup 200 shapes are pinned-not-verified (no live fetch at build) — each carries a ponytail re-confirm-against-live comment; the phase-gate human-verify is first live confirmation. NEXT: 06-05 wires voice.startSession (persist callId, arm the one-shot watchdog) + forceEndSession→hangupCall."
+progress:
+  total_phases: 21
+  completed_phases: 14
+  total_plans: 118
+  completed_plans: 110
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 06-04-PLAN.md
 last_updated: "2026-07-19T23:00:00.632Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
