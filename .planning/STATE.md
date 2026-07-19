@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 6 (Live Voice Sessions) CONTEXT gathered 2026-07-19 — 8 gray areas discussed and locked in .planning/phases/06-live-voice-sessions/06-CONTEXT.md (conversation feel: open-mic VAD + barge-in + warm multilingual voice; live UI: transcript+orb, always-on countdown, confirm-End, mic pre-flight; 15-min cap: agent wrap-up at T-2min, watchdog still briefs on abnormal drop, time-cap-only cost; brief+handoff: clean-end review/edit vs abnormal auto-store, post-call plan ask, jump to cockpit review gate; consent: pre-flight notice + discard audio + brief=vault-content/audit-refs-only; mic-failure: pause+recover then abnormal-brief, silence check-in; a11y: text-input fallback + full keyboard/SR; brief: thorough fixed-section markdown + kept transcript). CONTEXT flags 4 open questions for research (pause-vs-watchdog wall-clock, WebRTC stack choice, tab-close detection, realtime token metering). NEXT: /gsd:plan-phase 6 (research → plan). Prior: Phase 3.11 Inbox Reply COMPLETE (6/6), RPLY-01 live human-verified in-thread 2026-07-19."
-last_updated: "2026-07-19T22:30:00.000Z"
-last_activity: "2026-07-19 — Phase 3.11 Inbox Reply, Wave 6 (03.11-06 phase close): the LIVE gate that no unit could substitute for is PASSED. TASK 1 (green sweep): full backend suite `pnpm --filter @pikar/backend test` = 359/360 (27/28 files) — the SOLE red is the documented pre-existing `audit.test.ts` auditCounts ('Component auditCounts is not registered'), a known non-regression; NO runCockpitAgent timeout this run. Confirmed `cockpit-agent@12` is the ACTIVE version (getActiveSkill → version 12, body teaches replyToMessage) — the Plan 05 eval gate held. TASK 2 (human-verify checkpoint): environment was already live (web on :3000, convex-local-backend on :3210 + OAuth site :3211, cockpit-agent@12 active), so the owner went straight to http://localhost:3000/workspace, signed in Gmail-connected, and sent a real 'reply to X'. OWNER CONFIRMED: the reply landed IN the original Gmail conversation thread (grouped, not a new thread) with the correct Re: subject, addressed ONLY the original sender; nothing sent before Approve. PITFALL 1 (threadId-vs-RFC-headers, contradicted in Google's own docs — the phase gate) RESOLVED EMPIRICALLY: the shipped send emits BOTH — RFC In-Reply-To/References in the raw MIME (load-bearing) AND threadId in the POST body (reinforcement); the owner did NOT isolate which is individually sufficient, so the recorded confirmed-working mechanism is the belt-and-suspenders both-signals send (do NOT assume headers alone suffice — keep both). TASK 3 (phase close): finalized docs/playbooks/cockpit.md with the reply-subsystem invariants (recipient-by-ref no-panel, toolless original-body ingestion, single-arm fan-out unchanged, threading fields optional) + the confirmed threading mechanism + Last verified bumped to 03.11-06; marked RPLY-01 Complete in REQUIREMENTS.md traceability (human-verify date 2026-07-19); closed ROADMAP Phase 3.11 (marked complete, 6/6 plan list filled, progress-table row flipped 4/6 In Progress → 6/6 Complete — verified by hand since gsd-tools phase-complete no-ops triple-decimal phases). NO deviations. NEXT: Phase 6 (Live Voice Sessions) is the open non-inserted candidate."
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-07-19T22:46:33.975Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 14
-  total_plans: 110
-  completed_plans: 106
+  total_plans: 118
+  completed_plans: 108
 ---
 
 ---
@@ -537,6 +537,8 @@ Progress: [█████████░] 94%
 | Phase 03.11-inbox-reply P03 | 7min | 2 tasks | 6 files |
 | Phase 03.11-inbox-reply P04 | 13min | 3 tasks | 6 files |
 | Phase 03.11 P05 | 27 | 2 tasks | 4 files |
+| Phase 06 P02 | 12 | 3 tasks | 9 files |
+| Phase 06 P01 | 9min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -664,6 +666,8 @@ Recent decisions affecting current work:
 - [Phase 03.11-inbox-reply]: getForDelivery projection landed with send (Task 1) not Task 2 — send reads req.threadId/inReplyTo/references so the projection must exist to typecheck; cockpit.test.ts still proves the full spine
 - [Phase 03.11-inbox-reply]: target-header read is a dedicated getReplyTarget action, kept distinct from the untrusted-body fetchInboxBodies — two trust planes, two blocks
 - [Phase 03.11-inbox-reply]: replyToMessage tool: fuzzy-ref server-side resolve (no-guess 0/2+/1) -> recipient-by-ref (recipientNames label, no panel) + Re:+threading via patchPlan -> toolless draftReply; labels/counts-only return; RPLY-01 spine writer complete
+- [Phase 06]: 06-02: both voice skills (voice-session, voice-brief) seeded UNGATED per RESEARCH OQ3 — free-form speech / vault-document output the eval gate cannot assert
+- [Phase 06]: 06-01: @pikar/voice foundation — Realtime API shapes pinned in realtime.ts (gpt-realtime-2.1, semantic_vad, response.done usage fields) from RESEARCH-cited live docs with a re-fetch ponytail; buildBriefMarkdown (fixed sections, empty→None, transcript welded in code), session FSM (capEndsAt/CAP_MS, active→ended_clean/abnormal, no wrapping state), accumulateUsage, and fail-closed priceRealtime in @pikar/cost. voice.md playbook + watch.json cover all future voice paths. Flag: plan 03/04 must re-confirm mint/handshake/hangup JSON against a live 200.
 
 ### Roadmap Evolution
 
@@ -688,8 +692,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-19T17:57:34.082Z
-Stopped at: Completed 03.11-05-PLAN.md (Wave 5 — cockpit-agent@12 gate-activated, teaches replyToMessage; RPLY-01). NEXT: Wave 6 (03.11-06 phase close — live in-thread Gmail reply human-verify).
+Last session: 2026-07-19T22:44:19.657Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

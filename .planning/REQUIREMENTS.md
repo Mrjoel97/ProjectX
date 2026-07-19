@@ -171,9 +171,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-02 | Phase 5 | Complete |
 | VALT-03 | Phase 5 | Complete |
 | VALT-04 | Phase 5 | Complete |
-| VOIC-01 | Phase 6 | Pending |
-| VOIC-02 | Phase 6 | Pending |
-| VOIC-03 | Phase 6 | Pending |
+| VOIC-01 | Phase 6 | In Progress |
+| VOIC-02 | Phase 6 | In Progress |
+| VOIC-03 | Phase 6 | In Progress |
 | VOIC-04 | Phase 6 | Pending |
 | IMPR-01 | Phase 8 | Pending |
 | IMPR-02 | Phase 8 | Pending |
