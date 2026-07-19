@@ -22,3 +22,17 @@ export function canTransition(from: SessionStatus, to: SessionStatus): boolean {
   if (from !== "active") return false;
   return to === "ended_clean" || to === "ended_abnormal";
 }
+
+/**
+ * Has a bounded grace window fully elapsed? True iff `now - sinceMs >= windowMs`. The ONE predicate
+ * behind BOTH the mic-recovery window (sinceMs = paused-at) and the silence timeout (sinceMs = last
+ * audio activity) in useVoiceSession — one place decides "give up and end", so the two timers can
+ * never disagree. Fail-SAFE by construction: a non-finite or negative input returns `false` (never
+ * end on a bad clock read — a spurious end is worse than a slightly late one). The window consuming
+ * cap time is the caller's concern; this is pure arithmetic with no wall-clock of its own.
+ */
+export function graceExpired(sinceMs: number, now: number, windowMs: number): boolean {
+  if (!Number.isFinite(sinceMs) || !Number.isFinite(now) || !Number.isFinite(windowMs)) return false;
+  if (sinceMs < 0 || now < 0 || windowMs < 0) return false;
+  return now - sinceMs >= windowMs;
+}

@@ -18,7 +18,7 @@ export {
 export type { RealtimeUsage } from "./realtime";
 export { buildBriefMarkdown } from "./brief";
 export type { BriefSections, TranscriptTurn } from "./brief";
-export { CAP_MS, canTransition, capEndsAt, isEnded } from "./session";
+export { CAP_MS, canTransition, capEndsAt, graceExpired, isEnded } from "./session";
 export type { SessionStatus } from "./session";
 export { ZERO_USAGE, accumulateUsage } from "./metering";
 export type { UsageDelta } from "./metering";
