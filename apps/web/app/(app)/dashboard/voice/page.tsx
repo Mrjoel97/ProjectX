@@ -1,5 +1,6 @@
 "use client";
 
+import { PreFlight } from "./PreFlight";
 import { useVoiceSession } from "./useVoiceSession";
 
 // VOIC-01 — the /dashboard/voice phase machine: pre-flight → live → post-call. The single
@@ -26,46 +27,11 @@ export default function VoicePage() {
   return (
     <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: "1.5rem" }}>
       {phase === "preflight" && (
-        // ponytail: inline placeholder — Task 2 replaces this with <PreFlight onStart={voice.start} />.
-        <section style={{ display: "grid", gap: "1rem", justifyItems: "center", textAlign: "center" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-display), system-ui, sans-serif",
-              fontWeight: 800,
-              fontSize: "clamp(1.6rem, 1.2rem + 1.4vw, 2.25rem)",
-              letterSpacing: "-0.02em",
-              color: "var(--ink)",
-            }}
-          >
-            Live Voice
-          </h1>
-          <p style={{ margin: 0, color: "var(--ink-soft)", maxWidth: "26rem" }}>
-            Talk through your next move with Pikar AI. The conversation is transcribed and saved to
-            your vault.
-          </p>
-          {voice.error && (
-            <p role="alert" style={{ margin: 0, color: "var(--held-text)" }}>
-              {voice.error}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => void voice.start()}
-            style={{
-              padding: "0.7rem 1.6rem",
-              borderRadius: "999px",
-              border: "none",
-              cursor: "pointer",
-              background: "var(--teal-600)",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: "0.95rem",
-            }}
-          >
-            Start session
-          </button>
-        </section>
+        <PreFlight
+          onStart={() => void voice.start()}
+          starting={voice.status === "connecting"}
+          error={voice.error}
+        />
       )}
 
       {phase === "live" && (
