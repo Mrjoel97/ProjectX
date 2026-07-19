@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
+  REALTIME_PRICING,
   TRANSCRIPTION_PRICING,
   chooseModel,
   estimateCostUsd,
   estimateTokens,
+  priceRealtime,
   priceTranscription,
   priceUsage,
 } from "./cost";
@@ -104,5 +106,35 @@ describe("priceTranscription", () => {
   });
   it("Infinity seconds → err (fail closed, non-finite)", () => {
     expect(priceTranscription(Number.POSITIVE_INFINITY).ok).toBe(false);
+  });
+});
+
+describe("priceRealtime", () => {
+  it("1M of each token type → summed per-MTok rates", () => {
+    const r = priceRealtime(1_000_000, 1_000_000, 1_000_000, 1_000_000);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const p = REALTIME_PRICING;
+      expect(r.value).toBeCloseTo(
+        p.audioInPerMTok + p.audioOutPerMTok + p.textInPerMTok + p.textOutPerMTok,
+        10,
+      );
+    }
+  });
+  it("audio out is priced richer than audio in", () => {
+    expect(REALTIME_PRICING.audioOutPerMTok).toBeGreaterThan(REALTIME_PRICING.audioInPerMTok);
+  });
+  it("all-zero usage → ok(0)", () => {
+    const r = priceRealtime(0, 0, 0, 0);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toBe(0);
+  });
+  it("negative any-field → err (fail closed)", () => {
+    expect(priceRealtime(-1, 0, 0, 0).ok).toBe(false);
+    expect(priceRealtime(0, 0, 0, -5).ok).toBe(false);
+  });
+  it("NaN / Infinity any-field → err, never NaN (fail closed)", () => {
+    expect(priceRealtime(Number.NaN, 0, 0, 0).ok).toBe(false);
+    expect(priceRealtime(0, Number.POSITIVE_INFINITY, 0, 0).ok).toBe(false);
   });
 });
