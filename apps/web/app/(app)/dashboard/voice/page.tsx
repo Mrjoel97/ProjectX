@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveSession } from "./LiveSession";
 import { PreFlight } from "./PreFlight";
 import { useVoiceSession } from "./useVoiceSession";
 
@@ -34,29 +35,7 @@ export default function VoicePage() {
         />
       )}
 
-      {phase === "live" && (
-        // ponytail: inline placeholder — Task 3 replaces this with <LiveSession session={voice} />.
-        <section style={{ display: "grid", gap: "1rem", justifyItems: "center", textAlign: "center" }}>
-          <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-            {voice.status === "connecting" ? "Connecting…" : "Live session"}
-          </p>
-          <button
-            type="button"
-            onClick={() => void voice.end()}
-            style={{
-              padding: "0.6rem 1.4rem",
-              borderRadius: "999px",
-              border: "none",
-              cursor: "pointer",
-              background: "var(--ink)",
-              color: "#fff",
-              fontWeight: 600,
-            }}
-          >
-            End session
-          </button>
-        </section>
-      )}
+      {phase === "live" && <LiveSession session={voice} />}
 
       {phase === "postcall" && (
         // Plan-07 seam: the brief review + plan handoff mount here with voice.sessionId + transcript.
