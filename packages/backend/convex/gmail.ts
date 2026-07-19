@@ -80,11 +80,19 @@ export function buildMime(
   subject: string,
   body: string,
   attachments: MimeAttachment[] = [],
+  // 03.11 RPLY-01: when present, emit In-Reply-To + References so Gmail threads the reply (Pitfall 2:
+  // these carry the RFC 5322 Message-ID header value, angle-bracketed — NEVER the Gmail id). Absent on
+  // every non-reply send, so a normal compose is byte-identical to the pre-3.11 output (the V4 test).
+  threading?: { inReplyTo: string; references: string },
 ): string {
+  const threadHeaders = threading
+    ? [`In-Reply-To: ${threading.inReplyTo}`, `References: ${threading.references}`]
+    : [];
   if (attachments.length === 0) {
     return [
       `To: ${to}`,
       `Subject: ${subject}`,
+      ...threadHeaders,
       "MIME-Version: 1.0",
       'Content-Type: text/plain; charset="UTF-8"',
       "",
@@ -96,6 +104,7 @@ export function buildMime(
   const lines: string[] = [
     `To: ${to}`,
     `Subject: ${subject}`,
+    ...threadHeaders,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",
@@ -171,15 +180,21 @@ export const send = internalAction({
       });
     }
 
-    // Deliver via the Gmail REST API.
-    const raw = base64Url(buildMime(req.recipient, req.subject, req.body, parts));
+    // Deliver via the Gmail REST API. 03.11 RPLY-01: a reply row carries the threading anchor
+    // (getForDelivery projected it from the request). In-Reply-To/References ride the raw bytes (the
+    // load-bearing hard requirement); threadId is reinforcement in the POST body (Pitfall 1 — verified
+    // live in Plan 06, not asserted here). Absent on every non-reply row → byte-identical legacy send.
+    const threading = req.inReplyTo
+      ? { inReplyTo: req.inReplyTo, references: req.references ?? req.inReplyTo }
+      : undefined;
+    const raw = base64Url(buildMime(req.recipient, req.subject, req.body, parts, threading));
     const sendRes = await fetch(SEND_ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${access.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ raw }),
+      body: JSON.stringify(req.threadId ? { raw, threadId: req.threadId } : { raw }),
     });
     if (sendRes.status >= 500) {
       // Transient: THROW so the retrier retries; a terminal failure flows onComplete →
@@ -517,5 +532,90 @@ export const fetchInboxBodies = internalAction({
       }),
     );
     return { ok: true, bodies };
+  },
+});
+
+// ── 03.11 RPLY-01: the reply target-header read ────────────────────────────────────────────
+//
+// A single message's threading anchor: From, Subject, threadId, and the RFC 5322 Message-ID/References
+// HEADERS (angle-bracketed — NEVER the Gmail id, Pitfall 2). Plan 04's replyToMessage tool calls this
+// server-side to set the reply's recipient/subject/In-Reply-To/References on the plan. These headers/ids
+// are returned to the SERVER-SIDE caller ONLY, never logged (the address stays refs-only to the loop,
+// §2-D; the reply tool owns the audit) — so this read writes NO audit itself (mirrors fetchInboxBodies).
+// Deliberately a SEPARATE action from fetchInboxBodies: that returns the untrusted BODY (toolless-only),
+// this returns refs-only HEADERS — keeping the two trust planes in distinct, separately-scanned blocks.
+
+const REPLY_HEADERS = ["From", "Subject", "Message-ID", "References"] as const;
+
+/** References = the original's References header (if any) + its Message-ID, space-joined (RFC 5322). */
+function buildReferences(messageIdHeader: string, existingReferences?: string): string {
+  return existingReferences ? `${existingReferences} ${messageIdHeader}` : messageIdHeader;
+}
+
+/** The reply anchor. inReplyTo/references are the RFC Message-ID header values (angle-bracketed). */
+type ReplyTarget = {
+  from: string;
+  subject: string;
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string;
+};
+
+// Explicit return type (guidelines §96) — never inferred through the internal graph.
+type ReplyTargetResult =
+  | { ok: true; target: ReplyTarget }
+  | { ok: false; reason: "not_connected" | "reauth" | "not_found" };
+
+export const getReplyTarget = internalAction({
+  args: { tenantId: v.string(), id: v.string() },
+  handler: async (ctx, { tenantId, id }): Promise<ReplyTargetResult> => {
+    // FIXTURE FIRST (same seam + ordering as listInbox/fetchInboxBodies) — the fixture message carries
+    // the RFC `messageId` header + `threadId` (03.11-01 anchors), so the eval/E2E reply path threads
+    // against it with no live mailbox.
+    const fixture = await ctx.runQuery(internal.smoke.getInboxFixture, { tenantId });
+    if (fixture) {
+      const m = fixture.messages.find((x) => x.id === id);
+      if (!m) return { ok: false, reason: "not_found" };
+      return {
+        ok: true,
+        target: {
+          from: m.from,
+          subject: m.subject,
+          threadId: m.threadId,
+          inReplyTo: m.messageId,
+          references: m.messageId ? buildReferences(m.messageId) : undefined,
+        },
+      };
+    }
+
+    const access = await freshAccessToken(ctx, tenantId);
+    if (!access.ok) {
+      return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
+    }
+
+    // format=metadata surfaces the top-level threadId + the requested headers — NO body is fetched.
+    const res = await fetch(
+      `${MESSAGES_ENDPOINT}/${id}?format=metadata` +
+        REPLY_HEADERS.map((h) => `&metadataHeaders=${h}`).join(""),
+      { headers: { Authorization: `Bearer ${access.token}` } },
+    );
+    if (res.status === 404) return { ok: false, reason: "not_found" };
+    const msg = (await res.json()) as {
+      threadId?: string;
+      payload?: { headers?: { name: string; value: string }[] };
+    };
+    const headers = msg.payload?.headers ?? [];
+    const pick = (h: string) => headers.find((x) => x.name.toLowerCase() === h.toLowerCase())?.value;
+    const messageIdHeader = pick("Message-ID");
+    return {
+      ok: true,
+      target: {
+        from: pick("From") ?? "",
+        subject: pick("Subject") ?? "",
+        threadId: msg.threadId,
+        inReplyTo: messageIdHeader,
+        references: messageIdHeader ? buildReferences(messageIdHeader, pick("References")) : undefined,
+      },
+    };
   },
 });

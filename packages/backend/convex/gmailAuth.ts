@@ -137,6 +137,13 @@ export const getForDelivery = internalQuery({
       subject: r.goal,
       body: r.editedBody ?? r.draft ?? "",
       attachments,
+      // 03.11 RPLY-01: the reply threading anchor. This is a HAND-BUILT projection (Pitfall 4) — a
+      // field it doesn't return never reaches gmail.send, so a reply would silently post un-threaded.
+      // executePlan copies these from the plan onto the request; buildMime emits In-Reply-To/References
+      // and send POSTs threadId. Absent on every non-reply row (all optional → the projection is null).
+      threadId: r.threadId,
+      inReplyTo: r.inReplyTo,
+      references: r.references,
     };
   },
 });
