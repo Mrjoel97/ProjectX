@@ -477,8 +477,10 @@ export function buildAgentContext(
     // Absolute send instant (epoch ms) once a time is resolved; absent = immediate on approve.
     sendAt?: number;
     // matches carry address + USER-only hints (displayName/lastSubject/…); buildAgentContext emits
-    // ONLY the name + matches.length — never a field inside a match (§2-D/§4).
-    candidates?: { name: string; matches: { address: string; displayName?: string }[] }[];
+    // ONLY the name + matches.length — never a field inside a match (§2-D/§4). `matches` is OPTIONAL
+    // so a NAME-ONLY PlanRow (03.10-04 propose-guard widening) is assignable here; getById returns
+    // the full row at runtime, so the count is present in production.
+    candidates?: { name: string; matches?: { address: string; displayName?: string }[] }[];
   },
   // The user's IANA zone (from the trusted client, §2-D) used ONLY to format sendAt for the model to
   // confirm; the model never supplies it. Defaults to UTC when a turn carries no client clock.
@@ -516,7 +518,7 @@ export function buildAgentContext(
     ...(pending.length
       ? [
           "Awaiting the user's contact pick (NOT yet recipients — tell the user to pick from the card, do NOT claim you added them):",
-          ...pending.map((c) => `  ${c.name}: ${c.matches.length} contact(s) found`),
+          ...pending.map((c) => `  ${c.name}: ${c.matches?.length ?? 0} contact(s) found`),
         ]
       : []),
     `Subject: ${plan.subject ?? "(not set)"}`,

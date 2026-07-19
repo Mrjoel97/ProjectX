@@ -10,7 +10,6 @@ import { buildBriefingView } from "@pikar/core/briefing";
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
-import type { ReactNode } from "react";
 import { useState } from "react";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -830,7 +829,12 @@ function PriorityRow({ item, tz, first }: { item: BriefingItem & { move: string 
   );
 }
 
-function BriefingCard({ briefing }: { briefing: Briefing }) {
+function BriefingCard({ briefing, demoted }: { briefing: Briefing; demoted?: boolean }) {
+  // Composition-active (UAT-C, 03.10-04): a demoted brief mounts COLLAPSED to its masthead so the
+  // work (picker/plan) owns the pane; a masthead toggle re-expands it. Local per-session UI ONLY —
+  // no plan field/mutation/query (ADR-004 dumb renderer). A fresh mount per slot, so useState(demoted)
+  // is correct at mount with no effect.
+  const [collapsed, setCollapsed] = useState(demoted ?? false);
   const { tz, items, listedCount } = briefing;
   // The intelligent report — lede, action-first needs-you (each with its recommended move), the
   // time-grouped fyi remainder, and the collapsed-noise count — comes ENTIRELY from the pure view
@@ -863,14 +867,38 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
           <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--teal-400)" }}>Inbox Briefing</div>
           <div style={{ color: "rgb(255 255 255 / 72%)", fontSize: "0.8rem", marginTop: "0.28rem", ...wrapAnywhere }}>{scope}</div>
         </div>
-        <div style={{ display: "flex", gap: "1.35rem", flex: "none" }}>
+        <div style={{ display: "flex", gap: "1.35rem", flex: "none", alignItems: "center" }}>
           <Kpi value={listedCount} caption="Messages" />
           <Kpi value={view.needsYou.length} caption="Need you" hot />
           <Kpi value={view.collapsedCount} caption="Automated" />
+          {/* VIEW CHROME (SC-4 exception, 03.10-04): a collapse toggle on the MASTHEAD, outside the
+              briefing-body content region. It acts on the view, never on email content — so the SC-4
+              "zero actionable controls" invariant holds where it matters (the content). aria-expanded
+              + aria-label carry the state (BRAND §6 — never colour/glyph alone). */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand briefing" : "Collapse briefing"}
+            style={{
+              alignSelf: "center",
+              background: "transparent",
+              border: "1px solid rgb(255 255 255 / 35%)",
+              borderRadius: "0.375rem",
+              color: "#fff",
+              cursor: "pointer",
+              padding: "0.3rem 0.55rem",
+              fontSize: "0.8rem",
+              lineHeight: 1,
+            }}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
         </div>
       </div>
 
-      <div style={{ padding: "1.05rem 1.15rem 1.2rem" }}>
+      {!collapsed && (
+      <div data-testid="briefing-body" style={{ padding: "1.05rem 1.15rem 1.2rem" }}>
         {/* LEDE first (Gap 1.1) — the executive summary line. MUST stay the first briefing-lede/-item
             element in the card (the E2E asserts lede-first); the masthead above carries no such testid. */}
         <p data-testid="briefing-lede" style={{ color: "var(--ink)", fontWeight: 500, fontSize: "1rem", lineHeight: 1.45, margin: "0 0 1rem" }}>
@@ -921,6 +949,7 @@ function BriefingCard({ briefing }: { briefing: Briefing }) {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -1050,9 +1079,9 @@ export function CardList({ threadId, sending }: { threadId?: string; sending: bo
     if (!threadId) return running ? null : <p style={muted}>No artifacts yet.</p>;
     if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
 
-    const brief = briefing ? <BriefingCard briefing={briefing} /> : null;
-    if (plan === null) return brief ?? (running ? null : <p style={muted}>No plan yet — answer the questions to build one.</p>);
-    return <PlanCards plan={plan} threadId={threadId} brief={brief} />;
+    if (plan === null)
+      return briefing ? <BriefingCard briefing={briefing} /> : running ? null : <p style={muted}>No plan yet — answer the questions to build one.</p>;
+    return <PlanCards plan={plan} threadId={threadId} briefing={briefing} />;
   };
 
   return (
@@ -1064,32 +1093,40 @@ export function CardList({ threadId, sending }: { threadId?: string; sending: bo
 }
 
 /** The existing plan-status dispatch, unchanged — lifted out so CardList can render the trace above it. */
-function PlanCards({ plan, threadId, brief }: { plan: Plan; threadId: string; brief: ReactNode }) {
+function PlanCards({ plan, threadId, briefing }: { plan: Plan; threadId: string; briefing: Briefing | null }) {
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
   const hasDraft = (Boolean(plan.body) || Boolean(plan.subject)) && !halted;
-  // Resolution happens during "collecting", BEFORE the PLAN — render the pick card whenever the
-  // cockpit has parked candidates and the plan hasn't been proposed/delivered yet.
-  const resolving = Boolean(plan.candidates?.length) && plan.status !== "proposed" && !reporting;
+  // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
+  // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
+  // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);
+  // the backend guard makes that state unreachable, this is defense-in-depth for any reader.
+  const resolving = Boolean(plan.candidates?.length) && !reporting;
   // Composition-active (UAT-A, 2026-07-19): the moment candidates park (or subject/body/recipients
   // are set, or the plan moves past collecting) the WORK is the story — a tall BriefingCard pinned
   // first buried the ResolutionCard and the pick stalled ("where is the list"). Demote the brief
-  // BELOW the plan cards, never destroy it; the briefing-only flow keeps it primary.
+  // BELOW the plan cards (collapsed to its masthead, UAT-C), never destroy it; the briefing-only
+  // flow keeps it primary.
   const composing =
     Boolean(plan.candidates?.length || plan.subject || plan.body || plan.recipients?.length) ||
     plan.status !== "collecting";
 
   return (
-    <div style={{ display: "grid", gap: "1rem" }}>
-      {!composing && brief}
+    // ponytail: `data-plan-id` is a render-only E2E hook (NOT a plan field/mutation/query) so the
+    // proposed+parked regression can force the deadlock ROW the backend guard now prevents live.
+    <div data-plan-id={plan._id} style={{ display: "grid", gap: "1rem" }}>
+      {!composing && briefing && <BriefingCard briefing={briefing} />}
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
-      {plan.status === "proposed" && <PlanCard plan={plan} threadId={threadId} />}
+      {/* UAT-C: never the unpickable "#1 (no name)" placeholder while a pick is parked — exactly
+          one card (the picker) renders in that deadlock state. */}
+      {plan.status === "proposed" && !plan.candidates?.length && <PlanCard plan={plan} threadId={threadId} />}
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
       {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
       {reporting && <ReportCard planId={plan._id} />}
-      {composing && brief /* demoted: still rendered + reachable below the work — never destroyed */}
+      {/* demoted: collapsed to its masthead below the work — still rendered + reachable, never destroyed */}
+      {composing && briefing && <BriefingCard briefing={briefing} demoted />}
     </div>
   );
 }

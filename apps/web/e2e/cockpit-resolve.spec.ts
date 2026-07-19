@@ -149,7 +149,7 @@ test("demotion: brief primary → candidates park → picker precedes the demote
   const picker = workspace.getByText("PICK A CONTACT", { exact: true });
   await expect(picker).toBeVisible({ timeout: 15_000 });
 
-  // Demoted, NOT destroyed: the briefing card is still attached and rendered below the work.
+  // Demoted, NOT destroyed: the briefing card (its masthead) is still attached below the work.
   await expect(briefCard).toBeVisible();
 
   // DOM order, not layout: the briefing card FOLLOWS the picker (compareDocumentPosition).
@@ -162,7 +162,70 @@ test("demotion: brief primary → candidates park → picker precedes the demote
   );
   expect(briefFollowsPicker).toBe(true);
 
-  // SC-4 re-assert on the DEMOTED card: still informational — zero buttons/links inside it.
-  await expect(briefCard.locator("button")).toHaveCount(0);
-  await expect(briefCard.locator("a")).toHaveCount(0);
+  // UAT-C (03.10-04): the demoted brief mounts COLLAPSED to its masthead — the content region
+  // (briefing-body) is not rendered, only the masthead + its toggle. The masthead toggle expands it
+  // to full content and collapses it again (local useState, no plan field — ADR-004).
+  const briefBody = briefCard.getByTestId("briefing-body");
+  await expect(briefBody).toHaveCount(0); // collapsed at mount: the content is hidden
+  await briefCard.getByRole("button", { name: /expand briefing/i }).click();
+  await expect(briefBody).toBeVisible(); // toggle expands to the full report
+  await briefCard.getByRole("button", { name: /collapse briefing/i }).click();
+  await expect(briefBody).toHaveCount(0); // and collapses back to the masthead
+
+  // SC-4 re-assert, RESCOPED to the CONTENT region (03.10-04): zero actionable controls INSIDE
+  // briefing-body — the masthead toggle is allowed view chrome OUTSIDE it. Assert while expanded.
+  await briefCard.getByRole("button", { name: /expand briefing/i }).click();
+  await expect(briefBody).toBeVisible();
+  await expect(briefBody.locator("button")).toHaveCount(0);
+  await expect(briefBody.locator("a")).toHaveCount(0);
+});
+
+// ── UAT-C proposed-while-pending picker-survival regression (03.10-04) ────────────────────────
+//
+// The transcript deadlock: a plan reached `proposed` with a contact pick STILL parked, so the
+// picker vanished (`status !== "proposed"` suppressed `resolving`) AND an unpickable "#1 (no name)"
+// PlanCard showed — a dead end. The BACKEND guard (proposePlan refuses over a parked pick) makes
+// this state unreachable through the agent — so we reach it out of band: the composer creates a REAL
+// agent thread and parks a pick (`resolve`), THEN `cockpit.proposeEmailPlan` flips status → proposed
+// WITHOUT clearing candidates (the exact bad ROW). The planId rides the `data-plan-id` hook the
+// PlanCards grid renders (present the moment the picker mounts). The frontend guards are defense-in-
+// depth for ANY reader: the picker MUST survive and NO "#1 (no name)" PlanCard may show. Like every
+// spec here, the LIVE paint is owed to the connected human-verify session (composer gated on
+// `gmailAuth.status.connected`); the automated gate is typecheck + Playwright discovery.
+
+test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanCard (UAT-C)", async ({ page }) => {
+  await page.goto("/dashboard/workspace");
+
+  const composer = page.getByPlaceholder("Describe your goal…");
+  await expect(composer).toBeVisible({ timeout: 15_000 });
+
+  const say = async (text: string) => {
+    await composer.fill(text);
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("", { timeout: 20_000 });
+  };
+
+  const workspace = page.getByTestId("workspace-pane");
+
+  // 1. Park a real pick via the composer (agent thread + candidates on the plan row).
+  await say("SMOKE::agent::resolve=SMOKE::Sarah");
+  const picker = workspace.getByText("PICK A CONTACT", { exact: true });
+  await expect(picker).toBeVisible({ timeout: 15_000 });
+
+  // 2. Read the plan id from the PlanCards grid hook, then flip status → proposed WITHOUT picking
+  //    (proposeEmailPlan keeps candidates) — the deadlock ROW the backend guard now prevents live.
+  const planId = await workspace.locator("[data-plan-id]").first().getAttribute("data-plan-id");
+  if (!planId) throw new Error("no data-plan-id on the PlanCards grid — cannot force the proposed state");
+  convexRun("cockpit:proposeEmailPlan", {
+    planId,
+    recipients: ["bob@example.com"],
+    mode: "individual",
+    subject: "Quarterly update",
+    body: "Hi, sharing the quarterly numbers.",
+  });
+
+  // 3. Reactive re-render at status 'proposed' with a pick STILL parked: the picker SURVIVES (the
+  //    dropped `status !== "proposed"` clause) and NO unpickable "#1 (no name)" PLAN card renders.
+  await expect(picker).toBeVisible({ timeout: 15_000 });
+  await expect(workspace.getByText("PLAN", { exact: true })).toHaveCount(0);
 });
