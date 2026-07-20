@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-07-21T02:30:00.000Z"
-last_activity: "2026-07-21 — Phase 7 Resilience & Ops Hardening, Wave 2: 07-03 executed — the PIPELINE review gate is now FAIL CLOSED (REVW-02/03). The bug: past MAX_REGENERATE(=3) a `regenerate` decision fell through the loop's `break` to DELIVER (an unapproved send, pipeline.ts:250-277). FIX at the shared decision point (CLAUDE.md §8): the review-gate loop routes EVERY decision through @pikar/core classifyReviewDecision({decision, regenerateCount}) — the SAME classifier 07-04 wires into the cockpit gate, never a forked copy. A past-cap regenerate now hits the `escalate` branch → a governed `escalated` terminal (mirrors stopBlocked): status escalated + review.escalated audit + retry.limit notification + one escalated telemetry row + return null, NO gmail.send. `escalated` added to REQUEST_STATUS (pipeline.ts) AND schema.ts requests.status (14 stages) AND telemetry.ts reviewOutcome validator in lockstep (Rule 3 — a write against any un-widened union throws; the RED test caught this precisely: 'Validator error: got escalated'). REVW-03: the review-inactivity timeout branch (SEVEN_DAYS default) now fires a review.expired notification between its audit and telemetry write (was audit+telemetry only), still NO delivery on timeout; both notifications use the static §4 label from @pikar/core notificationMessage. MAX_REGENERATE re-exported from @pikar/core (requests.ts still imports it for canRegenerate) — value now lives once in core (07-01). Extended smoke:pipeline: approve→deliver + a review-expiry (via smoke:fireReviewTimeout, which cancels the real SEVEN_DAYS scheduled timeout and re-fires review.fireTimeout at delay 0 → expired + review.expired notify + NO send) + a 4-regenerate breach (→ escalated + retry.limit notify + NO send), backed by assertReviewExpired/assertReviewEscalated. Commits e73c000 (T1 feat, TDD RED→GREEN: classifier wiring at the cap + the escalated terminal write seam, auditCounts aggregate registered), 450231f (T2 feat review.expired notify), b16b879 (T3 test smoke + cockpit.md fail-closed invariant). TWO Rule-3 deviations (both load-bearing plumbing): widened schema.ts+telemetry.ts validators (not only pipeline REQUEST_STATUS as planned — the escalated write must validate); added smoke:fireReviewTimeout + the two assertions the extended script calls. VERIFIED: pnpm --filter @pikar/backend test pipeline 2/2 green; backend source tsc clean (pre-existing test-file import.meta.glob errors are untouched non-regressions); check-playbooks exit 0. NOT YET RUN (manual phase-gate, needs live dev deployment): npm run smoke:pipeline. NEXT: 07-04 wires the SAME classifyReviewDecision into the LIVE cockpit gate (executePlan/plans.reviseCount/plans.escalated) — the shared fix reaches both gates."
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-07-20T23:49:09.114Z"
+last_activity: "2026-07-20 — Phase 7 Resilience & Ops Hardening, Wave 3: 07-05 executed — OPSG-05 user-facing notification matrix CLOSED. notifications.notify is now the SINGLE choke point: it inserts the in-app row (the fail-closed floor) THEN ctx.scheduler.runAfter(0, internal.notifyExternal.dispatch, {tenantId, kind}) — scheduling an action from the mutation isolates a slow/failing send from the in-app write. NEW notifyExternal.ts ('use node'): resolves the user's OWN mailbox via a read-only users/me/profile GET and emails a STATIC 'Pikar: <kind>' subject + notificationMessage(kind) body through the GOVERNED Gmail send seam (gmail.ts now EXPORTS freshAccessToken/base64Url/SEND_ENDPOINT — no SECOND send fetch added, which would have tripped llmRedaction's exact-two-POSTs scan). fail-closed: no connected mailbox / refresh fail / send error returns silently. loop guard: the whole dispatch is wrapped so a failed external send NEVER throws, NEVER re-notifies, NEVER dead-letters (a re-notifying failed send would recurse). DLQ now notifies at BOTH terminals — onPipelineComplete (only when a requestId ref rides context.payload; synthetic runFailingPipeline skips it) + deadLetterRecipient (requestId always present) — beside their audit, requestId ref + static §4 label only. §4 STATIC SCAN extended (llmRedaction.test.ts +2): no notify message across pipeline/cockpit/deadLetter/notifications/notifyExternal interpolates a content field; the external channel sends only the kind enum member + notificationMessage (no content/requestId), the scheduled dispatch carries {tenantId,kind} only — both MUTATION-CHECKED (inject ${...body}/a content field → RED, revert). Commits 9396b59 (T1 RED), 894ea78 (T1 GREEN), f60c0ba (T2), 6862787 (T3). TWO Rule-3 deviations (both blocking-plumbing): the deadletter smoke assertion lives in smokeAssert.assertDeadLetterReason (the internalQuery run-smoke-dlq polls), not the .mjs; bumped cockpit.md because gmail.ts is a cockpit.md-watched path. VERIFIED: pnpm --filter @pikar/backend test notifications deadLetter llmRedaction 39/39 green; backend source tsc clean (pre-existing test-file import.meta.glob errors untouched); check-playbooks exit 0. NOT RUN (live-only phase gate): npm run smoke:dlq + the manual per-failure-class in-app+email human-verify. NEXT: 07-06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 15
   total_plans: 124
-  completed_plans: 117
+  completed_plans: 119
 ---
 
 ---
@@ -560,6 +560,8 @@ Progress: [█████████░] 94%
 | Phase 06 P07 | 15min | 3 tasks | 12 files |
 | Phase 07 P01 | 8min | 3 tasks | 12 files |
 | Phase 07-resilience-operations-hardening P02 | 9min | 3 tasks | 5 files |
+| Phase 07 P05 | 17 | 3 tasks | 10 files |
+| Phase 07-resilience-operations-hardening P04 | 15 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -696,6 +698,7 @@ Recent decisions affecting current work:
 - [Phase 07]: [Phase 07]: notificationMessage(kind) takes NO content parameter — the §4 no-PII-in-notifications firewall is a type-level constraint, not a runtime convention
 - [Phase 07]: [Phase 07]: classifyReviewDecision is the single fail-closed source of truth for both review gates (07-03 pipeline + 07-04 cockpit); regenerate at/over MAX_REGENERATE escalates, never delivers (REVW-02)
 - [Phase 07-resilience-operations-hardening]: 07-02: WORM export is EXPORT ONLY (owner ruling) — real S3 PutObject under COMPLIANCE Object Lock + SHA256, cursor advances only after a durable write; hot audit-table sweep DEFERRED (SC#4 partial)
+- [Phase 07]: OPSG-05 notify choke point: in-app insert then best-effort fail-closed loop-guarded external email (send-to-self via governed Gmail seam)
 
 ### Roadmap Evolution
 
@@ -720,8 +723,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:25:19.924Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-07-20T23:49:08.830Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
