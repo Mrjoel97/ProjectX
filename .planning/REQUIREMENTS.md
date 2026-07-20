@@ -19,7 +19,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **AGNT-01**: Executive Agent classifies each request and produces a routing decision (direct tool / specialized sub-agent / direct LLM response)
 - [x] **AGNT-02**: User can see the plan (routing decision + step list) before approving any execution
 - [x] **AGNT-03**: Unknown/invalid routing values route to an explicit error branch (dead-letter), never a silent default
-- [ ] **AGNT-04**: Executive Agent timeout triggers notification and escalation/timeout handling
+- [x] **AGNT-04**: Executive Agent timeout triggers notification and escalation/timeout handling
 
 ### Guardrails
 
@@ -147,7 +147,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGNT-01 | Phase 2 | Complete |
 | AGNT-02 | Phase 2 | Complete |
 | AGNT-03 | Phase 2 | Complete |
-| AGNT-04 | Phase 7 | Pending |
+| AGNT-04 | Phase 7 | Complete |
 | GRDL-01 | Phase 3 | Complete |
 | GRDL-02 | Phase 3 | Complete |
 | GRDL-03 | Phase 3 | Complete |
