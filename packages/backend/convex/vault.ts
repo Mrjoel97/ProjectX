@@ -13,8 +13,9 @@
 // item and starts NO workflow — identical content is never re-embedded. The raw doc `text` lives
 // ONLY on this row + the rag chunks; nothing else in the pipeline carries raw content (§4).
 //
-// This module is the ingest workflow's SOLE starter (the vault plane's zero-embed-before-accept
-// invariant, mirroring executePlan for delivery).
+// Ingest always starts via `vaultIngest.startIngest` (never a bare `workflow.start`) — that helper
+// attaches the failure-handling `onComplete`, so a dead run can never strand a doc at `processing`
+// (the vault plane's zero-embed-before-accept invariant, mirroring executePlan for delivery).
 import type { EntryId } from "@convex-dev/rag";
 import {
   categoryFor,
@@ -29,9 +30,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
@@ -67,11 +68,7 @@ export const vaultIngestText = tenantMutation({
         status: "processing",
       });
       const correlationId = crypto.randomUUID();
-      await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
-        vaultDocId: docId,
-        tenantId: ctx.tenantId,
-        correlationId,
-      });
+      await startIngest(ctx, { vaultDocId: docId, tenantId: ctx.tenantId, correlationId });
       return { vaultDocId: docId };
     }
 
@@ -99,11 +96,7 @@ export const vaultIngestText = tenantMutation({
       createdAt: Date.now(),
     });
     const correlationId = crypto.randomUUID();
-    await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
-      vaultDocId,
-      tenantId: ctx.tenantId,
-      correlationId,
-    });
+    await startIngest(ctx, { vaultDocId, tenantId: ctx.tenantId, correlationId });
     return { vaultDocId };
   },
 });
@@ -165,11 +158,7 @@ export const vaultUpload = tenantMutation({
     });
     if (searchable) {
       const correlationId = crypto.randomUUID();
-      await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
-        vaultDocId,
-        tenantId: ctx.tenantId,
-        correlationId,
-      });
+      await startIngest(ctx, { vaultDocId, tenantId: ctx.tenantId, correlationId });
     } else {
       // Phase-3.8 auto-extract: a recognized binary schedules its extraction rail immediately.
       // The row stays pending_extraction here — the action flips it to `extracting` when work
@@ -475,11 +464,7 @@ export const ingestExtractedText = internalMutation({
       extractionTruncated: truncated || undefined,
     });
     const correlationId = crypto.randomUUID();
-    await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
-      vaultDocId: docId,
-      tenantId,
-      correlationId,
-    });
+    await startIngest(ctx, { vaultDocId: docId, tenantId, correlationId });
     return null;
   },
 });
