@@ -1,7 +1,7 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-07
-> Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: none
+> Last verified: 2026-07-20 against 06-08 (phase close)
+> Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
 
 ## Purpose
 
@@ -33,7 +33,7 @@ Pure packages (`packages/*` — no Convex, unit-testable):
 - `packages/cost/src/cost.ts` — `priceRealtime()` + `REALTIME_PRICING` (fail-closed,
   mirrors `priceTranscription`).
 
-Backend adapters (thin, added in later plans — pre-registered in `watch.json`):
+Backend adapters (thin — all shipped, pre-registered in `watch.json`):
 
 - `packages/backend/convex/voice.ts` — the session engine (06-05): tenant-wrapped
   `startSession`/`recordUsage`/`endSessionClean`; internal `forceEndSession` (the watchdog
@@ -104,7 +104,8 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
 - **The 15-minute cap is a server wall-clock watchdog, armed once and never re-armed or
   paused.** A mic-drop grace window consumes cap time. Why: a movable cap can be stalled
   indefinitely by a hung client. Enforced by: `capEndsAt`/`CAP_MS` are pure + unit-tested;
-  `startSession` arms exactly one timer (later `voice.test.ts`).
+  `startSession` arms exactly one timer (`voice.test.ts` — one `ctx.scheduler.runAt(` grep-proven).
+  Recorded as the cost-bound decision in ADR-005.
 - **Mic-loss pauses and recovers, but the pause consumes cap time and NEVER re-arms the
   watchdog.** On mic loss (track `ended` / getUserMedia failure / permission revoke) the client
   hook enters `paused` and shows "mic lost — reconnect to continue"; `reconnect()` re-acquires
@@ -160,7 +161,9 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   (localStorage) the instant PostCall stores it, so only auto-stored (dropped) briefs remain unseen
   and surface. Losing the seen-set (private mode) degrades to re-surfacing, never to losing a brief.
 - **The live-session + brief prompts load from the skill registry, never hardcoded**
-  (CLAUDE.md §5). Enforced by: `getActiveSkill` fail-closed load at mint/draft time (later).
+  (CLAUDE.md §5, ADR-003). Enforced by: `getActiveSkill` fail-closed load at mint/draft time
+  (`voiceToken.mintClientSecret` for the persona, `llm.draftVoiceBrief` for the brief — both
+  fail-closed if unseeded; `voiceToken.test.ts` / `voiceBriefDraft.test.ts`).
 - **`OPENAI_API_KEY` / the ephemeral client secret never reach the browser, a log, or an
   audit row** (Pitfall 4). Enforced by: `mintClientSecret` returns only
   `{clientSecret, expiresAt}`; no audit/log carries either.
