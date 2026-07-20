@@ -23,6 +23,8 @@ const terminalOutcome = v.object({
     v.literal("failed"),
     // Governed guardrail stop (GRDL-01) — a first-class fail-closed terminal.
     v.literal("blocked"),
+    // REVW-02 fail-closed terminal: a regenerate past MAX_REGENERATE, escalated not sent.
+    v.literal("escalated"),
   ),
   durationMs: v.number(),
   decisionCounts: v.record(v.string(), v.number()),

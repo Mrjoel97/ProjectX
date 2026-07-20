@@ -20,6 +20,7 @@
 // pipeline.ts is on the raw-builder allowlist (internalMutation, not a tenant
 // wrapper — the workflow carries no client identity).
 import { priceUsage } from "@pikar/cost";
+import { classifyReviewDecision, notificationMessage } from "@pikar/core";
 import { workflow } from "./index";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -39,15 +40,18 @@ export const REQUEST_STATUS = v.union(
   v.literal("rejected"),
   v.literal("blocked"),
   v.literal("expired"),
+  // REVW-02 fail-closed terminal: a regenerate past MAX_REGENERATE, escalated not sent.
+  v.literal("escalated"),
   v.literal("failed"),
   v.literal("awaiting_reauth"),
 );
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-// ponytail: MAX_REGENERATE cap is Phase-7 REVW-02's upgrade path (per-tenant policy).
-// Exported so the review UI stops offering "Ask for changes" at the cap — past it, a
-// `regenerate` decision falls through the loop to delivery (an unapproved send).
-export const MAX_REGENERATE = 3;
+// REVW-02: the regenerate cap is now @pikar/core's single source of truth —
+// classifyReviewDecision enforces it in the gate below (fail closed at the cap: escalate,
+// never deliver). Re-exported so requests.ts's `canRegenerate` hint and the review UI read
+// the SAME value the gate enforces (07-01 consolidation, CLAUDE.md §8 root-cause).
+export { MAX_REGENERATE } from "@pikar/core";
 
 /** One accumulated LLM usage (route/draft/regenerate) for the OPSG-01 row. */
 type Usage = { inputTokens: number; outputTokens: number; costUsd: number };
@@ -104,7 +108,9 @@ export const pipelineWorkflow = workflow.define({
         payload: { requestId }, // ref only — redaction-safe (CLAUDE.md §4)
       });
     // Write-once terminal telemetry from the accumulated outcome (idempotent by cid).
-    const writeTelemetry = (reviewOutcome: "sent" | "rejected" | "expired" | "blocked") =>
+    const writeTelemetry = (
+      reviewOutcome: "sent" | "rejected" | "expired" | "blocked" | "escalated",
+    ) =>
       step.runMutation(internal.telemetry.writeTerminal, {
         requestId,
         correlationId,
@@ -135,6 +141,21 @@ export const pipelineWorkflow = workflow.define({
         message: `Request stopped — ${LABELS[reason]}`,
       });
       await writeTelemetry("blocked");
+    };
+
+    // The ONE governed escalated terminal — a regenerate past MAX_REGENERATE fails closed here
+    // (status + review.escalated audit + retry.limit notify + escalated telemetry, NO send).
+    // Mirrors stopBlocked: one governed terminal, never a throw and never a fall-through to DELIVER.
+    const escalate = async () => {
+      await setStatusStep("escalated");
+      await audit("review.escalated");
+      await step.runMutation(internal.notifications.notify, {
+        tenantId,
+        kind: "retry.limit",
+        requestId,
+        message: notificationMessage("retry.limit"), // static §4 label, refs only
+      });
+      await writeTelemetry("escalated");
     };
 
     // 0. GUARD — scan → kill-switch → budget/model, BEFORE any model call (GRDL-01/03).
@@ -239,7 +260,17 @@ export const pipelineWorkflow = workflow.define({
 
       decisionCounts[evt.decision] = (decisionCounts[evt.decision] ?? 0) + 1;
 
-      if (evt.decision === "reject") {
+      // REVW-02 (fail closed): route EVERY gate decision through @pikar/core's shared
+      // classifier — the SAME one the cockpit gate uses (07-04) — so the regenerate cap is
+      // enforced at the workflow boundary, never by the UI hiding a button. A past-cap
+      // regenerate returns "escalate" and can no longer reach the DELIVER `break`.
+      // Note: edit_text/reject are single-shot terminals per the classifier (proceed/terminate),
+      // so their decisionCounts can't exceed 1 — the one enforced threshold is the regenerate
+      // cap (REVW-02 scope honesty).
+      const decisionAction = classifyReviewDecision({ decision: evt.decision, regenerateCount });
+
+      if (decisionAction.action === "terminate") {
+        // reject → rejected terminal (unchanged).
         await step.runMutation(internal.pipeline.saveDraft, { requestId, rejectReason: evt.reason });
         await setStatusStep("rejected");
         await audit("review.rejected");
@@ -247,7 +278,14 @@ export const pipelineWorkflow = workflow.define({
         return null; // NO delivery
       }
 
-      if (evt.decision === "regenerate" && attempt < MAX_REGENERATE) {
+      if (decisionAction.action === "escalate") {
+        // THE BUG FIX: a regenerate past MAX_REGENERATE fails closed to the human here —
+        // audit + notify + telemetry, NO send. It can no longer fall through to DELIVER.
+        await escalate();
+        return null; // NO delivery
+      }
+
+      if (decisionAction.action === "regenerate") {
         if (draftsViaLLM) {
           // force:true so an identical-args fetch cannot hand back the byte-identical draft
           // the user just asked to change (Pitfall 2); instruction is threaded + redacted +
@@ -270,7 +308,7 @@ export const pipelineWorkflow = workflow.define({
         continue;
       }
 
-      // approve | edit_text (| regenerate past the cap — the UI stops offering it).
+      // decisionAction.action === "proceed": approve | edit_text → DELIVER.
       if (evt.decision === "edit_text") {
         await step.runMutation(internal.pipeline.saveDraft, { requestId, editedBody: evt.editedText });
       }

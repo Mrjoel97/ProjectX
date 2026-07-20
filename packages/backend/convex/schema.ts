@@ -101,7 +101,9 @@ export default defineSchema({
     safeText: v.optional(v.string()), // redacted goal
     safeTextHash: v.optional(v.string()), // SHA-256 hex of safeText — the cache-key member
     lastInstruction: v.optional(v.string()), // scanned (redacted) latest regenerate instruction (03-04)
-    // The 13 observable pipeline stages (kept in sync with pipeline.ts REQUEST_STATUS).
+    // The 14 observable pipeline stages (kept in sync with pipeline.ts REQUEST_STATUS).
+    // `escalated` is REVW-02's fail-closed terminal: a regenerate past MAX_REGENERATE is
+    // handed to a human, never delivered.
     status: v.union(
       v.literal("submitted"),
       v.literal("routing"),
@@ -114,6 +116,7 @@ export default defineSchema({
       v.literal("rejected"),
       v.literal("blocked"),
       v.literal("expired"),
+      v.literal("escalated"),
       v.literal("failed"),
       v.literal("awaiting_reauth"),
     ),
