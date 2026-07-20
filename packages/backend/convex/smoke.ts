@@ -6,6 +6,7 @@
 //   2. startReviewGate    -> reviewGate (awaitEvent race, issue #177 workaround)
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
+import type { WorkflowId } from "@convex-dev/workflow";
 import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -162,6 +163,29 @@ export const seedPipeline = internalMutation({
       },
     );
     return { requestId };
+  },
+});
+
+/** REVW-03 smoke driver: fire the ARMED review gate's timeout NOW instead of the real
+ *  SEVEN_DAYS the pipeline arms, by cancelling the scheduled timeout and re-firing
+ *  internal.review.fireTimeout at delay 0 against the same namespaced gate. Poll this
+ *  (it throws until the gate has armed a pendingTimeouts row) to drive the expired terminal. */
+export const fireReviewTimeout = internalMutation({
+  args: { correlationId: v.string() },
+  handler: async (ctx, { correlationId }) => {
+    const row = await ctx.db
+      .query("pendingTimeouts")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!row) throw new Error(`no armed review gate for ${correlationId}`);
+    // Cancel the real SEVEN_DAYS timeout, then fire the same gate's timeout immediately.
+    await ctx.scheduler.cancel(row.scheduledId as Id<"_scheduled_functions">);
+    await ctx.scheduler.runAfter(0, internal.review.fireTimeout, {
+      workflowId: row.workflowId as WorkflowId,
+      correlationId,
+      attempt: row.attempt ?? 0,
+    });
+    return { ok: true };
   },
 });
 

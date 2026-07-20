@@ -126,6 +126,86 @@ export const assertDeadLetterReason = internalQuery({
   },
 });
 
+/**
+ * REVW-03: the review-inactivity timeout landed the request at the `expired` terminal —
+ * status expired + a review.expired notification fired (07-03's addition, was audit-only) +
+ * one expired telemetry row + NO send (never sent/delivering).
+ */
+export const assertReviewExpired = internalQuery({
+  args: { correlationId: v.string() },
+  handler: async (ctx, { correlationId }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "expired") {
+      throw new Error(`request ${correlationId} at "${req.status}", expected expired (NO send)`);
+    }
+
+    const notes = await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_read", (q) => q.eq("tenantId", req.tenantId))
+      .collect();
+    if (!notes.some((n) => n.requestId === req._id && n.kind === "review.expired")) {
+      throw new Error(`no review.expired notification for ${correlationId}`);
+    }
+
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!tel || tel.reviewOutcome !== "expired") {
+      throw new Error(`no expired telemetry row for ${correlationId}`);
+    }
+    return { ok: true, status: req.status };
+  },
+});
+
+/**
+ * REVW-02 (the bug fix): a regenerate breach past MAX_REGENERATE fails closed at the
+ * `escalated` terminal — status escalated + a review.escalated audit + a retry.limit
+ * notification + one escalated telemetry row + NO send (never sent/delivering).
+ */
+export const assertReviewEscalated = internalQuery({
+  args: { correlationId: v.string() },
+  handler: async (ctx, { correlationId }) => {
+    const req = await ctx.db
+      .query("requests")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!req) throw new Error(`no request for ${correlationId}`);
+    if (req.status !== "escalated") {
+      throw new Error(`request ${correlationId} at "${req.status}", expected escalated (NO send)`);
+    }
+
+    const audits = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    if (!audits.some((a) => a.eventType === "review.escalated")) {
+      throw new Error(`no review.escalated audit for ${correlationId}`);
+    }
+
+    const notes = await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_read", (q) => q.eq("tenantId", req.tenantId))
+      .collect();
+    if (!notes.some((n) => n.requestId === req._id && n.kind === "retry.limit")) {
+      throw new Error(`no retry.limit notification for ${correlationId}`);
+    }
+
+    const tel = await ctx.db
+      .query("telemetry")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .first();
+    if (!tel || tel.reviewOutcome !== "escalated") {
+      throw new Error(`no escalated telemetry row for ${correlationId}`);
+    }
+    return { ok: true, status: req.status };
+  },
+});
+
 // ── 03-05 guardrail phase-gate assertions ────────────────────────────────────
 // The component behaviors convex-test cannot emulate (kill switch, budget window,
 // action-cache isolation/hit, fallback) plus GRDL-02's no-raw-PII needle scan.
