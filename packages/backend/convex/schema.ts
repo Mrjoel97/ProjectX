@@ -21,7 +21,11 @@ export default defineSchema({
     ts: v.number(),
   })
     .index("by_tenant_ts", ["tenantId", "ts"])
-    .index("by_correlation", ["correlationId"]),
+    .index("by_correlation", ["correlationId"])
+    // OPSG-03 WORM export windows CROSS-tenant by ts (by_tenant_ts is per-tenant, useless
+    // for the global export). Adding an index is not a write path — Convex backfills it
+    // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.
+    .index("by_ts", ["ts"]),
 
   // Dead-letter queue populated by workflow onComplete on failure. Redaction-safe payload.
   deadLetters: defineTable({
@@ -221,6 +225,12 @@ export default defineSchema({
     replyThreadId: v.optional(v.string()),
     inReplyTo: v.optional(v.string()),
     references: v.optional(v.string()),
+    // Cockpit review-gate counter/terminal (REVW-02, 07-04). `reviseCount` is the redraft
+    // tally the gate compares against MAX_REGENERATE (@pikar/core classifyReviewDecision);
+    // `escalated` is the fail-closed terminal flag set when the cap is breached. Both optional
+    // → existing rows need no backfill (append-only discipline, like sendAt/attachments).
+    reviseCount: v.optional(v.number()),
+    escalated: v.optional(v.boolean()),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),

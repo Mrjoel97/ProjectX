@@ -1,6 +1,6 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-07-12 against c577890
+> Last verified: 2026-07-21 against 07-01
 > Build history: `.planning/phases/01-foundation-governance-substrate/`, `.planning/phases/03-guardrails/` · Related ADRs: [002](../decisions/002-insert-only-audit.md)
 
 ## Purpose
@@ -54,7 +54,7 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 - **New audit event type**: redact first, build a payload of refs/counts only, call `internal.audit.log`. If the writer is a new file, extend `llmRedaction.test.ts`'s scan scope to cover it.
 - **New workflow**: always pass `onComplete: internal.deadLetter.onPipelineComplete` with a refs-only `context` payload, or failures are silent.
 - **Never** add a mutating audit function, a public audit writer, or a payload field that could carry user content. If a debugging need tempts you to store content, store it in the content plane (`requests`/`plans`) and put the ref in the payload.
-- **Implementing real WORM export (Phase 7 / OPSG-03)**: gotchas are documented in `worm.ts` — bucket Object Lock must be enabled at bucket creation, checksum headers required, `@aws-sdk/client-s3` added only then. The cursor may only advance after a confirmed successful PutObject.
+- **Implementing real WORM export (Phase 7 / OPSG-03)**: gotchas are documented in `worm.ts` — bucket Object Lock must be enabled at bucket creation, checksum headers required. `@aws-sdk/client-s3` is now installed (07-01) so `worm.ts` ("use node") can import it. The pure serialization/key/retention math lives in `@pikar/core` retention.ts (`serializeAuditNdjson` sorts keys → byte-identical re-export → idempotent PutObject; `wormObjectKey`; `retainUntilDate`/`RETENTION_MS`). The cursor may only advance after a confirmed successful PutObject.
 - **DLQ replay**: blocked on specifying idempotency; the `replayed` status is reserved for it.
 
 ## How to verify
@@ -74,5 +74,5 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 
 - WORM export is a stub (schedule + cursor + no-op); real S3 Object Lock in Phase 7
 - No DLQ replay path yet (`replayed` status reserved)
-- No `by_ts` index on `audit`; `auditSince` full-scans — fine at current volume, add the index when Phase 7 export volume demands it
+- The `audit` table now has a global `by_ts` index (07-01) that backs `auditSince` (was a full scan) and the cross-tenant WORM export window
 - Not every `audit.log` caller's payload is covered by the static scan (e.g. `gmail.ts`, `deliverApprovedPlan.ts`) — extend `llmRedaction.test.ts` when touching those
