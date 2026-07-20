@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.11: Inbox Reply** (INSERTED) — 2026-07-19 - "Draft a reply to X" becomes a real reply: recipient by message ref (From address, refs-only — no panel round-trip), `Re:` subject + Gmail in-thread threading, body drafted from user intent with the original as toolless-ingested context, delivered through the unchanged plan → Approve → governed fan-out (6/6 plans; RPLY-01 owner live human-verify APPROVED 2026-07-19 — a real reply landed in-thread in real Gmail with the Re: subject, addressed only the original sender)
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
-- [ ] **Phase 6: Live Voice Sessions** - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
+- [x] **Phase 6: Live Voice Sessions** (VOIC-01..04 live human-verified 2026-07-21) - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [ ] **Phase 7: Resilience & Operations Hardening** - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
 - [ ] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch
 - [ ] **Phase 9: Private Beta Productionization** - Invite-only signup, verified per-user isolation, guided onboarding, Microsoft Graph as second provider
@@ -371,12 +371,12 @@ Plans: 7/7 executed (Lane C). Phase 5 code-complete + live in-browser verified (
 Plans:
 - [x] 06-01-PLAN.md — Pure foundations: pin Realtime API shapes + packages/voice + priceRealtime + voice playbook (Wave 0)
 - [x] 06-02-PLAN.md — voiceSessions table + voice-session/voice-brief skills (Wave 0)
-- [ ] 06-03-PLAN.md — voiceToken: mint ephemeral secret + server hangup (Wave 1)
-- [ ] 06-04-PLAN.md — llm.draftVoiceBrief: toolless brief drafting + SMOKE seam (Wave 1)
-- [ ] 06-05-PLAN.md — voice.ts: durable watchdog + end paths + metering + brief store (Wave 2)
-- [ ] 06-06-PLAN.md — Voice UI: WebRTC client + pre-flight + live session (Wave 3)
-- [ ] 06-07-PLAN.md — Post-call summary + brief review/store + plan handoff + e2e (Wave 4)
-- [ ] 06-08-PLAN.md — ADR + playbook finalize + live human-verify gate (Wave 5)
+- [x] 06-03-PLAN.md — voiceToken: mint ephemeral secret + server hangup (Wave 1)
+- [x] 06-04-PLAN.md — llm.draftVoiceBrief: toolless brief drafting + SMOKE seam (Wave 1)
+- [x] 06-05-PLAN.md — voice.ts: durable watchdog + end paths + metering + brief store (Wave 2)
+- [x] 06-06-PLAN.md — Voice UI: WebRTC client + pre-flight + live session (Wave 3)
+- [x] 06-07-PLAN.md — Post-call summary + brief review/store + plan handoff + e2e (Wave 4)
+- [x] 06-08-PLAN.md — ADR + playbook finalize + live human-verify gate (Wave 5) — completed 2026-07-21 (owner live human-verify APPROVED; UAT-fix chain: mint shape, transcript completeness, plain-text brief, visible wrap-up, ingest-stranding fix, honest handoff rename)
 
 ### Phase 7: Resilience & Operations Hardening
 **Goal**: Every failure path â agent/review timeouts, retry-threshold breaches, dead-letters â is caught, notified, escalated, and archived immutably.
@@ -431,7 +431,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 3.11 Inbox Reply (INSERTED) | 6/6 | Complete (RPLY-01 — replyToMessage tool + delivery threading spine + cockpit-agent@12 eval-gated; owner live human-verify APPROVED 2026-07-19 — reply landed in-thread in real Gmail, Re: subject, original sender only) | 2026-07-19 |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
-| 6. Live Voice Sessions | 0/TBD | Not started | - |
+| 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
 | 8. Self-Improvement | 0/TBD | Not started | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
