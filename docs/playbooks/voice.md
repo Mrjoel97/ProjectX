@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps)
+> Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
 
 ## Purpose
@@ -8,8 +8,9 @@
 Lets a user hold a live, bidirectional voice conversation with the Executive Agent
 (browser-direct WebRTC over the OpenAI Realtime API), hard-capped at 15 minutes by a
 server-side watchdog. When the session ends — cleanly or abnormally — a structured
-markdown brief is generated in the spoken language, stored + indexed in the knowledge
-vault, and optionally handed off into the normal plan pipeline at the existing review gate.
+PLAIN-TEXT brief (no markdown `#`/`*` — it is read in the vault and welded into the plan
+seed) is generated in the spoken language, stored + indexed in the knowledge vault, and
+optionally handed off into the normal plan pipeline at the existing review gate.
 
 ## Key files
 
@@ -18,9 +19,13 @@ Pure packages (`packages/*` — no Convex, unit-testable):
 - `packages/voice/src/realtime.ts` — pinned live OpenAI Realtime API shapes: endpoint
   constants (`CLIENT_SECRETS_URL`, `CALLS_URL`, `hangupUrl(callId)`), default model
   snapshot, session-config key names, and `response.done` usage field names.
-- `packages/voice/src/brief.ts` — `buildBriefMarkdown(sections, transcript, language)`:
-  pure fixed-section markdown composer; empty sections render "None"; transcript welded
-  verbatim in code (never model-authored).
+- `packages/voice/src/brief.ts` — ALL brief string logic, pure: `BRIEF_HEADERS` (the single
+  shared header set), `buildBriefMarkdown(sections, transcript, language)` (server/drafted brief),
+  `composeBrief(transcript, dateStr)` (client clean-end editable brief), and
+  `planSeedFromBrief(brief)` (pull Decisions + Action items for the plan handoff). All emit/parse
+  clean PLAIN TEXT (no `#`/`*`): headers are bare UPPERCASE labels, lists `- item`, turns
+  `Speaker: text`; empty sections render "None"; transcript welded verbatim in code (never
+  model-authored). Composers + parser share `BRIEF_HEADERS` so they can never drift.
 - `packages/voice/src/session.ts` — session status FSM (`active → ended_clean |
   ended_abnormal`, terminal once ended) + `capEndsAt(startedAt)` / `CAP_MS` +
   `graceExpired(sinceMs, now, windowMs)` (the pure mic-recovery/silence expiry predicate,
@@ -56,9 +61,11 @@ consent), `LiveSession.tsx` (transcript + orb + countdown + End confirm + text f
 mic-lost paused banner + a11y).
 
 Post-call surface (06-07): `PostCall.tsx` — the always-available screen both end types land on:
-the brief markdown (composed client-side from the transcript, no model — plan-05's clean-end
-contract) in an editable textarea, "Just save" → `voice.endSessionClean({editedMarkdown})`, and the
-VOIC-04 "Turn this into a plan?" ask → `cockpit.sendCockpitMessage(planSeedFromBrief(md))` →
+the brief text (composed client-side from the transcript via `composeBrief` in `@pikar/voice`, no
+model — plan-05's clean-end contract) in an editable textarea, "Just save" →
+`voice.endSessionClean({editedMarkdown})`, and the VOIC-04 "Turn this into a plan?" ask →
+`cockpit.sendCockpitMessage(planSeedFromBrief(md))` (`planSeedFromBrief` also lives in `@pikar/voice`,
+shared with `AbnormalBriefBanner`) →
 `/dashboard/workspace?thread=<id>` (the EXISTING PLAN card + single Approve — no new pipeline, no new
 gate). `AbnormalBriefBanner.tsx` (mounted app-wide in `(app)/layout.tsx`) — on next app open surfaces
 the newest auto-stored voice brief the user has NOT yet reviewed (client-side seen-set in
@@ -100,8 +107,9 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
    → `recordSpend` (best-effort budget contribution; the 15-min cap is the real cost bound).
 5. End: clean (User End / graceful 0:00) cancels the watchdog then stores the brief after
    review; abnormal (watchdog fires / tab close) calls `hangupCall` then auto-stores.
-6. Brief markdown (composed by `buildBriefMarkdown`) → `voice.storeBrief` → `ingestDoc`
-   → vault `ready`. Optional "Turn into a plan?" → `sendCockpitMessage` → review gate.
+6. Brief plain text (server: `buildBriefMarkdown`; client clean-end: `composeBrief`) →
+   `voice.storeBrief` → `ingestDoc` → vault `ready`. Optional "Turn into a plan?" →
+   `planSeedFromBrief` → `sendCockpitMessage` → review gate.
 
 ## Invariants — what must never break
 
@@ -150,6 +158,20 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   counter and records no spend. Enforced by: the `recordUsage` fail-closed test in `voice.test.ts`.
 - **The transcript is welded onto the brief in code, never model-authored.** Enforced by:
   `buildBriefMarkdown` composes it deterministically; `brief.test.ts`.
+- **A brief is CLEAN PLAIN TEXT — no markdown `#` or `*`.** It is read as-is in the vault and
+  welded into the plan seed, so markdown syntax is noise both places. Headers are bare UPPERCASE
+  labels, lists `- item`, turns `Speaker: text`. The two composers (`buildBriefMarkdown` server,
+  `composeBrief` client) and the parser (`planSeedFromBrief`) ALL key off the ONE `BRIEF_HEADERS`
+  set, so a composer and the parser can never disagree on a header. Enforced by: `brief.test.ts`
+  asserts no `[#*]` in either composer's output and a compose→parse round-trip (both flavors).
+- **The T-2min wrap-up is warned THREE ways, the visible one deterministic.** At `nearingCap`
+  (`remainingMs ≤ WRAP_UP_MS`, i.e. 2 min before `CAP_MS`): the countdown restyles, `LiveSession`
+  shows a VISIBLE teal-accent banner (aria-hidden — the SR announcement is the a11y path, so no
+  double-announce), and the agent gets a one-time verbal nudge. The nudge is a `response.create`
+  and is DEFERRED while a response is in flight (`responseActiveRef`) — sent mid-response it
+  silently 400s and never speaks; the next 1s tick fires it in the gap. Note: at a 15-min cap this
+  only fires 13 min in — untestable in a short call without temporarily lowering `CAP_MS`. The
+  banner + defer are the imperative/UI legs (live-verify only); no unit test.
 - **Both end types converge on ONE stored brief and ONE review→convert surface.** A clean end
   reviews→stores here; a dropped end auto-stored server-side and is surfaced by the banner — both
   render the same review + "Turn into a plan" affordance, and the plan handoff is the SAME
@@ -204,7 +226,9 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   imports from `realtime.ts`.
 - **New brief section:** add the field to the brief section shape AND `buildBriefMarkdown`
   AND (plan 04) the `generateObject` schema — keep field names stable (they are the schema).
-  Most likely to break: the empty→"None" and fixed-order invariants → extend `brief.test.ts`.
+  Add its header to `BRIEF_HEADERS` (the shared set the parser uses to find section boundaries).
+  Most likely to break: the empty→"None", no-markdown, and fixed-order invariants → extend
+  `brief.test.ts`. Never reintroduce `#`/`*` into a composer — the brief is plain text by contract.
 - **Watchdog / cap change:** only through `CAP_MS`/`capEndsAt` — never re-arm on pause.
 - **New backend/UI voice file:** its path prefix is likely already covered under `voice.md`
   in `watch.json`; if not, add it there (do not duplicate `llm.ts`/skills paths — those live

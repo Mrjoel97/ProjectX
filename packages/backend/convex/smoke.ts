@@ -465,18 +465,20 @@ export const seedInboxFixture = internalMutation({
 // review yet, which AbnormalBriefBanner then surfaces. Idempotent (drops prior seeded voice briefs) so
 // re-runs never stack banners. The markdown carries real Decisions + Action items so the "Turn into a
 // plan" handoff (planSeedFromBrief) has something to seed the cockpit thread with.
+// Clean PLAIN-TEXT brief (no `#`/`*`) matching the production format — headers are BRIEF_HEADERS
+// labels so planSeedFromBrief parses the Decisions + Action items out of it for the handoff.
 const SEED_VOICE_BRIEF_MD = [
-  "# Voice brief — dropped session",
+  "Voice brief — dropped session",
   "",
-  "## Decisions",
+  "DECISIONS",
   "- Move the Q3 review to Friday morning",
   "",
-  "## Action items",
+  "ACTION ITEMS",
   "- Email the team the Q3 summary before the review",
   "",
-  "## Conversation",
-  "- **You:** Let's line up the Q3 review.",
-  "- **Pikar AI:** Friday morning works — I'll note the summary as an action item.",
+  "CONVERSATION",
+  "You: Let's line up the Q3 review.",
+  "Pikar AI: Friday morning works — I'll note the summary as an action item.",
   "",
 ].join("\n");
 

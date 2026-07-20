@@ -1146,8 +1146,10 @@ button.clay-card:hover {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  border: 2px solid rgb(255 255 255 / 40%);
-  border-top-color: #fff;
+  /* currentColor so the ring adapts to the button's text colour: white on a teal button,
+     ink on a light one (the "Just save" secondary). White-text buttons look identical to before. */
+  border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-top-color: currentColor;
   animation: btn-spin 0.7s linear infinite;
 }
 

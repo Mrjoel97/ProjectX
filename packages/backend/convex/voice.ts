@@ -15,9 +15,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
-import { workflow } from "./index";
 import { tenantMutation } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { startIngest } from "./vaultIngest";
 
 // ── Reads (parallel-session guard + brief resolvers) ─────────────────────────
 
@@ -198,7 +198,11 @@ export const endSessionClean = tenantMutation({
       });
       vaultDocId = stored.vaultDocId;
     }
-    return { ok: true, ...(ended ? {} : { alreadyEnded: true as const }), ...(vaultDocId && { vaultDocId }) };
+    return {
+      ok: true,
+      ...(ended ? {} : { alreadyEnded: true as const }),
+      ...(vaultDocId && { vaultDocId }),
+    };
   },
 });
 
@@ -313,11 +317,7 @@ export const persistBrief = internalMutation({
       createdAt: Date.now(),
     });
     const correlationId = crypto.randomUUID();
-    await workflow.start(ctx, internal.vaultIngest.ingestDoc, {
-      vaultDocId,
-      tenantId: s.tenantId,
-      correlationId,
-    });
+    await startIngest(ctx, { vaultDocId, tenantId: s.tenantId, correlationId });
     await ctx.db.patch(sessionId, { briefRef: vaultDocId });
     return { vaultDocId };
   },
@@ -328,7 +328,7 @@ export const persistBrief = internalMutation({
 // empty-transcript model call (drafting over "" is a wasted spend for a degenerate input); the
 // upgrade path is a client beacon (pagehide + sendBeacon) carrying the last transcript to storeBrief.
 const ABANDONED_BRIEF_MD =
-  "# Voice brief\n\nThe session ended before a transcript could be captured (the tab closed or the " +
+  "Voice brief\n\nThe session ended before a transcript could be captured (the tab closed or the " +
   "15-minute cap was reached with no client connected). No summary is available.";
 
 /**

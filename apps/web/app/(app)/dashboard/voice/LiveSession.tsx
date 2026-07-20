@@ -164,6 +164,28 @@ export function LiveSession({ session }: { session: VoiceSession }) {
         </button>
       </header>
 
+      {/* T-2min wrap-up notice — a VISIBLE, deterministic banner so a sighted user actually sees the
+          warning (the countdown restyle above is easy to miss; the SR announcement is screen-reader
+          only). Calm, not alarming: a natural wrap-up, so a teal accent — never --held amber, which
+          BRAND reserves for the approval gate. aria-hidden: the `warnedRef` SR announcement is the
+          a11y path, so this must not double-announce. */}
+      {nearingCap && status !== "ended" && (
+        <div
+          aria-hidden="true"
+          style={{
+            padding: "0.6rem 0.9rem",
+            borderRadius: "0.5rem",
+            borderLeft: "3px solid var(--teal-600)",
+            background: "var(--canvas)",
+            color: "var(--ink)",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+          }}
+        >
+          About 2 minutes left — the assistant will start wrapping up. Anything final to add?
+        </div>
+      )}
+
       {/* Mic-lost paused state — the grace window is still counting cap time, so this is urgent but
           recoverable. Keyboard-operable Reconnect retries getUserMedia; if it doesn't return in time
           the hook falls through to the abnormal-end brief. */}

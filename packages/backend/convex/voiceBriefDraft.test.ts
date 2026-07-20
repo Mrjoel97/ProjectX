@@ -40,22 +40,24 @@ test("SMOKE:: returns a deterministic fixed-section brief offline (no model call
     language: "en",
   });
 
-  // Every fixed section is present, in composer order (a real model would throw without a key).
+  // Every fixed section is present as a plain UPPERCASE label (no markdown `#`) in composer order.
   for (const heading of [
-    "## Summary",
-    "## Decisions",
-    "## Action items",
-    "## Open questions",
-    "## Discussion",
-    "## Transcript",
+    "SUMMARY",
+    "DECISIONS",
+    "ACTION ITEMS",
+    "OPEN QUESTIONS",
+    "DISCUSSION",
+    "CONVERSATION",
   ]) {
     expect(md).toContain(heading);
   }
-  // The spoken language is recorded as leading metadata (an in-language brief knows its language).
-  expect(md).toContain("<!-- brief-language: en -->");
-  // The full transcript is welded VERBATIM in code — both turns, never model-authored.
-  expect(md).toContain("**user:** SMOKE::route=direct_llm::Let's finalize the Q3 offsite.");
-  expect(md).toContain("**assistant:** Booked the venue for the 14th.");
+  // The brief carries NO markdown syntax — clean plain text for the vault + plan handoff.
+  expect(md).not.toMatch(/[#*]/);
+  // The spoken language is recorded on a leading Language line (an in-language brief knows its language).
+  expect(md).toContain("Language: en");
+  // The full transcript is welded VERBATIM in code as plain `Speaker: text` — both turns, never model-authored.
+  expect(md).toContain("user: SMOKE::route=direct_llm::Let's finalize the Q3 offsite.");
+  expect(md).toContain("assistant: Booked the venue for the 14th.");
   // An empty narrative section renders the literal "None" (open questions is empty offline).
-  expect(md).toContain("## Open questions\n\nNone");
+  expect(md).toContain("OPEN QUESTIONS\n\nNone");
 });

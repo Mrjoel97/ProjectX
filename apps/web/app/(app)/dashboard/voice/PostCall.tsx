@@ -1,11 +1,12 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { composeBrief, planSeedFromBrief } from "@pikar/voice";
 import { useAction, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { markVoiceBriefSeen } from "./AbnormalBriefBanner";
-import type { Turn, VoiceSession } from "./useVoiceSession";
+import type { VoiceSession } from "./useVoiceSession";
 
 // VOIC-03 (clean-end review→store) + VOIC-04 (brief→plan handoff). The always-available post-call
 // surface both end types land on: render the brief markdown for review/edit, store it to the vault
@@ -23,59 +24,10 @@ function today(): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
 }
 
-// Compose the editable brief from the transcript (client-side, no model call — plan-05's clean-end
-// contract: "the client already composed the markdown"). Decisions + Action items lead (empty for
-// the user to fill from what was discussed — the agent's T-2min wrap-up is the tail of the
-// conversation below), the narrative follows. ponytail: naive transcript weld; the structured
-// draftVoiceBrief model path is the server's abnormal-end story, not a per-review spend here.
-export function composeBriefMarkdown(transcript: Turn[]): string {
-  const narrative = transcript
-    .filter((t) => t.text.trim())
-    .map((t) => `- **${t.speaker === "user" ? "You" : "Pikar AI"}:** ${t.text.trim()}`)
-    .join("\n");
-  return [
-    `# Voice brief — ${today()}`,
-    "",
-    "## Decisions",
-    "",
-    "- ",
-    "",
-    "## Action items",
-    "",
-    "- ",
-    "",
-    "## Conversation",
-    "",
-    narrative || "_No transcript was captured for this session._",
-    "",
-  ].join("\n");
-}
-
-// Pull the Decisions + Action items sections for the plan seed (VOIC-04): the handoff opens a
-// cockpit thread with what to DO, not the whole transcript. Falls back to the full brief when the
-// user left both sections empty, so the agent always has something to plan from.
-export function planSeedFromBrief(markdown: string): string {
-  const section = (name: string): string => {
-    const re = new RegExp(`##\\s+${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "i");
-    const body = markdown.match(re)?.[1] ?? "";
-    // Drop empty bullet placeholders ("- " with nothing after).
-    return body
-      .split("\n")
-      .filter((l) => l.trim() && l.trim() !== "-")
-      .join("\n")
-      .trim();
-  };
-  const decisions = section("Decisions");
-  const actions = section("Action items");
-  if (!decisions && !actions) return markdown.trim();
-  return [
-    "Turn this voice brief into a plan.",
-    decisions && `\nDecisions:\n${decisions}`,
-    actions && `\nAction items:\n${actions}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
+// The brief text is composed client-side from the transcript (no model call — plan-05's clean-end
+// contract) and parsed for the plan seed. Both live in @pikar/voice's pure `brief` module, sharing
+// BRIEF_HEADERS with the server drafter so a composer and the parser can never drift, and emitting
+// clean PLAIN TEXT (no `#`/`*`) — the brief is read in the vault and welded into the plan seed.
 
 type Phase = "review" | "saving" | "saved" | "handoff";
 
@@ -85,7 +37,7 @@ export function PostCall({ session }: { session: VoiceSession }) {
   const endSessionClean = useMutation(api.voice.endSessionClean);
   const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
 
-  const [markdown, setMarkdown] = useState(() => composeBriefMarkdown(transcript));
+  const [markdown, setMarkdown] = useState(() => composeBrief(transcript, today()));
   const [phase, setPhase] = useState<Phase>("review");
   const [error, setError] = useState<string | null>(null);
   const busy = phase === "saving" || phase === "handoff";
@@ -173,14 +125,13 @@ export function PostCall({ session }: { session: VoiceSession }) {
         </h1>
         <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
           {phase === "saved"
-            ? "It's indexed in your Knowledge Vault. Turn it into a plan whenever you're ready."
-            : "Edit the decisions and action items, then save it or turn it into a plan for approval."}
+            ? "It's indexed in your Knowledge Vault. Continue with your agent whenever you're ready."
+            : "Edit the decisions and action items, then save it or continue with your agent to act on it."}
         </p>
       </div>
 
       {phase === "saved" ? (
         <pre
-          aria-label="Saved brief"
           style={{
             margin: 0,
             padding: "1rem",
@@ -200,7 +151,7 @@ export function PostCall({ session }: { session: VoiceSession }) {
       ) : (
         <label style={{ display: "grid", gap: "0.4rem" }}>
           <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-soft)" }}>
-            Brief (Markdown)
+            Brief
           </span>
           <textarea
             value={markdown}
@@ -229,7 +180,12 @@ export function PostCall({ session }: { session: VoiceSession }) {
       <p
         aria-live="polite"
         role={error ? "alert" : undefined}
-        style={{ margin: 0, minHeight: "1.2rem", fontSize: "0.85rem", color: error ? "var(--held-text)" : "var(--ink-soft)" }}
+        style={{
+          margin: 0,
+          minHeight: "1.2rem",
+          fontSize: "0.85rem",
+          color: error ? "var(--held-text)" : "var(--ink-soft)",
+        }}
       >
         {error ??
           (phase === "saving"
@@ -239,23 +195,82 @@ export function PostCall({ session }: { session: VoiceSession }) {
               : "")}
       </p>
 
+      {/* While an action is in flight the CLICKED button shows a spinning ring + a "…" label and
+          both buttons disable (mirrors the workspace send button) — so a click reads as "working",
+          never "stuck", even though "Continue with your agent" then navigates away. During handoff we
+          collapse to the single primary button so the layout doesn't jump. */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", justifyContent: "flex-end" }}>
-        {phase === "saved" ? (
-          <button type="button" onClick={() => void onTurnIntoPlan()} disabled={busy} style={primaryBtn}>
-            Turn this into a plan
-          </button>
+        {phase === "saved" || phase === "handoff" ? (
+          <ActionButton
+            variant="primary"
+            onClick={() => void onTurnIntoPlan()}
+            busy={phase === "handoff"}
+            disabled={busy}
+            label="Continue with your agent"
+            busyLabel="Opening workspace…"
+          />
         ) : (
           <>
-            <button type="button" onClick={() => void onJustSave()} disabled={busy} style={secondaryBtn}>
-              Just save
-            </button>
-            <button type="button" onClick={() => void onTurnIntoPlan()} disabled={busy} style={primaryBtn}>
-              Turn this into a plan?
-            </button>
+            <ActionButton
+              variant="secondary"
+              onClick={() => void onJustSave()}
+              busy={phase === "saving"}
+              disabled={busy}
+              label="Just save"
+              busyLabel="Saving…"
+            />
+            <ActionButton
+              variant="primary"
+              onClick={() => void onTurnIntoPlan()}
+              busy={false}
+              disabled={busy}
+              label="Continue with your agent"
+              busyLabel="Opening workspace…"
+            />
           </>
         )}
       </div>
     </section>
+  );
+}
+
+// A pill button with a busy affordance: while `busy`, it shows the shared `.btn-spinner` ring + a
+// "…" label and reads `aria-busy` (not colour-dependent, BRAND §6). `.btn-spinner` inherits the
+// button's text colour (currentColor) → white on the teal primary, ink on the light secondary.
+function ActionButton({
+  onClick,
+  variant,
+  busy,
+  disabled,
+  label,
+  busyLabel,
+}: {
+  onClick: () => void;
+  variant: "primary" | "secondary";
+  busy: boolean;
+  disabled: boolean;
+  label: string;
+  busyLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={busy}
+      aria-label={busy ? busyLabel : label}
+      style={{
+        ...(variant === "primary" ? primaryBtn : secondaryBtn),
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      {busy && <span className="btn-spinner" aria-hidden="true" />}
+      {busy ? busyLabel : label}
+    </button>
   );
 }
 

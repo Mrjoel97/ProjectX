@@ -98,6 +98,11 @@ export function useVoiceSession(): VoiceSession {
   const agentTurnRef = useRef<string | null>(null);
   const usageAccumRef = useRef({ inAudioTok: 0, outAudioTok: 0, textInTok: 0, textOutTok: 0 });
   const wrapSentRef = useRef(false);
+  // True while an agent response is in flight (first delta / audio start → response.done). The
+  // wrap-up nudge is a `response.create`; sent mid-response it silently 400s ("conversation already
+  // has an active response"), and that error lands in onEvent's dropped default case — the wrap-up
+  // never speaks. So we DEFER it until this clears (the next tick fires it in the gap).
+  const responseActiveRef = useRef(false);
   const pausedSinceRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(0);
   const endedRef = useRef(false);
@@ -164,6 +169,7 @@ export function useVoiceSession(): VoiceSession {
           break;
         case REALTIME_EVENTS.assistantAudioStarted:
           lastActivityRef.current = Date.now();
+          responseActiveRef.current = true;
           setSpeaking("agent");
           break;
         case REALTIME_EVENTS.assistantAudioStopped:
@@ -184,6 +190,7 @@ export function useVoiceSession(): VoiceSession {
           const delta = ev.delta ?? "";
           if (!delta) break;
           lastActivityRef.current = Date.now();
+          responseActiveRef.current = true; // a text-only response has no audio-start to flag it
           setTranscript((t) => {
             const id = agentTurnRef.current;
             const prev = id ? t.find((x) => x.id === id) : undefined;
@@ -222,6 +229,7 @@ export function useVoiceSession(): VoiceSession {
             agentTurnRef.current = null;
             setTranscript((t) => t.map((x) => (x.id === openId ? { ...x, final: true } : x)));
           }
+          responseActiveRef.current = false; // response finished → the wrap-up nudge may fire now
           const usage = ev.response?.usage;
           if (usage) {
             const u = readUsage(usage);
@@ -407,7 +415,9 @@ export function useVoiceSession(): VoiceSession {
 
       // T-2min: emphasize (state above) + nudge the agent to close, once. AGENT INSTRUCTION only —
       // the session stays "active"; the server watchdog keeps its wall-clock count (Pattern 3).
-      if (left <= WRAP_UP_MS && !wrapSentRef.current && status === "live") {
+      // Deferred while a response is in flight — sent mid-response the createResponse silently 400s,
+      // so wrapSentRef stays false and the next tick (1s later) retries it in the gap.
+      if (left <= WRAP_UP_MS && !wrapSentRef.current && !responseActiveRef.current && status === "live") {
         wrapSentRef.current = true;
         send({
           type: REALTIME_CLIENT_EVENTS.createResponse,
