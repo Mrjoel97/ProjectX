@@ -14,8 +14,11 @@
  */
 
 /** The terminal states that produce exactly one telemetry row. `blocked` is a
- *  governed guardrail stop — a first-class fail-closed terminal (GRDL-01), no LLM ran. */
-export type ReviewOutcome = "sent" | "rejected" | "expired" | "failed" | "blocked";
+ *  governed guardrail stop — a first-class fail-closed terminal (GRDL-01), no LLM ran.
+ *  `escalated` is the REVW-02 fail-closed terminal: a draft that hit the regenerate cap
+ *  is handed to the human instead of delivered (see reviewThreshold.ts). No LLM row is
+ *  added by the escalation itself — the accumulated usages carry through. */
+export type ReviewOutcome = "sent" | "rejected" | "expired" | "failed" | "blocked" | "escalated";
 
 /** One LLM call's usage — route, draft, and each regenerate contribute one. */
 export interface LlmUsage {
