@@ -17,7 +17,10 @@ import { internal } from "./_generated/api";
 import { contentHash } from "./lib/hash";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+// Exported so notifyExternal.ts reuses the GOVERNED send endpoint (OPSG-05) — the external
+// notification channel is the SAME sanctioned Gmail send, never a new write verb. Keeping it
+// here (not duplicated) also keeps llmRedaction's POST-target scan the single source of truth.
+export const SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 // messages.list (`?q=`) + per-id messages.get (`/<id>?format=metadata`) share this base.
 const MESSAGES_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
@@ -26,7 +29,7 @@ const MESSAGES_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messag
 // persists the fresh access token. Returns a discriminated result — NEVER throws: a dead/
 // disconnected token is a governed reauth signal, not a retriable failure. Each caller decides
 // how to surface `false` (send → awaiting_reauth; search → notification + fall back to asking).
-async function freshAccessToken(
+export async function freshAccessToken(
   ctx: ActionCtx,
   tenantId: string,
 ): Promise<
@@ -136,7 +139,7 @@ export function buildMime(
   return lines.join("\r\n");
 }
 
-function base64Url(s: string): string {
+export function base64Url(s: string): string {
   return Buffer.from(s, "utf-8")
     .toString("base64")
     .replace(/\+/g, "-")

@@ -48,9 +48,11 @@ describe("notify choke point (OPSG-05 — in-app insert + best-effort external d
     // No gmailTokens row for the tenant → freshAccessToken returns not_connected → dispatch returns
     // silently BEFORE any network call. It must not throw and must write NOTHING (a failed external
     // send that notified would create the very notification loop OPSG-05 forbids).
+    // A void action resolves to null over the convex-test boundary — the load-bearing claim is that
+    // it RESOLVES (never throws).
     await expect(
       t.action(internal.notifyExternal.dispatch, { tenantId: TENANT, kind: "deadletter" }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
 
     expect(await notifications(t)).toHaveLength(0);
   });

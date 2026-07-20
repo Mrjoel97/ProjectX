@@ -1,10 +1,11 @@
-// In-app notifications (INTK-04 seam).
+// In-app notifications (INTK-04 seam) — the OPSG-05 notify choke point.
 //
-// Phase-2 notifications are IN-APP ONLY — nothing leaves the browser (CONTEXT).
-// This `notifications` table is the seam Phase-7 OPSG-05 grows channels
-// (email/push) onto; deliberately no channel logic here.
-// ponytail: in-app only until OPSG-05 — add channel dispatch in `notify` then.
+// `notify` is the SINGLE choke point every failure terminal in the phase routes through: it always
+// inserts the in-app row (the fail-closed floor), THEN best-effort dispatches an external email via
+// the governed Gmail send (internal.notifyExternal.dispatch, scheduled runAfter 0). External is
+// fail-closed to in-app and loop-guarded — see notifyExternal.ts.
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -32,8 +33,14 @@ export const markRead = tenantMutation({
 });
 
 /**
- * Insert an in-app notification. Internal so trusted callers (submit rejection,
- * the token-age cron in 02-05) pass an already-resolved tenantId.
+ * The notify choke point. Insert the in-app notification (always — the fail-closed floor), then
+ * schedule a best-effort external email dispatch. Internal so trusted callers (submit rejection,
+ * the token-age cron in 02-05, the DLQ terminals, the review gate) pass an already-resolved tenantId.
+ *
+ * The external dispatch is scheduled (runAfter 0), never inline: scheduling an action from a mutation
+ * is the correct seam, and it keeps this transaction fast + isolates a slow/failing send from the
+ * in-app write. A failed send never throws back here and never re-notifies (loop guard lives in
+ * notifyExternal). `message` stays refs/counts-only (§4) — callers pass notificationMessage(kind).
  */
 export const notify = internalMutation({
   args: {
@@ -51,5 +58,7 @@ export const notify = internalMutation({
       read: false,
       createdAt: Date.now(),
     });
+    // Best-effort external channel — never blocks/rolls back the in-app row above.
+    await ctx.scheduler.runAfter(0, internal.notifyExternal.dispatch, { tenantId, kind });
   },
 });
