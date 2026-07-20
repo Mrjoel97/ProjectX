@@ -390,7 +390,7 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Wave-0 foundation: pure @pikar/core modules (retention/serialize, review-threshold, notification templates) + @aws-sdk/client-s3 + schema by_ts index + plan counter fields (Wave 1)
+- [x] 07-01-PLAN.md — Wave-0 foundation: pure @pikar/core modules (retention/serialize, review-threshold, notification templates) + @aws-sdk/client-s3 + schema by_ts index + plan counter fields (Wave 1) — completed 2026-07-21 (145/145 core green; OPSG-03/REVW-02/OPSG-05 primitives)
 - [ ] 07-02-PLAN.md — OPSG-03: real WORM S3 Object Lock export + auditSince by_ts rewrite (export-only; hot-copy sweep deferred) (Wave 2)
 - [ ] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
 - [ ] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)

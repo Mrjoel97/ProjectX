@@ -33,7 +33,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 ### Human Review & Delivery
 
 - [x] **REVW-01**: User reviews and can approve, edit, or reject **at a single plan-level gate before execution** — approve once, then hands-off governed execution with stage notifications and a halt control. *(Redefined 2026-07-10 from per-response review. Phase 2 shipped the interim per-response gate — mechanics smoke-tested; the plan-level gate ships with the cockpit, Phase 3.1, whose manual checkpoint carries the end-user verification.)*
-- [ ] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
+- [x] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [ ] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
 - [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter
@@ -87,9 +87,9 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 - [x] **OPSG-01**: Per-request telemetry captures tokens, cost, duration, decision/retry counters, and review outcome
 - [x] **OPSG-02**: Every request, redaction, routing decision, model call, review action, and delivery is written to an insert-only audit log
-- [ ] **OPSG-03**: Completed request trails are exported on schedule to immutable (WORM) archival storage
+- [x] **OPSG-03**: Completed request trails are exported on schedule to immutable (WORM) archival storage
 - [x] **OPSG-04**: Failed/unhandled requests are archived to a dead-letter store with payload, error details, and correlation ID
-- [ ] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
+- [x] **OPSG-05**: Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events
 - [x] **OPSG-06**: Schema changes ship as tracked, resumable migrations — no ad-hoc backfills against a live deployment
 - [x] **OPSG-07**: A dead-letter write or workflow failure is surfaced to the operator without inspecting the database — a failure nobody sees is a failure nobody fixes. (Narrow, Phase-2 slice of operator visibility; OPSG-05's full user-facing notification matrix stays in Phase 7.)
 
@@ -155,7 +155,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRDL-05 | Phase 3 | Complete |
 | GRDL-06 | Phase 3 | Complete |
 | REVW-01 | Phase 2 | Complete |
-| REVW-02 | Phase 7 | Pending |
+| REVW-02 | Phase 7 | Complete |
 | REVW-03 | Phase 7 | Pending |
 | DLVR-01 | Phase 2 | Complete |
 | DLVR-02 | Phase 9 | Pending |
@@ -182,9 +182,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVAL-02 | Phase 3.6 | Complete |
 | OPSG-01 | Phase 2 | Complete |
 | OPSG-02 | Phase 1 | Complete |
-| OPSG-03 | Phase 7 | Pending |
+| OPSG-03 | Phase 7 | Complete |
 | OPSG-04 | Phase 1 | Complete |
-| OPSG-05 | Phase 7 | Pending |
+| OPSG-05 | Phase 7 | Complete |
 | OPSG-06 | Phase 2 | Complete |
 | OPSG-07 | Phase 2 | Complete |
 | DISC-01 | Phase 1 | Complete |

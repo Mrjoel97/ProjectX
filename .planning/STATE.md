@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 6 (Live Voice Sessions) COMPLETE (8/8) — 06-08 closed 2026-07-21: ADR-005 accepted, voice.md finalized, owner live human-verify APPROVED (VOIC-01..04). NEXT: /gsd:plan-phase 7 (Resilience & Operations Hardening — unplanned, 0/TBD)."
-last_updated: "2026-07-21T00:00:00.000Z"
-last_activity: "2026-07-21 — Phase 6 CLOSED. The 06-08 live human-verify walk-through surfaced + fixed six live-only defects unit tests could not catch (root-caused, not symptom-patched): (1) 404 + missing nav on a stale prod build; (2) mint 400 — the OpenAI Realtime client_secrets body nests turn_detection + transcription under session.audio.input, and the ephemeral secret returns as top-level `value` (not client_secret) — f22b2e3; (3) NO_ACTIVE_SKILL: voice-session unseeded on the running deployment (design fail-closed, reseeded via convex dev --run); (4) agent transcript dropped turns → brief gaps — response.output_audio_transcript.done made authoritative (self-creating when no delta) + response.done resets the open-agent-turn ref so a missed .done can't bleed the next response's deltas — 292eb41; (5) brief carried raw markdown #/* — ALL brief string logic consolidated into @pikar/voice brief.ts behind ONE shared BRIEF_HEADERS set (server buildBriefMarkdown + client composeBrief + planSeedFromBrief parser can never drift) emitting clean PLAIN TEXT, plus a VISIBLE T-2min wrap-up banner (was SR-only) and a collision-safe deferred wrap-up nudge (responseActiveRef) + PostCall busy spinner + honest handoff rename 'Turn this into a plan' -> 'Continue with your agent' (the cockpit agent is an email composer; a brief with no recipient/subject correctly draws a clarifying question, richer non-email plan logged in 06 deferred-items.md) — 61a36a1; (6) PRE-EXISTING vault bug the UAT exposed — all 5 ingestDoc start sites called workflow.start WITHOUT an onComplete, so a dead/interrupted ingest stranded the doc at 'processing' forever; fixed at the shared choke point: vaultIngest.startIngest is the SOLE starter wrapping workflow.start with onComplete: onIngestComplete (failed/canceled -> markFailed, idempotent) + retryStuckIngests recovered the 4 stranded docs live — 68d47e6. ADR-005 + voice.md were the automated Task-1 close (39f058f). VERIFIED: @pikar/voice 28, vault/voice suites (32), voiceBriefDraft green; backend typecheck clean; biome clean; check-playbooks exit 0; owner approved the full walk-through incl. brief->plan->Approve->real governed send. NEXT: plan Phase 7."
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-07-20T23:08:24.436Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 15
-  total_plans: 118
-  completed_plans: 118
+  total_plans: 124
+  completed_plans: 115
 ---
 
 ---
@@ -558,6 +558,7 @@ Progress: [█████████░] 94%
 | Phase 06 P05 | 15min | 3 tasks | 4 files |
 | Phase 06 P06 | 21min | 4 tasks | 12 files |
 | Phase 06 P07 | 15min | 3 tasks | 12 files |
+| Phase 07 P01 | 8min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -690,6 +691,9 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-04: draftVoiceBrief is a toolless generateObject clone of digestInbox — fail-closed voice-brief load, SMOKE offline seam, DEFAULT→CHEAP both metered, transcript code-welded via buildBriefMarkdown
 - [Phase 06]: 06-06: voice.abortSession is the thin client gateway to the internal forceEndSession abnormal path (browser can't call internalAction)
 - [Phase 06]: 06-07: brief->plan handoff reuses cockpit sendCockpitMessage entirely (no new pipeline/gate); clean-end brief composed client-side (no model call); dropped-vs-reviewed distinguished by a localStorage seen-set (no new backend query)
+- [Phase 07]: [Phase 07]: WORM NDJSON serialization recursively key-sorts so a re-exported window is byte-identical → idempotent PutObject under Object Lock (retention.ts)
+- [Phase 07]: [Phase 07]: notificationMessage(kind) takes NO content parameter — the §4 no-PII-in-notifications firewall is a type-level constraint, not a runtime convention
+- [Phase 07]: [Phase 07]: classifyReviewDecision is the single fail-closed source of truth for both review gates (07-03 pipeline + 07-04 cockpit); regenerate at/over MAX_REGENERATE escalates, never delivers (REVW-02)
 
 ### Roadmap Evolution
 
@@ -714,8 +718,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-20T00:18:55.355Z
-Stopped at: Completed 06-07-PLAN.md (post-call brief review/store + VOIC-04 plan handoff via existing cockpit gate + dropped-session AbnormalBriefBanner + offline e2e). NEXT: 06-08 phase close / live human-verify.
+Last session: 2026-07-20T23:07:17.893Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
