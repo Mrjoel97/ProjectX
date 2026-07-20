@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-06
+> Last verified: 2026-07-20 against 06-07
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: none
 
 ## Purpose
@@ -54,6 +54,17 @@ throttled `response.done` usage, drives the countdown + T-2min wrap-up, and runs
 mic-loss pause/recover + silence expiry. `PreFlight.tsx` (mic permission + level meter +
 consent), `LiveSession.tsx` (transcript + orb + countdown + End confirm + text fallback +
 mic-lost paused banner + a11y).
+
+Post-call surface (06-07): `PostCall.tsx` — the always-available screen both end types land on:
+the brief markdown (composed client-side from the transcript, no model — plan-05's clean-end
+contract) in an editable textarea, "Just save" → `voice.endSessionClean({editedMarkdown})`, and the
+VOIC-04 "Turn this into a plan?" ask → `cockpit.sendCockpitMessage(planSeedFromBrief(md))` →
+`/dashboard/workspace?thread=<id>` (the EXISTING PLAN card + single Approve — no new pipeline, no new
+gate). `AbnormalBriefBanner.tsx` (mounted app-wide in `(app)/layout.tsx`) — on next app open surfaces
+the newest auto-stored voice brief the user has NOT yet reviewed (client-side seen-set in
+localStorage; PostCall marks a just-reviewed brief seen via the `vaultDocId` `endSessionClean`
+returns), reusing `vault.listVaultDocs` (no new backend). `workspace/page.tsx` reads `?thread=<id>` on
+mount (client-only, the connect-gmail precedent) to re-open the handoff thread at the Approve gate.
 
 ## Dependencies & blast radius
 
@@ -132,6 +143,22 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   counter and records no spend. Enforced by: the `recordUsage` fail-closed test in `voice.test.ts`.
 - **The transcript is welded onto the brief in code, never model-authored.** Enforced by:
   `buildBriefMarkdown` composes it deterministically; `brief.test.ts`.
+- **Both end types converge on ONE stored brief and ONE review→convert surface.** A clean end
+  reviews→stores here; a dropped end auto-stored server-side and is surfaced by the banner — both
+  render the same review + "Turn into a plan" affordance, and the plan handoff is the SAME
+  `sendCockpitMessage` → PLAN/Approve pipeline (no voice-specific plan pipeline, no second gate). The
+  brief→plan message never sends anything — it lands at the existing single Approve. Enforced by:
+  `apps/web/e2e/voice.spec.ts` (offline, seeded stored brief) asserts the dropped brief surfaces, the
+  handoff navigates to `/workspace?thread=<id>`, and NO REPORT card exists pre-Approve; the live
+  audio round-trip + the real Approve→send stay the plan-08 human-verify.
+- **The clean-end review store persists even after the end-CAS already flipped.** The client calls
+  End (flips `ended_clean`, cancels the watchdog promptly — no abnormal fire during review), THEN the
+  review screen stores the edited markdown; that second `endSessionClean`'s `markEndedClean` no-ops
+  but `persistBrief` still runs (idempotent on `briefRef`). A bare end with no markdown keeps the
+  original CAS no-op. Enforced by: `voice.test.ts` (the clean-end + clean-after-abnormal cases).
+- **The dropped-session banner surfaces ONLY unreviewed briefs.** A clean-end brief is marked seen
+  (localStorage) the instant PostCall stores it, so only auto-stored (dropped) briefs remain unseen
+  and surface. Losing the seen-set (private mode) degrades to re-surfacing, never to losing a brief.
 - **The live-session + brief prompts load from the skill registry, never hardcoded**
   (CLAUDE.md §5). Enforced by: `getActiveSkill` fail-closed load at mint/draft time (later).
 - **`OPENAI_API_KEY` / the ephemeral client secret never reach the browser, a log, or an
@@ -175,6 +202,11 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
 - `pnpm --filter @pikar/backend test voice` — the session engine (convex-test + fake timers):
   watchdog arm/fire/cancel, parallel guard, clean/abnormal CAS, `storeBrief` ingest, `recordUsage`.
 - `pnpm --filter @pikar/backend test llmRedaction` — the refs/counts-only session-audit static scan.
+- `pnpm --filter @pikar/web test:e2e -- voice` — the offline post-call e2e: a seeded stored brief
+  (`smoke:seedVoiceBrief`) surfaces in the banner, "Turn into a plan" routes through
+  `sendCockpitMessage` to `/workspace?thread=<id>`, and nothing sends pre-Approve. Needs the live
+  local stack + a Gmail-connected E2E user; where the harness lacks it, authored-and-documented per
+  prior phases (the seeder itself is validated against the dev deployment).
 - `node scripts/check-playbooks.mjs` — exits 0 when this playbook is registered and all
   new voice files are covered (static scan).
 - Live session round-trip, barge-in, echo cancellation, multilingual, real 15:00 hangup —

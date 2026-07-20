@@ -42,7 +42,8 @@
     "packages/backend/convex/voice.test.ts",
     "packages/backend/convex/voiceToken.ts",
     "packages/backend/convex/voiceToken.test.ts",
-    "apps/web/app/(app)/dashboard/voice/"
+    "apps/web/app/(app)/dashboard/voice/",
+    "apps/web/e2e/voice.spec.ts"
   ],
   "skill-registry.md": [
     "packages/backend/convex/skills.ts",

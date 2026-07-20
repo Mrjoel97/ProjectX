@@ -6,6 +6,7 @@
 //   2. startReviewGate    -> reviewGate (awaitEvent race, issue #177 workaround)
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
+import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -456,6 +457,55 @@ export const seedInboxFixture = internalMutation({
     ];
     await ctx.db.insert("inboxFixtures", { tenantId, offlineDigest, messages });
     return { messageCount: messages.length };
+  },
+});
+
+// VOIC-03 offline e2e seed: a stored voice brief exactly as `forceEndSession → storeBrief` leaves one
+// after a DROPPED (tab-closed) session — a vaultDocuments row (kind:brief, source:voice) with no human
+// review yet, which AbnormalBriefBanner then surfaces. Idempotent (drops prior seeded voice briefs) so
+// re-runs never stack banners. The markdown carries real Decisions + Action items so the "Turn into a
+// plan" handoff (planSeedFromBrief) has something to seed the cockpit thread with.
+const SEED_VOICE_BRIEF_MD = [
+  "# Voice brief — dropped session",
+  "",
+  "## Decisions",
+  "- Move the Q3 review to Friday morning",
+  "",
+  "## Action items",
+  "- Email the team the Q3 summary before the review",
+  "",
+  "## Conversation",
+  "- **You:** Let's line up the Q3 review.",
+  "- **Pikar AI:** Friday morning works — I'll note the summary as an action item.",
+  "",
+].join("\n");
+
+export const seedVoiceBrief = internalMutation({
+  args: { tenantId: v.string(), markdown: v.optional(v.string()), baseMs: v.optional(v.number()) },
+  handler: async (ctx, { tenantId, markdown, baseMs }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+    const prior = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    for (const d of prior) {
+      if (d.source === "voice" && d.kind === "brief") await ctx.db.delete(d._id);
+    }
+    const md = markdown ?? SEED_VOICE_BRIEF_MD;
+    const now = baseMs ?? Date.now();
+    const vaultDocId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Voice brief — dropped session",
+      kind: "brief",
+      category: categoryFor({ source: "agent" }), // same bucket persistBrief writes
+      source: "voice",
+      mimeType: "text/markdown",
+      size: new TextEncoder().encode(md).length,
+      contentHash: `smoke-voice-${now}`,
+      text: md, // vault content plane — the banner reads this for the plan handoff
+      status: "ready",
+      createdAt: now,
+    });
+    return { vaultDocId };
   },
 });
 
