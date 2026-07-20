@@ -178,7 +178,7 @@ export const endSessionClean = tenantMutation({
   handler: async (
     ctx,
     { sessionId, editedMarkdown },
-  ): Promise<{ ok: true; alreadyEnded?: true }> => {
+  ): Promise<{ ok: true; alreadyEnded?: true; vaultDocId?: Id<"vaultDocuments"> }> => {
     const s = await ctx.db.get(sessionId);
     if (!s || s.tenantId !== ctx.tenantId) throw new Error("voice: session not found"); // no cross-tenant
     const ended = await ctx.runMutation(internal.voice.markEndedClean, { sessionId });
@@ -188,9 +188,17 @@ export const endSessionClean = tenantMutation({
     // no-ops, but the brief must still persist. persistBrief is idempotent on briefRef, so a race
     // with the watchdog's auto-store never double-writes. A bare end (no markdown) keeps the original
     // CAS no-op — nothing to store — which the "clean end after abnormal" test still asserts.
-    if (editedMarkdown)
-      await ctx.runMutation(internal.voice.persistBrief, { sessionId, markdown: editedMarkdown });
-    return ended ? { ok: true } : { ok: true, alreadyEnded: true };
+    // The vaultDocId is returned so the review UI can mark this brief "reviewed" — it never re-surfaces
+    // in the dropped-session banner (VOIC-03: the banner is for briefs the user has NOT yet seen).
+    let vaultDocId: Id<"vaultDocuments"> | undefined;
+    if (editedMarkdown) {
+      const stored = await ctx.runMutation(internal.voice.persistBrief, {
+        sessionId,
+        markdown: editedMarkdown,
+      });
+      vaultDocId = stored.vaultDocId;
+    }
+    return { ok: true, ...(ended ? {} : { alreadyEnded: true as const }), ...(vaultDocId && { vaultDocId }) };
   },
 });
 

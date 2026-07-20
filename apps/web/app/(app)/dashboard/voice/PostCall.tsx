@@ -4,6 +4,7 @@ import { api } from "@pikar/backend/api";
 import { useAction, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { markVoiceBriefSeen } from "./AbnormalBriefBanner";
 import type { Turn, VoiceSession } from "./useVoiceSession";
 
 // VOIC-03 (clean-end review→store) + VOIC-04 (brief→plan handoff). The always-available post-call
@@ -96,7 +97,10 @@ export function PostCall({ session }: { session: VoiceSession }) {
     if (!sessionId) return false;
     setError(null);
     try {
-      await endSessionClean({ sessionId, editedMarkdown: markdown });
+      const res = await endSessionClean({ sessionId, editedMarkdown: markdown });
+      // This brief was JUST reviewed here — mark it seen so the dropped-session banner never
+      // re-surfaces it on the next app open (only auto-stored, unreviewed briefs surface there).
+      if (res.vaultDocId) markVoiceBriefSeen(res.vaultDocId);
       return true;
     } catch {
       setError("Couldn't save your brief. Please try again.");

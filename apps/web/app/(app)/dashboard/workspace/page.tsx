@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
 import { CardList } from "./cards";
 import { ChatPane } from "./ChatPane";
@@ -157,6 +157,16 @@ export default function WorkspacePage() {
     setTabs((t) => (t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }]));
     setThreadId(id);
   };
+
+  // The voice brief→plan handoff (VOIC-04) navigates here as /workspace?thread=<id> — sendCockpitMessage
+  // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
+  // once on mount (client-only — avoids the useSearchParams Suspense boundary for a redirect-only value,
+  // the connect-gmail precedent). Nothing sends: the user still crosses the same single Approve.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("thread");
+    if (id) openThread(id, "Voice brief");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const newChat = () => setThreadId(undefined);
 
   const hour = new Date().getHours();
