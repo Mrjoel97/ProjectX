@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response)
+> Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
 
 ## Purpose
@@ -188,6 +188,13 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   client-exposed) POSTing `/v1/realtime/calls/{callId}/hangup` with the server key; 200 =
   ended, a non-200 throws with the STATUS only (refs-only, §4). It is the VOIC-02 watchdog's
   actuator. Enforced by: `voiceToken.test.ts` (targets the hangup path, 200 success, non-200 throw).
+- **The agent transcript must be COMPLETE — the brief is composed from it verbatim, so a
+  dropped turn is a brief gap.** In `useVoiceSession.onEvent` (LIVE-VERIFIED 2026-07-20):
+  `response.output_audio_transcript.done` is authoritative — it finalizes the streamed turn OR,
+  when no `.delta` created one, appends a final turn from its full `transcript` (never dropped);
+  and `response.done` resets the open-agent-turn ref so a missed `.done` (barge-in / cancel)
+  cannot bleed the next response's deltas into the prior bubble. Follow-up: extract a pure
+  transcript reducer + unit test (currently verified by live walk-through only).
 
 ## How to change safely
 

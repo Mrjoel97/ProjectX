@@ -199,18 +199,29 @@ export function useVoiceSession(): VoiceSession {
         case REALTIME_EVENTS.outputTranscriptDone: {
           const id = agentTurnRef.current;
           agentTurnRef.current = null;
-          if (id) {
-            setTranscript((t) =>
-              t.map((x) =>
-                x.id === id
-                  ? { ...x, final: true, text: (ev.transcript ?? x.text).trim() || x.text }
-                  : x,
-              ),
-            );
-          }
+          // The done event carries the AUTHORITATIVE full transcript for the response. Finalize the
+          // streamed turn if one exists — but if no `.delta` ever created a turn (a response can emit
+          // `.done` with no delta stream, or the deltas were missed), DON'T drop the agent's words:
+          // create the final turn from the full transcript. Dropping it here is what holed the brief.
+          const full = (ev.transcript ?? "").trim();
+          setTranscript((t) => {
+            const prev = id ? t.find((x) => x.id === id) : undefined;
+            if (prev) return t.map((x) => (x.id === prev.id ? { ...x, final: true, text: full || x.text } : x));
+            if (!full) return t;
+            return [...t, { id: `a-${Date.now()}-${t.length}`, speaker: "agent", text: full, final: true }];
+          });
           break;
         }
         case REALTIME_EVENTS.responseDone: {
+          // Response boundary: if a transcript `.done` was missed (barge-in / cancel), finalize any
+          // still-open agent turn and clear the ref so the NEXT response's deltas start a fresh turn
+          // instead of bleeding into — and overwriting — this one (the "text stopped showing partway
+          // through the call" symptom). Idempotent when `.done` already ran (ref is null).
+          const openId = agentTurnRef.current;
+          if (openId) {
+            agentTurnRef.current = null;
+            setTranscript((t) => t.map((x) => (x.id === openId ? { ...x, final: true } : x)));
+          }
           const usage = ev.response?.usage;
           if (usage) {
             const u = readUsage(usage);
@@ -221,6 +232,13 @@ export function useVoiceSession(): VoiceSession {
           }
           break;
         }
+        default:
+          // UAT diagnostic (ponytail: remove/quiet at phase close): if the agent speaks but no text
+          // appears, the real event name OpenAI sent shows up here — the pinned output_audio_transcript
+          // names are the MEDIUM-confidence risk realtime.ts flags. Filter the console by "[voice]".
+          if (ev.type?.includes("transcript") || ev.type?.includes("audio"))
+            console.debug("[voice] unhandled audio/transcript event:", ev.type);
+          break;
       }
     },
     [],
