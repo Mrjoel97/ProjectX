@@ -254,6 +254,14 @@ export const pipelineWorkflow = workflow.define({
       if (evt.kind === "timeout") {
         await setStatusStep("expired");
         await audit("review.expired");
+        // REVW-03: notify the human that their review lapsed (was audit+telemetry only).
+        // Mirrors stopBlocked's ordering; static §4 label, refs only — no content.
+        await step.runMutation(internal.notifications.notify, {
+          tenantId,
+          kind: "review.expired",
+          requestId,
+          message: notificationMessage("review.expired"),
+        });
         await writeTelemetry("expired");
         return null; // NO delivery
       }
