@@ -2,6 +2,21 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+status: paused-at-checkpoint
+stopped_at: "07-06-PLAN.md Task 2 checkpoint:human-verify — Task 1 (autonomous) COMPLETE + committed (c7da38b). Phase 7 is offline-verified but NOT closed: the live S3 Object-Lock/scheduler/deliverability proofs need a running deployment (07-VALIDATION Manual-Only) + owner sign-off. Do NOT flip ROADMAP/STATE phase-complete or mark AGNT-04/REVW-02/REVW-03/OPSG-03/OPSG-05 complete until the owner types 'approved'."
+last_updated: "2026-07-21T03:05:00.000Z"
+last_activity: "2026-07-21 — Phase 7 Resilience & Ops, Wave 4: 07-06 (phase close) AUTONOMOUS PORTION executed, paused at the blocking Task 2 human-verify. Task 1: full offline sweep GREEN — @pikar/core 145/145; @pikar/backend 398/399 (sole red the DOCUMENTED audit.test.ts auditCounts 'Component auditCounts is not registered' convex-test non-regression — every Phase-7-touched suite green: llmRedaction 33/33, cockpitTools 52/52, runCockpitAgent 18/18); node scripts/check-playbooks.mjs exit 0. The FOUR fail-closed grep-proofs (the phase's highest-value security assertions) HOLD: (1) pipeline.ts a past-cap regenerate routes classifyReviewDecision → the governed escalated terminal (return null, NO gmail.send) and the old DELIVER fall-through is GONE (pipeline.ts:274/286/291/293 vs proceed-only DELIVER :319); (2) cockpit.ts executePlan returns {ok:false,reason:'review_escalated'} at :497 BEFORE the CAS flip, proposeEmailPlan caps re-proposes via classifyReviewDecision(:393) with MAX_REGENERATE imported from @pikar/core (not inlined); (3) worm.ts advanceCursor(:88) runs ONLY after await s3.send(PutObjectCommand)(:76) resolves, stub path(:57) never advances, no advance on throw; (4) notifyExternal.ts sends only 'Pikar: ${kind}' + notificationMessage(kind) — no content interpolated (§4 firewall). SC#4 recorded PARTIAL in audit-dead-letter.md (WORM export met; hot-audit sweep DEFERRED per owner ruling 2026-07-21, export-only; §3/ADR-002 intact, no new ADR — never a silent gap). Three playbooks (audit-dead-letter/cockpit/agent-runtime) got a 07-06 phase-close Last-verified bump. Commit c7da38b (T1 docs). NO deviations. 07-06-SUMMARY.md written (autonomous portion, self-check PASSED). AWAITING OWNER (Task 2, blocking human-verify): the live walk-through — (1) smoke:worm against the real Object-Lock bucket → S3-console-inspect one COMPLIANCE object w/ RetainUntilDate + checksum, delete REFUSED; (2) smoke:pipeline expiry + regenerate-breach → expired/escalated, notify fired, NO send; (3) force an agent-timeout → one in-app agent.timeout + safe reply; (4) the OPSG-05 matrix per failure class incl. smoke:dlq + a mid-flight-Gmail-disconnect proving NO notify loop + in-app row still lands; (5) confirm SC#4 partial. Resume: owner 'approved' closes Phase 7 (flip ROADMAP/STATE + mark the 5 requirements), or a defect becomes a gap-closure plan. NEXT: owner human-verify."
+progress:
+  total_phases: 21
+  completed_phases: 15
+  total_plans: 124
+  completed_plans: 119
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
 status: ready
 stopped_at: "Completed 07-04-PLAN.md (07-05 also done; 07-06 phase-close remains). NEXT: 07-06 phase close + the manual phase-gate live checks."
 last_updated: "2026-07-21T02:50:00.000Z"

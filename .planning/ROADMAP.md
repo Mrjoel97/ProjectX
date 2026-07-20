@@ -395,7 +395,7 @@ Plans:
 - [ ] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
 - [ ] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)
 - [ ] 07-05-PLAN.md — OPSG-05: notify choke point + best-effort external (email) dispatch + DLQ notification + §4 scan (Wave 3)
-- [ ] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4)
+- [ ] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4) — AUTONOMOUS PORTION DONE 2026-07-21 (offline sweep green: core 145/145, backend 398/399 sole documented red, check-playbooks 0; four fail-closed grep-proofs hold; SC#4-partial recorded; commit c7da38b). PAUSED at the blocking Task 2 owner human-verify (live S3 Object-Lock + notification-matrix walk-through) — Phase 7 NOT closed until owner approves.
 
 ### Phase 8: Self-Improvement
 **Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop â see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback â sequenced last because the loop is meaningless until review/feedback data has accumulated.
