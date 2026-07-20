@@ -8,7 +8,7 @@
 // `context.payload` and the audit payload are REDACTION-SAFE (refs/ids/counts
 // only — CLAUDE.md #4). Callers pass synthetic/ref data, never raw user content.
 import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
-import { buildTelemetry } from "@pikar/core";
+import { buildTelemetry, notificationMessage } from "@pikar/core";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -56,6 +56,18 @@ export const onPipelineComplete = internalMutation({
     // (e.g. smoke.ts) skip this branch untouched.
     const requestId = context.payload?.requestId as Id<"requests"> | undefined;
     if (!requestId) return;
+
+    // OPSG-05: a dead-letter surfaces to the USER (in-app + best-effort external), beside the audit
+    // above — keyed by the redaction-safe requestId ref + the static §4 label ONLY. This is the ONLY
+    // notify on the DLQ path: the external-send failure path lives in notifyExternal and never reaches
+    // here (the notify-loop guard). Fired only when a requestId ref is present (synthetic smokes skip it).
+    await ctx.runMutation(internal.notifications.notify, {
+      tenantId: context.tenantId,
+      kind: "deadletter",
+      requestId,
+      message: notificationMessage("deadletter"),
+    });
+
     const request = await ctx.db.get(requestId);
     if (!request) return;
 
@@ -126,6 +138,15 @@ export const deadLetterRecipient = internalMutation({
       eventType: "deadletter.written",
       actor: "system",
       payload: { requestId, status: "new" }, // refs/flags only
+    });
+
+    // OPSG-05: the per-recipient dead-letter also surfaces to the user (in-app + external), beside its
+    // audit — requestId ref + static §4 label only. requestId is always present here (a required arg).
+    await ctx.runMutation(internal.notifications.notify, {
+      tenantId,
+      kind: "deadletter",
+      requestId,
+      message: notificationMessage("deadletter"),
     });
 
     await ctx.db.patch(requestId, { status: "failed" });

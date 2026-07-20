@@ -115,6 +115,16 @@ export const assertDeadLetterReason = internalQuery({
       throw new Error(`request ${correlationId} at "${req.status}", expected failed (no-stuck-status)`);
     }
 
+    // OPSG-05: a dead-letter with a requestId ref fires a user-facing `deadletter` notification beside
+    // its audit (07-05). Mirrors assertReviewExpired/assertReviewEscalated — keyed by requestId + kind.
+    const notes = await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_read", (q) => q.eq("tenantId", req.tenantId))
+      .collect();
+    if (!notes.some((n) => n.requestId === req._id && n.kind === "deadletter")) {
+      throw new Error(`no deadletter notification for ${correlationId}`);
+    }
+
     const tel = await ctx.db
       .query("telemetry")
       .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
