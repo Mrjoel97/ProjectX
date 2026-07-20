@@ -1,6 +1,6 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-20 against 06-08 (phase close)
+> Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
 
 ## Purpose
@@ -76,6 +76,12 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
 - External service: OpenAI Realtime API (GA `/v1/realtime/client_secrets` + `/calls` +
   `/calls/{id}/hangup`). Exact JSON shapes are pinned in `realtime.ts` and are
   verify-against-the-live-doc (post-training-cutoff GA — see the `ponytail:` sources there).
+  **LIVE-VERIFIED 2026-07-20** (first real mint): the `client_secrets` body nests
+  `turn_detection` + `transcription` under `session.audio.input` (a top-level
+  `session.turn_detection` 400s "unknown parameter"), and the 200 returns the ephemeral
+  secret as top-level `value` (an `ek_…` string), not `client_secret`. `voiceToken.ts` is
+  the single reader of both shapes. The `/calls` SDP handshake + hangup remain pin-only
+  (confirmed on the live walk-through).
 - Env var: `OPENAI_API_KEY` (server-only). Never reaches the browser, a log line, or an
   audit row.
 - Reused rails: `vaultIngest.ingestDoc` (brief → vault), `recordSpend`/`recordModelSpend`

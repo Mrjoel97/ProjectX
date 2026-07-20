@@ -6,6 +6,7 @@ import {
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
   hangupUrl,
+  TRANSCRIPTION_MODEL,
   TURN_DETECTION_TYPE,
 } from "@pikar/voice";
 import { convexTest } from "convex-test";
@@ -49,7 +50,7 @@ const asTenant = (t: ReturnType<typeof convexTest>) => t.withIdentity({ subject:
 test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + the registry persona", async () => {
   const t = convexTest(schema, modules);
   await t.mutation(internal.skills.seedSkills, {}); // seeds voice-session as active v1
-  stubFetch(() => Response.json({ client_secret: "ek_ephemeral_abc", expires_at: 1234 }));
+  stubFetch(() => Response.json({ value: "ek_ephemeral_abc", expires_at: 1234 }));
 
   await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
@@ -60,7 +61,10 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
   const body = JSON.parse(captured!.init.body as string);
   // The session config comes from the pinned realtime.ts constants…
   expect(body.session.model).toBe(DEFAULT_REALTIME_MODEL);
-  expect(body.session.turn_detection.type).toBe(TURN_DETECTION_TYPE);
+  // …LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under audio.input (a top-level
+  // session.turn_detection 400s). A regression here is exactly what the mock could not catch.
+  expect(body.session.audio.input.turn_detection.type).toBe(TURN_DETECTION_TYPE);
+  expect(body.session.audio.input.transcription.model).toBe(TRANSCRIPTION_MODEL);
   // …and the live-session instructions are the REGISTRY skill body, not a hardcoded prompt (§5).
   expect(body.session.instructions).toBe(voiceSessionSkillBody);
 });
@@ -68,7 +72,7 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
 test("mintClientSecret returns ONLY {clientSecret, expiresAt} and NEVER the API key", async () => {
   const t = convexTest(schema, modules);
   await t.mutation(internal.skills.seedSkills, {});
-  stubFetch(() => Response.json({ client_secret: "ek_ephemeral_xyz", expires_at: 9999 }));
+  stubFetch(() => Response.json({ value: "ek_ephemeral_xyz", expires_at: 9999 }));
 
   const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
@@ -83,7 +87,7 @@ test("mintClientSecret fails closed when no active voice-session skill is seeded
   const t = convexTest(schema, modules);
   // No seedSkills → no active persona. A registry-backed mint MUST throw (a hardcoded prompt
   // would never consult the registry and would silently proceed).
-  stubFetch(() => Response.json({ client_secret: "ek", expires_at: 1 }));
+  stubFetch(() => Response.json({ value: "ek", expires_at: 1 }));
   await expect(asTenant(t).action(internal.voiceToken.mintClientSecret, {})).rejects.toThrow();
 });
 

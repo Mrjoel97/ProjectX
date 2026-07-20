@@ -42,12 +42,14 @@ export const TRANSCRIPTION_MODEL = "gpt-4o-transcribe" as const;
 
 /** Key names written into the `client_secrets` mint body's `session` object. The
  *  live-session `instructions` load from the registry skill (CLAUDE.md §5), never hardcoded. */
+// LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under `audio.input` (a top-level
+// `session.turn_detection` 400s "unknown parameter"), and the transcription key is `transcription`.
 export const SESSION_CONFIG_KEYS = {
   model: "model",
   instructions: "instructions",
   voice: "audio.output.voice",
-  turnDetectionType: "turn_detection.type",
-  transcriptionModel: "input_audio_transcription.model",
+  turnDetectionType: "audio.input.turn_detection.type",
+  transcriptionModel: "audio.input.transcription.model",
 } as const;
 
 /** The nested field names on `response.done`'s `usage` object that the client reads for

@@ -25,11 +25,10 @@ import { tenantAction } from "./lib/functions";
 // literal if the persona picks another (the INSTRUCTIONS load from the registry, §5, never here).
 const REALTIME_VOICE = "marin";
 
-// The mint 200 shape ({ client_secret, expires_at }) is pinned from the phase RESEARCH doc, NOT a
-// live fetch (no fetch tool at build time). ponytail: re-confirm against a live 200 the first time
-// a real mint runs — if OpenAI nests it ({ client_secret: { value, expires_at } }), fix it HERE
-// (this is the single reader of the response shape).
-type MintResponse = { client_secret: string; expires_at: number };
+// The mint 200 shape — LIVE-VERIFIED 2026-07-20 against a real POST: the ephemeral secret is the
+// TOP-LEVEL `value` field (an `ek_…` string) with `expires_at` beside it — NOT `client_secret`, nor
+// a nested `client_secret.value` (the pre-live pin guessed wrong both ways). Single reader of the shape.
+type MintResponse = { value: string; expires_at: number };
 
 /**
  * Mint a short-lived Realtime client secret for the browser (VOIC-01 pre-flight). The session
@@ -55,9 +54,15 @@ export const mintClientSecret = tenantAction({
           type: "realtime",
           model: DEFAULT_REALTIME_MODEL,
           instructions: skill.body, // registry persona, baked into the ephemeral secret
-          audio: { output: { voice: REALTIME_VOICE } },
-          turn_detection: { type: TURN_DETECTION_TYPE }, // semantic_vad → barge-in
-          input_audio_transcription: { model: TRANSCRIPTION_MODEL }, // auto-detect → in-language brief
+          // LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under `audio.input` — a
+          // top-level `session.turn_detection` 400s ("unknown parameter"); the API key is `transcription`.
+          audio: {
+            input: {
+              transcription: { model: TRANSCRIPTION_MODEL }, // auto-detect → in-language brief
+              turn_detection: { type: TURN_DETECTION_TYPE }, // semantic_vad → barge-in
+            },
+            output: { voice: REALTIME_VOICE },
+          },
         },
       }),
     });
@@ -69,7 +74,7 @@ export const mintClientSecret = tenantAction({
     const body = (await res.json()) as MintResponse;
     // Return ONLY the ephemeral secret + its expiry. OPENAI_API_KEY stays in Convex env — it is
     // structurally absent from this object, and nothing here logs or audits either (Pitfall 4).
-    return { clientSecret: body.client_secret, expiresAt: body.expires_at };
+    return { clientSecret: body.value, expiresAt: body.expires_at };
   },
 });
 
