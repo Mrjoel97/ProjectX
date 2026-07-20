@@ -387,7 +387,14 @@ Plans:
   2. A review-inactivity timeout and an Executive Agent timeout each fire an escalation notification (via the scheduled-event race on the review gate).
   3. Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events.
   4. Completed request trails export on schedule to immutable (WORM) archival storage, and the hot audit copy is swept per the retention policy.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Wave-0 foundation: pure @pikar/core modules (retention/serialize, review-threshold, notification templates) + @aws-sdk/client-s3 + schema by_ts index + plan counter fields (Wave 1)
+- [ ] 07-02-PLAN.md — OPSG-03: real WORM S3 Object Lock export + auditSince by_ts rewrite (export-only; hot-copy sweep deferred) (Wave 2)
+- [ ] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
+- [ ] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)
+- [ ] 07-05-PLAN.md — OPSG-05: notify choke point + best-effort external (email) dispatch + DLQ notification + §4 scan (Wave 3)
 
 ### Phase 8: Self-Improvement
 **Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop â see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback â sequenced last because the loop is meaningless until review/feedback data has accumulated.
@@ -432,6 +439,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
-| 7. Resilience & Operations Hardening | 0/TBD | Not started | - |
+| 7. Resilience & Operations Hardening | 0/5 | Planned | - |
 | 8. Self-Improvement | 0/TBD | Not started | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
