@@ -1,7 +1,16 @@
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
+
+// Mock the node-only S3 SDK so the real-export branch runs without a live bucket.
+// vi.hoisted lets the factory reference `s3Send` (vi.mock is hoisted above imports).
+// PutObjectCommand is captured as its raw input so the test can assert the headers.
+const { s3Send } = vi.hoisted(() => ({ s3Send: vi.fn() }));
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: vi.fn(() => ({ send: s3Send })),
+  PutObjectCommand: vi.fn((input: unknown) => ({ input })),
+}));
 
 // Raw source for the static-shape assertions (edge-runtime has no node:fs, so we
 // inline file contents via Vite's ?raw loader instead of reading from disk).
@@ -120,5 +129,80 @@ describe("WORM cursor mechanics + stub safety (SC-4)", () => {
     const t = convexTest(schema, modules);
     const res = await t.action(internal.worm.exportAudit, {});
     expect(res).toMatchObject({ skipped: true });
+  });
+});
+
+describe("WORM real export — advance only after a durable PutObject (OPSG-03)", () => {
+  const ORIGINAL = process.env.WORM_BUCKET;
+
+  beforeEach(() => {
+    process.env.WORM_BUCKET = "test-worm-bucket";
+    s3Send.mockReset();
+  });
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.WORM_BUCKET;
+    else process.env.WORM_BUCKET = ORIGINAL;
+  });
+
+  async function seedAudit(t: ReturnType<typeof convexTest>, tsList: number[]) {
+    await t.run(async (ctx) => {
+      for (const ts of tsList) {
+        await ctx.db.insert("audit", {
+          tenantId: "t1",
+          correlationId: `c${ts}`,
+          eventType: "x",
+          actor: "system",
+          payload: { ref: `r${ts}` },
+          ts,
+        });
+      }
+    });
+  }
+
+  test("serializes the window → PutObject(COMPLIANCE, SHA256, retain-until) → advances the cursor to maxTs", async () => {
+    s3Send.mockResolvedValue({});
+    const t = convexTest(schema, modules);
+    await seedAudit(t, [10, 20, 30]);
+
+    const res = await t.action(internal.worm.exportAudit, {});
+
+    // Cursor advanced to the newest exported ts.
+    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(30);
+    expect(res).toMatchObject({ exported: 3, maxTs: 30 });
+
+    // Exactly one PutObject with the Object-Lock headers.
+    expect(s3Send).toHaveBeenCalledTimes(1);
+    const put = s3Send.mock.calls[0]?.[0].input;
+    expect(put).toMatchObject({
+      Bucket: "test-worm-bucket",
+      ChecksumAlgorithm: "SHA256",
+      ObjectLockMode: "COMPLIANCE",
+    });
+    expect(put.ObjectLockRetainUntilDate).toBeInstanceOf(Date);
+    // NDJSON body: one line per row, ts-ascending.
+    expect(String(put.Body).trimEnd().split("\n")).toHaveLength(3);
+  });
+
+  test("PutObject throw → cursor is NOT advanced (next cron retries the same window)", async () => {
+    s3Send.mockRejectedValue(new Error("s3 down"));
+    const t = convexTest(schema, modules);
+    await seedAudit(t, [42]);
+
+    await expect(t.action(internal.worm.exportAudit, {})).rejects.toThrow("s3 down");
+
+    // The advance is unreachable when PutObject rejects.
+    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
+    const cursors = await t.run((ctx) => ctx.db.query("exportCursors").collect());
+    expect(cursors).toHaveLength(0);
+  });
+
+  test("empty window → returns { exported: 0 }, no PutObject, no advance", async () => {
+    s3Send.mockResolvedValue({});
+    const t = convexTest(schema, modules);
+    // No audit rows past the 0 cursor.
+    const res = await t.action(internal.worm.exportAudit, {});
+    expect(res).toEqual({ exported: 0 });
+    expect(s3Send).not.toHaveBeenCalled();
+    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
   });
 });
