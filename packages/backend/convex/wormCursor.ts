@@ -27,17 +27,14 @@ export const getCursor = internalQuery({
 /** Audit rows strictly after `since`, oldest-first — the incremental export window. */
 export const auditSince = internalQuery({
   args: { since: v.number(), limit: v.optional(v.number()) },
-  handler: async (ctx, { since, limit }) => {
-    // ponytail: full scan is fine for the Phase-1 stub. The audit index is
-    // [tenantId, ts] (per-tenant) and there is no global by-ts index, so a
-    // cross-tenant "since ts" window needs a scan. Phase 7 adds a `by_ts` index
-    // to the audit table if the incremental export ever needs to scale.
-    const all = await ctx.db.query("audit").collect();
-    return all
-      .filter((r) => r.ts > since)
-      .sort((a, b) => a.ts - b.ts)
-      .slice(0, limit ?? 10_000);
-  },
+  handler: (ctx, { since, limit }) =>
+    // Index range read on the global by_ts index (07-01): rows come back
+    // ts-ascending straight from the index, so no manual filter/sort — and no
+    // full .collect() scan of the unbounded audit table.
+    ctx.db
+      .query("audit")
+      .withIndex("by_ts", (q) => q.gt("ts", since))
+      .take(limit ?? 10_000),
 });
 
 /** Advance the cursor after a CONFIRMED durable export (upsert — one row per cursor). */

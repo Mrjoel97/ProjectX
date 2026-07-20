@@ -56,12 +56,20 @@ describe("WORM cursor mechanics + stub safety (SC-4)", () => {
     expect(rows).toHaveLength(1);
   });
 
-  test("auditSince returns only rows strictly after the cursor ts, oldest-first", async () => {
+  test("auditSince (by_ts index) returns only rows strictly after the cursor ts, oldest-first, bounded by limit", async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
-      for (const ts of [30, 10, 20]) {
+      // Insert out of ts order and across tenants — the export window is CROSS-tenant
+      // and must come back ts-ascending from the by_ts index regardless of insert order.
+      for (const [ts, tenantId] of [
+        [30, "t1"],
+        [10, "t2"],
+        [20, "t1"],
+        [40, "t2"],
+        [15, "t1"],
+      ] as const) {
         await ctx.db.insert("audit", {
-          tenantId: "t1",
+          tenantId,
           correlationId: `c${ts}`,
           eventType: "x",
           actor: "system",
@@ -70,8 +78,18 @@ describe("WORM cursor mechanics + stub safety (SC-4)", () => {
         });
       }
     });
-    const rows = await t.query(internal.wormCursor.auditSince, { since: 15 });
-    expect(rows.map((r) => r.ts)).toEqual([20, 30]);
+
+    // Strictly after `since`, oldest-first, all tenants.
+    const window = await t.query(internal.wormCursor.auditSince, { since: 15 });
+    expect(window.map((r) => r.ts)).toEqual([20, 30, 40]);
+
+    // Boundary is EXCLUSIVE (ts > since): a row exactly at `since` is not re-exported.
+    const atBoundary = await t.query(internal.wormCursor.auditSince, { since: 20 });
+    expect(atBoundary.map((r) => r.ts)).toEqual([30, 40]);
+
+    // limit bounds the window to the oldest N rows after `since` (index take, not a scan+slice).
+    const limited = await t.query(internal.wormCursor.auditSince, { since: 15, limit: 2 });
+    expect(limited.map((r) => r.ts)).toEqual([20, 30]);
   });
 
   // THE critical correctness property (see worm.ts header): the stub path must
