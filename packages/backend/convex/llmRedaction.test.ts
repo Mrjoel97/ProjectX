@@ -723,3 +723,61 @@ test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, 
     );
   }
 });
+
+// ── 07-05 (OPSG-05): the notify choke point + external channel carry NO content (§4) ──────────────
+// Every Phase-7 notification MESSAGE is a static label — `notificationMessage(kind)` or a static-label
+// interpolation (`${LABELS[reason]}`) — NEVER an interpolated content field (body/subject/recipient/
+// name/…). The external email (notifyExternal) sends only the kind enum member + notificationMessage:
+// no requestId, no content. Mutation-checked the 03.7 way: interpolating `${body}` into any notify
+// message, or a content field into notifyExternal's mail, trips these RED (confirmed, then reverted).
+
+/** A `${…content…}` interpolation of a content-bearing field — the thing a notify message may NEVER carry. */
+const CONTENT_INTERPOLATION =
+  /\$\{[^}]*\b(body|subject|recipient|recipients|draft|goal|editedBody|bodyIntent|snippet|gist|address|greetingName|name)\b/;
+
+test("no notify call interpolates a content field into its message (§4 static-label firewall)", () => {
+  // The notify call-sites across the phase. `message:` is a static label or a static-label interpolation;
+  // it must never carry a `${...content...}`. Comments are stripped — prose names the fields by design.
+  let scanned = 0;
+  for (const file of ["pipeline.ts", "cockpit.ts", "deadLetter.ts", "notifications.ts", "notifyExternal.ts"]) {
+    const src = readSource(file).replace(/\/\/[^\n]*/g, "");
+    const messages = [...src.matchAll(/notifications\.notify,\s*\{[\s\S]*?message:\s*([^\n]*)/g)].map(
+      (m) => m[1] ?? "",
+    );
+    for (const msg of messages) {
+      scanned++;
+      expect(msg, `${file} interpolates content into a notify message: ${msg}`).not.toMatch(
+        CONTENT_INTERPOLATION,
+      );
+    }
+  }
+  expect(scanned, "no notify messages were scanned — the firewall is vacuous").toBeGreaterThan(0);
+});
+
+test("the external channel sends only the kind label + notificationMessage — no content, no requestId (§4)", () => {
+  // notifyExternal builds the email from the kind enum member (subject) + notificationMessage(kind)
+  // (body) ONLY. Strip comments (they name the forbidden fields by design), then assert the mail-
+  // building code carries no content field and no requestId — the external notice can leak nothing.
+  const ext = readSource("notifyExternal.ts").replace(/\/\/[^\n]*/g, "");
+  expect(ext, "notifyExternal does not send notificationMessage(kind) as the body").toMatch(
+    /buildMime\([^)]*notificationMessage\(/,
+  );
+  // No content INTERPOLATION and no content PROPERTY READ (a request/plan field) may appear — and it
+  // must take no requestId ref. (The `body:` fetch-option key is the HTTP request body, not content,
+  // so the scan targets `${…content…}` / `.content` / the ref arg, never the bare key.)
+  expect(ext, "notifyExternal interpolates a content field into the mail").not.toMatch(
+    CONTENT_INTERPOLATION,
+  );
+  expect(ext, "notifyExternal reads a request/plan content field or takes a requestId ref").not.toMatch(
+    /\.(body|subject|recipient|recipients|draft|goal|snippet|gist)\b|\brequestId\b/,
+  );
+
+  // The choke point schedules dispatch with { tenantId, kind } ONLY — never the message/requestId/content
+  // (the loop guard is also a §4 guard: nothing content-bearing crosses into the external channel).
+  const notif = readSource("notifications.ts").replace(/\/\/[^\n]*/g, "");
+  const sched = notif.match(/runAfter\(\s*0\s*,\s*internal\.notifyExternal\.dispatch\s*,\s*(\{[^}]*\})/);
+  expect(sched, "notify does not schedule notifyExternal.dispatch").not.toBeNull();
+  expect(sched?.[1], "the dispatch schedule carries more than { tenantId, kind }").not.toMatch(
+    /\b(message|requestId|body|subject|recipient|draft|goal)\b/,
+  );
+});
