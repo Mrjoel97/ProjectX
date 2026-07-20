@@ -386,8 +386,8 @@ Plans:
   1. Edit and reject retry counters enforce thresholds; a breach escalates, notifies, and terminates the request safely.
   2. A review-inactivity timeout and an Executive Agent timeout each fire an escalation notification (via the scheduled-event race on the review gate).
   3. Notifications fire for validation rejection, escalations, retry-limit breaches, timeouts, and dead-letter events.
-  4. Completed request trails export on schedule to immutable (WORM) archival storage, and the hot audit copy is swept per the retention policy.
-**Plans**: 5 plans
+  4. Completed request trails export on schedule to immutable (WORM) archival storage. **(PARTIAL — owner ruling 2026-07-21: WORM export IN scope; the hot-audit-copy sweep/delete is DEFERRED — export-only, §3/ADR-002 intact, no new ADR. The verifier records SC#4 as partially met, not a silent gap.)**
+**Plans**: 6 plans
 
 Plans:
 - [ ] 07-01-PLAN.md — Wave-0 foundation: pure @pikar/core modules (retention/serialize, review-threshold, notification templates) + @aws-sdk/client-s3 + schema by_ts index + plan counter fields (Wave 1)
@@ -395,6 +395,7 @@ Plans:
 - [ ] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
 - [ ] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)
 - [ ] 07-05-PLAN.md — OPSG-05: notify choke point + best-effort external (email) dispatch + DLQ notification + §4 scan (Wave 3)
+- [ ] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4)
 
 ### Phase 8: Self-Improvement
 **Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop â see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback â sequenced last because the loop is meaningless until review/feedback data has accumulated.
