@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-07-20T23:22:56.043Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-07-21T02:30:00.000Z"
+last_activity: "2026-07-21 — Phase 7 Resilience & Ops Hardening, Wave 2: 07-03 executed — the PIPELINE review gate is now FAIL CLOSED (REVW-02/03). The bug: past MAX_REGENERATE(=3) a `regenerate` decision fell through the loop's `break` to DELIVER (an unapproved send, pipeline.ts:250-277). FIX at the shared decision point (CLAUDE.md §8): the review-gate loop routes EVERY decision through @pikar/core classifyReviewDecision({decision, regenerateCount}) — the SAME classifier 07-04 wires into the cockpit gate, never a forked copy. A past-cap regenerate now hits the `escalate` branch → a governed `escalated` terminal (mirrors stopBlocked): status escalated + review.escalated audit + retry.limit notification + one escalated telemetry row + return null, NO gmail.send. `escalated` added to REQUEST_STATUS (pipeline.ts) AND schema.ts requests.status (14 stages) AND telemetry.ts reviewOutcome validator in lockstep (Rule 3 — a write against any un-widened union throws; the RED test caught this precisely: 'Validator error: got escalated'). REVW-03: the review-inactivity timeout branch (SEVEN_DAYS default) now fires a review.expired notification between its audit and telemetry write (was audit+telemetry only), still NO delivery on timeout; both notifications use the static §4 label from @pikar/core notificationMessage. MAX_REGENERATE re-exported from @pikar/core (requests.ts still imports it for canRegenerate) — value now lives once in core (07-01). Extended smoke:pipeline: approve→deliver + a review-expiry (via smoke:fireReviewTimeout, which cancels the real SEVEN_DAYS scheduled timeout and re-fires review.fireTimeout at delay 0 → expired + review.expired notify + NO send) + a 4-regenerate breach (→ escalated + retry.limit notify + NO send), backed by assertReviewExpired/assertReviewEscalated. Commits e73c000 (T1 feat, TDD RED→GREEN: classifier wiring at the cap + the escalated terminal write seam, auditCounts aggregate registered), 450231f (T2 feat review.expired notify), b16b879 (T3 test smoke + cockpit.md fail-closed invariant). TWO Rule-3 deviations (both load-bearing plumbing): widened schema.ts+telemetry.ts validators (not only pipeline REQUEST_STATUS as planned — the escalated write must validate); added smoke:fireReviewTimeout + the two assertions the extended script calls. VERIFIED: pnpm --filter @pikar/backend test pipeline 2/2 green; backend source tsc clean (pre-existing test-file import.meta.glob errors are untouched non-regressions); check-playbooks exit 0. NOT YET RUN (manual phase-gate, needs live dev deployment): npm run smoke:pipeline. NEXT: 07-04 wires the SAME classifyReviewDecision into the LIVE cockpit gate (executePlan/plans.reviseCount/plans.escalated) — the shared fix reaches both gates."
 progress:
   total_phases: 21
   completed_phases: 15
   total_plans: 124
-  completed_plans: 116
+  completed_plans: 117
 ---
 
 ---
@@ -720,8 +720,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:21:44.400Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-07-20T23:25:19.924Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

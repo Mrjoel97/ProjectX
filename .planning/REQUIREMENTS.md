@@ -34,7 +34,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 - [x] **REVW-01**: User reviews and can approve, edit, or reject **at a single plan-level gate before execution** — approve once, then hands-off governed execution with stage notifications and a halt control. *(Redefined 2026-07-10 from per-response review. Phase 2 shipped the interim per-response gate — mechanics smoke-tested; the plan-level gate ships with the cockpit, Phase 3.1, whose manual checkpoint carries the end-user verification.)*
 - [x] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
-- [ ] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
+- [x] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
 - [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter
 - [x] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
@@ -156,7 +156,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRDL-06 | Phase 3 | Complete |
 | REVW-01 | Phase 2 | Complete |
 | REVW-02 | Phase 7 | Complete |
-| REVW-03 | Phase 7 | Pending |
+| REVW-03 | Phase 7 | Complete |
 | DLVR-01 | Phase 2 | Complete |
 | DLVR-02 | Phase 9 | Pending |
 | DLVR-03 | Phase 2 | Complete |
