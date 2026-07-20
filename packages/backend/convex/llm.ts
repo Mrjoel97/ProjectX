@@ -65,12 +65,13 @@ import {
   generateText,
   jsonSchema,
   type LanguageModel,
+  RetryError,
   stepCountIs,
   tool,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
@@ -1457,6 +1458,15 @@ async function recordModelSpend(
   return priced.value;
 }
 
+// AGNT-04: the exhausted-timeout discriminator. isFallbackEligible is broader (429/5xx/bad-output all
+// retry too); this narrows to the abort/timeout class so ONLY a real timeout escalates to an
+// agent.timeout notification. Unwraps RetryError like isFallbackEligible (the SDK may wrap the abort).
+function isTimeoutError(e: unknown): boolean {
+  if (RetryError.isInstance(e)) return isTimeoutError(e.lastError);
+  const name = (e as { name?: unknown } | null)?.name;
+  return name === "TimeoutError" || name === "AbortError";
+}
+
 // The governed generateText loop shared by runCockpitAgent (a gateway model string) and the
 // mock-model test shim (a scripted mock — Convex args cannot carry a LanguageModel). Runs the
 // loop, records spend, and on an eligible primary failure retries once on the fallback model.
@@ -1564,7 +1574,17 @@ async function runAgentLoop(
     return await run(primary, 1);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
-    return await run(fallback, 0);
+    try {
+      return await run(fallback, 0);
+    } catch (e2) {
+      // AGNT-04: BOTH the primary AND the CHEAP_MODEL fallback failed. If the exhausted failure is a
+      // timeout/abort class, re-throw a CONTENT-FREE ConvexError marker so the cockpit driver can fire
+      // the agent.timeout notification — the error `name` does NOT survive the ctx.runAction boundary,
+      // but a ConvexError's `data` does. Any OTHER exhausted failure (a 5xx, a bad-output retry)
+      // propagates as-is → the driver's generic error turn, never an over-notification.
+      if (isTimeoutError(e2)) throw new ConvexError({ kind: "agent_timeout" });
+      throw e2;
+    }
   }
 }
 
@@ -1848,14 +1868,26 @@ export const runCockpitAgent = internalAction({
 
     // 5. The governed generateText tool-loop; eligible failure → CHEAP_MODEL.
     const primaryId = model ?? DEFAULT_MODEL;
+    // Offline test seam (AGNT-04) — mirrors the route/draft `fail=primary` SMOKE sentinels: force BOTH
+    // the primary AND the CHEAP_MODEL fallback to an exhausted AbortSignal-class timeout through the
+    // REAL runAgentLoop (no gateway), so the driver's agent.timeout path is exercisable end-to-end.
+    // Never a production input — a real turn never carries this exact text (parseAgentSmoke returns
+    // null for it, so it falls through here rather than a tool op).
+    const forceTimeout = text.trim() === "SMOKE::agent::timeout";
+    const timeoutModel = (): LanguageModel =>
+      new MockLanguageModelV4({
+        doGenerate: async () => {
+          throw new DOMException("smoke: forced agent timeout", "TimeoutError");
+        },
+      }) as unknown as LanguageModel;
     const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
       prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
-      primary: { model: resolveModel(primaryId), id: primaryId },
-      fallback: { model: resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
+      primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
+      fallback: { model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,

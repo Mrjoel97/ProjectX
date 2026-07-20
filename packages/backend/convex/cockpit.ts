@@ -11,13 +11,18 @@
 // before Approve. It is the SOLE `workflow.start(deliverApprovedPlan)` call site (the
 // grep-able zero-sends-before-Approve invariant, RESEARCH-delivery §5).
 import { Agent, listMessages } from "@convex-dev/agent";
-import { applyRecipientEdit, SEND_TIME_HORIZON_MS } from "@pikar/core";
+import {
+  applyRecipientEdit,
+  classifyReviewDecision,
+  notificationMessage,
+  SEND_TIME_HORIZON_MS,
+} from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
 import { workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -32,6 +37,25 @@ const cockpitAgent = new Agent(components.agent, {
   name: "email-cockpit",
   languageModel: DEFAULT_MODEL,
 } as unknown as ConstructorParameters<typeof Agent>[1]);
+
+/**
+ * AGNT-04: fire ONE agent.timeout notification IFF the driver's caught error is the content-free
+ * exhausted-timeout marker runAgentLoop throws (a ConvexError whose data.kind is "agent_timeout" —
+ * the error `name` does not survive the ctx.runAction boundary, a ConvexError's `data` does). BOTH
+ * cockpit agent entry points (sendCockpitMessage, resolveRecipients) route their catch through this,
+ * so a timeout on EITHER surface notifies (CLAUDE.md §8 — one fix, every caller). A non-timeout
+ * failure is a no-op (never over-notify). Callers keep their own safe reply + trace-only finally
+ * (invariant 11 — the notify lives in the catch tail, NEVER the finally).
+ */
+async function notifyIfAgentTimeout(ctx: ActionCtx, tenantId: string, e: unknown): Promise<void> {
+  if (e instanceof ConvexError && (e.data as { kind?: string } | null)?.kind === "agent_timeout") {
+    await ctx.runMutation(internal.notifications.notify, {
+      tenantId,
+      kind: "agent.timeout",
+      message: notificationMessage("agent.timeout"),
+    });
+  }
+}
 
 /**
  * The conversation turn (SC2/SC3). Thin driver over the governed Executive Agent tool-loop:
@@ -104,8 +128,12 @@ export const sendCockpitMessage = tenantAction({
         history, // UAT-E: the model sees the conversation so far, not just this turn
       });
       reply = res.reply;
-    } catch {
+    } catch (e) {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+      // AGNT-04: an EXHAUSTED model timeout (primary + CHEAP_MODEL fallback both timed out) escalates
+      // to one in-app agent.timeout notification. The turn stays non-dead-ending (the safe reply
+      // above); nothing was sent. A non-timeout failure is a no-op (never over-notify).
+      await notifyIfAgentTimeout(ctx, ctx.tenantId, e);
     } finally {
       // `finally` — NOT the tail of the try, and please do not "simplify" it away. It is the only
       // construct that terminalizes on EVERY exit: success, the caught throw, AND the governed stop
@@ -261,8 +289,10 @@ export const resolveRecipients = tenantAction({
         omitRecipientEdits: true,
       });
       reply = res.reply;
-    } catch {
+    } catch (e) {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+      // AGNT-04: the OTHER agent entry point escalates an exhausted timeout the same way (§8).
+      await notifyIfAgentTimeout(ctx, ctx.tenantId, e);
     } finally {
       // See sendCockpitMessage: `finally` is what covers the governed stop's early RETURN.
       await ctx.runMutation(internal.agentSteps.finish, {

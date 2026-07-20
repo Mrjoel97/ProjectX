@@ -452,6 +452,56 @@ test("turn lifecycle: resolveRecipients (the OTHER agent entry point) terminaliz
   expect(new Set(steps.map((s) => s.turnId)).size).toBe(2);
 });
 
+// ── 07-04: AGNT-04 — an exhausted model timeout escalates to an agent.timeout notification ────
+//
+// The Executive-Agent loop already bounds every model call with AbortSignal.timeout + one
+// CHEAP_MODEL fallback. What was missing: on an EXHAUSTED timeout (BOTH models time out) the driver
+// saved a generic error turn with no signal. Now runAgentLoop re-throws a content-free ConvexError
+// timeout marker and the driver fires ONE agent.timeout notification — staying non-dead-ending.
+// The SMOKE::agent::timeout seam forces both models to an AbortSignal-class timeout through the REAL
+// runAgentLoop (no gateway), the offline analogue of a live double-timeout.
+
+test("agent.timeout (AGNT-04): an exhausted model timeout fires ONE agent.timeout notification + a safe non-dead-ending reply; the thinking row still terminalizes", async () => {
+  const t = setupDriver();
+  await t.mutation(internal.skills.seedSkills, {});
+  const asT = t.withIdentity({ subject: "t1" });
+
+  const { threadId } = await asT.action(api.cockpit.sendCockpitMessage, {
+    text: "SMOKE::agent::timeout",
+  });
+
+  // Exactly ONE agent.timeout notification (never over-notify), scoped to the tenant.
+  const notifs = await t.run((ctx) => ctx.db.query("notifications").collect());
+  expect(notifs).toHaveLength(1);
+  expect(notifs[0]!.kind).toBe("agent.timeout");
+  expect(notifs[0]!.tenantId).toBe("t1");
+
+  // The turn is NON-dead-ending: the safe reply was saved (nothing was sent).
+  const msgs = await asT.query(api.cockpit.listThreadMessages, {
+    threadId,
+    paginationOpts: { cursor: null, numItems: 10 },
+  });
+  expect(msgs.page.some((m) => (m.text ?? "").includes("nothing was sent"))).toBe(true);
+
+  // The finally still terminalized the thinking trace (invariant 11) — no orphan `running` row.
+  const steps = await readSteps(t);
+  expect(steps.length).toBeGreaterThanOrEqual(1);
+  expect(steps.every((s) => s.phase === "done")).toBe(true);
+  expect(steps.filter((s) => s.phase === "running")).toHaveLength(0);
+});
+
+test("agent.timeout (AGNT-04): a NON-timeout failure fires NO agent.timeout notification (don't over-notify)", async () => {
+  const t = setupDriver();
+  // Skills deliberately UNSEEDED → getActiveSkill throws NO_ACTIVE_SKILL: a NON-timeout failure that
+  // reaches the driver's catch the same way. The generic error turn saves; NO notification fires.
+  await t.withIdentity({ subject: "t1" }).action(api.cockpit.sendCockpitMessage, {
+    text: "draft something",
+  });
+
+  const notifs = await t.run((ctx) => ctx.db.query("notifications").collect());
+  expect(notifs).toHaveLength(0);
+});
+
 test("draftDocument pin: loads the pinned drafter version, fails closed on a missing one", async () => {
   const { t } = await setup(); // seedSkills → document-drafter v1 ACTIVE
   const args = {
