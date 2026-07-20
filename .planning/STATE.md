@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-07-20T23:08:24.436Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-07-20T23:22:56.043Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 15
   total_plans: 124
-  completed_plans: 115
+  completed_plans: 116
 ---
 
 ---
@@ -559,6 +559,7 @@ Progress: [█████████░] 94%
 | Phase 06 P06 | 21min | 4 tasks | 12 files |
 | Phase 06 P07 | 15min | 3 tasks | 12 files |
 | Phase 07 P01 | 8min | 3 tasks | 12 files |
+| Phase 07-resilience-operations-hardening P02 | 9min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -694,6 +695,7 @@ Recent decisions affecting current work:
 - [Phase 07]: [Phase 07]: WORM NDJSON serialization recursively key-sorts so a re-exported window is byte-identical → idempotent PutObject under Object Lock (retention.ts)
 - [Phase 07]: [Phase 07]: notificationMessage(kind) takes NO content parameter — the §4 no-PII-in-notifications firewall is a type-level constraint, not a runtime convention
 - [Phase 07]: [Phase 07]: classifyReviewDecision is the single fail-closed source of truth for both review gates (07-03 pipeline + 07-04 cockpit); regenerate at/over MAX_REGENERATE escalates, never delivers (REVW-02)
+- [Phase 07-resilience-operations-hardening]: 07-02: WORM export is EXPORT ONLY (owner ruling) — real S3 PutObject under COMPLIANCE Object Lock + SHA256, cursor advances only after a durable write; hot audit-table sweep DEFERRED (SC#4 partial)
 
 ### Roadmap Evolution
 
@@ -718,8 +720,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:07:17.893Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-07-20T23:21:44.400Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
