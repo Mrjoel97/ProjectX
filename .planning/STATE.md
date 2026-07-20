@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Completed 06-06-PLAN.md (Live Voice client: /dashboard/voice route + useVoiceSession WebRTC hook + pre-flight + live surface + mic-loss/silence→abnormal-end; VOIC-01/02 client half). NEXT: 06-07 brief review + plan handoff."
-last_updated: "2026-07-19T23:52:11.722Z"
+stopped_at: "Completed 06-07-PLAN.md (post-call brief review/store + VOIC-04 plan handoff via existing cockpit gate + dropped-session AbnormalBriefBanner + offline e2e). NEXT: 06-08 phase close / live human-verify."
+last_updated: "2026-07-20T00:18:55.371Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 14
   total_plans: 118
-  completed_plans: 112
+  completed_plans: 113
 ---
 
 ---
@@ -557,6 +557,7 @@ Progress: [█████████░] 94%
 | Phase 06 P04 | 14 | 1 tasks | 4 files |
 | Phase 06 P05 | 15min | 3 tasks | 4 files |
 | Phase 06 P06 | 21min | 4 tasks | 12 files |
+| Phase 06 P07 | 15min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -688,6 +689,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-01: @pikar/voice foundation — Realtime API shapes pinned in realtime.ts (gpt-realtime-2.1, semantic_vad, response.done usage fields) from RESEARCH-cited live docs with a re-fetch ponytail; buildBriefMarkdown (fixed sections, empty→None, transcript welded in code), session FSM (capEndsAt/CAP_MS, active→ended_clean/abnormal, no wrapping state), accumulateUsage, and fail-closed priceRealtime in @pikar/cost. voice.md playbook + watch.json cover all future voice paths. Flag: plan 03/04 must re-confirm mint/handshake/hangup JSON against a live 200.
 - [Phase 06]: 06-04: draftVoiceBrief is a toolless generateObject clone of digestInbox — fail-closed voice-brief load, SMOKE offline seam, DEFAULT→CHEAP both metered, transcript code-welded via buildBriefMarkdown
 - [Phase 06]: 06-06: voice.abortSession is the thin client gateway to the internal forceEndSession abnormal path (browser can't call internalAction)
+- [Phase 06]: 06-07: brief->plan handoff reuses cockpit sendCockpitMessage entirely (no new pipeline/gate); clean-end brief composed client-side (no model call); dropped-vs-reviewed distinguished by a localStorage seen-set (no new backend query)
 
 ### Roadmap Evolution
 
@@ -712,8 +714,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-19T23:52:02.264Z
-Stopped at: Completed 06-06-PLAN.md (Live Voice client: /dashboard/voice route + useVoiceSession WebRTC hook + pre-flight + live surface + mic-loss/silence→abnormal-end; VOIC-01/02 client half). NEXT: 06-07 brief review + plan handoff.
+Last session: 2026-07-20T00:18:55.355Z
+Stopped at: Completed 06-07-PLAN.md (post-call brief review/store + VOIC-04 plan handoff via existing cockpit gate + dropped-session AbnormalBriefBanner + offline e2e). NEXT: 06-08 phase close / live human-verify.
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

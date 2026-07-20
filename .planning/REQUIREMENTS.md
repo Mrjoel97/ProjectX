@@ -68,7 +68,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **VOIC-01**: User can hold a live bidirectional voice conversation with the Executive Agent (WebRTC realtime) with an End-session button
 - [x] **VOIC-02**: A server-side watchdog hard-caps sessions at 15 minutes and terminates cleanly
 - [x] **VOIC-03**: Ended sessions are transcribed into a detailed structured markdown brief, stored and indexed in the knowledge vault
-- [ ] **VOIC-04**: At session end, the agent asks permission to convert the brief into a step-by-step plan; approved plans enter the normal request pipeline (with the review gate)
+- [x] **VOIC-04**: At session end, the agent asks permission to convert the brief into a step-by-step plan; approved plans enter the normal request pipeline (with the review gate)
 
 ### Self-Improvement
 
@@ -174,7 +174,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
 | VOIC-02 | Phase 6 | Complete (server engine unit-verified 06-05: watchdog cap + clean/abnormal CAS + fail-closed metering; live 15:00 hangup at phase-gate human-verify) |
 | VOIC-03 | Phase 6 | Complete (server engine unit-verified 06-05: brief → vault ingest, refs-only session audit; live round-trip at phase-gate human-verify) |
-| VOIC-04 | Phase 6 | Pending |
+| VOIC-04 | Phase 6 | Complete |
 | IMPR-01 | Phase 8 | Pending |
 | IMPR-02 | Phase 8 | Pending |
 | IMPR-03 | Phase 8 | Pending |
