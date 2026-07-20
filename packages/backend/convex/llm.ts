@@ -1121,13 +1121,17 @@ export function buildCockpitTools(
         if (hasPersonalization && plan.mode === "group")
           return "Cannot propose yet — this plan tailors wording per recipient, which requires individual sends (a group send is one combined email). Switch the mode to individual, then propose.";
         // Structural facts come from the ROW, never from model args (DECISION #2).
-        await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
+        const result = await ctx.runMutation(internal.cockpit.proposeEmailPlan, {
           planId,
           recipients,
           mode: recipients.length > 1 ? (plan.mode ?? "individual") : "individual",
           subject: plan.subject,
           body: plan.body,
         });
+        // REVW-02: past the revise cap the gate escalated instead of re-proposing (fail-closed,
+        // bounded). Tell the user plainly — the plan can no longer be re-proposed OR approved.
+        if (result?.escalated)
+          return "This plan has been revised too many times, so I've escalated it for review — I can't keep redrafting or send it. Please start a new plan if you still need changes.";
         return "Plan proposed — the user can now review and Approve it.";
       },
     }),

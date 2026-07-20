@@ -540,3 +540,84 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
     }
   });
 });
+
+// ── 07-04: REVW-02 (cockpit) — the LIVE gate is bounded and fails closed ───────────────────────
+// proposeEmailPlan counts each redraft (re-propose of an already-proposed plan) on plans.reviseCount
+// via the SAME @pikar/core classifyReviewDecision the pipeline gate uses (07-03); past MAX_REGENERATE
+// it marks the plan `escalated` + notifies retry.limit and STOPS re-proposing. executePlan then
+// refuses an escalated plan (review_escalated) — the cockpit mirror of the unapproved-send guard.
+describe("cockpit revise cap (REVW-02 — bounded, fail-closed live gate)", () => {
+  const proposeArgs = (planId: Id<"plans">) => ({
+    planId,
+    recipients: ["a@example.com"],
+    mode: "individual" as const,
+    subject: "Q3 update",
+    body: "Here is the Q3 update.",
+  });
+
+  test("re-proposing past MAX_REGENERATE (3) escalates + notifies retry.limit; status is not advanced and content is not re-proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t, "proposed"); // an already-proposed plan → every call is a redraft
+
+    // Three redrafts stay within the cap (reviseCount climbs 1 → 2 → 3), still proposed.
+    for (let i = 1; i <= 3; i++) {
+      await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+      const p = await t.run((ctx) => ctx.db.get(planId));
+      expect(p?.reviseCount).toBe(i);
+      expect(p?.escalated).toBeFalsy();
+      expect(p?.status).toBe("proposed");
+    }
+
+    // The FOURTH redraft breaches the cap → escalate (fail closed), notify, do NOT re-propose.
+    const escalated = await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+    expect(escalated).toEqual({ escalated: true });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.escalated).toBe(true);
+    expect(plan?.reviseCount).toBe(3); // not advanced past the cap on the escalate call
+    expect(plan?.status).toBe("proposed"); // never advanced to approved/delivering
+
+    const notifs = await t.run((ctx) =>
+      ctx.db.query("notifications").filter((q) => q.eq(q.field("kind"), "retry.limit")).collect(),
+    );
+    expect(notifs).toHaveLength(1); // exactly one retry.limit — the breach notified once
+    expect(notifs[0]!.tenantId).toBe(TENANT);
+  });
+
+  test("first propose of a not-yet-proposed plan is not a redraft (reviseCount stays 0, not escalated)", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t, "collecting");
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.reviseCount ?? 0).toBe(0);
+    expect(plan?.escalated).toBeFalsy();
+  });
+
+  test("executePlan refuses an escalated plan (review_escalated): no CAS flip, no requests seeded, no workflow", async () => {
+    const t = withDelivery();
+    await seedMailbox(t); // present so the refusal is specifically review_escalated, not gmail_not_connected
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_1",
+        status: "proposed",
+        recipients: ["a@example.com", "b@example.com"],
+        mode: "individual",
+        subject: "Q3 update",
+        body: "Here is the Q3 update.",
+        escalated: true, // the fail-closed terminal flag proposeEmailPlan set at the cap
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    expect(res).toEqual({ ok: false, reason: "review_escalated" });
+
+    // Fail-before-mutate: status stays proposed, NO rows seeded, NO workflow started.
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+});

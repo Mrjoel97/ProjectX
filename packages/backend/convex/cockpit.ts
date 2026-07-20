@@ -378,8 +378,42 @@ export const proposeEmailPlan = internalMutation({
     subject: v.string(),
     body: v.string(),
   },
-  handler: async (ctx, { planId, recipients, mode, subject, body }) => {
+  handler: async (
+    ctx,
+    { planId, recipients, mode, subject, body },
+  ): Promise<{ escalated: true } | undefined> => {
+    const plan = await ctx.db.get(planId);
+    // REVW-02 (cockpit): a RE-propose of an ALREADY-proposed plan is the live gate's "regenerate"
+    // (the agent redrafting a proposed plan on a further user edit). Route it through the SAME
+    // @pikar/core classifier the pipeline gate uses (07-03) so the "regenerate past the cap = an
+    // unapproved send" fix lives in ONE place (CLAUDE.md §8). A FIRST propose (status not yet
+    // "proposed") is never a redraft — it proposes unconditionally, leaving reviseCount at 0.
+    if (plan?.status === "proposed") {
+      const regenerateCount = plan.reviseCount ?? 0;
+      const decision = classifyReviewDecision({ decision: "regenerate", regenerateCount });
+      if (decision.action === "escalate") {
+        // Past MAX_REGENERATE: FAIL CLOSED. Mark the plan escalated + notify retry.limit and do NOT
+        // re-propose (bounded, never an unbounded redraft loop). executePlan then refuses it entirely.
+        await ctx.db.patch(planId, { escalated: true });
+        await ctx.runMutation(internal.notifications.notify, {
+          tenantId: plan.tenantId,
+          kind: "retry.limit",
+          message: notificationMessage("retry.limit"),
+        });
+        return { escalated: true };
+      }
+      await ctx.db.patch(planId, {
+        recipients,
+        mode,
+        subject,
+        body,
+        status: "proposed",
+        reviseCount: regenerateCount + 1,
+      });
+      return undefined;
+    }
     await ctx.db.patch(planId, { recipients, mode, subject, body, status: "proposed" });
+    return undefined;
   },
 });
 
@@ -449,13 +483,18 @@ export const executePlan = tenantMutation({
     { planId },
   ): Promise<
     | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
-    | { ok: false; reason: "gmail_not_connected" | "send_time_too_far" }
+    | { ok: false; reason: "gmail_not_connected" | "send_time_too_far" | "review_escalated" }
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
     // Idempotent no-op (double-approve): only "proposed" proceeds. Convex mutations are
     // serializable, so of two concurrent approves exactly one flips the status and seeds/starts.
     if (plan.status !== "proposed") return { ok: true, alreadyStarted: true };
+
+    // REVW-02 fail-closed: a plan escalated past MAX_REGENERATE (proposeEmailPlan) can NEVER be
+    // approved/sent — the cockpit mirror of the pipeline unapproved-send guard (07-03). Sibling early
+    // guard BEFORE the CAS flip / seed / start, so an escalated plan seeds no rows, starts no workflow.
+    if (plan.escalated) return { ok: false, reason: "review_escalated" };
 
     // No mailbox → no send (design: stop before any delivery). Reuse the existing token reader;
     // the row is checked for existence ONLY and never logged (crown jewels — CLAUDE.md §4).
