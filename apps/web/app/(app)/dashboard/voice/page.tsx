@@ -1,6 +1,7 @@
 "use client";
 
 import { LiveSession } from "./LiveSession";
+import { PostCall } from "./PostCall";
 import { PreFlight } from "./PreFlight";
 import { useVoiceSession } from "./useVoiceSession";
 
@@ -9,11 +10,10 @@ import { useVoiceSession } from "./useVoiceSession";
 // survives the pre-flight → live transition. Phase is derived from the hook's status (one source of
 // truth), never a second piece of state that could drift.
 //
-// Post-call (the brief review + "turn into a plan?" handoff) is Plan 07 — this leaves a clean seam:
-// when status is "ended" we render a placeholder carrying the sessionId + transcript Plan 07 fills.
-//
-// Task 1 ships the state machine with inline placeholders; Task 2 slots in <PreFlight>, Task 3
-// <LiveSession>. BRAND tokens only, no component library (§10).
+// Post-call (Plan 07): when status is "ended" — a clean End here, or an on-page abnormal
+// fall-through — <PostCall> reviews/stores the brief and offers the plan handoff. A session dropped
+// on a CLOSED tab is surfaced instead by <AbnormalBriefBanner> (app shell) on next open. BRAND
+// tokens only, no component library (§10).
 
 export default function VoicePage() {
   const voice = useVoiceSession();
@@ -37,12 +37,7 @@ export default function VoicePage() {
 
       {phase === "live" && <LiveSession session={voice} />}
 
-      {phase === "postcall" && (
-        // Plan-07 seam: the brief review + plan handoff mount here with voice.sessionId + transcript.
-        <section style={{ display: "grid", gap: "0.5rem", justifyItems: "center", textAlign: "center" }}>
-          <p style={{ margin: 0, color: "var(--ink-soft)" }}>Session ended. Your brief is on its way.</p>
-        </section>
-      )}
+      {phase === "postcall" && <PostCall session={voice} />}
     </div>
   );
 }

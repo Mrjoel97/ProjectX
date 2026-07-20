@@ -182,10 +182,15 @@ export const endSessionClean = tenantMutation({
     const s = await ctx.db.get(sessionId);
     if (!s || s.tenantId !== ctx.tenantId) throw new Error("voice: session not found"); // no cross-tenant
     const ended = await ctx.runMutation(internal.voice.markEndedClean, { sessionId });
-    if (!ended) return { ok: true, alreadyEnded: true }; // watchdog already fired
+    // Store the reviewed brief EVEN WHEN the CAS already flipped the session: the client calls End
+    // (flips ended_clean + cancels the watchdog promptly, so no abnormal fire during review), THEN
+    // the post-call review screen stores the edited markdown — that second call's markEndedClean
+    // no-ops, but the brief must still persist. persistBrief is idempotent on briefRef, so a race
+    // with the watchdog's auto-store never double-writes. A bare end (no markdown) keeps the original
+    // CAS no-op — nothing to store — which the "clean end after abnormal" test still asserts.
     if (editedMarkdown)
       await ctx.runMutation(internal.voice.persistBrief, { sessionId, markdown: editedMarkdown });
-    return { ok: true };
+    return ended ? { ok: true } : { ok: true, alreadyEnded: true };
   },
 });
 
