@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Phase 8 context gathered
-last_updated: "2026-07-21T14:38:24.712Z"
-last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-07-21T15:27:29.173Z"
+last_activity: "2026-07-21 — Phase 8 Self-Improvement, Wave 1: 08-01 executed — the schema substrate + kill switch. schema.ts (single-owner this phase) got FOUR additive pieces in one edit: (1) `feedback` table — tenant-owned, keyed to requestId + skillName('cockpit-agent')/skillVersion, up/down rating + optional comment; by_tenant_request (one editable row per tenant+request, the mis-tap-undo) + by_skill (eligibility rolls the negative-rate over this); comment carries a ponytail: note that it is CONTENT-PLANE (raw at rest on the tenant row like requests.goal, PII-scrubbed at the export boundary in Plan 04, NEVER audit/DLQ §4). (2) plans.skillVersion + (3) requests.skillVersion — optional attribution fields (no migration; the sendAt/threadId precedent) so a rating attributes to the exact skill version that produced the response (set at propose in Plan 02, copied plan→requests at executePlan). (4) `optimizerConfig` single-row table (kill switch + tunable thresholds). New optimizerConfig.ts MIRRORS guardrails.ts verbatim: exported DEFAULT_OPTIMIZER_CONFIG { enabled:false, negativeRateThreshold:0.30, minSampleFloor:20, cooldownMs:604800000 } (Plan 03 eligibility + Plan 07 CI read the same floor), getOptimizerConfig internalQuery (first() ?? DEFAULT — DORMANT default-on-read), setOptimizerConfig internalMutation (partial-arg upsert: drops undefined args so a CI lastRunAt-only write never clobbers a set field, patches the one row or inserts DEFAULT⊕args, always stamps updatedAt). THE OPTIMIZER SHIPS DORMANT — a missing/false row reads enabled=false (the CONTEXT lock). TDD on Task 2: RED (04dd3bb, 4 failing — module missing) → GREEN (ce07b79, 4/4 pass), no refactor. Commits e486749 (T1 schema), 04dd3bb (T2 RED), ce07b79 (T2 GREEN). NO deviations. VERIFIED: pnpm --filter @pikar/backend test optimizerConfig 4/4 green (default-off-on-read, enable-keeps-defaults, single-row upsert after two writes, lastRunAt anchor without enabling); backend SOURCE tsc clean — the four additions compile, the sole non-test error convex/lib/functions.ts(25,3) TS2322 is PRE-EXISTING (verified by stashing schema.ts — the error stands alone; logged to deferred-items.md, out of scope). Playbook/watch.json updates for ALL of Phase 8 are centralized in Plan 08-08 (deliberately untouched — the check-playbooks hook self-clears on the second stop). NEXT: 08-02 (feedback capture mutation + set plans.skillVersion at propose, copy to requests at executePlan)."
 progress:
   total_phases: 21
   completed_phases: 16
-  total_plans: 124
-  completed_plans: 120
+  total_plans: 132
+  completed_plans: 121
 ---
 
 ---
@@ -592,6 +592,7 @@ Progress: [█████████░] 94%
 | Phase 07-resilience-operations-hardening P02 | 9min | 3 tasks | 5 files |
 | Phase 07 P05 | 17 | 3 tasks | 10 files |
 | Phase 07-resilience-operations-hardening P04 | 15 | 3 tasks | 6 files |
+| Phase 08 P01 | 15 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -729,6 +730,7 @@ Recent decisions affecting current work:
 - [Phase 07]: [Phase 07]: classifyReviewDecision is the single fail-closed source of truth for both review gates (07-03 pipeline + 07-04 cockpit); regenerate at/over MAX_REGENERATE escalates, never delivers (REVW-02)
 - [Phase 07-resilience-operations-hardening]: 07-02: WORM export is EXPORT ONLY (owner ruling) — real S3 PutObject under COMPLIANCE Object Lock + SHA256, cursor advances only after a durable write; hot audit-table sweep DEFERRED (SC#4 partial)
 - [Phase 07]: OPSG-05 notify choke point: in-app insert then best-effort fail-closed loop-guarded external email (send-to-self via governed Gmail seam)
+- [Phase 08]: Optimizer ships DORMANT: optimizerConfig.enabled defaults false (missing row reads enabled=false)
 
 ### Roadmap Evolution
 
@@ -753,9 +755,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-21T14:38:24.691Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-self-improvement/08-CONTEXT.md
+Last session: 2026-07-21T15:27:17.530Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
