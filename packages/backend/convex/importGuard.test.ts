@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { RAW_BUILDER_ALLOWLIST } from "./lib/allowlist";
+import { stableTenant } from "./lib/functions";
 
 // Static scan: read every convex source at build time. edge-runtime has no node:fs,
 // so we inline file contents via Vite's import.meta.glob raw loader instead.
@@ -38,4 +39,20 @@ describe("import guard: raw builders are scoped-unavoidable (SC-2)", () => {
       expect(BANNED.test(content)).toBe(false);
     });
   }
+});
+
+// tenantId must be stable per USER across login sessions. Convex Auth's
+// identity.subject is `<userId>|<sessionId>`; stableTenant takes the userId
+// segment. Regression guard for the per-session-scoping bug (see spec
+// 2026-07-21-tenant-scope-per-session-fix-design).
+describe("stableTenant: per-user scope, not per-session", () => {
+  test("strips the |sessionId suffix", () => {
+    expect(stableTenant("user123|sess456")).toBe("user123");
+  });
+  test("subject with no pipe is returned unchanged", () => {
+    expect(stableTenant("user123")).toBe("user123");
+  });
+  test("only the first segment is the userId", () => {
+    expect(stableTenant("user123|s1|s2")).toBe("user123");
+  });
 });

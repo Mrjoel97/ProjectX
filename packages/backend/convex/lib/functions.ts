@@ -15,14 +15,24 @@ import {
 import { action, mutation, query } from "../_generated/server";
 
 /**
+ * Derive the stable per-user tenant id from a Convex Auth subject.
+ * `identity.subject` is `<userId>|<sessionId>` — we take the userId segment so a
+ * given user gets the SAME tenantId across login sessions (a new session must not
+ * mint a new tenant). A subject with no `|` returns unchanged (shape may vary by
+ * provider); only the first segment is ever the userId, so extra pipes are ignored.
+ */
+export function stableTenant(subject: string): string {
+  return subject.split("|")[0];
+}
+
+/**
  * Resolve the tenant scope from the authenticated identity. Fails closed:
  * an unauthenticated call throws UNAUTHENTICATED before any handler runs.
- * tenantId === identity.subject (userId) for the single-owner beta.
  */
 async function requireTenant(ctx: { auth: { getUserIdentity: () => Promise<unknown> } }) {
   const identity = (await ctx.auth.getUserIdentity()) as { subject?: string } | null;
   if (!identity) throw new Error("UNAUTHENTICATED");
-  return identity.subject as string;
+  return stableTenant(identity.subject as string);
 }
 
 /** Tenant-scoped query builder. ctx gains `tenantId`. */
