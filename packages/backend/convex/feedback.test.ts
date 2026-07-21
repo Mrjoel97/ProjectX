@@ -3,7 +3,7 @@
 // (a mis-tap can't poison the signal); undo deletes it (fully reversible). A request with no
 // resolvable skillVersion is rejected (unattributable feedback is never stored — the Pitfall-1
 // warning sign), and a cross-tenant requestId is "not found" (the tenant guard).
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts";
+import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
