@@ -134,6 +134,10 @@ export default defineSchema({
     threadId: v.optional(v.string()),
     inReplyTo: v.optional(v.string()),
     references: v.optional(v.string()),
+    // Skill-version attribution (08 IMPR-02). Copied from the plan at executePlan so a
+    // feedback rating is attributable to the exact skill version that produced this response.
+    // Optional → no migration (the threadId/inReplyTo copy precedent).
+    skillVersion: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
@@ -234,6 +238,10 @@ export default defineSchema({
     // → existing rows need no backfill (append-only discipline, like sendAt/attachments).
     reviseCount: v.optional(v.number()),
     escalated: v.optional(v.boolean()),
+    // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
+    // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
+    // executePlan. Optional → no migration (the sendAt/attachments precedent).
+    skillVersion: v.optional(v.number()),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
@@ -556,4 +564,39 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"]) // browse
     // getActiveSession's parallel-session guard reads the single active row for a tenant.
     .index("by_tenant_status", ["tenantId", "status"]),
+
+  // ── Phase-8 self-improvement plane (IMPR-01/02) ────────────────────────────
+  // New tables + optional fields only → no migration (prior-phase discipline).
+
+  // User feedback on a delivered response (IMPR-01). Tenant-owned, keyed to the
+  // originating request and — through request.skillVersion — to the exact skill version
+  // that produced it, so a rating becomes a rollout score for SkillOpt later.
+  feedback: defineTable({
+    tenantId: v.string(),
+    requestId: v.id("requests"),
+    skillName: v.string(), // "cockpit-agent" — the gated skill that produced the response
+    skillVersion: v.number(), // resolved from request.skillVersion at write
+    rating: v.union(v.literal("up"), v.literal("down")),
+    // ponytail: raw comment text is CONTENT-PLANE — it lives at rest on this tenant-owned row
+    // (like requests.goal), and is PII-SCRUBBED at the export boundary (Plan 04) before it ever
+    // leaves the system. It is NEVER written to an audit/DLQ payload (CLAUDE.md §4 spirit).
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
+    .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
+
+  // The optimizer kill switch + tunable thresholds (IMPR-02). SINGLE row, upserted by
+  // optimizerConfig.setOptimizerConfig; read with .first() (≤1 row — no index needed).
+  // Default-on-read: a missing/false row means the optimizer ships DORMANT (enabled=false,
+  // zero seed, no migration — the guardrailConfig precedent).
+  optimizerConfig: defineTable({
+    enabled: v.boolean(), // DORMANT default via default-on-read (Plan default false)
+    negativeRateThreshold: v.number(), // starting value: 0.30
+    minSampleFloor: v.number(), // 20 — one bad rating can't trigger
+    cooldownMs: v.number(), // 604800000 (7d)
+    lastRunAt: v.optional(v.number()), // cooldown anchor, set by the CI job / dry-run
+    updatedAt: v.number(),
+  }),
 });
