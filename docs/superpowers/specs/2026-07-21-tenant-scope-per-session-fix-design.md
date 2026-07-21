@@ -80,17 +80,28 @@ non-tenant tables). A cleanup can be done later if the dead rows ever matter.
 This is the tenant-isolation security path, so the change leaves one runnable check
 (ponytail discipline — security paths always keep a check).
 
-Add assertions for the derivation to the **existing** wrapper/import-guard test that
-already covers `functions.ts` (no new file — a new uncovered file under `packages/` would
-trip the CLAUDE.md §9 Stop hook). The check asserts:
+Make the derivation testable: extract a tiny pure exported helper
+`stableTenant(subject: string)` in `functions.ts` and call it inside `requireTenant`.
+Assert three cases:
 
 - `"u|s"` → `"u"`
 - `"u"` → `"u"`
 - `"u|s1|s2"` → `"u"`
 
-If the derivation is inlined and not separately importable, extract a tiny pure helper
-(e.g. `stableTenant(subject: string)`) in `functions.ts`, use it inside `requireTenant`,
-and assert against the helper. Prefer the smallest change that makes the logic testable.
+**Where the assertions live.** There is no existing unit test of `requireTenant`'s logic —
+`importGuard.test.ts` is a static import-scan that explicitly *exempts* `functions.ts`
+(`importGuard.test.ts:27`), so it does not cover this. Two options, pick the lazier that
+keeps the suite honest:
+
+- **Preferred:** add a small `describe("stableTenant")` runtime-assert block to the existing
+  `importGuard.test.ts` (imports `stableTenant`, three `expect`s). No new file, so the
+  CLAUDE.md §9 "new uncovered file under `packages/`" Stop hook does not fire. The file
+  already carries tenant-scoping invariants (SC-2), so a tenant-derivation check is a
+  reasonable neighbour.
+- **Alternative:** add a dedicated `convex/functions.test.ts`. This is a *new* file under
+  `packages/` and will trip the §9 hook unless its path is registered in
+  `docs/playbooks/watch.json` (or acknowledged under `_unassigned`). Only take this if the
+  dedicated file is judged worth the registration step.
 
 ## Manual verification
 
@@ -102,7 +113,7 @@ and assert against the helper. Prefer the smallest change that makes the logic t
 ## Definition of done
 
 - `requireTenant` returns the stable userId; comment corrected.
-- Derivation check added to the existing wrapper test; test suite green.
+- `stableTenant` derivation check added (see Testing); test suite green.
 - `pnpm typecheck` passes.
 - Manual verification above performed once against the live deployment.
 - Memory `tenant-scope-is-per-session` updated to reflect the fix (or the note that it's
