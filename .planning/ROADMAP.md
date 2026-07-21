@@ -405,7 +405,15 @@ Plans:
   1. User can rate and comment on delivered responses, and the feedback is captured against the originating request.
   2. A feedback threshold breach triggers the autonomous prompt-optimization loop, gated by automated eval checks (held-out set the optimizer never sees), with a one-click rollback and a kill switch.
   3. Prompts are versioned; every optimization records the before/after versions and the triggering evidence.
-**Plans**: TBD
+**Plans**: 8 plans in 6 waves
+- [ ] 08-01-PLAN.md — Schema substrate (feedback table, plans/requests.skillVersion, optimizerConfig) + kill-switch config (Wave 1)
+- [ ] 08-02-PLAN.md — Feedback capture mutation + skill-version attribution at propose/executePlan (Wave 2)
+- [ ] 08-03-PLAN.md — Threshold-breach eligibility: pure classifier + optimizerEligibility query (Wave 2)
+- [ ] 08-04-PLAN.md — PII-scrubbed trajectory export endpoint (fail-closed) (Wave 3)
+- [ ] 08-05-PLAN.md — Candidate write-back through the eval gate + IMPR-03 audit + owner notification (Wave 4)
+- [ ] 08-06-PLAN.md — Feedback UI on delivered ReportCard + ops kill-switch/activate panel (Wave 5)
+- [ ] 08-07-PLAN.md — SkillOpt Python env package + dormant GitHub Actions batch runner (Wave 5)
+- [ ] 08-08-PLAN.md — Manual cockpit-agent dry-run (proof-of-life) + playbook/watch + phase close (Wave 6)
 
 ### Phase 9: Private Beta Productionization
 **Goal**: Invited users beyond the owner can sign up, stay fully isolated from each other, onboard fast to a first delivered result, and deliver via either email provider â the week-4 definition of "production" (not billing/public launch).
@@ -441,5 +449,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
-| 8. Self-Improvement | 0/TBD | Not started | - |
+| 8. Self-Improvement | 0/8 | Planned | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
