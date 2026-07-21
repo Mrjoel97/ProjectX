@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Attachment & Voice-Dictation Intake** - Attachments classified/OCR'd/transcribed and voice dictation, both into the pipeline (6/6 plans; SC3 live human-verify APPROVED 2026-07-15 — attach + dictate → delivered email reflected the content, guardrails intact)
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [x] **Phase 6: Live Voice Sessions** (VOIC-01..04 live human-verified 2026-07-21) - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
-- [x] **Phase 7: Resilience & Operations Hardening** (AGNT-04/REVW-02/REVW-03/OPSG-03/OPSG-05; code verified + live smokes green 2026-07-21, real-S3 Object-Lock + real-email owner-deferred manual checks) - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
+- [x] **Phase 7: Resilience & Operations Hardening** (AGNT-04/REVW-02/REVW-03/OPSG-03/OPSG-05; owner-approved 2026-07-21 — live smokes green + OPSG-05 email & in-app matrix owner live-verified; real-S3 Object-Lock durability owner-deferred) - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
 - [ ] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch
 - [ ] **Phase 9: Private Beta Productionization** - Invite-only signup, verified per-user isolation, guided onboarding, Microsoft Graph as second provider
 
@@ -440,6 +440,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
-| 7. Resilience & Operations Hardening | 6/6 | Complete (code verified + smokes green; real-S3/email owner-deferred) | 2026-07-21 |
+| 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
 | 8. Self-Improvement | 0/TBD | Not started | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
