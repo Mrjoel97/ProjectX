@@ -1,22 +1,25 @@
 ---
 phase: 07-resilience-operations-hardening
 verified: 2026-07-21T03:50:00Z
-status: human_needed
-score: 4/4 must-haves verified (code); 2 items owner-deferred pending cloud infra (Manual-Only, not gaps)
+status: passed
+score: 4/4 must-haves verified (code); OPSG-05 both channels owner live-verified 2026-07-21; 1 item (real S3 durability) owner-deferred pending AWS infra (Manual-Only, not a gap)
+owner_signoff: "2026-07-21 — owner live-verified the OPSG-05 matrix end-to-end and typed 'I approve, I've seen it myself.' (1) External email: a real `Pikar: review.expired` message delivered to the owner's live mailbox. (2) In-app: the NotificationsBanner render surface (added this session as gap-closure — the general matrix had no frontend surface, a live human-verify finding) shown rendering `agent.timeout` at the top of the app shell with a working Dismiss/markRead, confirmed against a production build (the local Next dev server was serving a stale bundle — an env artifact, not a code defect). Remaining deferred: real S3 Object-Lock durability only (owner does the AWS bucket later; the export code + stub-skip are proven)."
 human_verification:
   - test: "Real WORM object lands in S3 with checksum + retention under COMPLIANCE Object Lock"
+    status: deferred
     expected: "One S3 object shows ObjectLockMode=COMPLIANCE, a RetainUntilDate ~7 years out, a SHA256 checksum, and a delete/overwrite attempt is refused by the bucket"
-    why_human: "Needs a real AWS Object-Lock-enabled S3 bucket + credentials provisioned in the Convex deployment env — no unit/smoke test can prove real S3 durability. The export code path (PutObject call, checksum header, retention pairing, advance-only-after-durable-write) is unit-proven in worm.test.ts and live-smoke-proven on the stub-skip branch (smoke:worm PASS against :3210 with WORM_BUCKET unset)."
+    why_human: "Needs a real AWS Object-Lock-enabled S3 bucket + credentials provisioned in the Convex deployment env — no unit/smoke test can prove real S3 durability. The export code path (PutObject call, checksum header, retention pairing, advance-only-after-durable-write) is unit-proven in worm.test.ts and live-smoke-proven on the stub-skip branch (smoke:worm PASS against :3210 with WORM_BUCKET unset). OWNER-DEFERRED pending AWS provisioning (owner chose email-check-first this session)."
   - test: "A real external email is delivered to a live mailbox for each failure class"
+    status: verified
     expected: "One in-app notification AND one external email land per event (validation reject, escalation, retry breach, review timeout, agent timeout, dead-letter); a FAILED external send does not recursively notify"
-    why_human: "Needs a Gmail OAuth-connected user (a live token) to observe real deliverability — no unit test can prove an email actually arrives. The notify choke point, external dispatch, and the loop-guard (fail-closed to in-app, swallow-all try/catch, never re-notifies) are unit-proven (notifications.test.ts, llmRedaction.test.ts §4 scans) and smoke-proven end-to-end for the DLQ path (smoke:dlq PASS: deadLetters row + deadletter.written audit + deadletter notify)."
+    result: "VERIFIED 2026-07-21 — owner received a real `Pikar: review.expired` email at their live mailbox; the in-app NotificationsBanner rendered `agent.timeout` (owner saw it), confirmed on a production build. The notify choke point, external dispatch, and loop-guard remain unit- + smoke-proven (notifications.test.ts, llmRedaction.test.ts §4 scans, smoke:dlq PASS)."
 ---
 
 # Phase 7: Resilience & Operations Hardening Verification Report
 
 **Phase Goal:** Every failure path — agent/review timeouts, retry-threshold breaches, dead-letters — is caught, notified, escalated, and archived immutably.
 **Verified:** 2026-07-21T03:50:00Z
-**Status:** human_needed (all code must-haves verified against source; two cloud-infra-only checks are owner-deferred Manual-Only per 07-CONTEXT/07-VALIDATION/07-06-SUMMARY — not silent gaps)
+**Status:** passed (all code must-haves verified against source; OPSG-05 both channels owner live-verified 2026-07-21 incl. the gap-closure in-app render surface; real S3 Object-Lock durability remains owner-deferred Manual-Only pending AWS provisioning — not a silent gap)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
