@@ -391,11 +391,11 @@ Plans:
 
 Plans:
 - [x] 07-01-PLAN.md — Wave-0 foundation: pure @pikar/core modules (retention/serialize, review-threshold, notification templates) + @aws-sdk/client-s3 + schema by_ts index + plan counter fields (Wave 1) — completed 2026-07-21 (145/145 core green; OPSG-03/REVW-02/OPSG-05 primitives)
-- [ ] 07-02-PLAN.md — OPSG-03: real WORM S3 Object Lock export + auditSince by_ts rewrite (export-only; hot-copy sweep deferred) (Wave 2)
-- [ ] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
-- [ ] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)
-- [ ] 07-05-PLAN.md — OPSG-05: notify choke point + best-effort external (email) dispatch + DLQ notification + §4 scan (Wave 3)
-- [ ] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4) — AUTONOMOUS PORTION DONE 2026-07-21 (offline sweep green: core 145/145, backend 398/399 sole documented red, check-playbooks 0; four fail-closed grep-proofs hold; SC#4-partial recorded; commit c7da38b). PAUSED at the blocking Task 2 owner human-verify (live S3 Object-Lock + notification-matrix walk-through) — Phase 7 NOT closed until owner approves.
+- [x] 07-02-PLAN.md — OPSG-03: real WORM S3 Object Lock export + auditSince by_ts rewrite (export-only; hot-copy sweep deferred) (Wave 2)
+- [x] 07-03-PLAN.md — REVW-02/03 workflow path: fail-closed review gate (escalated terminal) + review-timeout notification (Wave 2)
+- [x] 07-04-PLAN.md — AGNT-04 + REVW-02 cockpit path: agent-timeout notification + bounded fail-closed cockpit revise cap (Wave 3)
+- [x] 07-05-PLAN.md — OPSG-05: notify choke point + best-effort external (email) dispatch + DLQ notification + §4 scan (Wave 3)
+- [x] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4) — 6/6 COMPLETE, owner-approved 2026-07-21. Offline sweep green (core 145/145, backend 398/399 sole documented red, check-playbooks 0); four fail-closed grep-proofs hold; runnable live smokes PASSED on :3210 (worm stub, pipeline 3 terminals, dlq); SC#4-partial recorded. Two cloud-infra-only checks (real S3 Object-Lock durability, real external email delivery) owner-DEFERRED as Manual-Only (3.8/6 precedent — not silent gaps). Commits c7da38b, 2ffa989, 02e8c2b. Orchestrator to run gsd-verifier + phase-complete next.
 
 ### Phase 8: Self-Improvement
 **Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop â see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback â sequenced last because the loop is meaningless until review/feedback data has accumulated.
