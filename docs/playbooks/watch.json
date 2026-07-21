@@ -41,7 +41,8 @@
     "packages/core/src/retention.ts",
     "packages/core/src/notificationTemplates.ts",
     "packages/contracts/src/audit.ts",
-    "packages/pii/"
+    "packages/pii/",
+    "apps/web/app/(app)/_components/NotificationsBanner.tsx"
   ],
   "voice.md": [
     "packages/voice/",

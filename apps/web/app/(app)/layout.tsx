@@ -24,6 +24,7 @@ import {
   WalletIcon,
 } from "../(auth)/icons";
 import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
+import { NotificationsBanner } from "./_components/NotificationsBanner";
 import { ReconnectBanner } from "./_components/ReconnectBanner";
 
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
@@ -157,6 +158,9 @@ function Shell({ children }: { children: ReactNode }) {
         {/* A voice session dropped on a closed tab was auto-briefed with no one present to review
             it — surface it here on next app open (VOIC-03, dropped-session half). */}
         <AbnormalBriefBanner />
+        {/* OPSG-05 in-app half: the general failure-notification matrix (timeouts, escalations,
+            retry-limit breaches, dead-letter). gmail_reconnect stays with ReconnectBanner above. */}
+        <NotificationsBanner />
         {/* The cockpit and the vault fuse full-bleed to the rail (no canvas padding — one
             surface, only the work floats); every other page stays cards-on-canvas. */}
         <main
