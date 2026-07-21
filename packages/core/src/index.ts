@@ -5,6 +5,7 @@ export * from "./emailIntent";
 export * from "./fallback";
 export * from "./logger";
 export * from "./notificationTemplates";
+export * from "./optimizerBreach";
 export * from "./result";
 export * from "./retention";
 export * from "./reviewThreshold";
