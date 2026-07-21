@@ -1,7 +1,11 @@
 # Design: Fix per-session tenant scoping
 
 - **Date:** 2026-07-21
-- **Status:** Approved (design), pending implementation
+- **Status:** Implemented and owner-approved (2026-07-21). Fix commit `c79e479`.
+  Code-verified: `importGuard.test.ts` green (3 `stableTenant` asserts), backend
+  running the fixed `requireTenant`. Owner signed off after signing in and
+  re-connecting Gmail against the live local deployment. Cross-login persistence
+  is owner-attested (not machine-replayed in this session).
 - **Subsystem:** tenant-scoping linchpin — `packages/backend/convex/lib/functions.ts`
 - **Related:** CLAUDE.md §2 (multi-tenant isolation), memory `tenant-scope-is-per-session`
 
