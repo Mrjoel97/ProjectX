@@ -7,6 +7,7 @@
 // before workflow.start; the attachment fan-out tests (CKPT-02, Plan 05) DO drive the successful
 // proposed→delivering path by registering the workflow + workflow/workpool components (the same
 // pattern cockpitTools.test.ts uses for the aggregate). smoke:fanout remains the live coverage.
+import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -619,5 +620,66 @@ describe("cockpit revise cap (REVW-02 — bounded, fail-closed live gate)", () =
     // Fail-before-mutate: status stays proposed, NO rows seeded, NO workflow started.
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
     expect(await countRequests(t)).toHaveLength(0);
+  });
+});
+
+// Skill-version attribution (08 IMPR-01): a rating is training signal only if it resolves to the
+// EXACT skill version that produced the response. proposeEmailPlan stamps plan.skillVersion from
+// the active cockpit-agent row; executePlan copies it onto every seeded request row, so feedback
+// (keyed to requestId → request.skillVersion) is attributable.
+describe("skill-version attribution (IMPR-01 — propose stamps, executePlan copies)", () => {
+  /** Seed the active cockpit-agent skill row the propose path reads its version from. */
+  const seedActiveCockpit = (t: ReturnType<typeof convexTest>, version: number) =>
+    t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: COCKPIT_AGENT_SKILL,
+        version,
+        body: "cockpit body",
+        status: "active",
+        createdAt: Date.now(),
+      }),
+    );
+
+  const proposeArgs = (planId: Id<"plans">) => ({
+    planId,
+    recipients: ["a@example.com", "b@example.com"],
+    mode: "individual" as const,
+    subject: "Q3 update",
+    body: "Here is the Q3 update.",
+  });
+
+  test("propose sets plan.skillVersion to the active cockpit-agent version; executePlan copies it to every request row", async () => {
+    const t = withDelivery();
+    await seedActiveCockpit(t, 12);
+    await seedMailbox(t);
+    const planId = await seedPlan(t, "collecting");
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(12);
+
+    const res = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(2);
+    for (const r of reqs) expect(r.skillVersion).toBe(12);
+  });
+
+  test("a re-propose re-attributes to the THEN-active version", async () => {
+    const t = convexTest(schema, modules);
+    await seedActiveCockpit(t, 12);
+    const planId = await seedPlan(t, "proposed"); // already proposed → the call is a redraft
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(12);
+  });
+
+  test("no active cockpit-agent row → propose degrades to unattributable (undefined), never throws", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t, "collecting"); // NO active skill seeded
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed"); // still proposes
+    expect(plan?.skillVersion).toBeUndefined(); // unattributable, but not a failure
   });
 });

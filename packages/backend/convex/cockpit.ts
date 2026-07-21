@@ -17,6 +17,7 @@ import {
   notificationMessage,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
+import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -383,6 +384,18 @@ export const proposeEmailPlan = internalMutation({
     { planId, recipients, mode, subject, body },
   ): Promise<{ escalated: true } | undefined> => {
     const plan = await ctx.db.get(planId);
+    // Skill-version attribution (08 IMPR-01): stamp the plan with the cockpit-agent version that
+    // is drafting it, so a later feedback rating (copied plan→requests at executePlan) resolves to
+    // the EXACT skill version that produced the response. Read the active row directly (this is a
+    // mutation, same db access loadSkill uses) — but NEVER throw: a missing active row (shouldn't
+    // happen post-seed) degrades to unattributable (undefined), it does not break a propose.
+    const activeCockpit = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) =>
+        q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"),
+      )
+      .unique();
+    const skillVersion = activeCockpit?.version;
     // REVW-02 (cockpit): a RE-propose of an ALREADY-proposed plan is the live gate's "regenerate"
     // (the agent redrafting a proposed plan on a further user edit). Route it through the SAME
     // @pikar/core classifier the pipeline gate uses (07-03) so the "regenerate past the cap = an
@@ -402,6 +415,7 @@ export const proposeEmailPlan = internalMutation({
         });
         return { escalated: true };
       }
+      // Re-attribute to the THEN-active version (a redraft may run under a newer cockpit-agent).
       await ctx.db.patch(planId, {
         recipients,
         mode,
@@ -409,10 +423,11 @@ export const proposeEmailPlan = internalMutation({
         body,
         status: "proposed",
         reviseCount: regenerateCount + 1,
+        skillVersion,
       });
       return undefined;
     }
-    await ctx.db.patch(planId, { recipients, mode, subject, body, status: "proposed" });
+    await ctx.db.patch(planId, { recipients, mode, subject, body, status: "proposed", skillVersion });
     return undefined;
   },
 });
@@ -564,6 +579,10 @@ export const executePlan = tenantMutation({
         threadId: plan.replyThreadId,
         inReplyTo: plan.inReplyTo,
         references: plan.references,
+        // Skill-version attribution (08 IMPR-01): carry the plan's cockpit-agent version onto every
+        // seeded row (set at propose) so a feedback rating on this delivered response resolves to the
+        // exact version that produced it. Optional → a plan with no skillVersion copies none.
+        skillVersion: plan.skillVersion,
         planId,
         createdAt: Date.now(),
       });

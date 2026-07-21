@@ -10,24 +10,6 @@ import { v } from "convex/values";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
 /**
- * Load the caller's own delivered request or fail closed. A cross-tenant id reads as "not found"
- * (never leaks another tenant's row); a request with no resolvable skillVersion is unattributable
- * — an unattributable rating is not training signal (RESEARCH Pitfall 1), so we refuse to store it.
- */
-async function requireAttributableRequest(
-  ctx: { db: { get: (id: unknown) => Promise<unknown> }; tenantId: string },
-  requestId: unknown,
-) {
-  const request = (await ctx.db.get(requestId)) as
-    | { tenantId: string; skillVersion?: number }
-    | null;
-  if (!request || request.tenantId !== ctx.tenantId) throw new Error("request not found");
-  if (request.skillVersion === undefined)
-    throw new Error("unattributable: request has no skillVersion (feedback not stored)");
-  return request.skillVersion;
-}
-
-/**
  * Submit OR edit a rating on a delivered response. Upserts the single by_tenant_request row:
  * first tap inserts (attributed to the request's skillVersion + COCKPIT_AGENT_SKILL), a re-tap
  * patches rating/comment/updatedAt on the SAME row (createdAt frozen — a mis-tap fix, not a new
@@ -42,7 +24,14 @@ export const submitFeedback = tenantMutation({
     comment: v.optional(v.string()),
   },
   handler: async (ctx, { requestId, rating, comment }) => {
-    const skillVersion = await requireAttributableRequest(ctx, requestId);
+    // Fail closed: a cross-tenant id reads as "not found" (never leaks another tenant's row); a
+    // request with no resolvable skillVersion is unattributable — an unattributable rating is not
+    // training signal (RESEARCH Pitfall 1), so we refuse to store it.
+    const request = await ctx.db.get(requestId);
+    if (!request || request.tenantId !== ctx.tenantId) throw new Error("request not found");
+    if (request.skillVersion === undefined)
+      throw new Error("unattributable: request has no skillVersion (feedback not stored)");
+    const skillVersion = request.skillVersion;
     const existing = await ctx.db
       .query("feedback")
       .withIndex("by_tenant_request", (q) =>
