@@ -449,5 +449,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
-| 8. Self-Improvement | 0/8 | Planned | - |
+| 8. Self-Improvement | 1/8 | In Progress | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
