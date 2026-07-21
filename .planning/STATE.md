@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "Phase 7 (Resilience & Operations Hardening) COMPLETE + OWNER-APPROVED (6/6 plans, VERIFICATION passed). NEXT: /gsd:plan-phase 8 (Self-Improvement — unplanned)."
-last_updated: "2026-07-21T04:30:00.000Z"
-last_activity: "2026-07-21 — Phase 7 CLOSED + owner-approved ('I approve, I've seen it myself'). Executed all 6 plans (waves 1-4) — pure @pikar/core hardening primitives (07-01), real S3 WORM export (07-02), the REVW-02 unapproved-send fix routing a past-cap regenerate to an `escalated` terminal on BOTH the durable workflow (07-03) and the live cockpit (07-04), the OPSG-05 notify choke point + external email dispatch + DLQ notify (07-05), phase close (07-06). LIVE-VERIFIED by me against :3210: smoke:worm (stub-skip), smoke:pipeline (approve→deliver, timeout→expired, breach→escalated, NO send), smoke:dlq (deadletter row+audit+notify). OWNER live-verified the OPSG-05 matrix: a real `Pikar: review.expired` email landed in their mailbox AND — after a live human-verify surfaced that the in-app notifications had NO general render surface (only ReconnectBanner's narrow gmail_reconnect filter) — a gap-closure NotificationsBanner was built (app shell, renders unread notifications.list excl. gmail_reconnect, Dismiss→markRead; BRAND-neutral, §4-safe), confirmed rendering on a PRODUCTION build (the local Next dev server was serving a stale bundle — env flake, not a code defect; next build compiled it clean first try). Commits: 07-01..07-06 + e147fe9 (in-app surface). VERIFICATION.md → passed. ONE item owner-deferred (Manual-Only, NOT a gap): real S3 Object-Lock durability (owner does the AWS bucket later; export code + stub-skip proven). SC#4 hot-audit sweep stays deferred (owner ruling, export-only). NOTED for later: tenant scope is `identity.subject` = userId|sessionId, so tenant-scoped data (notifications, gmail tokens) is SESSION-scoped, not per-user (lib/functions.ts:25) — a latent multi-tenancy concern surfaced during the live verify. Env note: I killed the owner's original :3000 dev server + left a production build (now stopped by an interrupt); :3210 Convex untouched. NEXT: plan Phase 8."
+stopped_at: Phase 8 context gathered
+last_updated: "2026-07-21T14:38:24.712Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 16
@@ -753,9 +753,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-20T23:49:08.830Z
-Stopped at: Completed 07-05-PLAN.md
-Resume file: None
+Last session: 2026-07-21T14:38:24.691Z
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-self-improvement/08-CONTEXT.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
