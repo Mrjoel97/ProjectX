@@ -22,7 +22,9 @@ import { action, mutation, query } from "../_generated/server";
  * provider); only the first segment is ever the userId, so extra pipes are ignored.
  */
 export function stableTenant(subject: string): string {
-  return subject.split("|")[0];
+  // split() always yields ≥1 element, so [0] is never undefined at runtime; the `?? subject`
+  // satisfies noUncheckedIndexedAccess and is a safe no-op fallback.
+  return subject.split("|")[0] ?? subject;
 }
 
 /**
