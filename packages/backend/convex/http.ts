@@ -1,3 +1,4 @@
+import { notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -92,6 +93,60 @@ http.route({
     }
     const data = await ctx.runQuery(internal.skilloptExport.buildTrajectoryExport, {});
     return Response.json(data);
+  }),
+});
+
+// IMPR-02 write-back + IMPR-03 evidence: the CI SkillOpt job POSTs an accepted (held-out-eval-passing)
+// skill body back here. It lands as a CANDIDATE through insertCandidate (routes through the registry
+// gate — never a raw patch, never active; §5) — the owner does the SEPARATE activateSkill click (Plan
+// 06 ops control), which only passes EVAL_GATE after eval:golden records evidence. Auth is the same
+// SKILLOPT_TOKEN bearer as /export (fail-closed 401). We write ONE insert-only, refs/counts-ONLY audit
+// row (§3/§4 — no body, no prose) and notify the owner "candidate ready" through the notify choke point.
+http.route({
+  path: "/skillopt/writeback",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const expected = process.env.SKILLOPT_TOKEN;
+    const authHeader = req.headers.get("Authorization");
+    if (!expected || authHeader !== `Bearer ${expected}`) {
+      return new Response("unauthorized", { status: 401 });
+    }
+
+    const { name, body, runId, negativeRate, sampleCount, tenantId } = (await req.json()) as {
+      name: string;
+      body: string;
+      runId: string;
+      negativeRate: number;
+      sampleCount: number;
+      tenantId: string;
+    };
+
+    // Route the optimized body through the registry gate. A non-gated name throws here → 500 (rejected).
+    const { fromVersion, toVersion, inserted } = await ctx.runMutation(internal.skills.insertCandidate, {
+      name,
+      body,
+    });
+
+    // Only a genuinely NEW candidate is an optimization: an idempotent repost writes no audit/notify (no churn).
+    if (inserted) {
+      // IMPR-03: ONE insert-only audit row — refs/counts ONLY (§3/§4). No skill body, no user content.
+      await ctx.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId: runId,
+        eventType: "skill.optimized",
+        actor: "skillopt",
+        payload: { skillName: name, fromVersion, toVersion, runId, negativeRate, sampleCount },
+      });
+
+      // Owner "candidate ready" notification via the choke point — the static label carries no refs/content (§4).
+      await ctx.runMutation(internal.notifications.notify, {
+        tenantId,
+        kind: "optimizer.candidate",
+        message: notificationMessage("optimizer.candidate"),
+      });
+    }
+
+    return Response.json({ ok: true, fromVersion, toVersion, inserted });
   }),
 });
 

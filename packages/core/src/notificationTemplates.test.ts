@@ -31,6 +31,7 @@ describe("notificationMessage (§4 static-label firewall)", () => {
       "agent.timeout",
       "deadletter",
       "awaiting_reauth",
+      "optimizer.candidate",
     ];
     expect([...NOTIFICATION_KINDS].sort()).toEqual([...expected].sort());
   });

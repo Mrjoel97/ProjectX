@@ -21,7 +21,8 @@ export type NotificationKind =
   | "retry.limit"
   | "agent.timeout"
   | "deadletter"
-  | "awaiting_reauth";
+  | "awaiting_reauth"
+  | "optimizer.candidate";
 
 /** Runtime list of the union members — lets callers/tests iterate every kind exhaustively. */
 export const NOTIFICATION_KINDS = [
@@ -33,6 +34,7 @@ export const NOTIFICATION_KINDS = [
   "agent.timeout",
   "deadletter",
   "awaiting_reauth",
+  "optimizer.candidate",
 ] as const satisfies readonly NotificationKind[];
 
 /** Static label per kind. `Record<NotificationKind, …>` makes a missing kind a compile error. */
@@ -45,6 +47,7 @@ const MESSAGES: Record<NotificationKind, string> = {
   "agent.timeout": "An agent step timed out.",
   deadletter: "A workflow failed and was recorded in the dead-letter queue.",
   awaiting_reauth: "Your Gmail connection needs to be reauthorized.",
+  "optimizer.candidate": "A new optimized skill candidate is ready for your review.",
 };
 
 /** The fixed label for a notification kind — NEVER interpolates content (§4). Pure. */

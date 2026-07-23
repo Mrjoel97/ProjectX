@@ -739,7 +739,7 @@ test("no notify call interpolates a content field into its message (§4 static-l
   // The notify call-sites across the phase. `message:` is a static label or a static-label interpolation;
   // it must never carry a `${...content...}`. Comments are stripped — prose names the fields by design.
   let scanned = 0;
-  for (const file of ["pipeline.ts", "cockpit.ts", "deadLetter.ts", "notifications.ts", "notifyExternal.ts"]) {
+  for (const file of ["pipeline.ts", "cockpit.ts", "deadLetter.ts", "notifications.ts", "notifyExternal.ts", "http.ts"]) {
     const src = readSource(file).replace(/\/\/[^\n]*/g, "");
     const messages = [...src.matchAll(/notifications\.notify,\s*\{[\s\S]*?message:\s*([^\n]*)/g)].map(
       (m) => m[1] ?? "",
