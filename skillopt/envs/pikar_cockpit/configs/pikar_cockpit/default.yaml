@@ -1,0 +1,33 @@
+# SkillOpt config for the pikar_cockpit env (pinned skillopt==0.2.0).
+#
+# ponytail: copied from the upstream configs/searchqa/default.yaml TEMPLATE SHAPE. The exact
+# split-path key names (train / valid_unseen -> path) are LOW-confidence (RESEARCH OQ2) and are
+# VERIFIED in the 08-08 dry-run. Correct-by-contract regardless: dataloader.read_split_items selects
+# the split from the path BASENAME, so a key-name fix at dry-run needs no loader change.
+#
+# Deliberately CONSERVATIVE: each edit re-rolls LIVE LLM calls through convex run llm:runCockpitAgent
+# (RESEARCH Pitfall 3), so keep the edit budget low and the held-out split TINY to keep the dry-run cheap.
+
+env:
+  name: pikar_cockpit
+  module: skillopt.envs.pikar_cockpit.adapter
+  adapter: PikarCockpitAdapter
+  task_types: [cockpit_email]
+
+# split -> data path. Key names verified at the 08-08 dry-run; the loader keys off the path basename,
+# and $SKILLOPT_EXPORT points at the single Plan-08-04 export.json the CI job downloads.
+data:
+  train: data/train
+  valid_unseen: data/valid_unseen
+
+optimizer:
+  optimizer_model: openai/gpt-4o-mini
+  learning_rate: 1          # max bounded edits per step — LOW (each edit re-rolls live LLM calls)
+  lr_scheduler: constant
+  max_steps: 2              # keep the dry-run cheap; raise once a real cadence + volume exist
+  rejected_edit_buffer: 4   # SkillOpt stability buffer (reject-and-remember)
+
+rollout:
+  workers: 2
+  max_completion_tokens: 4096
+  valid_size: 4             # TINY held-out slice — a handful of cases (RESEARCH Pitfall 3)

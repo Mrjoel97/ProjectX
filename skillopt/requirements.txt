@@ -1,0 +1,5 @@
+# Pinned EXACT (CLAUDE.md §6 — pre-1.0 component, API churn expected; re-verify at the 08-08 dry-run).
+skillopt==0.2.0
+
+# rollout.py / dataloader.py use only the Python standard library (json, urllib, subprocess,
+# concurrent.futures) — no extra runtime deps. The convex-run seam is invoked via node, not Python.
