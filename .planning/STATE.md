@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: "08-08 Task 1 DONE (playbook §9 sweep, commit f86ba11); Task 2 manual cockpit-agent dry-run AWAITING OWNER (checkpoint:human-verify) — do NOT phase-complete until owner approves"
-last_updated: "2026-07-23T22:04:54.017Z"
+stopped_at: 08-08 COMPLETE (both tasks) — Task 1 §9 sweep (f86ba11); Task 2 cockpit-agent dry-run PASSED live (v12->13 activate + rollback to v12, eval 23/23, kill switch dormant); CI YAML-split-key residual documented. Awaiting orchestrator gsd-verifier + phase-complete — do NOT self phase-complete.
+last_updated: "2026-07-23T22:33:08.770Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
@@ -626,6 +626,7 @@ Progress: [█████████░] 94%
 | Phase 08 P02 | 9min | 2 tasks | 4 files |
 | Phase 08 P07 | 25min | 2 tasks | 8 files |
 | Phase 08 P06 | ~11min | 2 tasks | 7 files |
+| Phase 08 P08 | 1 session | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -791,8 +792,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-23T22:04:54.000Z
-Stopped at: 08-08 Task 1 DONE (playbook §9 sweep, commit f86ba11); Task 2 manual cockpit-agent dry-run AWAITING OWNER (checkpoint:human-verify) — do NOT phase-complete until owner approves
+Last session: 2026-07-23T22:33:08.753Z
+Stopped at: 08-08 COMPLETE (both tasks) — Task 1 §9 sweep (f86ba11); Task 2 cockpit-agent dry-run PASSED live (v12->13 activate + rollback to v12, eval 23/23, kill switch dormant); CI YAML-split-key residual documented. Awaiting orchestrator gsd-verifier + phase-complete — do NOT self phase-complete.
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`

@@ -2,7 +2,7 @@
 phase: 08-self-improvement
 plan: 08
 subsystem: skill-registry / self-improvement
-status: paused-at-checkpoint
+status: complete
 tags: [playbook, definition-of-done, skillopt, write-back, phase-close]
 requires:
   - "All Phase-8 code plans (08-01..08-07): feedback, optimizerConfig/eligibility, skilloptExport, insertCandidate/activateCandidate, http /skillopt routes, notificationTemplates optimizer.candidate, the skillopt/ Python env + CI workflow"
@@ -28,7 +28,7 @@ decisions:
   - "watch.json coverage for the new Phase-8 paths lives under skill-registry.md's entry (the playbook that documents the loop) — no separate self-improvement.md playbook file, which would break the hook's playbook-filename key contract. http.ts stays under cockpit.md (already watched), notificationTemplates.ts under audit-dead-letter.md (already watched)."
   - "Phase-9 blockers (ops-surface owner-authorization, PII names-in-prose, deployment env config) recorded as an explicit gating section in the playbook, NOT fixed here — owner-approved deferrals for single-owner beta."
 metrics:
-  tasks_completed: 1
+  tasks_completed: 2
   tasks_total: 2
   files_touched: 4
   completed_date: "2026-07-24"
@@ -41,7 +41,7 @@ metrics:
 ## Status
 
 - **Task 1 (autonomous — the §9 definition-of-done sweep): DONE + committed** (`f86ba11`).
-- **Task 2 (manual cockpit-agent dry-run + feedback-UI walkthrough): AWAITING OWNER** — a `checkpoint:human-verify`. It requires the owner + deployment env (`SKILLOPT_TOKEN`, `SKILLOPT_OWNER_TENANT`) + Python (`pip install skillopt==0.2.0`) + seeding synthetic trajectories. Not run; no result fabricated.
+- **Task 2 (manual cockpit-agent dry-run + feedback-UI walkthrough): DONE — dry-run executed by the orchestrator at the owner's "do it yourself" instruction, PASSED end-to-end** against the running local deployment (one documented CI-only residual, below).
 
 ## What was done (Task 1)
 
@@ -66,9 +66,27 @@ metrics:
 
 None — Task 1 executed as written. `http.ts` was already watched under `cockpit.md`, so it was not duplicated under `skill-registry.md` (the plan noted it "isn't currently watched" — it is, via cockpit.md; coverage is satisfied).
 
-## Task 2 — Owner checkpoint (NOT executed)
+## Task 2 — cockpit-agent dry-run (proof-of-life): PASSED
 
-See the CHECKPOINT block returned to the orchestrator. The dry-run is RESEARCH § "Manual cockpit-agent dry-run" steps 1–6 (export → SkillOpt → candidate write-back → eval green → owner activate → active flips → rollback restores → kill switch dormant). Resume signal: owner types "approved" once the dry-run flips the active version and rollback restores it (or describes what broke).
+Executed by the orchestrator (owner-directed "do it yourself"), live against the running local deployment. RESEARCH § "Manual cockpit-agent dry-run" steps 1–6, seam proven end-to-end:
+
+- **Export (IMPR-02):** `GET /skillopt/export` → 401 (no token) / 401 (bad token) / 200 (correct `SKILLOPT_TOKEN`) with scrubbed JSON. Scrub firewall also unit-covered by `skilloptExport.test.ts` (5/5).
+- **Write-back (IMPR-02/03):** `POST /skillopt/writeback` → `{fromVersion:12, toVersion:13, inserted:true, notified:true}`; identical repost → `inserted:false, notified:false` (idempotent). `notified:true` resolved via the trusted `SKILLOPT_OWNER_TENANT` env — the request body carries NO tenantId (the cross-tenant IDOR fix, commit d67802d, verified LIVE).
+- **Candidate-only / HITL:** after write-back the active `cockpit-agent` stayed **v12** — v13 did NOT auto-activate (the whole point).
+- **Eval gate:** `pnpm eval:golden --skill cockpit-agent@13` → 23/23 passed ($0.1125), evidence recorded on v13.
+- **Activate + rollback (IMPR-02/03):** `activateSkill cockpit-agent@13` → active flipped 12→13 (EVAL_GATE passed). `activateSkill cockpit-agent@12` → active restored to 12 (status-exempt). Final prod state = **v12**.
+- **Dormancy (IMPR-02):** `optimizerConfig.getOptimizerConfig` → `enabled=false`.
+
+### Honest residual (documented, NOT a pass)
+
+The SkillOpt **Python OPTIMIZE step** (`train.py` generating `best_skill.md`) was NOT run locally — this Windows box's Python is tangled (target interpreter lacks pip), and 08-07 designed that step for **CI (clean Python 3.11)**. A hand-edited candidate body was substituted to exercise the Convex seam; `skillopt==0.2.0` is confirmed present on PyPI. **The exact SkillOpt v0.2.0 YAML split-key names remain a CI/clean-env verification item** (the documented LOW-confidence residual, RESEARCH OQ2) — Manual-Only, in the same class as the Phase-7 real-S3 / real-email owner-deferrals (a documented residual, NOT a silent gap).
+
+### Dry-run DB artifacts left behind (harmless — append-only design)
+
+- `cockpit-agent` v13 (now archived; the registry is append-only) + its eval evidence.
+- One `skill.optimized` audit row (runId `dryrun-2607`).
+- One `optimizer.candidate` notification for the owner tenant.
+- Local deployment env now has `SKILLOPT_TOKEN` (a dryrun placeholder) + `SKILLOPT_OWNER_TENANT` (the real owner tenant).
 
 ## Self-Check: PASSED
 
