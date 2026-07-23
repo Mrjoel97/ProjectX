@@ -110,6 +110,291 @@ function EvalSignals() {
   );
 }
 
+// A plain positional line compare (IMPR-03 before/after). ponytail: no diff library and no
+// LCS — a line-index compare over the two skill bodies. Ceiling: an inserted/removed line
+// mid-body misaligns the tail; upgrade to an LCS diff only if reviewers find it noisy.
+function unifiedDiff(from: string, to: string): { sign: " " | "-" | "+"; text: string }[] {
+  const a = from.split("\n");
+  const b = to.split("\n");
+  const out: { sign: " " | "-" | "+"; text: string }[] = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const l = a[i];
+    const r = b[i];
+    if (l === r) out.push({ sign: " ", text: l ?? "" });
+    else {
+      if (l !== undefined) out.push({ sign: "-", text: l });
+      if (r !== undefined) out.push({ sign: "+", text: r });
+    }
+  }
+  return out;
+}
+
+// IMPR-02/03 optimizer surface on the ops page: the kill switch + the owner's one-click
+// candidate activation (before/after diff + evidence), both on a surface the owner already
+// uses (08-CONTEXT: no new bespoke screen). Ships DORMANT — the switch is OFF until Phase 9.
+function OptimizerPanel() {
+  const config = useQuery(api.optimizerConfig.getOptimizerStatus, {});
+  const candidates = useQuery(api.skills.candidatesForReview, {});
+  const setEnabled = useMutation(api.optimizerConfig.setOptimizerEnabled);
+  const activate = useMutation(api.skills.activateCandidate);
+  const [busy, setBusy] = useState(false);
+  const [activating, setActivating] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const enabled = config?.enabled ?? false;
+
+  async function toggle() {
+    if (busy || config === undefined) return;
+    setBusy(true);
+    try {
+      await setEnabled({ enabled: !enabled });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doActivate(name: string, version: number) {
+    const key = `${name}@${version}`;
+    setActivating(key);
+    setErrors((e) => ({ ...e, [key]: "" }));
+    try {
+      await activate({ name, version });
+    } catch (err) {
+      // Surface the EVAL_GATE (or any) refusal inline — never swallow it.
+      setErrors((e) => ({ ...e, [key]: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setActivating(null);
+    }
+  }
+
+  return (
+    <div style={{ display: "grid", gap: "1rem" }}>
+      {/* Kill switch — a toggle bound to optimizerConfig.enabled. Meaning is never colour-only
+          (BRAND §6): aria-pressed + an explicit On/Dormant word + the knob position. */}
+      <div
+        style={{
+          background: "var(--card)",
+          borderRadius: "1rem",
+          boxShadow: cardShadow,
+          padding: "1.25rem",
+          display: "flex",
+          gap: "1rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <span className="stat-badge">
+          <BoltIcon size={16} />
+        </span>
+        <div style={{ display: "grid", gap: "0.2rem", flex: "1 1 16rem" }}>
+          <p className="caps-label" style={{ margin: 0 }}>
+            Self-optimizer
+          </p>
+          <div style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
+            {config === undefined
+              ? "Loading…"
+              : enabled
+                ? "On — the CI loop may run against feedback breaches."
+                : "Dormant — ships OFF until Phase 9 brings real feedback volume."}
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Optimizer kill switch"
+          disabled={busy || config === undefined}
+          onClick={() => void toggle()}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.4rem 0.5rem 0.4rem 0.9rem",
+            borderRadius: "999px",
+            border: `1px solid ${enabled ? "var(--teal-600)" : "var(--rule)"}`,
+            background: "var(--card)",
+            cursor: busy ? "default" : "pointer",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+            color: "var(--ink)",
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {enabled ? "On" : "Dormant"}
+          <span
+            aria-hidden
+            style={{
+              width: "2.2rem",
+              height: "1.2rem",
+              borderRadius: "999px",
+              background: enabled ? "var(--teal-600)" : "var(--rule)",
+              position: "relative",
+              transition: "background 120ms",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: "0.15rem",
+                left: enabled ? "1.15rem" : "0.15rem",
+                width: "0.9rem",
+                height: "0.9rem",
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 120ms",
+              }}
+            />
+          </span>
+        </button>
+      </div>
+
+      {/* Candidate-ready review: before/after diff + evidence + one-click activate. */}
+      {candidates === undefined ? (
+        <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading candidates…</p>
+      ) : candidates.length === 0 ? (
+        <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+          No optimized candidates awaiting review.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "1rem" }}>
+          {candidates.map((c) => {
+            const key = `${c.name}@${c.toVersion}`;
+            const err = errors[key];
+            return (
+              <li
+                key={key}
+                style={{
+                  background: "var(--card)",
+                  borderRadius: "1rem",
+                  boxShadow: cardShadow,
+                  padding: "1.25rem",
+                  display: "grid",
+                  gap: "0.75rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.6rem",
+                    alignItems: "baseline",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: "var(--ink)" }}>{c.name}</span>
+                  <span style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+                    v{c.fromVersion ?? "—"} → v{c.toVersion}
+                  </span>
+                  {/* Gate pre-warning — not colour-only: an explicit word (§6). */}
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: c.gatePassed ? "var(--released)" : "#991b1b",
+                    }}
+                  >
+                    {c.gatePassed
+                      ? "eval evidence: passing"
+                      : "eval evidence: none — gate will refuse"}
+                  </span>
+                </div>
+
+                <details>
+                  <summary
+                    style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}
+                  >
+                    Before / after (skill body diff)
+                  </summary>
+                  <pre
+                    style={{
+                      margin: "0.5rem 0 0",
+                      fontSize: "0.72rem",
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
+                      background: "var(--canvas)",
+                      border: "1px solid var(--rule)",
+                      borderRadius: "0.6rem",
+                      padding: "0.75rem",
+                      overflowX: "auto",
+                      maxHeight: "22rem",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {unifiedDiff(c.fromBody ?? "", c.toBody).map((line, i) => (
+                      <div
+                        // biome-ignore lint/suspicious/noArrayIndexKey: positional diff lines have no stable id
+                        key={i}
+                        style={{
+                          color:
+                            line.sign === "+"
+                              ? "var(--released)"
+                              : line.sign === "-"
+                                ? "#991b1b"
+                                : "var(--ink-soft)",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {line.sign} {line.text}
+                      </div>
+                    ))}
+                  </pre>
+                </details>
+
+                <details>
+                  <summary
+                    style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}
+                  >
+                    Triggering evidence
+                  </summary>
+                  <pre
+                    style={{
+                      margin: "0.5rem 0 0",
+                      fontSize: "0.72rem",
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
+                      background: "var(--canvas)",
+                      border: "1px solid var(--rule)",
+                      borderRadius: "0.6rem",
+                      padding: "0.75rem",
+                      overflowX: "auto",
+                    }}
+                  >
+                    {c.evidence ?? "No eval evidence recorded yet."}
+                  </pre>
+                </details>
+
+                <button
+                  type="button"
+                  disabled={activating === key}
+                  onClick={() => void doActivate(c.name, c.toVersion)}
+                  style={{
+                    justifySelf: "start",
+                    padding: "0.55rem 1.2rem",
+                    borderRadius: "999px",
+                    border: "none",
+                    cursor: activating === key ? "default" : "pointer",
+                    background: "var(--teal-600)",
+                    color: "#fff",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    fontFamily: "inherit",
+                    opacity: activating === key ? 0.6 : 1,
+                  }}
+                >
+                  {activating === key ? "Activating…" : `Activate v${c.toVersion}`}
+                </button>
+
+                {err ? (
+                  <p role="alert" style={{ margin: 0, color: "#991b1b", fontSize: "0.82rem" }}>
+                    {err}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // OPSG-07: the operator dead-letter surface — a failure nobody sees is a failure nobody
 // fixes. Tenant-scoped (not owner-gated — CONTEXT). Rows are redaction-safe: refs, hashes,
 // ids, counts ONLY — never raw user content or PII (CLAUDE.md §4). Ships resolve only;
@@ -140,6 +425,15 @@ export default function OpsPage() {
           Eval signals
         </p>
         <EvalSignals />
+      </section>
+
+      {/* Optimizer sits between the ambient eval read and the incident dead-letter read:
+          the kill switch + candidate activation are operator controls, not incidents. */}
+      <section style={{ display: "grid", gap: "0.9rem" }}>
+        <p className="caps-label" style={{ margin: 0 }}>
+          Optimizer
+        </p>
+        <OptimizerPanel />
       </section>
 
       <section style={{ display: "grid", gap: "0.9rem" }}>

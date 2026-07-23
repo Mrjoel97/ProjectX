@@ -12,6 +12,7 @@ import {
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
+  GATED_SKILLS,
   GRAPH_EXTRACTOR_SKILL,
   hasPassingEvidence,
   INBOX_DIGEST_SKILL,
@@ -27,14 +28,20 @@ import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachment
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
+import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
-import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { v } from "convex/values";
-import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -64,49 +71,110 @@ export const getActiveSkill = internalQuery({
 });
 
 /**
- * The ONE permitted status mutation. Within a single mutation it archives the
- * current active row and activates the target version — never patching
- * body/name/version. Re-activating a prior version is the rollback path.
+ * The single gated candidate→active flip, defined ONCE (CLAUDE.md §8 root-cause):
+ * both the internal `activateSkill` and the owner-facing `activateCandidate` (Plan 06
+ * ops panel) route through this so the EVAL_GATE can never be bypassed or duplicated.
+ * Within one mutation it archives the current active row and activates the target
+ * version — never patching body/name/version. Re-activating a prior version is rollback.
+ */
+async function activateSkillVersion(
+  ctx: MutationCtx,
+  name: string,
+  version: number,
+): Promise<void> {
+  const target = await ctx.db
+    .query("skills")
+    .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+    .unique();
+
+  if (target === null) {
+    throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+  }
+
+  // EVAL_GATE (EVAL-01): a never-before-active version of a gated skill may only
+  // activate with recorded passing evidence pinning EXACTLY this version. The
+  // candidate-vs-rollback distinction is PURELY the target row's status —
+  // archived/rolled_back were active before and are exempt BY STATUS (rollback
+  // must always work mid-incident, never blocked by a broken eval harness).
+  if (
+    isGatedSkill(name) &&
+    target.status === "candidate" &&
+    !hasPassingEvidence(target.evidence, name, version)
+  ) {
+    throw new Error(
+      `EVAL_GATE: ${name} v${version} has no recorded passing eval run (run pnpm eval:golden --skill ${name}@${version})`,
+    );
+  }
+
+  const current = await ctx.db
+    .query("skills")
+    .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+    .unique();
+
+  if (current !== null && current._id !== target._id) {
+    await ctx.db.patch(current._id, { status: "archived" });
+  }
+
+  if (target.status !== "active") {
+    await ctx.db.patch(target._id, { status: "active" });
+  }
+}
+
+/**
+ * The ONE permitted internal status mutation (the eval runner / seed path). Wraps the
+ * shared activateSkillVersion gate.
  */
 export const activateSkill = internalMutation({
   args: { name: v.string(), version: v.number() },
+  handler: (ctx, { name, version }) => activateSkillVersion(ctx, name, version),
+});
+
+/**
+ * The owner's one-click candidate activation from the ops panel (IMPR-02/03). A
+ * tenantMutation — the authenticated identity IS the owner gate — routing through the
+ * SAME shared EVAL_GATE as activateSkill, so an unevaluated gated candidate CANNOT go
+ * live from the UI any more than from the runner. Returns the flip so the panel can
+ * confirm the before→after; an EVAL_GATE / NO_SUCH_SKILL_VERSION throw surfaces inline.
+ */
+export const activateCandidate = tenantMutation({
+  args: { name: v.string(), version: v.number() },
   handler: async (ctx, { name, version }) => {
-    const target = await ctx.db
-      .query("skills")
-      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
-      .unique();
+    await activateSkillVersion(ctx, name, version);
+    return { ok: true as const, name, version };
+  },
+});
 
-    if (target === null) {
-      throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+/**
+ * The ops panel's candidate-review read (IMPR-03): for each GATED skill that has a
+ * pending candidate, the newest candidate with the live (active) version as `fromVersion`
+ * + both bodies (the before/after diff source), its recorded `evidence`, and whether that
+ * evidence passes the gate (so the panel can pre-warn an Activate that EVAL_GATE will
+ * refuse). Registry rows are global; the tenantMutation identity is just the owner gate.
+ */
+export const candidatesForReview = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const out = [];
+    for (const name of GATED_SKILLS) {
+      const rows = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect();
+      const candidates = rows.filter((r) => r.status === "candidate");
+      if (candidates.length === 0) continue;
+      const candidate = candidates.reduce((a, b) => (b.version > a.version ? b : a));
+      const active = rows.find((r) => r.status === "active") ?? null;
+      out.push({
+        name,
+        fromVersion: active?.version ?? null,
+        fromBody: active?.body ?? null,
+        toVersion: candidate.version,
+        toBody: candidate.body,
+        evidence: candidate.evidence ?? null,
+        gatePassed: hasPassingEvidence(candidate.evidence, name, candidate.version),
+      });
     }
-
-    // EVAL_GATE (EVAL-01): a never-before-active version of a gated skill may only
-    // activate with recorded passing evidence pinning EXACTLY this version. The
-    // candidate-vs-rollback distinction is PURELY the target row's status —
-    // archived/rolled_back were active before and are exempt BY STATUS (rollback
-    // must always work mid-incident, never blocked by a broken eval harness).
-    if (
-      isGatedSkill(name) &&
-      target.status === "candidate" &&
-      !hasPassingEvidence(target.evidence, name, version)
-    ) {
-      throw new Error(
-        `EVAL_GATE: ${name} v${version} has no recorded passing eval run (run pnpm eval:golden --skill ${name}@${version})`,
-      );
-    }
-
-    const current = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
-      .unique();
-
-    if (current !== null && current._id !== target._id) {
-      await ctx.db.patch(current._id, { status: "archived" });
-    }
-
-    if (target.status !== "active") {
-      await ctx.db.patch(target._id, { status: "active" });
-    }
+    return out;
   },
 });
 
@@ -250,7 +318,9 @@ export const insertCandidate = internalMutation({
   args: { name: v.string(), body: v.string() },
   handler: async (ctx, { name, body }) => {
     if (!isGatedSkill(name)) {
-      throw new Error(`NOT_GATED: ${name} is not eval-gated — only gated skills accept an optimized candidate`);
+      throw new Error(
+        `NOT_GATED: ${name} is not eval-gated — only gated skills accept an optimized candidate`,
+      );
     }
 
     const rows = await ctx.db
@@ -259,7 +329,9 @@ export const insertCandidate = internalMutation({
       .collect();
 
     if (rows.length === 0) {
-      throw new Error(`${NO_ACTIVE_SKILL_ERROR}: ${name} — cannot write back a candidate for an unseeded skill`);
+      throw new Error(
+        `${NO_ACTIVE_SKILL_ERROR}: ${name} — cannot write back a candidate for an unseeded skill`,
+      );
     }
 
     const maxVersion = Math.max(...rows.map((r) => r.version));
@@ -273,7 +345,13 @@ export const insertCandidate = internalMutation({
     }
 
     const toVersion = maxVersion + 1;
-    await ctx.db.insert("skills", { name, version: toVersion, body, status: "candidate", createdAt: Date.now() });
+    await ctx.db.insert("skills", {
+      name,
+      version: toVersion,
+      body,
+      status: "candidate",
+      createdAt: Date.now(),
+    });
     return { name, fromVersion, toVersion, inserted: true };
   },
 });

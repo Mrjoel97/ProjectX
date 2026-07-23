@@ -13,7 +13,7 @@ import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { loadSkill } from "./skills";
 
@@ -516,6 +516,112 @@ describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
     expect(res).toEqual({ name: "cockpit-agent", fromVersion: 11, toVersion: 12, inserted: false });
     // No churn: still exactly the two rows, no v13 minted.
     expect(await rowsOf(t, "cockpit-agent")).toHaveLength(2);
+  });
+});
+
+describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", () => {
+  const OWNER = "owner_a";
+  const insert = (
+    t: ReturnType<typeof convexTest>,
+    fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
+  ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
+
+  type SkillStatus = "active" | "candidate" | "rolled_back" | "archived";
+
+  const passing = (name: string, version: number) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "r1",
+      pass: true,
+      casesPassed: 15,
+      casesTotal: 15,
+      retriedCases: [],
+      costUsd: 0.08,
+      model: "openai/gpt-4o-mini",
+      skillVersions: { [name]: version },
+      ts: 0,
+    });
+
+  const statusOf = (t: ReturnType<typeof convexTest>, name: string, version: number) =>
+    t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+        .unique();
+      return row!.status;
+    });
+
+  test("activateCandidate routes through the SHARED EVAL_GATE — an unevaluated gated candidate is refused", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insert(t, { name: "cockpit-agent", version: 2, body: "v2", status: "candidate" });
+    const asOwner = t.withIdentity({ subject: OWNER });
+
+    await expect(
+      asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    // The gate held — the active row is untouched.
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("candidate");
+  });
+
+  test("activateCandidate flips a candidate with passing evidence (v1 archived, v2 active)", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: passing("cockpit-agent", 2),
+    });
+    const asOwner = t.withIdentity({ subject: OWNER });
+
+    const res = await asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 });
+    expect(res).toEqual({ ok: true, name: "cockpit-agent", version: 2 });
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("archived");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("active");
+  });
+
+  test("activateCandidate requires an authenticated identity (owner gate)", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await expect(
+      t.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 1 }),
+    ).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+
+  test("candidatesForReview lists newest candidate per gated skill with before/after + gate status", async () => {
+    const t = convexTest(schema, modules);
+    // cockpit-agent: active v11 + a passing candidate v12.
+    await insert(t, { name: "cockpit-agent", version: 11, body: "OLD BODY", status: "active" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 12,
+      body: "NEW BODY",
+      status: "candidate",
+      evidence: passing("cockpit-agent", 12),
+    });
+    // document-drafter: active v1 + an UNEVALUATED candidate v2 (gate will refuse).
+    await insert(t, { name: "document-drafter", version: 1, body: "d1", status: "active" });
+    await insert(t, { name: "document-drafter", version: 2, body: "d2", status: "candidate" });
+    // inbox-digest: only an active row → NOT listed (no candidate awaiting review).
+    await insert(t, { name: "inbox-digest", version: 1, body: "i1", status: "active" });
+    const asOwner = t.withIdentity({ subject: OWNER });
+
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+    const cockpit = list.find((c) => c.name === "cockpit-agent")!;
+    expect(cockpit).toMatchObject({
+      fromVersion: 11,
+      fromBody: "OLD BODY",
+      toVersion: 12,
+      toBody: "NEW BODY",
+      gatePassed: true,
+    });
+    const doc = list.find((c) => c.name === "document-drafter")!;
+    expect(doc).toMatchObject({ fromVersion: 1, toVersion: 2, gatePassed: false });
+    // Only skills WITH a candidate appear — inbox-digest (active-only) is absent.
+    expect(list.find((c) => c.name === "inbox-digest")).toBeUndefined();
   });
 });
 

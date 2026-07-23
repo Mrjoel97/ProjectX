@@ -6,8 +6,9 @@
 // same threshold floor. internalMutation/internalQuery from ./_generated/server are NOT
 // banned by the import guard (guardrails.ts / telemetry.ts precedent — no allowlist entry).
 import { v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 
 // Default-on-read: a missing/false optimizerConfig row means the optimizer is DORMANT
 // (enabled=false, zero seed, no migration). Exported — Plan 03 eligibility and Plan 07 CI
@@ -21,6 +22,31 @@ export const DEFAULT_OPTIMIZER_CONFIG = {
 
 async function getConfig(ctx: QueryCtx) {
   return (await ctx.db.query("optimizerConfig").first()) ?? DEFAULT_OPTIMIZER_CONFIG;
+}
+
+type ConfigPatch = {
+  enabled?: boolean;
+  negativeRateThreshold?: number;
+  minSampleFloor?: number;
+  cooldownMs?: number;
+  lastRunAt?: number;
+};
+
+/** The single upsert, defined ONCE (CLAUDE.md §8): both the internal CI mutation and the
+ *  owner-facing ops toggle write through here. Drops undefined args so a partial write
+ *  never clobbers a set field; patches the one row or inserts DEFAULT⊕patch; stamps updatedAt. */
+async function writeConfig(ctx: MutationCtx, args: ConfigPatch): Promise<void> {
+  const patch = Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined));
+  const row = await ctx.db.query("optimizerConfig").first();
+  if (row) {
+    await ctx.db.patch(row._id, { ...patch, updatedAt: Date.now() });
+  } else {
+    await ctx.db.insert("optimizerConfig", {
+      ...DEFAULT_OPTIMIZER_CONFIG,
+      ...patch,
+      updatedAt: Date.now(),
+    });
+  }
 }
 
 /** Read the optimizer config (IMPR-02). Default-on-read: a missing row reads DORMANT
@@ -43,20 +69,24 @@ export const setOptimizerConfig = internalMutation({
     cooldownMs: v.optional(v.number()),
     lastRunAt: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    // Drop undefined args so a partial write never clobbers a set field with undefined.
-    const patch = Object.fromEntries(
-      Object.entries(args).filter(([, value]) => value !== undefined),
-    );
-    const row = await ctx.db.query("optimizerConfig").first();
-    if (row) {
-      await ctx.db.patch(row._id, { ...patch, updatedAt: Date.now() });
-    } else {
-      await ctx.db.insert("optimizerConfig", {
-        ...DEFAULT_OPTIMIZER_CONFIG,
-        ...patch,
-        updatedAt: Date.now(),
-      });
-    }
+  handler: (ctx, args) => writeConfig(ctx, args),
+});
+
+/** Read the optimizer config from the ops page (IMPR-02). Public/tenant — the authenticated
+ *  identity is the owner gate; the config itself is a single global row. Default-on-read: a
+ *  missing row reads DORMANT (enabled=false), so the kill switch ships OFF. */
+export const getOptimizerStatus = tenantQuery({
+  args: {},
+  handler: (ctx) => getConfig(ctx),
+});
+
+/** Flip the optimizer kill switch from the ops page (IMPR-02). Public/tenant owner-gated
+ *  wrapper over the shared upsert — maps to the SAME single-row optimizerConfig.enabled the
+ *  CI job and eligibility check read. Ships dormant until an owner turns it on (Phase 9). */
+export const setOptimizerEnabled = tenantMutation({
+  args: { enabled: v.boolean() },
+  handler: async (ctx, { enabled }) => {
+    await writeConfig(ctx, { enabled });
+    return { ok: true as const, enabled };
   },
 });
