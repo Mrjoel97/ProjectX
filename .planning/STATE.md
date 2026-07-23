@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 08-05-PLAN.md
-last_updated: "2026-07-24T00:20:00.000Z"
-last_activity: "2026-07-24 — Phase 8 Self-Improvement, Wave 4: 08-05 executed — the HUMAN-IN-THE-LOOP write-back seam (IMPR-02 + IMPR-03). NEW skills.insertCandidate internalMutation: accepts a SkillOpt-authored EXTERNAL body and mints it as a NEW CANDIDATE (version=maxVer+1, status='candidate') — mirrors seedSkills' gated-candidate branch but body-as-arg. It NEVER sets status='active' and NEVER patches a prior row (immutable-per-version, §5) — activation stays the owner's SEPARATE activateSkill/EVAL_GATE click (Plan 06 ops panel). Rejects a non-gated name (NOT_GATED — only eval-gated skills route through the gate), throws NO_ACTIVE_SKILL for an unseeded skill, and is idempotent vs the NEWEST row body (byte-identical repost → no insert, Pitfall 1). Returns { name, fromVersion (the LIVE/active version — the audit 'before'), toVersion, inserted }. NEW http.ts POST /skillopt/writeback (httpAction, same SKILLOPT_TOKEN bearer + fail-closed 401 as /export): body { name, body, runId, negativeRate, sampleCount, tenantId } → insertCandidate → when inserted, ONE insert-only audit row via internal.audit.log (eventType 'skill.optimized', payload { skillName, fromVersion, toVersion, runId, negativeRate, sampleCount } — refs/counts ONLY, no body, §3/§4) + internal.notifications.notify { kind:'optimizer.candidate' } (static §4 label, refs-free) → returns { ok, fromVersion, toVersion, inserted }. NEW notificationTemplates optimizer.candidate kind (union + NOTIFICATION_KINDS + MESSAGES Record — a missing key is a compile error; static label 'A new optimized skill candidate is ready for your review.'). ONE Rule-2 deviation: the endpoint gates audit+notify on inserted===true (an idempotent repost churns no audit row + no duplicate notification — full 'no churn' beyond the plan's registry-only idempotence), and http.ts was added to the §4 llmRedaction notify-site scan (the new notify site is now firewall-covered). TDD Task 1: RED (3 failing — export missing) → GREEN 37/37, no refactor. Task 2 code-first. Commits d2f0f24 (T1 insertCandidate + 3 tests), e28fd59 (T2 writeback + audit + notify + kind + §4 scan). VERIFIED: skills 37/37, notificationTemplates 4/4, llmRedaction 33/33 green; backend source tsc clean except the PRE-EXISTING lib/functions.ts(25,3) TS2322 (documented 08-01/08-04 — my files add zero new errors). Candidate never reaches active without the owner's gated click. Playbook/watch.json for ALL of Phase 8 stay centralized in Plan 08-08 (deliberately untouched — check-playbooks self-clears on the second stop). NEXT: 08-06 (feedback UI on delivered ReportCard + ops kill-switch/activate panel — the owner surface that flips this candidate live)."
+stopped_at: Completed 08-07-PLAN.md
+last_updated: "2026-07-24T00:00:00.000Z"
+last_activity: "2026-07-24 — Phase 8 Self-Improvement, Wave 5: 08-07 executed — the OFFLINE SkillOpt batch runner (IMPR-02 deployment), the Python-side glue to the TS export/writeback seams, shipping DORMANT. NEW skillopt/envs/pikar_cockpit/ env package (v0.2.0 contract, imports ZERO TS — glued to Convex only by URL/CLI contracts, shares no files with any other Phase 8 plan): dataloader.py = PikarCockpitDataLoader(SplitDataLoader) whose load_split_items(split_path) reads the Plan-04 export JSON ({skillName, items:[{id,task_description,conversation,hard,soft,skillVersion,split}]}) and returns the items whose exported `split` matches the split the PATH NAMES — split chosen off the path BASENAME (norm valid_unseen->valid), NOT a hardcoded YAML key, so the LOW-confidence v0.2.0 split-path key names (RESEARCH OQ2) get a one-line fix at the 08-08 dry-run with NO loader change (correct-by-contract); pure partition/split_of_path/read_split_items helpers + a __main__ self-check asserting the partition matches the export field, runnable offline (skillopt import-shims to `object` when absent). rollout.py = run_batch(*, items, skill_content, out_root, workers, max_completion_tokens) SCORES edits by EXECUTING THE REAL COCKPIT SKILL (no second engine, RESEARCH Pitfall 3): mints skill_content as a pinnable candidate via POST /skillopt/writeback (the only body->version seam that exists; ponytail-flagged one-candidate-per-batch, per-edit audit/notify noise = accepted dormant ceiling, dev-pin upgrade path), then per item seeds a fresh cockpit plan + drives its user turns through `convex run llm:runCockpitAgent` with skillVersions pinned — invoking NODE DIRECTLY (no shell; tenantIds carry '|') and judging success by STDOUT JSON not exit code (mirrors smokeRun.mjs must(), RESEARCH Pitfall 6); persists <out_root>/predictions/<id>/conversation.json, returns {id, hard=exported thumbs (OQ1), soft=plan-state health (status/subject/body/recipients, the eval:golden shape)}. adapter.py = thin PikarCockpitAdapter(EnvAdapter) wiring. configs/pikar_cockpit/default.yaml = conservative (LOW edit budget, TINY valid split) searchqa-template shape. skills/initial.md = active cockpit-agent body FETCHED at run start, no hardcoded prompt (CLAUDE.md §5). requirements.txt pins skillopt==0.2.0 EXACT (§6). NEW .github/workflows/skillopt.yml = DORMANT two-gate CI batch runner: on {weekly cron, workflow_dispatch}; GATE 1 kill switch reads optimizerConfig.getOptimizerConfig, no-ops when enabled=false (ship default OFF); GATE 2 eligibility — scheduled cron proceeds ONLY on an optimizerEligibility breach, workflow_dispatch BYPASSES (manual dry-run) so the cron is breach-triggered, never a disguised SkillOpt-Sleep (08-CONTEXT defer); pipeline (only if enabled AND (dispatched OR eligible)): pip install, GET /skillopt/export, fetch active body, train.py, POST /skillopt/writeback candidate, pnpm eval:golden --skill cockpit-agent@<toVersion> to record the EVAL_GATE evidence; golden eval-cases/*.json NEVER an export/train source (held-out integrity); `on:` quoted so YAML keeps the string key. Commits 0ed681a (T1 env package), 3d8c1b3 (T2 workflow). NO deviations (two correct-by-contract choices: quoted on-key, named eval:golden script). VERIFIED offline: python dataloader.py -> 'self-check PASSED'; ast.parse all *.py -> PY_OK; yaml.safe_load skillopt.yml -> YML_OK (cron + workflow_dispatch present). DORMANT + NOT armed this phase — live correctness (real export/train/writeback/eval) is the 08-08 dry-run via workflow_dispatch, which also verifies the exact SkillOpt YAML split keys + base-class signatures. Playbook/watch.json for ALL of Phase 8 stay centralized in 08-08 (new skillopt/ + .github/ paths registered by the §9 sweep; check-playbooks self-clears on the second stop). NEXT: 08-05/08-06 (write-back + feedback UI) then 08-08 (dry-run + phase close + playbook sweep)."
 progress:
   total_phases: 21
   completed_phases: 16
   total_plans: 132
-  completed_plans: 125
+  completed_plans: 126
 ---
 
 ---
@@ -624,6 +624,7 @@ Progress: [█████████░] 94%
 | Phase 07-resilience-operations-hardening P04 | 15 | 3 tasks | 6 files |
 | Phase 08 P01 | 15 | 2 tasks | 3 files |
 | Phase 08 P02 | 9min | 2 tasks | 4 files |
+| Phase 08 P07 | 25min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -787,8 +788,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-23T21:06:31.761Z
-Stopped at: Completed 08-04-PLAN.md
+Last session: 2026-07-23T21:19:53.038Z
+Stopped at: Completed 08-07-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
