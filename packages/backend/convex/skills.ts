@@ -235,6 +235,50 @@ export const seedSkills = internalMutation({
 });
 
 /**
+ * SkillOpt write-back seam (IMPR-02/03): accept an EXTERNALLY-authored (optimized)
+ * skill body as a NEW CANDIDATE version through the registry gate. Mirrors seedSkills'
+ * gated-candidate branch but takes the body as an arg. It NEVER sets status:"active"
+ * and NEVER patches a prior row (immutable-per-version, CLAUDE.md §5) — activation
+ * stays the owner's SEPARATE activateSkill click (the EVAL_GATE choke point, Plan 06
+ * ops control). A non-gated name is rejected: only eval-gated skills route through the
+ * gate. Idempotent vs the NEWEST row body (Pitfall 1) — a byte-identical repost mints
+ * nothing. Returns { name, fromVersion (the live/active version), toVersion, inserted }
+ * — the before/after the optimization audit records; `inserted` lets the caller skip a
+ * duplicate audit/notify on an idempotent repost (no churn).
+ */
+export const insertCandidate = internalMutation({
+  args: { name: v.string(), body: v.string() },
+  handler: async (ctx, { name, body }) => {
+    if (!isGatedSkill(name)) {
+      throw new Error(`NOT_GATED: ${name} is not eval-gated — only gated skills accept an optimized candidate`);
+    }
+
+    const rows = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name))
+      .collect();
+
+    if (rows.length === 0) {
+      throw new Error(`${NO_ACTIVE_SKILL_ERROR}: ${name} — cannot write back a candidate for an unseeded skill`);
+    }
+
+    const maxVersion = Math.max(...rows.map((r) => r.version));
+    const newest = rows.reduce((a, b) => (b.version > a.version ? b : a));
+    // fromVersion pins the LIVE version (the before); degenerate no-active registries fall back to max.
+    const fromVersion = rows.find((r) => r.status === "active")?.version ?? maxVersion;
+
+    // Idempotent vs the NEWEST row (Pitfall 1): an identical body inserts nothing.
+    if (newest.body === body) {
+      return { name, fromVersion, toVersion: newest.version, inserted: false };
+    }
+
+    const toVersion = maxVersion + 1;
+    await ctx.db.insert("skills", { name, version: toVersion, body, status: "candidate", createdAt: Date.now() });
+    return { name, fromVersion, toVersion, inserted: true };
+  },
+});
+
+/**
  * One-off retirement flip: archive the single active row of a skill (no-op when
  * none is active). Used to retire the dead executive-agent.classifier live via
  * `npx convex run skills:archiveSkill '{"name":"executive-agent.classifier"}'` —

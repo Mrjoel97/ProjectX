@@ -452,6 +452,73 @@ describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", (
   });
 });
 
+describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
+  const insert = (
+    t: ReturnType<typeof convexTest>,
+    fields: { name: string; version: number; body: string; status: "active" | "candidate" | "archived" },
+  ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
+
+  const rowsOf = (t: ReturnType<typeof convexTest>, name: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect(),
+    );
+
+  test("an external body → a NEW candidate (maxVer+1); the active row stays active + immutable", async () => {
+    const t = convexTest(schema, modules);
+    // A gated skill live at v11 (a couple of archived priors to prove maxVer+1, not active+1).
+    await insert(t, { name: "cockpit-agent", version: 10, body: "v10", status: "archived" });
+    await insert(t, { name: "cockpit-agent", version: 11, body: "v11 ACTIVE", status: "active" });
+
+    const res = await t.mutation(internal.skills.insertCandidate, {
+      name: "cockpit-agent",
+      body: "OPTIMIZED BODY",
+    });
+
+    // Returns the before/after the audit records.
+    expect(res).toEqual({ name: "cockpit-agent", fromVersion: 11, toVersion: 12, inserted: true });
+
+    const rows = await rowsOf(t, "cockpit-agent");
+    const v12 = rows.find((r) => r.version === 12)!;
+    expect(v12.status).toBe("candidate"); // NEVER active — activation is the owner's separate click
+    expect(v12.body).toBe("OPTIMIZED BODY");
+    // The active row is untouched (immutable, still active — the loader still serves v11).
+    const active = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
+    expect(active.version).toBe(11);
+    expect(active.body).toBe("v11 ACTIVE");
+    expect(rows.filter((r) => r.status === "active")).toHaveLength(1);
+  });
+
+  test("a NON-gated skill name is rejected (only eval-gated skills route through the gate)", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "email-drafter", version: 1, body: "v1", status: "active" });
+
+    await expect(
+      t.mutation(internal.skills.insertCandidate, { name: "email-drafter", body: "NEW" }),
+    ).rejects.toThrow(/NOT_GATED/);
+
+    // Nothing inserted — the registry is unchanged.
+    expect(await rowsOf(t, "email-drafter")).toHaveLength(1);
+  });
+
+  test("a byte-identical NEWEST body is idempotent — inserts nothing, returns the existing version", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 11, body: "v11 ACTIVE", status: "active" });
+    await insert(t, { name: "cockpit-agent", version: 12, body: "CANDIDATE BODY", status: "candidate" });
+
+    const res = await t.mutation(internal.skills.insertCandidate, {
+      name: "cockpit-agent",
+      body: "CANDIDATE BODY", // identical to the newest row
+    });
+
+    expect(res).toEqual({ name: "cockpit-agent", fromVersion: 11, toVersion: 12, inserted: false });
+    // No churn: still exactly the two rows, no v13 minted.
+    expect(await rowsOf(t, "cockpit-agent")).toHaveLength(2);
+  });
+});
+
 describe("no hardcoded agent prompts in convex/", () => {
   test.each([
     ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
