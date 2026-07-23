@@ -58,7 +58,14 @@
     "packages/contracts/src/skill.ts",
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
-    "packages/backend/scripts/run-seed.mjs"
+    "packages/backend/scripts/run-seed.mjs",
+    "packages/backend/convex/feedback.ts",
+    "packages/backend/convex/optimizerConfig.ts",
+    "packages/backend/convex/optimizerEligibility.ts",
+    "packages/backend/convex/skilloptExport.ts",
+    "packages/core/src/optimizerBreach.ts",
+    "skillopt/",
+    ".github/workflows/skillopt.yml"
   ],
   "intake.md": [
     "packages/extraction/",
