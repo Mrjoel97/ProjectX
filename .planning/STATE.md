@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 08-07-PLAN.md
-last_updated: "2026-07-24T00:00:00.000Z"
-last_activity: "2026-07-24 — Phase 8 Self-Improvement, Wave 5: 08-07 executed — the OFFLINE SkillOpt batch runner (IMPR-02 deployment), the Python-side glue to the TS export/writeback seams, shipping DORMANT. NEW skillopt/envs/pikar_cockpit/ env package (v0.2.0 contract, imports ZERO TS — glued to Convex only by URL/CLI contracts, shares no files with any other Phase 8 plan): dataloader.py = PikarCockpitDataLoader(SplitDataLoader) whose load_split_items(split_path) reads the Plan-04 export JSON ({skillName, items:[{id,task_description,conversation,hard,soft,skillVersion,split}]}) and returns the items whose exported `split` matches the split the PATH NAMES — split chosen off the path BASENAME (norm valid_unseen->valid), NOT a hardcoded YAML key, so the LOW-confidence v0.2.0 split-path key names (RESEARCH OQ2) get a one-line fix at the 08-08 dry-run with NO loader change (correct-by-contract); pure partition/split_of_path/read_split_items helpers + a __main__ self-check asserting the partition matches the export field, runnable offline (skillopt import-shims to `object` when absent). rollout.py = run_batch(*, items, skill_content, out_root, workers, max_completion_tokens) SCORES edits by EXECUTING THE REAL COCKPIT SKILL (no second engine, RESEARCH Pitfall 3): mints skill_content as a pinnable candidate via POST /skillopt/writeback (the only body->version seam that exists; ponytail-flagged one-candidate-per-batch, per-edit audit/notify noise = accepted dormant ceiling, dev-pin upgrade path), then per item seeds a fresh cockpit plan + drives its user turns through `convex run llm:runCockpitAgent` with skillVersions pinned — invoking NODE DIRECTLY (no shell; tenantIds carry '|') and judging success by STDOUT JSON not exit code (mirrors smokeRun.mjs must(), RESEARCH Pitfall 6); persists <out_root>/predictions/<id>/conversation.json, returns {id, hard=exported thumbs (OQ1), soft=plan-state health (status/subject/body/recipients, the eval:golden shape)}. adapter.py = thin PikarCockpitAdapter(EnvAdapter) wiring. configs/pikar_cockpit/default.yaml = conservative (LOW edit budget, TINY valid split) searchqa-template shape. skills/initial.md = active cockpit-agent body FETCHED at run start, no hardcoded prompt (CLAUDE.md §5). requirements.txt pins skillopt==0.2.0 EXACT (§6). NEW .github/workflows/skillopt.yml = DORMANT two-gate CI batch runner: on {weekly cron, workflow_dispatch}; GATE 1 kill switch reads optimizerConfig.getOptimizerConfig, no-ops when enabled=false (ship default OFF); GATE 2 eligibility — scheduled cron proceeds ONLY on an optimizerEligibility breach, workflow_dispatch BYPASSES (manual dry-run) so the cron is breach-triggered, never a disguised SkillOpt-Sleep (08-CONTEXT defer); pipeline (only if enabled AND (dispatched OR eligible)): pip install, GET /skillopt/export, fetch active body, train.py, POST /skillopt/writeback candidate, pnpm eval:golden --skill cockpit-agent@<toVersion> to record the EVAL_GATE evidence; golden eval-cases/*.json NEVER an export/train source (held-out integrity); `on:` quoted so YAML keeps the string key. Commits 0ed681a (T1 env package), 3d8c1b3 (T2 workflow). NO deviations (two correct-by-contract choices: quoted on-key, named eval:golden script). VERIFIED offline: python dataloader.py -> 'self-check PASSED'; ast.parse all *.py -> PY_OK; yaml.safe_load skillopt.yml -> YML_OK (cron + workflow_dispatch present). DORMANT + NOT armed this phase — live correctness (real export/train/writeback/eval) is the 08-08 dry-run via workflow_dispatch, which also verifies the exact SkillOpt YAML split keys + base-class signatures. Playbook/watch.json for ALL of Phase 8 stay centralized in 08-08 (new skillopt/ + .github/ paths registered by the §9 sweep; check-playbooks self-clears on the second stop). NEXT: 08-05/08-06 (write-back + feedback UI) then 08-08 (dry-run + phase close + playbook sweep)."
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-07-23T21:49:39.263Z"
+last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 16
   total_plans: 132
-  completed_plans: 126
+  completed_plans: 127
 ---
 
 ---
@@ -625,6 +625,7 @@ Progress: [█████████░] 94%
 | Phase 08 P01 | 15 | 2 tasks | 3 files |
 | Phase 08 P02 | 9min | 2 tasks | 4 files |
 | Phase 08 P07 | 25min | 2 tasks | 8 files |
+| Phase 08 P06 | ~11min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -764,6 +765,8 @@ Recent decisions affecting current work:
 - [Phase 07]: OPSG-05 notify choke point: in-app insert then best-effort fail-closed loop-guarded external email (send-to-self via governed Gmail seam)
 - [Phase 08]: Optimizer ships DORMANT: optimizerConfig.enabled defaults false (missing row reads enabled=false)
 - [Phase 08]: 08-04: trajectory export is a SEPARATE PII-scrubbed plane (packages/pii scanText, safeText+counts only), fail-closed drop on any scan Err; names-in-prose is a ponytail-flagged HARD BLOCKER before Phase 9 multi-user
+- [Phase 08]: 08-06: EVAL_GATE flip defined ONCE (activateSkillVersion) — activateSkill + owner-gated activateCandidate both route through it; an unevaluated gated candidate cannot go live from the ops UI
+- [Phase 08]: 08-06: owner gate in the single-user MVP = tenantMutation/tenantQuery (authenticated identity); skills/optimizerConfig stay global rows the identity guards
 
 ### Roadmap Evolution
 
@@ -788,8 +791,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-23T21:19:53.038Z
-Stopped at: Completed 08-07-PLAN.md
+Last session: 2026-07-23T21:48:37.477Z
+Stopped at: Completed 08-06-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
