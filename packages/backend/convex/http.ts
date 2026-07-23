@@ -112,26 +112,38 @@ http.route({
       return new Response("unauthorized", { status: 401 });
     }
 
-    const { name, body, runId, negativeRate, sampleCount, tenantId } = (await req.json()) as {
+    const { name, body, runId, negativeRate, sampleCount } = (await req.json()) as {
       name: string;
       body: string;
       runId: string;
       negativeRate: number;
       sampleCount: number;
-      tenantId: string;
     };
 
+    // SECURITY: the audit/notify tenant is NOT taken from the request body — a body-supplied
+    // tenantId is attacker-controllable (anyone with SKILLOPT_TOKEN could aim an audit row or a
+    // notification at an arbitrary tenant = cross-tenant write / IDOR). It comes from trusted
+    // server-side config (SKILLOPT_OWNER_TENANT env, same trust class as SKILLOPT_TOKEN). The owner
+    // sets it when configuring the optimizer; the dormant-ship default means writeback isn't
+    // legitimately called until then. ponytail: env config is the owner-scoped source — a per-owner
+    // config row only becomes worth it once there is more than one owner (Phase 9).
+    const ownerTenant = process.env.SKILLOPT_OWNER_TENANT;
+
     // Route the optimized body through the registry gate. A non-gated name throws here → 500 (rejected).
+    // The skill registry is GLOBAL (insertCandidate is tenant-agnostic), so the candidate lands
+    // regardless — only the tenant-scoped audit/notify below depend on a trusted owner tenant.
     const { fromVersion, toVersion, inserted } = await ctx.runMutation(internal.skills.insertCandidate, {
       name,
       body,
     });
 
     // Only a genuinely NEW candidate is an optimization: an idempotent repost writes no audit/notify (no churn).
-    if (inserted) {
+    // Skip the tenant-scoped audit/notify when no trusted owner tenant is configured rather than
+    // writing them against an untrusted tenant — the global candidate is still safely inserted above.
+    if (inserted && ownerTenant) {
       // IMPR-03: ONE insert-only audit row — refs/counts ONLY (§3/§4). No skill body, no user content.
       await ctx.runMutation(internal.audit.log, {
-        tenantId,
+        tenantId: ownerTenant,
         correlationId: runId,
         eventType: "skill.optimized",
         actor: "skillopt",
@@ -140,13 +152,13 @@ http.route({
 
       // Owner "candidate ready" notification via the choke point — the static label carries no refs/content (§4).
       await ctx.runMutation(internal.notifications.notify, {
-        tenantId,
+        tenantId: ownerTenant,
         kind: "optimizer.candidate",
         message: notificationMessage("optimizer.candidate"),
       });
     }
 
-    return Response.json({ ok: true, fromVersion, toVersion, inserted });
+    return Response.json({ ok: true, fromVersion, toVersion, inserted, notified: inserted && !!ownerTenant });
   }),
 });
 
