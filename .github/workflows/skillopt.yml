@@ -1,0 +1,153 @@
+# SkillOpt — the offline, DORMANT skill optimizer (IMPR-02).
+#
+# Ships DORMANT and stays that way until Phase 9 arms it. Two gates keep the pipeline a no-op:
+#   1. KILL SWITCH  — reads optimizerConfig.enabled (default false, Plan 08-01); no-op when off.
+#   2. ELIGIBILITY  — a SCHEDULED cron runs the pipeline ONLY on an optimizerEligibility breach
+#                     (08-03); workflow_dispatch (the manual kick / dry-run) BYPASSES eligibility.
+# The cron below is the FUTURE cadence, NOT a nightly SkillOpt-Sleep (that is explicitly deferred in
+# 08-CONTEXT) — the eligibility gate makes it a breach-triggered loop, never a disguised sleep.
+#
+# The golden in-repo eval-cases/*.json are NEVER an export/train source (held-out integrity) — the
+# only train data is GET /skillopt/export, which is feedback->request rows (08-04). A WRITE-BACK
+# lands a gated CANDIDATE (never active); the owner activates it on the ops page (human-in-the-loop).
+#
+# convex run success is judged by CLI OUTPUT, not exit code (Windows/Node24 teardown crash, RESEARCH
+# Pitfall 6): we capture stdout (JSON) and parse the gate field with jq.
+#
+# Secrets (owner's own deployment):
+#   CONVEX_DEPLOY_KEY  — deploy key so `convex run` targets the deployment
+#   SKILLOPT_TOKEN     — bearer for GET /skillopt/export + POST /skillopt/writeback
+#   SKILLOPT_HTTP_URL  — the deployment's .convex.site base URL
+#   OPENAI_API_KEY     — set on the deployment for the live rollout + eval:golden model calls
+
+name: skillopt
+
+# Quoted so YAML keeps the string key `on` (unquoted `on` parses to boolean true) — GitHub accepts both.
+"on":
+  schedule:
+    # Weekly Mon 04:17 UTC — future cadence only; the eligibility gate gates every tick.
+    - cron: "17 4 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: skillopt
+  cancel-in-progress: false
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      SKILLOPT_TOKEN: ${{ secrets.SKILLOPT_TOKEN }}
+      SKILLOPT_HTTP_URL: ${{ secrets.SKILLOPT_HTTP_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The convex CLI (for the gate queries) lives in packages/backend/node_modules — install it
+      # BEFORE the gates, since the gates ARE `convex run` calls. ponytail: one workspace install;
+      # the heavy python/train work stays behind both gates below.
+      - name: Install workspace (pnpm)
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      # ── GATE 1: KILL SWITCH (belt-and-suspenders to a disabled schedule) ──────────────────────
+      - name: Kill-switch gate (optimizerConfig.enabled)
+        id: killswitch
+        working-directory: packages/backend
+        run: |
+          OUT=$(node node_modules/convex/bin/main.js run optimizerConfig:getOptimizerConfig '{}' 2>/dev/null || true)
+          echo "optimizerConfig: $OUT"
+          ENABLED=$(printf '%s' "$OUT" | jq -r '.enabled // false')
+          if [ "$ENABLED" != "true" ]; then
+            echo "optimizer dormant (enabled=$ENABLED) — skipping"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── GATE 2: ELIGIBILITY (cron = breach-only; workflow_dispatch bypasses) ───────────────────
+      - name: Eligibility gate (optimizerEligibility breach; dispatch bypasses)
+        id: eligibility
+        if: steps.killswitch.outputs.proceed == 'true'
+        working-directory: packages/backend
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual dispatch — bypassing eligibility (dry-run/testing)"
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "neg=0" >> "$GITHUB_OUTPUT"
+            echo "n=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          OUT=$(node node_modules/convex/bin/main.js run optimizerEligibility:optimizerEligibility '{}' 2>/dev/null || true)
+          echo "optimizerEligibility: $OUT"
+          ELIGIBLE=$(printf '%s' "$OUT" | jq -r '.eligible // false')
+          echo "neg=$(printf '%s' "$OUT" | jq -r '.negativeRate // 0')" >> "$GITHUB_OUTPUT"
+          echo "n=$(printf '%s' "$OUT" | jq -r '.sampleCount // 0')" >> "$GITHUB_OUTPUT"
+          if [ "$ELIGIBLE" != "true" ]; then
+            echo "not eligible (no breach) — skipping the pipeline this tick"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── PIPELINE: only when enabled AND (dispatched OR eligible) ───────────────────────────────
+      - name: Set up Python
+        if: steps.eligibility.outputs.proceed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install SkillOpt
+        if: steps.eligibility.outputs.proceed == 'true'
+        run: pip install -r skillopt/requirements.txt
+
+      - name: Export scrubbed trajectories (GET /skillopt/export)
+        if: steps.eligibility.outputs.proceed == 'true'
+        run: |
+          # feedback->request rows only (08-04); the golden eval-cases/*.json are NEVER exported.
+          curl -fsS -H "Authorization: Bearer $SKILLOPT_TOKEN" "$SKILLOPT_HTTP_URL/skillopt/export" -o export.json
+
+      - name: Fetch active cockpit-agent body -> skills/initial.md
+        if: steps.eligibility.outputs.proceed == 'true'
+        working-directory: packages/backend
+        run: |
+          OUT=$(node node_modules/convex/bin/main.js run skills:getActiveSkill '{"name":"cockpit-agent"}' 2>/dev/null)
+          printf '%s' "$OUT" | jq -r '.body' > "$GITHUB_WORKSPACE/skillopt/envs/pikar_cockpit/skills/initial.md"
+
+      - name: Train (rollout -> reflect -> edit -> held-out-accept)
+        if: steps.eligibility.outputs.proceed == 'true'
+        env:
+          SKILLOPT_EXPORT: ${{ github.workspace }}/export.json
+        run: |
+          python scripts/train.py \
+            --config skillopt/envs/pikar_cockpit/configs/pikar_cockpit/default.yaml \
+            --out_root outputs/run
+          test -f outputs/run/best_skill.md
+
+      - name: Write back best_skill.md as a CANDIDATE (owner activates)
+        if: steps.eligibility.outputs.proceed == 'true'
+        run: |
+          BODY=$(jq -Rs . < outputs/run/best_skill.md)
+          PAYLOAD=$(jq -nc \
+            --argjson body "$BODY" \
+            --arg runId "${{ github.run_id }}" \
+            --argjson neg "${{ steps.eligibility.outputs.neg }}" \
+            --argjson n "${{ steps.eligibility.outputs.n }}" \
+            '{name:"cockpit-agent", body:$body, runId:$runId, negativeRate:$neg, sampleCount:$n, tenantId:"skillopt-ci"}')
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $SKILLOPT_TOKEN" -H "Content-Type: application/json" \
+            -d "$PAYLOAD" "$SKILLOPT_HTTP_URL/skillopt/writeback" -o writeback.json
+          echo "TO_VERSION=$(jq -r '.toVersion' writeback.json)" >> "$GITHUB_ENV"
+
+      - name: Record eval evidence on the candidate (EVAL_GATE input)
+        if: steps.eligibility.outputs.proceed == 'true'
+        run: |
+          # eval:golden --skill pins the new candidate; an all-green run records the passing evidence
+          # activateSkill's EVAL_GATE requires before the owner can flip it live.
+          pnpm --filter @pikar/backend eval:golden --skill "cockpit-agent@${TO_VERSION}"
