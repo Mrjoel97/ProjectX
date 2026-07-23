@@ -74,7 +74,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 - [x] **IMPR-01**: User feedback (rating/comment) is captured on delivered responses
 - [x] **IMPR-02**: Feedback threshold breach triggers the autonomous prompt-optimization loop, gated by automated eval checks, with one-click rollback and a kill switch
-- [ ] **IMPR-03**: Prompts are versioned; every optimization records before/after versions and the triggering evidence
+- [x] **IMPR-03**: Prompts are versioned; every optimization records before/after versions and the triggering evidence
 
 ### Agent Evaluation
 
@@ -177,7 +177,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOIC-04 | Phase 6 | Complete |
 | IMPR-01 | Phase 8 | Complete |
 | IMPR-02 | Phase 8 | Complete |
-| IMPR-03 | Phase 8 | Pending |
+| IMPR-03 | Phase 8 | Complete |
 | EVAL-01 | Phase 3.6 | Complete |
 | EVAL-02 | Phase 3.6 | Complete |
 | OPSG-01 | Phase 2 | Complete |

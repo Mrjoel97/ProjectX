@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
+stopped_at: Completed 08-05-PLAN.md
+last_updated: "2026-07-24T00:20:00.000Z"
+last_activity: "2026-07-24 — Phase 8 Self-Improvement, Wave 4: 08-05 executed — the HUMAN-IN-THE-LOOP write-back seam (IMPR-02 + IMPR-03). NEW skills.insertCandidate internalMutation: accepts a SkillOpt-authored EXTERNAL body and mints it as a NEW CANDIDATE (version=maxVer+1, status='candidate') — mirrors seedSkills' gated-candidate branch but body-as-arg. It NEVER sets status='active' and NEVER patches a prior row (immutable-per-version, §5) — activation stays the owner's SEPARATE activateSkill/EVAL_GATE click (Plan 06 ops panel). Rejects a non-gated name (NOT_GATED — only eval-gated skills route through the gate), throws NO_ACTIVE_SKILL for an unseeded skill, and is idempotent vs the NEWEST row body (byte-identical repost → no insert, Pitfall 1). Returns { name, fromVersion (the LIVE/active version — the audit 'before'), toVersion, inserted }. NEW http.ts POST /skillopt/writeback (httpAction, same SKILLOPT_TOKEN bearer + fail-closed 401 as /export): body { name, body, runId, negativeRate, sampleCount, tenantId } → insertCandidate → when inserted, ONE insert-only audit row via internal.audit.log (eventType 'skill.optimized', payload { skillName, fromVersion, toVersion, runId, negativeRate, sampleCount } — refs/counts ONLY, no body, §3/§4) + internal.notifications.notify { kind:'optimizer.candidate' } (static §4 label, refs-free) → returns { ok, fromVersion, toVersion, inserted }. NEW notificationTemplates optimizer.candidate kind (union + NOTIFICATION_KINDS + MESSAGES Record — a missing key is a compile error; static label 'A new optimized skill candidate is ready for your review.'). ONE Rule-2 deviation: the endpoint gates audit+notify on inserted===true (an idempotent repost churns no audit row + no duplicate notification — full 'no churn' beyond the plan's registry-only idempotence), and http.ts was added to the §4 llmRedaction notify-site scan (the new notify site is now firewall-covered). TDD Task 1: RED (3 failing — export missing) → GREEN 37/37, no refactor. Task 2 code-first. Commits d2f0f24 (T1 insertCandidate + 3 tests), e28fd59 (T2 writeback + audit + notify + kind + §4 scan). VERIFIED: skills 37/37, notificationTemplates 4/4, llmRedaction 33/33 green; backend source tsc clean except the PRE-EXISTING lib/functions.ts(25,3) TS2322 (documented 08-01/08-04 — my files add zero new errors). Candidate never reaches active without the owner's gated click. Playbook/watch.json for ALL of Phase 8 stay centralized in Plan 08-08 (deliberately untouched — check-playbooks self-clears on the second stop). NEXT: 08-06 (feedback UI on delivered ReportCard + ops kill-switch/activate panel — the owner surface that flips this candidate live)."
+progress:
+  total_phases: 21
+  completed_phases: 16
+  total_plans: 132
+  completed_plans: 125
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: ready
 stopped_at: Completed 08-04-PLAN.md
 last_updated: "2026-07-23T21:08:07.753Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."

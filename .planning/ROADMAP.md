@@ -410,7 +410,7 @@ Plans:
 - [x] 08-02-PLAN.md — Feedback capture mutation + skill-version attribution at propose/executePlan (Wave 2)
 - [x] 08-03-PLAN.md — Threshold-breach eligibility: pure classifier + optimizerEligibility query (Wave 2)
 - [x] 08-04-PLAN.md — PII-scrubbed trajectory export endpoint (fail-closed) (Wave 3)
-- [ ] 08-05-PLAN.md — Candidate write-back through the eval gate + IMPR-03 audit + owner notification (Wave 4)
+- [x] 08-05-PLAN.md — Candidate write-back through the eval gate + IMPR-03 audit + owner notification (Wave 4)
 - [ ] 08-06-PLAN.md — Feedback UI on delivered ReportCard + ops kill-switch/activate panel (Wave 5)
 - [ ] 08-07-PLAN.md — SkillOpt Python env package + dormant GitHub Actions batch runner (Wave 5)
 - [ ] 08-08-PLAN.md — Manual cockpit-agent dry-run (proof-of-life) + playbook/watch + phase close (Wave 6)
@@ -449,5 +449,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (live in-browser verified + P0 embed fix) | 2026-07-14 |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
-| 8. Self-Improvement | 4/8 | In Progress | - |
+| 8. Self-Improvement | 5/8 | In Progress | - |
 | 9. Private Beta Productionization | 0/TBD | Not started | - |
