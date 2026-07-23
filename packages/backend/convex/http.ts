@@ -75,4 +75,24 @@ http.route({
   }),
 });
 
+// IMPR-02 trajectory export: the authenticated seam the CI SkillOpt job pulls PII-scrubbed
+// trajectories from. Auth is a shared bearer token (SKILLOPT_TOKEN) — this is the owner's OWN
+// deployment and the CI job holds the token, so a shared secret is the ponytail-right auth here
+// (no OAuth). All scrubbing + fail-closed dropping happens in buildTrajectoryExport; this route
+// only gates access and serializes the result.
+http.route({
+  path: "/skillopt/export",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const expected = process.env.SKILLOPT_TOKEN;
+    const auth = req.headers.get("Authorization");
+    // Fail-closed: reject when the token is unset OR the header is missing/mismatched.
+    if (!expected || auth !== `Bearer ${expected}`) {
+      return new Response("unauthorized", { status: 401 });
+    }
+    const data = await ctx.runQuery(internal.skilloptExport.buildTrajectoryExport, {});
+    return Response.json(data);
+  }),
+});
+
 export default http;
