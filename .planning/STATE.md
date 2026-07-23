@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: 08-08 COMPLETE (both tasks) — Task 1 §9 sweep (f86ba11); Task 2 cockpit-agent dry-run PASSED live (v12->13 activate + rollback to v12, eval 23/23, kill switch dormant); CI YAML-split-key residual documented. Awaiting orchestrator gsd-verifier + phase-complete — do NOT self phase-complete.
-last_updated: "2026-07-23T22:41:56.260Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-07-23T23:42:59.229Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
@@ -792,9 +792,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-23T22:33:08.753Z
-Stopped at: 08-08 COMPLETE (both tasks) — Task 1 §9 sweep (f86ba11); Task 2 cockpit-agent dry-run PASSED live (v12->13 activate + rollback to v12, eval 23/23, kill switch dormant); CI YAML-split-key residual documented. Awaiting orchestrator gsd-verifier + phase-complete — do NOT self phase-complete.
-Resume file: None
+Last session: 2026-07-23T23:42:59.208Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-private-beta-productionization/09-CONTEXT.md
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
 pushes then stops the workpool, so async `onComplete`/scheduler steps never
