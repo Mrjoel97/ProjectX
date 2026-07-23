@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-07-21T15:43:57.370Z"
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-07-23T21:08:07.753Z"
 last_activity: "2026-07-14 — Phase 3.3 Wave 3: 03.3-05 executed (executePlan attachment send fan-out + PLAN/REPORT card attachment rows; CKPT-02). Remaining: 06 (phase close + human-verify)."
 progress:
   total_phases: 21
   completed_phases: 16
   total_plans: 132
-  completed_plans: 123
+  completed_plans: 124
 ---
 
 ---
@@ -747,6 +747,7 @@ Recent decisions affecting current work:
 - [Phase 07-resilience-operations-hardening]: 07-02: WORM export is EXPORT ONLY (owner ruling) — real S3 PutObject under COMPLIANCE Object Lock + SHA256, cursor advances only after a durable write; hot audit-table sweep DEFERRED (SC#4 partial)
 - [Phase 07]: OPSG-05 notify choke point: in-app insert then best-effort fail-closed loop-guarded external email (send-to-self via governed Gmail seam)
 - [Phase 08]: Optimizer ships DORMANT: optimizerConfig.enabled defaults false (missing row reads enabled=false)
+- [Phase 08]: 08-04: trajectory export is a SEPARATE PII-scrubbed plane (packages/pii scanText, safeText+counts only), fail-closed drop on any scan Err; names-in-prose is a ponytail-flagged HARD BLOCKER before Phase 9 multi-user
 
 ### Roadmap Evolution
 
@@ -771,8 +772,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-21T15:27:17.530Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-07-23T21:06:31.761Z
+Stopped at: Completed 08-04-PLAN.md
 Resume file: None
 
 **Local dev backend must stay running:** `convex dev` (NOT `--once`) — `--once`
