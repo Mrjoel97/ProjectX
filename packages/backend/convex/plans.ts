@@ -305,6 +305,10 @@ export const reportForPlan = tenantQuery({
         attachments.push({ filename: att.filename, url: await ctx.storage.getUrl(att.storageId) });
       }
       report.push({
+        // The requests row id — the requestId the delivered-response feedback control keys
+        // off (api.feedback.myFeedback/submitFeedback), so a rating attributes to the exact
+        // skillVersion copied onto this row at executePlan (Plan 02/06).
+        requestId: r._id,
         recipient: r.recipient,
         status: r.status,
         correlationId: r.correlationId,

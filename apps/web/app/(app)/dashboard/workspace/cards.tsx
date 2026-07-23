@@ -426,6 +426,114 @@ function DraftCard({ plan }: { plan: Plan }) {
   );
 }
 
+// A delivered ReportCard row (plans.reportForPlan) — the shape the feedback control keys off.
+type ReportRow = FunctionReturnType<typeof api.plans.reportForPlan>[number];
+type RequestId = ReportRow["requestId"];
+
+// IMPR-01 feedback on the delivered response: thumbs up/down (+ an optional single-line "why"
+// on thumbs-down), editable/undoable. ponytail: no debounce/optimistic cache — Convex
+// reactivity re-renders myFeedback after every mutation; two buttons + one input wired to the
+// three Plan-02 mutations is the laziest correct control. Selected state is NOT colour-only
+// (aria-pressed + a filled/outlined weight + the ✓ affordance), per BRAND §6 a11y.
+function FeedbackControl({ requestId }: { requestId: RequestId }) {
+  const current = useQuery(api.feedback.myFeedback, { requestId });
+  const submit = useMutation(api.feedback.submitFeedback);
+  const undo = useMutation(api.feedback.undoFeedback);
+  const [comment, setComment] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (current === undefined) return null; // first load — render nothing rather than a flicker
+  const rating = current?.rating ?? null;
+  // Reveal the comment field on thumbs-down (the qualitative "why" SkillOpt needs) or whenever a
+  // comment already exists; `comment` state is the in-flight edit, falling back to the stored one.
+  const showComment = rating === "down" || (current?.comment ?? "") !== "";
+  const commentValue = comment ?? current?.comment ?? "";
+
+  async function choose(next: "up" | "down") {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // Clicking the SELECTED thumb again UNDOES (a mis-tap is reversible); the other thumb EDITS.
+      if (rating === next) {
+        await undo({ requestId });
+        setComment(null);
+      } else {
+        await submit({ requestId, rating: next, comment: commentValue || undefined });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveComment() {
+    if (busy || !rating) return; // a comment without a rating has nothing to attribute to
+    setBusy(true);
+    try {
+      await submit({ requestId, rating, comment: commentValue || undefined });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const thumb = (value: "up" | "down", glyph: string, aria: string) => {
+    const active = rating === value;
+    return (
+      <button
+        type="button"
+        aria-pressed={active}
+        aria-label={aria}
+        disabled={busy}
+        onClick={() => void choose(value)}
+        style={{
+          ...btn,
+          padding: "0.25rem 0.6rem",
+          fontSize: "0.95rem",
+          lineHeight: 1,
+          border: active ? "1px solid var(--teal-600)" : "1px solid var(--rule, #d8dbe0)",
+          background: active ? "var(--teal-600)" : "var(--card, #fff)",
+          color: active ? "#fff" : "var(--ink-soft, #55606c)",
+          fontWeight: active ? 700 : 500,
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {glyph}
+        {active ? " ✓" : ""}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", width: "100%" }}>
+      <span style={{ ...dim, fontSize: "0.78rem" }}>Rate this reply:</span>
+      {thumb("up", "👍", "Helpful")}
+      {thumb("down", "👎", "Not helpful")}
+      {showComment && (
+        <input
+          type="text"
+          value={commentValue}
+          disabled={busy}
+          onChange={(e) => setComment(e.target.value)}
+          onBlur={() => void saveComment()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void saveComment();
+          }}
+          placeholder="What was off? (optional)"
+          aria-label="Optional feedback comment"
+          style={{
+            flex: "1 1 12rem",
+            minWidth: "10rem",
+            padding: "0.3rem 0.55rem",
+            borderRadius: "0.375rem",
+            border: "1px solid var(--rule, #d8dbe0)",
+            fontSize: "0.82rem",
+            fontFamily: "inherit",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function ReportCard({ planId }: { planId: PlanId }) {
   // LIVE projection (plans.reportForPlan): one row per recipient, filling as the fan-out
   // patches requests.status and the gmail.sent audit lands the messageId. Reactive — no polling.
@@ -462,6 +570,9 @@ function ReportCard({ planId }: { planId: PlanId }) {
                   CLAUDE.md §4). ponytail: a dedicated per-correlation audit-trail view is a later
                   slice — surfacing the id (selectable) is the honest link target for now. */}
               <code style={{ ...dim, marginLeft: "auto" }}>audit: {r.correlationId}</code>
+              {/* IMPR-01: feedback lives on the DELIVERED response — only a sent row is a real
+                  outcome to rate (and only a sent row has an attributable skillVersion to score). */}
+              {r.status === "sent" && <FeedbackControl requestId={r.requestId} />}
             </li>
           ))}
         </ul>
