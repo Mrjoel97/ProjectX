@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-24 against 87f143d
+> Last verified: 2026-07-24 against 11-03 (Wave 3 — onboarding UI + first-run gate shipped)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -26,13 +26,23 @@ Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/src/skill.ts` — `BUSINESS_PROFILE_SKILL` name const (UNGATED — absent from `GATED_SKILLS`)
 - `packages/backend/convex/skills.ts` — `seedSkills[]` row that boots it v1/active
 
-Backend adapter (Wave 2 — LIVE) + frontend (Waves 3-4 — registered here so the Stop hook protects them):
+Backend adapter (Wave 2 — LIVE) + frontend (Wave 3 gate+onboarding LIVE; profile page Wave 4):
 - `packages/backend/convex/onboarding.ts` — thin adapter (§1): `status` (tenantQuery, first-run gate),
   `extractProfile` (tenantAction, returns the object — NEVER auto-commits, SC#1), `commitProfile` +
   `updateProfile` (tenantMutation, persistBrief clone → `startIngest`; updateProfile re-embeds in place).
   Checks: `onboarding.test.ts` (SC#1/#2/#3) + `profileRedaction.test.ts` (SC#4).
-- `apps/web/app/(app)/dashboard/onboarding/` — the first-run onboarding flow (Wave 3-4)
-- `apps/web/app/(app)/dashboard/profile/` — the profile view/edit page (re-embeds on save) (Wave 3-4)
+- `apps/web/app/(app)/layout.tsx` — the first-run GATE (Wave 3, LIVE): inside `<Authenticated>` Shell,
+  `useQuery(api.onboarding.status)` → `router.replace("/dashboard/onboarding")` for `needsOnboarding`
+  tenants; the shell loader holds while the status query resolves. NOT in `middleware.ts` (invariant below).
+- `apps/web/app/(app)/dashboard/onboarding/page.tsx` — the first-run onboarding flow (Wave 3, LIVE):
+  a conversational surface (BRAND §5 chat idiom, adapted — NOT the thread-bound ChatPane) with the three
+  ONBD-02 intake modalities all reducing to `intakeText` for `extractProfile`: pasted text (compose box) →
+  straight through; uploaded file and spoken brief (MediaRecorder one-shot) → `vault.vaultUpload` → poll
+  `listVaultDocs` until the row's extracted `text` lands (pending_extraction/extracting show a waiting
+  state) → `extractProfile`. The result renders a pre-filled EDITABLE review card + a persona confirm/change
+  control (SC#1); `commitProfile` on confirm releases the gate (`router.replace("/dashboard")`). Resumable
+  via a `pikar:onboarding-draft` localStorage draft (no new table — RESEARCH Open-Q2), cleared on commit.
+- `apps/web/app/(app)/dashboard/profile/` — the profile view/edit page (re-embeds on save) (Wave 4)
 
 ## Dependencies & blast radius
 
