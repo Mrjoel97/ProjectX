@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: planning
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-24T03:52:20.379Z"
-last_activity: 2026-07-24 — v2.0 roadmap created (Phases 10-25)
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-07-24T04:41:31Z"
+last_activity: 2026-07-24 — Plan 10-01 shipped (vaultGroundHydrated + shared runVaultGround helper)
 progress:
   total_phases: 37
   completed_phases: 17
-  total_plans: 132
-  completed_plans: 128
+  total_plans: 136
+  completed_plans: 129
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 10 of 25 (Vault->Agent Grounding) — first phase of milestone v2.0
-Plan: none yet (phase not planned)
-Status: Ready to plan
-Last activity: 2026-07-24 — v2.0 roadmap created (Phases 10-25)
+Plan: 01 of 4 complete (vault hydration path)
+Status: Executing — Plan 02 next (runCockpitAgent wiring)
+Last activity: 2026-07-24 — Plan 10-01 shipped (vaultGroundHydrated + shared runVaultGround helper)
 
-Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases)
+Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 1/4 plans)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -45,11 +45,15 @@ Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases)
 ## Performance Metrics
 
 **Velocity:** (v2.0)
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1
+- Average duration: ~5 min
+- Total execution time: ~5 min
 
-**Recent Trend:** n/a (milestone just opened)
+| Phase | Plan | Duration | Tasks | Files |
+|-------|------|----------|-------|-------|
+| 10 | 01 | 5 min | 2 | 3 |
+
+**Recent Trend:** 10-01 landed clean (TDD, 12/12 vaultGround green, zero functional deviations).
 
 *Updated after each plan completion.*
 
@@ -77,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T03:52:20.364Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/10-vault-agent-grounding/10-CONTEXT.md
+Last session: 2026-07-24T04:41:31Z
+Stopped at: Completed 10-01-PLAN.md (vault hydration path)
+Resume file: .planning/phases/10-vault-agent-grounding/10-02-PLAN.md
