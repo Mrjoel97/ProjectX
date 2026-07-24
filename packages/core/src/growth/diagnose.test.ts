@@ -119,6 +119,7 @@ describe("diagnose — top-down gate router (stop at first failing gate)", () =>
     const sc = healthy();
     sc.financials.cac = 400; // threshold 300
     sc.financials.ltgp = 2000; // keep ratio >= floor so gate 2 passes
+    sc.financials.thirtyDayCashPerCustomer = 500; // >= cac so the tdc<cac gate 2 doesn't preempt
     const rx = diagnose(sc);
     expect(rx.gate).toBe(3);
     expect(rx.route).toBe("lead-engine");
