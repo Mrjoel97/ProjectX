@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-07-24T04:41:31Z"
-last_activity: 2026-07-24 — Plan 10-01 shipped (vaultGroundHydrated + shared runVaultGround helper)
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-07-24T05:01:52.985Z"
+last_activity: 2026-07-24 — Plan 10-02 shipped (searchVault tool + vaultSources card + vault.searched audit + ADR-006)
 progress:
   total_phases: 37
   completed_phases: 17
   total_plans: 136
-  completed_plans: 129
+  completed_plans: 130
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 10 of 25 (Vault->Agent Grounding) — first phase of milestone v2.0
-Plan: 01 of 4 complete (vault hydration path)
-Status: Executing — Plan 02 next (runCockpitAgent wiring)
-Last activity: 2026-07-24 — Plan 10-01 shipped (vaultGroundHydrated + shared runVaultGround helper)
+Plan: 02 of 4 complete (searchVault cockpit grounding tool)
+Status: Executing — Plan 03 next (source-card UI + VERB label)
+Last activity: 2026-07-24 — Plan 10-02 shipped (searchVault tool + vaultSources card + vault.searched audit + ADR-006)
 
-Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 1/4 plans)
+Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 2/4 plans)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -45,15 +45,16 @@ Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 1/
 ## Performance Metrics
 
 **Velocity:** (v2.0)
-- Total plans completed: 1
-- Average duration: ~5 min
-- Total execution time: ~5 min
+- Total plans completed: 2
+- Average duration: ~12 min
+- Total execution time: ~25 min
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 10 | 01 | 5 min | 2 | 3 |
+| 10 | 02 | 20 min | 3 | 7 |
 
-**Recent Trend:** 10-01 landed clean (TDD, 12/12 vaultGround green, zero functional deviations).
+**Recent Trend:** 10-02 landed clean (TDD, 68/68 cockpitTools+vaultGround green, one fixture-only correction).
 
 *Updated after each plan completion.*
 
@@ -67,6 +68,7 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Roadmap]: `requireOwner` (GOVN-01) pulled EARLY to Phase 22 — it must exist before agent-authored skills (Phase 23) activate and before multi-user (Phase 25).
 - [Roadmap]: BEVL market-fact grounding depends on web research (Phase 16); Phase 12 evaluation scopes to vault-grounded findings until then.
 - [Architecture]: Every v2.0 capability is one of two shapes — a read-only tool returning content in-loop, or a write staged into the plan for the human Approve mutation. No third mechanism.
+- [Phase 10]: ADR-006: vault chunks are trusted-as-own — enter the agent loop directly (SC2-fenced), not through the toolless-ingestion firewall; fence + human Approve gate are the backstops
 
 ### Pending Todos
 
@@ -81,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T04:41:31Z
-Stopped at: Completed 10-01-PLAN.md (vault hydration path)
-Resume file: .planning/phases/10-vault-agent-grounding/10-02-PLAN.md
+Last session: 2026-07-24T05:01:20.120Z
+Stopped at: Completed 10-02-PLAN.md
+Resume file: .planning/phases/10-vault-agent-grounding/10-03-PLAN.md

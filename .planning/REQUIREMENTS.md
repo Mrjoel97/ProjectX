@@ -142,7 +142,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 - [ ] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
 - [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
-- [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
+- [x] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
 
 *(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
 
@@ -253,7 +253,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GOVN-01 | Phase 22 | Pending |
 | SKILL-02 | Phase 23 | Pending |
 | GOVN-02 | Phase 24 | Pending |
-| BETA-05 | Phase 25 | Pending |
+| BETA-05 | Phase 25 | Complete |
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)
