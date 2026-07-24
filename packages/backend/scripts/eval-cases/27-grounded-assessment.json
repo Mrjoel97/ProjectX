@@ -1,0 +1,14 @@
+{
+  "id": "27-grounded-assessment",
+  "description": "BEVL-01 assessment: the user states a figure, the agent STORES it (recordScorecardAnswer), then evaluates — the cited finding produces one real leverage-ranked gap, never a fabricated one",
+  "turns": [
+    "Some context on my business before anything else. It's called Bluewater Ledger, a bookkeeping practice, and our CAC is 180 dollars per new client. That's the only hard number I have to hand — save it so I don't have to repeat it.",
+    "Good. Now evaluate my business using the figure I just gave you, and tell me where the constraint is."
+  ],
+  "expect": {
+    "evaluationPresent": true,
+    "findingsPresent": true,
+    "gapCount": 1
+  },
+  "needles": ["Bluewater Ledger", "Bluewater"]
+}

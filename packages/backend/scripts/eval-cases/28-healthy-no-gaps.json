@@ -1,0 +1,16 @@
+{
+  "id": "28-healthy-no-gaps",
+  "description": "BEVL-01 SC #2: a business with no failing gate assesses as HEALTHY — cited findings present and ZERO gaps. gapCount 0 paired with findingsPresent is what separates this from the honest not-enough-data verdict",
+  "turns": [
+    "Health check on my business, Harborline Studio. What we sell is a done-for-you brand sprint, and lifetime gross profit per client (LTGP) is about 2400 dollars.",
+    "Two more things about how we sell: the brand sprint is our attraction offer, the front door people buy first, and we also run a monthly retainer plan that clients stay on — that's our continuity offer.",
+    "On acquisition: warm outreach is the one channel we actually run, every single week, and it keeps us full.",
+    "That's everything. Now evaluate my business."
+  ],
+  "expect": {
+    "evaluationPresent": true,
+    "findingsPresent": true,
+    "gapCount": 0
+  },
+  "needles": ["Harborline Studio", "Harborline"]
+}
