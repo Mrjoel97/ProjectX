@@ -496,7 +496,15 @@ Plans:
   3. Each surfaced gap becomes a concrete, approvable next action routed through the existing plan -> human Approve -> execute spine (the review is read-only; acting is gated).
   4. Evaluation rubrics are minted AS gated skills and activated only through the Phase-3.6 eval gate; the engine's market claims stay scoped to vault-grounded findings until web research (Phase 16) lands.
   5. Evaluation findings write refs/citations/counts only to audit/telemetry (no grounded prose leaks); an isolation assertion ships for the evaluations table.
-**Plans**: TBD
+**Plans**:  6 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — Growth OS pure-TS port (diagnose/ltgpCac/cfa + scorecard type)
+- [ ] 12-02-PLAN.md — Register 7 gated rubric/specialist skills (bodies + sync test)
+- [ ] 12-03-PLAN.md — evaluations table + engine + refs-only audit + two-tenant isolation test
+- [ ] 12-04-PLAN.md — evaluateBusiness read-tool + EVALUATION card (human-verify)
+- [ ] 12-05-PLAN.md — Gap -> proposed memo-plan + memo terminal (not email)
+- [ ] 12-06-PLAN.md — Eval-gate harness + 2 golden fixtures + cockpit-agent teaching + activation
 
 ### Phase 13: Proactive In-App Review
 **Goal**: The chief-of-staff initiates - a scheduled recurring business review is delivered in-app on a weekly-style cadence using no OAuth mailbox token, so proactivity never depends on (or silently breaks on) the Google 7-day testing token.
