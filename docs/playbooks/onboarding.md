@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-24 against efbf8d3
+> Last verified: 2026-07-24 against 87f143d
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -26,10 +26,13 @@ Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/src/skill.ts` — `BUSINESS_PROFILE_SKILL` name const (UNGATED — absent from `GATED_SKILLS`)
 - `packages/backend/convex/skills.ts` — `seedSkills[]` row that boots it v1/active
 
-Backend adapter + frontend (created by Waves 2-4 — registered here so the Stop hook protects them):
-- `packages/backend/convex/onboarding.ts` — thin adapter: extraction action + commit mutation
-- `apps/web/app/(app)/dashboard/onboarding/` — the first-run onboarding flow
-- `apps/web/app/(app)/dashboard/profile/` — the profile view/edit page (re-embeds on save)
+Backend adapter (Wave 2 — LIVE) + frontend (Waves 3-4 — registered here so the Stop hook protects them):
+- `packages/backend/convex/onboarding.ts` — thin adapter (§1): `status` (tenantQuery, first-run gate),
+  `extractProfile` (tenantAction, returns the object — NEVER auto-commits, SC#1), `commitProfile` +
+  `updateProfile` (tenantMutation, persistBrief clone → `startIngest`; updateProfile re-embeds in place).
+  Checks: `onboarding.test.ts` (SC#1/#2/#3) + `profileRedaction.test.ts` (SC#4).
+- `apps/web/app/(app)/dashboard/onboarding/` — the first-run onboarding flow (Wave 3-4)
+- `apps/web/app/(app)/dashboard/profile/` — the profile view/edit page (re-embeds on save) (Wave 3-4)
 
 ## Dependencies & blast radius
 
@@ -64,8 +67,10 @@ cannot see:
 - **The domain module is Convex-free (CLAUDE.md §1)** — `businessProfile.ts` imports no Convex, no network;
   it is pure and portable. The backend `onboarding.ts` adapter is the only place it meets the DB.
 - **§4 redaction boundary (SC#4)** — `audit` / `telemetry` / `deadLetters` payloads written during
-  onboarding carry refs / hashes / ids / counts ONLY — never a profile field value or intake prose.
-  Redact-then-write. Enforced by `profileRedaction.test.ts` (Wave 2+).
+  onboarding carry refs / hashes / ids / counts / booleans ONLY — never a profile field value or intake
+  prose. The profile `text` is CONTENT (it lives on the vaultDocuments row + rag chunks), never a log.
+  `commitProfile` / `updateProfile` emit exactly one audit event each — payload `{vaultDocId, fieldCount,
+  personaConfirmed[, reembed]}`. Enforced by `profileRedaction.test.ts` (sentinel-in-every-field scan).
 - **The extraction skill is UNGATED and SEPARATE from the gated cockpit-agent** — editing
   `business-profile.md` never touches the cockpit-agent body, and it activates v1 without an eval gate
   (its output is a vault document a human confirms, not autonomous tool-state — same rationale as
@@ -89,9 +94,9 @@ cannot see:
 
 - `pnpm --filter @pikar/core test -- businessProfile` — pure schema + always-confirm decision + serializer
   roundtrip + enterprise-not-emittable (SC#1). ~5s, no deployment needed.
-- `pnpm --filter @pikar/backend test -- onboarding` — commit→ingest→retrieve + tenant isolation
-  (SC#2/#3), convex-test. Wave 2+.
-- `pnpm --filter @pikar/backend test -- profileRedaction` — §4 audit/telemetry/DLQ scan (SC#4). Wave 2+.
+- `pnpm --filter @pikar/backend test -- onboarding` — status gate + extract-no-auto-commit (SC#1) +
+  commit→ingest→retrieve + tenant isolation + re-embed (SC#2/#3), convex-test. LIVE.
+- `pnpm --filter @pikar/backend test -- profileRedaction` — §4 audit/telemetry/DLQ scan (SC#4). LIVE.
 - `node scripts/check-playbooks.mjs` — this playbook covers its watched paths.
 - Manual first-run/resumability/review-card checks: see `11-VALIDATION.md` § Manual-Only Verifications.
 
