@@ -1,173 +1,176 @@
-# Stack Research
+# Stack Research — Pikar v2.0 Platform milestone
 
-**Domain:** Governed agentic AI operating layer (AI chief-of-staff web platform) — voice/text intake, durable multi-step orchestration, RAG, guardrails, human review, email delivery
-**Researched:** 2026-07-08
-**Confidence:** HIGH (most core choices verified against official docs/releases; a few integration-layer choices MEDIUM)
+**Domain:** Governed agentic operating layer (chief-of-staff), adding platform breadth to a shipped Convex/TS app
+**Researched:** 2026-07-24
+**Confidence:** HIGH (all versions verified live against the npm registry; integration patterns read from the actual code — `gmail.ts`, `llm.ts` tool-loop, `routing.ts`, skills registry). MEDIUM only on the Pikar-Ai MCP's OAuth specifics (remote connector, not inspectable from the repo — flagged below).
 
----
-
-## Executive Recommendation (one-liner per decision)
-
-| Decision | Recommendation | Confidence |
-|----------|---------------|------------|
-| Monorepo | pnpm workspaces + Turborepo | HIGH |
-| Web framework | Next.js 16.2 (App Router, Node 20+) | HIGH |
-| Orchestration | **Inngest** (event-driven durable steps) | HIGH |
-| AI SDK | Vercel AI SDK v6 | HIGH |
-| LLM gateway | Vercel AI Gateway + thin custom budget/cache layer | MEDIUM-HIGH |
-| Realtime voice | OpenAI Realtime API (gpt-realtime) over **WebRTC** (browser), ephemeral tokens minted server-side | HIGH |
-| Async transcription | gpt-4o-transcribe | HIGH |
-| Vector store | **pgvector** (HNSW + halfvec) in the primary Postgres | HIGH |
-| PII detection | Microsoft Presidio as a Dockerized microservice + regex prefilter (hybrid) | MEDIUM-HIGH |
-| Auth | **Better Auth** (self-hosted, magic-link/invite, org plugin) | HIGH |
-| Email | Own adapter: `googleapis` (Gmail) + `@microsoft/microsoft-graph-client` (Graph). **Not** Nylas | HIGH |
-| Observability | **Langfuse** (LLM traces/prompts/evals) + OpenTelemetry (infra) — both | HIGH |
-| Validation/contracts | Zod v4 as single source of truth → OpenAPI generation | MEDIUM-HIGH |
-| Testing | Vitest (unit/integration) + Playwright (e2e) | HIGH |
-| CI | GitHub Actions + Turborepo remote cache | HIGH |
-| ORM | **Drizzle** (code-first, SQL-close, pgvector-friendly) | HIGH |
+> **Reading note for the roadmap author.** This milestone is *breadth on an existing spine*, so the headline is how little needs adding. The existing stack (TS monorepo, Convex + pinned pre-1.0 components, `ai@7.0.20` + `@ai-sdk/openai@4.0.11` → OpenAI direct, Convex Auth, `@convex-dev/agent@0.6.4`, RAG/vault, Gmail via raw `fetch`) stays as-is. Six of the seven new capabilities need **zero or one** new runtime dependency. The two real dependency decisions are: an **MCP client** for the media service and **MSAL** for Microsoft Graph auth. Everything else is a new pure-TS `packages/*` module + a thin `convex/` adapter reusing what is already installed.
 
 ---
 
-## Recommended Stack
+## The one pattern everything reuses
 
-### Core Technologies
+The codebase already has the exact seam every new external tool needs — **`gmail.ts`**: a `"use node"` `internalAction` that calls a REST API with raw `fetch`, refreshes OAuth tokens through one shared root (`freshAccessToken`), returns a **discriminated result** (never throws on a dead token → routes to a governed reauth state), and is driven by `@convex-dev/action-retrier` for retries/dead-letter. Calendar, Contacts, People, and Microsoft Graph all follow this precedent. **Rung 2 of the ponytail ladder (reuse what's here) covers most of this milestone.**
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Node.js | 20 LTS (or 22 LTS) | Runtime for all services | Next.js 16 requires Node 20+; 22 LTS is the safer long-horizon target |
-| TypeScript | 5.7+ | Language across monorepo | Mandated; ecosystem baseline |
-| pnpm | 10.x | Package manager / workspaces | Strict dep isolation catches phantom deps; disk-efficient; `workspace:*` protocol is the monorepo standard |
-| Turborepo | 2.x | Build/task orchestration + caching | Incremental task graph + remote cache turns 30s builds into 0.2s; pairs natively with pnpm and Vercel |
-| Next.js | 16.2.x (latest stable 16.2.9, June 2026) | Web app (App Router, RSC, route handlers) | Turbopack default (2-5x faster builds), React Compiler stable, Cache Components; the platform's flagship framework and deploy target |
-| PostgreSQL | 16/17 | Primary datastore + vector + audit + queue-of-record | Single source of truth; pgvector, JSONB, and strong transactional guarantees satisfy audit/compliance mandate |
-| pgvector | 0.8.x (halfvec, HNSW) | Vector search over briefs/documents | Removes a moving part; comfortably handles up to ~10M 1536-dim vectors on one instance with HNSW + halfvec |
-| Redis | 7.x | LLM response cache (safeTextHash), rate limiting, ephemeral state | Fast exact-hash cache lookup/store; standard for token/cost caching and rate limits |
-| Drizzle ORM | latest (0.4x → 1.0 track) | Type-safe DB access + migrations | Code-first TS schemas (matches mandate), thin SQL wrapper lets you drop to raw SQL for pgvector ops, tiny bundle, serverless-friendly |
-| Inngest | latest SDK (`inngest` 3.x) | Durable orchestration engine (the BPMN runtime) | Event-driven step functions with retries, `waitForEvent` (human review loop), flow control (concurrency/throttle/rate-limit/debounce for cost guardrails), no worker fleet to run, no determinism constraint (critical for LLM steps), self-hostable later |
-| Vercel AI SDK | v6 | LLM calls, tool loops, agents, structured outputs, streaming | Unified provider interface, `Agent`/`ToolLoopAgent` abstractions, native human-in-the-loop tool approval, MCP support, type-safe structured outputs |
-| Better Auth | 1.x | Auth, invite/magic-link, per-user isolation | Self-hosted (credentials in your Postgres — compliance win), invitations + organization plugin built-in, no per-user pricing, integrates with Drizzle |
-
-### Supporting Libraries
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| Zod | 4.x | Runtime validation + contract source of truth | All boundary validation (intake, tool I/O, data contracts). Generate OpenAPI + infer TS types from one schema |
-| drizzle-zod | latest | Derive Zod schemas from Drizzle tables | Keep DB schema and validation contracts in sync |
-| @hono/zod-openapi *or* zod-to-openapi | latest | Generate OpenAPI from Zod | Per-service contract docs (satisfies "every service gets a contract" mandate) |
-| @ai-sdk/openai, @ai-sdk/anthropic, @ai-sdk/google | v6-compatible | Provider adapters for primary/fallback | Wire primary + fallback models behind AI SDK |
-| Langfuse SDK (JS/TS) | v4 (needs Langfuse platform ≥3.95) | LLM tracing, prompt mgmt, evals, feedback capture | Trace every model call/cost/token; prompt management feeds the prompt-optimization loop; feedback scores drive threshold breach |
-| @opentelemetry/* | latest | Infra/service tracing + metrics | App-level spans, DB/HTTP instrumentation; Langfuse consumes OTel spans so they interoperate |
-| googleapis | latest | Gmail API delivery adapter | Concrete implementation behind your email port |
-| @microsoft/microsoft-graph-client + @azure/identity | latest | Microsoft Graph email delivery adapter | Second implementation behind the same email port |
-| ioredis (or node-redis) | latest | Redis client | Cache + rate-limit + ephemeral state access |
-| Playwright | latest | E2E / browser tests | Voice UI, review loop, auth flows |
-| Vitest | 3.x | Unit + integration tests | Fast, ESM-native, Vite-powered; pairs with Turborepo |
-| pdf-parse / unpdf, tesseract.js (or a cloud OCR) | latest | Attachment extraction (PDF/OCR) | Attachment classify → extract → merge into context |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| Turborepo remote cache | Speed CI + local builds | Enable on Vercel or self-hosted cache server |
-| Biome (or ESLint + Prettier) | Lint/format | Biome is faster and single-binary; ESLint if you need niche plugins |
-| Drizzle Kit | Migrations | `drizzle-kit generate` + `migrate`; check migrations into git for audit |
-| GitHub Actions | CI/CD | Matrix: typecheck, lint, `vitest`, `playwright`, `turbo build`; use Turbo cache to skip unchanged packages |
-| Inngest Dev Server | Local orchestration testing | `npx inngest-cli dev` mirrors production step behavior locally |
-| Inngest Agent Skills | Claude Code guidance | Pre-built skills (inngest-setup/steps/flow-control) keep Claude Code current on Inngest APIs — relevant given solo+Claude Code build |
+Governed agent tools already have a pattern too — **`buildCockpitTools()` in `llm.ts`**: each tool wraps a primitive, preserves its cost/PII/audit governance, and is handed to `ai`'s `generateText({ tools, stopWhen: stepCountIs(8) })`. New action tools and sub-agents extend this object; they do not invent a new mechanism.
 
 ---
 
-## Installation
+## Recommended Stack — per new capability
 
-```bash
-# Monorepo scaffold
-pnpm dlx create-turbo@latest
+### 1. Business-evaluation engine — **NO new dependencies**
 
-# Core web + AI
-pnpm add next@^16.2 react react-dom ai@^6 @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/google zod@^4
+Pure-TS `packages/evaluation` (assessment scoring + gap detection) + a thin `convex/` adapter. It is LLM analysis grounded on the vault, structured by a skill, scored by domain code.
 
-# Orchestration
-pnpm add inngest
+| Piece | Uses (already installed) | Integration |
+|-------|--------------------------|-------------|
+| Structured assessment/gap output | `ai@7.0.20` + `@ai-sdk/openai@4.0.11`, `generateObject` + `zod@4` schema | New skill rows (`business-evaluator`, `gap-detector`) in the `skills` table — CLAUDE.md §5, no hardcoded prompts |
+| Grounding on the business profile | existing `vaultGround.ts` hybrid retrieval (the review specifically noted this was built but unreached — wire it) | pass retrieved context into the eval prompt |
+| Scheduled proactive **in-app** review | **Convex cron** (`crons.ts`, native) → `@convex-dev/workpool@0.4.8` for per-tenant fan-out | writes an in-app notification/briefing, never auto-sends |
+| Scoring / gap math | plain TS in `packages/evaluation` with one assert-based self-check | testable without Convex (CLAUDE.md §1) |
 
-# Data layer
-pnpm add drizzle-orm postgres ioredis
-pnpm add -D drizzle-kit drizzle-zod
+**Do NOT add:** a rules engine (json-rules-engine, etc.), a BPMN runtime, or an analytics SaaS. Evaluation is LLM + a scoring function + the vault; a rules DSL is unrequested abstraction.
 
-# Auth
-pnpm add better-auth
+---
 
-# Email adapters
-pnpm add googleapis @microsoft/microsoft-graph-client @azure/identity
+### 2. Real sub-agent dispatch — **NO new runtime dependency** (promote one devDep)
 
-# Observability
-pnpm add @langfuse/otel @langfuse/tracing @opentelemetry/api @opentelemetry/sdk-node
+Make the `routing.ts` `sub_agent` enum real. Today the pipeline dead-letters it (`routing.ts` L10-11). A sub-agent is just **another governed `generateText` loop** with its own skill and its own scoped tool subset, invoked as a Convex action and orchestrated durably.
 
-# Contracts / OpenAPI
-pnpm add @hono/zod-openapi   # or: pnpm add zod-to-openapi
+| Concern | Use (already present) | Note |
+|---------|----------------------|------|
+| Sub-agent = nested governed loop | the existing `runAgentLoop` / `buildCockpitTools` pattern in `llm.ts` | each sub-agent loads its own skill row; keep cost/PII/audit wrapping per call |
+| Durable dispatch / multi-step orchestration | `@convex-dev/workflow@0.4.4` (installed, pinned) | survives restarts; already the pipeline's backbone |
+| Bounded parallel fan-out to sub-agents | `@convex-dev/workpool@0.4.7` → **promote from `devDependencies` to `dependencies`** | it's currently dev-only; runtime dispatch needs it as a dep |
+| First exemplar sub-agent | one new skill + a scoped tool set | ship one real specialist (e.g. the research sub-agent from #3) to prove the seam |
 
-# Attachments
-pnpm add unpdf tesseract.js
+`@convex-dev/agent@0.6.4` is already installed and **is** the latest published version — it provides threads/messages/sub-agent primitives if you prefer its abstraction over hand-rolled nested loops. Pick one; do not run both mechanisms.
 
-# Dev / test
-pnpm add -D vitest @playwright/test @biomejs/biome typescript turbo
+**Do NOT add:** LangChain, LangGraph, CrewAI, AutoGen, or any Python agent framework. They duplicate what `generateText` + `@convex-dev/workflow` already do durably, drag heavy abstractions across the `packages/*` portability line, and bypass the `tenantQuery/Mutation/Action` governance wrappers (CLAUDE.md §2). The tool-loop + Convex workflow *is* the orchestration engine.
 
-# PII: run Microsoft Presidio as containers (not an npm package) — see Architecture notes
-# docker run microsoft/presidio-analyzer ; docker run microsoft/presidio-anonymizer
+---
+
+### 3. Non-email action tools
+
+**Calendar (Google + Microsoft)** — **NO new dependency.**
+- Google Calendar API v3 via raw `fetch`, reusing the existing Google OAuth token root (`freshAccessToken` in `gmail.ts`); add the `https://www.googleapis.com/auth/calendar.events` scope. This is an *incremental scope*, not a new consent stack.
+- Microsoft calendar rides the Graph adapter from capability #7 (`/me/events`, `/me/calendar/getSchedule`).
+
+**Web research / browsing** — **add ONE search+extract API client.**
+
+| Recommended | Version | Why |
+|-------------|---------|-----|
+| **Tavily** (`@tavily/core`) | `0.7.6` | Purpose-built for LLM/agent research: one call returns ranked results **plus cleaned page content and an optional synthesized answer**, so the agent doesn't fetch-and-strip HTML itself. Reachable via raw `fetch` (it's a plain REST API — you can skip even the SDK). Wrap as a governed cockpit tool. |
+
+Integration: a `webResearch` tool in the tool-loop that calls Tavily server-side from a `"use node"` action, PII-scans results before they enter context, and records refs/hashes only in audit (CLAUDE.md §4).
+
+**Do NOT add for web:** a headless browser at runtime (Playwright/Puppeteer) — Playwright is a **dev-only e2e** dep and must stay that way; full browser automation in the product is brittle, slow, and a large security/SSRF surface. Tavily/Exa/Firecrawl do fetch+extract server-side. Also do not wire the dev-only Brave wrapper in `gsd-tools.cjs` into the product; it's a build-time convenience, not a per-tenant runtime capability.
+
+**Document / content creation** — **NO new dependency for v2.0 (defer `docx`).**
+- Text/markdown content = LLM + a skill; no dep.
+- PDF output already exists: `markdownToPdf()` in `llm.ts` on `pdf-lib@1.17.1`; extraction on `unpdf@1.6.2`. Reuse both.
+- Editable Word output: `docx@9.7.1` is the clean pure-JS choice **only if** users demand `.docx`. Defer until a Validated line asks for it — PDF covers the delivery story today (YAGNI, ladder rung 1).
+
+**Do NOT add for docs:** a LibreOffice/Gotenberg/headless-Chrome PDF sidecar (a whole deployment plane for what `pdf-lib` already renders).
+
+**Contacts / CRM / follow-ups** — **NO new dependency.**
+- A tenant-scoped **`contacts` Convex table** (native) is the CRM. It composes directly with the `resolveContacts` tool the cockpit already has.
+- Follow-ups = the **Convex scheduler** (native `ctx.scheduler` / crons) — the same mechanism deferred-send already uses.
+- Optional one-way import from Google People API or MS Graph `/me/contacts` via raw `fetch` (reuse OAuth) when a user wants to seed contacts.
+
+**Do NOT add for CRM:** a Salesforce/HubSpot SDK or an external CRM integration. The minimal contacts table + scheduler is the lazy solution that fully covers the solopreneur follow-up story.
+
+---
+
+### 4. Media canvas (images + video ≤3 min) — **add an MCP client; the Pikar-Ai MCP IS the media backend**
+
+The connected **Pikar-Ai** service (a claude.ai remote OAuth connector, Higgsfield-backed) exposes `generate_image` / `generate_video` / `generate_audio` / `generate_3d` / `upscale_*` / `outpaint_image` / `reframe` / `remove_background` / `motion_control` / `virality_predictor` and a `models_explore(action:'recommend')` chooser. The mandate is to **call it, not rebuild generation.** The app backend must connect to it as an MCP client over Streamable HTTP.
+
+**`ai@7.0.20` does NOT ship an MCP client** (verified: the installed `dist/index.d.ts` has no `createMCPClient` export — MCP moved to a separate package in later `ai` builds). So a client dep is genuinely required:
+
+| Recommended | Version | Why |
+|-------------|---------|-----|
+| **`@modelcontextprotocol/sdk`** | `1.29.0` | Official client. `StreamableHTTPClientTransport` + built-in OAuth helpers fit a **remote OAuth-gated** connector, and the media flow runs **outside** the `generateText` loop (see below) so we don't need SDK-native `tools()` wiring. Node ≥18. |
+
+Alternative: **`@ai-sdk/mcp@2.0.16`** (peers `zod ^4.1.8`, compatible with the repo's `zod@4.4.3`) — its `.tools()` plugs straight into `generateText`. Choose this **only if** you decide to expose generation as inline agent tools rather than async jobs.
+
+**CRITICAL architecture — media is an async job, not a sync tool call.** Video up to 3 minutes takes far longer than the cockpit loop's `CALL_TIMEOUT_MS` / `stepCountIs(8)` budget. Do NOT call `generate_video` synchronously inside `runAgentLoop`. Pattern (mirrors deferred-send + the retrier discipline already in the codebase):
+
+```
+agent tool `createMedia` → submit job to Pikar-Ai MCP → store {jobRef, status:'running'} in a mediaJobs table
+   → @convex-dev/workpool@0.4.8 worker polls (or receives webhook) via @convex-dev/action-retrier
+   → on completion: pull the asset, ctx.storage.store(), surface in the vault/canvas + notify
 ```
 
+Auth: store the Pikar-Ai/Higgsfield OAuth token in the **Convex secrets plane** (env, per README secrets rules) and refresh it exactly like `gmail.ts` does for Google. **[MEDIUM confidence: the connector's precise OAuth flow / whether a machine token or REST fallback exists could not be inspected from the repo — a spike to confirm the transport + token exchange is the first task of this capability.]**
+
+**Do NOT add:** Higgsfield/Replicate/fal.ai/Runway SDKs, `ffmpeg`, or any model-hosting/inference dep — that *is* rebuilding the generation the MCP already provides, and splinters the "one media backend" story. No new frontend canvas/component library either (CLAUDE.md §10 — build on `globals.css`, don't add a UI kit without asking).
+
 ---
 
-## Detailed Rationale for Contested Decisions
+### 5. Dynamic / self-authored skills — **NO new dependency**
 
-### Orchestration: Inngest (over Temporal / Trigger.dev / Vercel Workflows)
+The machinery exists: the `skills` table (`name`, `version`, `body`, `status`), the seed/publish path, versioning + rollback, the audit spine, and SkillOpt's held-out-validation loop for the eval gate. Self-authoring is a **governance flow over existing tables**, not new tech.
 
-The BPMN spec is a long chain of retryable, human-gated steps (intake → validate → enrich → plan → ground → PII → cost → cache → LLM → review → deliver → archive) with dead-letter and escalation. That is exactly Inngest's sweet spot.
+| Piece | Uses | Note |
+|-------|------|------|
+| User-authored skill | new governed mutation writing a `draft` skill row → `published` via the existing status lifecycle | zod-validate the body at the trust boundary (installed) |
+| Agent-authored skill (late, governance-heavy) | same write path behind owner-approval + a SkillOpt eval gate | the `requireOwner` primitive from the governance phase gates the self-modification write |
+| Rollback / provenance | existing skill versioning + append-only `audit` | no new store |
 
-- **Solo dev + 4 weeks:** Inngest has *no worker fleet* to operate. Functions run as ordinary serverless handlers; the Inngest service handles scheduling/retries/state. Temporal requires you to run and manage a worker fleet and learn workflows/activities/signals (weeks of ramp) — wrong for this timeline.
-- **LLM-friendly:** Temporal demands strictly deterministic workflow code, which fights non-deterministic LLM calls. Inngest has no determinism requirement on the orchestration layer.
-- **Human review loop:** `step.waitForEvent` cleanly models approve/edit/reject with timeouts — directly maps to the review + escalation + timeout requirements.
-- **Cost guardrails as infra:** Built-in flow control (concurrency, throttling, rate limiting, debounce, prioritization) supports budget enforcement and protects against runaway spend with one line per function.
-- **Dead-letter + audit:** Failure handling and run history give you a dead-letter path and a durable execution trail that complements the audit tables.
-- **Deploy fit:** Runs great on Vercel-compatible serverless; self-hostable later via official Helm/OCI chart if you outgrow the cloud tier (note: earlier "cannot self-host" claims are outdated as of 2026).
+**Do NOT add:** a plugin sandbox/VM, or an external prompt-management SaaS (Langfuse, PromptLayer, Humanloop). The Convex skills registry + audit + SkillOpt is already the system of record; a second one is duplicate infrastructure and a second PII/governance surface.
 
-**When Trigger.dev would win instead:** if you needed very long single-task compute (minutes–hours of uninterrupted execution) or Apache-2.0 self-hosting from day one. **When Temporal would win:** true enterprise, multi-language, mission-critical determinism at scale — overkill here. **Vercel Queues/Workflows:** too young/limited for a 15-step governed pipeline with human gates; revisit later.
+---
 
-### LLM gateway: Vercel AI Gateway + thin custom layer (over LiteLLM / pure custom)
+### 6. ISO 9001:2015 QMS tooling for software — **NO runtime dependency (mostly docs + native tables)**
 
-AI SDK v6 speaks to the Vercel AI Gateway natively, giving provider-agnostic routing, primary/fallback, and zero-markup access to OpenAI/Anthropic/Google/etc. That covers "provider-agnostic + fallback" with almost no code. The product-specific pieces the gateway does *not* give you — **budget-based model downgrade** and **safeTextHash response caching** — you implement as a thin wrapper in your `llm` package (pre-call cost estimate → budget check → choose tier → cache lookup in Redis → call via AI SDK → cache store). **LiteLLM** is the alternative if you want a self-hosted, language-agnostic proxy with built-in budget/virtual-key controls, but it adds a Python service to operate; given a TS-only solo build, keep the gateway + your own guardrail layer.
+This is process formalization, not a library. The QMS bones already exist and map onto the standard:
 
-### Realtime voice: OpenAI Realtime API over WebRTC
+| ISO 9001:2015 clause | Existing mechanism |
+|----------------------|--------------------|
+| 7.5 Documented information / doc control | `docs/playbooks/` + immutable `docs/decisions/` ADRs + git + the Stop-hook enforcement (CLAUDE.md §9) |
+| 8.5.6 Control of changes | skill versioning + GSD phase/plan records + ADR supersession |
+| 7.1.5 / 9.1 Monitoring & measurement | existing `telemetry` + `audit` (append-only, WORM export) tables |
+| 8.7 / 10.2 Nonconformity & corrective action (CAPA) | **add a tenant-scoped `nonconformities`/`capa` Convex table** (native) + a management-review report query over `audit`/`telemetry` |
+| 9.3 Management review | a Convex query aggregating audit/telemetry/eval outcomes into a review record |
 
-`gpt-realtime` (and `gpt-realtime-2.1` / `-mini`) is GA and production-stable with GPT-5-class reasoning. Use **WebRTC** for the browser session (OpenAI's recommended browser transport; lowest latency, handles audio directly), with your Node service minting **ephemeral session tokens** so the API key never reaches the client. Inline `input_audio_transcription` produces the live transcript you convert to a structured markdown brief. Use WebSocket transport only if you later need the server to sit directly in the media path for compliance interception. The 15-min cap is enforced server-side by session config + a client End-session action.
+So the only "build" is a small native table + a couple of report queries; everything else is writing controlled documents against the existing spine.
 
-### Transcription (async): gpt-4o-transcribe
+**Do NOT add:** an ISO/QMS SaaS platform or a document-management system. For a solo product, git + ADRs + the audit spine already satisfy document and record control; a QMS SaaS is cost and a second source of truth.
 
-For dictation recordings and audio attachments (non-live), gpt-4o-transcribe gives ~4.1% WER at $0.006/min (mini at $0.003/min) and stays within the OpenAI stack you already use. Deepgram Nova-3 is a strong alternative if you later need sub-150ms streaming STT independent of the Realtime API, but it is unnecessary now since the Realtime API handles live transcription.
+---
 
-### Vector store: pgvector (over Qdrant/Pinecone/etc.)
+### 7. Microsoft Graph / Outlook (second email provider, DLVR-02) — **add MSAL; keep API calls on raw `fetch`**
 
-At this scale (single-user briefs + docs, well under 1M vectors in beta) pgvector with a tuned HNSW index performs comparably to dedicated engines while eliminating an entire piece of infrastructure. halfvec quantization + HNSW scale to ~10M vectors on one managed Postgres. Per-user isolation is a simple `WHERE user_id = ?` filter co-located with your relational data. Move to a dedicated engine only when you can name the bottleneck (billions of vectors, massive write throughput, or advanced filtered/hybrid search at scale).
+Phase 9 context (`09-CONTEXT.md`) already specs this: delegated `Mail.Send` + read scopes on the `/common` tenant, **full parity** (send + read plane), **connect-both-choose-per-send** provider model, behind a provider-abstraction seam. Clean de-scope lever: Outlook **send-only** for beta.
 
-### PII detection: Presidio microservice + regex prefilter (hybrid)
+| Piece | Recommended | Version | Why |
+|-------|-------------|---------|-----|
+| Graph OAuth (auth-code + refresh, token cache, consent quirks) | **`@azure/msal-node`** | `5.4.2` | Graph's token/refresh/consent model differs enough from Google's that hand-rolling it at the security boundary is the *wrong* place to be lazy (the ponytail "not lazy about security" carve-out). MSAL handles refresh + cache correctly. Node ≥20 ✓. |
+| Graph REST calls (`/me/sendMail`, `/me/messages`, `/me/events`) | **raw `fetch`** (no SDK) | — | Follows the `gmail.ts` precedent exactly. |
+| Provider abstraction seam | new **`packages/delivery`** pure-TS `Provider` interface `{ send, search, listInbox, fetchInboxBodies, getReplyTarget }` | — | `gmail` + `graph` adapters in `convex/`; `deliverApprovedPlan` picks per send. This is the seam `09-CONTEXT.md` L116-118 flagged as the open shape question — resolve it toward a `packages/delivery` package (CLAUDE.md §1). |
 
-Presidio is the mature open-source standard (v2.2.362, March 2026): hybrid NER + regex + context rules + checksums, plus a dedicated Anonymizer. It is **Python** with no first-class Node library, so run `presidio-analyzer` and `presidio-anonymizer` as Docker microservices and call them over REST from your Node `pii` package. Add a fast **regex prefilter** for developer/structured secrets (API keys, IPs, account numbers) Presidio's NLP wasn't trained for. Keep a pure-LLM pass optional and only for edge cases — LLM redaction alone is non-deterministic and can hallucinate/miss entities, which is unacceptable for a guardrail that must produce a reliable `safeText` with explicit null/unknown failure handling. This yields deterministic, testable redaction with LLM as fallback, not primary.
+**Do NOT add:** `@microsoft/microsoft-graph-client` (v3.0.7). It is a thin `fetch` wrapper with its own auth-provider abstraction; the repo's precedent is raw `fetch`, the version is stale (3.x, long unmaintained relative to Graph's cadence), and it adds a dependency for endpoints you call in one line. Also do NOT adopt a unified-email SaaS (Nylas, etc.) — it inserts a third-party processor into a restricted-scope data path (the CASA/zero-retention surface).
 
-### Auth: Better Auth (over Auth.js / Clerk)
+---
 
-Beta requires invited users, per-user data isolation, and (soon) org/RBAC. Better Auth stores users in *your* Postgres (no third party holds credentials — a compliance advantage for this product), ships invitations + magic-link + the organization plugin natively, charges nothing per user, and integrates with Drizzle. Clerk is faster to drop in but puts user/org data in Clerk's DB and gates Organizations behind paid tiers — conflicts with the "own your data / per-user isolation / no vendor lock-in" posture. Auth.js (NextAuth v5) has no native multi-tenancy, invitations, or RBAC and would mean building those by hand.
+## Installation (only the genuinely-new deps)
 
-### Email: own adapter, not Nylas
+```bash
+# @pikar/backend — media MCP client + Microsoft Graph auth
+pnpm --filter @pikar/backend add @modelcontextprotocol/sdk@1.29.0 @azure/msal-node@5.4.2
 
-You explicitly want your own abstraction and both Gmail + Graph accounts are in hand. Define an `EmailProvider` port and implement it twice: `googleapis` (Gmail API) and `@microsoft/microsoft-graph-client` + `@azure/identity` (Graph). Nylas/unified APIs add per-message cost and a dependency you don't need for two providers — reserve for when you must support many arbitrary mailboxes.
+# @pikar/backend — web research (or skip the SDK and raw-fetch Tavily's REST API)
+pnpm --filter @pikar/backend add @tavily/core@0.7.6
 
-### Observability: Langfuse *and* OpenTelemetry
+# Promote existing devDep → dep (runtime sub-agent/media-job fan-out)
+pnpm --filter @pikar/backend add @convex-dev/workpool@0.4.7
 
-They are complementary, not competing. Langfuse's JS/TS SDK v4 is built *on* OpenTelemetry, so use OTel for general service/infra spans and let Langfuse ingest the LLM-specific traces (per-request tokens/cost/latency/decision counts — your telemetry payload) plus prompt management and evals. Langfuse prompt management + feedback scores are the natural home for the feedback-capture → prompt-optimization loop and threshold-breach detection. Self-hostable via Docker if you want telemetry in your own perimeter.
+# DEFERRED until a Validated line requires editable Word output:
+# pnpm --filter @pikar/backend add docx@9.7.1
+```
 
-### ORM: Drizzle (over Prisma)
-
-Code-first TS schemas match the mandate, the thin SQL-like API lets you write raw pgvector queries and complex audit joins without fighting an abstraction, the bundle is tiny for serverless cold starts, and it pairs with Better Auth and drizzle-zod. Prisma 7 (TS/WASM engine) closed much of the gap and is the pick if you want maximum abstraction + Prisma Studio, but the trend is Prisma→Drizzle and Drizzle's SQL-closeness wins for a pgvector-heavy, audit-heavy schema.
+Everything else (business-evaluation, sub-agent dispatch, calendar via Google, contacts table, self-authored skills, QMS tables) adds **no** package — new `packages/*` modules + thin `convex/` adapters over already-installed deps.
 
 ---
 
@@ -175,79 +178,55 @@ Code-first TS schemas match the mandate, the thin SQL-like API lets you write ra
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| Inngest | Trigger.dev v4 | Long single-task compute (minutes–hours), Apache-2.0 self-host from day one |
-| Inngest | Temporal | Enterprise, multi-language, strict-determinism, mission-critical at scale |
-| Vercel AI Gateway | LiteLLM proxy | Want self-hosted virtual keys + per-key budgets in one box, OK running a Python service |
-| pgvector | Qdrant / Pinecone | Billions of vectors, high write throughput, advanced filtered/hybrid search at scale |
-| Presidio (self-host) | Cloud PII API (e.g. AWS Comprehend, Google DLP) | Don't want to run a container; accept per-call cost + data leaving perimeter |
-| Better Auth | Clerk | Want zero-effort polished drop-in UI and don't mind hosted user data / per-user cost |
-| gpt-4o-transcribe | Deepgram Nova-3 / ElevenLabs Scribe v2 | Need independent low-latency streaming STT outside OpenAI |
-| Drizzle | Prisma 7 | Prefer high-level abstraction + Prisma Studio; team less comfortable with SQL |
-| OpenAI Realtime | Pipecat/LiveKit + composable STT/LLM/TTS | Need fine-grained control of each pipeline stage or multi-vendor voice |
+| `@modelcontextprotocol/sdk` 1.29.0 (media MCP client) | `@ai-sdk/mcp` 2.0.16 | If you expose generation as **inline** agent tools inside `generateText` rather than async jobs — its `.tools()` wires straight in. (Not the default: video ≤3min must be async.) |
+| Tavily `@tavily/core` 0.7.6 (web research) | Exa (`exa-js` 2.16.0) — neural/semantic search; Firecrawl (`@mendable/firecrawl-js` 4.30.1) — deep crawl/scrape | Exa for research-discovery/semantic recall; Firecrawl when you need to crawl a whole site or convert pages to markdown at scale |
+| MSAL + raw `fetch` (Graph) | `@microsoft/microsoft-graph-client` 3.0.7 | Only if you want typed request builders and accept the extra dep + its own auth abstraction — not worth it here |
+| Nested `generateText` loop + `@convex-dev/workflow` (sub-agents) | `@convex-dev/agent` 0.6.4 thread/sub-agent primitives (already installed) | If you prefer its managed threads/messages abstraction over hand-rolled loops — pick one, not both |
+| `contacts` Convex table (CRM) | Google People / MS Graph contacts sync | When a user wants to seed from an existing address book (one-way import, raw fetch) |
+| PDF via existing `pdf-lib` | `docx` 9.7.1 | Only when users need **editable** `.docx`, confirmed by a Validated line |
 
 ---
 
-## What NOT to Use
+## What NOT to Use (consolidated)
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Temporal (for this milestone) | Steep learning curve + worker fleet ops; determinism fights LLM calls; wrong for solo 4-week build | Inngest |
-| Prisma-style pure LLM PII redaction as the primary guard | Non-deterministic, can hallucinate/miss entities; can't guarantee `safeText` | Presidio microservice + regex prefilter, LLM only as fallback |
-| Nylas / unified email API | Per-message cost + dependency you don't need for two known providers; conflicts with "own abstraction" | Own `EmailProvider` port over googleapis + Graph SDK |
-| Auth.js (NextAuth v5) for multi-tenant beta | No native invitations, multi-tenancy, or RBAC — you'd rebuild them | Better Auth |
-| Clerk for the data-sovereignty requirement | User/org data lives in Clerk; Organizations is paid | Better Auth (data in your Postgres) |
-| Separate dedicated vector DB now | Extra infra + ops for sub-1M vectors; premature | pgvector in the primary Postgres |
-| WebSocket-only voice from the browser | Higher latency, you manage media path unnecessarily | WebRTC browser↔OpenAI with server-minted ephemeral tokens |
-| BullMQ/raw Redis queues as the orchestrator | You'd hand-build retries, state, human gates, DLQ, flow control | Inngest (Redis stays for caching/rate-limit only) |
-| Next.js Pages Router | Legacy; misses RSC/streaming/route handlers that this app relies on | App Router (Next 16.2) |
-
----
-
-## Stack Patterns by Variant
-
-**If you must keep all infra inside your own perimeter (compliance-driven):**
-- Self-host Inngest (Helm/OCI), Langfuse (Docker), and Presidio containers; keep Better Auth (already self-hosted) and pgvector in your Postgres.
-- Because it removes third-party data processors from the request path.
-
-**If the 4-week clock slips and you must cut scope:**
-- Keep Realtime voice, orchestration, PII, cost guardrails, review loop, and one email provider (Gmail) — defer Graph, self-improvement loop, and dedicated evals.
-- Because the governed pipeline + voice is the product's identity; email provider #2 and the optimization loop are additive.
-
-**If voice needs server-side media interception later (call recording/compliance):**
-- Switch the voice transport to WebSocket with the server in the media path, or introduce LiveKit/Pipecat.
-- Because WebRTC browser-direct keeps media off your servers by design.
+| LangChain / LangGraph / CrewAI / AutoGen | Duplicate `generateText` + Convex workflow; heavy abstractions; bypass tenant-wrapper governance; break `packages/*` portability | Nested governed loop + `@convex-dev/workflow` (+ `@convex-dev/agent` if you want threads) |
+| Higgsfield/Replicate/fal.ai/Runway SDKs, `ffmpeg`, model hosting | Rebuilds the generation the Pikar-Ai MCP already provides; splinters the media backend | The connected Pikar-Ai MCP via `@modelcontextprotocol/sdk` |
+| Playwright/Puppeteer at runtime | Brittle, slow, SSRF/security surface; Playwright is dev-only e2e here | Tavily/Exa/Firecrawl server-side fetch+extract |
+| `@microsoft/microsoft-graph-client` | Stale thin wrapper + own auth abstraction; repo precedent is raw fetch | MSAL (auth) + raw `fetch` (calls) |
+| Unified-email SaaS (Nylas etc.) | Inserts a third-party processor into restricted-scope data (CASA/zero-retention surface) | Direct Gmail + Graph adapters behind `packages/delivery` |
+| External prompt-mgmt SaaS (Langfuse/PromptLayer) | Duplicates the skills registry + audit; second PII/governance surface | Existing `skills` table + SkillOpt + `audit` |
+| Rules-engine / BPMN runtime (evaluation) | Unrequested abstraction; the spec explicitly dropped UiPath/BPMN-as-runtime | LLM + a scoring function in `packages/evaluation` + the vault |
+| ISO/QMS SaaS or DMS | Cost + second source of truth for a solo product | Playbooks/ADRs/git + audit spine + a `nonconformities` table |
+| LibreOffice/Gotenberg/headless-Chrome PDF sidecar | A deployment plane for what `pdf-lib` already renders | Existing `markdownToPdf()` |
+| Bumping pinned pre-1.0 Convex components | CLAUDE.md §6 — API churn; requires changelog read + full boot check | Keep exact pins; only `@convex-dev/workpool` moves devDep→dep at its **current** 0.4.7 |
 
 ---
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| Next.js 16.2 | Node 20+ (22 LTS recommended) | Node 20 is the hard floor; Turbopack default |
-| AI SDK v6 | @ai-sdk/* provider packages @ v6 | v5→v6 has a wire-format change; use v6 providers, not v5 |
-| Langfuse TS SDK v4 | Langfuse platform ≥ 3.95.0 | Self-hosted platform must meet minimum for all features |
-| Drizzle ORM | postgres.js / node-postgres | Use one driver consistently; drizzle-kit for migrations |
-| pgvector 0.8.x | PostgreSQL 16/17 | Enable `halfvec` + HNSW; raise dim cap to 4,000 with halfvec |
-| Better Auth 1.x | Drizzle adapter | Point Better Auth at the same Postgres/Drizzle instance |
-| Inngest SDK 3.x | Next.js route handler / any Node server | Serve functions via `/api/inngest`; use Dev Server locally |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `@modelcontextprotocol/sdk@1.29.0` | Node ≥20 (repo engines `>=20`) ✓ | StreamableHTTP transport for the remote Pikar-Ai connector |
+| `@ai-sdk/mcp@2.0.16` | `zod ^3.25.76 \|\| ^4.1.8` → repo `zod@4.4.3` ✓ | only if inline-tool path chosen |
+| `@azure/msal-node@5.4.2` | Node ≥20 ✓ | delegated auth-code + refresh for Graph |
+| `@tavily/core@0.7.6` | Node ≥18 ✓ | or skip the SDK and raw-fetch the REST API |
+| `@convex-dev/workpool@0.4.7→0.4.8` | matches installed Convex `1.42.1` component set | promote devDep→dep; keep exact pin per §6 |
+| `docx@9.7.1` (deferred) | pure JS, no native build | no `onlyBuiltDependencies` entry needed |
+| **Unchanged, keep as-is** | `ai@7.0.20`, `@ai-sdk/openai@4.0.11`, `@convex-dev/agent@0.6.4` (already latest), all pinned Convex components, Convex Auth `0.0.94` | do NOT bump casually (§6) |
 
 ---
 
 ## Sources
 
-- nextjs.org/blog/next-16-2, endoflife.date/nextjs — Next.js 16.2.x current stable (June 2026), Node 20+ (HIGH)
-- vercel.com/blog/ai-sdk-6, github.com/vercel/ai/releases — AI SDK v6 features, Agent/ToolLoopAgent, HITL, AI Gateway (HIGH)
-- inngest.com (docs, changelog, /ai), github.com/inngest/inngest — steps, flow control, self-host Helm/OCI, Agent Skills, checkpointing (HIGH)
-- medium/@matthieumordrel orchestration guide; trybuildpilot.com; hookdeck.com; zenml.io temporal-alternatives — Temporal vs Trigger.dev vs Inngest tradeoffs (MEDIUM, cross-checked)
-- openai.com/index/introducing-gpt-realtime, developers.openai.com/api/docs/guides/realtime, marktechpost (gpt-realtime-2.1, Jul 2026) — Realtime API GA, WebRTC/WS/SIP, pricing (HIGH)
-- tokenmix.ai, deepgram.com/learn/best-speech-to-text-apis-2026, artificialanalysis.ai — gpt-4o-transcribe WER/pricing vs Whisper/Nova-3 (MEDIUM-HIGH)
-- clickhouse.com scale-vector-search-postgres, cruxdigits.nl, encore.dev pgvector guide — pgvector scale limits, halfvec, HNSW (HIGH)
-- github.com/microsoft/presidio, microsoft.github.io/presidio, grepture.com, cleanmyprompt.io — Presidio v2.2.362, hybrid detection, Python/microservice, LLM-vs-Presidio tradeoffs (MEDIUM-HIGH; Node = run as service)
-- makerkit.dev better-auth-vs-clerk, buildmvpfast.com, logrocket.com best-auth-library-nextjs-2026 — Better Auth org/invitations, self-host, data ownership (HIGH)
-- langfuse.com/docs (observability, OTel, SDK overview), github.com/langfuse/langfuse — Langfuse on OTel, TS SDK v4, self-host, prompt mgmt/evals (HIGH)
-- makerkit.dev drizzle-vs-prisma, encore.dev, prisma.io/docs comparisons — Drizzle vs Prisma 2026, edge/serverless, Prisma 7 WASM engine (HIGH)
-- turborepo.dev/docs, github.com/vercel/turborepo skills, medium TS monorepo 2026 — pnpm + Turborepo structure, caching (HIGH)
+- **Live npm registry** (`npm view … version`, 2026-07-24) — HIGH: `ai@7.0.37` latest / `@ai-sdk/openai@4.0.20` latest / `@microsoft/microsoft-graph-client@3.0.7` (stale) / `@azure/msal-node@5.4.2` / `@modelcontextprotocol/sdk@1.29.0` / `@ai-sdk/mcp@2.0.16` / `@tavily/core@0.7.6` / `exa-js@2.16.0` / `@mendable/firecrawl-js@4.30.1` / `docx@9.7.1` / `ical-generator@11.0.0` / `googleapis@173.0.0` / `@convex-dev/agent@0.6.4` (=installed, is latest) / `@convex-dev/workpool@0.4.8`.
+- **Installed `ai@7.0.20` `dist/index.d.ts`** inspected — HIGH: confirms **no** `createMCPClient`/`MCPClient` export, so an MCP client is a genuine addition (not reuse).
+- **AI SDK docs — MCP client** (`ai-sdk.dev/docs/reference/ai-sdk-core/create-mcp-client`) — HIGH: `createMCPClient` + `sse`/`http` transports; `.tools()` → `generateText`.
+- **Repo code read** — HIGH: `gmail.ts` (raw-fetch + `freshAccessToken` OAuth refresh + discriminated result + retrier), `llm.ts` (`buildCockpitTools` / `runAgentLoop` / `generateText({ tools, stopWhen: stepCountIs(8) })`), `routing.ts` (`sub_agent` enum unimplemented → dead-lettered), `package.json` files (installed versions).
+- **`.planning/phases/09-private-beta-productionization/09-CONTEXT.md`** — HIGH: DLVR-02 already scoped (delegated `Mail.Send` + `/common`, full parity, connect-both/choose-per-send, provider-abstraction seam, send-only de-scope lever).
+- **Pikar-Ai MCP server instructions** (this session's connector) — MEDIUM: tool surface (`generate_image/video/audio/3d`, `upscale_*`, `outpaint`, `reframe`, `remove_background`, `motion_control`, `virality_predictor`, `models_explore`); **its OAuth/token exchange for backend (non-Claude) callers is unverified — spike first.**
 
 ---
-*Stack research for: governed agentic AI operating layer (AI chief-of-staff)*
-*Researched: 2026-07-08*
+*Stack research for: Pikar v2.0 — platform breadth on a governed Convex/TS agent app*
+*Researched: 2026-07-24*

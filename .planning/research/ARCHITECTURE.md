@@ -1,309 +1,270 @@
 # Architecture Research
 
-**Domain:** Governed agentic AI operating layer (durable orchestration + LLM guardrails + human-in-the-loop)
-**Researched:** 2026-07-08
-**Confidence:** HIGH (core decisions verified against current vendor docs and 2026 comparisons; MEDIUM on some voice/vault specifics)
+**Domain:** Governed agentic platform — integrating v2.0 breadth-of-action features into an existing Convex tool-loop without breaking governance invariants
+**Researched:** 2026-07-24
+**Confidence:** HIGH (every integration point below is a verified `file:function` in the current tree, located via graphify then read at the span)
 
-## Verdict Up Front
+> Supersedes the 2026-07-08 v1.0 greenfield architecture study. This is a **subsequent-milestone
+> integration study**: the "standard architecture" already exists and ships. The job is: where does
+> each v2.0 feature **plug in**, what is **NEW vs MODIFIED**, and what **build order** keeps the five
+> governance invariants intact. The invariants (CLAUDE.md + PROJECT.md) that must survive every feature:
+>
+> 1. **Tenant isolation** — every read/write scoped by `tenantId` (the `tenantQuery/Mutation/Action` wrappers; `namespace = tenantId` in RAG).
+> 2. **Redact-then-write audit** — `audit.payload` / `deadLetters.payload` carry refs/hashes/counts only, never raw content/PII.
+> 3. **The human Approve gate is a mutation, never an LLM tool** — the model can *propose*; only `cockpit.executePlan` (a `tenantMutation`, human-triggered) *sends*.
+> 4. **Skills load from the registry** — no hardcoded prompts; bodies are versioned rows, gated by EVAL_GATE.
+> 5. **Domain logic in `packages/*`; `convex/` is a thin adapter.**
 
-- **Modular monolith, not microservices.** One repo, one (or two) deployables, ~15 services as *packages with clean contracts*. This is the only shape a solo dev ships in 4 weeks, and the package boundaries are exactly the seams you split on later.
-- **Inngest for durable orchestration, not Temporal.** Inngest is step-native (no determinism constraint — the deciding factor for non-deterministic LLM calls), has no worker fleet to operate, is TypeScript-first, and gets you to a durable function in minutes. Temporal's determinism-replay model forces every LLM/tool call into carefully isolated Activities and requires you to run and manage workers — weeks of overhead a solo 4-week build cannot afford.
-- **Two distinct data paths.** The **async request pipeline** (BPMN spec) runs as an Inngest workflow. The **realtime voice session** runs *outside* the durable engine over WebRTC direct to the model, and only *feeds* the pipeline once a brief is converted to a plan.
-- **Shared-DB multi-tenancy with `tenantId` (= userId) scoping** for private beta. Single role, row scoping enforced in the data layer. No per-tenant infra.
-
-## Standard Architecture
-
-Governed agentic platforms in 2026 converge on a **three-layer** shape: an orchestration/sequencing layer, a governed-capability layer (tools, grounding, model access), and a cross-cutting governance/observability layer where controls attach (routing, approval gates, PII, cost, audit, rollback). Pikar maps cleanly onto this.
+## Standard Architecture (what exists today)
 
 ### System Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                          apps/web  (Next.js)                          │
-│   Intake (text/voice/files) · Review dashboard · Voice client (WebRTC)│
-└───────────────┬───────────────────────────────────┬──────────────────┘
-                │ HTTPS (REST)                        │ WebRTC (audio)
-                ▼                                     ▼
-┌───────────────────────────────┐        ┌───────────────────────────────┐
-│      apps/api (Node edge)      │        │  OpenAI Realtime (gpt-realtime)│
-│  auth · tenant ctx · intake    │        │  ← ephemeral token minted by   │
-│  endpoint · review actions ·   │        │    apps/api, browser connects  │
-│  ephemeral voice token · hooks │        │    direct; transcript streamed │
-└───────┬───────────────┬────────┘        └───────────────┬───────────────┘
-        │ emit event    │ mint token                       │ on End-session
-        ▼               │                                  ▼  (brief → vault)
-┌──────────────────────────────────────────────────────────────────────┐
-│           apps/worker — Inngest durable pipeline (event-driven)        │
-│  validate → enrich attachments → executive-agent route → ground →      │
-│  PII/safeText → cost/downgrade → cache → LLM gen(+fallback) →          │
-│  waitForEvent: human review → deliver(email) → feedback → optimize     │
-│  (each step: typed contract · ret/timeout · dead-letter on failure)    │
-└───────┬──────────────────────────────────────────────────┬────────────┘
-        │ direct in-process calls (typed service interfaces) │ events
-        ▼                                                    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                    packages/*  (domain service modules)               │
-│  validation · attachments · executive-agent · tools · sub-agents ·    │
-│  grounding · pii · cost · llm-gateway(+cache) · delivery ·            │
-│  feedback · prompt-optimizer · notifications · audit(+telemetry)      │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                 ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Postgres (tenant-scoped: requests, briefs, vault, audit, dead-letter)│
-│  Redis (LLM cache by safeTextHash · rate/session state)               │
-│  Blob store (attachments, audio) · Compliance archive (append-only)   │
+│                    ONE GOVERNED TOOL-LOOP (per turn)                   │
+│                                                                        │
+│  runCockpitAgent (llm.ts:1749, internalAction)                         │
+│    1. guardrails.preCall  ── kill-switch / daily-budget → PAUSED_REPLY │
+│    2. load COCKPIT_AGENT_SKILL body  ── skills.getActiveSkill (system) │
+│    3. plan context  ── plans.getById (index+label recipients, §2-D)    │
+│    4. SMOKE:: offline sentinel  ── one op → one governed tool call     │
+│    5. runAgentLoop (llm.ts:1478)                                       │
+│         generateText({ system, prompt, tools, stopWhen:stepCountIs(8), │
+│                        abortSignal: timeout, maxRetries })             │
+│         primary → CHEAP_MODEL fallback ; recordModelSpend accumulates  │
+│         onToolExecutionStart/End → agentSteps.record/finish (trace)    │
+│                          │                                             │
+│                          ▼                                             │
+│  buildCockpitTools (llm.ts:607)  ── ~15 MAILBOX-ONLY tools, closures   │
+│    over (ctx, tenantId, planId): addRecipients/setRecipients/          │
+│    removeRecipient/resolveContacts/setSendTime/draftBody/              │
+│    generate|regenerate|removeAttachment/proposePlan/listInbox/         │
+│    briefInbox …   every tool: tool({description, inputSchema, execute})│
 └──────────────────────────────────────────────────────────────────────┘
+        │ proposePlan (tool) flips status→"proposed" ONLY
+        ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  HUMAN APPROVE GATE — cockpit.executePlan (cockpit.ts:494)             │
+│    tenantMutation, NOT a tool.  CAS status proposed→approved →         │
+│    deliverApprovedPlan fan-out (email send)                            │
+└──────────────────────────────────────────────────────────────────────┘
+
+  UNWIRED / HOLLOW today (the v2.0 seams):
+  • vaultGround (vaultGround.ts:25)  ── hybrid RAG+graph retrieval, tenantAction, ZERO callers
+  • routing sub_agent route (contracts/routing.ts:13)  ── valid enum, unimplemented → dead-letters
+  • skills insertCandidate / activateCandidate (skills.ts:317/139)  ── candidate→EVAL_GATE→active
+  • crons.ts (cronJobs)  ── worm-export + gmail-token-scan (the proactive-schedule pattern)
+  • briefings.insert/byThread (briefings.ts)  ── append-only content row + live card (in-app digest)
+  • Pikar-Ai MCP service  ── generate_image/video/audio/3d (external, media generation)
 ```
 
-### Component Responsibilities
+### Component Responsibilities (existing, load-bearing for integration)
 
-| Component (package) | Responsibility (owns) | Talks to | Sync in-pipeline / Event / Realtime |
-|---|---|---|---|
-| `validation` | Schema + auth + business-rule validation of intake; produces validated request | contracts, db | Sync |
-| `attachments` | Classify → OCR / PDF extraction / audio transcription → `attachmentRefs`; merge into context | blob store, transcription API | Sync (long-running step) |
-| `executive-agent` | Classify + plan; emit `routingDecision` (tool / sub-agent / direct-LLM / invalid) | llm-gateway, tools, sub-agents | Sync (decision) |
-| `tools` | Execute browser/API tool calls with scoped permissions | external APIs, audit | Sync per route |
-| `sub-agents` | Run bounded specialist agent loops | llm-gateway, tools | Sync per route |
-| `grounding` | Retrieve/embed knowledge-vault context; ground the request | db (vault), embeddings | Sync |
-| `pii` | Scan + redact → `safeText` + `safeTextHash`; explicit null/unknown failure branch | (pure + model optional) | Sync (gate) |
-| `cost` | Estimate cost, budget check, model downgrade → `costEstimateResult` | llm-gateway config | Sync (gate) |
-| `llm-gateway` | Cache check (safeTextHash) → primary gen → fallback; `llmResponse` | Redis, LLM APIs | Sync |
-| `delivery` | Provider-agnostic email send (Gmail API + MS Graph) | Gmail/Graph | Sync (post-approval) |
-| `feedback` | Capture feedback → `feedbackResult`; threshold detection | db | Event |
-| `prompt-optimizer` | Self-improvement loop triggered on feedback threshold | llm-gateway, db | Event (async) |
-| `notifications` | Rejection / escalation / retry-breach / timeout / dead-letter alerts | email/push | Event |
-| `audit` | Reusable logging, `telemetryPayload`, `auditLogPayload`, compliance archival | Postgres, archive | Cross-cutting (every step) |
+| Component | Responsibility | File:function |
+|-----------|----------------|---------------|
+| `runCockpitAgent` | Governed per-turn entry: gate → skill → context → loop | `llm.ts:1749` |
+| `runAgentLoop` | The `generateText` loop: tools, step cap, timeout, fallback, spend, trace | `llm.ts:1478` |
+| `buildCockpitTools` | Builds the tool record the loop hands the model (closures over ctx/tenant/plan) | `llm.ts:607` |
+| Approve gate | Human-triggered CAS send; the one place proposed→approved | `cockpit.executePlan` `cockpit.ts:494` |
+| Delivery fan-out | Materialize attachments, one request per recipient, send | `deliverApprovedPlan.ts:23` |
+| Vault grounding | Hybrid `rag.search`(namespace=tenantId) → graph `expand` → `fuse` → `{docIds,context[]}` | `vaultGround.ts:25` (unwired) |
+| Routing contract | `direct_llm / direct_tool / sub_agent`; unknown → `{ok:false,"unknown_route"}` | `contracts/routing.ts:36` |
+| Skills registry | `getActiveSkill`/`getSkillVersion` load; `activateSkillVersion` = the ONE EVAL_GATE flip | `skills.ts:51/208/80` |
+| Candidate write-back | External/optimized body → new **candidate** (never active) | `skills.insertCandidate` `skills.ts:317` |
+| Owner activation | One-click candidate→active through the same EVAL_GATE | `skills.activateCandidate` `skills.ts:139` |
+| Cron schedule | `cronJobs()` daily → internal action (the proactive-review template) | `crons.ts` |
+| In-app digest | Append-only content row + `tenantQuery` live card, writes NO audit row | `briefings.ts` |
+| Cost/gate primitives | `guardrails.preCall` (kill-switch/budget), `recordModelSpend` | `guardrails.ts` / `llm.ts:1454` |
 
-## Recommended Project Structure
+## Integration Map — the six features
 
-pnpm workspaces + Turborepo is the settled 2026 TypeScript-monorepo stack: `apps/` for deployables, `packages/` for domain modules and shared libs. Cross-package access is by *import of the installed package only* — never relative `../` across boundaries. That rule is what makes each service ownable from its own README/contract/runbook (the user's strict separation-of-concerns mandate) and later extractable.
+For each: **exact integration point**, **NEW vs MODIFIED**, **data-flow change**, **invariants preserved**.
 
-```
-pikar-ai/
-├── apps/
-│   ├── web/                 # Next.js: intake UI, review dashboard, WebRTC voice client
-│   ├── api/                 # Node edge: auth, tenant ctx, intake endpoint, review actions,
-│   │                        #   ephemeral voice-token minting, provider webhooks; emits Inngest events
-│   └── worker/              # Inngest functions host = the durable BPMN pipeline
-├── packages/
-│   ├── contracts/           # Zod schemas + inferred TS types for EVERY data contract
-│   │                        #   (attachmentRefs, routingDecision, piiScanResult, costEstimateResult,
-│   │                        #    llmResponse, reviewDecision, feedbackResult, telemetryPayload,
-│   │                        #    notificationPayload, auditLogPayload). Single source of truth.
-│   ├── core/                # config, Result/error types, tenant context, Inngest client wrapper,
-│   │                        #   logger factory — the only package everyone may depend on
-│   ├── db/                  # Prisma/Drizzle schema + tenant-scoped client + migrations
-│   ├── validation/          # each domain package below exposes: index.ts (typed service iface),
-│   ├── attachments/         #   README.md, CONTRACT.md (its input/output contract ref),
-│   ├── executive-agent/     #   RUNBOOK.md (ops/failure modes). No cross-imports except core/contracts/db.
-│   ├── tools/
-│   ├── sub-agents/
-│   ├── grounding/
-│   ├── pii/
-│   ├── cost/
-│   ├── llm-gateway/         # includes cache adapter (Redis) + fallback chain
-│   ├── delivery/            # email adapter interface + Gmail + Graph implementations
-│   ├── feedback/
-│   ├── prompt-optimizer/
-│   ├── notifications/
-│   └── audit/               # logging + telemetry + compliance archival
-└── turbo.json / pnpm-workspace.yaml / tsconfig.base.json
-```
+### (1) vault→agent wiring — the immediate root
 
-### Structure Rationale
+**Decision: add a `searchVault` TOOL, not an always-on grounding step.** The `briefInbox`/`listInbox`
+tools already establish the pattern: a read-only tool the model calls *when it decides it needs it*,
+returning content to the model but writing only refs/counts to audit. A grounding *step* (inject
+top-K into every prompt) burns retrieval cost on every turn and can't be query-shaped by the model.
+Ponytail rung 2: reuse the tool pattern that's already here.
 
-- **`packages/*` = the ~15 BPMN child services.** Each is a library with a single exported typed interface (e.g. `piiScan(input): Promise<PiiScanResult>`), no HTTP surface of its own. This gives microservice-grade isolation of *contract and ownership* without microservice operational cost. To split one out later, wrap its `index.ts` in an HTTP/queue handler — the callers already speak its contract.
-- **`contracts/` is separate and depended-on by everyone.** All the named payloads live here as Zod schemas so validation is runtime + compile-time and identical on both sides of every boundary. This is the linchpin of "any engineer owns one service from its docs."
-- **`apps/api` is a thin edge, `apps/worker` holds the pipeline.** The edge only authenticates, scopes tenant, persists the request, and *emits an event*. All orchestration lives in Inngest functions in `worker` so the durable logic is in one auditable place.
-- **`apps/web` owns the WebRTC voice client directly** — realtime audio does not traverse your backend (see Data Flow).
-
-## Architectural Patterns
-
-### Pattern 1: Durable pipeline as steps (Inngest)
-
-**What:** The BPMN flow is one Inngest function; each service call is a `step.run(...)`. Steps are individually retried, memoized, and observable. Human review is a durable pause via `step.waitForEvent(...)` with a timeout that fires escalation.
-**When to use:** Any multi-stage flow that must survive crashes, wait for humans, or fan out — i.e. the whole request pipeline.
-**Trade-offs:** + No determinism constraint (LLM calls are just steps), no worker fleet, free-tier friendly. − Vendor coupling; mitigate by keeping business logic in `packages/*` and using `worker` only as thin orchestration.
-
-```typescript
-// apps/worker/functions/process-request.ts
-export const processRequest = inngest.createFunction(
-  { id: "process-request", concurrency: { key: "event.data.tenantId", limit: 5 } },
-  { event: "request/received" },
-  async ({ event, step }) => {
-    const valid   = await step.run("validate",   () => validation.check(event.data));
-    const enriched= await step.run("enrich",     () => attachments.process(valid));
-    const route   = await step.run("route",      () => executiveAgent.classify(enriched));
-    if (route.kind === "invalid") return step.run("dead-letter", () => audit.deadLetter(route));
-    const grounded= await step.run("ground",     () => grounding.apply(enriched, route));
-    const safe    = await step.run("pii",        () => pii.redact(grounded));      // → safeText
-    const cost    = await step.run("cost",       () => costSvc.estimate(safe));    // → downgrade
-    const out     = await step.run("generate",   () => llmGateway.generate(safe, cost)); // cache+fallback
-    const review  = await step.waitForEvent("review", {                            // durable HITL
-      event: "review/decided", timeout: "24h", match: "data.requestId",
-    });
-    if (!review) return step.run("escalate", () => notifications.escalate(event.data));
-    if (review.data.decision === "approve")
-      await step.run("deliver", () => delivery.sendEmail(out, event.data));
-    await step.sendEvent("feedback", { name: "feedback/capture", data: { /*...*/ } });
-  }
-);
-```
-
-### Pattern 2: Direct calls inside a request, events across lifecycles
-
-**What:** Within a single request's synchronous path, stages call each other as typed in-process functions (fast, easy to trace, transactional). Across lifecycle boundaries — feedback→optimization, any failure→dead-letter, everything→audit/telemetry, all→notifications — use Inngest events (decoupled, retried, fan-out).
-**When to use:** Default to direct calls; reach for an event whenever the receiver's timing is independent of the sender's success or the work should not block the user's response.
-**Trade-offs:** Events add eventual-consistency reasoning; keep the *user-visible* path synchronous and push self-improvement/telemetry/archival off the hot path.
-
-### Pattern 3: Adapter (ports) for every external dependency
-
-**What:** `delivery` exposes an `EmailProvider` port with `GmailProvider` and `GraphProvider` implementations chosen per user's connected account. `llm-gateway` exposes a `ModelProvider` port so downgrade/fallback swaps models behind one interface. `attachments` does the same for OCR/transcription.
-**When to use:** Any third-party surface that has an alternative or changes fast (the Realtime API surface explicitly changes faster than text APIs).
-**Trade-offs:** Slight indirection; huge payoff for the "provider-agnostic from day one" mandate and testability.
-
-### Pattern 4: Guardrail gates with explicit null/unknown branches
-
-**What:** `pii` and `cost` are *gates*, not decorations. Each returns a discriminated result (`ok` / `null` / `unknown`) and the pipeline branches explicitly on failure rather than assuming success — matching the spec's explicit failure handling and the 2026 lesson that skipping guardrails is the most expensive omission.
-**Trade-offs:** More branches to test (the 20-scenario matrix exists for exactly this); non-negotiable for a "governed" product.
-
-## Data Flow
-
-### Async request pipeline (text / file / dictation intake)
-
-```
-User submits (web) → apps/api: authN + tenant scope + persist request → emit "request/received"
-    ↓ (Inngest picks up in apps/worker)
-validate → enrich(attachments) → executive-agent(route) ──invalid──▶ dead-letter + notify
-    ↓ (valid route)
-ground → pii(safeText, safeTextHash) → cost(estimate+downgrade) → llm-gateway(cache→gen→fallback)
-    ↓
-waitForEvent(review)  ──timeout──▶ escalate/notify;  ──reject/edit(retry++)──▶ regenerate or escalate
-    ↓ (approve)
-delivery(email via Gmail/Graph) → emit "feedback/capture"
-    ↓ (independent lifecycle)
-feedback → (threshold breach) → prompt-optimizer
-Throughout: audit.log + telemetry at EVERY step; compliance archive is append-only.
-```
-
-### Realtime voice session path (live Executive Agent, 15-min cap)
-
-This path deliberately **bypasses the durable pipeline** for the live audio, because sub-second bidirectional audio cannot flow through a workflow engine.
-
-```
-web voice client ──"start session"──▶ apps/api: mint ephemeral client secret (API key stays server-side)
-web client ──WebRTC SDP offer──▶ OpenAI Realtime (gpt-realtime); direct audio channel opens
-   live turns, interruptions, function-calls happen browser↔model for ≤15 min (hard cap timer)
-User clicks End-session (or cap hit):
-   transcript → step: build structured markdown brief → store in knowledge vault (tenant-scoped)
-   OPTIONAL (explicit user permission): brief → convert to executable plan
-       ↓
-   plan enters the ASYNC pipeline as a normal "request/received" event
-Audit: session metadata, transcript, and brief creation are logged like any request.
-```
-
-Key isolation points: the browser holds the WebRTC connection; `apps/api` only mints a short-lived token and never proxies audio; post-session brief-building *is* durable (runs as an Inngest function) so it survives failures.
-
-### Multi-tenancy / per-user isolation (private beta)
-
-- **Single Postgres, `tenantId` (= userId) column on every row**; the `db` package exposes a tenant-scoped client so no query can omit the filter. Optionally enable Postgres Row-Level Security as defense-in-depth.
-- **Tenant context flows through `core`** and is stamped onto every Inngest event, audit log, and cache key (`safeTextHash` is namespaced by tenant to prevent cross-tenant cache hits).
-- **Single role** (spec defers RBAC). Invite/signup flow + onboarding are app-layer only.
-- No per-tenant infra, schemas, or workers — appropriate for private beta; the `tenantId` discipline is what lets you graduate to schema-per-tenant or RLS-hardened later without rewrites.
-
-## Suggested Build Order
-
-Dependency-driven; the first shippable target is one thin end-to-end slice (the constraint), then guardrails, then enrichment, then voice, then self-improvement, then beta.
-
-| Step | Build | Why here (dependency) |
-|---|---|---|
-| **0. Foundation** | monorepo (pnpm+Turbo), `contracts`, `core`, `db`, auth + `tenantId`, Inngest wired, `audit` skeleton | Everything imports these; audit must exist day one (no retrofitting) |
-| **1. Thin E2E slice** | text intake → `executive-agent` (direct-LLM route) → `llm-gateway` (no cache yet) → `waitForEvent` review → `delivery` (one provider) → audit | Proves the pipeline + HITL + delivery + trail; the MVP spine |
-| **2. Guardrails** | `pii` (safeText), `cost` (estimate+downgrade), `llm-gateway` cache (safeTextHash) + fallback | Governance is a product feature and build constraint; slot into existing steps |
-| **3. Enrichment** | `attachments` (OCR/PDF/transcription), `grounding` + knowledge vault | Adds input richness; depends on pipeline + vault schema |
-| **4. Routing depth** | `tools` execution + `sub-agents` routes + invalid-route/dead-letter hardening | Extends executive-agent's other branches once spine is stable |
-| **5. Voice** | dictation (record→transcribe→pipeline) first, then live WebRTC session → brief → vault → optional plan | Reuses attachments/transcription + pipeline; realtime is highest-risk, isolate it |
-| **6. Self-improvement + ops** | `feedback` → `prompt-optimizer`, `notifications`, compliance archival hardening | Event-driven, off hot path; safe to add last |
-| **7. Private beta** | invite/signup flow, per-user isolation hardening, onboarding, second email provider | Productionization once features exist |
-
-## Scaling Considerations
-
-| Scale | Architecture adjustments |
+| | |
 |---|---|
-| 0–1k users (beta) | Modular monolith as-is. Single Postgres + Redis + managed Inngest. `tenantId` scoping. No changes needed. |
-| 1k–100k users | Add Inngest concurrency keys per tenant (already patterned); read replicas for vault/audit; move compliance archive to object storage; consider extracting `attachments` (CPU-heavy OCR) and `llm-gateway` to their own deployables using their existing package contracts. |
-| 100k+ users | Split the heaviest packages into services (the seams already exist), partition Postgres or move audit/archive to a columnar/append-only store, dedicated embedding infra for `grounding`. |
+| **Integration point** | New `searchVault` entry in `buildCockpitTools` (`llm.ts:607`); executes `ctx.runAction` into vault grounding |
+| **NEW** | An **internal** grounding action. `vaultGround` (`vaultGround.ts:25`) is a `tenantAction` (identity-derived tenant); a tool already runs inside an action ctx with `tenantId` in its closure. Extract the handler body into `internal.vaultGround.groundInternal({tenantId, query})` so the tool calls it directly (no auth double-derive). Thin — the pure logic (`fuse`, `expand`, `rag.search`) is untouched. |
+| **MODIFIED** | `buildCockpitTools` (+1 tool). `COCKPIT_AGENT_SKILL` body → a NEW version teaching the agent when to ground (registry flip, not code — §5). |
+| **Data flow** | model → `searchVault(query)` → `groundInternal` → `rag.search(namespace=tenantId)` → `vaultGraph.expand` (hop-capped, tenant-filtered) → `fuse` → `{docIds, context[]}` returned to the model as context (content plane, like `briefInbox`'s digest). |
+| **Invariants** | Tenant isolation: `namespace = tenantId` + `expand` filters by tenantId (already enforced in `vaultGround`). §4: the tool RETURN is content-plane (goes to the model); any audit row logs `docIds`+counts only — mirror `briefInbox`'s refs-only `mailbox.listed` pattern. Cost: the loop's `preCall`+`recordModelSpend` already govern the embedding/search spend. |
 
-### Scaling priorities
+This is the **root dependency**: business evaluation, non-email sub-agents, and the flagship
+"upload a report → discuss by voice → grounded insights" flow all consume grounded context.
 
-1. **First bottleneck: attachment/OCR + transcription CPU** — extract `attachments` to its own worker first.
-2. **Second bottleneck: LLM cost/latency** — the cache + downgrade you build in Step 2 *is* the mitigation; tune cache hit rate before scaling compute.
+### (2) real sub_agent dispatch — one governed loop, swappable (skill, toolset)
 
-## Anti-Patterns
+**Decision: a sub-agent is a `(skill body, tool-set builder)` pair the SAME loop runs — NOT a new
+loop, NOT a recursive agent.** The hollow `sub_agent` enum collapses to email today because there is
+exactly one `buildCockpitTools`. Make the tool-set a *parameter*: the router names a specialist, the
+loop loads that specialist's skill as `system` and that specialist's tool record. `runAgentLoop`'s
+governance (`stopWhen: stepCountIs(8)`, `preCall`, `recordModelSpend`, timeout, fallback) is written
+once and applies to every specialist unchanged.
 
-### Anti-Pattern 1: Reaching for microservices on day one
-**What people do:** Deploy each of the 15 services separately "for separation of concerns."
-**Why it's wrong:** A solo dev drowns in inter-service contracts, network failure modes, and deploy pipelines — you will not reach beta in 4 weeks.
-**Do this instead:** Package-per-service in a modular monolith with strict contracts; split only when a specific package proves a real scaling need.
+| | |
+|---|---|
+| **Integration point** | `runCockpitAgent`/`runAgentLoop` (`llm.ts:1749/1478`) parameterized by a skill name + a tool-set builder; `contracts/routing.ts` `sub_agent` carries a specialist id |
+| **NEW** | A **tool-set registry**: `{ specialistId → (skillName, buildToolset(ctx,tenantId,planId,...)) }`. `buildCockpitTools` becomes one entry (the "email" specialist). One exemplar second specialist (per PROJECT.md — calendar or research) proves the seam. New gated specialist skills in the registry. |
+| **MODIFIED** | `routingSchema` (`contracts/routing.ts:12`) — add the specialist identifier to the `sub_agent` branch (still fail-closed: an unknown specialist is `unknown_route`, never a default). `runCockpitAgent` step 2 (load specialist skill, not always `COCKPIT_AGENT_SKILL`) and step 5 (build specialist toolset). `runAgentLoop`'s hardcoded `buildCockpitTools(...)` (`llm.ts:1513`) → the injected builder. |
+| **Data flow** | classify → `sub_agent{specialist}` → loop loads `(specialistSkill, specialistTools)` → same governed `generateText` → specialist proposes a plan via the same `proposePlan` → human `executePlan`. |
+| **Invariants** | Loops: `stepCountIs(8)` unchanged, shared across specialists. Cost: single `preCall` at entry + single `recordModelSpend` accumulator — no per-specialist budget leak; a nested-loop design would fragment cost accounting, which is exactly why we **avoid** it. **Approve gate untouched**: every specialist proposes; only `executePlan` (mutation) acts. Skills: specialist prompts are gated registry rows. |
 
-### Anti-Pattern 2: Putting LLM/tool calls in a determinism-constrained workflow engine
-**What people do:** Adopt Temporal and then fight replay non-determinism by wrapping every model call in an Activity.
-**Why it's wrong:** Enormous cognitive + ops overhead for a non-deterministic-by-nature agent system.
-**Do this instead:** Use a step-native engine (Inngest) where each LLM/tool call is naturally a step; no replay model to design around.
+Anti-pattern to avoid: a `dispatchSubAgent` tool that spins a *nested* `generateText` — it
+double-counts steps, forks the cost accumulator, and tempts a specialist to "execute" inside a tool.
+Keep it one loop with a swapped `(skill, tools)`.
 
-### Anti-Pattern 3: Proxying realtime audio through your backend
-**What people do:** Route WebRTC/audio through `apps/api`.
-**Why it's wrong:** Latency, cost, and needless complexity; the Realtime pattern is browser-direct with an ephemeral token.
-**Do this instead:** Mint an ephemeral client secret server-side; let the browser hold the WebRTC session; only persist the resulting transcript/brief.
+### (3) business-evaluation engine + scheduled proactive in-app review
 
-### Anti-Pattern 4: Bolting on audit/PII/cost after the pipeline works
-**What people do:** Ship the happy path, add governance later.
-**Why it's wrong:** The spec and constraints make audit + guardrails core; retrofitting means re-plumbing every step.
-**Do this instead:** `audit` and the gate contracts exist from Step 0/2; each step logs as it runs.
+**Decision: profile is a groundable vault document; the engine is pure `packages/*`; on-demand runs
+as a tool/specialist; the proactive schedule reuses `crons.ts` → an internal action → `briefings`-style
+in-app card + `notifications.notify`. No mailbox token — the digest is in-app.**
 
-### Anti-Pattern 5: Cross-tenant cache/state leakage
-**What people do:** Key the LLM cache purely by `safeTextHash`.
-**Why it's wrong:** Two tenants with identical redacted text share responses — a data-isolation breach.
-**Do this instead:** Namespace cache keys and all state by `tenantId`.
+| | |
+|---|---|
+| **Integration point** | Onboarding intake → `vaultDocuments` (`schema.ts:482`, `kind:"business_profile"`) via the existing ingest path (so it's embedded + groundable). Evaluation engine = new `packages/evaluation` (pure). On-demand = an `evaluateBusiness` tool inside an "analyst" specialist (feature 2). Proactive = new `crons.daily` entry (`crons.ts`) → internal action → per-tenant eval → in-app card + notify. |
+| **NEW** | `packages/evaluation` (assessment + gap-detection + advice-to-action, pure TS). Business-profile intake surface. A `businessEvaluations` content table (or reuse the `briefings` append-only shape) + a live `tenantQuery` card. The cron action. |
+| **MODIFIED** | `crons.ts` (+1 daily job — mirrors `worm-export`/`gmail-token-scan`). `notifications` (a new kind). Schema (+ profile doc kind is just a string; + evaluations table). |
+| **Data flow** | onboarding → profile doc ingested → (on-demand) analyst specialist grounds via `searchVault` + runs `packages/evaluation` → advice; (scheduled) cron → internal action per tenant → grounds → evaluates → `briefings.insert`-style row → live card + `notifications.notify`. **Advice that drives action still routes back through a plan + `executePlan`** — the review is read-only, the *acting* is gated. |
+| **Invariants** | §1 domain logic in `packages/evaluation`; Convex adapter thin. §4 the eval card is content-plane (writes NO audit row, exactly like `briefings.ts`); any audit logs counts only. Tenant isolation: cron iterates tenants, every read/write scoped. **Depends on feature 1** (grounding) and reuses feature 2 (specialist). |
+
+### (4) non-email tools (calendar · web research · doc/content creation · contacts/CRM)
+
+**Decision: each is a tool inside a specialist tool-set (feature 2). Read tools mirror `listInbox`
+(read-only, safe to execute in-loop). WRITE/side-effecting tools must NOT fire on a tool call — they
+*stage into the plan* and the human `executePlan` mutation performs the external write.**
+
+| | |
+|---|---|
+| **Integration point** | New tools in specialist tool-sets (feature 2 registry). External calls via new action adapters (`calendar.ts`, `research.ts`, `contacts.ts`) with secrets in Convex env. |
+| **NEW** | Per-domain adapter modules (thin Convex actions over Google Calendar API, a web-search provider, CRM). A **generalized approved-action executor**: today `executePlan`/`deliverApprovedPlan` only fan out email; a calendar-event/CRM-write needs the same propose→approve→execute spine generalized beyond `gmail.send`. |
+| **MODIFIED** | `deliverApprovedPlan.ts:23` (or a sibling executor) to dispatch by action type, not email-only. `plans` schema may carry a typed pending-action beyond email fields. |
+| **Data flow** | read tool (calendar list / web search) executes in-loop like `listInbox`; write tool (create event / add contact) stages a pending action on the plan → `proposePlan` → human `executePlan` → typed executor performs the write. |
+| **Invariants** | **Approve gate**: the critical one here — a "createCalendarEvent" that fired inside a tool would breach invariant 3 (LLM causing an external side effect without human approval). Route every external *write* through the mutation. Cost/loop: same governance. §4: adapters log refs/counts. |
+
+### (5) media canvas over the Pikar-Ai MCP service
+
+**Decision: a `generateMedia` tool in a "media" specialist that calls the connected Pikar-Ai MCP
+service (`generate_image/video/audio/3d`) from an action. Do NOT rebuild generation (PROJECT.md
+mandate). Output is an asset ref on the plan, like a generated attachment; delivery is Approve-gated.**
+
+| | |
+|---|---|
+| **Integration point** | New media specialist tool-set (feature 2). New MCP client adapter action (`mcp.ts` / `media.ts`) calling the Pikar-Ai service. Reuse the attachment/plan asset pattern from `renderAndStore` (`llm.ts:652`) + `plans.recordAttachments`. |
+| **NEW** | MCP client adapter (auth + call to `generate_image/video/...`, `models_explore(action:'recommend')` for model choice). Media-asset handling on the plan (ref/storageId, never raw bytes to the model). |
+| **MODIFIED** | Plan/attachment schema to carry media refs; the Approve-gate executor if media is *delivered* externally. |
+| **Data flow** | model → `generateMedia(brief)` → MCP `generate_*` → store asset under tenant → ref on plan → (if it leaves the building) `proposePlan` → `executePlan`. |
+| **Invariants** | Cost: media generation is expensive and external — it MUST `recordModelSpend`/a per-turn media cap so `preCall`+budget still bound the turn (video ≤3 min is a real cost ceiling). Tenant isolation: assets stored under `tenantId`. §4: refs only, never asset bytes/URLs in audit/model return. Approve gate before external delivery. |
+
+### (6) dynamic / agent-authored skills over the eval-gated registry
+
+**Decision: the registry ALREADY has the seam — `insertCandidate` (`skills.ts:317`) writes a NEW
+CANDIDATE (never active), and `activateSkillVersion` (`skills.ts:80`) is the ONE EVAL_GATE flip that
+requires passing evidence + owner action. User-authored first, agent-authored later. Placed LAST:
+self-modification, governance-heavy, and it depends on an eval harness for brand-new skills.**
+
+| | |
+|---|---|
+| **Integration point** | `skills.insertCandidate` (already exists, gated-only, idempotent). Owner activation via `skills.activateCandidate` (already exists, `tenantMutation` = owner gate + EVAL_GATE). Candidate review via `skills.candidatesForReview` (`skills.ts:154`). |
+| **NEW** | A skill-authoring surface (user first): compose body → `insertCandidate`. For agent-authored: a tool that lets the agent *propose* a skill body → same `insertCandidate` path (candidate ONLY). The genuinely hard NEW piece: an **eval harness for a brand-new gated skill** — the golden eval is per-skill with fixtures; a never-before-seen skill has none, so EVAL_GATE (`hasPassingEvidence`) can't pass without new fixtures. This is the gating complexity, not the write path. |
+| **MODIFIED** | Minimal in `skills.ts` — the write/gate/review seams exist. Possibly `GATED_SKILLS` registration for a new skill family. |
+| **Data flow** | author (user or agent) → `insertCandidate` (candidate) → eval run records evidence (`recordEvalEvidence`) → owner reviews (`candidatesForReview`) → `activateCandidate` (EVAL_GATE) → active. |
+| **Invariants** | Self-modification is safe by construction: the agent can only ever write a **candidate**; `insertCandidate` NEVER sets `status:"active"` and NEVER patches a prior row (immutable-per-version, §5). Activation is a separate owner mutation behind EVAL_GATE. This is precisely why it can ship last without new governance primitives. |
+
+## Suggested Build Order (dependency-aware)
+
+Matches PROJECT.md's staircase; the ordering rationale is the dependency arrows, not preference.
+
+```
+0. vault→agent wiring (searchVault tool)          ── ROOT: unblocks all grounding
+        │
+        ├─► 1. business profile intake + evaluation engine (on-demand)   [needs grounding]
+        │        │
+        │        └─► 3. scheduled proactive in-app review                [needs engine + cron pattern]
+        │
+        └─► 2. real sub_agent dispatch (one exemplar specialist)         [the framework for breadth]
+                 │
+                 ├─► 4. non-email tools (calendar/research/docs/CRM)     [needs dispatch + gated writes]
+                 │
+                 └─► 5. media canvas over Pikar-Ai MCP                   [needs dispatch + cost/asset handling]
+
+6. dynamic skills: user-authored → agent-authored                        [self-mod, governance-heavy, LATE]
+7. Governance & beta: requireOwner + cross-user isolation test +         [multi-user comes LAST]
+   ISO 9001 formalization + productionization
+```
+
+- **0 is non-negotiably first** — it's the "root" the launch-readiness review named; every intelligent feature grounds against the vault.
+- **2 before 4 and 5** — non-email tools and media are *specialists*; the dispatch framework must exist first, or each capability re-forks the loop.
+- **1 before 3** — the proactive schedule runs the on-demand engine; build the engine, then schedule it.
+- **6 late** — self-authored skills are self-modification; ship the registry-consumer features first so there's something worth authoring skills *for*, and so the EVAL_GATE has real fixtures to reason about.
+- **7 last** — multi-user isolation + `requireOwner` gate the beta; per the phase-8 owner-auth blocker (memory), the ops/optimizer controls are currently tenant-callable with no owner-role primitive, so `requireOwner` + the cross-user isolation test must land before real users, i.e. at the very end.
+
+## Anti-Patterns (specific to this integration)
+
+### Anti-Pattern 1: Making an external side-effect an LLM tool
+**What people do:** `sendEmail` / `createCalendarEvent` / `deliverMedia` as a tool the model calls.
+**Why it's wrong:** breaks invariant 3 — the human Approve gate. The model must never cause an
+irreversible external effect.
+**Instead:** tools *stage* into the plan; a human-triggered `executePlan` mutation performs the
+effect. `proposePlan` (`llm.ts:1083`) is the template — it only flips status, it does not send.
+
+### Anti-Pattern 2: A sub-agent as a nested `generateText` loop
+**What people do:** a `dispatchSubAgent` tool that runs its own inner agent loop.
+**Why it's wrong:** forks the cost accumulator and step budget; the outer `preCall`/`stepCountIs(8)`
+no longer bound the turn; tempts the inner loop to "execute."
+**Instead:** one loop, a swapped `(skill body, tool-set)` pair selected by the router. Governance
+written once in `runAgentLoop`.
+
+### Anti-Pattern 3: Grounding/eval/media content leaking into audit
+**What people do:** log the retrieved vault text, the evaluation prose, or a media URL "for debugging."
+**Why it's wrong:** breaks invariant 2 — the audit becomes a PII/content honeypot. `llmRedaction.test.ts`
+statically scans these blocks.
+**Instead:** content-plane returns to the model; audit/deadLetter payloads carry `docIds`/counts/hashes
+only. Follow `briefings.ts` (writes NO audit row) and the refs-only `mailbox.listed` payload.
+
+### Anti-Pattern 4: Bypassing EVAL_GATE for a "quick" skill activation
+**What people do:** let a user/agent-authored skill go active directly.
+**Why it's wrong:** breaks invariant 4 and the moat's held-out-validation guarantee.
+**Instead:** `insertCandidate` (candidate only) → evidence → owner `activateCandidate` (the ONE gated
+flip in `activateSkillVersion`). Rollback stays exempt-by-status.
 
 ## Integration Points
 
 ### External Services
 
-| Service | Integration pattern | Notes |
-|---|---|---|
-| LLM text APIs | `ModelProvider` port in `llm-gateway`; primary + fallback chain | Keep keys server-side; downgrade swaps model behind port |
-| OpenAI Realtime (voice) | Ephemeral token minted by `apps/api`; browser WebRTC direct | Surface changes fast — confirm model/voice/pricing before launch; keep behind adapter |
-| OCR / PDF / transcription | Ports in `attachments` | Long-running → own Inngest step with generous timeout |
-| Gmail API + MS Graph | `EmailProvider` port in `delivery` | Chosen per user's connected account; OAuth token storage tenant-scoped |
-| Inngest | `core` client wrapper; functions in `apps/worker` | Managed, no worker fleet; free tier covers beta |
-| Postgres / Redis / blob | `db` package + cache adapter | tenant-scoped client; Redis keys namespaced by tenant |
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Pikar-Ai MCP (media) | MCP client from a Convex action; `models_explore(recommend)` then `generate_*` | Do NOT rebuild generation (PROJECT.md); store asset refs under tenantId; cost-gate the turn |
+| Google Calendar / web-search / CRM | Thin Convex action adapters, secrets in Convex env | Read tools execute in-loop; writes route through the Approve mutation |
+| OpenAI embeddings (RAG) | `vaultRag.ts` single `rag` instance, `text-embedding-3-small`@1536 | Already wired; grounding just needs a caller (feature 1) |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
-|---|---|---|
-| `apps/api` ↔ `apps/worker` | Inngest event (`request/received`, `review/decided`) | Edge stays thin; orchestration decoupled |
-| pipeline step ↔ `packages/*` | Direct typed in-process call | Fast, traceable, transactional within a step |
-| pipeline ↔ `feedback`/`notifications`/`audit`/`prompt-optimizer` | Inngest events | Independent lifecycles, off hot path |
-| any package ↔ any package | Import installed package only (never `../`) | Enforces ownership + later extractability |
-| all ↔ `contracts` | Zod schema import | Runtime + compile-time contract parity on both sides |
+|----------|---------------|-------|
+| tool ↔ vault grounding | `ctx.runAction(internal.vaultGround.groundInternal)` | Extract internal entry from the `tenantAction` so the tool passes its closure `tenantId` |
+| router ↔ specialist | `routingSchema.sub_agent{specialist}` → `(skill, toolset)` registry | Fail-closed: unknown specialist → `unknown_route`, never a default |
+| loop ↔ Approve gate | `proposePlan` flips status; `executePlan` (mutation) sends | The one-way boundary the whole governance story rests on |
+| cron ↔ in-app digest | `crons.daily` → internal action → `briefings`-style row + `notify` | No mailbox token; content-plane row writes no audit |
+| author ↔ registry | `insertCandidate` (candidate) → `activateCandidate` (EVAL_GATE) | Agent can only write candidates; owner + evidence activate |
 
 ## Sources
 
-- [Temporal vs Inngest (2026): Durable Execution for AI Agents — wetheflywheel](https://wetheflywheel.com/en/comparisons/temporal-vs-inngest/) — HIGH
-- [Inngest vs Temporal (official comparison)](https://www.inngest.com/compare-to-temporal) — MEDIUM (vendor, cross-checked)
-- [The Ultimate Guide to TypeScript Orchestration: Temporal vs Trigger.dev vs Inngest — Medium](https://medium.com/@matthieumordrel/the-ultimate-guide-to-typescript-orchestration-temporal-vs-trigger-dev-vs-inngest-and-beyond-29e1147c8f2d) — MEDIUM
-- [Agentic AI Architecture: 2026 Production Patterns + Stack — Internative](https://internative.net/insights/blog/agentic-ai-architecture-2026) — MEDIUM
-- [Agentic Orchestration Design Patterns for Enterprise AI — Put It Forward](https://www.putitforward.com/agentic-ai/agentic-orchestration-design-patterns) — MEDIUM
-- [The Three Layers of an Agentic AI Platform — Bain & Company](https://www.bain.com/insights/the-three-layers-of-an-agentic-ai-platform/) — MEDIUM
-- [15 Agentic Design Patterns for Production AI (2026) — vdf.ai](https://vdf.ai/blog/agentic-design-patterns-practical-guide/) — MEDIUM
-- [Realtime API with WebRTC — OpenAI (official docs)](https://developers.openai.com/api/docs/guides/realtime-webrtc) — HIGH
-- [Voice agents — OpenAI (official docs)](https://developers.openai.com/api/docs/guides/voice-agents) — HIGH
-- [OpenAI Realtime API Voice Apps: WebRTC Guide (2026) — APIScout](https://apiscout.dev/guides/openai-realtime-api-building-voice-applications-2026) — MEDIUM
-- [Structuring a repository — Turborepo (official docs)](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository) — HIGH
-- [Monorepos with TypeScript in 2026: Turborepo, pnpm Workspaces & Project References — Medium](https://medium.com/@mernstackdevbykevin/monorepos-with-typescript-93c9233f6df8) — MEDIUM
+- `packages/backend/convex/llm.ts` — `runCockpitAgent:1749`, `runAgentLoop:1478`, `buildCockpitTools:607`, `proposePlan:1083`, `briefInbox:1181`, `renderAndStore:652` (read at span; HIGH)
+- `packages/backend/convex/cockpit.ts:494` — `executePlan` Approve gate (HIGH)
+- `packages/backend/convex/vaultGround.ts:25` — grounding action, zero callers (HIGH)
+- `packages/contracts/src/routing.ts` — `sub_agent` enum + fail-closed `parseRouting` (HIGH)
+- `packages/backend/convex/skills.ts` — `insertCandidate:317`, `activateSkillVersion:80`, `activateCandidate:139`, `candidatesForReview:154`, `seedSkills:235` (HIGH)
+- `packages/backend/convex/briefings.ts`, `crons.ts`, `vaultRag.ts`, `schema.ts` — in-app digest / schedule / RAG / tables patterns (HIGH)
+- `.planning/PROJECT.md` — v2.0 milestone target features + staircase (HIGH)
+- MCP server instructions (Pikar-Ai) — media generation tool surface (HIGH)
 
 ---
-*Architecture research for: governed agentic AI operating layer (Pikar-AI)*
-*Researched: 2026-07-08*
+*Architecture research for: governed agentic platform — v2.0 breadth-of-action integration*
+*Researched: 2026-07-24*

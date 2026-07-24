@@ -1,202 +1,172 @@
 # Project Research Summary
 
-**Project:** Pikar-AI
-**Domain:** Governed agentic AI operating layer (AI chief-of-staff web platform) — voice/text intake, durable multi-step orchestration, RAG, guardrails, human review, email delivery
-**Researched:** 2026-07-08
+**Project:** Pikar AI — v2.0 Platform (chief-of-staff breadth + private beta)
+**Domain:** Governed multi-tenant agentic operating layer, expanding a shipped Convex/TS email cockpit into a broad AI chief-of-staff, then opening a private beta
+**Researched:** 2026-07-24
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Pikar-AI is a governed agentic AI platform: a solopreneur "chief of staff" that takes voice/text/attachment input, plans and executes multi-step work behind cost/PII/quality guardrails, requires human approve/edit/reject before anything leaves the building, and follows through with real delivery (email) under a full audit trail. Experts building this class of system in 2026 converge on a **modular monolith** (one repo, ~15 packages with strict typed contracts) run by a **step-native durable orchestrator** (Inngest, not Temporal) — because LLM/tool calls are inherently non-deterministic and a solo 4-week build cannot afford Temporal's worker-fleet and determinism-replay overhead. The realtime voice session is architected as a deliberate exception: it bypasses the durable pipeline entirely (browser-direct WebRTC to OpenAI Realtime with a server-minted ephemeral token) and only re-enters the governed pipeline after the session ends and produces a brief.
+This is breadth-on-an-existing-spine, not a greenfield build. All four studies converge on the same conclusion: the governed tool-loop, the plan→approve→execute gate, the skills registry, the audit spine, and the vault/RAG machinery already exist and are load-bearing — the milestone's job is to wire new capabilities through the same seams, not invent new ones. The stack delta is near-zero (two genuinely new runtime deps: `@modelcontextprotocol/sdk` for the media MCP client, `@azure/msal-node` for Microsoft Graph auth, plus optionally `@tavily/core` for web research); everything else is a new pure-TS `packages/*` module plus a thin `convex/` adapter over already-installed dependencies. The single highest-leverage piece of work is wiring the already-built vault retrieval (`vaultGround.ts`, currently zero callers) into the agent as a `searchVault` tool — almost every other capability (evaluation, the flagship voice-doc workflow, credible sub-agent output) is boilerplate without it.
 
-The recommended stack is TypeScript end-to-end: pnpm+Turborepo monorepo, Next.js 16.2 (App Router), Postgres+pgvector (single datastore for relational, vector, and audit data), Redis for caching/rate-limiting, Drizzle ORM, Vercel AI SDK v6 + AI Gateway for LLM access, Better Auth (self-hosted, org/invite-native) for auth, Presidio (as a Dockerized microservice) + regex prefilter for PII, and Langfuse + OpenTelemetry for observability. Zod is the single source of truth for every data contract (attachmentRefs, routingDecision, piiScanResult, costEstimateResult, llmResponse, etc.), enforced at every package boundary. Feature-wise, the market (Lindy, Dust, Zapier Agents, Relevance AI, Motion) has normalized multi-step agents, human-in-the-loop approval, and knowledge grounding as table stakes, but nobody combines solopreneur-accessible governance (PII, cost caps, audit) with a live bidirectional voice strategy session that produces a durable, groundable brief — that intersection is Pikar's defensible position, and the roadmap should protect it rather than chase competitor integration breadth.
+The recommended approach is the four-stage staircase all four studies independently arrive at: S1 Foundation & Intelligence (vault wiring, business evaluation, flagship voice-doc workflow) → S2 Breadth of Action (real sub-agent dispatch via one exemplar, non-email action tools) → S3 Creation & Self-Extension (media canvas, dynamic skills) → S4 Governance & Productionization (owner-gating, cross-tenant isolation, invite/OAuth reconciliation, ISO 9001 formalization). Each capability is architecturally a variation on two existing mechanisms: a read-only tool that returns content to the model (mirrors `listInbox`/`briefInbox`), or a staged write that proposes into a plan and only executes via the human-triggered `executePlan` mutation. No new capability may create a third mechanism.
 
-The dominant risk to the 4-week timeline is **not** the AI/agent engineering — it's external, uncontrollable verification processes: Google's OAuth sensitive-scope review for `gmail.send` (2–4 weeks, cannot be rushed) and Microsoft Graph's `Mail.Send` permission model. The mitigation is well-understood (use Google's Testing-mode 100-user cap for beta, accept and handle 7-day token expiry, prefer delegated Graph permissions, sequence one email provider before the second) but it must be decided at roadmap/foundation time, not discovered in week 3. The other clustered risks are guardrail-integrity bugs that are easy to miss because they fail silently: cache keys not namespaced by tenant (cross-user data leak), audit logs storing raw PII instead of `safeText` (compliance honeypot), `safeText` being treated as guaranteed-clean rather than best-effort, and agent/voice loops with no hard cost kill-switch. All of these must be designed in from the foundation phase — none of them are safely deferrable or retrofittable.
+The key risks are governance regressions, not build risk: (1) sub-agent dispatch fanning out into runaway cost/loops with no lineage; (2) grounded/retrieved content leaking into the insert-only audit or becoming injected instructions; (3) a self-authored skill finding a path to `active` status without the eval gate; (4) the evaluation engine fabricating gaps or generic advice to look useful; (5) the three known un-gated Phase-8 owner-only functions remaining live authorization holes when the beta opens a second user. All five are addressed below as explicit phase success criteria, not follow-up work — they are cheap to prevent at each phase and expensive (in one case, WORM-immutable) to fix after.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is a single TypeScript monorepo (pnpm + Turborepo) deploying to Next.js 16.2, with Postgres as the one durable datastore (relational + pgvector for embeddings + audit/dead-letter tables) and Redis for cache/rate-limiting. Inngest is the deciding architectural choice: it provides event-driven durable steps, `waitForEvent` for the human-review gate, and built-in flow control for cost guardrails, with no worker fleet to operate and no determinism constraint on LLM calls — the opposite trade-off of Temporal, which was explicitly rejected as wrong for a solo 4-week build. Full source: `.planning/research/STACK.md`.
+Six of seven new capabilities need zero or one new dependency, because the codebase already has the exact seam every external integration needs: `gmail.ts`'s pattern of a `"use node"` action, raw `fetch`, one shared OAuth-refresh root, a discriminated result, and retrier-driven retries. New capabilities extend `buildCockpitTools`/`runAgentLoop`, they don't reinvent orchestration. The two genuine new-dependency decisions are an MCP client for the connected Pikar-Ai media service and MSAL for Microsoft Graph's auth model (different enough from Google's to hand-roll safely). `docx` output is explicitly deferred (PDF via existing `pdf-lib` already covers delivery) and `@convex-dev/workpool` needs only a devDep→dep promotion, not a new install.
 
 **Core technologies:**
-- Next.js 16.2 (App Router) — flagship web framework, Turbopack default, matches Vercel deploy target
-- Inngest — durable orchestration for the entire BPMN pipeline; step-native, no worker fleet, human-review-friendly via `waitForEvent`
-- Postgres + pgvector (HNSW/halfvec) — single datastore for relational data, vectors, and audit trail; avoids a dedicated vector DB at this scale
-- Vercel AI SDK v6 + AI Gateway — provider-agnostic LLM calls, primary/fallback, structured outputs, native human-in-the-loop tool approval
-- Drizzle ORM — code-first, SQL-close, pgvector- and audit-schema-friendly
-- Better Auth — self-hosted auth with native invite/magic-link/org support (credentials stay in Pikar's own Postgres, a compliance win over Clerk)
-- Presidio (Dockerized microservice) + regex prefilter — hybrid PII detection; deterministic and testable, LLM redaction only as fallback
-- OpenAI Realtime API over WebRTC — live voice session, ephemeral server-minted tokens, browser-direct audio (never proxied through the backend)
-- Langfuse + OpenTelemetry — LLM-specific tracing/cost/prompt-management (Langfuse) plus general infra tracing (OTel); complementary, not competing
-- Zod — single source of truth for every data contract, generating both runtime validation and OpenAPI/TS types
+- `@modelcontextprotocol/sdk@1.29.0` — MCP client for the connected Pikar-Ai media service (image/video/audio/3D generation) — `ai@7.0.20` ships no MCP client, so this is a genuine addition; `StreamableHTTPClientTransport` + built-in OAuth fits the remote OAuth-gated connector
+- `@azure/msal-node@5.4.2` — Microsoft Graph delegated auth-code + refresh + token cache — Graph's auth model differs enough from Google's that hand-rolling it at the security boundary is the wrong place to be lazy
+- `@tavily/core@0.7.6` (or raw-fetch its REST API, skipping the SDK) — web research tool returning ranked results plus cleaned page content in one call, avoiding a bespoke fetch+strip pipeline
+- `@convex-dev/workpool@0.4.7→0.4.8` (promote existing devDep to dep) — bounded parallel fan-out for sub-agent dispatch and async media jobs
+- Everything else (evaluation engine, sub-agent dispatch, calendar, contacts/CRM, self-authored skills, QMS tables) — no new package; pure-TS `packages/*` + thin `convex/` adapters over `ai@7.0.20`, `zod@4`, Convex cron/scheduler, and the existing `skills`/`audit`/`vaultRag` tables
+
+**Explicitly avoid:** LangChain/LangGraph/CrewAI/AutoGen (duplicate `generateText` + `@convex-dev/workflow`, bypass tenant wrappers), any model-hosting/inference SDK for media (rebuilds what the Pikar-Ai MCP already provides), Playwright/Puppeteer at runtime (dev-only e2e tool; SSRF/security surface in product), `@microsoft/microsoft-graph-client` (stale thin wrapper; repo precedent is raw fetch), a rules-engine/BPMN runtime for evaluation, and any external prompt-management SaaS (duplicates the skills registry + audit).
 
 ### Expected Features
 
-The competitive landscape (Lindy, Dust, Zapier Agents, Relevance AI, Motion) has normalized multi-step agentic execution, human approval gates, and knowledge grounding, but none combine solopreneur-tier governance with a voice-native strategy session — that gap is Pikar's differentiation. Full detail: `.planning/research/FEATURES.md`.
+Full detail in FEATURES.md by capability (evaluation engine, flagship voice-doc workflow, sub-agent dispatch, non-email action tools, media canvas, dynamic skills). The unifying theme across all six: Pikar's moat is doing what generic AI tools already do, but grounded (the user's own vault data, not textbook boilerplate), governed (every external effect through the single approval gate), and action-connected (findings become approvable next steps, not static reports).
 
 **Must have (table stakes):**
-- Text/chat intake, attachment upload + extraction, multi-step planning/execution
-- Human approve/edit/reject before any action leaves the system, with plan/step visibility
-- At least one real delivery channel (email) and persistent memory/grounding (knowledge vault)
-- Per-user isolation, invite-based signup, fast onboarding, event notifications
-- Voice dictation intake (record → transcribe → pipeline)
+- Vault→agent read tool — the linchpin; retrieval is shipped but has zero agent callers today
+- Business profile intake + persona-tuned, framework-structured (SWOT + stage-appropriate canvas) evaluation, grounded in the user's own vault data, with severity-rated gaps
+- Flagship: upload a report → discuss by voice → surface insights/gaps with citations → memo or gap-bridging plan, including an honest "no gaps found" path
+- One real sub-agent (Research exemplar) behind a now-real dispatcher, with context handoff and audit continuity across the hop
+- Calendar read/create, web research, document/content creation, contacts read/lookup — each reusing the shipped adapter/governance pattern
+- Image + video (≤3 min) generation as a thin wrap of the connected Pikar-Ai MCP service, with assets stored/governed like any other artifact
+- User-authored skills with the existing draft→publish→rollback lifecycle, tenant-scoped
 
-**Should have (differentiators):**
-- Live 15-min bidirectional voice strategy session that produces a structured, groundable brief
-- Governance-for-solopreneurs bundle (PII redaction + cost caps + audit) at an accessible tier
-- Per-request cost visibility with automatic model downgrade and LLM response caching
-- Full audit trail and compliance archival from day one
-- Self-improvement loop (feedback-driven prompt optimization) — but kept human-gated, not autonomous, in v1
+**Should have (competitive differentiators):**
+- Evaluation advice that emits a concrete, approvable next action per gap (not a static report)
+- Voice-native back-and-forth over a specific document (interrupt, drill in, redirect), plus cross-document pattern detection once vault history is rich
+- Scheduled proactive in-app review (chief-of-staff initiates, not purely reactive)
+- Governed sub-agent tool scoping (each specialist reaches only its own tools) with a transparent "who did what" hop chain in the plan card
+- Media edit tools (upscale/outpaint/remove-bg/reframe) preferred over regenerate; media invoked as a routed tool inside a plan, not a silo
+- Agent-authored skills (LATE — self-modification, eval-gated, human-approved)
 
-**Defer (v2+):**
-- Broad integration breadth beyond email (Slack, docs write-back)
-- Multi-agent "workforce" orchestration, Computer Use/browser RPA, calendar/scheduling engine
-- Multiplayer/multi-reviewer RBAC, billing/public launch, custom skills registry
-- Fully autonomous "no approval" mode — explicitly conflicts with the governance identity
+**Defer / anti-features (explicitly do not build):**
+- Free-form "AI business coach" chat, fabricated metrics/benchmarks, a numeric viability score, or auto-executing recommended actions
+- Fixed-quota "always find 3-5 gaps," unbounded voice sessions, summarize-only document analysis
+- A full agent swarm on day one, one-agent-per-tool, agents autonomously spawning agents, free inter-agent negotiation loops
+- Full CRM (pipelines/deal stages), autonomous calendar invites without approval, unrestricted/unscoped web browsing
+- Building a generation pipeline or hosting models, a full timeline/NLE video editor, unbounded video length, auto-publishing generated media to social
+- Agent self-publishing skills without human approval, arbitrary code execution in skills, third-party/marketplace skill sharing
 
 ### Architecture Approach
 
-The system is a modular monolith organized as `apps/{web, api, worker}` plus ~15 `packages/*` domain modules communicating through Zod-defined contracts, with `apps/worker` hosting the entire BPMN pipeline as a single Inngest function (steps for validate → enrich → route → ground → PII → cost → generate → wait-for-review → deliver → feedback). The realtime voice session is architecturally isolated from this durable pipeline — it runs browser-to-OpenAI directly over WebRTC and only re-enters the governed pipeline once a brief is produced — because sub-second bidirectional audio cannot flow through a workflow engine. Full detail: `.planning/research/ARCHITECTURE.md`.
+The existing system is one governed tool-loop per turn (`runCockpitAgent` → `runAgentLoop`'s `generateText({tools, stopWhen: stepCountIs(8)})` → `buildCockpitTools`) gated by a human-triggered `executePlan` mutation that is structurally separate from any LLM tool. Every v2.0 feature is a variation on two integration shapes: a read-only tool that returns content in-loop (the `searchVault`/`listInbox` shape), or a tool that stages a pending action onto the plan for the human approve-gate to execute (the `proposePlan`/`executePlan` shape). The architecture research is explicit that a sub-agent must be a swappable `(skill body, tool-set)` pair the SAME loop runs — never a nested `generateText` call — because a nested loop forks the cost accumulator and the step budget, and tempts a specialist to "execute" from inside a tool.
 
 **Major components:**
-1. `contracts` + `core` — Zod schemas (single source of truth for every payload) and shared config/tenant-context/logger, depended on by everything
-2. `worker` pipeline packages (`validation`, `attachments`, `executive-agent`, `grounding`, `pii`, `cost`, `llm-gateway`, `delivery`) — the governed request pipeline, each a typed in-process service with no HTTP surface of its own
-3. Cross-cutting packages (`audit`, `notifications`, `feedback`, `prompt-optimizer`) — event-driven, off the synchronous hot path, wrap every step for compliance and self-improvement
+1. `runAgentLoop` (`llm.ts:1478`) — the one governed loop; parameterized by skill + tool-set so sub-agents reuse it rather than forking it
+2. `buildCockpitTools` (`llm.ts:607`) — becomes one entry in a new tool-set registry keyed by specialist; new tools (`searchVault`, `evaluateBusiness`, calendar/research/contacts/media) are added here or in specialist variants, never as a parallel mechanism
+3. `cockpit.executePlan` (`cockpit.ts:494`) — the sole Approve gate; must be generalized beyond email so calendar/CRM/media writes route through the same mutation instead of a second bespoke executor
+4. `vaultGround.ts` (unwired) — hybrid RAG+graph retrieval; needs an internal entry point (`groundInternal`) callable from a tool closure, not a redesign
+5. Skills registry (`skills.ts`) — `insertCandidate` (candidate-only write) / `activateCandidate` (the one EVAL_GATE flip) already provide the safe self-authoring seam; dynamic skills reuse it verbatim
+6. Crons + `briefings.ts` — the in-app-digest pattern (no audit row, no OAuth token) that the scheduled proactive review must follow exactly
 
 ### Critical Pitfalls
 
-Full list (12 pitfalls with mitigations) in `.planning/research/PITFALLS.md`. Top risks:
-
-1. **Google OAuth verification timeline** — `gmail.send` sensitive-scope review takes 2–4 weeks and cannot be rushed; use Testing-mode (100-user cap) for the beta and architect for 7-day test-token expiry rather than blocking launch on full verification.
-2. **Cross-tenant cache leakage** — LLM cache keyed only on `safeTextHash` (without a tenant/user namespace) silently serves one user's cached response to another; every cache key must be namespaced by `userId`/`tenantId` from day one.
-3. **Audit log as a PII honeypot** — "log everything from day one" must mean logging `safeText` and references/hashes, never raw prompts/transcripts/email bodies; redact-then-log ordering is a foundational, non-negotiable pipeline contract.
-4. **Realtime voice cost blowout** — the Realtime API re-bills the entire conversation history every turn; requires history pruning, prompt caching, and a server-side (not client-only) 15-minute watchdog with real-time token metering.
-5. **Agent loop runaway / no kill-switch** — LLM agents cannot reliably self-terminate; requires a hard iteration cap, tool-call repetition detector, and a per-request cost budget enforced as an actual kill-switch (not just advisory) at the gateway layer.
+1. **Agent-authored skill self-activates, bypassing the eval gate** — capability-minimize: agent-reachable skill tools must be physically unable to call `activateCandidate`; authoring can only ever produce a `candidate`; activation requires `requireOwner` + a passing held-out eval.
+2. **Indirect prompt injection via vault/web content** — grounded and researched text is data, never instructions; quarantine it with delimiters, give research sub-agents no send/write capability, and keep every external-effect tool behind the plan-approval gate so an injection can at most propose, never execute.
+3. **Sub-agent dispatch fans out into runaway cost/loops with no accountability** — enforce a hard depth cap, a shared root-request budget envelope (not a fresh envelope per sub-agent), cycle refusal, and `rootRequestId`/`parentAgentId` lineage in every audit row, as non-negotiable success criteria of the dispatch phase itself.
+4. **Evaluation engine fabricates gaps or gives generic/hallucinated advice** — ground every finding in a citation (vault ref or web-research result) or don't surface it; make "no gaps found" a first-class, eval-tested outcome; a healthy-business fixture must return zero gaps.
+5. **Grounded vault/business content leaks into audit, telemetry, or step rows** — redact-then-write must extend to the new content channels grounding introduces (step traces, evaluation findings, sub-agent traces); a regression test must assert no audit/telemetry/step/DLQ row contains any substring of a source document.
 
 ## Implications for Roadmap
 
-Based on combined research, suggested phase structure (dependency-driven, matching the architecture's own "Suggested Build Order" and the pitfalls' foundational-decision list):
+Based on combined research, the four-stage staircase is dependency-forced, not a preference — all four studies independently converge on it.
 
-### Phase 1: Foundation
-**Rationale:** Everything else imports these packages; the audit substrate, tenant-scoping discipline, and orchestrator choice must exist before any feature work, because retrofitting them (per Pitfalls 8, 10, 12) is far more expensive than building them in.
-**Delivers:** Monorepo (pnpm+Turborepo), `contracts`, `core`, `db` (Postgres+Drizzle, `tenantId` on every row), Better Auth wired, Inngest wired, `audit` skeleton (redact-then-log ordering decided now).
-**Avoids:** Pitfall 10 (durable-orchestration learning curve — Inngest chosen up front, not Temporal), Pitfall 12 (multi-user isolation retrofit), Pitfall 8 (audit PII honeypot — ordering contract fixed now).
+### Phase Group S1: Foundation & Intelligence
+**Rationale:** Vault→agent wiring is the root every other capability depends on (evaluation, flagship workflow, and credible sub-agent output all collapse to boilerplate without it) — architecturally and dependency-wise it must ship first.
+**Delivers:** `searchVault` tool wired into `buildCockpitTools`; business profile intake + evaluation engine (SWOT/canvas, grounded, action-emitting, honest "no gaps"); the flagship upload→discuss-by-voice→gaps→memo/plan workflow (mostly integration of shipped extraction + voice); scheduled proactive in-app-only review.
+**Addresses (FEATURES.md):** Vault→agent read tool, business profile intake, business evaluation engine, flagship voice-doc workflow, scheduled proactive review.
+**Avoids (PITFALLS.md):** Pitfall 5 (grounded PII into audit/telemetry — redaction boundary must extend in this same phase, not after); Pitfall 4 (non-credible evaluation — healthy-business fixture returns zero gaps, every finding sourced); Pitfall 7 (proactive review must touch no OAuth token, in-app only); Pitfall 2 partially (quarantine established here, must not regress in S2).
 
-### Phase 2: Thin End-to-End Slice
-**Rationale:** Proves the core value proposition (input → plan → guardrails → approve → deliver → audit) before any enrichment or voice work; this is the MVP spine per FEATURES.md's v1 definition.
-**Delivers:** Text intake → `executive-agent` (direct-LLM route) → `llm-gateway` (no cache yet) → `waitForEvent` human review → `delivery` (one email provider only) → audit trail.
-**Addresses:** Text/attachment intake, Executive Agent planning/routing, plan/step visibility, human review, single delivery channel (all P1 in FEATURES.md).
-**Avoids:** Pitfall 11 (integration scope creep — ship one email provider fully before starting the second).
+### Phase Group S2: Breadth of Action
+**Rationale:** Non-email tools and future specialists are architecturally sub-agents; the dispatch framework (one loop, swappable skill+tool-set) must exist before any specialist tool is added, or each capability re-forks the loop.
+**Delivers:** Real `sub_agent` dispatch via one Research exemplar (not a swarm); non-email action tools (calendar read/create, web research, document/content creation, contacts/CRM) as specialist tools, with writes staged into the plan and executed only via a generalized `executePlan`/`deliverApprovedPlan`.
+**Uses (STACK.md):** `@tavily/core` (web research), existing Google/MS OAuth roots extended with new scopes, `@convex-dev/workpool` (promoted dep) for bounded fan-out.
+**Implements (ARCHITECTURE.md):** Tool-set registry `{specialistId → (skillName, buildToolset)}`; `deliverApprovedPlan.ts` generalized to dispatch by action type, not email-only.
+**Avoids:** Pitfall 3 (multi-agent runaway — depth cap, shared root budget, cycle refusal, lineage fields are phase success criteria, present before the first exemplar ships); Pitfall 2 must not regress (web research content stays untrusted data; research sub-agent has no send/write capability); Anti-Pattern 1 (no external side-effect ever becomes a tool call — every write stages into the plan).
 
-### Phase 3: Guardrails
-**Rationale:** Governance is both a product differentiator and a build constraint (PROJECT.md); it must slot into the existing pipeline steps immediately after the spine works, not be bolted on later.
-**Delivers:** `pii` (safeText, fail-closed on unknown), `cost` (estimate + budget check + downgrade + real kill-switch), `llm-gateway` cache (safeTextHash namespaced by tenant) + fallback chain.
-**Uses:** Presidio microservice + regex prefilter, Redis cache, Vercel AI Gateway fallback routing.
-**Avoids:** Pitfall 6 (PII false confidence), Pitfall 7 (cross-tenant cache leak), Pitfall 5 (agent loop runaway).
+### Phase Group S3: Creation & Self-Extension
+**Rationale:** Both media canvas and dynamic skills are lower-risk / higher-optionality once the dispatch framework and gated write path exist; dynamic skills specifically depend on there being real specialist capability worth authoring skills for, and on the eval harness having real fixtures to validate against.
+**Delivers:** Media canvas (`generateMedia` tool in a media specialist calling the connected Pikar-Ai MCP, async job model, separate capped media budget, moderation-verdict logging); user-authored dynamic skills first, agent-authored (self-modification) skills last, both routed through the existing `insertCandidate`→eval→`activateCandidate` seam.
+**Uses:** `@modelcontextprotocol/sdk`, `@convex-dev/workpool`/action-retrier for async media jobs.
+**Avoids:** Pitfall 6 (media must never be synchronous or agent-fired without approval — async by construction, own budget line, moderation ref only in audit); Pitfall 1 (agent tools must be structurally incapable of calling `activateCandidate`; every agent-authored skill is a candidate only, gated by owner + passing eval).
 
-### Phase 4: Enrichment (Attachments + Grounding)
-**Rationale:** Adds input richness and the knowledge-vault memory substrate; depends on the pipeline and vault schema already existing from Phase 2–3.
-**Delivers:** `attachments` (classify → OCR/PDF/audio transcription), `grounding` + knowledge vault (indexed, searchable, groundable).
-**Implements:** `attachments` and `grounding` packages from ARCHITECTURE.md; knowledge vault as first-class store per FEATURES.md.
-
-### Phase 5: Voice
-**Rationale:** Highest architectural risk (isolated from the durable pipeline, real-time cost exposure) and highest product-identity value; sequenced after the core pipeline and vault are stable so voice failures don't block the spine, per ARCHITECTURE.md's build order. Voice dictation (lower complexity, reuses attachments/transcription) ships before the live bidirectional session.
-**Delivers:** Voice dictation intake first, then live 15-min WebRTC session with server-side watchdog, incremental transcript persistence, brief generation into the vault, and optional brief→plan conversion.
-**Addresses:** Voice dictation intake (P1) and live voice strategy session (P2/differentiator) from FEATURES.md.
-**Avoids:** Pitfall 3 (realtime cost blowout — history pruning, caching, server-side token metering) and Pitfall 4 (orphaned session lifecycle bugs — watchdog TTL, incremental persistence).
-
-### Phase 6: Self-Improvement + Ops Hardening
-**Rationale:** Event-driven and off the hot path; the feedback/prompt-optimization loop is meaningless until review data has accumulated from prior phases, so it is correctly sequenced last per FEATURES.md's dependency notes.
-**Delivers:** `feedback` capture, `prompt-optimizer` (human-gated, held-out eval, no autonomous promotion in v1), `notifications` hardening, compliance archival hardening.
-**Avoids:** Pitfall 9 (reward hacking / quality drift — keep the loop manual/assisted for v1, never autonomous).
-
-### Phase 7: Private Beta Productionization
-**Rationale:** Once features exist, this phase focuses on the specific week-4 definition of "production": invited users beyond the owner, not billing or public launch.
-**Delivers:** Invite/signup flow, per-user isolation verification (User A cannot read User B's data — test explicitly), minimal onboarding, second email provider (only after the first works end-to-end), Google OAuth Testing-mode + 7-day token-expiry handling verified with a real second user.
-**Avoids:** Pitfall 1 (OAuth verification timeline), Pitfall 2 (Graph over-permissioning), Pitfall 11 (integration scope creep — second provider only now).
+### Phase Group S4: Governance & Productionization (opens the beta)
+**Rationale:** Multi-user comes last by design — per the phase-8 owner-auth blocker (project memory), three self-improvement functions are currently callable by any authenticated user because no owner-role primitive exists; this is a hard authorization/information-disclosure blocker that must close before a second user ever exists. `requireOwner` is a shared dependency multiple earlier findings point back to — pull it in EARLY within this phase group so it can gate everything, not just the invite flow.
+**Delivers:** `requireOwner(ctx)` primitive gating the three known Phase-8 functions (`optimizerConfig.setOptimizerEnabled`, `skills.activateCandidate`, `skills.candidatesForReview`) and every new admin-ish control at birth; a cross-tenant isolation test covering every table/surface added across S1–S3; invite/waitlist flow binding to the OAuth subject (not typed email) with mismatch rejection, tested against both Google and Microsoft subject formats; Microsoft Graph/Outlook as a second delivery provider behind a `packages/delivery` abstraction (MSAL + raw fetch); ISO 9001:2015 formalization as a clause→existing-artifact conformance map, not new procedure documents.
+**Uses:** `@azure/msal-node`, existing `betaInvites`/roles concept, existing audit/playbook/ADR spine for the QMS map.
+**Avoids:** Pitfall 8a (cross-tenant isolation regressions — assertions written as each S1-S3 surface ships, not retrofitted); Pitfall 8b (owner-gating holes — three functions + any new admin control); Pitfall 8c (invite/OAuth identity mismatch — bind on subject at first sign-in, reject cross-subject re-redemption); Pitfall 9 (ISO process-theater — map clauses to existing artifacts, only fill genuine gaps).
 
 ### Phase Ordering Rationale
 
-- Foundation-first ordering exists because Pitfalls 8, 10, and 12 are explicitly "cheap now, expensive to retrofit" — the data model, orchestrator choice, and audit ordering are irreversible-ish decisions that every later phase depends on.
-- The thin-slice-before-guardrails-before-enrichment ordering follows FEATURES.md's dependency graph directly (grounding requires the vault; approval requires plan visibility; cost/PII must gate generation, not follow it) and ARCHITECTURE.md's own "Suggested Build Order" table.
-- Voice is deliberately isolated to its own phase late in the sequence because it is architecturally separate from the durable pipeline (bypasses Inngest) and carries the highest cost/lifecycle risk (Pitfalls 3–4); isolating it prevents its risk from blocking the core governed pipeline that is the product's primary trust mechanism.
-- Email-provider sequencing (one before two) is called out explicitly in its own step because Pitfall 11 identifies parallel OAuth work on two providers as a common way for a 4-week plan to have "neither provider sends end-to-end" by week 3.
+- Vault wiring is non-negotiably first (S1) — every "grounded, not generic" claim across the whole milestone depends on it; it is low effort and the single highest-leverage item in the research.
+- Dispatch (S2) must precede specialist tools and media — a dispatcher with nothing specialized to dispatch to is the current hollow state; build one sub-agent and its tools together as the proof, then let calendar/research/contacts/media ride the same seam.
+- The evaluation engine (S1) precedes market-fact credibility, which depends on web research (S2) — sequence any "current market claim" capability after S2 lands; S1's engine must scope itself to vault-grounded findings only until then.
+- Self-modification (S3, agent-authored skills) is correctly last among the capability phases — it needs a real eval harness with real fixtures, which only exists once there's something worth authoring skills for.
+- Governance (S4) is last overall — `requireOwner` and the isolation test gate the beta open; shipping multi-user before them converts three latent bugs into live authorization/disclosure holes on day one of a second user.
+- Two invariants must be checked as a gate at the end of every phase in this roadmap, not just S4: (a) the Approve gate stays a mutation, never a tool, for any new external effect; (b) no new content channel (grounding, evaluation, sub-agent trace, media) writes anything but refs/hashes/counts into audit, telemetry, or DLQ.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 5 (Voice):** OpenAI Realtime API surface changes fast (confirmed by STACK.md and PITFALLS.md); confirm current model/voice/pricing and history-pruning/caching APIs immediately before implementation, not from this research snapshot.
-- **Phase 7 (Private Beta / Email):** Google OAuth Testing-mode mechanics and Microsoft Graph Application Access Policy setup are procedural/administrative (not code) and time-sensitive; verify current console UI/steps against Google's and Microsoft's docs at implementation time.
-- **Phase 6 (Self-Improvement):** Prompt-optimization/reward-hacking mitigation research is MEDIUM confidence (community/research sources, not domain-specific case studies) — validate the human-gate/held-out-eval design against whatever feedback volume the beta actually produces.
+Needs phase-specific research (`/gsd:research-phase`) before or during planning:
+- **Media canvas phase (S3):** Pikar-Ai MCP's OAuth/token-exchange flow for backend (non-Claude) callers is unverified from the repo (STACK.md flags MEDIUM confidence) — a spike to confirm the transport + token exchange is the first task. Also unresolved: the connector's pricing units (per-image/per-second-of-video) needed to build the separate media cost-guardrail line.
+- **S4 productionization phase:** Microsoft Graph OAuth subject format for invite reconciliation needs verification against the actual delegated-flow response shape before the invite-binding logic is built; this determines whether the "one invite = one subject" rule can be implemented identically to Google or needs a provider-specific adapter.
+- **S1/S4 shared dependency:** whether `packages/pii`'s structured-only scrub (names-in-prose ceiling, flagged in Phase-8 memory) must be upgraded (e.g., toward a Presidio-backed path) before grounded business-profile content is ever written to an exportable table — this is a genuine open design question, not just an implementation detail, and should get a short spike before S1's redaction-boundary work is finalized.
+- **S1 evaluation engine:** the confidence-threshold for persona detection (solopreneur vs. startup vs. SME) — FEATURES.md specifies "confirm with user, never silently assume" but the auto-classify confidence bar itself isn't researched.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Foundation):** pnpm+Turborepo, Drizzle, Better Auth, Inngest setup are all HIGH-confidence, well-documented, current patterns.
-- **Phase 2 (Thin Slice) and Phase 3 (Guardrails):** Inngest step patterns, AI SDK v6 tool loops, and Presidio hybrid PII are HIGH-confidence with official docs and working code samples already captured in ARCHITECTURE.md and STACK.md.
+Phases with standard, well-documented patterns (research-phase can likely be skipped):
+- **Non-email action tools (S2):** calendar/contacts/doc-creation all mirror the shipped `gmail.ts` adapter pattern exactly; no new pattern to discover.
+- **Dynamic skills — user-authored (S3):** the write/gate/review seam (`insertCandidate`/`activateCandidate`/`candidatesForReview`) already exists and is fully specified in ARCHITECTURE.md.
+- **Sub-agent dispatch mechanism (S2):** the `(skill, tool-set)`-swap-in-one-loop design is fully specified with file:function references; the open question is the specialist roster, not the mechanism.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core choices verified against official docs/releases (Next.js, Inngest, AI SDK, pgvector, Better Auth, Langfuse); integration-layer choices (LLM gateway budget layer, PII hybrid pipeline) MEDIUM-HIGH |
-| Features | MEDIUM-HIGH | Competitor feature facts are HIGH (current reviews of Lindy/Dust/Zapier/Relevance/Motion); table-stakes-vs-differentiator categorization is synthesized opinion, MEDIUM |
-| Architecture | HIGH | Core decisions (modular monolith, Inngest over Temporal, WebRTC isolation) verified against current vendor docs and 2026 comparisons; voice/vault specifics MEDIUM |
-| Pitfalls | HIGH | OAuth/Graph/Realtime timeline facts are HIGH (official docs + multiple sources); agent-loop and prompt-optimization mitigations MEDIUM (community/research, less domain-specific); structural traps HIGH (verified against project constraints) |
+| Stack | HIGH | Versions verified live against npm registry 2026-07-24; integration patterns read from actual code (`gmail.ts`, `llm.ts`); only the Pikar-Ai MCP's backend OAuth specifics are MEDIUM (remote connector, not inspectable from the repo) |
+| Features | MEDIUM-HIGH | Domain/dependency patterns HIGH (grounded in shipped code + PROJECT.md); credibility/anti-pattern framing verified via multiple web sources (MEDIUM); exact scope calls (what's P1 vs P2) are opinionated recommendations, not externally validated |
+| Architecture | HIGH | Every integration point is a verified `file:function` read at the span in the current tree; supersedes and is consistent with the prior v1.0 architecture study |
+| Pitfalls | HIGH | Grounded in this repo's shipped governance mechanisms plus verified 2026 external sources for injection/OAuth/ISO claims; ISO clause-mapping specifically flagged MEDIUM (interpretive) |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Voice-in-4-weeks scope tradeoff:** FEATURES.md explicitly flags that the live 15-min bidirectional voice session is the highest-complexity item and competes hard with the core governed-pipeline slice for the same 4-week window. The roadmap should force an explicit decision at planning time: is live voice a true launch-blocking requirement, or does dictation-only ship first with live voice as an immediate v1.x follow-on? PROJECT.md currently lists it as an active requirement without this tradeoff resolved.
-- **Email provider sequencing choice:** Research recommends picking whichever provider (Gmail vs. Microsoft Graph) has the simplest consent path for the actual beta cohort (e.g., `internal` Workspace app avoids verification entirely). This decision depends on who the actual beta invitees are and should be made explicitly during roadmap/phase planning, not left implicit.
-- **PII residual-risk documentation:** Best-in-class hybrid PII pipelines still leak 2–4% of PII; the roadmap should include an explicit task to document and communicate this residual risk (and non-English-input degradation) rather than treating `safeText` as a completed compliance checkbox.
-- **Self-improvement loop scope for v1:** Given tiny/noisy beta feedback volume and documented reward-hacking rates (46–74% of optimization runs), consider explicitly scoping Phase 6 as "capture feedback + propose edits for human review" only, deferring any autonomous prompt promotion past the beta — this should be confirmed as a roadmap decision, not assumed.
+- Pikar-Ai MCP backend auth mechanism (media, S3) — unverified from the repo; requires a spike before the media specialist's adapter action can be written.
+- Media pricing units (S3) — needed to size the new media cost-guardrail line; not discoverable without querying the connector or its docs directly.
+- Names-in-prose PII scrub ceiling (shared S1/S4 dependency) — `packages/pii` covers structured PII only; whether this must be closed before grounded content reaches any exportable/WORM table is a real open design decision, not just a task, and should be resolved before S1's redaction-boundary work is called done.
+- Microsoft Graph OAuth subject format (S4, invite reconciliation) — needs confirmation against the actual delegated-flow token response before the invite→subject binding logic assumes parity with Google's subject format.
+- Persona-detection confidence threshold (S1, evaluation engine) — the requirement to "confirm with user, never silently assume" is set; the auto-classify confidence bar that triggers confirmation vs. auto-proceed is not yet specified.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- nextjs.org/blog/next-16-2, endoflife.date/nextjs — Next.js 16.2.x, Node 20+ requirement
-- inngest.com (docs, changelog), github.com/inngest/inngest — steps, flow control, self-host, checkpointing
-- developers.openai.com/api/docs/guides/realtime, guides/realtime-webrtc, guides/voice-agents — Realtime API GA, WebRTC transport, cost management
-- github.com/microsoft/presidio, microsoft.github.io/presidio — hybrid NER+regex detection, microservice deployment
-- langfuse.com/docs, github.com/langfuse/langfuse — OTel-based SDK v4, self-host, prompt management
-- developers.google.com/identity/protocols/oauth2/production-readiness — sensitive/restricted scope verification, Testing-mode 100-user cap
-- learn.microsoft.com/en-us/graph/permissions-overview — Graph Mail.Send application vs. delegated permissions
-- turborepo.dev/docs — pnpm + Turborepo monorepo structuring
+- Live npm registry checks (2026-07-24) for all new/candidate dependency versions
+- Repo code read via graphify + direct file reads: `gmail.ts`, `llm.ts` (`runCockpitAgent`, `runAgentLoop`, `buildCockpitTools`, `proposePlan`, `briefInbox`, `renderAndStore`), `cockpit.ts:executePlan`, `vaultGround.ts`, `contracts/routing.ts`, `skills.ts` (`insertCandidate`, `activateSkillVersion`, `activateCandidate`, `candidatesForReview`, `seedSkills`), `briefings.ts`, `crons.ts`, `vaultRag.ts`, `schema.ts`
+- `.planning/PROJECT.md` — v2.0 milestone target features, staircase, Key Decisions
+- `.planning/phases/09-private-beta-productionization/09-CONTEXT.md` — DLVR-02 Microsoft Graph scope
+- Connected Pikar-Ai MCP server instructions and tool catalog (this session's connector)
+- CLAUDE.md repository conventions; project memory (`phase8-owner-auth-blockers`, `tenant-scope-is-per-session`, `llm-use-vercel-ai-gateway`)
 
 ### Secondary (MEDIUM confidence)
-- usecarly.com, aiagentslist.com, incremys.com, cybernews.com — Lindy/Dust/Relevance AI 2026 feature reviews
-- wetheflywheel.com, medium.com/@matthieumordrel — Temporal vs. Inngest vs. Trigger.dev orchestration tradeoffs
-- hackernoon.com, tokenmix.ai — OpenAI Realtime API real-world cost/latency data (4,000 measured sessions)
-- relayplane.com, futureagi.com, arxiv.org/pdf/2606.04056 — agent loop runaway-cost incident catalogs
-- lilianweng.github.io — reward hacking / self-improvement failure modes
+- Multi-agent supervisor/handoff pattern sources (Microsoft Azure Databricks guide, Medium/DEV.to supervisor-pattern writeups, Educative agent-orchestration course)
+- Business evaluation framework sources (FasterCapital, Medium PESTEL/SWOT/Lean Canvas, FourWeekMBA BMC-vs-SWOT)
+- "Why AI business advice is generic" sources (Medium, Entrepreneur, What Works Growth)
+- Prompt injection defense guidance (Maxim AI 2026 guide; Palo Alto Unit 42 web-based indirect injection research)
+- Google OAuth 7-day testing-mode refresh token expiry (Unipile; Google Cloud Help — verified current 2026)
 
 ### Tertiary (LOW confidence)
-- (none flagged — all sourced findings reached at least MEDIUM confidence via cross-checking)
+- ISO 9001:2015 clause-to-artifact mapping — interpretive, needs validation against the actual standard text during S4 planning
 
 ---
-*Research completed: 2026-07-08*
+*Research completed: 2026-07-24*
 *Ready for roadmap: yes*
-
-## Convex Revision (2026-07-09)
-
-The owner switched the data + orchestration plane from **Postgres + pgvector + Redis + Inngest** to **Convex**. Full re-derivation: `.planning/research/STACK-CONVEX.md` (supersedes STACK.md for the data/orchestration plane). Summary of what changed:
-
-**Replaced / dropped:**
-- **Inngest -> Convex Workflow component** (durable steps, exactly-once mutations, configurable action retries, `awaitEvent` human gates, `onComplete`). Do NOT keep Inngest alongside Convex.
-- **Postgres + Drizzle -> Convex DB** (document store + indexes + schema); **Redis -> Convex tables** (LLM cache) + **Rate Limiter component**; **pgvector -> Convex vector search + RAG component**.
-- **Better Auth -> Convex Auth** for the beta (data still in your DB, preserving the data-ownership rationale) + a manual `betaInvites` table. `@convex-dev/better-auth` (~0.10.x, pre-1.0) is the alternative if org/invitation plugins are wanted now. Clerk still rejected (external data hosting).
-
-**Kept (integration points move onto Convex actions):** Next.js 16.2, pnpm+Turborepo, Vercel AI SDK v6 + AI Gateway, OpenAI Realtime/WebRTC + gpt-4o-transcribe, Presidio (containerized), email adapters, Langfuse + OTel, Zod (bridged via `convex-helpers`). NEW: graphify Python sidecar; Convex Agent/RAG/Action-Retrier/Rate-Limiter components.
-
-**Wins:** reactive `useQuery` subscriptions make live pipeline status + review queue trivial (upgrade over polling); durable scheduled functions give a server-authoritative voice watchdog and Gmail token-refresh cron; RAG namespaces + a `customQuery` tenant wrapper harden multi-tenant isolation; SOC 2 Type II + HIPAA BAA + AES-256 available.
-
-**New limitations to design around (with mitigations in STACK-CONVEX.md):**
-- `awaitEvent` has **no built-in timeout** -> schedule a `review-timeout` event and race it (needed for review-timeout->escalation).
-- **No built-in dead-letter queue** -> insert failures into a `deadLetter` table in `onComplete`.
-- **No enforced immutable/append-only table** -> insert-only audit module + **scheduled export to S3 Object Lock (WORM)** for true audit immutability/retention.
-- **Vector ceilings:** 2048-dim cap (use `text-embedding-3-small` @1536, NOT 3-large @3072), <=256 results, only first 100k docs/table indexed, equality-only filters.
-- **No graph query language** -> model `graphNodes`/`graphEdges` tables with compound indexes; hop-capped iterative traversal (respect 4,096 index-read / 32k-scan tx limits).
-- **Lock-in** -> keep all domain logic in pure-TS `packages/*`; `convex/` stays a thin adapter; core components are pre-1.0 (pin versions).
-
-**Build order:** the 7-phase sequence is unchanged; Convex changes *what* Phase 1 builds (Convex project/schema, component wiring, Convex Auth + invite table, tenant-scoping wrapper, insert-only audit + WORM export stub, and the `awaitEvent`-timeout / `onComplete`-DLQ patterns established up front - the new "learning cost").
