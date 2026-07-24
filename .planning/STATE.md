@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-07-24T20:53:21.134Z"
-last_activity: "2026-07-24 — Phase 12 plan 02 COMPLETE: registered 7 GATED evaluation skills — 4 framework rubrics (growth-os-diagnostic/swot/lean-canvas/bmc) the engine loads to assess a business + 3 specialist targets (offer-architect/money-model-designer/lead-engine, execution deferred to 15+). Each a canonical .md → byte-identical derived .ts body (original wording, NO book text) with the shared grounding rubric (per-finding vault citation, H/M/L confidence, explicit not-enough-data state, no numeric %, affirmative healthy state); growth-os-diagnostic folds the diagnose() gate order + financial spine + 7-level positioning. skillBodies.test.ts asserts all 7 md↔ts byte-identical; seedSkills seeds all 7. Contracts 13/13 + backend skills 42/42 green; check-playbooks exit 0. (Pre-existing audit.test.ts + backend-typecheck failures logged to deferred-items.md, out of scope.)"
+stopped_at: Completed 12-03-PLAN.md
+last_updated: "2026-07-24T21:19:30.932Z"
+last_activity: "2026-07-25 — Phase 12 plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness activity step). recordScorecardAnswer = the LOCKED 'store' half (a user figure persists forward, cited user-provided, never re-asked). byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Thin/idea-stage (zero grounded findings) → 'insufficient' + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam (grounded cited row, refs-only §4 audit, carry-forward anti-re-ask, two-tenant isolation, thin-data); check-playbooks exit 0. Pre-existing audit.test.ts + backend-typecheck failures remain out-of-scope (deferred-items.md)."
 progress:
   total_phases: 37
   completed_phases: 19
   total_plans: 146
-  completed_plans: 139
+  completed_plans: 140
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 12 of 25 (Business Evaluation Engine) — executing
-Plan: 12-02 complete (7 gated evaluation/specialist rubric skills registered)
+Plan: 12-03 complete (evaluation engine — evaluations table + runEvaluation + carry-forward store)
 Status: Phase 12 in progress
-Last activity: 2026-07-24 — Phase 12 plan 02 COMPLETE: registered 7 GATED evaluation skills (4 framework rubrics growth-os-diagnostic/swot/lean-canvas/bmc + 3 specialist targets offer-architect/money-model-designer/lead-engine). Canonical .md → byte-identical derived .ts bodies (original wording, no book text) carrying the shared grounding rubric; growth-os-diagnostic folds the diagnose() gate order + financial spine + 7-level positioning. sync test 7/7, seedSkills seeds all 7. Rubric-body activation deferred to the plan-06 eval gate.
+Last activity: 2026-07-25 — Phase 12 plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
 Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Phases 10 + 11 shipped 4/4 each)
 
@@ -65,6 +65,7 @@ Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Ph
 | Phase 11 P04 | 40 min | 2 tasks | 5 files |
 | Phase 12 P01 | 8 min | 3 tasks | 8 files |
 | Phase 12 P02 | 17 min | 3 tasks | 19 files |
+| Phase 12 P03 | 17 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,7 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 12]: 12-01: Growth diagnostic math ported to pure-TS packages/core/src/growth (ltgpCac/cfa/diagnose); Convex-free (CLAUDE.md §1)
 - [Phase 12]: 12-01: unknown financial input → diagnose emits ask (empty route/proofMetric) at the money-model gate — an all-null Scorecard never falsely reaches 'scale' (BEVL-01 no-fabricated-metrics guarantee in the type system)
 - [Phase 12]: 12-02: 7 evaluation/specialist skills registered as GATED (4 framework rubrics + 3 specialist targets); bootstrap seeds v1 active, edits publish eval-gated candidates activated only via plan-06 (SC #4). growth-os-diagnostic folds diagnose() gate order + financial spine + 7-level positioning into ONE body; the 3 persona-fallback bodies (swot=SME, lean-canvas=solopreneur, bmc=startup) carry the shared grounding rubric (per-finding vault cite, H/M/L confidence, explicit not-enough-data state, no numeric %, affirmative healthy state). Original wording, NO Hormozi book text; contracts-side skillBodies.test.ts enforces md↔ts byte-identity.
+- [Phase 12]: 12-03: evaluation engine SHIPPED — dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward→ground via vaultGroundHydrated→pure diagnose()→persist cited row→refs-only evaluation.ran audit→evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (user figure persists forward, cited user-provided). v1 findings deterministic (profile-parse + labeled-number scan); LLM narrative deferred to plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over SMOKE:: seam.
 
 ### Pending Todos
 
@@ -104,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T20:48:40.623Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-07-24T21:19:30.878Z
+Stopped at: Completed 12-03-PLAN.md
 Resume file: None
