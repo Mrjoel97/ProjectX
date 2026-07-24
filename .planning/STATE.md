@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: planning
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-07-24T20:48:55.395Z"
-last_activity: "2026-07-24 — Phase 11 (Persona Onboarding & Business Profile) COMPLETE & verified (passed 7/7). Sparse-start decision mid-phase: onboarding admits idea-stage users (only oneLineDescription + persona required); name/offering/customer optional, enriched on the editable /dashboard/profile page. Rail nav link added (page was unreachable). business-profile skill seeded active v1."
+status: executing
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-07-24T20:53:21.134Z"
+last_activity: "2026-07-24 — Phase 12 plan 02 COMPLETE: registered 7 GATED evaluation skills — 4 framework rubrics (growth-os-diagnostic/swot/lean-canvas/bmc) the engine loads to assess a business + 3 specialist targets (offer-architect/money-model-designer/lead-engine, execution deferred to 15+). Each a canonical .md → byte-identical derived .ts body (original wording, NO book text) with the shared grounding rubric (per-finding vault citation, H/M/L confidence, explicit not-enough-data state, no numeric %, affirmative healthy state); growth-os-diagnostic folds the diagnose() gate order + financial spine + 7-level positioning. skillBodies.test.ts asserts all 7 md↔ts byte-identical; seedSkills seeds all 7. Contracts 13/13 + backend skills 42/42 green; check-playbooks exit 0. (Pre-existing audit.test.ts + backend-typecheck failures logged to deferred-items.md, out of scope.)"
 progress:
   total_phases: 37
   completed_phases: 19
   total_plans: 146
-  completed_plans: 137
+  completed_plans: 139
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 12 of 25 (Business Evaluation Engine) — executing
-Plan: 12-01 complete (Growth diagnostic math ported to pure-TS)
+Plan: 12-02 complete (7 gated evaluation/specialist rubric skills registered)
 Status: Phase 12 in progress
-Last activity: 2026-07-24 — Phase 12 plan 01 COMPLETE: ported the Growth OS diagnostic spine (diagnose.py/ltgp_cac.py/cfa.py) to Convex-free packages/core/src/growth (Scorecard + ltgpCac/cfa + diagnose gate router + leverageRank), all-nullable Scorecard so an unknown financial input makes diagnose ASK not fabricate (BEVL-01). 191 core tests green; growth-diagnostic playbook registered.
+Last activity: 2026-07-24 — Phase 12 plan 02 COMPLETE: registered 7 GATED evaluation skills (4 framework rubrics growth-os-diagnostic/swot/lean-canvas/bmc + 3 specialist targets offer-architect/money-model-designer/lead-engine). Canonical .md → byte-identical derived .ts bodies (original wording, no book text) carrying the shared grounding rubric; growth-os-diagnostic folds the diagnose() gate order + financial spine + 7-level positioning. sync test 7/7, seedSkills seeds all 7. Rubric-body activation deferred to the plan-06 eval gate.
 
 Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Phases 10 + 11 shipped 4/4 each)
 
@@ -64,6 +64,7 @@ Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Ph
 | Phase 11 P03 | 76 min | 3 tasks | 6 files |
 | Phase 11 P04 | 40 min | 2 tasks | 5 files |
 | Phase 12 P01 | 8 min | 3 tasks | 8 files |
+| Phase 12 P02 | 17 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,7 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 11]: 11-04: profile page is the post-onboarding editability/enrichment surface — save re-embeds via updateProfile so grounding stays current; the committed vault-doc markdown is the single record, getProfile parses it back with deserializeProfile (round-trip test binds the two)
 - [Phase 12]: 12-01: Growth diagnostic math ported to pure-TS packages/core/src/growth (ltgpCac/cfa/diagnose); Convex-free (CLAUDE.md §1)
 - [Phase 12]: 12-01: unknown financial input → diagnose emits ask (empty route/proofMetric) at the money-model gate — an all-null Scorecard never falsely reaches 'scale' (BEVL-01 no-fabricated-metrics guarantee in the type system)
+- [Phase 12]: 12-02: 7 evaluation/specialist skills registered as GATED (4 framework rubrics + 3 specialist targets); bootstrap seeds v1 active, edits publish eval-gated candidates activated only via plan-06 (SC #4). growth-os-diagnostic folds diagnose() gate order + financial spine + 7-level positioning into ONE body; the 3 persona-fallback bodies (swot=SME, lean-canvas=solopreneur, bmc=startup) carry the shared grounding rubric (per-finding vault cite, H/M/L confidence, explicit not-enough-data state, no numeric %, affirmative healthy state). Original wording, NO Hormozi book text; contracts-side skillBodies.test.ts enforces md↔ts byte-identity.
 
 ### Pending Todos
 
