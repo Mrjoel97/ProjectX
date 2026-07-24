@@ -32,7 +32,37 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Live Voice Sessions** (VOIC-01..04 live human-verified 2026-07-21) - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [x] **Phase 7: Resilience & Operations Hardening** (AGNT-04/REVW-02/REVW-03/OPSG-03/OPSG-05; owner-approved 2026-07-21 — live smokes green + OPSG-05 email & in-app matrix owner live-verified; real-S3 Object-Lock durability owner-deferred) - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
 - [x] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (completed 2026-07-23)
-- [ ] **Phase 9: Private Beta Productionization** - Invite-only signup, verified per-user isolation, guided onboarding, Microsoft Graph as second provider
+- [~] **Phase 9: Private Beta Productionization** - **SUPERSEDED (2026-07-24) -> absorbed into Phase 25.** Productionization moves to the END of milestone v2.0 (executes LAST, after all Phase 10+ platform work). `09-CONTEXT.md` remains the spec for that final phase.
+
+---
+
+## Milestone v2.0 - Platform -> Private Beta (Phases 10-25)
+
+*Defined 2026-07-24. Grow the governed email cockpit into a broadly-capable AI chief-of-staff, then open the invite-only beta on top of it. Dependency-ordered staircase S1->S4; every v2.0 requirement maps to exactly one phase (24/24 covered). Phases 1-9 above are shipped v1.0 history - not renumbered.*
+
+**S1 - Foundation & Intelligence**
+- [ ] **Phase 10: Vault->Agent Grounding** - The agent finally reads the vault mid-conversation via a governed `searchVault` tool (the root dependency everything else grounds on)
+- [ ] **Phase 11: Persona Onboarding & Business Profile** - Guided first-run persona detection (solopreneur/startup/SME) + business/idea intake -> structured profile in the vault
+- [ ] **Phase 12: Business Evaluation Engine** - On-demand grounded assessment (SWOT/Lean/BMC) + gaps -> governed action proposals + honest "no gaps"
+- [ ] **Phase 13: Proactive In-App Review** - Scheduled recurring in-app business review, using no OAuth mailbox token
+- [ ] **Phase 14: Flagship Voice-Doc Workflow** - Upload a report -> discuss by voice -> grounded insights/patterns/gaps -> memo or gap-bridging plan
+
+**S2 - Breadth of Action**
+- [ ] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
+- [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
+- [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
+- [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
+- [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated)
+
+**S3 - Creation & Self-Extension**
+- [ ] **Phase 20: Media Canvas** - Images + video (<=3 min) via the connected Pikar-Ai MCP as async governed jobs with a separate cost cap
+- [ ] **Phase 21: User-Authored Skills** - User authors business-adapted skills through the eval-gated registry (candidate-only)
+- [ ] **Phase 22: Owner Authorization Primitive** - `requireOwner` gates the three Phase-8 functions + admin controls (pulled EARLY - needed before Phase 23 and before multi-user)
+- [ ] **Phase 23: Agent-Authored Skills** - Agent authors candidate-only skills; activation needs the eval gate PLUS owner approval
+
+**S4 - Governance & Open the Beta**
+- [ ] **Phase 24: ISO 9001 Conformance Map** - Map existing audit/skill-versioning/playbook change-control to ISO 9001:2015 clauses; fill only genuine gaps
+- [ ] **Phase 25: Private Beta Productionization** - Invite/waitlist, cross-tenant isolation test, fast onboarding, Outlook (DLVR-02), Vercel deploy - the beta opens LAST (absorbs former Phase 9, consumes `09-CONTEXT.md`)
 
 ## Phase Details
 
@@ -416,6 +446,8 @@ Plans:
 - [ ] 08-08-PLAN.md — Manual cockpit-agent dry-run (proof-of-life) + playbook/watch + phase close (Wave 6)
 
 ### Phase 9: Private Beta Productionization
+> **SUPERSEDED (2026-07-24) -> absorbed into Phase 25 (Milestone v2.0).** This entry stays as history; its requirements (BETA-01/02/03, DLVR-02) now map to Phase 25, which reuses `09-CONTEXT.md` as its spec and executes LAST after all Phase 10+ work.
+
 **Goal**: Invited users beyond the owner can sign up, stay fully isolated from each other, onboard fast to a first delivered result, and deliver via either email provider â the week-4 definition of "production" (not billing/public launch).
 **Depends on**: Phase 8
 **Requirements**: BETA-01, BETA-02, BETA-03, DLVR-02
@@ -426,10 +458,183 @@ Plans:
   4. An approved response can be delivered via Microsoft Graph (Outlook) through the same provider-agnostic adapter that already serves Gmail (delegated `Mail.Send`, built only after Gmail works end-to-end).
 **Plans**: TBD
 
+## Phase Details - Milestone v2.0
+
+### Phase 10: Vault->Agent Grounding
+**Goal**: The Executive Agent can retrieve from the user's knowledge vault mid-conversation through a governed `searchVault` tool, so every downstream intelligence feature grounds in the user's own data instead of generic model memory. This is the root dependency the launch-readiness review named (vault retrieval shipped but had zero agent callers).
+**Depends on**: Phase 5 (vault + `vaultGround.ts`), Phase 3.2.1 (the governed agent tool-loop), Phase 3.6 (eval gate for the skill-teaching edit)
+**Requirements**: VGND-01
+**Success Criteria** (what must be TRUE):
+  1. In a cockpit conversation the agent calls `searchVault(query)` and receives hydrated, tenant-scoped chunk text; an empty or failed search returns cleanly and the turn continues (fails open, never dead-ends).
+  2. Retrieved vault content is quarantined as untrusted data (delimited, labelled untrusted, never able to select a tool or set a parameter) - an injection in a grounded doc can at most inform a proposal, execution still crosses the human Approve gate.
+  3. No grounded-doc substring appears in any audit, telemetry, agent-step, or DLQ payload (refs/ids/counts only); a regression test asserts the boundary.
+  4. User A's `searchVault` can never return User B's vault content (tenant-scoped by `namespace=tenantId`); the isolation assertion ships with the tool, not retrofitted.
+  5. The searchVault skill-teaching lives as a gated skill version activated only through the Phase-3.6 eval gate.
+**Plans**: TBD
+
+### Phase 11: Persona Onboarding & Business Profile
+**Goal**: A guided first-run onboarding identifies the user's persona and captures their business/idea into a structured, indexed business profile in the vault - the grounded substrate the evaluation engine and flagship workflow read.
+**Depends on**: Phase 10 (grounding - the profile is a groundable vault doc), Phase 3.8 (extraction for uploaded business docs), Phase 6 (voice, for a spoken brief)
+**Requirements**: ONBD-01, ONBD-02
+**Success Criteria** (what must be TRUE):
+  1. A brand-new user completes a guided onboarding that identifies persona (solopreneur / startup / SME); a low-confidence detection confirms with the user rather than silently assuming (enterprise is out of scope).
+  2. The user supplies their business via files, pasted text, or a written/spoken brief and a structured business profile document is stored and embedded in the vault, retrievable via `searchVault`.
+  3. The business profile is tenant-scoped and unreachable by any other user (isolation assertion ships with the profile doc-kind/table).
+  4. No raw business-profile prose lands in any audit/telemetry/DLQ row (refs/counts only - business profiles are name-dense, so the redaction boundary holds here).
+**Plans**: TBD
+
+### Phase 12: Business Evaluation Engine
+**Goal**: The agent produces an on-demand, persona-appropriate business assessment grounded in the user's own vault data, surfaces real gaps as governed action proposals, and honestly reports when there are none - Pikar doing what generic AI does, but grounded and action-connected.
+**Depends on**: Phase 11 (business profile), Phase 10 (grounding). Market-fact claims depend on Phase 16 web research - until then the engine scopes itself to vault-grounded findings only and says so.
+**Requirements**: BEVL-01, BEVL-02
+**Success Criteria** (what must be TRUE):
+  1. On demand the agent returns an assessment using a persona-appropriate framework (SWOT / Lean / Business Model Canvas), grounded in the user's vault; every finding carries a source citation and a confidence label, and no metric, competitor, or viability score is fabricated.
+  2. A healthy-business fixture returns zero gaps - "no gaps found" is a first-class, eval-tested outcome, never a forced quota.
+  3. Each surfaced gap becomes a concrete, approvable next action routed through the existing plan -> human Approve -> execute spine (the review is read-only; acting is gated).
+  4. Evaluation rubrics are minted AS gated skills and activated only through the Phase-3.6 eval gate; the engine's market claims stay scoped to vault-grounded findings until web research (Phase 16) lands.
+  5. Evaluation findings write refs/citations/counts only to audit/telemetry (no grounded prose leaks); an isolation assertion ships for the evaluations table.
+**Plans**: TBD
+
+### Phase 13: Proactive In-App Review
+**Goal**: The chief-of-staff initiates - a scheduled recurring business review is delivered in-app on a weekly-style cadence using no OAuth mailbox token, so proactivity never depends on (or silently breaks on) the Google 7-day testing token.
+**Depends on**: Phase 12 (runs the on-demand evaluation engine on a schedule); reuses the existing crons + `briefings` in-app-digest pattern (no audit row, no OAuth token)
+**Requirements**: BEVL-03
+**Success Criteria** (what must be TRUE):
+  1. A Convex-scheduled job runs the evaluation engine per tenant on a recurring cadence and writes an in-app review card + notification - no email, no mailbox token touched.
+  2. The proactive review survives past 7 days (no `invalid_grant` dependency); any future scheduled Google-bound call is explicitly deferred to production OAuth (S4).
+  3. The scheduled review is tenant-scoped (the cron iterates tenants, every read/write scoped) and writes refs/counts only to audit.
+**Plans**: TBD
+
+### Phase 14: Flagship Voice-Doc Workflow
+**Goal**: The flagship experience - a user uploads a report, has it understood in the vault, discusses it by voice with the grounded agent, and receives surfaced insights/patterns/gaps plus a memo or a gap-bridging plan, with an honest "no gaps" path and the user deciding after the discussion.
+**Depends on**: Phase 10 (grounding), Phase 12 (insight/gap engine), Phase 6 (live voice sessions), Phase 3.8/4 (report ingestion/extraction). Mostly integration of shipped machinery.
+**Requirements**: DOCV-01
+**Success Criteria** (what must be TRUE):
+  1. An uploaded report is ingested and embedded in the vault, then the user holds a live voice conversation with the agent that grounds its answers in that specific document (interrupt, drill in, redirect).
+  2. The agent surfaces insights/patterns/gaps each carrying a vault citation; when the document reveals no gaps it says so honestly rather than fabricating one.
+  3. After the discussion the user chooses the outcome - a memo or a gap-bridging plan - and any resulting action crosses the normal plan -> Approve gate.
+  4. No report content leaks into audit/telemetry/step rows (refs/counts only).
+**Plans**: TBD
+
+### Phase 15: Sub-Agent Dispatch & Generalized Action Executor
+**Goal**: The hollow `sub_agent` route becomes real - specialists are swappable (skill body, tool-set) pairs the ONE governed loop runs - and the approve->execute spine becomes action-agnostic, so all breadth of action rides a single governed seam instead of re-forking the loop or the executor.
+**Depends on**: Phase 10 (grounding, for credible specialist output), Phase 3.2.1 (the one governed loop). The S2 framework - must exist before any specific action tool or media.
+**Requirements**: DISP-01, ACTN-01
+**Success Criteria** (what must be TRUE):
+  1. The router dispatches a named specialist that runs in the SAME governed loop with a swapped (skill body, tool-set); an unknown specialist fails closed to `unknown_route`, never a silent default.
+  2. Dispatch enforces a hard depth cap, a shared root-request cost budget (one envelope drawn down across the whole sub-agent tree), and cycle refusal (A->B->A is rejected) - no nested `generateText` loops, no agents spawning agents.
+  3. Every sub-agent audit/telemetry row carries `rootRequestId` + `parentAgentId` lineage (refs/ids only), so the insert-only audit reconstructs the call tree and cost attributes to the root request.
+  4. An approved plan can execute a non-email action type through a generalized executor (`executePlan`/`deliverApprovedPlan` dispatches by action type); the human Approve gate stays a mutation, never a tool.
+  5. A cross-tenant isolation assertion ships for the dispatch/lineage rows (a sub-agent run keyed on `rootRequestId` is still tenant-scoped).
+**Plans**: TBD
+
+### Phase 16: Research Sub-Agent & Web Research
+**Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
+**Depends on**: Phase 15 (dispatch framework + generalized executor)
+**Requirements**: DISP-02, ACTN-03
+**Success Criteria** (what must be TRUE):
+  1. A Research specialist is dispatched via DISP-01 with its own least-privilege tool-set and returns findings to the executive agent - it has NO send/write capability, so an injected instruction in a fetched page can at most propose, never execute.
+  2. The web-research tool is injection- and SSRF-hardened (retrieved page text quarantined as untrusted data; no internal/metadata endpoints reachable); findings are stored in the vault with a retrieval-date freshness stamp.
+  3. Research findings and the sub-agent trace write refs/counts only to audit/telemetry (no page content, no grounded prose); an isolation assertion ships for stored findings.
+  4. The evaluation engine (Phase 12) can now cite fresh web-research results with a freshness stamp for market claims instead of relying on stale model memory.
+**Plans**: TBD
+
+### Phase 17: Calendar Actions
+**Goal**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions - a read tool that surfaces availability in-loop and a write that stages an event into the plan for human approval.
+**Depends on**: Phase 15 (dispatch + generalized executor); mirrors the shipped `gmail.ts` adapter pattern (standard, research-phase likely skippable)
+**Requirements**: ACTN-02
+**Success Criteria** (what must be TRUE):
+  1. The agent reads calendar availability in-loop (like `listInbox`) and proposes a calendar event; the event is created only after the human Approve gate fires the generalized executor - never inside a tool call.
+  2. Calendar actions reuse the shipped OAuth-refresh/adapter pattern and log refs/ids/counts only to audit.
+  3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
+**Plans**: TBD
+
+### Phase 18: Document & Content Creation
+**Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
+**Depends on**: Phase 15 (dispatch + executor); reuses the shipped attachment/render pattern (`renderAndStore` + `plans.recordAttachments`)
+**Requirements**: ACTN-04
+**Success Criteria** (what must be TRUE):
+  1. The agent produces a standalone document/content artifact stored under the tenant as a vault asset (ref, never raw bytes to the model), distinct from an outbound email attachment.
+  2. Any external delivery of a created artifact crosses the plan -> Approve gate; creation alone has no external side effect.
+  3. Artifact refs only in audit/telemetry; artifacts are tenant-scoped with an isolation assertion.
+**Plans**: TBD
+
+### Phase 19: Contacts, CRM & Follow-ups
+**Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM.
+**Depends on**: Phase 15 (dispatch + executor)
+**Requirements**: ACTN-05
+**Success Criteria** (what must be TRUE):
+  1. The agent reads contact/CRM state in-loop to resolve people and surface follow-up context; a CRM write (add contact, log a follow-up) stages into the plan and executes only via the human Approve gate.
+  2. Contact/CRM data is tenant-scoped and unreachable across tenants (isolation assertion ships with the surface).
+  3. CRM reads/writes log refs/ids/counts only to audit.
+**Plans**: TBD
+
+### Phase 20: Media Canvas
+**Goal**: A media-creation canvas produces images and video (<=3 min) via the connected Pikar-Ai MCP service as async governed jobs with their own capped budget - generation is wrapped, not rebuilt (PROJECT.md mandate).
+**Depends on**: Phase 15 (dispatch, media specialist); reuses the scheduling/async machinery. FIRST TASK is a Pikar-Ai MCP auth + pricing spike (research flag - backend OAuth/token-exchange + per-image/per-second pricing units are unverified from the repo).
+**Requirements**: MEDIA-01
+**Success Criteria** (what must be TRUE):
+  1. The first task confirms the Pikar-Ai MCP backend auth/token-exchange flow and pricing units (per-image / per-second-of-video) via a spike, BEFORE the media adapter action is written.
+  2. Media generation runs as an async background job (the request never blocks on multi-minute video); the UI tracks job status and never hangs synchronously.
+  3. Media draws a separate, capped media budget line with its own kill-switch - never folded into the token budget; an agent or injected content cannot fire generation without human approval (plan-gated by construction).
+  4. Generated assets are stored under the tenant as refs; audit logs asset id/hash + a moderation-verdict ref only (never the asset or its URL); an isolation assertion ships for media jobs/assets.
+**Plans**: TBD
+
+### Phase 21: User-Authored Skills
+**Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim.
+**Depends on**: Phases 16-19 (real specialist capability worth authoring skills for), Phase 3.6 (eval gate). User-authored first, agent-authored (Phase 23) last.
+**Requirements**: SKILL-01
+**Success Criteria** (what must be TRUE):
+  1. A user composes a skill body through an authoring surface that can only ever write a `candidate` (never `active`) via the existing `insertCandidate` seam.
+  2. A user-authored candidate leaves `candidate` only through a passing held-out eval run recorded on the skill row (evidence refs/counts only); rollback to a prior active version stays structurally exempt and always works.
+  3. Authored skills are tenant-scoped and immutable-versioned with recorded provenance (author = user).
+**Plans**: TBD
+
+### Phase 22: Owner Authorization Primitive (requireOwner)
+**Goal**: A real `requireOwner(ctx)` primitive gates the three known Phase-8 functions and every admin-ish control at birth - pulled EARLY because it must exist before agent-authored skills can activate (Phase 23) and before a second user ever exists (Phase 25). Closes the standing Phase-8 owner-auth blocker.
+**Depends on**: Phase 8 (the three un-gated functions exist). Deliberately pulled early - no dependency on later phases.
+**Requirements**: GOVN-01
+**Success Criteria** (what must be TRUE):
+  1. `requireOwner(ctx)` derives owner identity from a durable data source (a `users.owner` boolean seeded via `convex run`, NOT the `SKILLOPT_OWNER_TENANT` env hack) and lives as a sibling primitive to the tenant wrappers.
+  2. `optimizerConfig.setOptimizerEnabled`, `skills.activateCandidate`, and `skills.candidatesForReview` each reject a non-owner caller server-side - a non-owner cannot flip the optimizer, activate a skill, or read candidate bodies.
+  3. Any new admin-ish control added from here on carries `requireOwner` from birth; the server-side guard is the trust boundary (hiding the UI is only presentation).
+**Plans**: TBD
+
+### Phase 23: Agent-Authored Skills
+**Goal**: The agent can author skills as candidates only - structurally unable to self-activate - with activation requiring BOTH a passing eval and owner approval; the governance-heaviest self-modification capability, placed last among the capability phases.
+**Depends on**: Phase 21 (user-authored authoring seam), Phase 22 (`requireOwner`), Phase 3.6 (eval gate incl. adversarial held-out fixtures)
+**Requirements**: SKILL-02
+**Success Criteria** (what must be TRUE):
+  1. An agent-reachable authoring tool can only ever produce a `status:"candidate"` skill - it is physically incapable of calling `activateCandidate` (capability minimization, not instruction-policing).
+  2. An agent-authored candidate reaches `active` only through a passing held-out eval (including adversarial cases the authoring agent never sees) PLUS `requireOwner` approval.
+  3. Every agent-authored skill row records author = agent and is immutable-versioned with one-write rollback; an `active` skill whose author is `agent` without recorded owner + eval evidence is impossible by construction.
+**Plans**: TBD
+
+### Phase 24: ISO 9001 Conformance Map
+**Goal**: An ISO 9001:2015 conformance foundation that maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills only genuine gaps - a conformance map that makes the compliance/trust moat real, not process theater.
+**Depends on**: the shipped audit/playbook/ADR/eval spine (all prior phases provide the artifacts to map)
+**Requirements**: GOVN-02
+**Success Criteria** (what must be TRUE):
+  1. A thin conformance map pairs each relevant ISO clause with the existing artifact that satisfies it (audit spine -> 7.5/8.5.1; skill registry versioning/rollback -> 8.5.6; playbooks/ADRs -> 7.5/8.3; eval gate -> 8.6; DLQ/notifications -> 10.2).
+  2. New documents exist ONLY where the map exposes a genuine gap; records point at the real audit log / immutable ADRs and match actual practice (no drift docs, no parallel binder).
+**Plans**: TBD
+
+### Phase 25: Private Beta Productionization
+**Goal**: Open the invite-only private beta on the full platform - invited users beyond the owner sign up, stay fully isolated, onboard to a first delivered result in minutes, and deliver via Gmail OR Outlook - executed LAST, after all platform work lands. Absorbs former Phase 9 and consumes `09-CONTEXT.md` as its spec.
+**Depends on**: all prior v2.0 phases (10-24); reuses the Phase 22 `requireOwner` primitive for the owner-admin surface
+**Requirements**: BETA-01, BETA-02, BETA-03, BETA-05, DLVR-02
+**Success Criteria** (what must be TRUE):
+  1. A new user can sign up only with a valid single-use invite (public waitlist -> owner approves on the owner-only admin page); a Google/Microsoft sign-in without a redeemed invite is blocked at the door with NO orphaned tenant persisted.
+  2. Invite redemption binds the OAuth SUBJECT (not the typed email), verifies the invited email matches, records the subject immutably, and rejects cross-subject re-redemption - tested against both Google and Microsoft subject formats.
+  3. A two-user cross-tenant isolation test (BETA-05) covers every table and index added across S1-S3 and asserts a non-owner cannot reach the three owner-gated functions; grounded-prose export stays owner-gated until the `packages/pii` names-in-prose scrub ceiling is closed.
+  4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
+  5. An approved plan can deliver via Microsoft Graph (Outlook) through the same provider-agnostic adapter that serves Gmail (connect-both, choose-per-send); deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> [9 SUPERSEDED -> Phase 25] -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23 -> 24 -> 25
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -450,4 +655,21 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
 | 8. Self-Improvement | 8/8 | Complete    | 2026-07-23 |
-| 9. Private Beta Productionization | 0/TBD | Not started | - |
+| 9. Private Beta Productionization | - | **SUPERSEDED -> Phase 25** | - |
+| **Milestone v2.0 - Platform -> Private Beta** | | | |
+| 10. Vault->Agent Grounding | 0/TBD | Not started | - |
+| 11. Persona Onboarding & Business Profile | 0/TBD | Not started | - |
+| 12. Business Evaluation Engine | 0/TBD | Not started | - |
+| 13. Proactive In-App Review | 0/TBD | Not started | - |
+| 14. Flagship Voice-Doc Workflow | 0/TBD | Not started | - |
+| 15. Sub-Agent Dispatch & Generalized Action Executor | 0/TBD | Not started | - |
+| 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
+| 17. Calendar Actions | 0/TBD | Not started | - |
+| 18. Document & Content Creation | 0/TBD | Not started | - |
+| 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
+| 20. Media Canvas | 0/TBD | Not started | - |
+| 21. User-Authored Skills | 0/TBD | Not started | - |
+| 22. Owner Authorization Primitive | 0/TBD | Not started | - |
+| 23. Agent-Authored Skills | 0/TBD | Not started | - |
+| 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
+| 25. Private Beta Productionization | 0/TBD | Not started | - |

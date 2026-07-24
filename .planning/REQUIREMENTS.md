@@ -199,7 +199,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REVW-02 | Phase 7 | Complete |
 | REVW-03 | Phase 7 | Complete |
 | DLVR-01 | Phase 2 | Complete |
-| DLVR-02 | Phase 9 | Pending |
+| DLVR-02 | Phase 25 | Pending |
 | DLVR-03 | Phase 2 | Complete |
 | CKPT-01 | Phase 3.2 | Complete |
 | CKPT-02 | Phase 3.3 | Complete |
@@ -230,15 +230,41 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPSG-07 | Phase 2 | Complete |
 | DISC-01 | Phase 1 | Complete |
 | DISC-02 | Phase 1 | Complete |
-| BETA-01 | Phase 9 | Pending |
-| BETA-02 | Phase 9 | Pending |
-| BETA-03 | Phase 9 | Pending |
+| BETA-01 | Phase 25 | Pending |
+| BETA-02 | Phase 25 | Pending |
+| BETA-03 | Phase 25 | Pending |
 | BETA-04 | Phase 2 | Complete |
+| VGND-01 | Phase 10 | Pending |
+| ONBD-01 | Phase 11 | Pending |
+| ONBD-02 | Phase 11 | Pending |
+| BEVL-01 | Phase 12 | Pending |
+| BEVL-02 | Phase 12 | Pending |
+| BEVL-03 | Phase 13 | Pending |
+| DOCV-01 | Phase 14 | Pending |
+| DISP-01 | Phase 15 | Pending |
+| ACTN-01 | Phase 15 | Pending |
+| DISP-02 | Phase 16 | Pending |
+| ACTN-03 | Phase 16 | Pending |
+| ACTN-02 | Phase 17 | Pending |
+| ACTN-04 | Phase 18 | Pending |
+| ACTN-05 | Phase 19 | Pending |
+| MEDIA-01 | Phase 20 | Pending |
+| SKILL-01 | Phase 21 | Pending |
+| GOVN-01 | Phase 22 | Pending |
+| SKILL-02 | Phase 23 | Pending |
+| GOVN-02 | Phase 24 | Pending |
+| BETA-05 | Phase 25 | Pending |
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)
 - Mapped to phases: 49
 - Unmapped: 0 ✓
+
+**v2.0 coverage (milestone v2.0 - Platform -> Private Beta, mapped 2026-07-24):**
+- v2.0 requirements: **24 total** - 20 new (VGND-01; ONBD-01/02; BEVL-01/02/03; DOCV-01; DISP-01/02; ACTN-01/02/03/04/05; MEDIA-01; SKILL-01/02; GOVN-01/02; BETA-05) + 4 carried-in (BETA-01, BETA-02, BETA-03, DLVR-02, repointed from the superseded Phase 9 to Phase 25)
+- Mapped to phases 10-25: 24
+- Unmapped: 0 ✓
+- Each v2.0 requirement maps to exactly one phase; no orphans, no duplicates.
 
 ---
 *Requirements defined: 2026-07-09*
