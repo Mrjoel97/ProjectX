@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-07-24T15:58:02.481Z"
-last_activity: "2026-07-24 — Phase 11 plan 02 COMPLETE — onboarding thin adapter (status gate, extractProfile no-auto-commit SC#1, commitProfile/updateProfile embed+re-embed SC#2/#3) + §4 redaction scan SC#4; 14 backend tests green"
+stopped_at: Completed 11-03-PLAN.md
+last_updated: "2026-07-24T20:30:00.000Z"
+last_activity: "2026-07-24 — Phase 11 plan 03 COMPLETE — forced-but-resumable first-run onboarding: client AppShell gate + conversational page (paste/file/voice intake -> editable review card + persona confirm -> commit); sparse-start relaxation admits idea-stage users (46a86c3); human-verified"
 progress:
   total_phases: 37
   completed_phases: 18
   total_plans: 140
-  completed_plans: 134
+  completed_plans: 135
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 11 — Persona Onboarding & Business Profile (executing; plan 02 of 4 complete)
+**Current focus:** Phase 11 — Persona Onboarding & Business Profile (executing; plan 03 of 4 complete)
 
 ## Current Position
 
 Phase: 11 of 25 (Persona Onboarding & Business Profile) — executing
-Plan: 02 of 4 complete (Wave 2) — next: 11-03
-Status: Plan 11-02 complete; ready to execute 11-03
-Last activity: 2026-07-24 — Phase 11 plan 02 COMPLETE — onboarding thin adapter (status gate, extractProfile no-auto-commit SC#1, commitProfile/updateProfile embed+re-embed SC#2/#3) + §4 redaction scan SC#4; 14 backend tests green
+Plan: 03 of 4 complete (Wave 3) — next: 11-04
+Status: Plan 11-03 complete (human-verified); ready to execute 11-04
+Last activity: 2026-07-24 — Phase 11 plan 03 COMPLETE — forced-but-resumable first-run onboarding: client AppShell gate + conversational page (paste/file/voice intake -> editable review card + persona confirm -> commit); sparse-start relaxation admits idea-stage users (46a86c3); human-verified
 
 Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Phase 10 shipped 4/4 plans)
 
@@ -61,6 +61,7 @@ Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Pha
 | Phase 10 P04 | 15 | 3 tasks | 8 files |
 | Phase 11 P01 | 10 min | 3 tasks | 11 files |
 | Phase 11 P02 | 11min | 3 tasks | 4 files |
+| Phase 11 P03 | 76 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 11]: 11-01: SC#1 encoded as pure decideConfirm returning literal { needsConfirm: true } — persona auto-commit impossible at the type level; enterprise not an emittable Persona
 - [Phase 11]: 11-02: onboarding is a thin adapter — the profile is 'just another vault doc', so embed/tenant-scope/retrieval come free from startIngest/vaultGroundHydrated; new work is only the extraction call + §4-safe audit
 - [Phase 11]: 11-02: extractProfile writes nothing (no doc, no audit) — SC#1 confirm-not-assume is structural; the sole write path is the separate human-confirmed commitProfile
+- [Phase 11]: 11-03: first-run gate lives in the client <Authenticated> AppShell (useQuery(api.onboarding.status) redirect), NOT middleware.ts — middleware has no DB access (RESEARCH Pitfall 4, eternal-spinner class)
+- [Phase 11]: 11-03: onboarding reuses the conversational chat SURFACE but routes extraction through the UNGATED business-profile skill, not the gated cockpit-agent — keeps onboarding tweaks out of the EVAL_GATE cycle / off the ~25 golden fixtures (RESEARCH Pitfall 1)
+- [Phase 11]: 11-03: sparse-start — REQUIRED_STRINGS relaxed to [oneLineDescription] + confirmed persona; name/stage/offering/targetCustomer optional so idea-stage users (ONBD-02 'business/idea') can commit and are enriched later (46a86c3)
 
 ### Pending Todos
 
