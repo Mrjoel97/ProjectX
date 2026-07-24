@@ -1,5 +1,8 @@
 {
   "_unassigned": [],
+  "growth-diagnostic.md": [
+    "packages/core/src/growth/"
+  ],
   "onboarding.md": [
     "packages/core/src/businessProfile.ts",
     "packages/backend/convex/onboarding.ts",
