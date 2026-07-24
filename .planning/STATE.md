@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: planning
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-07-24T15:34:25.348Z"
-last_activity: 2026-07-24 — Phase 11 plan 01 COMPLETE — pure business-profile domain module (SC#1 always-confirm), UNGATED business-profile extraction skill seeded v1, onboarding playbook registered
+status: executing
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-07-24T15:58:02.481Z"
+last_activity: "2026-07-24 — Phase 11 plan 02 COMPLETE — onboarding thin adapter (status gate, extractProfile no-auto-commit SC#1, commitProfile/updateProfile embed+re-embed SC#2/#3) + §4 redaction scan SC#4; 14 backend tests green"
 progress:
   total_phases: 37
   completed_phases: 18
   total_plans: 140
-  completed_plans: 133
+  completed_plans: 134
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 11 — Persona Onboarding & Business Profile (executing; plan 01 of 4 complete)
+**Current focus:** Phase 11 — Persona Onboarding & Business Profile (executing; plan 02 of 4 complete)
 
 ## Current Position
 
 Phase: 11 of 25 (Persona Onboarding & Business Profile) — executing
-Plan: 01 of 4 complete (Wave 1) — next: 11-02
-Status: Plan 11-01 complete; ready to execute 11-02
-Last activity: 2026-07-24 — Phase 11 plan 01 COMPLETE — pure business-profile domain module (SC#1 always-confirm), UNGATED business-profile extraction skill seeded v1, onboarding playbook registered
+Plan: 02 of 4 complete (Wave 2) — next: 11-03
+Status: Plan 11-02 complete; ready to execute 11-03
+Last activity: 2026-07-24 — Phase 11 plan 02 COMPLETE — onboarding thin adapter (status gate, extractProfile no-auto-commit SC#1, commitProfile/updateProfile embed+re-embed SC#2/#3) + §4 redaction scan SC#4; 14 backend tests green
 
 Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Phase 10 shipped 4/4 plans)
 
@@ -60,6 +60,7 @@ Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Pha
 *Updated after each plan completion.*
 | Phase 10 P04 | 15 | 3 tasks | 8 files |
 | Phase 11 P01 | 10 min | 3 tasks | 11 files |
+| Phase 11 P02 | 11min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 10]: 10-03: the SourceCard reuses the existing briefingSheet opaque --card style (no new card idiom); titles link to /dashboard/vault (doc-level, no new query) — inline PreviewModal click-through deferred behind a getVaultDoc(byId) query
 - [Phase 11]: 11-01: business-profile skill is UNGATED (mirrors voice-brief) — output is a human-confirmed vault doc, not tool-state; not in GATED_SKILLS
 - [Phase 11]: 11-01: SC#1 encoded as pure decideConfirm returning literal { needsConfirm: true } — persona auto-commit impossible at the type level; enterprise not an emittable Persona
+- [Phase 11]: 11-02: onboarding is a thin adapter — the profile is 'just another vault doc', so embed/tenant-scope/retrieval come free from startIngest/vaultGroundHydrated; new work is only the extraction call + §4-safe audit
+- [Phase 11]: 11-02: extractProfile writes nothing (no doc, no audit) — SC#1 confirm-not-assume is structural; the sole write path is the separate human-confirmed commitProfile
 
 ### Pending Todos
 
@@ -90,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T15:34:13.815Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-07-24T15:58:02.460Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
