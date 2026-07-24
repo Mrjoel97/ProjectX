@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: planning
-stopped_at: Phase 11 COMPLETE & verified (passed 7/7) — next Phase 12
-last_updated: "2026-07-24T18:09:24.485Z"
-last_activity: "2026-07-24 — Phase 11 plan 04 COMPLETE (all 4 plans done) — editable /dashboard/profile page: getProfile + deserializeProfile load the committed Lean-core fields, Save re-embeds via updateProfile so grounding stays current; rail nav link added (page was unreachable); human-verified"
+stopped_at: Phase 12 context gathered
+last_updated: "2026-07-24T19:33:52.102Z"
+last_activity: "2026-07-24 — Phase 11 (Persona Onboarding & Business Profile) COMPLETE & verified (passed 7/7). Sparse-start decision mid-phase: onboarding admits idea-stage users (only oneLineDescription + persona required); name/offering/customer optional, enriched on the editable /dashboard/profile page. Rail nav link added (page was unreachable). business-profile skill seeded active v1."
 progress:
   total_phases: 37
   completed_phases: 19
@@ -99,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T18:04:30.456Z
-Stopped at: Completed 11-04-PLAN.md
-Resume file: None
+Last session: 2026-07-24T19:33:52.090Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-business-evaluation-engine/12-CONTEXT.md
