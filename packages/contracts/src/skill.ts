@@ -64,6 +64,27 @@ export const VOICE_BRIEF_SKILL = "voice-brief" as const;
 /** Registry name of the business-profile extraction skill (ONBD-02 — onboarding intake→Lean-core profile). */
 export const BUSINESS_PROFILE_SKILL = "business-profile" as const;
 
+/** Registry name of the Growth OS diagnostic rubric (BEVL-01 — constraint routing + financial-spine method). */
+export const GROWTH_OS_DIAGNOSTIC_SKILL = "growth-os-diagnostic" as const;
+
+/** Registry name of the SWOT framework rubric (BEVL-01 — SME persona-fallback quadrant method). */
+export const SWOT_SKILL = "swot" as const;
+
+/** Registry name of the Lean Canvas framework rubric (BEVL-01 — solopreneur persona-fallback canvas method). */
+export const LEAN_CANVAS_SKILL = "lean-canvas" as const;
+
+/** Registry name of the Business Model Canvas framework rubric (BEVL-01 — startup persona-fallback canvas method). */
+export const BMC_SKILL = "bmc" as const;
+
+/** Registry name of the offer-architect specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
+export const OFFER_ARCHITECT_SKILL = "offer-architect" as const;
+
+/** Registry name of the money-model-designer specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
+export const MONEY_MODEL_DESIGNER_SKILL = "money-model-designer" as const;
+
+/** Registry name of the lead-engine specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
+export const LEAD_ENGINE_SKILL = "lead-engine" as const;
+
 /**
  * Skills whose CANDIDATE versions may only activate through a recorded passing
  * eval run (EVAL-01). Rollback (archived/rolled_back targets) is structurally
@@ -81,6 +102,16 @@ export const GATED_SKILLS: readonly string[] = [
   DOCUMENT_DRAFTER_SKILL,
   INBOX_DIGEST_SKILL,
   REPLY_DRAFTER_SKILL,
+  // Phase 12 (BEVL-01): the evaluation-framework rubrics + specialist skills. Their
+  // METHOD bodies leave the building as findings/next-step memos, so activation is
+  // eval-gated — a candidate only goes live through a recorded passing eval run.
+  GROWTH_OS_DIAGNOSTIC_SKILL,
+  SWOT_SKILL,
+  LEAN_CANVAS_SKILL,
+  BMC_SKILL,
+  OFFER_ARCHITECT_SKILL,
+  MONEY_MODEL_DESIGNER_SKILL,
+  LEAD_ENGINE_SKILL,
 ];
 
 /** Whether activation of a candidate version of this skill requires eval evidence. */
