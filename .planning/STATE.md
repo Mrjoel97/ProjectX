@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-07-24T05:10:21.302Z"
-last_activity: 2026-07-24 — Plan 10-02 shipped (searchVault tool + vaultSources card + vault.searched audit + ADR-006)
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-07-24T06:00:00.000Z"
+last_activity: 2026-07-24 — Plan 10-03 shipped (vault-grounding source card + searchVault verb label in the workspace canvas)
 progress:
   total_phases: 37
   completed_phases: 17
   total_plans: 136
-  completed_plans: 131
+  completed_plans: 132
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 10 of 25 (Vault->Agent Grounding) — first phase of milestone v2.0
-Plan: 3 of 4 complete (10-01, 10-02, 10-04 shipped; 10-03 source-card UI in flight)
-Status: Executing — Plan 10-04 shipped (candidate cockpit-agent@13 vault-grounding teaching + golden fixtures 25/26 + harness vault seed)
-Last activity: 2026-07-24 — Plan 10-04 shipped (teach agent WHEN to ground via the eval gate; candidate skill, not hand-activated)
+Plan: 4 of 4 complete (10-01, 10-02, 10-03, 10-04 all shipped) — Phase 10 plans done
+Status: Executing — Plan 10-03 shipped (SourceCard "📚 Grounded in N documents" + VERB["searchVault"] label in cards.tsx; cross-surface render is Manual-Only UAT)
+Last activity: 2026-07-24 — Plan 10-03 shipped (surface vault grounding to the user in the workspace canvas)
 
-Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 3/4 plans)
+Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 4/4 plans)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -53,8 +53,9 @@ Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 3/
 |-------|------|----------|-------|-------|
 | 10 | 01 | 5 min | 2 | 3 |
 | 10 | 02 | 20 min | 3 | 7 |
+| 10 | 03 | 12 min | 2 | 2 |
 
-**Recent Trend:** 10-02 landed clean (TDD, 68/68 cockpitTools+vaultGround green, one fixture-only correction).
+**Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
 *Updated after each plan completion.*
 | Phase 10 P04 | 15 | 3 tasks | 8 files |
@@ -71,6 +72,7 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Architecture]: Every v2.0 capability is one of two shapes — a read-only tool returning content in-loop, or a write staged into the plan for the human Approve mutation. No third mechanism.
 - [Phase 10]: ADR-006: vault chunks are trusted-as-own — enter the agent loop directly (SC2-fenced), not through the toolless-ingestion firewall; fence + human Approve gate are the backstops
 - [Phase 10]: 10-04: vault-grounding teaching is candidate cockpit-agent@13 (versioned skill, §5), gate-activated only; the 'not on compose turns' clause guards the 23 existing golden fixtures
+- [Phase 10]: 10-03: the SourceCard reuses the existing briefingSheet opaque --card style (no new card idiom); titles link to /dashboard/vault (doc-level, no new query) — inline PreviewModal click-through deferred behind a getVaultDoc(byId) query
 
 ### Pending Todos
 
@@ -85,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T05:10:21.290Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-07-24T06:00:00.000Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None

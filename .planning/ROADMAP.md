@@ -41,7 +41,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 *Defined 2026-07-24. Grow the governed email cockpit into a broadly-capable AI chief-of-staff, then open the invite-only beta on top of it. Dependency-ordered staircase S1->S4; every v2.0 requirement maps to exactly one phase (24/24 covered). Phases 1-9 above are shipped v1.0 history - not renumbered.*
 
 **S1 - Foundation & Intelligence**
-- [ ] **Phase 10: Vault->Agent Grounding** - The agent finally reads the vault mid-conversation via a governed `searchVault` tool (the root dependency everything else grounds on)
+- [x] **Phase 10: Vault->Agent Grounding** - The agent finally reads the vault mid-conversation via a governed `searchVault` tool (the root dependency everything else grounds on) (completed 2026-07-24)
 - [ ] **Phase 11: Persona Onboarding & Business Profile** - Guided first-run persona detection (solopreneur/startup/SME) + business/idea intake -> structured profile in the vault
 - [ ] **Phase 12: Business Evaluation Engine** - On-demand grounded assessment (SWOT/Lean/BMC) + gaps -> governed action proposals + honest "no gaps"
 - [ ] **Phase 13: Proactive In-App Review** - Scheduled recurring in-app business review, using no OAuth mailbox token
@@ -660,7 +660,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 8. Self-Improvement | 8/8 | Complete    | 2026-07-23 |
 | 9. Private Beta Productionization | - | **SUPERSEDED -> Phase 25** | - |
 | **Milestone v2.0 - Platform -> Private Beta** | | | |
-| 10. Vault->Agent Grounding | 3/4 | In Progress|  |
+| 10. Vault->Agent Grounding | 4/4 | Complete   | 2026-07-24 |
 | 11. Persona Onboarding & Business Profile | 0/TBD | Not started | - |
 | 12. Business Evaluation Engine | 0/TBD | Not started | - |
 | 13. Proactive In-App Review | 0/TBD | Not started | - |
