@@ -10,6 +10,7 @@ import { buildBriefingView } from "@pikar/core/briefing";
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { useState } from "react";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -1089,6 +1090,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   personalizeRecipient: ["Tailoring a message…", "Tailored a message"],
   listInbox: ["Checking your inbox…", "Checked your inbox"],
   briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
+  searchVault: ["Searching your knowledge vault…", "Grounded in the vault"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
@@ -1161,6 +1163,44 @@ function ActivityCard({ steps }: { steps: StepView[] }) {
   );
 }
 
+// ---------- VAULT SOURCES (VGND-01) ----------
+
+// The read-side of Plan 02's vaultSources content-plane row. Derive the shape from the api (repo
+// convention — no dataModel import); the row carries refs-only labels: titles + docIds + count,
+// never a query string or chunk text (§4, vaultSources.ts writes NO log-plane row).
+type VaultSources = NonNullable<FunctionReturnType<typeof api.vaultSources.byThread>>;
+
+/**
+ * "📚 Grounded in N documents" — a DUMB renderer over vaultSources.byThread (the briefing precedent):
+ * self-queries on threadId, returns null when a turn wasn't grounded, so an ungrounded/compose turn
+ * shows no card. Titles are labels-to-UI (BRAND §3 tracked-caps label + §2 opaque --card sheet, no
+ * amber). Each links to the vault — the lazy, context-sanctioned click-through.
+ */
+function SourceCard({ threadId }: { threadId?: string }) {
+  const sources: VaultSources | null | undefined = useQuery(
+    api.vaultSources.byThread,
+    threadId ? { threadId } : "skip",
+  );
+  if (!sources || sources.count === 0) return null;
+  return (
+    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="source-card">
+      <p style={capsTeal}>📚 Grounded in {sources.count} document{sources.count === 1 ? "" : "s"}</p>
+      <ul style={{ listStyle: "none", margin: "0.7rem 0 0", padding: 0, display: "grid", gap: "0.4rem" }}>
+        {sources.titles.map((title, i) => (
+          // ponytail: doc-level link to /dashboard/vault (context-sanctioned fallback, no new query).
+          //  Inline PreviewModal upgrade = add a getVaultDoc(byId) tenant query + import PreviewModal —
+          //  deferred (Pitfall 5). docIds ride along in the row for that future targeted click-through.
+          <li key={sources.docIds[i] ?? title} style={traceText}>
+            <Link href="/dashboard/vault" data-testid="source-title" style={{ color: "var(--teal-600)" }}>
+              {title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
 export function CardList({ threadId, sending }: { threadId?: string; sending: boolean }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -1198,6 +1238,9 @@ export function CardList({ threadId, sending }: { threadId?: string; sending: bo
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       {trace}
+      {/* Renders above the plan-status branches like the trace — grounding happens on pure advice
+          turns with no plan row, so it must not sit under any plan-status gate. Self-reads its data. */}
+      <SourceCard threadId={threadId} />
       {rest()}
     </div>
   );
