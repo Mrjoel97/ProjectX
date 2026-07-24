@@ -1,5 +1,11 @@
 {
   "_unassigned": [],
+  "onboarding.md": [
+    "packages/core/src/businessProfile.ts",
+    "packages/backend/convex/onboarding.ts",
+    "apps/web/app/(app)/dashboard/onboarding/",
+    "apps/web/app/(app)/dashboard/profile/"
+  ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
     "packages/backend/convex/opsSignals.test.ts",
