@@ -284,6 +284,21 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 
+  // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
+  // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
+  // searchVault turn. Titles + doc ids + count ONLY — labels-to-UI, NEVER chunk text, NEVER an
+  // audit row (the refs-only vault.searched audit is written by the ACTING module, llm.ts, so
+  // titles held here can never reach a payload — CLAUDE.md §4). docIds are PreviewModal
+  // click-through targets (Plan 03). Append-only per thread; byThread reads the latest.
+  vaultSources: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(), // renders the SOURCE card for this thread, like briefings
+    docIds: v.array(v.id("vaultDocuments")), // stable refs — PreviewModal click-through target (Plan 03)
+    titles: v.array(v.string()), // doc titles = labels-to-UI (§4: never reach the audit payload)
+    count: v.number(), // grounded-in-N — the card masthead
+    createdAt: v.number(),
+  }).index("by_thread", ["tenantId", "threadId"]),
+
   // ── Phase-3.9 agent activity trace (CKPT-05) ──────────────────────────────
   //
   // The step rows the agent loop writes and the browser subscribes to, so a 10-30s turn shows
@@ -323,6 +338,10 @@ export default defineSchema({
       v.literal("listInbox"),
       v.literal("briefInbox"),
       v.literal("replyToMessage"),
+      // Phase-10 (VGND-01): the read-only vault-grounding tool. Without this literal the SDK's
+      // activity-step insert throws and is silently swallowed → no "Searching…" step in prod
+      // while tests pass (Research Pitfall 4).
+      v.literal("searchVault"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
