@@ -116,10 +116,10 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
     const body = "Playbook A body. ".repeat(150); // ~2550 chars > PER_DOC_CHAR_CAP
     const docA = await seedDoc(t, { title: "Playbook A", text: body });
 
-    const { docIds, titles, chunks } = await t.action(
-      internal.vaultGround.vaultGroundHydrated,
-      { tenantId: TENANT, query: `SMOKE::${docA}` },
-    );
+    const { docIds, titles, chunks } = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${docA}`,
+    });
 
     expect(docIds).toContain(docA);
     // three parallel arrays
@@ -178,7 +178,9 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     expect(all).toHaveLength(2);
     expect(all.every((d) => d.tenantId === TENANT)).toBe(true);
 
-    const brainDumps = await asTenant(t).query(api.vault.listVaultDocs, { category: "brain-dumps" });
+    const brainDumps = await asTenant(t).query(api.vault.listVaultDocs, {
+      category: "brain-dumps",
+    });
     expect(brainDumps).toHaveLength(1);
     expect(brainDumps[0]?.category).toBe("brain-dumps");
   });
@@ -205,7 +207,9 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     const url = await asTenant(t).query(api.vault.vaultDownloadUrl, { vaultDocId: doc });
     expect(url).toBeTruthy();
 
-    const cross = await asTenant(t, "tenant_b").query(api.vault.vaultDownloadUrl, { vaultDocId: doc });
+    const cross = await asTenant(t, "tenant_b").query(api.vault.vaultDownloadUrl, {
+      vaultDocId: doc,
+    });
     expect(cross).toBeNull();
   });
 
@@ -235,7 +239,9 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     const brief = await seedDoc(t, { title: "brief", category: "workspace-docs" });
     const note = await seedDoc(t, { title: "note", category: "brain-dumps" });
 
-    const all = await asTenant(t).action(api.vault.vaultSearch, { query: `SMOKE::${brief},${note}` });
+    const all = await asTenant(t).action(api.vault.vaultSearch, {
+      query: `SMOKE::${brief},${note}`,
+    });
     expect(all.map((d) => d._id).sort()).toEqual([brief, note].sort());
 
     const scoped = await asTenant(t).action(api.vault.vaultSearch, {
@@ -250,7 +256,9 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     const mine = await seedDoc(t, { category: "brain-dumps" });
     const theirs = await seedDoc(t, { category: "brain-dumps" }, "tenant_b");
 
-    const out = await asTenant(t).action(api.vault.vaultSearch, { query: `SMOKE::${mine},${theirs}` });
+    const out = await asTenant(t).action(api.vault.vaultSearch, {
+      query: `SMOKE::${mine},${theirs}`,
+    });
     expect(out.map((d) => d._id)).toEqual([mine]);
   });
 });
