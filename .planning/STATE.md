@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: planning
-stopped_at: Phase 12 context gathered
-last_updated: "2026-07-24T19:33:52.102Z"
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-07-24T20:48:55.395Z"
 last_activity: "2026-07-24 — Phase 11 (Persona Onboarding & Business Profile) COMPLETE & verified (passed 7/7). Sparse-start decision mid-phase: onboarding admits idea-stage users (only oneLineDescription + persona required); name/offering/customer optional, enriched on the editable /dashboard/profile page. Rail nav link added (page was unreachable). business-profile skill seeded active v1."
 progress:
   total_phases: 37
   completed_phases: 19
-  total_plans: 140
-  completed_plans: 136
+  total_plans: 146
+  completed_plans: 137
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-Phase: 12 of 25 (Business Evaluation Engine) — Phase 11 complete & verified
-Plan: none yet (Phase 12 not planned)
-Status: Ready to plan Phase 12
-Last activity: 2026-07-24 — Phase 11 (Persona Onboarding & Business Profile) COMPLETE & verified (passed 7/7). Sparse-start decision mid-phase: onboarding admits idea-stage users (only oneLineDescription + persona required); name/offering/customer optional, enriched on the editable /dashboard/profile page. Rail nav link added (page was unreachable). business-profile skill seeded active v1.
+Phase: 12 of 25 (Business Evaluation Engine) — executing
+Plan: 12-01 complete (Growth diagnostic math ported to pure-TS)
+Status: Phase 12 in progress
+Last activity: 2026-07-24 — Phase 12 plan 01 COMPLETE: ported the Growth OS diagnostic spine (diagnose.py/ltgp_cac.py/cfa.py) to Convex-free packages/core/src/growth (Scorecard + ltgpCac/cfa + diagnose gate router + leverageRank), all-nullable Scorecard so an unknown financial input makes diagnose ASK not fabricate (BEVL-01). 191 core tests green; growth-diagnostic playbook registered.
 
 Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Phases 10 + 11 shipped 4/4 each)
 
@@ -63,6 +63,7 @@ Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Ph
 | Phase 11 P02 | 11min | 3 tasks | 4 files |
 | Phase 11 P03 | 76 min | 3 tasks | 6 files |
 | Phase 11 P04 | 40 min | 2 tasks | 5 files |
+| Phase 12 P01 | 8 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 11]: 11-03: onboarding reuses the conversational chat SURFACE but routes extraction through the UNGATED business-profile skill, not the gated cockpit-agent — keeps onboarding tweaks out of the EVAL_GATE cycle / off the ~25 golden fixtures (RESEARCH Pitfall 1)
 - [Phase 11]: 11-03: sparse-start — REQUIRED_STRINGS relaxed to [oneLineDescription] + confirmed persona; name/stage/offering/targetCustomer optional so idea-stage users (ONBD-02 'business/idea') can commit and are enriched later (46a86c3)
 - [Phase 11]: 11-04: profile page is the post-onboarding editability/enrichment surface — save re-embeds via updateProfile so grounding stays current; the committed vault-doc markdown is the single record, getProfile parses it back with deserializeProfile (round-trip test binds the two)
+- [Phase 12]: 12-01: Growth diagnostic math ported to pure-TS packages/core/src/growth (ltgpCac/cfa/diagnose); Convex-free (CLAUDE.md §1)
+- [Phase 12]: 12-01: unknown financial input → diagnose emits ask (empty route/proofMetric) at the money-model gate — an all-null Scorecard never falsely reaches 'scale' (BEVL-01 no-fabricated-metrics guarantee in the type system)
 
 ### Pending Todos
 
@@ -99,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T19:33:52.090Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-business-evaluation-engine/12-CONTEXT.md
+Last session: 2026-07-24T20:48:40.623Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
