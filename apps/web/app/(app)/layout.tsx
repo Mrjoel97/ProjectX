@@ -4,7 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@pikar/backend/api";
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   BellIcon,
@@ -67,9 +67,26 @@ function DeadLetterBadge() {
   );
 }
 
+// ONBD-01 first-run gate. Lives HERE in the client shell (never middleware.ts — that has no DB
+// access and would re-introduce the eternal-spinner class of bug this component was built to kill).
+// A tenant with no committed business_profile is force-redirected to onboarding and can't reach any
+// other (app) route until they commit one; navigating away re-fires the redirect (pathname changes →
+// off-onboarding again → effect runs). `undefined` = status still loading → hold the shell on the
+// existing loader rather than flash the cockpit before the redirect.
+const ONBOARDING_PATH = "/dashboard/onboarding";
+
 function Shell({ children }: { children: ReactNode }) {
   const { signOut } = useAuthActions();
   const pathname = usePathname();
+  const router = useRouter();
+
+  const onboarding = useQuery(api.onboarding.status);
+  const onOnboarding = pathname === ONBOARDING_PATH;
+  useEffect(() => {
+    if (onboarding?.needsOnboarding && !onOnboarding) router.replace(ONBOARDING_PATH);
+  }, [onboarding, onOnboarding, router]);
+  // Loading the gate signal, or a redirect is in flight: show the shell's own loader, not children.
+  const gateBusy = onboarding === undefined || (onboarding.needsOnboarding && !onOnboarding);
   // Collapsed state persists per browser. Read after mount (SSR has no localStorage);
   // the brief expanded-first paint is acceptable.
   const [collapsed, setCollapsed] = useState(false);
@@ -168,7 +185,11 @@ function Shell({ children }: { children: ReactNode }) {
             /^\/dashboard\/(workspace|vault)/.test(pathname) ? " is-bleed" : ""
           }`}
         >
-          {children}
+          {gateBusy ? (
+            <p style={{ color: "var(--ink-soft)", margin: "2rem" }}>Loading…</p>
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>
