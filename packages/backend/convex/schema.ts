@@ -299,6 +299,65 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 
+  // ── Phase-12 business-evaluation content plane (BEVL-01) ──────────────────
+  //
+  // The durable, append-only assessment trail. Each `runEvaluation` (evaluations.ts) writes ONE
+  // row: the grounded + carried-forward Scorecard snapshot, the per-finding cited observations,
+  // the leverage-ranked gaps (diagnose() prescriptions), and the honest not-enough-data sections.
+  // CONTENT-PLANE (like `plans`/`vaultSources`): findings/gaps carry grounded labels + citations
+  // and are NEVER audited — only counts/enums reach the refs-only `evaluation.ran` audit (§4).
+  //
+  // Storage DECISION (12-03): a dedicated TABLE, not a vaultDocuments doc-kind — a clean
+  // latest-per-thread query (by_tenant_thread, order desc) + first-class SC #5 isolation index
+  // (by_tenant) without parse-on-read; BEVL-03's recurring review consumes the structured trail.
+  // Append-only new table = no migration (prior-phase discipline).
+  //
+  // `scorecard` is v.any() (the @pikar/core Scorecard shape — all-nullable); `userProvided` holds
+  // the scorecard dot-path keys a user answered in-conversation so carry-forward + citation
+  // labeling read it (a finding on a userProvided field is cited "user-provided", never fabricated).
+  evaluations: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(),
+    framework: v.union(
+      v.literal("swot"),
+      v.literal("lean"),
+      v.literal("bmc"),
+      v.literal("growth-os"),
+    ),
+    // Cited observations — content-plane, never audited. `source` distinguishes a grounded vault
+    // fact from a user-provided figure (honest provenance); a user-provided finding has no docId.
+    findings: v.array(
+      v.object({
+        label: v.string(),
+        section: v.string(), // framework quadrant/section (e.g. "identity", "financials")
+        citationDocId: v.optional(v.string()), // absent for a user-provided finding
+        citationTitle: v.string(),
+        confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+        source: v.union(v.literal("vault"), v.literal("user-provided")),
+      }),
+    ),
+    // Leverage-ranked prescriptions (diagnose() → the single highest-leverage constraint first).
+    gaps: v.array(
+      v.object({
+        label: v.string(),
+        leverageRank: v.number(), // gate order (Market<Offer<Money<Leads<Scale) — lower = fix first
+        route: v.string(), // the target specialist skill (execution deferred to 15+)
+        playbook: v.string(),
+        citationDocId: v.optional(v.string()),
+      }),
+    ),
+    // Honest thin-data state: a section the vault couldn't ground AND no carried value — a nudge,
+    // NOT a fabricated finding and NOT a real gap.
+    notEnoughData: v.array(v.object({ section: v.string(), needs: v.string() })),
+    scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
+    userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
+    verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
+    createdAt: v.number(),
+  })
+    // SC #5 isolation + "latest per tenant" ; by_tenant_thread = the card's latest-per-thread read.
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_thread", ["tenantId", "threadId"]),
+
   // ── Phase-3.9 agent activity trace (CKPT-05) ──────────────────────────────
   //
   // The step rows the agent loop writes and the browser subscribes to, so a 10-30s turn shows
@@ -342,6 +401,10 @@ export default defineSchema({
       // activity-step insert throws and is silently swallowed → no "Searching…" step in prod
       // while tests pass (Research Pitfall 4).
       v.literal("searchVault"),
+      // Phase-12 (BEVL-01): the read-only business-evaluation tool. Without this literal the
+      // engine's "Assessing…" step insert throws and is silently swallowed in prod while tests
+      // pass (Pitfall 2 — the same closed-union trap as searchVault above).
+      v.literal("evaluateBusiness"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
