@@ -105,6 +105,47 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **BETA-03**: A new user reaches their first delivered result within minutes via a guided conversational onboarding
 - [x] **BETA-04**: User sees live pipeline status and their review queue update in real time (Convex subscriptions)
 
+## v2.0 Platform Requirements
+
+Milestone **v2.0 — Platform → Private Beta** (defined 2026-07-24). Grow the governed email cockpit
+into a broadly-capable AI chief-of-staff, then open the invite-only beta on top of it. Grouped by the
+four dependency-ordered stages (S1→S4). **Carried-in:** BETA-01/02/03 and DLVR-02 live in the v1
+Private Beta section above and land in this milestone's **final** stage (S4) — the beta opens last.
+
+### S1 — Foundation & Intelligence
+
+- [ ] **VGND-01**: The agent can retrieve from the user's knowledge vault mid-conversation via a governed `searchVault` tool — hydrated chunk text, tenant-scoped, refs-only audit, fails open (an empty/failed search never dead-ends the turn)
+- [ ] **ONBD-01**: A guided first-run onboarding identifies the user's persona (solopreneur / startup / SME); enterprise is deferred
+- [ ] **ONBD-02**: The user supplies their business/idea (files, pasted text, or a written/spoken brief) and a structured business profile is stored and indexed in the vault
+- [ ] **BEVL-01**: The agent produces an on-demand business assessment using persona-appropriate frameworks (SWOT / Lean / Business Model Canvas), grounded in the user's own vault data, with honest data-gap flags and no fabricated metrics or viability scores
+- [ ] **BEVL-02**: The assessment surfaces gaps and turns them into governed action proposals through the approve→execute spine; a healthy business honestly returns zero gaps
+- [ ] **BEVL-03**: A proactive business review is delivered in-app on a recurring cadence (weekly-style briefing) using no OAuth mailbox token
+- [ ] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
+
+### S2 — Breadth of Action
+
+- [ ] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
+- [ ] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
+- [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
+- [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
+- [ ] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
+- [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments)
+- [ ] **ACTN-05**: The agent can track contacts / CRM state and follow-ups scoped to the user
+
+### S3 — Creation & Self-Extension
+
+- [ ] **MEDIA-01**: A media-creation canvas produces images and video (≤3 min) via the connected Pikar-Ai service as async governed jobs with a separate cost cap — generation is wrapped, not rebuilt
+- [ ] **SKILL-01**: The user can author skills adapted to their business through the eval-gated skills registry
+- [ ] **SKILL-02**: The agent can author skills as candidates only — structurally unable to self-activate; activation requires the eval gate plus owner approval
+
+### S4 — Governance & Open the Beta
+
+- [ ] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
+- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
+- [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
+
+*(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
