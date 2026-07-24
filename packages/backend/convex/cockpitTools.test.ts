@@ -10,6 +10,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { contentHash } from "./lib/hash";
 import { buildAgentContext, buildCockpitTools, buildHistoryBlock } from "./llm";
 import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
@@ -803,4 +804,99 @@ test("both briefing tools degrade conversationally with no mailbox — fallback 
 
   const notifs = await t.run((ctx) => ctx.db.query("notifications").collect());
   expect(notifs.filter((n) => n.kind === "gmail_reconnect").length).toBe(2);
+});
+
+// ── 10-02 (VGND-01/BETA-05): searchVault — the governed read-only vault-grounding tool ──────────
+// Drives the tool directly through __invokeCockpitTool with a SMOKE::<docId> query (offline, no
+// embedding network, no OPENAI_API_KEY). Proves: genuine hydrated fenced retrieval (not a swallowed
+// UNAUTHENTICATED no-match), honest fail-open on a miss (SC1), refs-only vault.searched audit (SC3,
+// §4), and tenant-B-empty isolation (BETA-05).
+const VAULT_NEEDLE = "ACME-Q3-REVENUE-SECRET-BODY";
+
+// Minimal groundable vault doc under `tenantId`. ownedDocsMeta/getDoc scope on tenantId only (no
+// status filter), so these fields are the whole seed.
+const seedVaultDoc = (t: T, tenantId: string, text: string): Promise<Id<"vaultDocuments">> =>
+  t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Q3 Report",
+      kind: "upload",
+      category: "business",
+      source: "upload",
+      mimeType: "text/plain",
+      size: text.length,
+      contentHash: "hash-q3",
+      text,
+      status: "ready",
+      createdAt: Date.now(),
+    }),
+  );
+
+test("searchVault hydrates a fenced chunk into the loop + writes a vaultSources card (VGND-01)", async () => {
+  const { t, planId } = await setup();
+  const docId = await seedVaultDoc(t, "t1", `The company report: ${VAULT_NEEDLE} grew 20%.`);
+
+  const reply = await call(t, planId, "searchVault", { query: `SMOKE::${docId}` });
+
+  // The SC2 fence AND the real chunk text — this assertion CANNOT pass on the fail-open path (no
+  // fence there), so it proves genuine retrieval via the identity-less internalAction.
+  expect(reply).toContain("<vault_context");
+  expect(reply).toContain(VAULT_NEEDLE);
+
+  // The content-plane source card exists: titles=labels-to-UI, count===1.
+  const row = await t.run((ctx) => ctx.db.query("vaultSources").first());
+  expect(row, "no vaultSources row was written on a hit").not.toBeNull();
+  expect(row!.count).toBe(1);
+  expect(row!.titles).toEqual(["Q3 Report"]);
+  expect(row!.threadId).toBe("thread1");
+});
+
+test("searchVault fails open on a no-match — honest nudge, never throws (SC1)", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await call(t, planId, "searchVault", { query: "SMOKE::" }); // empty seed → no docs
+  expect(reply).toMatch(/don't have anything|upload/i);
+  expect(reply).not.toContain("<vault_context"); // no fence on a miss
+
+  // No source card written on a miss (nothing to show).
+  expect(await t.run((ctx) => ctx.db.query("vaultSources").first())).toBeNull();
+});
+
+test("searchVault writes a refs-only vault.searched audit — queryHash + resultCount ONLY (SC3, §4)", async () => {
+  const { t, planId } = await setup();
+  const docId = await seedVaultDoc(t, "t1", `Secret figures: ${VAULT_NEEDLE}.`);
+  const query = `SMOKE::${docId}`;
+
+  await call(t, planId, "searchVault", { query });
+
+  const rows = await t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .filter((q) => q.eq(q.field("eventType"), "vault.searched"))
+      .collect(),
+  );
+  expect(rows).toHaveLength(1);
+  const payload = rows[0]!.payload as Record<string, unknown>;
+  expect(Object.keys(payload).sort()).toEqual(["queryHash", "resultCount"]);
+  expect(payload.queryHash).toBe(await contentHash(query));
+  expect(payload.resultCount).toBe(1);
+  // Neither the raw query nor any chunk substring may reach the payload (§4).
+  const json = JSON.stringify(payload);
+  expect(json).not.toContain("SMOKE::");
+  expect(json).not.toContain(VAULT_NEEDLE);
+});
+
+test("searchVault gives tenant B NOTHING of tenant A's corpus (BETA-05)", async () => {
+  const { t } = await setup();
+  const t1Doc = await seedVaultDoc(t, "t1", `Tenant A private: ${VAULT_NEEDLE}.`);
+  const t2Plan = await t.mutation(internal.plans.insertPlan, { tenantId: "t2", threadId: "thread2" });
+
+  const reply = await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t2",
+    planId: t2Plan,
+    toolName: "searchVault",
+    input: { query: `SMOKE::${t1Doc}` }, // t2 asking for t1's doc id
+  });
+  expect(reply).toMatch(/don't have anything|upload/i); // tenant B gets the honest no-match
+  expect(reply).not.toContain(VAULT_NEEDLE); // never A's content
 });
