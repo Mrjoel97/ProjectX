@@ -17,13 +17,26 @@
 // the row + rag chunks), never a log.
 
 import { openai } from "@ai-sdk/openai";
+import type { EntryId } from "@convex-dev/rag";
 import { BUSINESS_PROFILE_SKILL } from "@pikar/contracts/skill";
-import { type BusinessProfile, isPersona, type Persona } from "@pikar/core";
+import {
+  type BusinessProfile,
+  isPersona,
+  type Persona,
+  serializeProfile,
+  validateProfile,
+} from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
+import { categoryFor } from "@pikar/vault";
 import { generateObject, jsonSchema, type LanguageModel } from "ai";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { tenantAction, tenantQuery } from "./lib/functions";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
+import { contentHash } from "./lib/hash";
+import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+import { startIngest } from "./vaultIngest";
+import { rag } from "./vaultRag";
 
 const CALL_TIMEOUT_MS = 45_000;
 
@@ -33,6 +46,19 @@ const PROFILE_KIND = "business_profile";
 // Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel (mirrors
 // vaultLlm.ts resolveModel — the @ai-sdk/openai provider wants the bare name + reads OPENAI_API_KEY).
 const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
+
+// The Convex arg validator mirroring the pure @pikar/core BusinessProfile. persona is the locked
+// union (enterprise is not emittable — SC#1). validateProfile re-checks at the write boundary.
+const vProfile = v.object({
+  name: v.string(),
+  oneLineDescription: v.string(),
+  persona: v.union(v.literal("solopreneur"), v.literal("startup"), v.literal("sme")),
+  stage: v.string(),
+  offering: v.string(),
+  targetCustomer: v.string(),
+  primaryGoals: v.array(v.string()),
+  knownConstraints: v.array(v.string()),
+});
 
 // generateObject structured-output schema (jsonSchema, not zod — keeps this V8 adapter zod-free like
 // vaultLlm/documentSchema). STRICT mode: every property is also `required`. persona is enum-locked so
@@ -128,5 +154,143 @@ export const extractProfile = tenantAction({
       maxRetries: 1,
     });
     return object;
+  },
+});
+
+// ── Commit / edit — the persistBrief clone (SC#2/#3, ONBD-02) ─────────────────
+
+// Count populated Lean-core fields (the 6 required strings + the 2 lists when non-empty). A refs-only
+// audit signal (§4) — a NUMBER, never a field value — so the ops plane can see "a profile landed"
+// without the profile becoming a log.
+function populatedFieldCount(p: BusinessProfile): number {
+  const strings = [p.name, p.oneLineDescription, p.persona, p.stage, p.offering, p.targetCustomer];
+  return (
+    strings.filter((s) => s.trim() !== "").length +
+    (p.primaryGoals.length > 0 ? 1 : 0) +
+    (p.knownConstraints.length > 0 ? 1 : 0)
+  );
+}
+
+// The SHARED persistBrief clone (voice.ts:299) — the profile is "just another vault doc", so embed +
+// tenant scope + retrieval come FREE from startIngest / vaultGroundHydrated (§1). `existing` re-embeds
+// an edit IN PLACE on the same row: the stale rag entry is deleted (clean replace) and the row is
+// reset to `processing` before re-ingest. `text` is vault CONTENT (§4) — kept on the row, never a log.
+// ponytail: an edit re-attributes the graph to the SAME sourceDocId but doesn't GC the prior version's
+// edges (upsertGraph dedups new ones; a short structured profile yields few) — the ceiling is routing
+// through vault.deleteVaultDoc's full cascade if profile-graph staleness ever matters.
+async function writeProfileDoc(
+  ctx: MutationCtx,
+  tenantId: string,
+  profile: BusinessProfile,
+  existing?: Doc<"vaultDocuments">,
+): Promise<Id<"vaultDocuments">> {
+  const text = serializeProfile(profile);
+  const hash = await contentHash(text);
+  const size = new TextEncoder().encode(text).length;
+  const title = profile.name || "Business profile";
+
+  let vaultDocId: Id<"vaultDocuments">;
+  if (existing) {
+    if (existing.ragEntryId)
+      await rag.deleteAsync(ctx, { entryId: existing.ragEntryId as EntryId }); // replace, not orphan
+    await ctx.db.patch(existing._id, {
+      title,
+      text,
+      contentHash: hash,
+      size,
+      status: "processing",
+      ragEntryId: undefined,
+      failureReason: undefined,
+    });
+    vaultDocId = existing._id;
+  } else {
+    vaultDocId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title,
+      kind: PROFILE_KIND, // NEW free-string kind — ZERO schema migration
+      category: categoryFor({ source: "agent" }), // → "workspace-docs"
+      source: "agent",
+      mimeType: "text/markdown",
+      size,
+      contentHash: hash,
+      text, // serializeProfile output — content plane (§4)
+      status: "processing",
+      createdAt: Date.now(),
+    });
+  }
+  await startIngest(ctx, { vaultDocId, tenantId, correlationId: crypto.randomUUID() });
+  return vaultDocId;
+}
+
+// The tenant's current committed profile doc (newest non-failed), or null. The edit target + the
+// re-commit guard.
+async function currentProfileDoc(
+  ctx: MutationCtx,
+  tenantId: string,
+): Promise<Doc<"vaultDocuments"> | null> {
+  const docs = await ctx.db
+    .query("vaultDocuments")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const profiles = docs
+    .filter((d) => d.kind === PROFILE_KIND && d.status !== "failed")
+    .sort((a, b) => b.createdAt - a.createdAt);
+  return profiles[0] ?? null;
+}
+
+/**
+ * ONBD-02 commit. The reviewed, human-confirmed profile becomes a `business_profile` vault doc and is
+ * embedded via startIngest — retrievable through searchVault / vaultGroundHydrated (SC#2), tenant-
+ * scoped so tenant A's profile never reaches tenant B (SC#3). Emits ONE insert-only audit (§3) whose
+ * payload is refs/counts/booleans ONLY — {vaultDocId, fieldCount, personaConfirmed} — never a field
+ * value (§4, SC#4). validateProfile is the trust-boundary gate (an invalid profile never persists).
+ */
+export const commitProfile = tenantMutation({
+  args: { profile: vProfile },
+  handler: async (ctx, { profile }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+    const check = validateProfile(profile);
+    if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
+
+    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, profile);
+
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: crypto.randomUUID(),
+      eventType: "onboarding.profile_committed",
+      actor: "user",
+      payload: { vaultDocId, fieldCount: populatedFieldCount(profile), personaConfirmed: true },
+    });
+    return { vaultDocId };
+  },
+});
+
+/**
+ * ONBD-02 edit. Re-embeds the tenant's profile on change so grounding stays current: the prior rag
+ * entry is replaced (writeProfileDoc), and searchVault / vaultGroundHydrated return the updated
+ * content. Falls back to a fresh commit when no profile exists yet (edit-before-commit is a no-throw
+ * first commit). Same refs/counts-only audit (§4, SC#4), tagged `reembed`.
+ */
+export const updateProfile = tenantMutation({
+  args: { profile: vProfile },
+  handler: async (ctx, { profile }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+    const check = validateProfile(profile);
+    if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
+
+    const existing = await currentProfileDoc(ctx, ctx.tenantId);
+    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, profile, existing ?? undefined);
+
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: crypto.randomUUID(),
+      eventType: "onboarding.profile_updated",
+      actor: "user",
+      payload: {
+        vaultDocId,
+        fieldCount: populatedFieldCount(profile),
+        personaConfirmed: true,
+        reembed: existing !== null,
+      },
+    });
+    return { vaultDocId };
   },
 });
