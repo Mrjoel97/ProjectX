@@ -24,6 +24,8 @@ import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+// The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
+import { persistNextStepMemo } from "./evaluations";
 import { workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -510,6 +512,17 @@ export const executePlan = tenantMutation({
     // approved/sent — the cockpit mirror of the pipeline unapproved-send guard (07-03). Sibling early
     // guard BEFORE the CAS flip / seed / start, so an escalated plan seeds no rows, starts no workflow.
     if (plan.escalated) return { ok: false, reason: "review_escalated" };
+
+    // MEMO TERMINAL (12-05 BEVL-02): a memo-plan is not an email, so Approve means SAVE, not send.
+    // It branches HERE — after the CAS read, before the mailbox pre-check — because a memo must not
+    // require a connected Gmail, and because everything below (seed requests → startFanout →
+    // gmail.send) is the email terminal. Nothing in the fan-out is reachable from this branch; the
+    // double-approve CAS above already makes it exactly-once. See evaluations.ts.
+    if (plan.kind === "memo") {
+      await ctx.db.patch(planId, { status: "done" });
+      await persistNextStepMemo(ctx, plan);
+      return { ok: true };
+    }
 
     // No mailbox → no send (design: stop before any delivery). Reuse the existing token reader;
     // the row is checked for existence ONLY and never logged (crown jewels — CLAUDE.md §4).

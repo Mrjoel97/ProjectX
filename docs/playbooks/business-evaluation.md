@@ -1,6 +1,7 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
+> Last verified: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
+> Prior: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
 ## Purpose
@@ -21,11 +22,17 @@ Backend (`packages/backend/convex/`):
   `recordScorecardAnswerInternal` (internalMutation — same `applyScorecardAnswer` core, called by the
   cockpit tool which carries an explicit tenantId, no live identity), `insertEvaluation`
   (internalMutation), `lastForThread` (internalQuery — carry-forward read), `byThread` (tenantQuery
-  — the card's latest-row read).
+  — the card's latest-row read). **12-05 (the ACTING half):** `actOnGap` (tenantMutation — a gap →
+  a proposed memo-plan), `buildMemo` (the deterministic memo template), `persistNextStepMemo`
+  (a plain exported helper — the MEMO TERMINAL, called by `cockpit.executePlan`).
 - `schema.ts` — the append-only `evaluations` table (`by_tenant` / `by_tenant_thread`) + the
-  `"evaluateBusiness"` literal in the closed `agentSteps.tool` union.
+  `"evaluateBusiness"` literal in the closed `agentSteps.tool` union + (12-05) the optional
+  `plans.kind: "memo"` discriminator and the optional `gaps[].reason`/`gaps[].proofMetric`.
 - `evaluations.test.ts` — convex-test over the `SMOKE::` seam: grounded cited row, refs-only audit,
   carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty.
+- `gapAction.test.ts` — convex-test for BEVL-02: gap → proposed memo-plan (no recipients), a
+  healthy/thin evaluation exposes no gap, approve persists a `next_step_memo` vault doc and seeds
+  ZERO `requests` rows (the terminal is a persist, NOT gmail), double-approve idempotence.
 
 Pure package (`packages/core/src/growth/`, see `growth-diagnostic.md`):
 - `diagnose.ts` / `financialSpine.ts` / `scorecard.ts` — the Convex-free diagnosis the engine calls.
@@ -86,8 +93,26 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
   no grounding → the field stays null → not-enough-data. With zero grounded findings the engine
   suppresses gaps (no basis for a prescription) and returns "insufficient". Enforced by the
   thin-data test + `diagnose`'s conservative unknown→ask (see `growth-diagnostic.md`).
-- **Read-only tool (two-shapes rule)** — `evaluations.ts` never proposes/sends; it only grounds,
-  diagnoses, persists, audits. Acting on a gap is a separate Approve-gated write (later plan).
+- **Read-only REVIEW (two-shapes rule)** — the evaluate path (`runEvaluation`/`byThread`) never
+  proposes or sends. `actOnGap` (12-05) is the ONE control that crosses into the plan gate, and it
+  only STAGES: it writes a `proposed` plan and nothing else. Zero sends before the human Approve
+  still holds — `executePlan` is still the sole gate and still the sole `workflow.start` site.
+- **A memo is NEVER an email (12-05)** — a memo-plan carries `kind: "memo"` and no recipients, and
+  `executePlan` branches to the persist terminal BEFORE the mailbox pre-check, so `startFanout` /
+  `deliverApprovedPlan` / `gmail.send` are structurally unreachable from it (no `requests` row is
+  ever seeded). Enforced by `gapAction.test.ts` (approve with NO `gmailTokens` row succeeds and
+  leaves `requests` empty — an email plan would have refused `gmail_not_connected`).
+- **One plans row per thread** — `plans.byThread` is a `.unique()` read, so `actOnGap` RECYCLES the
+  thread's existing row (resetPlan → patchPlan) instead of inserting a second one. A row that is
+  mid-flight or delivered (`approved`/`scheduled`/`delivering`/`done`) is refused (`plan_busy`) —
+  staging a memo must never clobber an in-flight send.
+- **The memo NAMES the specialist, it does not RUN it** — `gap.route` is written into the memo body
+  as an instruction plus its `gap.playbook` citation. Specialist execution is Phase 15+; nothing
+  here may invoke a specialist skill.
+- **No fabricated content in the memo** — `buildMemo` is a deterministic template over the persisted
+  row only (cited findings + the prescription's own `reason`/`proofMetric`). It is a document the
+  user reads, NOT an agent prompt, so §5 does not apply — but it must never assert a figure the
+  evaluation did not ground.
 - **Fail open (SC1)** — any grounding/skill error yields an "insufficient" verdict, never a throw
   out of the governed loop. Enforced by the outer try/catch + the fail-open grounding branch.
 - **Closed `agentSteps.tool` union** — `"evaluateBusiness"` must stay in the union (Pitfall 2).
@@ -103,12 +128,23 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
   (if a persona default) `PERSONA_FRAMEWORK`; ensure the rubric skill is seeded/gated (12-02).
 - **Schema change on `evaluations`** — append-only (no migration); update the derived `evalFields`
   consumers only if you add a field. Never make the row mutable except via the two write surfaces.
+- **Change what a memo says** — edit `buildMemo` only. It reads the persisted row; if you need a
+  new fact in the body, persist it on the gap (optional field) at diagnose time rather than
+  re-deriving it at act time (two derivations drift).
+- **Change what Approve does for a memo** — edit `persistNextStepMemo` + the `plan.kind === "memo"`
+  branch in `cockpit.executePlan`. Do NOT route a memo through `deliverApprovedPlan`: that workflow
+  fans out `gmail.send` per recipient and a memo has none. A future non-email terminal (ACTN-01,
+  Phase 15) generalizes this branch — it does not widen the gmail one.
 
 ## How to verify
 
 - `pnpm --filter @pikar/backend exec vitest run convex/evaluations.test.ts` — all six cases
   (grounded cited row, store path, refs-only audit, carry-forward, isolation, thin-data). ~8s, no
   deployment.
+- `pnpm --filter @pikar/backend exec vitest run convex/gapAction.test.ts` — the four BEVL-02 cases
+  (proposed memo transition, nothing-to-act-on, memo-persisted-not-emailed, double-approve
+  idempotence). Needs the `workflow` + `workflow/workpool` components registered (the memo terminal
+  ingests through `startIngest`) alongside `auditCounts`.
 - `pnpm --filter @pikar/backend typecheck` — the engine source is type-clean (pre-existing
   test-file typecheck failures are tracked in the phase `deferred-items.md`).
 - `node scripts/check-playbooks.mjs` — this playbook covers `packages/backend/convex/evaluations.ts`.
@@ -130,8 +166,14 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
   scan; the rich per-quadrant LLM-narrated findings ride the live model, taught via a `cockpit-agent`
   body change through the eval gate (later plan). `ponytail:` upgrade path = thread the rubric body
   into an LLM parse when the card needs prose findings.
-- **The EVALUATION card** (plan 04) and the **gap → proposed-PLAN memo terminal** (BEVL-02) sit on
-  top of this row; they are separate plans.
+- **The memo is the stand-in for the fix, not the fix** (12-05) — approving it saves a next-step
+  memo; it does not build the offer or run the campaign. Specialist EXECUTION is Phase 15+.
+- **Acting on a gap recycles the thread's plan row** — so a thread that already delivered an email
+  (`status: "done"`) refuses `actOnGap` with `plan_busy`; the user starts a new chat. `ponytail:`
+  upgrade path = a plan row per artifact (drop the one-row-per-thread `.unique()`) if threads ever
+  need to hold an email AND a memo at once.
+- **The vault doc is the whole terminal** — there is no memo index/list surface; a `next_step_memo`
+  is browsable at `/dashboard/vault` like any other doc and groundable via `startIngest`.
 - **Market-fact grounding is out of scope** — vault-grounded findings only until web research
   (Phase 16); `marketViable` is a supplied signal, not verified.
 - **Specialist EXECUTION deferred (15+)** — a gap's `route` names the target specialist skill; it is
