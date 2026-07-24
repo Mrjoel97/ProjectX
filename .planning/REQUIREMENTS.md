@@ -238,7 +238,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ONBD-01 | Phase 11 | Complete |
 | ONBD-02 | Phase 11 | Complete |
 | BEVL-01 | Phase 12 | In Progress |
-| BEVL-02 | Phase 12 | Pending |
+| BEVL-02 | Phase 12 | In Progress |
 | BEVL-03 | Phase 13 | Pending |
 | DOCV-01 | Phase 14 | Pending |
 | DISP-01 | Phase 15 | Pending |

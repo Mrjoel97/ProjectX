@@ -670,7 +670,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | **Milestone v2.0 - Platform -> Private Beta** | | | |
 | 10. Vault->Agent Grounding | 4/4 | Complete    | 2026-07-24 |
 | 11. Persona Onboarding & Business Profile | 4/4 | Complete    | 2026-07-24 |
-| 12. Business Evaluation Engine | 4/6 | In Progress|  |
+| 12. Business Evaluation Engine | 5/6 | In Progress|  |
 | 13. Proactive In-App Review | 0/TBD | Not started | - |
 | 14. Flagship Voice-Doc Workflow | 0/TBD | Not started | - |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 0/TBD | Not started | - |

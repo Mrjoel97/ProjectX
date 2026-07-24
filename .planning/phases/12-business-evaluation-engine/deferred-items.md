@@ -33,5 +33,19 @@
   with a "more" disclosure, distinct not-enough-data state, affirmative healthy state, no numeric
   scores) AND 12-06's own teaching/gate verification. Do NOT close Phase 12 with only 12-06's checks.
 
+## Deferred verification added by 12-05 → 12-06 (the debt is now THREE-part)
+
+- **12-05's acting path is NOT live-verified.** 12-05 is `autonomous: true` and has no checkpoint of
+  its own, and its flow is unreachable by hand for exactly the reasons above: with no EVALUATION card
+  rendering live there is no gap to tap. Coverage shipped is convex-test over the real mutations
+  (`gapAction.test.ts`, 4/4) exercising evaluate → gap → `actOnGap` → proposed memo-plan →
+  `executePlan` → persisted `next_step_memo` vault doc with ZERO `requests` rows.
+
+  **Add to 12-06's checkpoint:** tap **"Act on this"** on a gap → a **NEXT-STEP MEMO** card appears
+  (memo body, "Approving saves this to your knowledge vault. Nothing is sent to anyone.",
+  **"Approve & save"**) → approve → the memo appears at `/dashboard/vault` as a `next_step_memo`
+  doc and **no email is sent**. Also confirm the email PLAN card is unchanged for a normal compose
+  (the memo branch must not have leaked into the send path).
+
   Workarounds explicitly ruled out by the owner: do not activate a gated skill to force the flow, do
   not hardcode agent teaching into source (§5), do not add throwaway seeding scaffolding.
