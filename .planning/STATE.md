@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: planning
-stopped_at: Phase 11 context gathered
-last_updated: "2026-07-24T14:50:51.375Z"
-last_activity: 2026-07-24 — Phase 10 (Vault->Agent Grounding) COMPLETE & verified passed; grounding live at cockpit-agent@14 (evidence-gated), UI human-approved after web rebuild
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-07-24T15:34:25.348Z"
+last_activity: 2026-07-24 — Phase 11 plan 01 COMPLETE — pure business-profile domain module (SC#1 always-confirm), UNGATED business-profile extraction skill seeded v1, onboarding playbook registered
 progress:
   total_phases: 37
   completed_phases: 18
-  total_plans: 136
-  completed_plans: 132
+  total_plans: 140
+  completed_plans: 133
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 11 — Persona Onboarding & Business Profile (next; not yet planned)
+**Current focus:** Phase 11 — Persona Onboarding & Business Profile (executing; plan 01 of 4 complete)
 
 ## Current Position
 
-Phase: 11 of 25 (Persona Onboarding & Business Profile) — Phase 10 complete
-Plan: none yet (Phase 11 not planned)
-Status: Ready to plan Phase 11
-Last activity: 2026-07-24 — Phase 10 (Vault->Agent Grounding) COMPLETE & verified passed; grounding live at cockpit-agent@14 (evidence-gated), UI human-approved after web rebuild
+Phase: 11 of 25 (Persona Onboarding & Business Profile) — executing
+Plan: 01 of 4 complete (Wave 1) — next: 11-02
+Status: Plan 11-01 complete; ready to execute 11-02
+Last activity: 2026-07-24 — Phase 11 plan 01 COMPLETE — pure business-profile domain module (SC#1 always-confirm), UNGATED business-profile extraction skill seeded v1, onboarding playbook registered
 
 Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Phase 10 shipped 4/4 plans)
 
@@ -59,6 +59,7 @@ Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Pha
 
 *Updated after each plan completion.*
 | Phase 10 P04 | 15 | 3 tasks | 8 files |
+| Phase 11 P01 | 10 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 10]: ADR-006: vault chunks are trusted-as-own — enter the agent loop directly (SC2-fenced), not through the toolless-ingestion firewall; fence + human Approve gate are the backstops
 - [Phase 10]: 10-04: vault-grounding teaching is candidate cockpit-agent@13 (versioned skill, §5), gate-activated only; the 'not on compose turns' clause guards the 23 existing golden fixtures
 - [Phase 10]: 10-03: the SourceCard reuses the existing briefingSheet opaque --card style (no new card idiom); titles link to /dashboard/vault (doc-level, no new query) — inline PreviewModal click-through deferred behind a getVaultDoc(byId) query
+- [Phase 11]: 11-01: business-profile skill is UNGATED (mirrors voice-brief) — output is a human-confirmed vault doc, not tool-state; not in GATED_SKILLS
+- [Phase 11]: 11-01: SC#1 encoded as pure decideConfirm returning literal { needsConfirm: true } — persona auto-commit impossible at the type level; enterprise not an emittable Persona
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T14:50:51.356Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-persona-onboarding-business-profile/11-CONTEXT.md
+Last session: 2026-07-24T15:34:13.815Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None

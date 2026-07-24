@@ -115,8 +115,8 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 ### S1 — Foundation & Intelligence
 
 - [x] **VGND-01**: The agent can retrieve from the user's knowledge vault mid-conversation via a governed `searchVault` tool — hydrated chunk text, tenant-scoped, refs-only audit, fails open (an empty/failed search never dead-ends the turn)
-- [ ] **ONBD-01**: A guided first-run onboarding identifies the user's persona (solopreneur / startup / SME); enterprise is deferred
-- [ ] **ONBD-02**: The user supplies their business/idea (files, pasted text, or a written/spoken brief) and a structured business profile is stored and indexed in the vault
+- [x] **ONBD-01**: A guided first-run onboarding identifies the user's persona (solopreneur / startup / SME); enterprise is deferred
+- [x] **ONBD-02**: The user supplies their business/idea (files, pasted text, or a written/spoken brief) and a structured business profile is stored and indexed in the vault
 - [ ] **BEVL-01**: The agent produces an on-demand business assessment using persona-appropriate frameworks (SWOT / Lean / Business Model Canvas), grounded in the user's own vault data, with honest data-gap flags and no fabricated metrics or viability scores
 - [ ] **BEVL-02**: The assessment surfaces gaps and turns them into governed action proposals through the approve→execute spine; a healthy business honestly returns zero gaps
 - [ ] **BEVL-03**: A proactive business review is delivered in-app on a recurring cadence (weekly-style briefing) using no OAuth mailbox token
@@ -235,8 +235,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BETA-03 | Phase 25 | Pending |
 | BETA-04 | Phase 2 | Complete |
 | VGND-01 | Phase 10 | Complete |
-| ONBD-01 | Phase 11 | Pending |
-| ONBD-02 | Phase 11 | Pending |
+| ONBD-01 | Phase 11 | Complete |
+| ONBD-02 | Phase 11 | Complete |
 | BEVL-01 | Phase 12 | Pending |
 | BEVL-02 | Phase 12 | Pending |
 | BEVL-03 | Phase 13 | Pending |
