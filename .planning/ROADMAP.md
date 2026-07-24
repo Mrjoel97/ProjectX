@@ -470,7 +470,10 @@ Plans:
   3. No grounded-doc substring appears in any audit, telemetry, agent-step, or DLQ payload (refs/ids/counts only); a regression test asserts the boundary.
   4. User A's `searchVault` can never return User B's vault content (tenant-scoped by `namespace=tenantId`); the isolation assertion ships with the tool, not retrofitted.
   5. The searchVault skill-teaching lives as a gated skill version activated only through the Phase-3.6 eval gate.
-**Plans**: TBD
+**Plans**:
+  - Wave 1: 10-01 (vault hydration engine — `vaultGroundHydrated` internalAction returns titles + capped chunk text)
+  - Wave 2: 10-02 (governed `searchVault` tool: briefInbox shape, refs-only `vault.searched` audit, untrusted fence, fail-open, BETA-05 isolation; +`vaultSources` table, ADR-006)
+  - Wave 3: 10-03 (UI: "Searching your knowledge vault…" step + "📚 Grounded in N documents" source card) · 10-04 (gated `cockpit-agent` skill teaching WHEN to ground + grounded/empty golden fixtures via the eval gate)
 
 ### Phase 11: Persona Onboarding & Business Profile
 **Goal**: A guided first-run onboarding identifies the user's persona and captures their business/idea into a structured, indexed business profile in the vault - the grounded substrate the evaluation engine and flagship workflow read.
