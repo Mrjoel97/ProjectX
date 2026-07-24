@@ -1,0 +1,14 @@
+{
+  "id": "25-vault-grounded",
+  "description": "Grounded compose: agent searches the vault, drafts from what it finds, proposes",
+  "turns": [
+    "Using what's in my knowledge vault about our logistics platform, draft an email to eval-ada-7k@golden.example letting them know when it launches to customers.",
+    "That looks right — go ahead and propose the plan."
+  ],
+  "expect": {
+    "status": "proposed",
+    "recipients": ["eval-ada-7k@golden.example"],
+    "bodyPresent": true
+  },
+  "needles": ["eval-ada-7k@golden.example", "Northwind"]
+}
