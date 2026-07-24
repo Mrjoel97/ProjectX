@@ -1,6 +1,17 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-24 (10-03 — vault-grounding read-side UI). Surfaced grounding to the user in `apps/web/…/workspace/cards.tsx`: `VERB["searchVault"]` labels the SDK-emitted activity step ("Searching your knowledge vault…" / "Grounded in the vault", unknown keys fall back to "Working…"), and a `SourceCard` (dumb renderer over `vaultSources.byThread`, self-querying on `threadId`, null when ungrounded) renders the opaque `--card` sheet "📚 Grounded in N documents" with each title a `next/link` to `/dashboard/vault`. Refs-only (titles/docIds/count — no query, no chunk text). Inline `PreviewModal` per-title click-through deferred (needs a `getVaultDoc(byId)` query). `pnpm --filter @pikar/web typecheck` clean. See the "Phase 10 — Vault grounding" section below.
+> Last verified: 2026-07-25 (12-05 — the gap-action + MEMO terminal, BEVL-02). **`executePlan` is no
+> longer email-only.** A plan now carries an optional `kind: "memo"` discriminator and the approve
+> gate branches on it AFTER the CAS read and BEFORE the mailbox pre-check: a memo-plan persists its
+> body as a `next_step_memo` vault doc (`evaluations.persistNextStepMemo` → `startIngest`) and goes
+> `done` WITHOUT seeding a `requests` row — `startFanout`/`deliverApprovedPlan`/`gmail.send` are
+> structurally unreachable from that branch, and `deliverApprovedPlan.ts` is untouched. The single
+> Approve gate, the CAS idempotence, and "zero sends before Approve" all still hold; what changed is
+> that Approve can now mean SAVE. `resetPlan` clears `kind` (a reset must drop the memo shape or the
+> next fresh compose in that thread would silently save instead of send — the Pitfall-6 class). The
+> `Act on this` control on the EVALUATION card is the only writer that stages one; see "Phase 12 —
+> Business evaluation" below and `business-evaluation.md` for the engine invariants.
+> Prior: 2026-07-24 (10-03 — vault-grounding read-side UI). Surfaced grounding to the user in `apps/web/…/workspace/cards.tsx`: `VERB["searchVault"]` labels the SDK-emitted activity step ("Searching your knowledge vault…" / "Grounded in the vault", unknown keys fall back to "Working…"), and a `SourceCard` (dumb renderer over `vaultSources.byThread`, self-querying on `threadId`, null when ungrounded) renders the opaque `--card` sheet "📚 Grounded in N documents" with each title a `next/link` to `/dashboard/vault`. Refs-only (titles/docIds/count — no query, no chunk text). Inline `PreviewModal` per-title click-through deferred (needs a `getVaultDoc(byId)` query). `pnpm --filter @pikar/web typecheck` clean. See the "Phase 10 — Vault grounding" section below.
 > Last verified: 2026-07-24 (10-02 — vault grounding). Added the read-only `searchVault` cockpit tool to `buildCockpitTools` (`llm.ts`) — copies the briefInbox three-plane split (refs-only `vault.searched` audit / `vaultSources` content-plane card / SC2-fenced chunk text into the loop), calls `internal.vaultGround.vaultGroundHydrated` with an EXPLICIT `{ tenantId, query }`, fails open on no-match/hiccup (SC1), tenant-isolated (BETA-05). `searchVault` added to the `agentSteps.tool` closed union (Pitfall 4). See the "Phase 10 — Vault grounding" section below; four regression tests in `cockpitTools.test.ts`. Plan 03 (later wave) owns the source-card UI + `VERB` label.
 > Last verified: 2026-07-24 (08-08 phase close — §9 sweep) — NO cockpit behavior change. Phase 8 (self-improvement) touched two cockpit.md-watched paths: `cockpit.ts` gained the IMPR-01 skill-version attribution (`proposeEmailPlan` stamps the active `cockpit-agent` version on `plans.skillVersion`; `executePlan` copies it onto every seeded `requests` row — the seam that makes a feedback rating attributable to the exact skill version), and `http.ts` gained the `/skillopt/export` + `/skillopt/writeback` routes (the SkillOpt seam — documented in skill-registry.md's "Phase 8: SkillOpt write-back loop" section). Bumped so the §9 Stop hook clears against the phase baseline. The manual cockpit-agent dry-run (proof-of-life) is the owner checkpoint — not yet run.
 > Last verified: 2026-07-21 (07-06 phase close) — NO cockpit code change; the Phase-7 close re-proved the cockpit fail-closed gate by grep: `executePlan` returns `{ ok: false, reason: "review_escalated" }` at cockpit.ts:497 BEFORE the CAS flip, and `proposeEmailPlan` caps re-proposes via `classifyReviewDecision` (cockpit.ts:393) with `MAX_REGENERATE` imported from `@pikar/core` (never inlined). Offline suite green (cockpitTools 52/52, runCockpitAgent 18/18, llmRedaction 33/33); live agent-timeout + review-breach human-verify pending (07-VALIDATION Manual-Only).
@@ -251,11 +262,31 @@ Read-side UI (`apps/web/…/workspace/cards.tsx`): the `EvaluationCard` is a DUM
 the thread has no evaluation, renders above the plan-status branches since an evaluation turn may
 carry no plan row). It renders the honest states the engine emits: per-section cited findings each
 with an H/M/L confidence chip + a `/dashboard/vault` citation link (a user-provided finding shows a
-non-link "user-provided" tag), a leverage-ranked gap list (≤5 + a "more" `<details>`, each gap with
-a DISABLED "Act on this" placeholder whose handler is plan 05), an affirmative `--released` HEALTHY
-banner, and a VISUALLY DISTINCT dashed/neutral not-enough-data nudge (never a gap look, never the
-`--held` amber that is the Approve gate ONLY, BRAND §2). NO numeric score anywhere — the engine
-never emits one and the card never invents one.
+non-link "user-provided" tag), a leverage-ranked gap list (≤5 + a "more" `<details>`), an
+affirmative `--released` HEALTHY banner, and a VISUALLY DISTINCT dashed/neutral not-enough-data
+nudge (never a gap look, never the `--held` amber that is the Approve gate ONLY, BRAND §2). NO
+numeric score anywhere — the engine never emits one and the card never invents one.
+
+### The `Act on this` control (12-05, BEVL-02) — the ONE write on the review
+
+`GapRow`'s "Act on this" is live: `useMutation(api.evaluations.actOnGap)({ threadId, gapIndex })`.
+It is the only control on the EVALUATION card that writes, and it only STAGES — the resulting
+`proposed` memo-plan surfaces in the EXISTING PLAN card via the `plans.byThread` subscription
+already in this file (no new surface, no new query). Three cockpit-side rules:
+
+- **`gapIndex` is the PERSISTED row index, not the display position.** The card sorts gaps by
+  `leverageRank`, so it carries each gap's original index through the sort
+  (`gaps.map((gap, gapIndex) => …).sort(…)`). Handing the mutation a display position would act on
+  the wrong gap the moment ranks differ.
+- **`PlanCard` branches on `plan.kind === "memo"`** and renders a NEXT-STEP MEMO card — the memo
+  body + "Approving saves this to your knowledge vault. Nothing is sent to anyone." + an
+  "Approve & save" button. Everything in the email PLAN card below that branch (recipients, mode,
+  the send-time picker, "Send to N recipients") would be a LIE on a memo. The approve handler is
+  reused verbatim: the single `executePlan` gate, which takes the persist terminal.
+  `PlanCards` also suppresses the `DraftCard` for a memo (its body is already the card above).
+- **A refusal is spoken, not swallowed** — `plan_busy` (the thread's plan is mid-send or delivered)
+  renders an inline `role="alert"` line telling the user to start a new chat; `gap_not_found`
+  (a stale index after a re-evaluation) says the gap is no longer on the latest evaluation.
 
 ## How to verify
 

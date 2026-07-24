@@ -242,6 +242,32 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     }
   }
 
+  // MEMO plan (12-05, BEVL-02): same single Approve gate, a different promise. Everything below
+  // this branch is email chrome — recipients, mode, a send-time picker, "Send to N recipients" —
+  // and every word of it would be a lie on a memo (it is saved to the vault, never sent). Reuses
+  // the approve()/busy/note handler above verbatim; executePlan takes the persist terminal.
+  if (plan.kind === "memo") {
+    return (
+      <div style={box} data-testid="memo-plan-card">
+        <div style={label}>NEXT-STEP MEMO</div>
+        <p style={{ whiteSpace: "pre-wrap", margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+          {body}
+        </p>
+        <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+          Approving saves this to your knowledge vault. Nothing is sent to anyone.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+        >
+          {busy ? "Saving…" : "Approve & save"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={box}>
       <div style={label}>PLAN</div>
@@ -1269,9 +1295,42 @@ function ConfChip({ c }: { c: Evaluation["findings"][number]["confidence"] }) {
   );
 }
 
-// One leverage-ranked gap. "Act on this" is a DISABLED placeholder — its handler is wired in plan 05
-// (ponytail: no-op until acting ships; the two-shapes write crosses the Approve gate there).
-function GapRow({ gap }: { gap: Evaluation["gaps"][number] }) {
+// One leverage-ranked gap. "Act on this" (12-05, BEVL-02) is the ONE control on the otherwise
+// read-only review that writes: it stages a next-step MEMO as a proposed plan, which the existing
+// PLAN card below then renders behind the single Approve gate (shape 2 of the two-shapes rule).
+// No new surface — the reactive plans.byThread subscription already in this file paints the result.
+function GapRow({
+  gap,
+  gapIndex,
+  threadId,
+}: {
+  gap: Evaluation["gaps"][number];
+  gapIndex: number;
+  threadId?: string;
+}) {
+  const actOnGap = useMutation(api.evaluations.actOnGap);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function act() {
+    if (busy || !threadId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await actOnGap({ threadId, gapIndex });
+      // plan_busy: the thread's plan row is mid-send or already delivered, so staging a memo over
+      // it would clobber real work. Say so plainly rather than failing silently (§1 voice).
+      if (!res.ok)
+        setNote(
+          res.reason === "plan_busy"
+            ? "This chat already has a plan in flight — start a new chat to act on this."
+            : "That gap is no longer on the latest evaluation.",
+        );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <li
       style={{
@@ -1285,23 +1344,31 @@ function GapRow({ gap }: { gap: Evaluation["gaps"][number] }) {
         padding: "0.5rem 0.7rem",
       }}
     >
-      <span style={{ ...traceText, flex: 1, color: "var(--ink)", fontWeight: 500 }}>{gap.label}</span>
+      <span style={{ ...traceText, flex: 1, color: "var(--ink)", fontWeight: 500 }}>
+        {gap.label}
+        {note && (
+          <span role="alert" style={{ display: "block", marginTop: "0.3rem", color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+            {note}
+          </span>
+        )}
+      </span>
       <button
         type="button"
-        disabled
-        title="Acting on a gap ships in a later step."
+        disabled={busy || !threadId}
+        onClick={() => void act()}
+        title="Draft a next-step memo for this gap — you approve it before anything is saved."
         style={{
           ...btn,
           flex: "none",
           padding: "0.25rem 0.6rem",
           fontSize: "0.8rem",
-          border: "1px solid var(--rule)",
-          background: "var(--canvas)",
-          color: "var(--ink-soft)",
-          cursor: "not-allowed",
+          border: "none",
+          background: "var(--teal-600)", // primary action on a white-text CTA (BRAND §2/§6)
+          color: "#fff",
+          fontWeight: 600,
         }}
       >
-        Act on this
+        {busy ? "Drafting…" : "Act on this"}
       </button>
     </li>
   );
@@ -1325,7 +1392,11 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
   const frameworkLabel = FRAMEWORK_LABEL[framework];
   const thin = findings.length === 0;
 
-  const rankedGaps = [...gaps].sort((a, b) => a.leverageRank - b.leverageRank);
+  // Carry each gap's ORIGINAL row index through the sort — actOnGap indexes the persisted gaps[]
+  // array, so handing it the display position would act on the wrong gap once ranks differ.
+  const rankedGaps = gaps
+    .map((gap, gapIndex) => ({ gap, gapIndex }))
+    .sort((a, b) => a.gap.leverageRank - b.gap.leverageRank);
   const topGaps = rankedGaps.slice(0, 5);
   const moreGaps = rankedGaps.slice(5);
   const sections = [...new Set(findings.map((f) => f.section))];
@@ -1385,8 +1456,8 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
               <>
                 <p style={evalSection}>Highest-leverage gaps</p>
                 <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.5rem" }}>
-                  {topGaps.map((g, i) => (
-                    <GapRow key={`${g.label}-${i}`} gap={g} />
+                  {topGaps.map(({ gap, gapIndex }) => (
+                    <GapRow key={`gap-${gapIndex}`} gap={gap} gapIndex={gapIndex} threadId={threadId} />
                   ))}
                 </ul>
                 {moreGaps.length > 0 && (
@@ -1395,8 +1466,8 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
                       {moreGaps.length} more
                     </summary>
                     <ul style={{ listStyle: "none", margin: "0.5rem 0 0", padding: 0, display: "grid", gap: "0.5rem" }}>
-                      {moreGaps.map((g, i) => (
-                        <GapRow key={`more-${g.label}-${i}`} gap={g} />
+                      {moreGaps.map(({ gap, gapIndex }) => (
+                        <GapRow key={`more-gap-${gapIndex}`} gap={gap} gapIndex={gapIndex} threadId={threadId} />
                       ))}
                     </ul>
                   </details>
@@ -1475,7 +1546,8 @@ function PlanCards({ plan, threadId, briefing }: { plan: Plan; threadId: string;
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
-  const hasDraft = (Boolean(plan.body) || Boolean(plan.subject)) && !halted;
+  // A memo's body IS the card above it — a DRAFT card would just print the same memo twice.
+  const hasDraft = (Boolean(plan.body) || Boolean(plan.subject)) && !halted && plan.kind !== "memo";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);
