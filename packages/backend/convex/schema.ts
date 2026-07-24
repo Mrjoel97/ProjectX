@@ -238,6 +238,12 @@ export default defineSchema({
     // → existing rows need no backfill (append-only discipline, like sendAt/attachments).
     reviseCount: v.optional(v.number()),
     escalated: v.optional(v.boolean()),
+    // Plan-SHAPE discriminator (12-05, BEVL-02). ABSENT = the email plan every prior phase built
+    // (no migration — the sendAt/attachments precedent); "memo" = a next-step memo staged by
+    // evaluations.actOnGap: no recipients, and executePlan takes the PERSIST terminal (a
+    // next_step_memo vault doc) instead of the gmail fan-out. Closed literal so a widening is a
+    // deliberate schema edit, never a runtime surprise.
+    kind: v.optional(v.literal("memo")),
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
@@ -344,6 +350,11 @@ export default defineSchema({
         route: v.string(), // the target specialist skill (execution deferred to 15+)
         playbook: v.string(),
         citationDocId: v.optional(v.string()),
+        // The prescription's own grounded prose (12-05): why this gate fails first and what proves
+        // it fixed. Written straight from diagnose() — the memo body (actOnGap) reads them instead
+        // of re-deriving. Optional → pre-12-05 rows simply carry none (append-only, no migration).
+        reason: v.optional(v.string()),
+        proofMetric: v.optional(v.string()),
       }),
     ),
     // Honest thin-data state: a section the vault couldn't ground AND no carried value — a nudge,

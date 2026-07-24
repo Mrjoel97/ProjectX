@@ -94,6 +94,10 @@ export const patchPlan = internalMutation({
     replyThreadId: v.optional(v.string()),
     inReplyTo: v.optional(v.string()),
     references: v.optional(v.string()),
+    // 12-05 BEVL-02: the plan-SHAPE discriminator. "memo" marks a next-step memo (no recipients)
+    // so executePlan takes the persist terminal instead of the gmail fan-out. Drop-undefined means
+    // an email patch never touches it; resetPlan clears it explicitly.
+    kind: v.optional(v.literal("memo")),
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
@@ -208,6 +212,9 @@ export const resetPlan = internalMutation({
       replyThreadId: undefined,
       inReplyTo: undefined,
       references: undefined,
+      // 12-05: a reset must also drop the memo SHAPE, or the next fresh compose in this thread
+      // would silently take the memo terminal instead of sending (the Pitfall-6 class, one rung up).
+      kind: undefined,
     });
   },
 });

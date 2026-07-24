@@ -26,12 +26,16 @@ import {
   type Prescription,
   type Scorecard,
 } from "@pikar/core/growth/index";
+import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { DatabaseWriter } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { DatabaseWriter, MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
+import { startIngest } from "./vaultIngest";
 
 // Derive the row validators from the schema (the agentSteps.ts rung-2 precedent) so insertEvaluation
 // can never drift from the table shape.
@@ -270,6 +274,10 @@ export const runEvaluation = internalAction({
           leverageRank: gateOrder(rx.gate),
           route: rx.route,
           playbook: rx.playbook,
+          // Carry the prescription's own prose onto the row (12-05) so the memo body is a pure READ
+          // of what was diagnosed — never a second, drift-prone re-derivation at act time.
+          reason: rx.reason,
+          proofMetric: rx.proofMetric,
         });
       }
       // Nothing grounded or carried → no honest basis for a prescription: suppress gaps (a gap
@@ -429,6 +437,143 @@ export const recordScorecardAnswerInternal = internalMutation({
   handler: (ctx, { tenantId, threadId, field, value }) =>
     applyScorecardAnswer(ctx.db, tenantId, threadId, field, value),
 });
+
+// ── The ACTING side (BEVL-02, 12-05): a gap → an approvable next-step memo ────────────────────
+//
+// Shape 2 of the two-shapes rule. The review above stays READ-ONLY; "Act on this" is the only
+// control that crosses into the plan → Approve → terminal spine, and it reuses that spine verbatim
+// (insertPlan/resetPlan/patchPlan) — NO new proposal store. Building the actual fix (the offer, the
+// campaign) is Phase 15+; the memo is the honest Phase-12 stand-in: it NAMES the target specialist
+// skill and cites its playbook, it does not run it.
+
+/** Statuses a thread's plan row may be recycled from. Anything else is mid-flight or delivered. */
+const ACTABLE_PLAN_STATUS: ReadonlySet<Doc<"plans">["status"]> = new Set([
+  "collecting",
+  "proposed",
+  "canceled",
+] as const);
+
+/**
+ * Compose the memo body from what was DIAGNOSED — a deterministic template over the persisted row
+ * (§5: this is a document the user reads, not an agent prompt; nothing here is model-authored and
+ * no metric is invented). Every claim is either a cited grounded finding or the prescription's own
+ * prose, so an approved memo can never assert a number the evaluation did not ground.
+ */
+function buildMemo(row: Doc<"evaluations">, gap: Doc<"evaluations">["gaps"][number]): string {
+  const grounded = row.findings.map((f) => `- ${f.label} [${f.citationTitle}]`).join("\n");
+  return [
+    `# Next step: ${gap.label}`,
+    "",
+    `Diagnosed on the **${row.framework}** framework. This is the highest-leverage constraint —`,
+    "the gates run Market → Offer → Money model → Leads and the first failing one is the only one",
+    "worth working on.",
+    "",
+    "## Why this first",
+    gap.reason ?? "It is the first failing gate — everything downstream compounds off it.",
+    "",
+    "## What this is grounded in",
+    grounded || "- (no grounded findings on file)",
+    "",
+    "## The next step",
+    `Run the **${gap.route}** specialist against its \`${gap.playbook}\` playbook.`,
+    "That specialist does not execute yet — approving this memo SAVES it to your vault as the",
+    "agreed next action. Nothing is sent to anyone.",
+    "",
+    "## Done when",
+    gap.proofMetric || "the constraint above no longer blocks the next gate.",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Turn a surfaced gap into a PROPOSED memo-plan (BEVL-02). Tenant-scoped (§2) and UI-driven, so it
+ * carries live identity — no internal twin is needed (unlike the tool-loop writes above).
+ *
+ * It REUSES the thread's single `plans` row rather than inserting a second one: `plans.byThread`
+ * is a `.unique()` read, so a second row for the same thread would throw for every reader of the
+ * workspace. A row that is mid-flight or already delivered is refused outright (`plan_busy`) —
+ * staging a memo must never clobber an in-flight send.
+ */
+export const actOnGap = tenantMutation({
+  args: { threadId: v.string(), gapIndex: v.number() },
+  handler: async (
+    ctx,
+    { threadId, gapIndex },
+  ): Promise<{ ok: true; planId: Id<"plans"> } | { ok: false; reason: "gap_not_found" | "plan_busy" }> => {
+    const row = await ctx.db
+      .query("evaluations")
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
+      .order("desc")
+      .first();
+    const gap = row?.gaps[gapIndex];
+    // A healthy (or thin-data) evaluation carries no gaps — there is simply nothing to act on, and
+    // nothing crosses the Approve gate. Same answer for a stale index.
+    if (!row || !gap) return { ok: false, reason: "gap_not_found" };
+
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
+      .unique();
+    if (plan && !ACTABLE_PLAN_STATUS.has(plan.status)) return { ok: false, reason: "plan_busy" };
+
+    let planId: Id<"plans">;
+    if (plan) {
+      planId = plan._id;
+      // resetPlan, not patchPlan: patchPlan DROPS undefined so it can never clear a filled slot —
+      // a half-composed email's recipients/attachments would survive onto the memo.
+      await ctx.runMutation(internal.plans.resetPlan, { planId });
+    } else {
+      planId = await ctx.runMutation(internal.plans.insertPlan, {
+        tenantId: ctx.tenantId,
+        threadId,
+      });
+    }
+    await ctx.runMutation(internal.plans.patchPlan, {
+      planId,
+      kind: "memo",
+      recipients: [], // a memo has no recipients — it is not an email
+      subject: `Next step: ${gap.label}`.slice(0, 120),
+      body: buildMemo(row, gap),
+      status: "proposed", // the pinned collecting→proposed spine, unchanged
+    });
+    return { ok: true, planId };
+  },
+});
+
+/**
+ * The MEMO TERMINAL — what Approve means for a memo-plan. Called from `executePlan` (cockpit.ts)
+ * BEFORE the mailbox pre-check, so a memo never touches `deliverApprovedPlan`/`gmail.send`: it
+ * seeds no `requests` rows and starts no fan-out workflow. The body persists as an ordinary
+ * `next_step_memo` vault doc (the persistBrief precedent — tenant scope + embedding + retrieval
+ * come free from `startIngest`), so the agreed next action is groundable from then on.
+ * `text` carries the memo verbatim — vault CONTENT, not a log (§4).
+ * ponytail: no new workflow or fan-out; the laziest correct terminal is a persist + a status flip.
+ */
+export async function persistNextStepMemo(
+  ctx: MutationCtx,
+  plan: Doc<"plans">,
+): Promise<Id<"vaultDocuments">> {
+  const markdown = plan.body ?? "";
+  const vaultDocId = await ctx.db.insert("vaultDocuments", {
+    tenantId: plan.tenantId,
+    title: plan.subject?.trim() || "Next step memo",
+    kind: "next_step_memo",
+    category: categoryFor({ source: "agent" }), // workspace-docs — a generated doc, not an upload
+    source: "evaluation",
+    mimeType: "text/markdown",
+    size: new TextEncoder().encode(markdown).length,
+    contentHash: await contentHash(markdown),
+    text: markdown,
+    status: "processing",
+    createdAt: Date.now(),
+  });
+  await startIngest(ctx, {
+    vaultDocId,
+    tenantId: plan.tenantId,
+    correlationId: crypto.randomUUID(),
+  });
+  return vaultDocId;
+}
 
 /** The tenant's latest evaluation row for a thread → feeds the EVALUATION card (plan 04). */
 export const byThread = tenantQuery({
