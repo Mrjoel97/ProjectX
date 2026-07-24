@@ -1,5 +1,6 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-24 (10-03 — vault-grounding read-side UI). Surfaced grounding to the user in `apps/web/…/workspace/cards.tsx`: `VERB["searchVault"]` labels the SDK-emitted activity step ("Searching your knowledge vault…" / "Grounded in the vault", unknown keys fall back to "Working…"), and a `SourceCard` (dumb renderer over `vaultSources.byThread`, self-querying on `threadId`, null when ungrounded) renders the opaque `--card` sheet "📚 Grounded in N documents" with each title a `next/link` to `/dashboard/vault`. Refs-only (titles/docIds/count — no query, no chunk text). Inline `PreviewModal` per-title click-through deferred (needs a `getVaultDoc(byId)` query). `pnpm --filter @pikar/web typecheck` clean. See the "Phase 10 — Vault grounding" section below.
 > Last verified: 2026-07-24 (10-02 — vault grounding). Added the read-only `searchVault` cockpit tool to `buildCockpitTools` (`llm.ts`) — copies the briefInbox three-plane split (refs-only `vault.searched` audit / `vaultSources` content-plane card / SC2-fenced chunk text into the loop), calls `internal.vaultGround.vaultGroundHydrated` with an EXPLICIT `{ tenantId, query }`, fails open on no-match/hiccup (SC1), tenant-isolated (BETA-05). `searchVault` added to the `agentSteps.tool` closed union (Pitfall 4). See the "Phase 10 — Vault grounding" section below; four regression tests in `cockpitTools.test.ts`. Plan 03 (later wave) owns the source-card UI + `VERB` label.
 > Last verified: 2026-07-24 (08-08 phase close — §9 sweep) — NO cockpit behavior change. Phase 8 (self-improvement) touched two cockpit.md-watched paths: `cockpit.ts` gained the IMPR-01 skill-version attribution (`proposeEmailPlan` stamps the active `cockpit-agent` version on `plans.skillVersion`; `executePlan` copies it onto every seeded `requests` row — the seam that makes a feedback rating attributable to the exact skill version), and `http.ts` gained the `/skillopt/export` + `/skillopt/writeback` routes (the SkillOpt seam — documented in skill-registry.md's "Phase 8: SkillOpt write-back loop" section). Bumped so the §9 Stop hook clears against the phase baseline. The manual cockpit-agent dry-run (proof-of-life) is the owner checkpoint — not yet run.
 > Last verified: 2026-07-21 (07-06 phase close) — NO cockpit code change; the Phase-7 close re-proved the cockpit fail-closed gate by grep: `executePlan` returns `{ ok: false, reason: "review_escalated" }` at cockpit.ts:497 BEFORE the CAS flip, and `proposeEmailPlan` caps re-proposes via `classifyReviewDecision` (cockpit.ts:393) with `MAX_REGENERATE` imported from `@pikar/core` (never inlined). Offline suite green (cockpitTools 52/52, runCockpitAgent 18/18, llmRedaction 33/33); live agent-timeout + review-breach human-verify pending (07-VALIDATION Manual-Only).
@@ -207,8 +208,17 @@ SDK's activity-step insert throws and is silently swallowed, so there is no "Sea
 prod while tests pass). The activity step is emitted by the SDK loop for free — do NOT write an
 `agentSteps.record` from the tool (that would double-write, the CKPT-05 property).
 
-<!-- Plan 03 (later wave): APPEND the source-card render + the `VERB` label (cards.tsx) notes here —
-     the reader is `vaultSources.byThread` (tenantQuery, latest row per thread). -->
+Read-side UI (10-03, `apps/web/…/workspace/cards.tsx`): the activity step is FREE labelling once
+`searchVault` joins the closed `agentSteps.tool` union — `VERB["searchVault"]` gives it the
+"Searching your knowledge vault…" / "Grounded in the vault" pair (an unknown key falls back to
+"Working…", so a tool added later never crashes the trace). The `SourceCard` wired into `CardList`
+is a DUMB renderer over the `vaultSources.byThread` content-plane reader (titles + docIds + count,
+refs-only §4 — no query string and no chunk text ever reach the card): it self-queries on
+`threadId`, returns null when the turn wasn't grounded, and renders the opaque `--card` sheet +
+tracked-caps "📚 Grounded in N documents" label with each title as a `next/link` to
+`/dashboard/vault` (the lazy click-through). The inline `PreviewModal` per-title upgrade is deferred
+— it needs a `getVaultDoc(byId)` tenant query (`vault.ts`, out of 10-03's boundary); the `docIds`
+already ride the row for it.
 
 ## How to verify
 
