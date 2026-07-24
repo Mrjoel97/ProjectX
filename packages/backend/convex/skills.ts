@@ -8,6 +8,7 @@
 
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
+  BMC_SKILL,
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
@@ -15,25 +16,38 @@ import {
   EXECUTIVE_ROUTER_SKILL,
   GATED_SKILLS,
   GRAPH_EXTRACTOR_SKILL,
+  GROWTH_OS_DIAGNOSTIC_SKILL,
   hasPassingEvidence,
   INBOX_DIGEST_SKILL,
   isGatedSkill,
+  LEAD_ENGINE_SKILL,
+  LEAN_CANVAS_SKILL,
   type LoadedSkill,
+  MONEY_MODEL_DESIGNER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
+  OFFER_ARCHITECT_SKILL,
   REPLY_DRAFTER_SKILL,
+  SWOT_SKILL,
   VOICE_BRIEF_SKILL,
   VOICE_SESSION_SKILL,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
+import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
+import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import { leadEngineSkillBody } from "@pikar/contracts/skills/leadEngine";
+import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
+import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
+import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { v } from "convex/values";
@@ -252,6 +266,17 @@ export const seedSkills = internalMutation({
       { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
       // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
       { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
+      // GATED (12-02, BEVL-01): the 4 evaluation-framework rubrics the engine loads to assess a
+      // business, + the 3 specialist skills an approved gap-action names (execution deferred to
+      // Phase 15+). Bootstrap seeds each v1 ACTIVE; a body edit publishes a candidate the eval
+      // gate must clear before it goes live (SC #4).
+      { name: GROWTH_OS_DIAGNOSTIC_SKILL, body: growthOsDiagnosticSkillBody },
+      { name: SWOT_SKILL, body: swotSkillBody },
+      { name: LEAN_CANVAS_SKILL, body: leanCanvasSkillBody },
+      { name: BMC_SKILL, body: bmcSkillBody },
+      { name: OFFER_ARCHITECT_SKILL, body: offerArchitectSkillBody },
+      { name: MONEY_MODEL_DESIGNER_SKILL, body: moneyModelDesignerSkillBody },
+      { name: LEAD_ENGINE_SKILL, body: leadEngineSkillBody },
     ];
 
     for (const { name, body } of seeds) {
