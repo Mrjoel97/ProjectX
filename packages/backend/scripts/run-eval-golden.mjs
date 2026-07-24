@@ -60,6 +60,18 @@ const EXPECT_KEYS = new Set([
   // trimmed synopsis is non-empty) — a briefing case must FAIL when the live synthesis returned
   // a blank lede, the same anti-silent-pass discipline as briefingPresent applied to the synopsis.
   "ledePresent",
+  // 12-06 (BEVL-01): the evaluation observables, same briefingPresent shape — read from the
+  // evaluations table, not the plan row.
+  //   evaluationPresent — smoke:evaluationCountForThread > 0. An assessment case FAILS when the
+  //     agent answered "evaluate my business" in prose and never called evaluateBusiness.
+  //   findingsPresent   — smoke:findingCountForThread > 0. The ANTI-VACUOUS companion to gapCount:
+  //     the engine force-clears gaps when there are zero grounded findings (SC #1), so gapCount:0
+  //     alone passes on the honest thin-data verdict just as happily as on a healthy business.
+  //   gapCount          — smoke:gapCountForThread, the latest row's leverage-ranked gaps. 0 with
+  //     findingsPresent is the affirmative healthy outcome (SC #2).
+  "evaluationPresent",
+  "findingsPresent",
+  "gapCount",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -115,8 +127,19 @@ function parseSkillPin(spec) {
 /** @param briefingCount rows smoke:briefingCountForThread returned for the case's thread
  *  (0 when the fixture does not ask for `briefingPresent` — the read is skipped).
  *  @param synopsisPresent smoke:briefingSynopsisPresent for the case's thread (false when the
- *  fixture does not ask for `ledePresent` — the read is skipped). */
-function evaluateExpect(expect, plan, briefingCount = 0, synopsisPresent = false) {
+ *  fixture does not ask for `ledePresent` — the read is skipped).
+ *  @param evaluationCount smoke:evaluationCountForThread (0 when unasked — read skipped).
+ *  @param findingCount smoke:findingCountForThread, the LATEST row's findings (0 when unasked).
+ *  @param gapCount smoke:gapCountForThread, the LATEST row's gaps (0 when unasked). */
+function evaluateExpect(
+  expect,
+  plan,
+  briefingCount = 0,
+  synopsisPresent = false,
+  evaluationCount = 0,
+  findingCount = 0,
+  gapCount = 0,
+) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
   const present = (s) => typeof s === "string" && s.length > 0;
@@ -169,6 +192,15 @@ function evaluateExpect(expect, plan, briefingCount = 0, synopsisPresent = false
       case "ledePresent":
         // FAIL when the live synthesis returned a blank lede but the fixture expects one.
         if (synopsisPresent !== expected) miss(key, expected, synopsisPresent);
+        break;
+      case "evaluationPresent":
+        if ((evaluationCount > 0) !== expected) miss(key, expected, evaluationCount > 0);
+        break;
+      case "findingsPresent":
+        if ((findingCount > 0) !== expected) miss(key, expected, findingCount > 0);
+        break;
+      case "gapCount":
+        if (gapCount !== expected) miss(key, expected, gapCount);
         break;
     }
   }
@@ -257,6 +289,40 @@ function selfCheck() {
     "ledePresent:true MUST FAIL when the synopsis read is false (empty lede — Pitfall 3)",
   );
 
+  // 2d. 12-06 (BEVL-01): the evaluation keys are IN the closed vocabulary and evaluate against the
+  // evaluations reads (args 5/6/7), never the plan row.
+  for (const expect of [{ evaluationPresent: true }, { findingsPresent: true }, { gapCount: 0 }]) {
+    assert.ok(validateFixture({ ...base, expect }, "<synthetic>"), `${Object.keys(expect)[0]} accepted`);
+  }
+  assert.equal(
+    evaluateExpect({ evaluationPresent: true }, collecting, 0, false, 1).length,
+    0,
+    "evaluationPresent:true must pass when the thread has an evaluation row",
+  );
+  assert.equal(
+    evaluateExpect({ evaluationPresent: true }, collecting, 0, false, 0).length,
+    1,
+    "evaluationPresent:true MUST FAIL when evaluateBusiness never ran (prose-only turn)",
+  );
+  // The anti-vacuous pair: gapCount:0 is the HEALTHY outcome only alongside findingsPresent:true.
+  // With zero findings the engine force-clears gaps (SC #1), so gapCount:0 alone passes on the
+  // honest thin-data verdict too — findingsPresent is what makes SC #2 a real assertion.
+  assert.equal(
+    evaluateExpect({ findingsPresent: true, gapCount: 0 }, collecting, 0, false, 1, 2, 0).length,
+    0,
+    "healthy = findings present AND zero gaps",
+  );
+  assert.equal(
+    evaluateExpect({ findingsPresent: true, gapCount: 0 }, collecting, 0, false, 1, 0, 0).length,
+    1,
+    "MUST FAIL on the thin-data verdict (no findings) even though gapCount is also 0",
+  );
+  assert.equal(
+    evaluateExpect({ gapCount: 1 }, collecting, 0, false, 1, 1, 0).length,
+    1,
+    "gapCount:1 MUST FAIL when the diagnosis surfaced no gap",
+  );
+
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   const trip = [0.4, 0.4, 0.3].reduce((sum, c) => sum + c, 0);
   assert.ok(overCap(trip), "$1.10 must trip the $1.00 cap");
@@ -331,7 +397,28 @@ function attemptCase(fixture, tenant, pin) {
     fixture.expect.ledePresent === undefined
       ? false
       : parse(must("smoke:briefingSynopsisPresent", { tenantId: tenant, threadId }));
-  const failures = evaluateExpect(fixture.expect, plan, briefingCount, synopsisPresent);
+  // 12-06: same skip-unless-asked discipline — a non-assessment case pays no extra hop.
+  const evaluationCount =
+    fixture.expect.evaluationPresent === undefined
+      ? 0
+      : parse(must("smoke:evaluationCountForThread", { tenantId: tenant, threadId }));
+  const findingCount =
+    fixture.expect.findingsPresent === undefined
+      ? 0
+      : parse(must("smoke:findingCountForThread", { tenantId: tenant, threadId }));
+  const gapCount =
+    fixture.expect.gapCount === undefined
+      ? 0
+      : parse(must("smoke:gapCountForThread", { tenantId: tenant, threadId }));
+  const failures = evaluateExpect(
+    fixture.expect,
+    plan,
+    briefingCount,
+    synopsisPresent,
+    evaluationCount,
+    findingCount,
+    gapCount,
+  );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
     must("smokeAssert:assertEvalCaseClean", { tenant, needles: fixture.needles });

@@ -399,6 +399,55 @@ export const briefingSynopsisPresent = internalQuery({
   },
 });
 
+/** 12-06 (BEVL-01): the eval harness's `evaluationPresent` read — the briefingCountForThread
+ *  precedent applied to the evaluation engine. `> 0` proves `evaluateBusiness` actually produced an
+ *  `evaluations` row, so an assessment case can never silently "pass" on a turn where the agent
+ *  simply answered in prose and never called the tool (the Pitfall-3 anti-silent-pass discipline).
+ *  Explicit return type per Convex guidelines §96. */
+export const evaluationCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    (
+      await ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+        .collect()
+    ).length,
+});
+
+/** 12-06 (BEVL-01): the eval harness's `findingsPresent` read — the LATEST evaluation row's cited
+ *  findings. It is the ANTI-VACUOUS companion to `gapCount`: the engine force-clears `gaps` when
+ *  there are zero grounded findings (a gap without a finding would be a fabricated diagnosis,
+ *  SC #1), so `gapCount: 0` alone passes just as happily on the honest thin-data verdict as on a
+ *  genuinely healthy one. `findingsPresent: true` is what separates them. */
+export const findingCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> => {
+    const row = await ctx.db
+      .query("evaluations")
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .order("desc")
+      .first();
+    return (row?.findings ?? []).length;
+  },
+});
+
+/** 12-06 (BEVL-01): the eval harness's `gapCount` read — the LATEST evaluation row's
+ *  leverage-ranked gaps. Latest-wins mirrors `evaluations.lastForThread` (append-only per thread →
+ *  `_creationTime` IS recency), so a case that stores a figure and then re-evaluates asserts against
+ *  the run that saw the figure. `0` is the healthy/"nothing to act on" outcome (SC #2). */
+export const gapCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> => {
+    const row = await ctx.db
+      .query("evaluations")
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .order("desc")
+      .first();
+    return (row?.gaps ?? []).length;
+  },
+});
+
 /**
  * Seed the FIXED deterministic message set for a tenant (idempotent — replaces any existing
  * rows, so re-running a smoke/eval never doubles the mailbox).
