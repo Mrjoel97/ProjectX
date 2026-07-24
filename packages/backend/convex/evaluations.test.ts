@@ -5,13 +5,13 @@
 import { serializeProfile } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import schema from "./schema";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (the cockpitTools.test.ts idiom).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -123,5 +123,123 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
     });
     expect(row?.scorecard.financials.cac).toBe(150);
     expect(row?.userProvided).toContain("financials.cac");
+  });
+});
+
+describe("evaluation.ran audit is refs-only (§4 — no grounded prose leaks)", () => {
+  test("the audit payload carries counts/enums ONLY — no finding label or citation string", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true));
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const events = await t.run(async (ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "evaluation.ran"))
+        .collect(),
+    );
+    expect(events).toHaveLength(1);
+    const payload = events[0]?.payload as Record<string, unknown>;
+
+    // Structural §4 assertion: every key is a known count/enum; counts are numbers; enums are the
+    // closed framework/verdict vocab. No key can carry a finding label, citation, or chunk of prose.
+    const COUNT_KEYS = ["findingCount", "gapCount", "groundedDocCount", "userProvidedCount"];
+    const ENUM_KEYS = ["framework", "verdict"];
+    expect(new Set(Object.keys(payload))).toEqual(new Set([...COUNT_KEYS, ...ENUM_KEYS]));
+    for (const k of COUNT_KEYS) expect(typeof payload[k]).toBe("number");
+    expect(["swot", "lean", "bmc", "growth-os"]).toContain(payload.framework);
+    expect(["gaps", "healthy", "insufficient"]).toContain(payload.verdict);
+
+    // And no payload value echoes a grounded finding label (the content plane never reaches audit).
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    const labels = (row?.findings ?? []).map((f) => f.label);
+    for (const value of Object.values(payload)) {
+      if (typeof value === "string") expect(labels).not.toContain(value);
+    }
+  });
+});
+
+describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
+  test("a user-provided figure survives into the NEXT run and is cited 'user-provided'", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(false)); // no financials in the vault
+    // Run 1 (creates the row), user answers the missing figure, Run 2 must NOT re-ask it.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    // The figure is carried forward (not re-nulled) …
+    expect(row?.scorecard.financials.cac).toBe(150);
+    expect(row?.userProvided).toContain("financials.cac");
+    // … and any finding on it is honestly labeled user-provided (never fabricated as a vault fact).
+    const cacFinding = row?.findings.find((f) => f.label.startsWith("CAC:"));
+    expect(cacFinding?.source).toBe("user-provided");
+  });
+});
+
+describe("two-tenant isolation (SC #5)", () => {
+  test("tenant B never reads tenant A's evaluation row", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true));
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    // tenant_a sees its row; tenant_b sees null through the same tenant-scoped query.
+    expect(
+      await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, { threadId: THREAD }),
+    ).not.toBeNull();
+    expect(
+      await t
+        .withIdentity({ subject: "tenant_b" })
+        .query(api.evaluations.byThread, { threadId: THREAD }),
+    ).toBeNull();
+  });
+});
+
+describe("thin-data honesty (idea-stage → not enough data, never a fabricated finding)", () => {
+  test("a run with no grounding → 'insufficient' + notEnoughData, ZERO fabricated findings/gaps", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    // SMOKE:: with no seed docs → the engine grounds nothing (a sparse/idea-stage profile).
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: "SMOKE::",
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    expect(row?.verdict).toBe("insufficient");
+    expect(row?.findings).toHaveLength(0); // nothing grounded → nothing asserted (no fabrication)
+    expect(row?.gaps).toHaveLength(0); // no grounded basis → no fabricated prescription
+    expect(row?.notEnoughData.length).toBeGreaterThanOrEqual(1); // an honest nudge instead
   });
 });

@@ -271,20 +271,27 @@ export const runEvaluation = internalAction({
           playbook: rx.playbook,
         });
       }
-      if (findings.length === 0 && notEnoughData.length === 0) {
-        notEnoughData.push({
-          section: "identity",
-          needs: "Add a business profile or documents to your vault so I can assess this.",
-        });
+      // Nothing grounded or carried → no honest basis for a prescription: suppress gaps (a gap
+      // without a grounded finding would be a fabricated diagnosis, SC #1) and nudge instead.
+      if (findings.length === 0) {
+        gaps.length = 0;
+        if (notEnoughData.length === 0) {
+          notEnoughData.push({
+            section: "identity",
+            needs: "Add a business profile or documents to your vault so I can assess this.",
+          });
+        }
       }
 
       const verdict: "gaps" | "healthy" | "insufficient" = !skillOk
         ? "insufficient"
-        : prescription.gate === "scale"
-          ? "healthy"
-          : gaps.length > 0
-            ? "gaps"
-            : "insufficient";
+        : findings.length === 0
+          ? "insufficient" // thin-data honesty: no grounded findings → not enough to assess
+          : prescription.gate === "scale"
+            ? "healthy"
+            : gaps.length > 0
+              ? "gaps"
+              : "insufficient";
 
       // ── Persist ONE content-plane row ──────────────────────────────────────────────────────────
       await ctx.runMutation(internal.evaluations.insertEvaluation, {
