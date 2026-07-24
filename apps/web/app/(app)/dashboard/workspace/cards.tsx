@@ -1201,6 +1201,227 @@ function SourceCard({ threadId }: { threadId?: string }) {
   );
 }
 
+// ── EVALUATION card (BEVL-01) ───────────────────────────────────────────────────────────────────
+type Evaluation = NonNullable<FunctionReturnType<typeof api.evaluations.byThread>>;
+
+const FRAMEWORK_LABEL: Record<Evaluation["framework"], string> = {
+  swot: "SWOT",
+  lean: "Lean Canvas",
+  bmc: "Business Model Canvas",
+  "growth-os": "Growth",
+};
+
+const evalSection = {
+  fontSize: "0.68rem",
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase" as const,
+  color: "var(--ink-soft)",
+  margin: "0.9rem 0 0.4rem",
+} as const;
+
+// Distinct thin-data sheet: dashed + neutral --canvas, informational. Deliberately NOT a gap look
+// and NOT amber (--held is the Approve gate ONLY, BRAND §2) — "add X to assess", never an alarm.
+const insufficientBox = {
+  marginTop: "0.7rem",
+  border: "1px dashed var(--rule)",
+  borderRadius: "0.6rem",
+  background: "var(--canvas)",
+  padding: "0.7rem 0.85rem",
+} as const;
+
+// Affirmative HEALTHY banner: the --released "cleared/success" token (BRAND §2), never a gap sheet.
+const healthyBox = {
+  marginTop: "0.9rem",
+  border: "1px solid var(--released)",
+  borderRadius: "0.6rem",
+  background: "color-mix(in srgb, var(--released) 10%, transparent)",
+  color: "var(--ink)",
+  fontWeight: 600,
+  padding: "0.7rem 0.85rem",
+} as const;
+
+// H/M/L confidence pill — teal/released/ink tokens ONLY (color-mix tint, globals.css:474 idiom).
+function ConfChip({ c }: { c: Evaluation["findings"][number]["confidence"] }) {
+  const m = {
+    high: { fg: "var(--released)", label: "High" },
+    medium: { fg: "var(--teal-600)", label: "Med" },
+    low: { fg: "var(--ink-soft)", label: "Low" },
+  }[c];
+  return (
+    <span
+      title={`${m.label} confidence`}
+      style={{
+        flex: "none",
+        fontSize: "0.62rem",
+        fontWeight: 800,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        padding: "0.05rem 0.4rem",
+        borderRadius: "1rem",
+        color: m.fg,
+        border: `1px solid ${m.fg}`,
+        background: `color-mix(in srgb, ${m.fg} 12%, transparent)`,
+      }}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+// One leverage-ranked gap. "Act on this" is a DISABLED placeholder — its handler is wired in plan 05
+// (ponytail: no-op until acting ships; the two-shapes write crosses the Approve gate there).
+function GapRow({ gap }: { gap: Evaluation["gaps"][number] }) {
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: "0.6rem",
+        border: "1px solid var(--rule)",
+        borderLeft: "3px solid var(--teal-600)",
+        borderRadius: "0.5rem",
+        padding: "0.5rem 0.7rem",
+      }}
+    >
+      <span style={{ ...traceText, flex: 1, color: "var(--ink)", fontWeight: 500 }}>{gap.label}</span>
+      <button
+        type="button"
+        disabled
+        title="Acting on a gap ships in a later step."
+        style={{
+          ...btn,
+          flex: "none",
+          padding: "0.25rem 0.6rem",
+          fontSize: "0.8rem",
+          border: "1px solid var(--rule)",
+          background: "var(--canvas)",
+          color: "var(--ink-soft)",
+          cursor: "not-allowed",
+        }}
+      >
+        Act on this
+      </button>
+    </li>
+  );
+}
+
+/**
+ * The EVALUATION card (BEVL-01): a DUMB renderer over evaluations.byThread (the SourceCard/briefing
+ * precedent — self-queries on threadId, null when the thread has no evaluation). Renders the honest
+ * states the engine emits: cited findings + H/M/L confidence, a leverage-ranked gap list (≤5 + a
+ * "more" disclosure, each with a plan-05 "Act on this" placeholder), the affirmative HEALTHY banner,
+ * and a VISUALLY DISTINCT not-enough-data nudge (dashed/neutral — never styled as a gap). No numeric
+ * score anywhere (the engine never emits one; the card never invents one).
+ */
+function EvaluationCard({ threadId }: { threadId?: string }) {
+  const evaluation: Evaluation | null | undefined = useQuery(
+    api.evaluations.byThread,
+    threadId ? { threadId } : "skip",
+  );
+  if (!evaluation) return null;
+  const { framework, findings, gaps, notEnoughData, verdict } = evaluation;
+  const frameworkLabel = FRAMEWORK_LABEL[framework];
+  const thin = findings.length === 0;
+
+  const rankedGaps = [...gaps].sort((a, b) => a.leverageRank - b.leverageRank);
+  const topGaps = rankedGaps.slice(0, 5);
+  const moreGaps = rankedGaps.slice(5);
+  const sections = [...new Set(findings.map((f) => f.section))];
+
+  return (
+    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="evaluation-card">
+      <p style={capsTeal}>Evaluation · {frameworkLabel}</p>
+
+      {thin ? (
+        // Thin-data ONLY: the distinct dashed nudge, no fabricated findings or gaps (SC #1).
+        <div data-testid="evaluation-insufficient" style={insufficientBox}>
+          <div style={{ fontWeight: 700, color: "var(--ink)" }}>Not enough data to assess yet</div>
+          <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem", ...traceText }}>
+            {notEnoughData.map((n) => (
+              <li key={n.section}>{n.needs}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <>
+          {sections.map((section) => (
+            <div key={section}>
+              <p style={evalSection}>{section}</p>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.4rem" }}>
+                {findings
+                  .filter((f) => f.section === section)
+                  .map((f, i) => (
+                    <li
+                      key={`${f.label}-${i}`}
+                      style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", ...traceText }}
+                    >
+                      <ConfChip c={f.confidence} />
+                      <span style={{ ...traceText, flex: 1, color: "var(--ink)" }}>
+                        {f.label}{" "}
+                        {f.citationDocId ? (
+                          <Link href="/dashboard/vault" data-testid="evaluation-citation" style={{ color: "var(--teal-600)", fontSize: "0.8rem" }}>
+                            [{f.citationTitle}]
+                          </Link>
+                        ) : (
+                          <span data-testid="evaluation-citation" style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+                            [{f.citationTitle}]
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+
+          {verdict === "healthy" ? (
+            <div data-testid="evaluation-healthy" style={healthyBox}>
+              No gaps found on {frameworkLabel} — your business is solid here.
+            </div>
+          ) : (
+            topGaps.length > 0 && (
+              <>
+                <p style={evalSection}>Highest-leverage gaps</p>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.5rem" }}>
+                  {topGaps.map((g, i) => (
+                    <GapRow key={`${g.label}-${i}`} gap={g} />
+                  ))}
+                </ul>
+                {moreGaps.length > 0 && (
+                  <details style={{ marginTop: "0.5rem" }}>
+                    <summary style={{ cursor: "pointer", color: "var(--teal-600)", fontSize: "0.85rem" }}>
+                      {moreGaps.length} more
+                    </summary>
+                    <ul style={{ listStyle: "none", margin: "0.5rem 0 0", padding: 0, display: "grid", gap: "0.5rem" }}>
+                      {moreGaps.map((g, i) => (
+                        <GapRow key={`more-${g.label}-${i}`} gap={g} />
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )
+          )}
+
+          {/* Residual not-enough-data alongside real findings — same DISTINCT dashed neutral look. */}
+          {notEnoughData.length > 0 && (
+            <div data-testid="evaluation-partial-nudge" style={{ ...insufficientBox, marginTop: "0.8rem" }}>
+              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: "0.85rem" }}>To assess more, add:</div>
+              <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem", ...traceText }}>
+                {notEnoughData.map((n) => (
+                  <li key={n.section}>{n.needs}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
 export function CardList({ threadId, sending }: { threadId?: string; sending: boolean }) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
@@ -1241,6 +1462,9 @@ export function CardList({ threadId, sending }: { threadId?: string; sending: bo
       {/* Renders above the plan-status branches like the trace — grounding happens on pure advice
           turns with no plan row, so it must not sit under any plan-status gate. Self-reads its data. */}
       <SourceCard threadId={threadId} />
+      {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
+          renders above the plan-status branches and self-reads its own latest-row data. */}
+      <EvaluationCard threadId={threadId} />
       {rest()}
     </div>
   );
