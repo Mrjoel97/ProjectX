@@ -1,8 +1,8 @@
 ---
 phase: 10-vault-agent-grounding
 verified: 2026-07-24T05:25:46Z
-status: human_needed
-score: 5/5 must-haves verified (automated); SC5 live skill-gate CLOSED 2026-07-24; 1 item (live UI render) requires human verification
+status: passed
+score: 5/5 must-haves verified — SC5 live skill-gate CLOSED 2026-07-24; live UI render human-approved 2026-07-24 (after web rebuild off the stale 07-21 prod build)
 human_verification:
   - test: "Run a grounded cockpit turn in the app (e.g. 'Using what's in my knowledge vault about X, ...')"
     expected: "The LATEST TRACE shows 'Searching your knowledge vault…' then 'Grounded in the vault' (never 'Working…'); a '📚 Grounded in N documents' source card renders on the workspace canvas listing doc titles; each title links to /dashboard/vault; the card matches BRAND (opaque --card sheet, tracked-caps label, no amber)."
@@ -81,7 +81,7 @@ No orphaned requirements: REQUIREMENTS.md maps only VGND-01 to Phase 10, and it 
 
 **Test:** Run a grounded cockpit turn in the app (a question that needs the user's own vault data).
 **Expected:** The LATEST TRACE row reads "Searching your knowledge vault…" then "Grounded in the vault" (never the "Working…" fallback); a "📚 Grounded in N documents" source card renders on the workspace canvas listing the doc titles; each title links to `/dashboard/vault`; the card matches BRAND styling (opaque `--card` sheet, tracked-caps label, no amber).
-**Why human:** Cross-surface SDK-loop callback + React render — not covered by backend vitest. Documented as Manual-Only in `10-VALIDATION.md`.
+**Result:** ✓ APPROVED 2026-07-24 by the owner. First attempt showed the "Working…" fallback + no card — root-caused to a STALE PROD BUILD: the app was `next start` on a `.next` bundle dated 2026-07-21, predating Plan 10-03's `VERB["searchVault"]` + `SourceCard`. Rebuilt `@pikar/web` (BUILD_ID 2026-07-24 17:02, new client chunk carries "Searching your knowledge vault" + "Grounded in") and restarted `next start`; owner hard-refreshed and confirmed the verb + source card render. Backend behavior (@14 grounding) was correct throughout — the failure was purely the frozen view layer.
 
 ### 2. Live skill-gate activation (SC5) — ✓ CLOSED 2026-07-24
 

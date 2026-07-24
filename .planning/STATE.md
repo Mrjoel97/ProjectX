@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: executing
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-07-24T06:00:00.000Z"
-last_activity: 2026-07-24 — Plan 10-03 shipped (vault-grounding source card + searchVault verb label in the workspace canvas)
+status: planning
+stopped_at: Phase 10 complete + verified (passed)
+last_updated: "2026-07-24T14:18:23.602Z"
+last_activity: 2026-07-24 — Phase 10 (Vault->Agent Grounding) COMPLETE — verification passed, grounding live at cockpit-agent@14, UI human-approved
 progress:
   total_phases: 37
-  completed_phases: 17
+  completed_phases: 18
   total_plans: 136
   completed_plans: 132
 ---
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 10 — Vault->Agent Grounding (the root dependency: the agent finally reads the vault mid-conversation)
+**Current focus:** Phase 11 — Persona Onboarding & Business Profile (next; not yet planned)
 
 ## Current Position
 
-Phase: 10 of 25 (Vault->Agent Grounding) — first phase of milestone v2.0
-Plan: 4 of 4 complete (10-01, 10-02, 10-03, 10-04 all shipped) — Phase 10 plans done
-Status: Executing — Plan 10-03 shipped (SourceCard "📚 Grounded in N documents" + VERB["searchVault"] label in cards.tsx; cross-surface render is Manual-Only UAT)
-Last activity: 2026-07-24 — Plan 10-03 shipped (surface vault grounding to the user in the workspace canvas)
+Phase: 11 of 25 (Persona Onboarding & Business Profile) — Phase 10 complete
+Plan: none yet (Phase 11 not planned)
+Status: Ready to plan Phase 11
+Last activity: 2026-07-24 — Phase 10 (Vault->Agent Grounding) COMPLETE & verified passed; grounding live at cockpit-agent@14 (evidence-gated), UI human-approved after web rebuild
 
-Progress (v2.0): [░░░░░░░░░░] 0%  (0/16 phases; Phase 10: 4/4 plans)
+Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Phase 10 shipped 4/4 plans)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
