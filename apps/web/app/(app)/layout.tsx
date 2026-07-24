@@ -20,6 +20,7 @@ import {
   ShieldIcon,
   SignOutIcon,
   TrendIcon,
+  UserIcon,
   VaultIcon,
   WalletIcon,
 } from "../(auth)/icons";
@@ -138,6 +139,14 @@ function Shell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="rail-foot">
+          <Link
+            href="/dashboard/profile"
+            className={`rail-item${isActive("/dashboard/profile") ? " is-active" : ""}`}
+            title={collapsed ? "Business Profile" : undefined}
+          >
+            <UserIcon />
+            <span className="rail-label">Business Profile</span>
+          </Link>
           <Link
             href="/connect-gmail"
             className={`rail-item${isActive("/connect-gmail") ? " is-active" : ""}`}
