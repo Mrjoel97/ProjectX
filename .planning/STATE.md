@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: verifying
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-07-24T18:04:30.643Z"
+status: planning
+stopped_at: Phase 11 COMPLETE & verified (passed 7/7) — next Phase 12
+last_updated: "2026-07-24T18:09:24.485Z"
 last_activity: "2026-07-24 — Phase 11 plan 04 COMPLETE (all 4 plans done) — editable /dashboard/profile page: getProfile + deserializeProfile load the committed Lean-core fields, Save re-embeds via updateProfile so grounding stays current; rail nav link added (page was unreachable); human-verified"
 progress:
   total_phases: 37
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 11 — Persona Onboarding & Business Profile (all 4 plans complete; awaiting orchestrator phase-goal verification)
+**Current focus:** Phase 12 — Business Evaluation Engine (next; not yet planned)
 
 ## Current Position
 
-Phase: 11 of 25 (Persona Onboarding & Business Profile) — all plans complete
-Plan: 04 of 4 complete (Wave 4) — phase plans done
-Status: Plan 11-04 complete (human-verified); Phase 11 all 4 plans done — awaiting orchestrator phase-goal verification + `phase complete`
-Last activity: 2026-07-24 — Phase 11 plan 04 COMPLETE (all 4 plans done) — editable /dashboard/profile page: getProfile + deserializeProfile load the committed Lean-core fields, Save re-embeds via updateProfile so grounding stays current; rail nav link added (page was unreachable); human-verified
+Phase: 12 of 25 (Business Evaluation Engine) — Phase 11 complete & verified
+Plan: none yet (Phase 12 not planned)
+Status: Ready to plan Phase 12
+Last activity: 2026-07-24 — Phase 11 (Persona Onboarding & Business Profile) COMPLETE & verified (passed 7/7). Sparse-start decision mid-phase: onboarding admits idea-stage users (only oneLineDescription + persona required); name/offering/customer optional, enriched on the editable /dashboard/profile page. Rail nav link added (page was unreachable). business-profile skill seeded active v1.
 
-Progress (v2.0): [█░░░░░░░░░] 6%  (1/16 phases complete; Phase 10 shipped 4/4 plans)
+Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Phases 10 + 11 shipped 4/4 each)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
