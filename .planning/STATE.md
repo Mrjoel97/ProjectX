@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: "12-04 Task 3 checkpoint (human-verify, BLOCKING) — Tasks 1-2 committed, awaiting visual approval"
-last_updated: "2026-07-25T00:45:00.000Z"
-last_activity: "2026-07-25 — Phase 12 plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness activity step). recordScorecardAnswer = the LOCKED 'store' half (a user figure persists forward, cited user-provided, never re-asked). byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Thin/idea-stage (zero grounded findings) → 'insufficient' + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam (grounded cited row, refs-only §4 audit, carry-forward anti-re-ask, two-tenant isolation, thin-data); check-playbooks exit 0. Pre-existing audit.test.ts + backend-typecheck failures remain out-of-scope (deferred-items.md)."
+stopped_at: "Completed 12-04-PLAN.md (Tasks 1-2 shipped; Task 3 visual verification DEFERRED to 12-06's checkpoint)"
+last_updated: "2026-07-25T02:20:00.000Z"
+last_activity: "2026-07-25 — Phase 12 plan 04 CLOSED (Tasks 1-2 done, Task 3 DEFERRED): evaluateBusiness read-tool (closed framework enum, readPlan cross-tenant guard, fail-open SC1, capped synopsis, SMOKE_OP_TOOL entry) + quiet recordScorecardAnswer write-tool (not plan-gated, refs-only audit) registered in buildCockpitTools; EVALUATION card renders findings + H/M/L chips + citations, ≤5 leverage-ranked gaps + 'more' disclosure with a DISABLED plan-05 'Act on this', affirmative healthy banner, and a visually distinct not-enough-data state. Deviation (Rule 3): recordScorecardAnswerInternal explicit-tenantId twin added over a shared applyScorecardAnswer helper — the tool loop carries no live identity so the public tenantMutation was uncallable; business-evaluation.md playbook updated. Checks: backend 470/471 (sole failure = pre-existing audit.test.ts auditCounts), cockpitTools 57/57, web typecheck exit 0, check-playbooks exit 0. Task 3 human-verify DEFERRED (card did not render live): cockpit-agent.md teaches the tool ZERO times (12-06 Task 2) and all 7 rubrics are seeded-but-gated in GATED_SKILLS (EVAL_GATE = 12-06 Task 3) — 12-06's checkpoint must carry BOTH plans' visual checks. No gated skill activated, no teaching hardcoded (§5).\n\nPRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness activity step). recordScorecardAnswer = the LOCKED 'store' half (a user figure persists forward, cited user-provided, never re-asked). byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Thin/idea-stage (zero grounded findings) → 'insufficient' + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam (grounded cited row, refs-only §4 audit, carry-forward anti-re-ask, two-tenant isolation, thin-data); check-playbooks exit 0. Pre-existing audit.test.ts + backend-typecheck failures remain out-of-scope (deferred-items.md)."
 progress:
   total_phases: 37
   completed_phases: 19
   total_plans: 146
-  completed_plans: 140
+  completed_plans: 141
 ---
 
 # Project State
@@ -25,9 +25,11 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 12 of 25 (Business Evaluation Engine) — executing
-Plan: 12-03 complete (evaluation engine — evaluations table + runEvaluation + carry-forward store)
-Status: Phase 12 in progress
-Last activity: 2026-07-25 — Phase 12 plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
+Plan: 12-04 closed (cockpit surface — evaluateBusiness + recordScorecardAnswer tools + EVALUATION card); next 12-05
+Status: Phase 12 in progress — 4/6 plans have summaries. **One open verification debt:** 12-04's human-verify is deferred into 12-06's checkpoint (see phase deferred-items.md); Phase 12 must not close on 12-06's own checks alone.
+Last activity: 2026-07-25 — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScorecardAnswer write-tool in buildCockpitTools; EVALUATION card (findings + H/M/L chips + citations, ≤5 ranked gaps + more, healthy banner, distinct not-enough-data). Rule-3 deviation: recordScorecardAnswerInternal explicit-tenantId twin over a shared applyScorecardAnswer helper (the tool loop carries no live identity). Backend 470/471 (sole failure pre-existing), cockpitTools 57/57, web typecheck + check-playbooks exit 0. Task 3 visual check DEFERRED — the agent is never taught the tool (cockpit-agent.md: 0 mentions → 12-06 Task 2) and all 7 rubrics are gated-but-unactivated (EVAL_GATE → 12-06 Task 3), so the flow is not yet verifiable end-to-end.
+
+PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
 Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Phases 10 + 11 shipped 4/4 each)
 
@@ -66,6 +68,7 @@ Progress (v2.0): [██░░░░░░░░] 13%  (2/16 phases complete; Ph
 | Phase 12 P01 | 8 min | 3 tasks | 8 files |
 | Phase 12 P02 | 17 min | 3 tasks | 19 files |
 | Phase 12 P03 | 17 min | 3 tasks | 5 files |
+| Phase 12 P04 | ~35 min | 2 of 3 tasks (Task 3 deferred) | 6 files |
 
 ## Accumulated Context
 
@@ -93,9 +96,13 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 12]: 12-02: 7 evaluation/specialist skills registered as GATED (4 framework rubrics + 3 specialist targets); bootstrap seeds v1 active, edits publish eval-gated candidates activated only via plan-06 (SC #4). growth-os-diagnostic folds diagnose() gate order + financial spine + 7-level positioning into ONE body; the 3 persona-fallback bodies (swot=SME, lean-canvas=solopreneur, bmc=startup) carry the shared grounding rubric (per-finding vault cite, H/M/L confidence, explicit not-enough-data state, no numeric %, affirmative healthy state). Original wording, NO Hormozi book text; contracts-side skillBodies.test.ts enforces md↔ts byte-identity.
 - [Phase 12]: 12-03: evaluation engine SHIPPED — dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward→ground via vaultGroundHydrated→pure diagnose()→persist cited row→refs-only evaluation.ran audit→evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (user figure persists forward, cited user-provided). v1 findings deterministic (profile-parse + labeled-number scan); LLM narrative deferred to plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over SMOKE:: seam.
 
+- [Phase 12]: 12-04: cockpit surface shipped — evaluateBusiness (read, CLOSED framework enum so the model can't inject prose, readPlan cross-tenant guard, fail-open SC1, CAPPED synopsis into the loop, SMOKE_OP_TOOL entry) + recordScorecardAnswer (write, {field,value}, cited user-provided, NOT plan-gated — a self-reported fact isn't an outbound action — refs-only audit, QUIET so no agentStep/tool-union entry). EVALUATION card is a dumb renderer over byThread: H/M/L ConfChip on globals.css color-mix tokens, ≤5 leverage-ranked gaps + a "more" disclosure, DISABLED "Act on this" (handler = plan 05), affirmative healthy banner on --released, and an insufficientBox never styled as a gap. No numeric % anywhere.
+- [Phase 12]: 12-04: recordScorecardAnswerInternal (explicit-tenantId internalMutation twin) added because the cockpit tool loop carries NO live identity — a tenantMutation is uncallable from a tool. Both it and the public mutation delegate to ONE applyScorecardAnswer helper so the tenant-scoping/carry-forward write path can't drift.
+- [Phase 12]: 12-04: Task 3 human-verify DEFERRED to 12-06 (owner decision) — the plan's checkpoint asked for end-to-end verification of a flow whose two enabling halves land in 12-06 (agent teaching = Task 2, EVAL_GATE rubric activation = Task 3). Verified-not-litigated: cockpit-agent.md has 0 evaluate/scorecard/swot/diagnose mentions; all 7 Phase-12 rubrics are in GATED_SKILLS. Workarounds refused: no gated skill activated, no teaching hardcoded (§5), no throwaway seeding.
+
 ### Pending Todos
 
-None yet.
+- **12-04 visual verification is UNPAID debt** — must be carried at plan 12-06's human-verify checkpoint, which has to cover BOTH plans' visual checks (12-04 card states + 12-06 teaching/gate). Detail in `.planning/phases/12-business-evaluation-engine/deferred-items.md`.
 
 ### Blockers/Concerns
 
@@ -106,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-25T00:45:00.000Z
-Stopped at: 12-04 Task 3 checkpoint (human-verify, BLOCKING) — Tasks 1-2 committed (0ce71e0, a23ff21); evaluateBusiness + recordScorecardAnswer tools + EVALUATION card built, awaiting visual approval before a continuation agent writes 12-04-SUMMARY.md
-Resume file: .planning/phases/12-business-evaluation-engine/12-04-PLAN.md (resume at Task 3)
+Last session: 2026-07-25T02:20:00.000Z
+Stopped at: Completed 12-04-PLAN.md — Tasks 1-2 shipped (0ce71e0, a23ff21) and summarized; Task 3 (human-verify) DEFERRED by owner decision into plan 12-06's checkpoint, since the agent teaching (12-06 Task 2) and the EVAL_GATE rubric activation (12-06 Task 3) are what make the flow reachable.
+Resume file: .planning/phases/12-business-evaluation-engine/12-05-PLAN.md (next plan)
