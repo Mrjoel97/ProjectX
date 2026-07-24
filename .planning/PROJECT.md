@@ -8,6 +8,40 @@ Pikar-AI is a governed, agentic operating layer that turns scattered, unstructur
 
 A user speaks or types a goal and the system reliably plans it, shows the plan for a **single approval before anything leaves the building** (approve once → hands-off governed execution, with stage notifications and a halt control), executes it with guardrails (cost, PII, quality), and follows through to real delivery (email) — with a full audit trail. *(Approval granularity moved from per-delivery to per-plan on 2026-07-10.)*
 
+## Current Milestone: v2.0 — Platform → Private Beta
+
+**Goal:** Grow Pikar from a governed *email* cockpit into a genuinely intelligent, broadly-capable
+AI chief-of-staff — one that knows the user's business, evaluates it, and acts across multiple tools
+— and only *then* open the invite-only private beta on that fuller product.
+
+**Why now (2026-07-24):** A pre-beta launch-readiness review verified in code that the app was an
+excellent governance spine wrapped around a single organ (email): the Knowledge Vault's hybrid
+retrieval was built but *unreachable by the agent* (zero callers), the "specialized sub-agent" route
+was a hollow enum, and every agent tool was a mailbox primitive. Voice→plan→send, by contrast, was
+fully wired. The owner chose to build platform breadth before exposing it to real users; the private
+beta (former Phase 9) moves to the END of this milestone.
+
+**Target features (dependency-ordered staircase):**
+1. **Foundation & Intelligence** — vault→agent wiring (the agent can finally read the vault) ·
+   persona onboarding (solopreneur / startup / SME) + business/idea intake → structured business
+   profile in the vault · business-evaluation engine (assessment + gap-detection +
+   advice-that-drives-action; on-demand + scheduled proactive **in-app** review) · flagship: upload a
+   report → discuss it by **voice** → grounded insights/patterns/gaps → memo or gap-bridging plan
+   (honest "no gaps" too; the user decides).
+2. **Breadth of Action** — real sub-agent **dispatch** (make the `sub_agent` route real) + first
+   exemplar, then calendar · web research · document/content creation · contacts/CRM/follow-ups.
+3. **Creation & Self-Extension** — media canvas (images + video ≤3 min — **leverage the connected
+   Pikar-Ai service**, do not rebuild) · dynamic skill creation (user-authored first, then
+   agent-authored — self-modification, governance-heavy, placed late).
+4. **Governance & Open the Beta** — ISO 9001:2015 QMS foundation (formalize the existing audit /
+   skill-versioning / GSD-playbook change-control bones) · `requireOwner` + cross-user isolation
+   test · Private Beta Productionization (invite/waitlist, Microsoft Graph/Outlook, Vercel deploy) —
+   the final phase.
+
+*The v1.0 email-cockpit + governance spine (Phases 1–8 plus the 3.x cockpit line) is shipped history
+this milestone builds on. The already-written `09-CONTEXT.md` becomes the spec for this milestone's
+final productionization phase.*
+
 ## Requirements
 
 ### Validated
@@ -93,4 +127,4 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 | **Scheduling split into two tiers: deferred send in v1 (Phase 3.5), recurring post-verification** (2026-07-12) | "Send at 4 AM" is the time dimension of the chief-of-staff promise and composes onto per-plan approval (the approved plan includes the when); recurring is a standing instruction blocked structurally by 7-day Testing-mode tokens and an unmade re-draft governance decision | ✅ Registered — SCHD-01 minted, Phase 3.5 inserted; design record: `.planning/design/scheduled-send.md` |
 
 ---
-*Last updated: 2026-07-12 — re-baselined: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`); deferred send added (SCHD-01 / Phase 3.5), recurring sends scoped out (`.planning/design/scheduled-send.md`)*
+*Last updated: 2026-07-24 — v2.0 Platform milestone opened (build the full chief-of-staff platform before the private beta; beta moves to the milestone's end — see Current Milestone). Prior 2026-07-12 re-baseline: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`); deferred send added (SCHD-01 / Phase 3.5), recurring sends scoped out (`.planning/design/scheduled-send.md`)*
