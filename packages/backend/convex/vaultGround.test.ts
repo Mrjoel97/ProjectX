@@ -105,6 +105,68 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
   });
 });
 
+describe("vaultGroundHydrated (identity-less internalAction — real titles + capped chunk text)", () => {
+  // Called EXACTLY as the cockpit tool harness will: internal.* + an explicit tenantId + NO identity
+  // (no asTenant / no withIdentity). The explicit tenantId arg is the ONLY scope.
+  const PER_DOC_CHAR_CAP = 1500; // mirrors the module const under test
+  const TOTAL_CHAR_CAP = 8000;
+
+  test("hydrates titles + per-doc-capped chunk text parallel to docIds", async () => {
+    const t = convexTest(schema, modules);
+    const body = "Playbook A body. ".repeat(150); // ~2550 chars > PER_DOC_CHAR_CAP
+    const docA = await seedDoc(t, { title: "Playbook A", text: body });
+
+    const { docIds, titles, chunks } = await t.action(
+      internal.vaultGround.vaultGroundHydrated,
+      { tenantId: TENANT, query: `SMOKE::${docA}` },
+    );
+
+    expect(docIds).toContain(docA);
+    // three parallel arrays
+    expect(titles).toHaveLength(docIds.length);
+    expect(chunks).toHaveLength(docIds.length);
+
+    const i = docIds.indexOf(docA);
+    expect(titles[i]).toBe("Playbook A");
+    expect(chunks[i]?.startsWith("Playbook A body")).toBe(true);
+    expect(chunks[i]!.length).toBeLessThanOrEqual(PER_DOC_CHAR_CAP); // source is longer → truncated
+  });
+
+  test("total chunk budget never exceeds TOTAL_CHAR_CAP across many fused docs", async () => {
+    const t = convexTest(schema, modules);
+    const big = "z".repeat(2000);
+    // Six docs all sharing a "hub" node → seeding from the first, 1-hop BFS fuses in all six.
+    // 6 × PER_DOC_CHAR_CAP (9000) exceeds TOTAL_CHAR_CAP (8000), so the running budget must bite.
+    const docs: string[] = [];
+    for (let n = 0; n < 6; n++) {
+      const d = await seedDoc(t, { title: `H${n}`, text: big });
+      await seedEdge(t, d, "hub", `n${n}`);
+      docs.push(d);
+    }
+
+    const { chunks } = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${docs[0]}`,
+    });
+
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    expect(total).toBeLessThanOrEqual(TOTAL_CHAR_CAP);
+    expect(total).toBeGreaterThan(0);
+  });
+
+  test("cross-tenant: an explicit foreign tenantId yields empty parallel arrays (VALT-03)", async () => {
+    const t = convexTest(schema, modules);
+    const docA = await seedDoc(t, { title: "Playbook A", text: "secret tenant-A body" });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: "tenant_b", // a tenant-A doc id, but scoped to tenant B — no identity to fall back on
+      query: `SMOKE::${docA}`,
+    });
+
+    expect(out).toEqual({ docIds: [], titles: [], chunks: [] });
+  });
+});
+
 describe("vault read plane (VALT-04 browse / stats / download / detail / search)", () => {
   test("listVaultDocs returns the tenant's docs; category filters; other tenants never appear", async () => {
     const t = convexTest(schema, modules);
