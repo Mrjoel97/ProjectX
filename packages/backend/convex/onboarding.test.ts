@@ -288,7 +288,8 @@ test("commitProfile rejects an invalid profile (empty required field) — nothin
   const t = setup();
   await expect(
     asTenant(t).mutation(api.onboarding.commitProfile, {
-      profile: { ...PROFILE, name: "   " },
+      // oneLineDescription is the one required text field (sparse-start); empty → rejected.
+      profile: { ...PROFILE, oneLineDescription: "   " },
     }),
   ).rejects.toThrow();
   const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());

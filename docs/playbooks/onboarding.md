@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-24 against 11-03 (Wave 3 — onboarding UI + first-run gate shipped)
+> Last verified: 2026-07-24 against 11-03 + sparse-start fix (idea-stage onboarding unblocked)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -70,6 +70,13 @@ cannot see:
 
 ## Invariants — what must never break
 
+- **Sparse-start: only `oneLineDescription` + a valid persona are required to commit** — an idea-stage
+  user (a vague idea, no business yet — ONBD-02 covers "business/idea") has no name/stage/offering/target
+  customer, so those are OPTIONAL and enriched later on the profile page. `validateProfile`'s
+  `REQUIRED_STRINGS` is exactly `["oneLineDescription"]`; the onboarding page's `requiredFilled` mirror and
+  `serializeProfile`'s empty-name heading fallback must stay in lockstep with it. The front door admits an
+  idea; it does not demand a finished business. Enforced by `businessProfile.test.ts` (sparse-start +
+  empty-name cases) and `onboarding.test.ts` (empty-description rejected).
 - **Persona is ALWAYS confirmed, never assumed (SC#1)** — `decideConfirm` returns `needsConfirm: true`
   unconditionally; no branch yields an auto-committed persona. Enforced by `businessProfile.test.ts`.
 - **Enterprise is not an emittable persona** — the `Persona` union is exactly `solopreneur | startup | sme`;

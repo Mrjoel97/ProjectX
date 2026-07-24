@@ -57,18 +57,20 @@ export function decideConfirm(inference: PersonaInference): ConfirmDecision {
 /** Structured validation result — `ok` or a list of human-readable errors. */
 export type ValidationResult = { ok: true } | { ok: false; errors: string[] };
 
-const REQUIRED_STRINGS: readonly (keyof BusinessProfile)[] = [
-  "name",
-  "oneLineDescription",
-  "stage",
-  "offering",
-  "targetCustomer",
-];
+// Sparse-start (idea-stage onboarding): the ONLY required text field is a one-line description
+// of the idea/business. name/stage/offering/targetCustomer are legitimately empty for someone
+// arriving with a vague idea and no business yet (ONBD-02 covers "business/idea") — they are
+// enriched later on the profile page as the idea becomes a venture. persona is validated
+// separately (always inferred + confirmed). This is the front-door gate: admit an idea, don't
+// demand a finished business.
+const REQUIRED_STRINGS: readonly (keyof BusinessProfile)[] = ["oneLineDescription"];
 
 /**
- * Validate a Lean-core profile at the trust boundary (before it is committed as a
- * vault doc). Required text fields must be non-empty; persona must be emittable;
- * the two lists must be arrays (empty is allowed — an absent goal is not fabricated).
+ * Validate a Lean-core profile at the trust boundary (before it is committed as a vault doc).
+ * SPARSE-START: only `oneLineDescription` must be non-empty (an idea-stage user has that but not
+ * yet a name/offering/customer); persona must be emittable; the two lists must be arrays (empty is
+ * allowed — an absent goal is not fabricated). The optional strings may be empty and are filled in
+ * later as the idea matures.
  */
 export function validateProfile(profile: BusinessProfile): ValidationResult {
   const errors: string[] = [];
@@ -94,7 +96,9 @@ const bullets = (items: string[]): string =>
  */
 export function serializeProfile(profile: BusinessProfile): string {
   return [
-    `# ${profile.name}`,
+    // Sparse-start: an idea-stage profile may have no name yet — fall back so the vault doc
+    // never embeds a bare "# " heading (matches onboarding.ts writeProfileDoc's title fallback).
+    `# ${profile.name || "Business profile"}`,
     "",
     profile.oneLineDescription,
     "",

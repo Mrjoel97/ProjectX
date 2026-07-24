@@ -212,11 +212,10 @@ export default function OnboardingPage() {
     setProfile((p) => (p ? { ...p, [key]: value } : p));
   }
 
-  const requiredFilled =
-    !!profile &&
-    [profile.name, profile.oneLineDescription, profile.stage, profile.offering, profile.targetCustomer].every(
-      (s) => s.trim() !== "",
-    );
+  // Sparse-start (idea-stage): only a one-line description is required to enter — name/stage/
+  // offering/target customer are optional and enriched later (persona is always set). Mirrors
+  // @pikar/core validateProfile so the button and the mutation agree.
+  const requiredFilled = !!profile && profile.oneLineDescription.trim() !== "";
 
   async function onCommit() {
     if (!profile || committing || !requiredFilled) return;
@@ -438,7 +437,7 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <LabeledField label="Business name">
+          <LabeledField label="Business name (optional)">
             <input style={field} value={profile.name} onChange={(e) => set("name", e.target.value)} />
           </LabeledField>
           <LabeledField label="One-line description">
@@ -448,10 +447,10 @@ export default function OnboardingPage() {
               onChange={(e) => set("oneLineDescription", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="Stage">
+          <LabeledField label="Stage (optional)">
             <input style={field} value={profile.stage} onChange={(e) => set("stage", e.target.value)} />
           </LabeledField>
-          <LabeledField label="Offering">
+          <LabeledField label="Offering (optional)">
             <textarea
               style={field}
               rows={2}
@@ -459,7 +458,7 @@ export default function OnboardingPage() {
               onChange={(e) => set("offering", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="Target customer">
+          <LabeledField label="Target customer (optional)">
             <textarea
               style={field}
               rows={2}
@@ -533,7 +532,8 @@ export default function OnboardingPage() {
             </button>
             {!requiredFilled && (
               <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
-                Fill name, description, stage, offering, and target customer to continue.
+                Add a one-line description to continue — the rest is optional and you can fill it in
+                later as your idea takes shape.
               </span>
             )}
           </div>

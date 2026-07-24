@@ -55,10 +55,27 @@ describe("validateProfile", () => {
     expect(validateProfile(complete)).toEqual({ ok: true });
   });
 
-  test("rejects an empty required field (name)", () => {
-    const r = validateProfile({ ...complete, name: "" });
+  test("rejects an empty oneLineDescription (the one required field)", () => {
+    const r = validateProfile({ ...complete, oneLineDescription: "  " });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors).toContain("name is required");
+    if (!r.ok) expect(r.errors).toContain("oneLineDescription is required");
+  });
+
+  test("SPARSE-START: an idea-stage profile (only description + persona) is valid", () => {
+    // Someone arriving with a vague idea has no name/stage/offering/customer yet — those fields
+    // are legitimately empty and enriched later. Only a one-line description + a persona are needed
+    // to get through the front-door gate (ONBD-02 covers "business/idea").
+    const idea: BusinessProfile = {
+      name: "",
+      oneLineDescription: "An app that helps freelancers auto-draft client invoices.",
+      persona: "startup",
+      stage: "",
+      offering: "",
+      targetCustomer: "",
+      primaryGoals: [],
+      knownConstraints: [],
+    };
+    expect(validateProfile(idea)).toEqual({ ok: true });
   });
 
   test("rejects an invalid persona (enterprise)", () => {
@@ -103,6 +120,11 @@ describe("serializeProfile (deterministic vault-doc markdown)", () => {
 
   test("is deterministic — same input, same output", () => {
     expect(serializeProfile(complete)).toBe(serializeProfile(complete));
+  });
+
+  test("SPARSE-START: an empty name falls back to a heading (no bare '# ')", () => {
+    const md = serializeProfile({ ...complete, name: "" });
+    expect(md.startsWith("# Business profile\n")).toBe(true);
   });
 
   test("renders empty lists as an explicit placeholder (no fabricated content)", () => {
