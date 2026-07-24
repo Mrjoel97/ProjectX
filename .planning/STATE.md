@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Completed 12-03-PLAN.md
-last_updated: "2026-07-24T21:19:30.932Z"
+stopped_at: "12-04 Task 3 checkpoint (human-verify, BLOCKING) — Tasks 1-2 committed, awaiting visual approval"
+last_updated: "2026-07-25T00:45:00.000Z"
 last_activity: "2026-07-25 — Phase 12 plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness activity step). recordScorecardAnswer = the LOCKED 'store' half (a user figure persists forward, cited user-provided, never re-asked). byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Thin/idea-stage (zero grounded findings) → 'insufficient' + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam (grounded cited row, refs-only §4 audit, carry-forward anti-re-ask, two-tenant isolation, thin-data); check-playbooks exit 0. Pre-existing audit.test.ts + backend-typecheck failures remain out-of-scope (deferred-items.md)."
 progress:
   total_phases: 37
@@ -106,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-24T21:19:30.878Z
-Stopped at: Completed 12-03-PLAN.md
-Resume file: None
+Last session: 2026-07-25T00:45:00.000Z
+Stopped at: 12-04 Task 3 checkpoint (human-verify, BLOCKING) — Tasks 1-2 committed (0ce71e0, a23ff21); evaluateBusiness + recordScorecardAnswer tools + EVALUATION card built, awaiting visual approval before a continuation agent writes 12-04-SUMMARY.md
+Resume file: .planning/phases/12-business-evaluation-engine/12-04-PLAN.md (resume at Task 3)
