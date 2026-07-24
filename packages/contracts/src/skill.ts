@@ -61,6 +61,9 @@ export const VOICE_SESSION_SKILL = "voice-session" as const;
 /** Registry name of the voice-brief structuring skill (VOIC-03 — the toolless call-to-brief writer). */
 export const VOICE_BRIEF_SKILL = "voice-brief" as const;
 
+/** Registry name of the business-profile extraction skill (ONBD-02 — onboarding intake→Lean-core profile). */
+export const BUSINESS_PROFILE_SKILL = "business-profile" as const;
+
 /**
  * Skills whose CANDIDATE versions may only activate through a recorded passing
  * eval run (EVAL-01). Rollback (archived/rolled_back targets) is structurally

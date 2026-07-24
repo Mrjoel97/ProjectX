@@ -8,6 +8,7 @@
 
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
+  BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
@@ -25,6 +26,7 @@ import {
   VOICE_SESSION_SKILL,
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
+import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
@@ -248,6 +250,8 @@ export const seedSkills = internalMutation({
       { name: VOICE_SESSION_SKILL, body: voiceSessionSkillBody },
       // UNGATED (RESEARCH OQ3): its output is a vault document, not tool-state.
       { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
+      // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
+      { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
     ];
 
     for (const { name, body } of seeds) {

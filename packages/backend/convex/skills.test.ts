@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
+import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
@@ -638,6 +639,7 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["reply-drafter.md", replyDrafterSkillBody],
     ["voice-session.md", voiceSessionSkillBody],
     ["voice-brief.md", voiceBriefSkillBody],
+    ["business-profile.md", businessProfileSkillBody],
   ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
     const mdPath = fileURLToPath(new URL(`../../contracts/skills/${file}`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
