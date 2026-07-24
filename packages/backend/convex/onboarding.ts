@@ -21,6 +21,7 @@ import type { EntryId } from "@convex-dev/rag";
 import { BUSINESS_PROFILE_SKILL } from "@pikar/contracts/skill";
 import {
   type BusinessProfile,
+  deserializeProfile,
   isPersona,
   type Persona,
   serializeProfile,
@@ -32,7 +33,7 @@ import { generateObject, jsonSchema, type LanguageModel } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { startIngest } from "./vaultIngest";
@@ -123,6 +124,22 @@ export const status = tenantQuery({
       .collect();
     const hasProfile = docs.some((d) => d.kind === PROFILE_KIND && d.status !== "failed");
     return { needsOnboarding: !hasProfile };
+  },
+});
+
+/**
+ * ONBD-02 profile read — the edit-form loader. Returns the tenant's committed Lean-core profile as a
+ * STRUCTURED object (parsed back from the vault doc's markdown via @pikar/core `deserializeProfile`,
+ * the serializer's inverse), or `null` if none is committed yet. There is no separate structured copy
+ * — the vault doc `text` is the record — so the parse is the read boundary. Content plane (§4): the
+ * returned object is profile CONTENT for the owning tenant's own edit surface, tenant-scoped by
+ * `ctx.tenantId`; it is NEVER written to a log.
+ */
+export const getProfile = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<BusinessProfile | null> => {
+    const doc = await currentProfileDoc(ctx, ctx.tenantId);
+    return doc?.text ? deserializeProfile(doc.text) : null;
   },
 });
 
@@ -225,7 +242,7 @@ async function writeProfileDoc(
 // The tenant's current committed profile doc (newest non-failed), or null. The edit target + the
 // re-commit guard.
 async function currentProfileDoc(
-  ctx: MutationCtx,
+  ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
   const docs = await ctx.db

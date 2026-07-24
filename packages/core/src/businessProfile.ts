@@ -117,3 +117,64 @@ export function serializeProfile(profile: BusinessProfile): string {
     "",
   ].join("\n");
 }
+
+/**
+ * Inverse of `serializeProfile` — parse the committed vault-doc markdown back into a structured
+ * `BusinessProfile` so the profile page can pre-fill an editable form from what was actually stored
+ * (there is NO separately-persisted structured copy; the markdown IS the record, incl. for profiles
+ * committed by earlier plans). Parses by the serializer's fixed markers, not brittle line offsets.
+ *
+ * ponytail: this mirrors `serializeProfile`'s fixed shape — the two must change together (a round-trip
+ * test in businessProfile.test.ts enforces it). Ceiling: an empty name serializes to the literal
+ * "Business profile" heading, so a business genuinely named "Business profile" round-trips to an empty
+ * name — harmless on an enrichment form (the user just retypes it). Upgrade path: persist structured
+ * JSON on the vault row if that collision ever matters.
+ */
+export function deserializeProfile(markdown: string): BusinessProfile {
+  const lines = markdown.split("\n");
+
+  const heading = (lines[0] ?? "").replace(/^#\s*/, "").trim();
+  const name = heading === "Business profile" ? "" : heading;
+
+  // A `- **Label:** value` bullet from the header block.
+  const field = (labelText: string): string => {
+    const prefix = `- **${labelText}:**`;
+    const line = lines.find((l) => l.startsWith(prefix));
+    return line ? line.slice(prefix.length).trim() : "";
+  };
+
+  // oneLineDescription is everything between the heading and the first header bullet.
+  const firstBullet = lines.findIndex((l) => l.startsWith("- **Persona:**"));
+  const oneLineDescription = lines
+    .slice(1, firstBullet === -1 ? 1 : firstBullet)
+    .join("\n")
+    .trim();
+
+  // List items under a `## Header` up to the next `## ` (skips the `_None specified_` placeholder).
+  const sectionItems = (header: string): string[] => {
+    const start = lines.findIndex((l) => l.trim() === `## ${header}`);
+    if (start === -1) return [];
+    const items: string[] = [];
+    for (let i = start + 1; i < lines.length; i++) {
+      const l = lines[i] ?? "";
+      if (l.startsWith("## ")) break;
+      if (l.startsWith("- ")) {
+        const value = l.slice(2).trim();
+        if (value !== "" && value !== "_None specified_") items.push(value);
+      }
+    }
+    return items;
+  };
+
+  const persona = field("Persona");
+  return {
+    name,
+    oneLineDescription,
+    persona: isPersona(persona) ? persona : "solopreneur",
+    stage: field("Stage"),
+    offering: field("Offering"),
+    targetCustomer: field("Target customer"),
+    primaryGoals: sectionItems("Primary goals"),
+    knownConstraints: sectionItems("Known constraints"),
+  };
+}

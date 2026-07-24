@@ -4,6 +4,7 @@ import {
   PERSONAS,
   type Persona,
   decideConfirm,
+  deserializeProfile,
   isPersona,
   serializeProfile,
   validateProfile,
@@ -131,5 +132,30 @@ describe("serializeProfile (deterministic vault-doc markdown)", () => {
     const md = serializeProfile({ ...complete, primaryGoals: [], knownConstraints: [] });
     expect(md).toContain("## Primary goals\n\n_None specified_");
     expect(md).toContain("## Known constraints\n\n_None specified_");
+  });
+});
+
+describe("deserializeProfile (inverse of serializeProfile — pre-fills the edit form)", () => {
+  test("round-trips a complete profile byte-for-byte", () => {
+    expect(deserializeProfile(serializeProfile(complete))).toEqual(complete);
+  });
+
+  test("SPARSE-START: round-trips an idea-stage profile (empty name + empty lists)", () => {
+    const idea: BusinessProfile = {
+      name: "",
+      oneLineDescription: "An app that helps freelancers auto-draft client invoices.",
+      persona: "startup",
+      stage: "",
+      offering: "",
+      targetCustomer: "",
+      primaryGoals: [],
+      knownConstraints: [],
+    };
+    expect(deserializeProfile(serializeProfile(idea))).toEqual(idea);
+  });
+
+  test("an unparseable persona falls back to solopreneur (never throws on stored text)", () => {
+    const md = serializeProfile(complete).replace("**Persona:** solopreneur", "**Persona:** ");
+    expect(deserializeProfile(md).persona).toBe("solopreneur");
   });
 });

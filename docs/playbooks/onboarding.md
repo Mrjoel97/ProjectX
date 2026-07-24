@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-24 against 11-03 + sparse-start fix (idea-stage onboarding unblocked)
+> Last verified: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
@@ -16,9 +16,11 @@ becomes a chief-of-staff rather than a generic assistant.
 
 Pure packages:
 - `packages/core/src/businessProfile.ts` — the Convex-free domain module (CLAUDE.md §1): `Persona`
-  union, `BusinessProfile` type, `serializeProfile` (deterministic vault-doc markdown), `decideConfirm`
+  union, `BusinessProfile` type, `serializeProfile` (deterministic vault-doc markdown) + its inverse
+  `deserializeProfile` (parses the committed markdown back to structured fields — the profile page's
+  edit-form loader; there is NO separate structured copy, the markdown IS the record), `decideConfirm`
   (the SC#1 always-confirm decision fn), field validators. `packages/core/src/businessProfile.test.ts`
-  is its one runnable check.
+  is its one runnable check (incl. the serialize↔deserialize round-trip).
 
 Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/skills/business-profile.md` — canonical extraction prompt body
@@ -28,9 +30,11 @@ Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 
 Backend adapter (Wave 2 — LIVE) + frontend (Wave 3 gate+onboarding LIVE; profile page Wave 4):
 - `packages/backend/convex/onboarding.ts` — thin adapter (§1): `status` (tenantQuery, first-run gate),
-  `extractProfile` (tenantAction, returns the object — NEVER auto-commits, SC#1), `commitProfile` +
-  `updateProfile` (tenantMutation, persistBrief clone → `startIngest`; updateProfile re-embeds in place).
-  Checks: `onboarding.test.ts` (SC#1/#2/#3) + `profileRedaction.test.ts` (SC#4).
+  `getProfile` (tenantQuery — the committed profile parsed back to structured fields via
+  `deserializeProfile`, or null; the profile page's edit-form loader), `extractProfile` (tenantAction,
+  returns the object — NEVER auto-commits, SC#1), `commitProfile` + `updateProfile` (tenantMutation,
+  persistBrief clone → `startIngest`; updateProfile re-embeds in place). Checks: `onboarding.test.ts`
+  (SC#1/#2/#3) + `profileRedaction.test.ts` (SC#4).
 - `apps/web/app/(app)/layout.tsx` — the first-run GATE (Wave 3, LIVE): inside `<Authenticated>` Shell,
   `useQuery(api.onboarding.status)` → `router.replace("/dashboard/onboarding")` for `needsOnboarding`
   tenants; the shell loader holds while the status query resolves. NOT in `middleware.ts` (invariant below).
@@ -42,7 +46,13 @@ Backend adapter (Wave 2 — LIVE) + frontend (Wave 3 gate+onboarding LIVE; profi
   state) → `extractProfile`. The result renders a pre-filled EDITABLE review card + a persona confirm/change
   control (SC#1); `commitProfile` on confirm releases the gate (`router.replace("/dashboard")`). Resumable
   via a `pikar:onboarding-draft` localStorage draft (no new table — RESEARCH Open-Q2), cleared on commit.
-- `apps/web/app/(app)/dashboard/profile/` — the profile view/edit page (re-embeds on save) (Wave 4)
+- `apps/web/app/(app)/dashboard/profile/page.tsx` — the profile view/EDIT page (Wave 4, LIVE): loads
+  `api.onboarding.getProfile`, renders the Lean-core fields as an editable form (the onboarding
+  review-card shape + BRAND §5 tokens, no new component library), and on Save calls
+  `api.onboarding.updateProfile` which RE-EMBEDS the doc in place (stale rag entry replaced) so
+  grounding stays current. Sparse-start mirror: only `oneLineDescription` is required to Save —
+  name/stage/offering/target customer never block it. This is the enrichment surface an idea-stage
+  user returns to as the idea matures.
 
 ## Dependencies & blast radius
 
@@ -128,6 +138,5 @@ cannot see:
 - **Names-in-prose PII ceiling** (shared S1/S4 open item): `packages/pii` scrubs STRUCTURED PII only;
   grounded business-profile prose containing person names must stay out of exportable/WORM tables until
   the NER spike resolves. `ponytail:` upgrade path = Presidio/NER before any multi-user export.
-- Backend adapter, onboarding UI, and profile page are Wave 2-4 work — their watched paths are
-  registered here now so the Stop hook does not block those plans; the sections above describe the
-  contract they must satisfy.
+- Backend adapter, onboarding UI, and profile page are all LIVE (Waves 2-4). Their watched paths stay
+  registered here so the Stop hook keeps protecting them.
