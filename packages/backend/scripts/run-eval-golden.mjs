@@ -362,6 +362,15 @@ async function runLive(pin) {
   const { messageCount } = parse(must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false }));
   console.log(`[eval:golden] seeded inbox fixture: ${messageCount} message(s), live digest`);
 
+  // 10-04 (VGND-01): seed a REAL embedded vault corpus ONCE, same one-shot shape as the inbox seed.
+  // 25-vault-grounded's live `searchVault` must resolve against a real `rag.add` doc (namespace =
+  // tenant), so without this the grounded fixture would retrieve nothing. `vaultSmoke:seedCorpus` is
+  // an internalAction callable via `convex run` (identity-less, explicit tenantId) that embeds two
+  // "Northwind-evalgrd" logistics briefs. The eval tenant is throwaway (`eval-${runId}`) — no purge
+  // (the inbox seed isn't purged either). Needs the deployment OPENAI_API_KEY the eval already requires.
+  const { docIds: vaultDocIds } = parse(must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: "evalgrd" }));
+  console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
+
   for (const fixture of fixtures) {
     let outcome;
     let retried = false;
