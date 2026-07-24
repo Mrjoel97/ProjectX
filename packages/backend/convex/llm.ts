@@ -1370,6 +1370,90 @@ export function buildCockpitTools(
         );
       },
     }),
+    // ── evaluateBusiness (BEVL-01) — the read-only business-assessment tool ─────────────────────────
+    // Mirrors searchVault's shape (shape-1 of the two-shapes rule): validated args → readPlan()
+    // cross-tenant guard → the internal.* engine action → a CAPPED synopsis into the loop (the card
+    // carries the findings, never this string). `framework` is a CLOSED enum (absent = the engine
+    // auto-picks) so the model can't inject prose here — the setMode precedent. Read-only: it never
+    // proposes or sends — "act on this gap" (shape 2) is plan 05. Fails open (SC1): a hiccup returns
+    // an honest "couldn't assess" rather than throwing out of the governed loop.
+    evaluateBusiness: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Assess the user's business on demand when they ask to 'evaluate my business' or run a " +
+        "framework (SWOT, lean canvas, business model canvas, growth): strengths, leverage-ranked " +
+        "gaps, and honest not-enough-data flags. Read-only: it renders an evaluation card, never sends.",
+      inputSchema: jsonSchema<{ framework?: "swot" | "lean" | "bmc" | "growth-os" }>({
+        type: "object",
+        properties: {
+          framework: {
+            type: "string",
+            enum: ["swot", "lean", "bmc", "growth-os"],
+            description: "Optional framework to assess on. Omit to let the engine auto-pick.",
+          },
+        },
+        additionalProperties: false,
+      }),
+      execute: async ({ framework }): Promise<string> => {
+        const plan = await readPlan(); // threadId + the cross-tenant guard
+        try {
+          const { verdict, findingCount, gapCount } = await ctx.runAction(
+            internal.evaluations.runEvaluation,
+            { tenantId, threadId: plan.threadId, framework },
+          );
+          const scope = framework ?? "your business";
+          return (
+            `Assessed ${scope}: ${findingCount} finding(s), ${gapCount} gap(s), verdict "${verdict}" ` +
+            "— shown to the user as an evaluation card. Point them at the card; don't restate findings."
+          );
+        } catch {
+          // Fail open (SC1): the engine itself never throws, but a runAction hiccup must not either.
+          return "I couldn't assess the business just now. Tell the user plainly and offer to retry.";
+        }
+      },
+    }),
+    // ── recordScorecardAnswer (BEVL-01) — the "store" write half of vault-first→ask→store ──────────
+    // A DIRECT scorecard write: the user hands over their OWN figure ("my CAC is 120"), so it is cited
+    // "user-provided" and does NOT cross the Approve gate — a self-reported fact is not an outbound
+    // action, so the two-shapes rule doesn't apply. Tenant-scoped via the EXPLICIT tenantId (the loop
+    // carries no live identity), refs-only audit (§4 — field name + a value fingerprint, never the raw
+    // figure). Quiet: no agentStep, so no SMOKE_OP_TOOL / tool-union entry (only evaluateBusiness steps).
+    recordScorecardAnswer: tool({
+      description:
+        "Store a figure the user states about their own business (e.g. 'my CAC is 120', 'we make " +
+        "$4k a month') into their evaluation scorecard so the next assessment uses it and never " +
+        "re-asks. Use ONLY for a number or fact the user gave; it changes nothing outbound.",
+      inputSchema: jsonSchema<{ field: string; value: string }>({
+        type: "object",
+        properties: {
+          field: {
+            type: "string",
+            description: "The scorecard field, e.g. financials.cac, financials.ltgp, identity.headlinePrice.",
+          },
+          value: { type: "string", description: "The value the user stated (a number or short fact)." },
+        },
+        required: ["field", "value"],
+        additionalProperties: false,
+      }),
+      execute: async ({ field, value }): Promise<string> => {
+        const plan = await readPlan(); // threadId + the cross-tenant guard
+        await ctx.runMutation(internal.evaluations.recordScorecardAnswerInternal, {
+          tenantId,
+          threadId: plan.threadId,
+          field,
+          value,
+        });
+        // Refs-only audit (§4): the field NAME + a value FINGERPRINT — never the raw figure.
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: planId,
+          eventType: "evaluation.answered",
+          actor: "system",
+          payload: { field, valueHash: await contentHash(value) },
+        });
+        return "Noted — I saved that for your evaluation and won't ask again; it'll show as user-provided.";
+      },
+    }),
     // ── replyToMessage (RPLY-01) — turn "reply to X" into a real threaded reply in ONE turn ───────
     // The loop has NO message ids (listInbox strips them, Pitfall 3), so the model refers to the
     // target by a FUZZY ref (sender / subject / range) and the tool resolves it SERVER-SIDE. On a
@@ -1700,7 +1784,8 @@ type AgentSmokeOp =
   | { kind: "removeAttachment"; index: number }
   | { kind: "personalize"; index: number; instructions: string }
   | { kind: "sendTime"; text: string }
-  | { kind: "brief"; range: "today" | "yesterday" | "week" };
+  | { kind: "brief"; range: "today" | "yesterday" | "week" }
+  | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" };
 
 function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
@@ -1742,6 +1827,14 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
       return { kind: "removeAttachment", index: Number(val) };
     case "sendTime":
       return { kind: "sendTime", text: val };
+    case "evaluate":
+      // Optional CLOSED framework enum — an unknown value falls back to auto-pick (undefined),
+      // mirroring the tool's inputSchema (a model can't inject prose through this seam either).
+      return {
+        kind: "evaluate",
+        framework:
+          val === "swot" || val === "lean" || val === "bmc" || val === "growth-os" ? val : undefined,
+      };
     case "brief":
       // Same enum the tool's inputSchema enforces — an unknown range defaults to today rather
       // than sending prose into the refs-only mailbox.listed audit payload (§4).
@@ -1778,6 +1871,7 @@ const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
   sendTime: "setSendTime",
   brief: "briefInbox",
   personalize: "personalizeRecipient",
+  evaluate: "evaluateBusiness",
 };
 
 function runAgentSmokeOp(
@@ -1813,6 +1907,8 @@ function runAgentSmokeOp(
       return invokeTool(tools, name, { range: op.range });
     case "personalize":
       return invokeTool(tools, name, { index: op.index, instructions: op.instructions });
+    case "evaluate":
+      return invokeTool(tools, name, { framework: op.framework });
   }
 }
 

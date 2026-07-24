@@ -421,6 +421,17 @@ test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ON
   expect(full.filter((n) => !RECIPIENT_TOOLS.includes(n)).sort()).toEqual([...withheld].sort());
 });
 
+// ── 12-04 (BEVL-01): the evaluation tools are registered in the cockpit set ────────────────────
+
+test("buildCockpitTools registers BOTH evaluateBusiness (read) and recordScorecardAnswer (write)", () => {
+  // The suite has no generic snapshot of tool keys, so without this line a dropped registration
+  // would ship silently. A bare stub ctx is enough — the tools only CLOSE over ctx here.
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const keys = Object.keys(buildCockpitTools(stubCtx, "t1", "plan-stub" as Id<"plans">));
+  expect(keys).toContain("evaluateBusiness");
+  expect(keys).toContain("recordScorecardAnswer");
+});
+
 // ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────
 
 test("buildHistoryBlock returns '' for absent/empty history (prompt byte-identical when historyless)", () => {

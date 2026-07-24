@@ -1,6 +1,6 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-25 against 12-03 (the durable evaluations table + runEvaluation engine)
+> Last verified: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
 ## Purpose
@@ -17,7 +17,9 @@ acting on a gap crosses the Approve gate separately. It audits counts/enums only
 Backend (`packages/backend/convex/`):
 - `evaluations.ts` — the engine. `runEvaluation` (internalAction: carry-forward → ground → load
   rubric → fill scorecard → `diagnose()`/`leverageRank()` → persist → refs-only audit → activity
-  step), `recordScorecardAnswer` (tenantMutation — the "store" half), `insertEvaluation`
+  step), `recordScorecardAnswer` (tenantMutation — the client "store" half) + its identity-free twin
+  `recordScorecardAnswerInternal` (internalMutation — same `applyScorecardAnswer` core, called by the
+  cockpit tool which carries an explicit tenantId, no live identity), `insertEvaluation`
   (internalMutation), `lastForThread` (internalQuery — carry-forward read), `byThread` (tenantQuery
   — the card's latest-row read).
 - `schema.ts` — the append-only `evaluations` table (`by_tenant` / `by_tenant_thread`) + the
@@ -115,8 +117,12 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
 
 - No new env vars/seeds. The framework rubric skills must be seeded (`seedSkills`) for a real run;
   a missing/inactive method fails open to "insufficient".
-- The grounding `query` is an EXPLICIT arg — the cockpit tool (a later plan) builds it; tests pass a
-  `SMOKE::<docId>` sentinel to ground offline. Absent → the `DEFAULT_QUERY` (hits `rag.search`).
+- The grounding `query` is an EXPLICIT arg — the cockpit `evaluateBusiness` tool (llm.ts, 12-04)
+  calls `runEvaluation` with an explicit tenantId; tests pass a `SMOKE::<docId>` sentinel to ground
+  offline. Absent → the `DEFAULT_QUERY` (hits `rag.search`).
+- The cockpit `recordScorecardAnswer` tool routes through `recordScorecardAnswerInternal` (explicit
+  tenantId) and emits its OWN refs-only `evaluation.answered` audit (field name + value fingerprint)
+  from llm.ts — the internal mutation itself stays audit-silent (one audit per tool call, in the tool).
 
 ## Known gaps & deferred work
 

@@ -28,6 +28,7 @@ import {
 } from "@pikar/core/growth/index";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { DatabaseWriter } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import schema from "./schema";
@@ -358,45 +359,75 @@ function gateOrder(g: Prescription["gate"]): number {
  * Tenant-guarded (§2). No prior row (answer before the first evaluation) → seed a minimal carrier
  * row so the figure still survives forward.
  */
+/**
+ * The shared store logic — patch the latest row's Scorecard (adding the dot-path to userProvided[]),
+ * or seed a minimal carrier row when the user answers before the first evaluation. Takes an explicit
+ * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
+ * identity-free cockpit tool loop, plan 04) route through ONE implementation — no drift.
+ */
+async function applyScorecardAnswer(
+  db: DatabaseWriter,
+  tenantId: string,
+  threadId: string,
+  field: string,
+  value: number | string | boolean,
+): Promise<{ recorded: true }> {
+  const last = await db
+    .query("evaluations")
+    .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+    .order("desc")
+    .first();
+
+  if (last) {
+    const scorecard = setPath(last.scorecard, field, value);
+    const userProvided = last.userProvided.includes(field)
+      ? last.userProvided
+      : [...last.userProvided, field];
+    await db.patch(last._id, { scorecard, userProvided });
+    return { recorded: true };
+  }
+
+  // No evaluation yet — seed a minimal carrier so the answer survives into the first run.
+  await db.insert("evaluations", {
+    tenantId,
+    threadId,
+    framework: "growth-os",
+    findings: [],
+    gaps: [],
+    notEnoughData: [],
+    scorecard: setPath(emptyScorecard, field, value),
+    userProvided: [field],
+    verdict: "insufficient",
+    createdAt: Date.now(),
+  });
+  return { recorded: true };
+}
+
 export const recordScorecardAnswer = tenantMutation({
   args: {
     threadId: v.string(),
     field: v.string(),
     value: v.union(v.number(), v.string(), v.boolean()),
   },
-  handler: async (ctx, { threadId, field, value }) => {
-    const last = await ctx.db
-      .query("evaluations")
-      .withIndex("by_tenant_thread", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("threadId", threadId),
-      )
-      .order("desc")
-      .first();
+  handler: (ctx, { threadId, field, value }) =>
+    applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, field, value),
+});
 
-    if (last) {
-      const scorecard = setPath(last.scorecard, field, value);
-      const userProvided = last.userProvided.includes(field)
-        ? last.userProvided
-        : [...last.userProvided, field];
-      await ctx.db.patch(last._id, { scorecard, userProvided });
-      return { recorded: true as const };
-    }
-
-    // No evaluation yet — seed a minimal carrier so the answer survives into the first run.
-    await ctx.db.insert("evaluations", {
-      tenantId: ctx.tenantId,
-      threadId,
-      framework: "growth-os",
-      findings: [],
-      gaps: [],
-      notEnoughData: [],
-      scorecard: setPath(emptyScorecard, field, value),
-      userProvided: [field],
-      verdict: "insufficient",
-      createdAt: Date.now(),
-    });
-    return { recorded: true as const };
+/**
+ * The internal store surface for the cockpit `recordScorecardAnswer` tool (plan 04). The tool loop
+ * carries an EXPLICIT tenantId and NO live identity (the searchVault/runEvaluation convention), so
+ * it cannot call the auth-scoped tenantMutation above — this internal twin takes the tenantId
+ * directly. Same one implementation, so the two can never diverge.
+ */
+export const recordScorecardAnswerInternal = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    field: v.string(),
+    value: v.union(v.number(), v.string(), v.boolean()),
   },
+  handler: (ctx, { tenantId, threadId, field, value }) =>
+    applyScorecardAnswer(ctx.db, tenantId, threadId, field, value),
 });
 
 /** The tenant's latest evaluation row for a thread → feeds the EVALUATION card (plan 04). */
