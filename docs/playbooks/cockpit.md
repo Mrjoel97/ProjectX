@@ -1,5 +1,15 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-25 (14-01 — Wave-0 freeze, Phase 14 voice-doc) — NO cockpit behavior
+> change. `FRAMEWORK_LABEL` in `cards.tsx` gained one entry, `"document-review": "Document review"`.
+> That map is typed `Record<Evaluation["framework"], string>`, i.e. derived from the Convex schema
+> union, so it is **not optional bookkeeping**: the moment `evaluations.framework` is widened without
+> it, `pnpm --filter @pikar/web typecheck` goes red. The two edits must always land in ONE commit.
+> The EVALUATION card itself is unchanged — a voice-doc review is rendered by the same dumb
+> single-`byThread`-read card as every business evaluation ("no new card idiom" still holds).
+> Phase 14 also adds `apps/web/e2e/voice-doc.spec.ts` under this playbook's watched `apps/web/e2e/`
+> prefix; its SC3 assertions are filled in by plan 14-08, not here.
+
 > Last verified: 2026-07-25 (4) — **chat-head + tab strip density pass** (owner-reported: both were
 > taking too much vertical space). The dominant cost was NOT the icons — it was the global
 > `body { line-height: 1.6 }` inherited by the two-line name/subtitle block, which alone stood ~40px

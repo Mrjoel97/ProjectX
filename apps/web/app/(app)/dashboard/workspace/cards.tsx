@@ -1237,6 +1237,9 @@ const FRAMEWORK_LABEL: Record<Evaluation["framework"], string> = {
   lean: "Lean Canvas",
   bmc: "Business Model Canvas",
   "growth-os": "Growth",
+  // Phase 14 (DOCV-01). This map is `Record<Evaluation["framework"], string>`, so the schema
+  // widening and this entry MUST land in the same commit or web typecheck goes red.
+  "document-review": "Document review",
 };
 
 const evalSection = {
