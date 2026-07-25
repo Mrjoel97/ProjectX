@@ -1,6 +1,6 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
+> Last verified: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
 > Prior: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
@@ -116,6 +116,40 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
 - **Fail open (SC1)** — any grounding/skill error yields an "insufficient" verdict, never a throw
   out of the governed loop. Enforced by the outer try/catch + the fail-open grounding branch.
 - **Closed `agentSteps.tool` union** — `"evaluateBusiness"` must stay in the union (Pitfall 2).
+- **The delta is computed IN the engine, never patched on (13-01)** — see below.
+
+## "What changed" — the `evaluations.delta` field (13-01, BEVL-03)
+
+`evaluations.delta` is an OPTIONAL row field:
+
+```ts
+delta?: { newFindings: number; gapsClosed: string[]; gapsOpened: string[] }
+```
+
+- **Optional ⇒ no migration.** Every pre-13-01 row simply carries none, and the review card hides
+  the "what changed" line when it is absent.
+- **Written only when the caller asks.** `runEvaluation` takes `withDelta: v.optional(v.boolean())`;
+  an on-demand run (the cockpit `evaluateBusiness` tool) passes nothing and records no delta. Only
+  the cron-driven weekly review asks for one, because only a recurring run has a meaningful
+  "since last time".
+- **Computed INSIDE `runEvaluation`, immediately before `insertEvaluation` — not patched on
+  afterwards.** Two reasons, both binding: (1) the `evaluations` table is APPEND-ONLY and
+  `insertEvaluation` is its single write surface, so a follow-up `ctx.db.patch` would break that
+  invariant; (2) the engine already holds `last` (the carry-forward read), `findings` and `gaps` in
+  ONE scope at that point, so the delta is pure arithmetic over values already in memory — zero
+  extra reads, zero extra writes. A separate "compute the delta" query would re-read `lastForThread`
+  for data the action is already holding.
+- **Gap identity is `${route}/${playbook}`, not `route` alone.** `diagnose()` emits only THREE
+  routes (`offer-architect`, `money-model-designer`, `lead-engine`) and several distinct
+  prescriptions share each — a route-only key would report a real move (e.g. "No offer worth buying
+  yet" → "Offer is a commodity", both `offer-architect`) as "no change". `playbook` is a code-owned
+  string literal from `diagnose()`, never LLM prose, so keying on it is safe in a way that keying on
+  the human-readable `label` would not be.
+- **`newFindings` is clamped at 0.** A DROP in finding count is not "new findings"; the card only
+  renders the line when it is > 0. (A repeat run in the same thread legitimately re-cites fewer
+  paths — see the provenance gap under Known gaps.)
+- Enforced by the four `delta`-named tests in `evaluations.test.ts`
+  (`vitest run convex/evaluations.test.ts -t "delta"`).
 
 ## How to change safely
 

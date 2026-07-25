@@ -101,6 +101,16 @@ function setPath<T>(obj: T, path: string, value: unknown): T {
   return clone as T;
 }
 
+/**
+ * The BEVL-03 "what changed" line (13-01). Named + explicit because `runEvaluation` RETURNS it and
+ * it is derived from `last` (an `internal.evaluations.lastForThread` result). Without an explicit
+ * annotation on both this and the handler's return, the action's return type resolves through
+ * `internal` → `api.d.ts` → back to `runEvaluation`: TypeScript detects the cycle, silently degrades
+ * the WHOLE generated API to `any`/`{}`, and ~90 unrelated `apps/web` errors appear (Pitfall 9 —
+ * measured: web typecheck went from exit 0 to 90 errors with the annotation missing).
+ */
+type EvaluationDelta = { newFindings: number; gapsClosed: string[]; gapsOpened: string[] };
+
 type Provenance = {
   docId?: string;
   title: string;
@@ -150,7 +160,15 @@ export const runEvaluation = internalAction({
     query: v.optional(v.string()),
     withDelta: v.optional(v.boolean()),
   },
-  handler: async (ctx, { tenantId, threadId, framework, query, withDelta }) => {
+  handler: async (
+    ctx,
+    { tenantId, threadId, framework, query, withDelta },
+  ): Promise<{
+    verdict: "gaps" | "healthy" | "insufficient";
+    findingCount: number;
+    gapCount: number;
+    delta: EvaluationDelta | undefined;
+  }> => {
     const turnId = crypto.randomUUID();
     const stepKey = "evaluateBusiness";
     const startedAt = Date.now();
@@ -336,7 +354,7 @@ export const runEvaluation = internalAction({
       const gapKey = (g: { route: string; playbook: string }) => `${g.route}/${g.playbook}`;
       const prevKeys = new Set((last?.gaps ?? []).map(gapKey));
       const nextKeys = new Set(gaps.map(gapKey));
-      const delta =
+      const delta: EvaluationDelta | undefined =
         withDelta && last
           ? {
               // Clamped: a DROP in findings is not "new findings", and the card only renders > 0.
