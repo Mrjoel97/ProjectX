@@ -1,5 +1,10 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-25 (15-02 — Phase 15 Lane A, dispatch core). See "Phase 15 — Lane A
+> (dispatch core)" below. `runAgentLoop` gained the append-only optional `toolNames` (absent ⇒ the
+> full record, byte-identical), and `runSpecialistTurn` is the one exported specialist entry into
+> the loop. `runCockpitAgent` behavior is unchanged. Related ADR: ADR-007.
+
 > Last verified: 2026-07-25 (15-01 — Phase 15 Wave-0 freeze). See "Phase 15 — Wave 0 (freeze)"
 > below. Three `agentSteps.tool` dispatch literals + their `VERB` entries landed, the missing
 > Phase-12 `evaluateBusiness` `VERB` entry was fixed in the same pass, and four new source files
@@ -401,6 +406,36 @@ BEHAVIOR — it makes later behavior expressible.
   (`preCall` only ever sees the outer call) and makes `stopWhen: stepCountIs(8)` meaningless.
   Dispatch is therefore a SEQUENTIAL second `runAgentLoop` call, never a loop inside a tool.
   15-05 appends its Approve-gate scan to this same file below the `// 15-05 adds:` marker.
+
+### Phase 15 — Lane A (dispatch core)
+
+15-02 added the ONE seam that lets a specialist run in THE governed loop without forking it.
+`runCockpitAgent`'s behavior is byte-identical.
+
+- **`runAgentLoop` gained the append-only optional `toolNames?: readonly string[]`** (the
+  `omitRecipientEdits` / `skillVersions` signature-evolution convention). **ABSENT ⇒ the full
+  20-key record** — every pre-existing caller keeps working, which is what the whole unchanged
+  `runCockpitAgent.test.ts` / `cockpitTools.test.ts` suite proves. **`[]` ⇒ an EMPTY record**, not
+  the full one: the implementation tests `toolNames === undefined`, never truthiness, because
+  `toolNames ? filtered : built` would hand a zero-tool specialist all 20 keys. Both are asserted.
+- **Withholding is STRUCTURAL ABSENCE from the tool record.** Not `activeTools` (ai@7 has it, one
+  line — but the withheld tool's `execute` closure would still sit in the record and stay reachable
+  via `invokeTool`), and emphatically not skill wording. This is the `omitRecipientEdits` precedent
+  generalized to an explicit allow-list: the capability is withheld by CONSTRUCTION. Upgrade path if
+  the filter ever gets hot: `activeTools` PLUS an `invokeTool` allow-list check, never `activeTools`
+  alone.
+- **`runSpecialistTurn` is the ONLY exported entry into the loop for a specialist**, and
+  **`runAgentLoop` stays module-private**. That narrowness is what makes "no agent spawns an agent"
+  checkable by reading one file (`dispatchGuard.test.ts`). It loads the body from the §5 registry
+  (`getSkillVersion` when pinned, else `getActiveSkill` — fail-closed on both), takes the tool-set
+  from `@pikar/core`'s code-owned allow-list (**ADR-007**), and returns `skillVersion` so the caller
+  can put `{name, version}` on the lineage audit row. Explicit return type, mandatory (Pitfall 4 —
+  an inferred one collapses the generated API to `any` in `apps/web`).
+- The `__runCockpitAgentWithScript` shim gained an append-only `toolNames` arg so the filter is
+  drivable offline through the REAL loop.
+- **Do not add a write tool to a specialist.** `specialists.test.ts` asserts `tools` as an equality
+  over the whole registry precisely so that edit fails a test. See ADR-007 for why the tool-set is
+  code-owned while the body is registry-owned.
 
 ## How to verify
 

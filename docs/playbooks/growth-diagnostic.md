@@ -1,12 +1,15 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-25 against 15-01 (Phase 15 Wave-0 freeze) — `packages/core/src/specialists.ts`
-> (+ its test) is now registered under this playbook as a STUB: the fail-closed route lookup with
-> ZERO specialists registered. It is the CONSUMER side of `diagnose()`'s `Prescription.route`. The
-> registry itself, and the closing of `Prescription.route` into a union, land in 15-02. No diagnostic
-> math changed. See "Consumer side — specialist dispatch" below.
+> Last verified: 2026-07-25 against 15-02 (Phase 15 Wave 1) — the three specialists are REGISTERED
+> and `Prescription.route` is now closed to `SpecialistRoute | ""`. No diagnostic math, gate order,
+> or route literal changed. See "Consumer side — specialist dispatch" below.
+> Previously verified: 2026-07-25 against 15-01 (Phase 15 Wave-0 freeze) — `packages/core/src/specialists.ts`
+> (+ its test) registered under this playbook as a STUB: the fail-closed route lookup with ZERO
+> specialists registered.
 > Previously verified: 2026-07-24 against 12-01 (Python→TS port of the Growth OS diagnostic spine)
-> Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
+> Build history: `.planning/phases/12-business-evaluation-engine/`,
+> `.planning/phases/15-sub-agent-dispatch-action-executor/` · Related ADRs: ADR-007 (sub-agent
+> capability is code-owned; the sub-agent prompt is registry-owned)
 
 ## Purpose
 
@@ -34,9 +37,29 @@ Pure package (`packages/core/src/growth/`):
 
 Consumer side — specialist dispatch (`packages/core/src/specialists.ts`, + `specialists.test.ts`):
 - `SPECIALIST_ROUTES` / `SpecialistRoute` / `SPECIALISTS` / `resolveSpecialist(route)` — the DISP-01
-  lookup that turns a `Prescription.route` string into a dispatchable specialist. At Wave 0 (15-01)
-  the registry is DELIBERATELY EMPTY and every input resolves to `{ ok: false, reason: "unknown_route" }`.
-  15-02 registers the three specialists.
+  lookup that turns a `Prescription.route` string into a dispatchable specialist. **15-02 registered
+  the three:** `offer-architect`, `money-model-designer`, `lead-engine`, each a
+  `(skillName, tools, stepTool)` triple. Nothing else resolves.
+- **`Prescription.route` is now `SpecialistRoute | ""`** (15-02). The `""` member is DELIBERATE — it
+  is what `diagnose.ts`'s not-enough-data ask branch emits, and `resolveSpecialist("")` refuses it at
+  runtime rather than routing on a guess. The union lives in `../specialists`; the dependency
+  direction is **`growth/ → specialists`, never the reverse** (a back-edge would be a cycle).
+- **INVARIANT a future change must keep: every non-empty route `diagnose()` can emit must resolve.**
+  A new gate with a new route literal is only half a change; the specialist must be registered in
+  the same commit. Asserted at runtime in `specialists.test.ts` (it reads the route literals off
+  `diagnose.ts`'s source and feeds each through `resolveSpecialist`) and at compile time by the
+  closed `route` type.
+- `wouldCycle(ancestry, route)` lives here rather than in `convex/dispatch.ts` because it must
+  already be CORRECT the day `MAX_DEPTH` rises — at depth 1 a depth cap hides every cycle.
+- `specialistMemoBody({route, body, incomplete})` composes the memo a specialist run produces. §5
+  does NOT apply (a document the user reads, not an agent prompt — the `buildMemo` precedent). The
+  "incomplete — cost ceiling reached" marker lives in the BODY, never on the plan row: a new
+  `plans.status` literal would touch the PINNED status enum with `apps/web` blast radius, and the
+  body is visible at the Approve gate where the human decides.
+- The three `skillName` values are INLINED copies of `OFFER_ARCHITECT_SKILL` /
+  `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` (`packages/contracts/src/skill.ts`) because
+  `@pikar/contracts` is not a dependency of `@pikar/core`. `specialists.test.ts` reads that file off
+  disk and asserts the copies match, so a rename on either side fails a test.
 - It mirrors `parseRouting` (`packages/contracts/src/routing.ts`) exactly: a discriminated result,
   NEVER a throw, and deliberately **no default specialist** — "a route the system cannot validate is
   a route it must not take". This is the same guarantee as the diagnostic's own conservatism, one
@@ -49,7 +72,11 @@ Consumer side — specialist dispatch (`packages/core/src/specialists.ts`, + `sp
   truthiness guard would happily "route" on them. Asserted in `specialists.test.ts`.
 - `SpecialistSpec.tools` is a CAPABILITY grant and is therefore code-owned, never DB-writable — only
   the skill BODY is a registry row (CLAUDE.md §5). A row that could widen its own tool set would be
-  a privilege-escalation path.
+  a privilege-escalation path. **ADR-007** records the split. Every spec's `tools` is
+  `["searchVault"]`, asserted as an equality over the WHOLE registry so a write tool cannot be added
+  to any one specialist quietly. `evaluateBusiness` is deliberately NOT granted — it persists an
+  `evaluations` row + an audit row per call and re-enters this engine mid-dispatch; the snapshot
+  reaches the specialist through its prompt instead.
 
 ## Dependencies & blast radius
 
