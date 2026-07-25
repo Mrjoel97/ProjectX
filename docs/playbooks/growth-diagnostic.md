@@ -1,6 +1,11 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-24 against 12-01 (Python→TS port of the Growth OS diagnostic spine)
+> Last verified: 2026-07-25 against 15-01 (Phase 15 Wave-0 freeze) — `packages/core/src/specialists.ts`
+> (+ its test) is now registered under this playbook as a STUB: the fail-closed route lookup with
+> ZERO specialists registered. It is the CONSUMER side of `diagnose()`'s `Prescription.route`. The
+> registry itself, and the closing of `Prescription.route` into a union, land in 15-02. No diagnostic
+> math changed. See "Consumer side — specialist dispatch" below.
+> Previously verified: 2026-07-24 against 12-01 (Python→TS port of the Growth OS diagnostic spine)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
 ## Purpose
@@ -26,6 +31,25 @@ Pure package (`packages/core/src/growth/`):
   constants for the Gate 2/3 numeric checks.
 - `index.ts` — re-exports the three modules.
 - `financialSpine.test.ts`, `diagnose.test.ts` — the runnable checks (vitest; ponytail — no fixtures).
+
+Consumer side — specialist dispatch (`packages/core/src/specialists.ts`, + `specialists.test.ts`):
+- `SPECIALIST_ROUTES` / `SpecialistRoute` / `SPECIALISTS` / `resolveSpecialist(route)` — the DISP-01
+  lookup that turns a `Prescription.route` string into a dispatchable specialist. At Wave 0 (15-01)
+  the registry is DELIBERATELY EMPTY and every input resolves to `{ ok: false, reason: "unknown_route" }`.
+  15-02 registers the three specialists.
+- It mirrors `parseRouting` (`packages/contracts/src/routing.ts`) exactly: a discriminated result,
+  NEVER a throw, and deliberately **no default specialist** — "a route the system cannot validate is
+  a route it must not take". This is the same guarantee as the diagnostic's own conservatism, one
+  layer out: `diagnose()` refuses to fabricate a route, and this refuses to invent one downstream.
+- The runtime branch is load-bearing even though `route` will become a union type in 15-02:
+  `gap.route` persists as `v.string()`, including the deliberate `route: ""` this file's `diagnose.ts`
+  emits on the not-enough-data ask branch, so rows predating the union reach the lookup un-narrowed.
+- The lookup uses `Object.prototype.hasOwnProperty.call(...)`, not `SPECIALISTS[route]`: a bare index
+  read resolves `"__proto__"`/`"constructor"` to `Object.prototype` members, which are TRUTHY, so a
+  truthiness guard would happily "route" on them. Asserted in `specialists.test.ts`.
+- `SpecialistSpec.tools` is a CAPABILITY grant and is therefore code-owned, never DB-writable — only
+  the skill BODY is a registry row (CLAUDE.md §5). A row that could widen its own tool set would be
+  a privilege-escalation path.
 
 ## Dependencies & blast radius
 

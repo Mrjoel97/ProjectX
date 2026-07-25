@@ -1,5 +1,10 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-25 (15-01 — Phase 15 Wave-0 freeze). See "Phase 15 — Wave 0 (freeze)"
+> below. Three `agentSteps.tool` dispatch literals + their `VERB` entries landed, the missing
+> Phase-12 `evaluateBusiness` `VERB` entry was fixed in the same pass, and four new source files
+> were registered under this playbook as STUBS. No cockpit BEHAVIOR changed.
+
 > Last verified: 2026-07-25 (4) — **chat-head + tab strip density pass** (owner-reported: both were
 > taking too much vertical space). The dominant cost was NOT the icons — it was the global
 > `body { line-height: 1.6 }` inherited by the two-line name/subtitle block, which alone stood ~40px
@@ -348,6 +353,54 @@ per tenant per week on the STABLE `REVIEW_THREAD_ID` (`"proactive-review"`, expo
   enrichment surface, whose save re-embeds the profile doc), turning the one dead-end state into the
   one action that unblocks it. `--teal-900`, not `--teal-600`: BRAND §6 forbids teal-600 as small
   body text (~2.9:1) and says to darken it.
+
+## Phase 15 — Sub-agent dispatch + generalized executor
+
+> **This section is an APPEND-ONLY shared singleton for Phase 15.** Each plan writes ONLY inside
+> its own `### Phase 15 — …` subsection and bumps `Last verified` at the top of this file. On a
+> merge conflict here, KEEP BOTH sides.
+
+### Phase 15 — Wave 0 (freeze)
+
+15-01 landed the shared seams every later Phase-15 plan depends on. Nothing here changes cockpit
+BEHAVIOR — it makes later behavior expressible.
+
+- **Three dispatch literals on the closed `agentSteps.tool` union** (`schema.ts`):
+  `dispatchOfferArchitect`, `dispatchMoneyModelDesigner`, `dispatchLeadEngine`. They are N
+  LITERALS, deliberately not a `specialist: v.string()` field — §4 on the trace plane is enforced
+  by the ABSENCE of anywhere to put text, and a string field would re-open exactly the hole the
+  closed union closed (`agentSteps` allow-list scan, `llmRedaction.test.ts`). Without the literals
+  the dispatch step's insert throws INSIDE an SDK tool callback, which the SDK swallows: prod gets
+  a blank activity card while every test stays green. `dispatch.test.ts` inserts each literal
+  against the real schema; that is the guard.
+- **Matching `VERB` entries** in `apps/web/.../workspace/cards.tsx`, plus the missing Phase-12
+  `evaluateBusiness` entry (it had been rendering the `["Working…","Done"]` FALLBACK since 12-04).
+  Rule: every `agentSteps.tool` literal gets a `VERB` entry in the same commit that adds it.
+  **This is the ONLY `apps/web` edit in Phase 15** — specialist attribution rides the plan BODY,
+  and `PlanCard` renders only at `plan.status === "proposed"`, so a `collecting` plan already
+  renders nothing during dispatch and needs no pending state.
+- **`internal.guardrails.remainingDailyCents`** — the readable half of the daily-spend rail.
+  `rateLimiter.getValue` reads utilization WITHOUT consuming tokens, clamped with `Math.max(0, …)`
+  because `recordSpend` uses `reserve: true` and drives the window negative on purpose. Explicit
+  `Promise<number>` return type is mandatory (an inferred one collapses the generated API to `any`
+  — that is how 13-01 shipped 90 `apps/web` errors). It is the DEPLOYMENT's budget, not the
+  tenant's: `dailySpendCents` is a keyless window; per-tenant keying is the upgrade path.
+- **STUBS registered under this playbook** (content lands later, but the paths are registered NOW
+  so the Stop hook can protect them from day one): `packages/backend/convex/dispatch.ts` (+
+  `dispatch.test.ts`, `dispatchGuard.test.ts`) → 15-02/15-03; `packages/core/src/actionType.ts`
+  (+ test) → 15-05. `actionType.ts` ships the closed `ACTION_TYPES = ["email","memo"]` union and
+  `actionTypeOf(kind)` — an absent `plans.kind` means the email plan every prior phase built, so
+  ACTN-01 needs no migration and no backfill.
+- **`dispatchGuard.test.ts` — the no-nested-loop scan.** `dispatch.ts` must contain ZERO
+  `generateText`, and `llm.ts` must contain EXACTLY ONE **tool-bearing** `generateText` call site.
+  Tool-bearing, not total: `llm.ts` legitimately holds several TOOLLESS `generateText` calls
+  (`digestInbox`/`draftReply`/`draftCockpit`) — that is the untrusted-content ingestion firewall
+  (agent-runtime.md invariant 10) and `llmRedaction.test.ts` already pins each as toolless. Note
+  `runAgentLoop` passes its tool set by SHORTHAND (`tools,`), so the scan matches `tools\s*[,:]`.
+  Why the invariant: a second loop nested in a tool's `execute` double-bills the daily window
+  (`preCall` only ever sees the outer call) and makes `stopWhen: stepCountIs(8)` meaningless.
+  Dispatch is therefore a SEQUENTIAL second `runAgentLoop` call, never a loop inside a tool.
+  15-05 appends its Approve-gate scan to this same file below the `// 15-05 adds:` marker.
 
 ## How to verify
 

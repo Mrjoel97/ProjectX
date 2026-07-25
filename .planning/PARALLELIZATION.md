@@ -70,21 +70,57 @@ After this commit, `convex/llm.ts`, `convex/schema.ts` and `convex/deliverApprov
 **FROZEN to their owning lane** for the rest of the phase. A lane that believes it needs an edit
 outside its column stops and coordinates — that is a contract change, not a code change.
 
-### Stage 2 — three execution lanes (PROVISIONAL until Stage 0 lands)
+### Stage 2 — execution lanes (FINALIZED at 15-01; Phase 15 runs SERIALLY)
 
-**This table is provisional on purpose.** Real file ownership can only be read off the finished
-plans; writing it before planning would be inventing the constraint instead of measuring it.
-The Stage-1 session finalizes this table in the same commit as the freeze.
+**FINALIZED 2026-07-25 by the Stage-1 (15-01) freeze commit.** No longer provisional: the
+ownership below is read off the six finished Phase-15 plans, not guessed.
 
-| Lane | Worktree | Branch | Scope | Owns (edit freely) | Must NOT touch |
-|------|----------|--------|-------|--------------------|----------------|
-| **A · Dispatch core** | `.worktrees/lane-a-dispatch` | `lane-a/dispatch-core` | Phase 15 SC #1, #2 | `convex/llm.ts` (route → specialist skill+tool-set swap, depth cap, cycle refusal, shared cost envelope), specialist skill rows in `convex/skills.ts` + `packages/contracts` | executor files, any voice file |
-| **B · Executor + lineage** | `.worktrees/lane-b-executor` | `lane-b/executor-lineage` | Phase 15 SC #4, #3, #5 | `convex/deliverApprovedPlan.ts`, `convex/plans.ts`, audit/telemetry lineage rows, the cross-tenant isolation assertion | `convex/llm.ts` (zero edits), voice files |
-| **C · Voice-doc flagship** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | Phase 14 (all SC) | `convex/voice.ts`, the new voice-doc module, `apps/web/app/(app)/dashboard/voice/*`, read-only use of `convex/evaluations.ts` | `convex/llm.ts`, executor files |
+> **OWNER DECISION (2026-07-25): Phase 15 executes SERIALLY, not in parallel.** All six plans
+> (15-01 … 15-06) run in `.worktrees/lane-a-dispatch` on `lane-a/dispatch-core`. There is no
+> Lane B session and no concurrent Phase-15 lane. The Wave-0 freeze still executed in FULL —
+> the seams below are real architecture (a closed schema union, a fail-closed lookup, a readable
+> budget rail), not coordination scaffolding — but its "land on `main` to unblock parallel lanes"
+> framing is moot, so it landed on the lane branch. **The Lane A / Lane B columns below are
+> retained as the file-ownership CONTRACT** (which plan may touch which file), which still holds
+> under serial execution and is what keeps 15-05's executor work from silently colliding with
+> 15-02/03/04's dispatch work. Phase 14 / Lane C is unaffected.
+
+| Lane | Branch | Plans | Owns (edit freely) | Must NOT touch |
+|------|--------|-------|--------------------|----------------|
+| **A · Dispatch core** | `lane-a/dispatch-core` | 15-02, 15-03, 15-04, 15-06 | `convex/llm.ts`, `convex/dispatch.ts`, `convex/dispatch.test.ts`, `convex/evaluations.ts` (+`.test.ts`), `packages/core/src/specialists*.ts`, `packages/core/src/growth/diagnose.ts`, `convex/skills.ts` seeding, `packages/contracts/skills/` + `packages/contracts/src/skills/`, `scripts/run-eval-golden.mjs` + `scripts/eval-cases/` | `convex/cockpit.ts`, `convex/deliverApprovedPlan.ts`, `packages/core/src/actionType.ts`, `convex/gapAction.test.ts`, `apps/web/**`, any voice file |
+| **B · Executor** | `lane-b/executor-lineage` | 15-05 | `convex/cockpit.ts`, `packages/core/src/actionType*.ts`, `convex/gapAction.test.ts`, `convex/dispatchGuard.test.ts` | `convex/llm.ts` (ZERO edits), `convex/dispatch.ts`, `convex/evaluations.ts`, `apps/web/**`, voice files |
+| **C · Voice-doc** | `lane-c/voice-doc` | Phase 14 | (unchanged) | (unchanged) |
+
+**Contract amendments recorded with this finalization (15-01):**
+
+- **Web column: RESOLVED — there is none.** Phase 15's ONLY `apps/web` edit is 15-01's `VERB` map
+  addition in `apps/web/app/(app)/dashboard/workspace/cards.tsx`. Specialist attribution rides the
+  plan BODY (15-04), and `PlanCard` renders only at `plan.status === "proposed"`, so a `collecting`
+  plan needs no pending state. **`apps/web` is FROZEN for Phase 15 after Wave 0.**
+- **SC #5 moves from Lane B to Lane A.** The lineage rows keyed on `rootRequestId` are written by
+  `convex/dispatch.ts`, so the two-tenant isolation assertion belongs in `convex/dispatch.test.ts`.
+  Splitting it across lanes would put two lanes in one test file. Lane B keeps SC #4 whole.
+- **`convex/evaluations.ts` → Lane A** (it is the dispatch TRIGGER, `actOnGap`). Lane B's arm table
+  calls the existing `persistNextStepMemo` unchanged, so Lane B needs zero edits there.
+- **`docs/playbooks/cockpit.md` is an append-only shared singleton this phase** (the `vault.md`
+  Phase-3.8 rule): each lane writes ONLY inside its own `### Phase 15 — Lane X` subsection and
+  bumps `Last verified`; on merge conflict, keep both. The `## Phase 15` container section and its
+  `### Phase 15 — Wave 0 (freeze)` subsection were opened by 15-01.
+- **`docs/playbooks/watch.json` is a Wave-0 singleton** (rule #5) — 15-01 registered
+  `convex/dispatch.ts`, `convex/dispatch.test.ts`, `convex/dispatchGuard.test.ts` and
+  `packages/core/src/actionType*.ts` under `cockpit.md`, and `packages/core/src/specialists*.ts`
+  under `growth-diagnostic.md`. No lane edits it after that commit.
+- **No lineage SCHEMA change was needed.** RESEARCH Q5: `AuditPayload` already permits
+  `rootRequestId`/`parentAgentId`, `audit.by_correlation` already exists, and `telemetry`
+  structurally cannot carry them (`requestId: v.id("requests")`, and a specialist run seeds zero
+  `requests` rows by design). Stage 1 item (1)'s "lineage fields" turned out to be a no-op — SC #3
+  needs zero schema change. What Stage 1 item (1) DID need was the three `agentSteps.tool` dispatch
+  literals.
 
 **Per-worktree setup, once, at Stage 2 only:** `pnpm install` → `npx convex dev` (codegen + its
 own dev deployment) → `pnpm dev`. Each lane gets an isolated deployment, which is what lets a
-lane run a live smoke without clobbering another's.
+lane run a live smoke without clobbering another's. (Under the serial decision this is done once,
+in `.worktrees/lane-a-dispatch`.)
 
 ### Stage 3 — integrate, then verify once
 

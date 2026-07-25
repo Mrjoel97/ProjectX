@@ -1,7 +1,9 @@
 {
   "_unassigned": [],
   "growth-diagnostic.md": [
-    "packages/core/src/growth/"
+    "packages/core/src/growth/",
+    "packages/core/src/specialists.ts",
+    "packages/core/src/specialists.test.ts"
   ],
   "business-evaluation.md": [
     "packages/backend/convex/evaluations.ts",
@@ -44,7 +46,12 @@
     "packages/core/src/emailIntent.ts",
     "packages/core/src/documentGen.ts",
     "packages/core/src/briefing.ts",
-    "packages/backend/scripts/run-smoke-fanout.mjs"
+    "packages/backend/scripts/run-smoke-fanout.mjs",
+    "packages/backend/convex/dispatch.ts",
+    "packages/backend/convex/dispatch.test.ts",
+    "packages/backend/convex/dispatchGuard.test.ts",
+    "packages/core/src/actionType.ts",
+    "packages/core/src/actionType.test.ts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/audit.ts",
