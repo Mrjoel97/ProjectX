@@ -1,6 +1,6 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-07-25 (13-01 — proactive review groundwork). NO audit/DLQ/notification behavior change. `packages/core/src/notificationTemplates.ts` gained three static review constants (`REVIEW_THREAD_ID`, `REVIEW_READY_MESSAGE`, `REVIEW_FAILED_MESSAGE`) that are NOT notification kinds — see the last bullet of the Notification matrix for why that absence is the guarantee. `NOTIFICATION_KINDS` is byte-identical; `@pikar/core` 195/195 green including `notificationTemplates.test.ts`.
+> Last verified: 2026-07-25 (13-02 — the proactive weekly review lands). NO audit/DLQ behavior change and NO new audit eventType: the review rides the existing refs-only `evaluation.ran` row (a `review.delivered` row would duplicate it). Two additions here: a **Cron jobs** section (the new `crons.weekly("proactive-review", monday 06:00 UTC)` alongside the two dailies, plus the `crons.weekly`-over-`crons.cron` override and its reason), and a Notification-matrix bullet recording that the DIRECT-insert bypass now has TWO enumerated users — `gmailAuth.flagExpiringTokens` and `proactiveReview.insertReviewNotification` — both bypassing `notify` because `notify` schedules `notifyExternal.dispatch` unconditionally. `NOTIFICATION_KINDS` is still byte-identical (the two review kinds stay out; that absence is the second barrier). Backend 494/495, sole red the pre-existing `audit.test.ts auditCounts`. Prior: 2026-07-25 (13-01 — proactive review groundwork). NO audit/DLQ/notification behavior change. `packages/core/src/notificationTemplates.ts` gained three static review constants (`REVIEW_THREAD_ID`, `REVIEW_READY_MESSAGE`, `REVIEW_FAILED_MESSAGE`) that are NOT notification kinds — see the last bullet of the Notification matrix for why that absence is the guarantee. `NOTIFICATION_KINDS` is byte-identical; `@pikar/core` 195/195 green including `notificationTemplates.test.ts`.
 > Prior: 2026-07-24 (10-02 — vault grounding). New refs-only audit event `vault.searched` written by the `searchVault` cockpit tool (`llm.ts`): payload is EXACTLY `{ queryHash, resultCount }` — the raw search query is NEVER stored, only its `contentHash` fingerprint (§4); `resultCount` is the grounded-doc count. No content, no chunk substring, no doc title (titles live on the `vaultSources` content-plane row, never the audit). Asserted by `cockpitTools.test.ts` (SC3). NO DLQ/WORM behavior change.
 > Last verified: 2026-07-24 (08-08 phase close — §9 sweep) — NO audit/DLQ behavior change. Phase 8 (self-improvement) touched two audit-dead-letter.md-watched paths: `packages/core/src/notificationTemplates.ts` gained the `optimizer.candidate` notification kind (the "candidate ready" owner notify — a static §4 label, no refs/content), and `packages/pii/` `scanText` is now ALSO the scrubber for the `/skillopt/export` trajectory plane (a SEPARATE PII-scrubbed export plane from the refs-only audit log; the names-in-prose gap is a recorded Phase-9 blocker in skill-registry.md). The new refs/counts-only `skill.optimized` audit row (`{skillName, fromVersion, toVersion, runId, negativeRate, sampleCount}`) is written by `/skillopt/writeback` and honors the §3 insert-only / §4 no-content contract. Bumped so the §9 Stop hook clears against the phase baseline.
 > Last verified: 2026-07-21 (07-06 phase close) — full offline sweep GREEN (backend 398/399, sole red the documented `audit.test.ts auditCounts` component-not-registered non-regression; `@pikar/core` 145/145; `check-playbooks` exit 0), the four fail-closed grep-proofs hold (pipeline escalate→`return null` never DELIVER; cockpit `executePlan` `review_escalated` before the CAS flip; `worm.advanceCursor` only after `s3.send` resolves; notify sites carry only `notificationMessage(kind)` static labels). Runnable live smokes PASSED against :3210 — `smoke:worm` (stub-skip path, no `WORM_BUCKET`), `smoke:pipeline` (approve→awaiting_reauth, timeout→`expired`+`review.expired`, breach→`escalated`+`retry.limit`, NO send on either terminal), `smoke:dlq` (`deadLetters` row + `deadletter.written` audit + `deadletter` notify). **Owner-approved 2026-07-21; TWO cloud-infra-only checks owner-DEFERRED as Manual-Only (07-VALIDATION, phases 3.8/6 precedent — NOT silent gaps): (1) a real S3 object under COMPLIANCE Object Lock that refuses deletion (needs an AWS Object-Lock bucket + creds in the Convex deployment env; the export code + stub-skip are proven, only real-bucket durability deferred); (2) a real external email delivered to a live mailbox (needs a Gmail-connected user; the choke point + external dispatch + no-loop are unit-proven, only real deliverability deferred).** ALSO (07-06 gap-closure, same session — a live human-verify finding): the OPSG-05 **in-app render surface** `NotificationsBanner` was added + mounted in the app shell (renders unread `notifications.list` excl. `gmail_reconnect`, Dismiss→`markRead`). The email channel was live-proven (`Pikar: review.expired` delivered to the owner's real mailbox); the in-app row previously had no general render surface (only `ReconnectBanner`'s narrow `gmail_reconnect` filter) — a user-flagged gap now closed. **OWNER LIVE-VERIFIED 2026-07-21 ('I approve, I've seen it myself'): the banner rendered `agent.timeout` at the top of the app shell with a working Dismiss, confirmed on a PRODUCTION build (the local Next dev server had been serving a stale bundle — an env artifact, not a code defect; `next build` compiled the surface cleanly first try). VERIFICATION.md → passed; only real S3 Object-Lock durability stays owner-deferred.** PRIOR: against 07-05
@@ -86,6 +86,34 @@ send from the in-app write.
   path. The proactive review is an IN-APP surface only. Adding them to `NOTIFICATION_KINDS` would
   arm the email channel for it and break `notificationTemplates.test.ts`'s element-by-element
   assertion on the closed array. Do not.
+- **The DIRECT-insert bypass now has TWO users (13-02)** — `gmailAuth.flagExpiringTokens`
+  (`gmail_reconnect`) and `proactiveReview.insertReviewNotification`
+  (`weekly_review` / `weekly_review_failed`). Both write `ctx.db.insert("notifications", …)`
+  themselves instead of calling `notify`, and for the SAME structural reason in both cases: `notify`
+  schedules `notifyExternal.dispatch` UNCONDITIONALLY (there is no conditional around the schedule),
+  and a notification ABOUT the mail path must not depend on the mail path. This is a deliberate,
+  enumerated exception list — not a pattern to copy casually. Anything that should reach email goes
+  through `notify`. `proactiveReview.test.ts`'s SC#2 guard asserts the review module imports no
+  `gmail`/`gmailAuth`/`notifyExternal`, never names `notifications.notify`, and DOES perform the
+  direct insert (so a module that quietly stopped notifying could not pass by doing nothing).
+
+## Cron jobs (`packages/backend/convex/crons.ts`)
+
+Three registrations, each a one-liner delegating to a module that owns the logic:
+
+| Cron | Schedule (UTC) | Target | Notes |
+|------|----------------|--------|-------|
+| `worm-export` | daily 03:00 | `internal.worm.exportAudit` | S3 Object-Lock export; clean stub-skip with `WORM_BUCKET` unset |
+| `gmail-token-expiry-scan` | daily 04:00 | `internal.gmailAuth.flagExpiringTokens` | in-app `gmail_reconnect` before delivery breaks (DLVR-03) |
+| `proactive-review` | **weekly, monday 06:00** | `internal.proactiveReview.runWeekly` | BEVL-03; in-app only, no mailbox token (see `business-evaluation.md`) |
+
+- `crons.weekly` is used DELIBERATELY over `crons.cron` for the review.
+  `_generated/ai/guidelines.md:287` bans the named helpers, but that file is Convex-authored codegen
+  output, not a repo decision — this file already runs two `crons.daily` jobs, and `weekly` is a
+  fully-typed, non-deprecated public API in the pinned `convex@1.42.1` (`WeeklySchedule` /
+  `CronJobs.weekly`). Do not re-litigate.
+- `dayOfWeek` MUST be lowercase (`"monday"`). The runtime validator rejects `"Monday"`; the JSDoc
+  example is wrong.
 
 ## Invariants — what must never break
 

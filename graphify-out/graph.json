@@ -849,7 +849,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_components_notificationsbanner",
-      "community": 102,
+      "community": 4,
       "norm_label": "notificationsbanner.tsx"
     },
     {
@@ -859,7 +859,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "apps_web_app_app_components_notificationsbanner_notificationsbanner",
-      "community": 102,
+      "community": 4,
       "norm_label": "notificationsbanner()"
     },
     {
@@ -869,7 +869,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_components_reconnectbanner",
-      "community": 102,
+      "community": 4,
       "norm_label": "reconnectbanner.tsx"
     },
     {
@@ -879,7 +879,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "apps_web_app_app_components_reconnectbanner_reconnectbanner",
-      "community": 102,
+      "community": 4,
       "norm_label": "reconnectbanner()"
     },
     {
@@ -889,7 +889,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_connect_gmail_page",
-      "community": 610,
+      "community": 623,
       "norm_label": "page.tsx"
     },
     {
@@ -899,7 +899,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "apps_web_app_app_connect_gmail_page_connectgmailpage",
-      "community": 610,
+      "community": 623,
       "norm_label": "connectgmailpage()"
     },
     {
@@ -989,7 +989,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_page",
-      "community": 178,
+      "community": 43,
       "norm_label": "page.tsx"
     },
     {
@@ -999,7 +999,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_page_stattile",
-      "community": 178,
+      "community": 43,
       "norm_label": "stattile()"
     },
     {
@@ -1009,7 +1009,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_page_dashboard",
-      "community": 178,
+      "community": 43,
       "norm_label": "dashboard()"
     },
     {
@@ -1019,7 +1019,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_profile_page",
-      "community": 59,
+      "community": 53,
       "norm_label": "page.tsx"
     },
     {
@@ -1029,7 +1029,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_profile_page_label",
-      "community": 59,
+      "community": 53,
       "norm_label": "label"
     },
     {
@@ -1039,7 +1039,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_profile_page_field",
-      "community": 59,
+      "community": 53,
       "norm_label": "field"
     },
     {
@@ -1059,7 +1059,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_profile_page_profilepage",
-      "community": 59,
+      "community": 53,
       "norm_label": "profilepage()"
     },
     {
@@ -1069,7 +1069,7 @@
       "source_location": "L263",
       "_origin": "ast",
       "id": "apps_web_app_app_dashboard_profile_page_labeledfield",
-      "community": 59,
+      "community": 53,
       "norm_label": "labeledfield()"
     },
     {
@@ -2839,7 +2839,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_layout",
-      "community": 102,
+      "community": 4,
       "norm_label": "layout.tsx"
     },
     {
@@ -2849,7 +2849,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "apps_web_app_app_layout_nav",
-      "community": 102,
+      "community": 4,
       "norm_label": "nav"
     },
     {
@@ -2859,7 +2859,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "apps_web_app_app_layout_deadletterbadge",
-      "community": 102,
+      "community": 4,
       "norm_label": "deadletterbadge()"
     },
     {
@@ -2869,7 +2869,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "apps_web_app_app_layout_shell",
-      "community": 102,
+      "community": 4,
       "norm_label": "shell()"
     },
     {
@@ -2879,7 +2879,7 @@
       "source_location": "L214",
       "_origin": "ast",
       "id": "apps_web_app_app_layout_appshell",
-      "community": 102,
+      "community": 4,
       "norm_label": "appshell()"
     },
     {
@@ -2889,7 +2889,7 @@
       "source_location": "L230",
       "_origin": "ast",
       "id": "apps_web_app_app_layout_authgate",
-      "community": 102,
+      "community": 4,
       "norm_label": "authgate()"
     },
     {
@@ -2899,7 +2899,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page",
-      "community": 178,
+      "community": 43,
       "norm_label": "page.tsx"
     },
     {
@@ -2909,7 +2909,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_stattile",
-      "community": 178,
+      "community": 43,
       "norm_label": "stattile()"
     },
     {
@@ -2919,7 +2919,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_review_outcomes",
-      "community": 178,
+      "community": 43,
       "norm_label": "review_outcomes"
     },
     {
@@ -2929,7 +2929,7 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_evalsignals",
-      "community": 178,
+      "community": 43,
       "norm_label": "evalsignals()"
     },
     {
@@ -2939,7 +2939,7 @@
       "source_location": "L116",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_unifieddiff",
-      "community": 178,
+      "community": 43,
       "norm_label": "unifieddiff()"
     },
     {
@@ -2949,7 +2949,7 @@
       "source_location": "L135",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_optimizerpanel",
-      "community": 178,
+      "community": 43,
       "norm_label": "optimizerpanel()"
     },
     {
@@ -2959,7 +2959,7 @@
       "source_location": "L402",
       "_origin": "ast",
       "id": "apps_web_app_app_ops_page_opspage",
-      "community": 178,
+      "community": 43,
       "norm_label": "opspage()"
     },
     {
@@ -3009,7 +3009,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_review_id_page",
-      "community": 139,
+      "community": 105,
       "norm_label": "page.tsx"
     },
     {
@@ -3019,7 +3019,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "apps_web_app_app_review_id_page_mode",
-      "community": 139,
+      "community": 105,
       "norm_label": "mode"
     },
     {
@@ -3029,7 +3029,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "apps_web_app_app_review_id_page_box",
-      "community": 139,
+      "community": 105,
       "norm_label": "box"
     },
     {
@@ -3039,7 +3039,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "apps_web_app_app_review_id_page_btn",
-      "community": 139,
+      "community": 105,
       "norm_label": "btn"
     },
     {
@@ -3049,7 +3049,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "apps_web_app_app_review_id_page_reviewgate",
-      "community": 139,
+      "community": 105,
       "norm_label": "reviewgate()"
     },
     {
@@ -3059,7 +3059,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_app_review_page",
-      "community": 611,
+      "community": 624,
       "norm_label": "page.tsx"
     },
     {
@@ -3069,7 +3069,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "apps_web_app_app_review_page_reviewqueue",
-      "community": 611,
+      "community": 624,
       "norm_label": "reviewqueue()"
     },
     {
@@ -3109,7 +3109,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_auth_fields",
-      "community": 102,
+      "community": 4,
       "norm_label": "fields.tsx"
     },
     {
@@ -3119,7 +3119,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "apps_web_app_auth_fields_textfield",
-      "community": 102,
+      "community": 4,
       "norm_label": "textfield()"
     },
     {
@@ -3129,7 +3129,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "apps_web_app_auth_fields_passwordfield",
-      "community": 102,
+      "community": 4,
       "norm_label": "passwordfield()"
     },
     {
@@ -3139,7 +3139,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons",
-      "community": 102,
+      "community": 4,
       "norm_label": "icons.tsx"
     },
     {
@@ -3149,7 +3149,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_iconprops",
-      "community": 102,
+      "community": 4,
       "norm_label": "iconprops"
     },
     {
@@ -3159,7 +3159,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_base",
-      "community": 102,
+      "community": 4,
       "norm_label": "base()"
     },
     {
@@ -3169,7 +3169,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_staricon",
-      "community": 102,
+      "community": 4,
       "norm_label": "staricon()"
     },
     {
@@ -3179,7 +3179,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_usericon",
-      "community": 102,
+      "community": 4,
       "norm_label": "usericon()"
     },
     {
@@ -3189,7 +3189,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_mailicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "mailicon()"
     },
     {
@@ -3199,7 +3199,7 @@
       "source_location": "L42",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_lockicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "lockicon()"
     },
     {
@@ -3209,7 +3209,7 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_checkcircleicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "checkcircleicon()"
     },
     {
@@ -3219,7 +3219,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_eyeicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "eyeicon()"
     },
     {
@@ -3229,7 +3229,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_eyeofficon",
-      "community": 102,
+      "community": 4,
       "norm_label": "eyeofficon()"
     },
     {
@@ -3239,7 +3239,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_arrowicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "arrowicon()"
     },
     {
@@ -3249,7 +3249,7 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_bolticon",
-      "community": 178,
+      "community": 43,
       "norm_label": "bolticon()"
     },
     {
@@ -3259,7 +3259,7 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_brainicon",
-      "community": 178,
+      "community": 43,
       "norm_label": "brainicon()"
     },
     {
@@ -3269,7 +3269,7 @@
       "source_location": "L106",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_shieldicon",
-      "community": 178,
+      "community": 43,
       "norm_label": "shieldicon()"
     },
     {
@@ -3349,7 +3349,7 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_gridicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "gridicon()"
     },
     {
@@ -3359,7 +3359,7 @@
       "source_location": "L191",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_bellicon",
-      "community": 178,
+      "community": 43,
       "norm_label": "bellicon()"
     },
     {
@@ -3369,7 +3369,7 @@
       "source_location": "L200",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_walleticon",
-      "community": 178,
+      "community": 43,
       "norm_label": "walleticon()"
     },
     {
@@ -3379,7 +3379,7 @@
       "source_location": "L209",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_fileicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "fileicon()"
     },
     {
@@ -3389,7 +3389,7 @@
       "source_location": "L218",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_trendicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "trendicon()"
     },
     {
@@ -3399,7 +3399,7 @@
       "source_location": "L227",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_pieicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "pieicon()"
     },
     {
@@ -3409,7 +3409,7 @@
       "source_location": "L236",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_vaulticon",
-      "community": 102,
+      "community": 4,
       "norm_label": "vaulticon()"
     },
     {
@@ -3419,7 +3419,7 @@
       "source_location": "L246",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_globeicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "globeicon()"
     },
     {
@@ -3429,7 +3429,7 @@
       "source_location": "L255",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_chevronlefticon",
-      "community": 102,
+      "community": 4,
       "norm_label": "chevronlefticon()"
     },
     {
@@ -3439,7 +3439,7 @@
       "source_location": "L263",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_signouticon",
-      "community": 102,
+      "community": 4,
       "norm_label": "signouticon()"
     },
     {
@@ -3449,7 +3449,7 @@
       "source_location": "L273",
       "_origin": "ast",
       "id": "apps_web_app_auth_icons_googleicon",
-      "community": 102,
+      "community": 4,
       "norm_label": "googleicon()"
     },
     {
@@ -3459,7 +3459,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_auth_layout",
-      "community": 178,
+      "community": 43,
       "norm_label": "layout.tsx"
     },
     {
@@ -3469,7 +3469,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "apps_web_app_auth_layout_features",
-      "community": 178,
+      "community": 43,
       "norm_label": "features"
     },
     {
@@ -3479,7 +3479,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "apps_web_app_auth_layout_authlayout",
-      "community": 178,
+      "community": 43,
       "norm_label": "authlayout()"
     },
     {
@@ -3489,7 +3489,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_auth_signin_page",
-      "community": 102,
+      "community": 4,
       "norm_label": "page.tsx"
     },
     {
@@ -3499,7 +3499,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "apps_web_app_auth_signin_page_signin",
-      "community": 102,
+      "community": 4,
       "norm_label": "signin()"
     },
     {
@@ -3509,7 +3509,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "apps_web_app_auth_signup_page",
-      "community": 102,
+      "community": 4,
       "norm_label": "page.tsx"
     },
     {
@@ -3519,7 +3519,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "apps_web_app_auth_signup_page_signup",
-      "community": 102,
+      "community": 4,
       "norm_label": "signup()"
     },
     {
@@ -4489,7 +4489,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_briefings_test",
-      "community": 97,
+      "community": 160,
       "norm_label": "briefings.test.ts"
     },
     {
@@ -4499,7 +4499,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "packages_backend_convex_briefings_test_modules",
-      "community": 97,
+      "community": 160,
       "norm_label": "modules"
     },
     {
@@ -4509,7 +4509,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_backend_convex_briefings_test_t",
-      "community": 97,
+      "community": 160,
       "norm_label": "t"
     },
     {
@@ -4519,7 +4519,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_briefings_test_seed",
-      "community": 97,
+      "community": 160,
       "norm_label": "seed()"
     },
     {
@@ -4679,7 +4679,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit",
-      "community": 327,
+      "community": 51,
       "norm_label": "cockpit.ts"
     },
     {
@@ -4689,7 +4689,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_cockpitagent",
-      "community": 327,
+      "community": 51,
       "norm_label": "cockpitagent"
     },
     {
@@ -4699,7 +4699,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_notifyifagenttimeout",
-      "community": 65,
+      "community": 51,
       "norm_label": "notifyifagenttimeout()"
     },
     {
@@ -4709,7 +4709,7 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_sendcockpitmessage",
-      "community": 327,
+      "community": 51,
       "norm_label": "sendcockpitmessage"
     },
     {
@@ -4719,7 +4719,7 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_fetchrecenthistory",
-      "community": 327,
+      "community": 51,
       "norm_label": "fetchrecenthistory()"
     },
     {
@@ -4729,7 +4729,7 @@
       "source_location": "L229",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_resolverecipients",
-      "community": 327,
+      "community": 51,
       "norm_label": "resolverecipients"
     },
     {
@@ -4739,7 +4739,7 @@
       "source_location": "L332",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_listthreadmessages",
-      "community": 327,
+      "community": 51,
       "norm_label": "listthreadmessages"
     },
     {
@@ -4749,7 +4749,7 @@
       "source_location": "L352",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_listthreads",
-      "community": 327,
+      "community": 51,
       "norm_label": "listthreads"
     },
     {
@@ -4759,7 +4759,7 @@
       "source_location": "L376",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_proposeemailplan",
-      "community": 327,
+      "community": 51,
       "norm_label": "proposeemailplan"
     },
     {
@@ -4769,7 +4769,7 @@
       "source_location": "L438",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_fanoutargs",
-      "community": 327,
+      "community": 51,
       "norm_label": "fanoutargs"
     },
     {
@@ -4779,7 +4779,7 @@
       "source_location": "L452",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_startfanout",
-      "community": 327,
+      "community": 51,
       "norm_label": "startfanout()"
     },
     {
@@ -4789,7 +4789,7 @@
       "source_location": "L475",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_startscheduleddelivery",
-      "community": 327,
+      "community": 51,
       "norm_label": "startscheduleddelivery"
     },
     {
@@ -4799,7 +4799,7 @@
       "source_location": "L496",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_executeplan",
-      "community": 327,
+      "community": 51,
       "norm_label": "executeplan"
     },
     {
@@ -4809,7 +4809,7 @@
       "source_location": "L635",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_cancelscheduledplan",
-      "community": 327,
+      "community": 51,
       "norm_label": "cancelscheduledplan"
     },
     {
@@ -4819,7 +4819,7 @@
       "source_location": "L669",
       "_origin": "ast",
       "id": "packages_backend_convex_cockpit_rescheduleplan",
-      "community": 327,
+      "community": 51,
       "norm_label": "rescheduleplan"
     },
     {
@@ -4999,7 +4999,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_crons",
-      "community": 612,
+      "community": 151,
       "norm_label": "crons.ts"
     },
     {
@@ -5009,7 +5009,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "packages_backend_convex_crons_crons",
-      "community": 612,
+      "community": 151,
       "norm_label": "crons"
     },
     {
@@ -5019,7 +5019,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_deadletter",
-      "community": 65,
+      "community": 121,
       "norm_label": "deadletter.ts"
     },
     {
@@ -5029,7 +5029,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "packages_backend_convex_deadletter_onpipelinecomplete",
-      "community": 65,
+      "community": 121,
       "norm_label": "onpipelinecomplete"
     },
     {
@@ -5039,7 +5039,7 @@
       "source_location": "L116",
       "_origin": "ast",
       "id": "packages_backend_convex_deadletter_deadletterrecipient",
-      "community": 65,
+      "community": 121,
       "norm_label": "deadletterrecipient"
     },
     {
@@ -5119,7 +5119,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_deliverapprovedplan",
-      "community": 105,
+      "community": 76,
       "norm_label": "deliverapprovedplan.ts"
     },
     {
@@ -5129,7 +5129,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_deliverapprovedplan_deliverapprovedplan",
-      "community": 105,
+      "community": 76,
       "norm_label": "deliverapprovedplan"
     },
     {
@@ -5139,7 +5139,7 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "packages_backend_convex_deliverapprovedplan_markplandone",
-      "community": 105,
+      "community": 76,
       "norm_label": "markplandone"
     },
     {
@@ -5179,7 +5179,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_documentdraft_test",
-      "community": 65,
+      "community": 119,
       "norm_label": "documentdraft.test.ts"
     },
     {
@@ -5189,7 +5189,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_backend_convex_documentdraft_test_modules",
-      "community": 65,
+      "community": 119,
       "norm_label": "modules"
     },
     {
@@ -5199,7 +5199,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test",
-      "community": 117,
+      "community": 104,
       "norm_label": "evaluations.test.ts"
     },
     {
@@ -5209,7 +5209,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test_modules",
-      "community": 117,
+      "community": 104,
       "norm_label": "modules"
     },
     {
@@ -5219,7 +5219,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test_aggregatemodules",
-      "community": 117,
+      "community": 104,
       "norm_label": "aggregatemodules"
     },
     {
@@ -5229,7 +5229,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test_newtest",
-      "community": 117,
+      "community": 104,
       "norm_label": "newtest()"
     },
     {
@@ -5239,7 +5239,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test_profiledoctext",
-      "community": 117,
+      "community": 104,
       "norm_label": "profiledoctext()"
     },
     {
@@ -5249,7 +5249,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_test_seeddoc",
-      "community": 117,
+      "community": 104,
       "norm_label": "seeddoc()"
     },
     {
@@ -5326,7 +5326,7 @@
       "label": "setPath()",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L95",
+      "source_location": "L97",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_setpath",
       "community": 13,
@@ -5336,7 +5336,7 @@
       "label": "EvaluationDelta",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L112",
+      "source_location": "L114",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_evaluationdelta",
       "community": 13,
@@ -5346,7 +5346,7 @@
       "label": "Provenance",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L114",
+      "source_location": "L116",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_provenance",
       "community": 13,
@@ -5356,7 +5356,7 @@
       "label": "lastForThread",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L122",
+      "source_location": "L124",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_lastforthread",
       "community": 13,
@@ -5366,7 +5366,7 @@
       "label": "insertEvaluation",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L133",
+      "source_location": "L135",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_insertevaluation",
       "community": 13,
@@ -5376,7 +5376,7 @@
       "label": "runEvaluation",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L155",
+      "source_location": "L157",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_runevaluation",
       "community": 13,
@@ -5386,7 +5386,7 @@
       "label": "gateOrder()",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L424",
+      "source_location": "L444",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_gateorder",
       "community": 13,
@@ -5396,7 +5396,7 @@
       "label": "applyScorecardAnswer()",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L441",
+      "source_location": "L461",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_applyscorecardanswer",
       "community": 13,
@@ -5406,7 +5406,7 @@
       "label": "recordScorecardAnswer",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L479",
+      "source_location": "L499",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_recordscorecardanswer",
       "community": 13,
@@ -5416,7 +5416,7 @@
       "label": "recordScorecardAnswerInternal",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L495",
+      "source_location": "L515",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_recordscorecardanswerinternal",
       "community": 13,
@@ -5426,7 +5426,7 @@
       "label": "ACTABLE_PLAN_STATUS",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L515",
+      "source_location": "L535",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_actable_plan_status",
       "community": 13,
@@ -5436,7 +5436,7 @@
       "label": "buildMemo()",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L527",
+      "source_location": "L547",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_buildmemo",
       "community": 13,
@@ -5446,7 +5446,7 @@
       "label": "actOnGap",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L562",
+      "source_location": "L582",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_actongap",
       "community": 13,
@@ -5456,17 +5456,17 @@
       "label": "persistNextStepMemo()",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L617",
+      "source_location": "L639",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_persistnextstepmemo",
-      "community": 53,
+      "community": 655,
       "norm_label": "persistnextstepmemo()"
     },
     {
       "label": "byThread",
       "file_type": "code",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L644",
+      "source_location": "L666",
       "_origin": "ast",
       "id": "packages_backend_convex_evaluations_bythread",
       "community": 13,
@@ -6179,7 +6179,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails",
-      "community": 40,
+      "community": 643,
       "norm_label": "guardrails.ts"
     },
     {
@@ -6189,7 +6189,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_ratelimiter",
-      "community": 105,
+      "community": 76,
       "norm_label": "ratelimiter"
     },
     {
@@ -6199,7 +6199,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_default_config",
-      "community": 40,
+      "community": 643,
       "norm_label": "default_config"
     },
     {
@@ -6209,7 +6209,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_getconfig",
-      "community": 40,
+      "community": 643,
       "norm_label": "getconfig()"
     },
     {
@@ -6219,7 +6219,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_setkillswitch",
-      "community": 40,
+      "community": 643,
       "norm_label": "setkillswitch"
     },
     {
@@ -6229,7 +6229,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_prepare",
-      "community": 40,
+      "community": 643,
       "norm_label": "prepare"
     },
     {
@@ -6239,7 +6239,7 @@
       "source_location": "L114",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_getsafetextbyhash",
-      "community": 40,
+      "community": 643,
       "norm_label": "getsafetextbyhash"
     },
     {
@@ -6249,7 +6249,7 @@
       "source_location": "L137",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_saveinstruction",
-      "community": 40,
+      "community": 643,
       "norm_label": "saveinstruction"
     },
     {
@@ -6259,7 +6259,7 @@
       "source_location": "L149",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_precall",
-      "community": 40,
+      "community": 643,
       "norm_label": "precall"
     },
     {
@@ -6269,7 +6269,7 @@
       "source_location": "L166",
       "_origin": "ast",
       "id": "packages_backend_convex_guardrails_recordspend",
-      "community": 40,
+      "community": 643,
       "norm_label": "recordspend"
     },
     {
@@ -6299,7 +6299,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_importguard_test",
-      "community": 140,
+      "community": 159,
       "norm_label": "importguard.test.ts"
     },
     {
@@ -6309,7 +6309,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "packages_backend_convex_importguard_test_sources",
-      "community": 140,
+      "community": 159,
       "norm_label": "sources"
     },
     {
@@ -6319,7 +6319,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "packages_backend_convex_importguard_test_basename",
-      "community": 140,
+      "community": 159,
       "norm_label": "basename()"
     },
     {
@@ -6329,7 +6329,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_index",
-      "community": 105,
+      "community": 76,
       "norm_label": "index.ts"
     },
     {
@@ -6339,7 +6339,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "packages_backend_convex_index_workflow",
-      "community": 105,
+      "community": 76,
       "norm_label": "workflow"
     },
     {
@@ -6349,7 +6349,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_backend_convex_index_retrier",
-      "community": 105,
+      "community": 76,
       "norm_label": "retrier"
     },
     {
@@ -6559,7 +6559,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb",
-      "community": 437,
+      "community": 453,
       "norm_label": "intakedb.ts"
     },
     {
@@ -6569,7 +6569,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_kind",
-      "community": 437,
+      "community": 453,
       "norm_label": "kind"
     },
     {
@@ -6579,7 +6579,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_status",
-      "community": 437,
+      "community": 453,
       "norm_label": "status"
     },
     {
@@ -6589,7 +6589,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_generateuploadurl",
-      "community": 437,
+      "community": 453,
       "norm_label": "generateuploadurl"
     },
     {
@@ -6599,7 +6599,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_insertartifact",
-      "community": 437,
+      "community": 453,
       "norm_label": "insertartifact"
     },
     {
@@ -6609,7 +6609,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_patchartifact",
-      "community": 437,
+      "community": 453,
       "norm_label": "patchartifact"
     },
     {
@@ -6619,7 +6619,7 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_bythread",
-      "community": 437,
+      "community": 453,
       "norm_label": "bythread"
     },
     {
@@ -6629,7 +6629,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "packages_backend_convex_intakedb_getartifact",
-      "community": 437,
+      "community": 453,
       "norm_label": "getartifact"
     },
     {
@@ -6639,7 +6639,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_allowlist",
-      "community": 140,
+      "community": 159,
       "norm_label": "allowlist.ts"
     },
     {
@@ -6649,7 +6649,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist",
-      "community": 140,
+      "community": 159,
       "norm_label": "raw_builder_allowlist"
     },
     {
@@ -6659,7 +6659,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_allowlist_rationale_9",
-      "community": 140,
+      "community": 159,
       "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by"
     },
     {
@@ -6719,7 +6719,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_functions_tenantaction",
-      "community": 110,
+      "community": 20,
       "norm_label": "tenantaction"
     },
     {
@@ -6729,7 +6729,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_hash",
-      "community": 53,
+      "community": 655,
       "norm_label": "hash.ts"
     },
     {
@@ -6739,7 +6739,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "packages_backend_convex_lib_hash_contenthash",
-      "community": 53,
+      "community": 655,
       "norm_label": "contenthash()"
     },
     {
@@ -6929,7 +6929,7 @@
       "source_location": "L470",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_fmtsendinstant",
-      "community": 171,
+      "community": 9,
       "norm_label": "fmtsendinstant()"
     },
     {
@@ -6939,7 +6939,7 @@
       "source_location": "L478",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_buildagentcontext",
-      "community": 171,
+      "community": 9,
       "norm_label": "buildagentcontext()"
     },
     {
@@ -6969,7 +6969,7 @@
       "source_location": "L598",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_stripreprefix",
-      "community": 9,
+      "community": 22,
       "norm_label": "stripreprefix()"
     },
     {
@@ -6979,7 +6979,7 @@
       "source_location": "L607",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_buildcockpittools",
-      "community": 9,
+      "community": 22,
       "norm_label": "buildcockpittools()"
     },
     {
@@ -7019,7 +7019,7 @@
       "source_location": "L1618",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_recordmodelspend",
-      "community": 171,
+      "community": 124,
       "norm_label": "recordmodelspend()"
     },
     {
@@ -7029,7 +7029,7 @@
       "source_location": "L1632",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_istimeouterror",
-      "community": 171,
+      "community": 124,
       "norm_label": "istimeouterror()"
     },
     {
@@ -7039,7 +7039,7 @@
       "source_location": "L1642",
       "_origin": "ast",
       "id": "packages_backend_convex_llm_runagentloop",
-      "community": 171,
+      "community": 124,
       "norm_label": "runagentloop()"
     },
     {
@@ -7489,7 +7489,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_notifications_test",
-      "community": 65,
+      "community": 119,
       "norm_label": "notifications.test.ts"
     },
     {
@@ -7499,7 +7499,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "packages_backend_convex_notifications_test_modules",
-      "community": 65,
+      "community": 119,
       "norm_label": "modules"
     },
     {
@@ -7509,7 +7509,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "packages_backend_convex_notifications_test_notifications",
-      "community": 65,
+      "community": 119,
       "norm_label": "notifications()"
     },
     {
@@ -7519,7 +7519,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_backend_convex_notifications_test_listscheduled",
-      "community": 65,
+      "community": 119,
       "norm_label": "listscheduled()"
     },
     {
@@ -7699,7 +7699,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding",
-      "community": 53,
+      "community": 655,
       "norm_label": "onboarding.ts"
     },
     {
@@ -7709,7 +7709,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_resolvemodel",
-      "community": 53,
+      "community": 655,
       "norm_label": "resolvemodel()"
     },
     {
@@ -7719,7 +7719,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_vprofile",
-      "community": 53,
+      "community": 655,
       "norm_label": "vprofile"
     },
     {
@@ -7729,7 +7729,7 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_profileschema",
-      "community": 53,
+      "community": 655,
       "norm_label": "profileschema"
     },
     {
@@ -7739,7 +7739,7 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_smokeprofilefixture",
-      "community": 59,
+      "community": 53,
       "norm_label": "smokeprofilefixture()"
     },
     {
@@ -7749,7 +7749,7 @@
       "source_location": "L118",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_status",
-      "community": 53,
+      "community": 655,
       "norm_label": "status"
     },
     {
@@ -7759,7 +7759,7 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_getprofile",
-      "community": 53,
+      "community": 655,
       "norm_label": "getprofile"
     },
     {
@@ -7769,7 +7769,7 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_extractprofile",
-      "community": 53,
+      "community": 655,
       "norm_label": "extractprofile"
     },
     {
@@ -7779,7 +7779,7 @@
       "source_location": "L182",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_populatedfieldcount",
-      "community": 53,
+      "community": 655,
       "norm_label": "populatedfieldcount()"
     },
     {
@@ -7789,7 +7789,7 @@
       "source_location": "L198",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_writeprofiledoc",
-      "community": 53,
+      "community": 655,
       "norm_label": "writeprofiledoc()"
     },
     {
@@ -7799,7 +7799,7 @@
       "source_location": "L244",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_currentprofiledoc",
-      "community": 53,
+      "community": 655,
       "norm_label": "currentprofiledoc()"
     },
     {
@@ -7809,7 +7809,7 @@
       "source_location": "L265",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_commitprofile",
-      "community": 53,
+      "community": 655,
       "norm_label": "commitprofile"
     },
     {
@@ -7819,7 +7819,7 @@
       "source_location": "L290",
       "_origin": "ast",
       "id": "packages_backend_convex_onboarding_updateprofile",
-      "community": 53,
+      "community": 655,
       "norm_label": "updateprofile"
     },
     {
@@ -8099,7 +8099,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test",
-      "community": 336,
+      "community": 65,
       "norm_label": "pipeline.test.ts"
     },
     {
@@ -8109,7 +8109,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test_modules",
-      "community": 336,
+      "community": 65,
       "norm_label": "modules"
     },
     {
@@ -8119,7 +8119,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test_aggregatemodules",
-      "community": 336,
+      "community": 65,
       "norm_label": "aggregatemodules"
     },
     {
@@ -8129,7 +8129,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test_t",
-      "community": 336,
+      "community": 65,
       "norm_label": "t"
     },
     {
@@ -8139,7 +8139,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test_harness",
-      "community": 336,
+      "community": 65,
       "norm_label": "harness()"
     },
     {
@@ -8149,7 +8149,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_test_seedrequest",
-      "community": 336,
+      "community": 65,
       "norm_label": "seedrequest()"
     },
     {
@@ -8159,7 +8159,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline",
-      "community": 105,
+      "community": 76,
       "norm_label": "pipeline.ts"
     },
     {
@@ -8169,7 +8169,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_request_status",
-      "community": 105,
+      "community": 76,
       "norm_label": "request_status"
     },
     {
@@ -8179,7 +8179,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_usage",
-      "community": 105,
+      "community": 76,
       "norm_label": "usage"
     },
     {
@@ -8189,7 +8189,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_tousage",
-      "community": 105,
+      "community": 76,
       "norm_label": "tousage()"
     },
     {
@@ -8199,7 +8199,7 @@
       "source_location": "L76",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_blockreason",
-      "community": 105,
+      "community": 76,
       "norm_label": "blockreason"
     },
     {
@@ -8209,7 +8209,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_labels",
-      "community": 105,
+      "community": 76,
       "norm_label": "labels"
     },
     {
@@ -8219,7 +8219,7 @@
       "source_location": "L90",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_pipelineworkflow",
-      "community": 105,
+      "community": 76,
       "norm_label": "pipelineworkflow"
     },
     {
@@ -8229,7 +8229,7 @@
       "source_location": "L341",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_setstatus",
-      "community": 105,
+      "community": 76,
       "norm_label": "setstatus"
     },
     {
@@ -8239,7 +8239,7 @@
       "source_location": "L350",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_savedraft",
-      "community": 105,
+      "community": 76,
       "norm_label": "savedraft"
     },
     {
@@ -8249,7 +8249,7 @@
       "source_location": "L369",
       "_origin": "ast",
       "id": "packages_backend_convex_pipeline_useverbatimdraft",
-      "community": 105,
+      "community": 76,
       "norm_label": "useverbatimdraft"
     },
     {
@@ -8299,7 +8299,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_plans",
-      "community": 51,
+      "community": 30,
       "norm_label": "plans.ts"
     },
     {
@@ -8309,7 +8309,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_plan_status",
-      "community": 51,
+      "community": 30,
       "norm_label": "plan_status"
     },
     {
@@ -8319,7 +8319,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_candidates",
-      "community": 51,
+      "community": 30,
       "norm_label": "candidates"
     },
     {
@@ -8329,7 +8329,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_attachments",
-      "community": 51,
+      "community": 30,
       "norm_label": "attachments"
     },
     {
@@ -8339,7 +8339,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_insertplan",
-      "community": 51,
+      "community": 30,
       "norm_label": "insertplan"
     },
     {
@@ -8349,7 +8349,7 @@
       "source_location": "L76",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_patchplan",
-      "community": 51,
+      "community": 30,
       "norm_label": "patchplan"
     },
     {
@@ -8359,7 +8359,7 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_setplansendtime",
-      "community": 51,
+      "community": 30,
       "norm_label": "setplansendtime"
     },
     {
@@ -8369,7 +8369,7 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_setplanstatus",
-      "community": 51,
+      "community": 30,
       "norm_label": "setplanstatus"
     },
     {
@@ -8379,7 +8379,7 @@
       "source_location": "L145",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_writecandidates",
-      "community": 51,
+      "community": 30,
       "norm_label": "writecandidates"
     },
     {
@@ -8389,7 +8389,7 @@
       "source_location": "L175",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_clearcandidates",
-      "community": 51,
+      "community": 30,
       "norm_label": "clearcandidates"
     },
     {
@@ -8399,7 +8399,7 @@
       "source_location": "L190",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_resetplan",
-      "community": 51,
+      "community": 30,
       "norm_label": "resetplan"
     },
     {
@@ -8409,7 +8409,7 @@
       "source_location": "L230",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_recordattachments",
-      "community": 51,
+      "community": 30,
       "norm_label": "recordattachments"
     },
     {
@@ -8419,7 +8419,7 @@
       "source_location": "L246",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_getbyid",
-      "community": 51,
+      "community": 30,
       "norm_label": "getbyid"
     },
     {
@@ -8429,7 +8429,7 @@
       "source_location": "L258",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_attachmenturls",
-      "community": 51,
+      "community": 30,
       "norm_label": "attachmenturls"
     },
     {
@@ -8439,7 +8439,7 @@
       "source_location": "L275",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_bythread",
-      "community": 51,
+      "community": 30,
       "norm_label": "bythread"
     },
     {
@@ -8449,8 +8449,158 @@
       "source_location": "L290",
       "_origin": "ast",
       "id": "packages_backend_convex_plans_reportforplan",
-      "community": 51,
+      "community": 30,
       "norm_label": "reportforplan"
+    },
+    {
+      "label": "proactiveReview.test.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test",
+      "community": 104,
+      "norm_label": "proactivereview.test.ts"
+    },
+    {
+      "label": "modules",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L18",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_modules",
+      "community": 104,
+      "norm_label": "modules"
+    },
+    {
+      "label": "aggregateModules",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_aggregatemodules",
+      "community": 104,
+      "norm_label": "aggregatemodules"
+    },
+    {
+      "label": "newTest()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L25",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_newtest",
+      "community": 104,
+      "norm_label": "newtest()"
+    },
+    {
+      "label": "profileText()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L32",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_profiletext",
+      "community": 104,
+      "norm_label": "profiletext()"
+    },
+    {
+      "label": "seedDoc()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L46",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_seeddoc",
+      "community": 104,
+      "norm_label": "seeddoc()"
+    },
+    {
+      "label": "runCron()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L78",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_runcron",
+      "community": 104,
+      "norm_label": "runcron()"
+    },
+    {
+      "label": "reviewRows()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L87",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_reviewrows",
+      "community": 104,
+      "norm_label": "reviewrows()"
+    },
+    {
+      "label": "notifications()",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L98",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_notifications",
+      "community": 104,
+      "norm_label": "notifications()"
+    },
+    {
+      "label": "sources",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L217",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_sources",
+      "community": 104,
+      "norm_label": "sources"
+    },
+    {
+      "label": "code",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L225",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_test_code",
+      "community": 104,
+      "norm_label": "code"
+    },
+    {
+      "label": "proactiveReview.ts",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview",
+      "community": 119,
+      "norm_label": "proactivereview.ts"
+    },
+    {
+      "label": "runWeekly",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L37",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_runweekly",
+      "community": 119,
+      "norm_label": "runweekly"
+    },
+    {
+      "label": "reviewOne",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L59",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_reviewone",
+      "community": 119,
+      "norm_label": "reviewone"
+    },
+    {
+      "label": "insertReviewNotification",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L117",
+      "_origin": "ast",
+      "id": "packages_backend_convex_proactivereview_insertreviewnotification",
+      "community": 119,
+      "norm_label": "insertreviewnotification"
     },
     {
       "label": "profileRedaction.test.ts",
@@ -8559,7 +8709,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_requests",
-      "community": 105,
+      "community": 76,
       "norm_label": "requests.ts"
     },
     {
@@ -8569,7 +8719,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_generateuploadurl",
-      "community": 105,
+      "community": 76,
       "norm_label": "generateuploadurl"
     },
     {
@@ -8579,7 +8729,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_attachmentarg",
-      "community": 105,
+      "community": 76,
       "norm_label": "attachmentarg"
     },
     {
@@ -8589,7 +8739,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_submit",
-      "community": 105,
+      "community": 76,
       "norm_label": "submit"
     },
     {
@@ -8599,7 +8749,7 @@
       "source_location": "L147",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_list",
-      "community": 105,
+      "community": 76,
       "norm_label": "list"
     },
     {
@@ -8609,7 +8759,7 @@
       "source_location": "L174",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_submitdecision",
-      "community": 105,
+      "community": 76,
       "norm_label": "submitdecision"
     },
     {
@@ -8619,7 +8769,7 @@
       "source_location": "L208",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_get",
-      "community": 105,
+      "community": 76,
       "norm_label": "get"
     },
     {
@@ -8629,7 +8779,7 @@
       "source_location": "L223",
       "_origin": "ast",
       "id": "packages_backend_convex_requests_reviewgate",
-      "community": 105,
+      "community": 76,
       "norm_label": "reviewgate"
     },
     {
@@ -8639,7 +8789,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_review",
-      "community": 105,
+      "community": 76,
       "norm_label": "review.ts"
     },
     {
@@ -8649,7 +8799,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "packages_backend_convex_review_reviewdecisionvalidator",
-      "community": 105,
+      "community": 76,
       "norm_label": "reviewdecisionvalidator"
     },
     {
@@ -8659,7 +8809,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "packages_backend_convex_review_revieweventvalidator",
-      "community": 105,
+      "community": 76,
       "norm_label": "revieweventvalidator"
     },
     {
@@ -8669,7 +8819,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "packages_backend_convex_review_eventname",
-      "community": 105,
+      "community": 76,
       "norm_label": "eventname()"
     },
     {
@@ -8679,7 +8829,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_backend_convex_review_armtimeout",
-      "community": 105,
+      "community": 76,
       "norm_label": "armtimeout"
     },
     {
@@ -8689,7 +8839,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "packages_backend_convex_review_firetimeout",
-      "community": 105,
+      "community": 76,
       "norm_label": "firetimeout"
     },
     {
@@ -8699,7 +8849,7 @@
       "source_location": "L92",
       "_origin": "ast",
       "id": "packages_backend_convex_review_senddecision",
-      "community": 105,
+      "community": 76,
       "norm_label": "senddecision"
     },
     {
@@ -8939,7 +9089,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_skilloptexport",
-      "community": 104,
+      "community": 643,
       "norm_label": "skilloptexport.ts"
     },
     {
@@ -8949,7 +9099,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "packages_backend_convex_skilloptexport_scrub",
-      "community": 104,
+      "community": 643,
       "norm_label": "scrub()"
     },
     {
@@ -8959,7 +9109,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "packages_backend_convex_skilloptexport_hashstring",
-      "community": 104,
+      "community": 643,
       "norm_label": "hashstring()"
     },
     {
@@ -8969,7 +9119,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_skilloptexport_buildtrajectoryexport",
-      "community": 104,
+      "community": 643,
       "norm_label": "buildtrajectoryexport"
     },
     {
@@ -8979,7 +9129,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_skills_test",
-      "community": 5,
+      "community": 0,
       "norm_label": "skills.test.ts"
     },
     {
@@ -8989,7 +9139,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "packages_backend_convex_skills_test_modules",
-      "community": 5,
+      "community": 0,
       "norm_label": "modules"
     },
     {
@@ -8999,7 +9149,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "packages_backend_convex_skills_test_lf",
-      "community": 5,
+      "community": 0,
       "norm_label": "lf()"
     },
     {
@@ -9009,7 +9159,7 @@
       "source_location": "L157",
       "_origin": "ast",
       "id": "packages_backend_convex_skills_test_skillstatus",
-      "community": 5,
+      "community": 0,
       "norm_label": "skillstatus"
     },
     {
@@ -9029,7 +9179,7 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "packages_backend_convex_skills_loadskill",
-      "community": 5,
+      "community": 0,
       "norm_label": "loadskill()"
     },
     {
@@ -9679,7 +9829,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vault",
-      "community": 30,
+      "community": 11,
       "norm_label": "vault.ts"
     },
     {
@@ -9689,7 +9839,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_bytelen",
-      "community": 30,
+      "community": 11,
       "norm_label": "bytelen()"
     },
     {
@@ -9699,7 +9849,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_vaultingesttext",
-      "community": 30,
+      "community": 11,
       "norm_label": "vaultingesttext"
     },
     {
@@ -9709,7 +9859,7 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_vaultupload",
-      "community": 30,
+      "community": 11,
       "norm_label": "vaultupload"
     },
     {
@@ -9719,7 +9869,7 @@
       "source_location": "L188",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_deletevaultdoc",
-      "community": 30,
+      "community": 11,
       "norm_label": "deletevaultdoc"
     },
     {
@@ -9729,7 +9879,7 @@
       "source_location": "L230",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_listvaultdocs",
-      "community": 30,
+      "community": 11,
       "norm_label": "listvaultdocs"
     },
     {
@@ -9739,7 +9889,7 @@
       "source_location": "L245",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_vaultstats",
-      "community": 30,
+      "community": 11,
       "norm_label": "vaultstats"
     },
     {
@@ -9749,7 +9899,7 @@
       "source_location": "L273",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_vaultdownloadurl",
-      "community": 30,
+      "community": 11,
       "norm_label": "vaultdownloadurl"
     },
     {
@@ -9759,7 +9909,7 @@
       "source_location": "L287",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_docentities",
-      "community": 30,
+      "community": 11,
       "norm_label": "docentities"
     },
     {
@@ -9769,7 +9919,7 @@
       "source_location": "L340",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_vaultsearch",
-      "community": 30,
+      "community": 11,
       "norm_label": "vaultsearch"
     },
     {
@@ -9779,7 +9929,7 @@
       "source_location": "L380",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_getdoc",
-      "community": 30,
+      "community": 11,
       "norm_label": "getdoc"
     },
     {
@@ -9789,7 +9939,7 @@
       "source_location": "L398",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_owneddocsmeta",
-      "community": 30,
+      "community": 11,
       "norm_label": "owneddocsmeta"
     },
     {
@@ -9799,7 +9949,7 @@
       "source_location": "L416",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_markready",
-      "community": 30,
+      "community": 11,
       "norm_label": "markready"
     },
     {
@@ -9809,7 +9959,7 @@
       "source_location": "L424",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_markfailed",
-      "community": 30,
+      "community": 11,
       "norm_label": "markfailed"
     },
     {
@@ -9819,7 +9969,7 @@
       "source_location": "L434",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_markextracting",
-      "community": 30,
+      "community": 11,
       "norm_label": "markextracting"
     },
     {
@@ -9829,7 +9979,7 @@
       "source_location": "L467",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_profileseeddocs",
-      "community": 30,
+      "community": 11,
       "norm_label": "profileseeddocs"
     },
     {
@@ -9839,7 +9989,7 @@
       "source_location": "L510",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_ingestfromattachment",
-      "community": 30,
+      "community": 11,
       "norm_label": "ingestfromattachment"
     },
     {
@@ -9849,7 +9999,7 @@
       "source_location": "L552",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_ingestextractedtext",
-      "community": 30,
+      "community": 11,
       "norm_label": "ingestextractedtext"
     },
     {
@@ -9859,7 +10009,7 @@
       "source_location": "L580",
       "_origin": "ast",
       "id": "packages_backend_convex_vault_getdocforextraction",
-      "community": 30,
+      "community": 11,
       "norm_label": "getdocforextraction"
     },
     {
@@ -10279,7 +10429,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultground",
-      "community": 110,
+      "community": 20,
       "norm_label": "vaultground.ts"
     },
     {
@@ -10289,7 +10439,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultground_runvaultground",
-      "community": 110,
+      "community": 20,
       "norm_label": "runvaultground()"
     },
     {
@@ -10299,7 +10449,7 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultground_vaultground",
-      "community": 110,
+      "community": 20,
       "norm_label": "vaultground"
     },
     {
@@ -10309,7 +10459,7 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultground_vaultgroundhydrated",
-      "community": 110,
+      "community": 20,
       "norm_label": "vaultgroundhydrated"
     },
     {
@@ -10319,7 +10469,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultingest",
-      "community": 53,
+      "community": 655,
       "norm_label": "vaultingest.ts"
     },
     {
@@ -10329,7 +10479,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultingest_startingest",
-      "community": 53,
+      "community": 655,
       "norm_label": "startingest()"
     },
     {
@@ -10339,7 +10489,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultingest_oningestcomplete",
-      "community": 53,
+      "community": 655,
       "norm_label": "oningestcomplete"
     },
     {
@@ -10349,7 +10499,7 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultingest_retrystuckingests",
-      "community": 53,
+      "community": 655,
       "norm_label": "retrystuckingests"
     },
     {
@@ -10359,7 +10509,7 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultingest_ingestdoc",
-      "community": 53,
+      "community": 655,
       "norm_label": "ingestdoc"
     },
     {
@@ -10369,7 +10519,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm",
-      "community": 104,
+      "community": 393,
       "norm_label": "vaultllm.ts"
     },
     {
@@ -10379,7 +10529,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_resolvemodel",
-      "community": 104,
+      "community": 393,
       "norm_label": "resolvemodel()"
     },
     {
@@ -10389,7 +10539,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_graphnode",
-      "community": 104,
+      "community": 393,
       "norm_label": "graphnode"
     },
     {
@@ -10399,7 +10549,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_graphedge",
-      "community": 104,
+      "community": 393,
       "norm_label": "graphedge"
     },
     {
@@ -10409,7 +10559,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_extractedgraph",
-      "community": 104,
+      "community": 393,
       "norm_label": "extractedgraph"
     },
     {
@@ -10419,7 +10569,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_graphschema",
-      "community": 104,
+      "community": 393,
       "norm_label": "graphschema"
     },
     {
@@ -10429,7 +10579,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_smokegraphfixture",
-      "community": 104,
+      "community": 393,
       "norm_label": "smokegraphfixture()"
     },
     {
@@ -10439,7 +10589,7 @@
       "source_location": "L109",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_extractgraph",
-      "community": 104,
+      "community": 393,
       "norm_label": "extractgraph"
     },
     {
@@ -10449,7 +10599,7 @@
       "source_location": "L150",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultllm_getdoctext",
-      "community": 104,
+      "community": 393,
       "norm_label": "getdoctext"
     },
     {
@@ -10459,7 +10609,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultrag",
-      "community": 6,
+      "community": 20,
       "norm_label": "vaultrag.ts"
     },
     {
@@ -10469,7 +10619,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultrag_openaiembeddingv2",
-      "community": 6,
+      "community": 20,
       "norm_label": "openaiembeddingv2"
     },
     {
@@ -10479,7 +10629,7 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultrag_ragembeddingmodel",
-      "community": 6,
+      "community": 20,
       "norm_label": "ragembeddingmodel"
     },
     {
@@ -10489,7 +10639,7 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultrag_rag",
-      "community": 6,
+      "community": 20,
       "norm_label": "rag"
     },
     {
@@ -10499,7 +10649,7 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultrag_embeddoc",
-      "community": 6,
+      "community": 20,
       "norm_label": "embeddoc"
     },
     {
@@ -10549,7 +10699,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke",
-      "community": 6,
+      "community": 20,
       "norm_label": "vaultsmoke.ts"
     },
     {
@@ -10559,7 +10709,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_bytelen",
-      "community": 6,
+      "community": 20,
       "norm_label": "bytelen()"
     },
     {
@@ -10569,7 +10719,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_insertbrief",
-      "community": 6,
+      "community": 20,
       "norm_label": "insertbrief"
     },
     {
@@ -10579,7 +10729,7 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_seedcorpus",
-      "community": 6,
+      "community": 20,
       "norm_label": "seedcorpus"
     },
     {
@@ -10589,7 +10739,7 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_assertready",
-      "community": 6,
+      "community": 20,
       "norm_label": "assertready"
     },
     {
@@ -10599,7 +10749,7 @@
       "source_location": "L139",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_assertsearchreturns",
-      "community": 6,
+      "community": 20,
       "norm_label": "assertsearchreturns"
     },
     {
@@ -10609,7 +10759,7 @@
       "source_location": "L163",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_assertgroundneighbor",
-      "community": 6,
+      "community": 20,
       "norm_label": "assertgroundneighbor"
     },
     {
@@ -10619,7 +10769,7 @@
       "source_location": "L206",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_assertnorawtext",
-      "community": 6,
+      "community": 20,
       "norm_label": "assertnorawtext"
     },
     {
@@ -10629,7 +10779,7 @@
       "source_location": "L229",
       "_origin": "ast",
       "id": "packages_backend_convex_vaultsmoke_purge",
-      "community": 6,
+      "community": 20,
       "norm_label": "purge"
     },
     {
@@ -10909,7 +11059,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_vaulttranscribe",
-      "community": 104,
+      "community": 643,
       "norm_label": "vaulttranscribe.ts"
     },
     {
@@ -10919,7 +11069,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "packages_backend_convex_vaulttranscribe_decodeutf8",
-      "community": 104,
+      "community": 643,
       "norm_label": "decodeutf8()"
     },
     {
@@ -10929,7 +11079,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_backend_convex_vaulttranscribe_transcribedoc",
-      "community": 104,
+      "community": 643,
       "norm_label": "transcribedoc"
     },
     {
@@ -11069,7 +11219,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_voice",
-      "community": 53,
+      "community": 655,
       "norm_label": "voice.ts"
     },
     {
@@ -11079,7 +11229,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_getactivesession",
-      "community": 53,
+      "community": 655,
       "norm_label": "getactivesession"
     },
     {
@@ -11089,7 +11239,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_getsession",
-      "community": 53,
+      "community": 655,
       "norm_label": "getsession"
     },
     {
@@ -11099,7 +11249,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_startsession",
-      "community": 53,
+      "community": 655,
       "norm_label": "startsession"
     },
     {
@@ -11109,7 +11259,7 @@
       "source_location": "L109",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_markendedclean",
-      "community": 53,
+      "community": 655,
       "norm_label": "markendedclean"
     },
     {
@@ -11119,7 +11269,7 @@
       "source_location": "L141",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_markendedabnormal",
-      "community": 53,
+      "community": 655,
       "norm_label": "markendedabnormal"
     },
     {
@@ -11129,7 +11279,7 @@
       "source_location": "L171",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_endsessionclean",
-      "community": 53,
+      "community": 655,
       "norm_label": "endsessionclean"
     },
     {
@@ -11139,7 +11289,7 @@
       "source_location": "L217",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_abortsession",
-      "community": 53,
+      "community": 655,
       "norm_label": "abortsession"
     },
     {
@@ -11149,7 +11299,7 @@
       "source_location": "L233",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_forceendsession",
-      "community": 53,
+      "community": 655,
       "norm_label": "forceendsession"
     },
     {
@@ -11159,7 +11309,7 @@
       "source_location": "L263",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_recordusage",
-      "community": 53,
+      "community": 655,
       "norm_label": "recordusage"
     },
     {
@@ -11169,7 +11319,7 @@
       "source_location": "L299",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_persistbrief",
-      "community": 53,
+      "community": 655,
       "norm_label": "persistbrief"
     },
     {
@@ -11179,7 +11329,7 @@
       "source_location": "L340",
       "_origin": "ast",
       "id": "packages_backend_convex_voice_storebrief",
-      "community": 53,
+      "community": 655,
       "norm_label": "storebrief"
     },
     {
@@ -11389,7 +11539,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_wormcursor",
-      "community": 556,
+      "community": 569,
       "norm_label": "wormcursor.ts"
     },
     {
@@ -11399,7 +11549,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "packages_backend_convex_wormcursor_getcursor",
-      "community": 556,
+      "community": 569,
       "norm_label": "getcursor"
     },
     {
@@ -11409,7 +11559,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "packages_backend_convex_wormcursor_auditsince",
-      "community": 556,
+      "community": 569,
       "norm_label": "auditsince"
     },
     {
@@ -11419,7 +11569,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_wormcursor_advancecursor",
-      "community": 556,
+      "community": 569,
       "norm_label": "advancecursor"
     },
     {
@@ -12009,7 +12159,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_routing_test",
-      "community": 171,
+      "community": 71,
       "norm_label": "routing.test.ts"
     },
     {
@@ -12019,7 +12169,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_routing",
-      "community": 171,
+      "community": 71,
       "norm_label": "routing.ts"
     },
     {
@@ -12029,7 +12179,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "packages_contracts_src_routing_routingschema",
-      "community": 171,
+      "community": 71,
       "norm_label": "routingschema"
     },
     {
@@ -12039,7 +12189,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "packages_contracts_src_routing_routingdecision",
-      "community": 171,
+      "community": 71,
       "norm_label": "routingdecision"
     },
     {
@@ -12049,7 +12199,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "packages_contracts_src_routing_parseroutingresult",
-      "community": 171,
+      "community": 71,
       "norm_label": "parseroutingresult"
     },
     {
@@ -12059,7 +12209,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "packages_contracts_src_routing_parserouting",
-      "community": 171,
+      "community": 71,
       "norm_label": "parserouting()"
     },
     {
@@ -12179,7 +12329,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "packages_contracts_src_skill_graph_extractor_skill",
-      "community": 104,
+      "community": 393,
       "norm_label": "graph_extractor_skill"
     },
     {
@@ -12229,7 +12379,7 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "packages_contracts_src_skill_business_profile_skill",
-      "community": 53,
+      "community": 655,
       "norm_label": "business_profile_skill"
     },
     {
@@ -12349,7 +12499,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_attachmentextractor",
-      "community": 5,
+      "community": 0,
       "norm_label": "attachmentextractor.ts"
     },
     {
@@ -12359,7 +12509,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_bmc",
-      "community": 5,
+      "community": 52,
       "norm_label": "bmc.ts"
     },
     {
@@ -12369,7 +12519,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_businessprofile",
-      "community": 5,
+      "community": 0,
       "norm_label": "businessprofile.ts"
     },
     {
@@ -12379,7 +12529,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_cockpitagent",
-      "community": 5,
+      "community": 0,
       "norm_label": "cockpitagent.ts"
     },
     {
@@ -12389,7 +12539,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_documentdrafter",
-      "community": 5,
+      "community": 0,
       "norm_label": "documentdrafter.ts"
     },
     {
@@ -12399,7 +12549,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_emaildrafter",
-      "community": 5,
+      "community": 0,
       "norm_label": "emaildrafter.ts"
     },
     {
@@ -12409,7 +12559,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_executiveagentclassifier",
-      "community": 5,
+      "community": 0,
       "norm_label": "executiveagentclassifier.ts"
     },
     {
@@ -12419,7 +12569,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_executiverouter",
-      "community": 5,
+      "community": 0,
       "norm_label": "executiverouter.ts"
     },
     {
@@ -12429,7 +12579,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_graphextractor",
-      "community": 5,
+      "community": 0,
       "norm_label": "graphextractor.ts"
     },
     {
@@ -12439,7 +12589,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_growthosdiagnostic",
-      "community": 5,
+      "community": 52,
       "norm_label": "growthosdiagnostic.ts"
     },
     {
@@ -12449,7 +12599,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_inboxdigest",
-      "community": 5,
+      "community": 0,
       "norm_label": "inboxdigest.ts"
     },
     {
@@ -12459,7 +12609,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_leadengine",
-      "community": 5,
+      "community": 52,
       "norm_label": "leadengine.ts"
     },
     {
@@ -12469,7 +12619,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_leancanvas",
-      "community": 5,
+      "community": 52,
       "norm_label": "leancanvas.ts"
     },
     {
@@ -12479,7 +12629,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_moneymodeldesigner",
-      "community": 5,
+      "community": 52,
       "norm_label": "moneymodeldesigner.ts"
     },
     {
@@ -12489,7 +12639,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_offerarchitect",
-      "community": 5,
+      "community": 52,
       "norm_label": "offerarchitect.ts"
     },
     {
@@ -12499,7 +12649,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_replydrafter",
-      "community": 5,
+      "community": 0,
       "norm_label": "replydrafter.ts"
     },
     {
@@ -12509,7 +12659,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_skillbodies_test",
-      "community": 5,
+      "community": 52,
       "norm_label": "skillbodies.test.ts"
     },
     {
@@ -12519,7 +12669,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_skillbodies_test_lf",
-      "community": 5,
+      "community": 52,
       "norm_label": "lf()"
     },
     {
@@ -12529,7 +12679,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_skillbodies_test_bodies",
-      "community": 5,
+      "community": 52,
       "norm_label": "bodies"
     },
     {
@@ -12539,7 +12689,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_swot",
-      "community": 5,
+      "community": 52,
       "norm_label": "swot.ts"
     },
     {
@@ -12549,7 +12699,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_voicebrief",
-      "community": 5,
+      "community": 0,
       "norm_label": "voicebrief.ts"
     },
     {
@@ -12559,7 +12709,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_contracts_src_skills_voicesession",
-      "community": 5,
+      "community": 0,
       "norm_label": "voicesession.ts"
     },
     {
@@ -12929,7 +13079,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_test",
-      "community": 59,
+      "community": 53,
       "norm_label": "businessprofile.test.ts"
     },
     {
@@ -12939,7 +13089,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_test_complete",
-      "community": 59,
+      "community": 53,
       "norm_label": "complete"
     },
     {
@@ -12949,7 +13099,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile",
-      "community": 59,
+      "community": 53,
       "norm_label": "businessprofile.ts"
     },
     {
@@ -12959,7 +13109,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_personas",
-      "community": 59,
+      "community": 53,
       "norm_label": "personas"
     },
     {
@@ -12969,7 +13119,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_persona",
-      "community": 59,
+      "community": 53,
       "norm_label": "persona"
     },
     {
@@ -12979,7 +13129,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_ispersona",
-      "community": 59,
+      "community": 53,
       "norm_label": "ispersona()"
     },
     {
@@ -12989,7 +13139,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_businessprofile",
-      "community": 59,
+      "community": 53,
       "norm_label": "businessprofile"
     },
     {
@@ -12999,7 +13149,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_personainference",
-      "community": 59,
+      "community": 53,
       "norm_label": "personainference"
     },
     {
@@ -13009,7 +13159,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_confirmdecision",
-      "community": 59,
+      "community": 53,
       "norm_label": "confirmdecision"
     },
     {
@@ -13019,7 +13169,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_decideconfirm",
-      "community": 59,
+      "community": 53,
       "norm_label": "decideconfirm()"
     },
     {
@@ -13029,7 +13179,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_validationresult",
-      "community": 59,
+      "community": 53,
       "norm_label": "validationresult"
     },
     {
@@ -13039,7 +13189,7 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_required_strings",
-      "community": 59,
+      "community": 53,
       "norm_label": "required_strings"
     },
     {
@@ -13049,7 +13199,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_validateprofile",
-      "community": 59,
+      "community": 53,
       "norm_label": "validateprofile()"
     },
     {
@@ -13059,7 +13209,7 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_bullets",
-      "community": 117,
+      "community": 104,
       "norm_label": "bullets()"
     },
     {
@@ -13069,7 +13219,7 @@
       "source_location": "L97",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_serializeprofile",
-      "community": 117,
+      "community": 104,
       "norm_label": "serializeprofile()"
     },
     {
@@ -13079,7 +13229,7 @@
       "source_location": "L133",
       "_origin": "ast",
       "id": "packages_core_src_businessprofile_deserializeprofile",
-      "community": 59,
+      "community": 53,
       "norm_label": "deserializeprofile()"
     },
     {
@@ -13279,7 +13429,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_core_src_emailintent_buildrecipientview",
-      "community": 171,
+      "community": 9,
       "norm_label": "buildrecipientview()"
     },
     {
@@ -13499,7 +13649,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_test",
-      "community": 13,
+      "community": 537,
       "norm_label": "diagnose.test.ts"
     },
     {
@@ -13509,7 +13659,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_test_healthy",
-      "community": 13,
+      "community": 537,
       "norm_label": "healthy()"
     },
     {
@@ -13519,7 +13669,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose",
-      "community": 13,
+      "community": 537,
       "norm_label": "diagnose.ts"
     },
     {
@@ -13529,7 +13679,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_prescription",
-      "community": 13,
+      "community": 537,
       "norm_label": "prescription"
     },
     {
@@ -13539,7 +13689,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_diagnose",
-      "community": 13,
+      "community": 537,
       "norm_label": "diagnose()"
     },
     {
@@ -13549,7 +13699,7 @@
       "source_location": "L172",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_gateorder",
-      "community": 13,
+      "community": 537,
       "norm_label": "gateorder()"
     },
     {
@@ -13559,7 +13709,7 @@
       "source_location": "L175",
       "_origin": "ast",
       "id": "packages_core_src_growth_diagnose_leveragerank",
-      "community": 13,
+      "community": 537,
       "norm_label": "leveragerank()"
     },
     {
@@ -13569,7 +13719,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_financialspine_test",
-      "community": 537,
+      "community": 548,
       "norm_label": "financialspine.test.ts"
     },
     {
@@ -13579,7 +13729,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_financialspine",
-      "community": 537,
+      "community": 548,
       "norm_label": "financialspine.ts"
     },
     {
@@ -13589,7 +13739,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "packages_core_src_growth_financialspine_round2",
-      "community": 537,
+      "community": 548,
       "norm_label": "round2()"
     },
     {
@@ -13599,7 +13749,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "packages_core_src_growth_financialspine_ltgpcac",
-      "community": 537,
+      "community": 548,
       "norm_label": "ltgpcac()"
     },
     {
@@ -13609,7 +13759,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "packages_core_src_growth_financialspine_cfa",
-      "community": 537,
+      "community": 548,
       "norm_label": "cfa()"
     },
     {
@@ -13619,7 +13769,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_index",
-      "community": 13,
+      "community": 537,
       "norm_label": "index.ts"
     },
     {
@@ -13629,7 +13779,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_growth_scorecard",
-      "community": 13,
+      "community": 537,
       "norm_label": "scorecard.ts"
     },
     {
@@ -13639,7 +13789,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "packages_core_src_growth_scorecard_valueequation",
-      "community": 13,
+      "community": 537,
       "norm_label": "valueequation"
     },
     {
@@ -13649,7 +13799,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "packages_core_src_growth_scorecard_scorecard",
-      "community": 13,
+      "community": 537,
       "norm_label": "scorecard"
     },
     {
@@ -13659,7 +13809,7 @@
       "source_location": "L92",
       "_origin": "ast",
       "id": "packages_core_src_growth_scorecard_emptyscorecard",
-      "community": 13,
+      "community": 537,
       "norm_label": "emptyscorecard"
     },
     {
@@ -13669,7 +13819,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_index",
-      "community": 65,
+      "community": 119,
       "norm_label": "index.ts"
     },
     {
@@ -13769,7 +13919,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_notificationtemplates_test",
-      "community": 65,
+      "community": 51,
       "norm_label": "notificationtemplates.test.ts"
     },
     {
@@ -13779,7 +13929,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_notificationtemplates",
-      "community": 65,
+      "community": 51,
       "norm_label": "notificationtemplates.ts"
     },
     {
@@ -13789,7 +13939,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "packages_core_src_notificationtemplates_notificationkind",
-      "community": 65,
+      "community": 51,
       "norm_label": "notificationkind"
     },
     {
@@ -13799,7 +13949,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "packages_core_src_notificationtemplates_messages",
-      "community": 65,
+      "community": 51,
       "norm_label": "messages"
     },
     {
@@ -13809,7 +13959,7 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "packages_core_src_notificationtemplates_notificationmessage",
-      "community": 65,
+      "community": 51,
       "norm_label": "notificationmessage()"
     },
     {
@@ -13819,7 +13969,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_test",
-      "community": 134,
+      "community": 454,
       "norm_label": "optimizerbreach.test.ts"
     },
     {
@@ -13829,7 +13979,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_test_cfg",
-      "community": 134,
+      "community": 454,
       "norm_label": "cfg"
     },
     {
@@ -13839,7 +13989,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach",
-      "community": 134,
+      "community": 454,
       "norm_label": "optimizerbreach.ts"
     },
     {
@@ -13849,7 +13999,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_breachconfig",
-      "community": 134,
+      "community": 454,
       "norm_label": "breachconfig"
     },
     {
@@ -13859,7 +14009,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_breachinput",
-      "community": 134,
+      "community": 454,
       "norm_label": "breachinput"
     },
     {
@@ -13869,7 +14019,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_breachreason",
-      "community": 134,
+      "community": 454,
       "norm_label": "breachreason"
     },
     {
@@ -13879,7 +14029,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_breachresult",
-      "community": 134,
+      "community": 454,
       "norm_label": "breachresult"
     },
     {
@@ -13889,7 +14039,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_core_src_optimizerbreach_classifybreach",
-      "community": 134,
+      "community": 454,
       "norm_label": "classifybreach()"
     },
     {
@@ -13899,7 +14049,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_result",
-      "community": 166,
+      "community": 184,
       "norm_label": "result.ts"
     },
     {
@@ -13909,7 +14059,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "packages_core_src_result_ok",
-      "community": 166,
+      "community": 184,
       "norm_label": "ok"
     },
     {
@@ -13919,7 +14069,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "packages_core_src_result_err",
-      "community": 166,
+      "community": 184,
       "norm_label": "err"
     },
     {
@@ -13929,7 +14079,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "packages_core_src_result_result",
-      "community": 166,
+      "community": 184,
       "norm_label": "result"
     },
     {
@@ -13939,7 +14089,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_core_src_result_isok",
-      "community": 166,
+      "community": 184,
       "norm_label": "isok()"
     },
     {
@@ -13949,7 +14099,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "packages_core_src_result_iserr",
-      "community": 166,
+      "community": 184,
       "norm_label": "iserr()"
     },
     {
@@ -13959,7 +14109,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "packages_core_src_result_unwrap",
-      "community": 166,
+      "community": 184,
       "norm_label": "unwrap()"
     },
     {
@@ -14029,7 +14179,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold_test",
-      "community": 336,
+      "community": 65,
       "norm_label": "reviewthreshold.test.ts"
     },
     {
@@ -14039,7 +14189,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold",
-      "community": 336,
+      "community": 65,
       "norm_label": "reviewthreshold.ts"
     },
     {
@@ -14049,7 +14199,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold_reviewdecision",
-      "community": 336,
+      "community": 65,
       "norm_label": "reviewdecision"
     },
     {
@@ -14059,7 +14209,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold_reviewclassifierinput",
-      "community": 336,
+      "community": 65,
       "norm_label": "reviewclassifierinput"
     },
     {
@@ -14069,7 +14219,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold_reviewclassification",
-      "community": 336,
+      "community": 65,
       "norm_label": "reviewclassification"
     },
     {
@@ -14079,7 +14229,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_core_src_reviewthreshold_classifyreviewdecision",
-      "community": 336,
+      "community": 65,
       "norm_label": "classifyreviewdecision()"
     },
     {
@@ -14229,7 +14379,7 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "packages_core_src_validatesubmit_isvalidemail",
-      "community": 9,
+      "community": 55,
       "norm_label": "isvalidemail()"
     },
     {
@@ -14299,7 +14449,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_cost_src_cost_test",
-      "community": 166,
+      "community": 184,
       "norm_label": "cost.test.ts"
     },
     {
@@ -14309,7 +14459,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_cost_src_cost",
-      "community": 166,
+      "community": 184,
       "norm_label": "cost.ts"
     },
     {
@@ -14319,7 +14469,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "packages_cost_src_cost_pricing",
-      "community": 166,
+      "community": 184,
       "norm_label": "pricing"
     },
     {
@@ -14329,7 +14479,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "packages_cost_src_cost_estimatetokens",
-      "community": 166,
+      "community": 184,
       "norm_label": "estimatetokens()"
     },
     {
@@ -14339,7 +14489,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "packages_cost_src_cost_costerror",
-      "community": 166,
+      "community": 184,
       "norm_label": "costerror"
     },
     {
@@ -14349,7 +14499,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "packages_cost_src_cost_estimatecostusd",
-      "community": 166,
+      "community": 184,
       "norm_label": "estimatecostusd()"
     },
     {
@@ -14359,7 +14509,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "packages_cost_src_cost_priceusage",
-      "community": 166,
+      "community": 184,
       "norm_label": "priceusage()"
     },
     {
@@ -14369,7 +14519,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_cost_src_cost_transcription_pricing",
-      "community": 166,
+      "community": 184,
       "norm_label": "transcription_pricing"
     },
     {
@@ -14379,7 +14529,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_cost_src_cost_pricetranscription",
-      "community": 166,
+      "community": 184,
       "norm_label": "pricetranscription()"
     },
     {
@@ -14389,7 +14539,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "packages_cost_src_cost_realtime_pricing",
-      "community": 166,
+      "community": 184,
       "norm_label": "realtime_pricing"
     },
     {
@@ -14399,7 +14549,7 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "packages_cost_src_cost_pricerealtime",
-      "community": 166,
+      "community": 184,
       "norm_label": "pricerealtime()"
     },
     {
@@ -14409,7 +14559,7 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "packages_cost_src_cost_choosemodel",
-      "community": 166,
+      "community": 184,
       "norm_label": "choosemodel()"
     },
     {
@@ -14419,7 +14569,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_cost_src_index",
-      "community": 166,
+      "community": 184,
       "norm_label": "index.ts"
     },
     {
@@ -14609,7 +14759,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_pii_src_index",
-      "community": 104,
+      "community": 643,
       "norm_label": "index.ts"
     },
     {
@@ -14619,7 +14769,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_pii_src_scan_test",
-      "community": 104,
+      "community": 643,
       "norm_label": "scan.test.ts"
     },
     {
@@ -14629,7 +14779,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "packages_pii_src_scan_test_unwrapok",
-      "community": 104,
+      "community": 643,
       "norm_label": "unwrapok()"
     },
     {
@@ -14639,7 +14789,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_pii_src_scan",
-      "community": 104,
+      "community": 643,
       "norm_label": "scan.ts"
     },
     {
@@ -14649,7 +14799,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "packages_pii_src_scan_piitype",
-      "community": 104,
+      "community": 643,
       "norm_label": "piitype"
     },
     {
@@ -14659,7 +14809,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "packages_pii_src_scan_safetext",
-      "community": 104,
+      "community": 643,
       "norm_label": "safetext"
     },
     {
@@ -14669,7 +14819,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_pii_src_scan_piientity",
-      "community": 104,
+      "community": 643,
       "norm_label": "piientity"
     },
     {
@@ -14679,7 +14829,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "packages_pii_src_scan_piiscanresult",
-      "community": 104,
+      "community": 643,
       "norm_label": "piiscanresult"
     },
     {
@@ -14689,7 +14839,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_pii_src_scan_piiscanerror",
-      "community": 104,
+      "community": 643,
       "norm_label": "piiscanerror"
     },
     {
@@ -14699,7 +14849,7 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "packages_pii_src_scan_detectors",
-      "community": 104,
+      "community": 643,
       "norm_label": "detectors"
     },
     {
@@ -14709,7 +14859,7 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "packages_pii_src_scan_luhn",
-      "community": 104,
+      "community": 643,
       "norm_label": "luhn()"
     },
     {
@@ -14719,7 +14869,7 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "packages_pii_src_scan_match",
-      "community": 104,
+      "community": 643,
       "norm_label": "match"
     },
     {
@@ -14729,7 +14879,7 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "packages_pii_src_scan_scantext",
-      "community": 104,
+      "community": 643,
       "norm_label": "scantext()"
     },
     {
@@ -14739,7 +14889,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "packages_pii_src_scan_rationale_56",
-      "community": 104,
+      "community": 643,
       "norm_label": "note: no \\b before \"(\" — a word boundary can't sit between two non-word chars,"
     },
     {
@@ -14759,7 +14909,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_vault_src_categories_test",
-      "community": 30,
+      "community": 110,
       "norm_label": "categories.test.ts"
     },
     {
@@ -14769,7 +14919,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_vault_src_categories",
-      "community": 30,
+      "community": 110,
       "norm_label": "categories.ts"
     },
     {
@@ -14779,7 +14929,7 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "packages_vault_src_categories_vaultcategory",
-      "community": 30,
+      "community": 110,
       "norm_label": "vaultcategory"
     },
     {
@@ -14789,7 +14939,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "packages_vault_src_categories_vaultsource",
-      "community": 30,
+      "community": 110,
       "norm_label": "vaultsource"
     },
     {
@@ -14799,7 +14949,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "packages_vault_src_categories_searchable_mime",
-      "community": 30,
+      "community": 110,
       "norm_label": "searchable_mime"
     },
     {
@@ -14809,7 +14959,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "packages_vault_src_categories_categoryfor",
-      "community": 53,
+      "community": 110,
       "norm_label": "categoryfor()"
     },
     {
@@ -14819,7 +14969,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_vault_src_categories_issearchable",
-      "community": 30,
+      "community": 110,
       "norm_label": "issearchable()"
     },
     {
@@ -14899,7 +15049,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_vault_src_fusion_test",
-      "community": 110,
+      "community": 20,
       "norm_label": "fusion.test.ts"
     },
     {
@@ -14909,7 +15059,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_vault_src_fusion",
-      "community": 110,
+      "community": 20,
       "norm_label": "fusion.ts"
     },
     {
@@ -14919,7 +15069,7 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "packages_vault_src_fusion_vectorhit",
-      "community": 110,
+      "community": 20,
       "norm_label": "vectorhit"
     },
     {
@@ -14929,7 +15079,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "packages_vault_src_fusion_fusionresult",
-      "community": 110,
+      "community": 20,
       "norm_label": "fusionresult"
     },
     {
@@ -14939,7 +15089,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "packages_vault_src_fusion_fuse",
-      "community": 110,
+      "community": 20,
       "norm_label": "fuse()"
     },
     {
@@ -21403,10 +21553,20 @@
       "norm_label": "notification matrix (opsg-05)"
     },
     {
+      "label": "Cron jobs (`packages/backend/convex/crons.ts`)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/audit-dead-letter.md",
+      "source_location": "L100",
+      "_origin": "ast",
+      "id": "docs_playbooks_audit_dead_letter_cron_jobs_packages_backend_convex_crons_ts",
+      "community": 233,
+      "norm_label": "cron jobs (`packages/backend/convex/crons.ts`)"
+    },
+    {
       "label": "Invariants — what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L90",
+      "source_location": "L118",
       "_origin": "ast",
       "id": "docs_playbooks_audit_dead_letter_invariants_what_must_never_break",
       "community": 233,
@@ -21416,7 +21576,7 @@
       "label": "How to change safely",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L100",
+      "source_location": "L128",
       "_origin": "ast",
       "id": "docs_playbooks_audit_dead_letter_how_to_change_safely",
       "community": 233,
@@ -21426,7 +21586,7 @@
       "label": "How to verify",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L109",
+      "source_location": "L137",
       "_origin": "ast",
       "id": "docs_playbooks_audit_dead_letter_how_to_verify",
       "community": 233,
@@ -21436,7 +21596,7 @@
       "label": "Operational notes",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L115",
+      "source_location": "L143",
       "_origin": "ast",
       "id": "docs_playbooks_audit_dead_letter_operational_notes",
       "community": 233,
@@ -21446,7 +21606,7 @@
       "label": "Known gaps & deferred work",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L122",
+      "source_location": "L150",
       "_origin": "ast",
       "id": "docs_playbooks_audit_dead_letter_known_gaps_deferred_work",
       "community": 233,
@@ -21496,7 +21656,7 @@
       "label": "Dependencies & blast radius",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L44",
+      "source_location": "L52",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_dependencies_blast_radius",
       "community": 150,
@@ -21506,7 +21666,7 @@
       "label": "Data flow",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L61",
+      "source_location": "L69",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_data_flow",
       "community": 150,
@@ -21516,7 +21676,7 @@
       "label": "Invariants — what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L80",
+      "source_location": "L91",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_invariants_what_must_never_break",
       "community": 150,
@@ -21526,17 +21686,57 @@
       "label": "\"What changed\" — the `evaluations.delta` field (13-01, BEVL-03)",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L121",
+      "source_location": "L132",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03",
       "community": 150,
       "norm_label": "\"what changed\" — the `evaluations.delta` field (13-01, bevl-03)"
     },
     {
+      "label": "Proactive weekly review (BEVL-03, 13-02)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L166",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "community": 150,
+      "norm_label": "proactive weekly review (bevl-03, 13-02)"
+    },
+    {
+      "label": "Invariants",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L180",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_invariants",
+      "community": 150,
+      "norm_label": "invariants"
+    },
+    {
+      "label": "How to change it safely",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L213",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_change_it_safely",
+      "community": 150,
+      "norm_label": "how to change it safely"
+    },
+    {
+      "label": "How to verify",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L224",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_verify",
+      "community": 150,
+      "norm_label": "how to verify"
+    },
+    {
       "label": "How to change safely",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L154",
+      "source_location": "L234",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_how_to_change_safely",
       "community": 150,
@@ -21546,9 +21746,9 @@
       "label": "How to verify",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L173",
+      "source_location": "L253",
       "_origin": "ast",
-      "id": "docs_playbooks_business_evaluation_how_to_verify",
+      "id": "docs_playbooks_business_evaluation_how_to_verify_253",
       "community": 150,
       "norm_label": "how to verify"
     },
@@ -21556,7 +21756,7 @@
       "label": "Operational notes",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L186",
+      "source_location": "L266",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_operational_notes",
       "community": 150,
@@ -21566,7 +21766,7 @@
       "label": "Known gaps & deferred work",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L197",
+      "source_location": "L277",
       "_origin": "ast",
       "id": "docs_playbooks_business_evaluation_known_gaps_deferred_work",
       "community": 150,
@@ -26728,7 +26928,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L14",
       "_origin": "convex_table",
-      "community": 633,
+      "community": 645,
       "norm_label": "audit (table)",
       "id": "packages_backend_convex_schema_audit_table"
     },
@@ -26738,7 +26938,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L30",
       "_origin": "convex_table",
-      "community": 635,
+      "community": 59,
       "norm_label": "deadletters (table)",
       "id": "packages_backend_convex_schema_deadletters_table"
     },
@@ -26748,7 +26948,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L46",
       "_origin": "convex_table",
-      "community": 651,
+      "community": 661,
       "norm_label": "skills (table)",
       "id": "packages_backend_convex_schema_skills_table"
     },
@@ -26758,7 +26958,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L64",
       "_origin": "convex_table",
-      "community": 648,
+      "community": 658,
       "norm_label": "pendingtimeouts (table)",
       "id": "packages_backend_convex_schema_pendingtimeouts_table"
     },
@@ -26768,7 +26968,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L77",
       "_origin": "convex_table",
-      "community": 638,
+      "community": 648,
       "norm_label": "exportcursors (table)",
       "id": "packages_backend_convex_schema_exportcursors_table"
     },
@@ -26778,7 +26978,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L87",
       "_origin": "convex_table",
-      "community": 650,
+      "community": 660,
       "norm_label": "requests (table)",
       "id": "packages_backend_convex_schema_requests_table"
     },
@@ -26788,7 +26988,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L151",
       "_origin": "convex_table",
-      "community": 649,
+      "community": 659,
       "norm_label": "plans (table)",
       "id": "packages_backend_convex_schema_plans_table"
     },
@@ -26808,7 +27008,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L298",
       "_origin": "convex_table",
-      "community": 654,
+      "community": 132,
       "norm_label": "vaultsources (table)",
       "id": "packages_backend_convex_schema_vaultsources_table"
     },
@@ -26818,7 +27018,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L323",
       "_origin": "convex_table",
-      "community": 637,
+      "community": 647,
       "norm_label": "evaluations (table)",
       "id": "packages_backend_convex_schema_evaluations_table"
     },
@@ -26828,7 +27028,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L393",
       "_origin": "convex_table",
-      "community": 631,
+      "community": 642,
       "norm_label": "agentsteps (table)",
       "id": "packages_backend_convex_schema_agentsteps_table"
     },
@@ -26838,7 +27038,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L457",
       "_origin": "convex_table",
-      "community": 644,
+      "community": 653,
       "norm_label": "inboxfixtures (table)",
       "id": "packages_backend_convex_schema_inboxfixtures_table"
     },
@@ -26848,7 +27048,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L480",
       "_origin": "convex_table",
-      "community": 632,
+      "community": 644,
       "norm_label": "attachments (table)",
       "id": "packages_backend_convex_schema_attachments_table"
     },
@@ -26858,7 +27058,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L492",
       "_origin": "convex_table",
-      "community": 652,
+      "community": 662,
       "norm_label": "telemetry (table)",
       "id": "packages_backend_convex_schema_telemetry_table"
     },
@@ -26868,7 +27068,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L511",
       "_origin": "convex_table",
-      "community": 646,
+      "community": 656,
       "norm_label": "notifications (table)",
       "id": "packages_backend_convex_schema_notifications_table"
     },
@@ -26878,7 +27078,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L522",
       "_origin": "convex_table",
-      "community": 640,
+      "community": 650,
       "norm_label": "gmailtokens (table)",
       "id": "packages_backend_convex_schema_gmailtokens_table"
     },
@@ -26888,7 +27088,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L535",
       "_origin": "convex_table",
-      "community": 643,
+      "community": 652,
       "norm_label": "guardrailconfig (table)",
       "id": "packages_backend_convex_schema_guardrailconfig_table"
     },
@@ -26898,7 +27098,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L542",
       "_origin": "convex_table",
-      "community": 636,
+      "community": 646,
       "norm_label": "demoitems (table)",
       "id": "packages_backend_convex_schema_demoitems_table"
     },
@@ -26908,7 +27108,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L552",
       "_origin": "convex_table",
-      "community": 645,
+      "community": 654,
       "norm_label": "intakeartifacts (table)",
       "id": "packages_backend_convex_schema_intakeartifacts_table"
     },
@@ -26918,7 +27118,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L585",
       "_origin": "convex_table",
-      "community": 653,
+      "community": 97,
       "norm_label": "vaultdocuments (table)",
       "id": "packages_backend_convex_schema_vaultdocuments_table"
     },
@@ -26928,7 +27128,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L619",
       "_origin": "convex_table",
-      "community": 642,
+      "community": 651,
       "norm_label": "graphnodes (table)",
       "id": "packages_backend_convex_schema_graphnodes_table"
     },
@@ -26938,7 +27138,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L630",
       "_origin": "convex_table",
-      "community": 641,
+      "community": 101,
       "norm_label": "graphedges (table)",
       "id": "packages_backend_convex_schema_graphedges_table"
     },
@@ -26948,7 +27148,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L646",
       "_origin": "convex_table",
-      "community": 655,
+      "community": 663,
       "norm_label": "voicesessions (table)",
       "id": "packages_backend_convex_schema_voicesessions_table"
     },
@@ -26958,7 +27158,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L681",
       "_origin": "convex_table",
-      "community": 639,
+      "community": 649,
       "norm_label": "feedback (table)",
       "id": "packages_backend_convex_schema_feedback_table"
     },
@@ -26968,7 +27168,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L701",
       "_origin": "convex_table",
-      "community": 647,
+      "community": 657,
       "norm_label": "optimizerconfig (table)",
       "id": "packages_backend_convex_schema_optimizerconfig_table"
     }
@@ -35763,7 +35963,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L515",
+      "source_location": "L535",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_actable_plan_status",
@@ -35773,7 +35973,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L562",
+      "source_location": "L582",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_actongap",
@@ -35783,7 +35983,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L441",
+      "source_location": "L461",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_applyscorecardanswer",
@@ -35793,7 +35993,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L527",
+      "source_location": "L547",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_buildmemo",
@@ -35803,7 +36003,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L644",
+      "source_location": "L666",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_bythread",
@@ -35813,7 +36013,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L112",
+      "source_location": "L114",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_evaluationdelta",
@@ -35853,7 +36053,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L424",
+      "source_location": "L444",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_gateorder",
@@ -35873,7 +36073,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L133",
+      "source_location": "L135",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_insertevaluation",
@@ -35883,7 +36083,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L122",
+      "source_location": "L124",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_lastforthread",
@@ -35893,7 +36093,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L617",
+      "source_location": "L639",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_persistnextstepmemo",
@@ -35913,7 +36113,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L114",
+      "source_location": "L116",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_provenance",
@@ -35923,7 +36123,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L479",
+      "source_location": "L499",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_recordscorecardanswer",
@@ -35933,7 +36133,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L495",
+      "source_location": "L515",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_recordscorecardanswerinternal",
@@ -35943,7 +36143,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L155",
+      "source_location": "L157",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_runevaluation",
@@ -35953,7 +36153,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L95",
+      "source_location": "L97",
       "weight": 1,
       "source": "packages_backend_convex_evaluations",
       "target": "packages_backend_convex_evaluations_setpath",
@@ -36227,7 +36427,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L455",
+      "source_location": "L475",
       "weight": 1,
       "source": "packages_backend_convex_evaluations_applyscorecardanswer",
       "target": "packages_backend_convex_evaluations_setpath",
@@ -36239,7 +36439,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L630",
+      "source_location": "L652",
       "weight": 1,
       "source": "packages_backend_convex_evaluations_persistnextstepmemo",
       "target": "packages_backend_convex_lib_hash_contenthash"
@@ -36250,7 +36450,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L635",
+      "source_location": "L657",
       "weight": 1,
       "source": "packages_backend_convex_evaluations_persistnextstepmemo",
       "target": "packages_backend_convex_vaultingest_startingest"
@@ -36261,7 +36461,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L626",
+      "source_location": "L648",
       "weight": 1,
       "source": "packages_backend_convex_evaluations_persistnextstepmemo",
       "target": "packages_vault_src_categories_categoryfor"
@@ -41953,6 +42153,191 @@
       "weight": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_plans_writecandidates",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L20",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_aggregatemodules",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L225",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_code",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L18",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_modules",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L25",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_newtest",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L98",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_notifications",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L32",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_profiletext",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L87",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_reviewrows",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L78",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_runcron",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L46",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_seeddoc",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L217",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_proactivereview_test_sources",
+      "confidence_score": 1
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L15",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_backend_convex_schema",
+      "confidence_score": 1
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L7",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_core_src_businessprofile_serializeprofile",
+      "confidence_score": 1
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L7",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test",
+      "target": "packages_core_src_index",
+      "confidence_score": 1
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.test.ts",
+      "source_location": "L33",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview_test_profiletext",
+      "target": "packages_core_src_businessprofile_serializeprofile",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L117",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_proactivereview_insertreviewnotification",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L59",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_proactivereview_reviewone",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L37",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_proactivereview_runweekly",
+      "confidence_score": 1
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L11",
+      "weight": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_core_src_index",
       "confidence_score": 1
     },
     {
@@ -58849,6 +59234,16 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
+      "source_location": "L100",
+      "weight": 1,
+      "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
+      "target": "docs_playbooks_audit_dead_letter_cron_jobs_packages_backend_convex_crons_ts",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/audit-dead-letter.md",
       "source_location": "L42",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
@@ -58869,7 +59264,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L100",
+      "source_location": "L128",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_how_to_change_safely",
@@ -58879,7 +59274,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L109",
+      "source_location": "L137",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_how_to_verify",
@@ -58889,7 +59284,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L90",
+      "source_location": "L118",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_invariants_what_must_never_break",
@@ -58909,7 +59304,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L122",
+      "source_location": "L150",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_known_gaps_deferred_work",
@@ -58929,7 +59324,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/audit-dead-letter.md",
-      "source_location": "L115",
+      "source_location": "L143",
       "weight": 1,
       "source": "docs_playbooks_audit_dead_letter_playbook_audit_log_dead_letter_pipeline",
       "target": "docs_playbooks_audit_dead_letter_operational_notes",
@@ -58959,7 +59354,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L61",
+      "source_location": "L69",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_data_flow",
@@ -58969,7 +59364,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L44",
+      "source_location": "L52",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_dependencies_blast_radius",
@@ -58979,7 +59374,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L154",
+      "source_location": "L234",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_how_to_change_safely",
@@ -58989,17 +59384,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L173",
+      "source_location": "L253",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_how_to_verify",
+      "target": "docs_playbooks_business_evaluation_how_to_verify_253",
       "confidence_score": 1
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L80",
+      "source_location": "L91",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_invariants_what_must_never_break",
@@ -59019,7 +59414,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L197",
+      "source_location": "L277",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_known_gaps_deferred_work",
@@ -59029,10 +59424,20 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L186",
+      "source_location": "L266",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_operational_notes",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L166",
+      "weight": 1,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
       "confidence_score": 1
     },
     {
@@ -59049,10 +59454,40 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L121",
+      "source_location": "L132",
       "weight": 1,
       "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
       "target": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L213",
+      "weight": 1,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_how_to_change_it_safely",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L224",
+      "weight": 1,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_how_to_verify",
+      "confidence_score": 1
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L180",
+      "weight": 1,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_invariants",
       "confidence_score": 1
     },
     {
@@ -64137,12 +64572,23 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/crons.ts",
-      "source_location": "L14",
+      "source_location": "L17",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
       "source": "packages_backend_convex_crons",
       "target": "packages_backend_convex_gmailauth_flagexpiringtokens"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/crons.ts",
+      "source_location": "L31",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_crons",
+      "target": "packages_backend_convex_proactivereview_runweekly"
     },
     {
       "relation": "calls",
@@ -64247,7 +64693,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L175",
+      "source_location": "L177",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64258,7 +64704,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L206",
+      "source_location": "L212",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64269,7 +64715,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L220",
+      "source_location": "L226",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64280,7 +64726,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L280",
+      "source_location": "L300",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64291,7 +64737,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L382",
+      "source_location": "L402",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64302,7 +64748,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L397",
+      "source_location": "L417",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64313,7 +64759,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L589",
+      "source_location": "L611",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64324,7 +64770,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L591",
+      "source_location": "L613",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64335,7 +64781,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L596",
+      "source_location": "L618",
       "weight": 1,
       "context": "convex_ref",
       "confidence_score": 1,
@@ -64346,7 +64792,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L147",
+      "source_location": "L149",
       "weight": 1,
       "context": "db_write",
       "confidence_score": 1,
@@ -64357,7 +64803,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/evaluations.ts",
-      "source_location": "L622",
+      "source_location": "L644",
       "weight": 1,
       "context": "db_write",
       "confidence_score": 1,
@@ -65100,6 +65546,50 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_plans",
       "target": "packages_backend_convex_schema_plans_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L70",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_evaluations_lastforthread"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L76",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_evaluations_runevaluation"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L111",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_notifyexternal_dispatch"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/proactiveReview.ts",
+      "source_location": "L123",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_proactivereview",
+      "target": "packages_backend_convex_schema_notifications_table"
     },
     {
       "relation": "calls",
@@ -66819,5 +67309,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "43fd499174ecc7509a83602a525995e7dace80a8"
+  "built_at_commit": "f248c9cfc021e92ad4b7c594d999a594f33fc1dd"
 }

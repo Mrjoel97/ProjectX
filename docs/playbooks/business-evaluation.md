@@ -1,6 +1,6 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
+> Last verified: 2026-07-25 (4) — 13-02: the **proactive weekly review** (`proactiveReview.ts`, BEVL-03) — a Monday-06:00-UTC cron enumerates onboarded tenants over `vaultDocuments.by_kind`, fans out one `reviewOne` per tenant, runs this engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, and writes an in-app notification only when something changed. See the **Proactive weekly review** section below. **The repeat-run provenance collapse recorded in the previous line is now CLOSED** — it had to be, because a weekly review is by design a repeat run on one pinned thread. `fillVault` now records a CITATION whenever a grounded document restates a field, even when the slot is already filled by carry-forward (the VALUE stays first-write-wins, and a pre-seeded `user-provided` citation is never downgraded); the two "already set → skip" short-circuits above it (the `currentOffers.length === 0` pre-check and the `FINANCIAL_PATTERNS` `continue`) are gone for the same reason. Regression-guarded by `proactiveReview.test.ts > notifies only on change`, which asserts run 2 has the SAME finding count as run 1 and an empty delta — that test was CONFIRMED red before the fix (a second `weekly_review` notification fired off a false "gaps closed"). `proactiveReview.test.ts` 8/8, `evaluations.test.ts` 11/11 unchanged, backend 494/495 (sole red the pre-existing `audit.test.ts auditCounts`). Prior: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
 > Prior: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
@@ -30,6 +30,14 @@ Backend (`packages/backend/convex/`):
   `plans.kind: "memo"` discriminator and the optional `gaps[].reason`/`gaps[].proofMetric`.
 - `evaluations.test.ts` — convex-test over the `SMOKE::` seam: grounded cited row, refs-only audit,
   carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty.
+- `proactiveReview.ts` (13-02, BEVL-03) — the weekly cron's three functions: `runWeekly`
+  (internalMutation — enumerate onboarded tenants over `vaultDocuments.by_kind`, dedupe, fan out),
+  `reviewOne` (internalAction — the engine on the stable `REVIEW_THREAD_ID`, notify-on-change),
+  `insertReviewNotification` (internalMutation — a DIRECT `notifications` insert, never
+  `notifications.notify`). See the **Proactive weekly review** section.
+- `proactiveReview.test.ts` — five behaviour cases plus the SC#2 (no mailbox token) and SC#3
+  (tenant-scoped) static source guards.
+- `crons.ts` — `crons.weekly("proactive-review", monday 06:00 UTC)` (see `audit-dead-letter.md`).
 - `gapAction.test.ts` — convex-test for BEVL-02: gap → proposed memo-plan (no recipients), a
   healthy/thin evaluation exposes no gap, approve persists a `next_step_memo` vault doc and seeds
   ZERO `requests` rows (the terminal is a persist, NOT gmail), double-approve idempotence.
@@ -67,7 +75,10 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
 3. **Fill** — parse a grounded business-profile chunk (`deserializeProfile`) into identity fields
    and scan for direct labeled figures (`CAC: $150`) into financials; each fill records its source
    doc as provenance. A user-provided carried field is provenance "user-provided". A field still
-   null → stays null (not-enough-data), never guessed.
+   null → stays null (not-enough-data), never guessed. **Value vs citation are separate rules**
+   (13-02): the VALUE is first-write-wins (carried/user-provided/earlier-doc beats a later doc), but
+   the CITATION is (re)recorded whenever a document restates the field, so a repeat run over the
+   same corpus cites the same things instead of collapsing to zero findings.
 4. **Auto-pick framework** — financials present → `growth-os`; else persona map
    (solopreneur→lean, startup→bmc, sme→swot); an explicit `framework` arg overrides.
 5. **Diagnose** — `diagnose()` + `leverageRank()` over the filled scorecard → gaps (route/playbook),
@@ -146,10 +157,79 @@ delta?: { newFindings: number; gapsClosed: string[]; gapsOpened: string[] }
   string literal from `diagnose()`, never LLM prose, so keying on it is safe in a way that keying on
   the human-readable `label` would not be.
 - **`newFindings` is clamped at 0.** A DROP in finding count is not "new findings"; the card only
-  renders the line when it is > 0. (A repeat run in the same thread legitimately re-cites fewer
-  paths — see the provenance gap under Known gaps.)
+  renders the line when it is > 0. The clamp is now a belt-and-braces guard rather than a
+  workaround: since 13-02 a repeat run over unchanged documents re-cites the SAME paths, so an
+  unchanged week produces `newFindings: 0` honestly, not by clamping a negative.
 - Enforced by the four `delta`-named tests in `evaluations.test.ts`
   (`vitest run convex/evaluations.test.ts -t "delta"`).
+
+## Proactive weekly review (BEVL-03, 13-02)
+
+`packages/backend/convex/proactiveReview.ts` — three functions, no new tables, no new audit rows.
+
+```
+crons.weekly("proactive-review", monday 06:00 UTC)
+  → internal.proactiveReview.runWeekly        (internalMutation, no args)
+      enumerate vaultDocuments.by_kind == "business_profile", dedupe by tenantId
+      → ctx.scheduler.runAfter(0, internal.proactiveReview.reviewOne, { tenantId })   per tenant
+          → internal.evaluations.lastForThread({ tenantId, REVIEW_THREAD_ID })
+          → internal.evaluations.runEvaluation({ …, framework: last?.framework, withDelta: true })
+          → internal.proactiveReview.insertReviewNotification   ONLY if something changed
+```
+
+### Invariants
+
+- **`REVIEW_THREAD_ID` is STABLE per tenant — never a per-week id.** `lastForThread` is indexed on
+  `(tenantId, threadId)`, so a date-derived thread id would silently reset the Scorecard every week
+  and re-ask figures the user already answered — it breaks the LOCKED store half. The repeat-run
+  cost of a pinned thread (the provenance collapse) was CLOSED in the engine instead; see the
+  `fillVault` citation rule below. Do not "fix" a future finding-count anomaly by rotating the id.
+- **`fillVault` records a citation on EVERY restatement, but sets the value only when unset.** The
+  two rules are separate on purpose. Provenance is not persisted on the row, so it must be rebuilt
+  from the grounded corpus each run; if a carried value short-circuits before the citation is
+  recorded, `findings` collapses toward zero, the engine then suppresses gaps (SC #1), and the delta
+  reports a false `gapsClosed`. A pre-seeded `user-provided` citation always wins (first writer of
+  the citation wins), so a carried user figure is never relabelled as a vault fact.
+- **The notification is written by a DIRECT `ctx.db.insert("notifications", …)`, never through
+  `notifications.notify`.** `notify` unconditionally schedules `internal.notifyExternal.dispatch`,
+  which calls `freshAccessToken` → the Gmail refresh path. Proactivity must not be able to break on
+  the Google 7-day testing-token expiry (SC#2). The same bypass `gmailAuth.flagExpiringTokens` uses.
+- **`weekly_review` / `weekly_review_failed` stay OUT of `NOTIFICATION_KINDS`.** That absence is the
+  second, independent barrier: `notifyExternal.dispatch` returns at `if (!KINDS.has(kind)) return;`
+  BEFORE any token work. Adding them there would arm the mailbox for the review.
+- **Every function takes an explicit validated `tenantId`.** A cron has no `ctx.auth`, so
+  `tenantQuery`/`tenantMutation` are structurally uncallable; the `runEvaluation` /
+  `recordScorecardAnswerInternal` internal-twin convention applies. `vaultDocuments.by_kind` is the
+  ONE deliberate cross-tenant read in the module and it is consumed for tenant ids only.
+- **No new audit eventType.** `evaluation.ran` already records the run; a `review.delivered` row
+  would duplicate it. There is no `review.*` event anywhere in the phase.
+- **Notify only on change.** First review ever, a moved verdict, or a non-empty delta. An idea-stage
+  tenant gets ONE "not enough data" ping, then silence. The evaluation ROW is written every week
+  regardless, so the card is always current — only the bell is conditional.
+- **A failed review still tells the user.** The `catch` in `reviewOne` inserts
+  `weekly_review_failed` with the static `REVIEW_FAILED_MESSAGE`; silence would be indistinguishable
+  from a healthy quiet week. The failure REASON never reaches the notification plane (§4).
+
+### How to change it safely
+
+- Adding a review notification kind? Add the literal to `insertReviewNotification`'s `v.union` AND a
+  static message constant in `packages/core/src/notificationTemplates.ts` — and keep it out of
+  `NOTIFICATION_KINDS`. Never interpolate a reason or any grounded prose into `message`.
+- Adding a second read to `runWeekly`? The SC#3 guard pins `by_kind` to exactly ONE occurrence; a
+  new read must be `withIndex`'d on `tenantId` or the test fails.
+- Changing the cadence? Only `crons.ts` changes. `crons.weekly` is used deliberately over
+  `crons.cron` (see the comment there); `dayOfWeek` MUST be lowercase — the runtime validator
+  rejects `"Monday"` and the JSDoc example is wrong.
+
+### How to verify
+
+- `pnpm --filter @pikar/backend exec vitest run convex/proactiveReview.test.ts` — 8/8: five
+  behaviour cases (enumeration+dedupe, card+notification, notify-only-on-change, cross-tenant
+  isolation, audit unchanged) and three static guards. Zero network: `rag.search` throws on the
+  unset `OPENAI_API_KEY` and the engine fails open, while the tenant's own profile doc still enters
+  the corpus through `internal.vault.profileSeedDocs` (a plain DB read).
+- LOCKED manual procedure: *Convex dashboard → function runner → `proactiveReview:runWeekly` with
+  `{}` → open `/dashboard/workspace`.*
 
 ## How to change safely
 
