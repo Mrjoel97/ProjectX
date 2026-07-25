@@ -22,3 +22,16 @@ export { CAP_MS, canTransition, capEndsAt, graceExpired, isEnded } from "./sessi
 export type { SessionStatus } from "./session";
 export { ZERO_USAGE, accumulateUsage } from "./metering";
 export type { UsageDelta } from "./metering";
+// Voice-doc discussion (Phase 14, DOCV-01) — the contract surface every downstream plan imports.
+export {
+  DIGEST_CHAR_CAP,
+  DOC_GAP_PLAYBOOK,
+  DOC_GAP_ROUTE,
+  DOC_REVIEW_FRAMEWORK,
+  EXCERPT_CHAR_CAP,
+  RETRIEVAL_CHAR_CAP,
+  RETRIEVAL_MAX_PASSAGES,
+  SEARCH_DOCUMENT_TOOL,
+  VOICE_DOC_THREAD_PREFIX,
+  voiceDocThreadId,
+} from "./docSession";
