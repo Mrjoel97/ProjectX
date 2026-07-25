@@ -11,13 +11,18 @@
 // before Approve. It is the SOLE `workflow.start(deliverApprovedPlan)` call site (the
 // grep-able zero-sends-before-Approve invariant, RESEARCH-delivery §5).
 import { Agent, listMessages } from "@convex-dev/agent";
+import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import {
+  type ActionType,
+  type Arm,
+  actionTypeOf,
   applyRecipientEdit,
+  armFor,
+  assertNever,
   classifyReviewDecision,
   notificationMessage,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
-import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -393,9 +398,7 @@ export const proposeEmailPlan = internalMutation({
     // happen post-seed) degrades to unattributable (undefined), it does not break a propose.
     const activeCockpit = await ctx.db
       .query("skills")
-      .withIndex("by_name_status", (q) =>
-        q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"),
-      )
+      .withIndex("by_name_status", (q) => q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"))
       .unique();
     const skillVersion = activeCockpit?.version;
     // REVW-02 (cockpit): a RE-propose of an ALREADY-proposed plan is the live gate's "regenerate"
@@ -429,7 +432,14 @@ export const proposeEmailPlan = internalMutation({
       });
       return undefined;
     }
-    await ctx.db.patch(planId, { recipients, mode, subject, body, status: "proposed", skillVersion });
+    await ctx.db.patch(planId, {
+      recipients,
+      mode,
+      subject,
+      body,
+      status: "proposed",
+      skillVersion,
+    });
     return undefined;
   },
 });
@@ -484,6 +494,17 @@ export const startScheduledDelivery = internalMutation({
 });
 
 /**
+ * ACTN-01 — the dispatcher's own arm bind, and the reason it is separate from `armFor`'s table in
+ * @pikar/core. The `workflow` case in executePlan below IS the gmail fan-out (seed requests →
+ * startFanout → deliverApprovedPlan). A new ActionType that merely classified as `workflow` would
+ * therefore inherit the EMAIL terminal silently — the exact structural property 12-05 bought by
+ * leaving deliverApprovedPlan.ts untouched. This line fails to compile the day ACTION_TYPES grows,
+ * forcing that author to visit the dispatcher and decide: an inline arm executes inline, a durable
+ * arm starts its OWN workflow. The switch's `assertNever` covers a new ARM; this covers a new TYPE.
+ */
+const _ARM_TABLE = { email: "workflow", memo: "inline" } as const satisfies Record<ActionType, Arm>;
+
+/**
  * The human approve gate (SC4). Idempotent CAS on plan.status: only the FIRST proposed→approved
  * transition seeds rows + starts the fan-out; a double-approve re-reads a non-proposed status
  * and no-ops (send once). Seeds ONE requests row per recipient (individual) or one comma-joined
@@ -513,15 +534,27 @@ export const executePlan = tenantMutation({
     // guard BEFORE the CAS flip / seed / start, so an escalated plan seeds no rows, starts no workflow.
     if (plan.escalated) return { ok: false, reason: "review_escalated" };
 
-    // MEMO TERMINAL (12-05 BEVL-02): a memo-plan is not an email, so Approve means SAVE, not send.
-    // It branches HERE — after the CAS read, before the mailbox pre-check — because a memo must not
-    // require a connected Gmail, and because everything below (seed requests → startFanout →
-    // gmail.send) is the email terminal. Nothing in the fan-out is reachable from this branch; the
-    // double-approve CAS above already makes it exactly-once. See evaluations.ts.
-    if (plan.kind === "memo") {
-      await ctx.db.patch(planId, { status: "done" });
-      await persistNextStepMemo(ctx, plan);
-      return { ok: true };
+    // ACTN-01: executePlan is the DISPATCHER. Each action type is one arm; adding a type without an
+    // arm is a COMPILE error (`armFor`'s `satisfies Record<ActionType, Arm>` table in @pikar/core,
+    // re-bound below), which is a stronger guarantee than any test. The arms are the EXISTING code
+    // paths — this is a refactor, not new behaviour — and the selection sits exactly where 12-05's
+    // `plan.kind === "memo"` if sat: after the CAS read and the escalated guard, BEFORE the mailbox
+    // pre-check, because a memo must not require a connected Gmail.
+    const armType = armFor(actionTypeOf(plan.kind));
+    switch (armType) {
+      case "inline": {
+        // memo (12-05 BEVL-02): Approve means SAVE, not send — one transactional write, so a
+        // workflow would add rows and latency for nothing. Nothing below (seed requests →
+        // startFanout → gmail.send) is reachable from here; the double-approve CAS above already
+        // makes it exactly-once. See evaluations.ts.
+        await ctx.db.patch(planId, { status: "done" });
+        await persistNextStepMemo(ctx, plan);
+        return { ok: true };
+      }
+      case "workflow":
+        break; // → the existing pre-check → CAS flip → seed requests → startFanout block below
+      default:
+        return assertNever(armType);
     }
 
     // No mailbox → no send (design: stop before any delivery). Reuse the existing token reader;
@@ -604,7 +637,13 @@ export const executePlan = tenantMutation({
     }
 
     const planCid = crypto.randomUUID();
-    const args: FanoutArgs = { planId, tenantId: ctx.tenantId, requestIds, correlationIds, planCid };
+    const args: FanoutArgs = {
+      planId,
+      tenantId: ctx.tenantId,
+      requestIds,
+      correlationIds,
+      planCid,
+    };
 
     // Deferred send (SC3): a future sendAt ARMS the scheduler and returns — the rows are frozen
     // (seeded above) but nothing starts. sendAt unset OR already past ⇒ start immediately (today's
