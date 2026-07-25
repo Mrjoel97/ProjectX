@@ -879,14 +879,23 @@ button.clay-card:hover {
 
 /* Chat header: the logo + name row, ruled off from the tab strip below it. */
 .chat-head {
-  padding-bottom: 0.6rem;
+  padding-bottom: 0.3rem;
   border-bottom: 1px solid var(--rule);
 }
 
+/* Header controls are scoped DOWN from the shared 2.1rem .icon-btn — the composer, onboarding
+   and attachment pickers use the same class and must keep their larger hit targets. 1.5rem
+   (24px) is the WCAG 2.2 AA 2.5.8 floor; do not go below it. */
+.chat-head .icon-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.45rem;
+}
+
 .chat-logo {
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 0.6rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 0.42rem;
   flex: none;
   display: grid;
   place-items: center;
@@ -899,32 +908,37 @@ button.clay-card:hover {
 
 .chat-tabs {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
   overflow-x: auto;
   /* Ruled off from the message list so the header block reads as one anchored region. */
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--rule);
   flex: none;
 }
 
 /* Compact New-chat pill — a small square "+" that never crowds the tab row. */
 .chat-tab.is-new {
-  padding: 0.3rem 0.55rem;
+  padding: 0.1rem 0.45rem;
   max-width: none;
   font-weight: 600;
 }
 
+/* ponytail: `min-height: 1.5rem` (24px) is the WCAG 2.2 AA 2.5.8 pointer-target floor and is
+   what stops this strip shrinking further — the padding/type below would otherwise land it at
+   ~20px. Do not remove it to reclaim space; drop the tab strip entirely if space is that tight. */
 .chat-tab {
   flex: none;
   font-family: inherit;
-  font-size: 0.8rem;
-  padding: 0.35rem 0.8rem;
-  border-radius: 0.6rem;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 0.45rem;
   border: 1px solid var(--rule);
   background: var(--card);
   color: var(--ink-soft);
   cursor: pointer;
-  max-width: 11rem;
+  max-width: 9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -936,7 +950,7 @@ button.clay-card:hover {
   display: inline-flex;
   align-items: center;
   padding: 0;
-  max-width: 12rem;
+  max-width: 10rem;
 }
 
 .chat-tab-label {
@@ -945,8 +959,8 @@ button.clay-card:hover {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.35rem 0.2rem 0.35rem 0.8rem;
-  max-width: 9rem;
+  padding: 0.2rem 0.15rem 0.2rem 0.55rem;
+  max-width: 7.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -960,7 +974,7 @@ button.clay-card:hover {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.35rem 0.6rem 0.35rem 0.2rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.15rem;
   opacity: 0.5;
 }
 

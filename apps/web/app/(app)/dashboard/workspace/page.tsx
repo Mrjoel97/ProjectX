@@ -211,16 +211,19 @@ export default function WorkspacePage() {
           <section data-testid="chat-pane" className="pane-chat" style={panel}>
             <header
               className="chat-head"
-              style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
+              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
             >
               <span aria-hidden="true" className="chat-logo">
-                <BrainIcon size={16} />
+                <BrainIcon size={12} />
               </span>
+              {/* Explicit tight line-heights: the global body `line-height: 1.6` was costing this
+                  two-line block ~40px on its own — more than the icon buttons beside it. */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h2
                   style={{
                     margin: 0,
-                    fontSize: "0.92rem",
+                    fontSize: "0.78rem",
+                    lineHeight: 1.15,
                     letterSpacing: "-0.01em",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -232,7 +235,8 @@ export default function WorkspacePage() {
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "0.66rem",
+                    fontSize: "0.56rem",
+                    lineHeight: 1.15,
                     color: "var(--ink-soft)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",

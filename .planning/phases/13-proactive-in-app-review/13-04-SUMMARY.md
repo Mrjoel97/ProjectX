@@ -37,7 +37,7 @@ completed: 2026-07-25
 
 # Phase 13 Plan 04: Live Verification Summary
 
-**BEVL-03 verified live end to end: two real `runWeekly` invocations produced two evaluation rows and exactly ONE notification, the finding count held at 8 across the unchanged re-run (the provenance fix holding in production), and the pinned review tab rendered the card with no composer — with Gmail DISCONNECTED throughout.**
+**BEVL-03 verified live end to end: two real `runWeekly` invocations produced two evaluation rows and exactly ONE notification, the finding count held at 8 across the unchanged re-run (the provenance fix holding in production), and the pinned review tab rendered the card with no composer. NOTE: the run was performed with Gmail CONNECTED — see the SC#2 correction below; the tokenless case is still unexercised.**
 
 ## Task 1 — Automated gates
 
@@ -117,11 +117,29 @@ Only `evaluation.ran` fired — **no new audit eventType** for the review. Every
 | Notification is clickable | **yes** — `link href="/dashboard/workspace?thread=proactive-review"` |
 | Deep link dedupes | **yes** — cold load of that URL yields exactly ONE review tab, no duplicate |
 
-### SC#2 — no mailbox involvement, proven the hard way
+### SC#2 — no mailbox involvement (partially verified; see the correction)
 
-The left nav renders **"Connect Gmail"**, i.e. Gmail is **not connected** for this tenant — and the weekly review still generated, notified, and rendered. No Gmail send, no `invalid_grant`, no reconnect prompt triggered by the run. The pre-existing `gmail_reconnect` notification rows are older (ts `1784952014015`) and unrelated.
+**Verified live:** the run produced no Gmail send, no `invalid_grant`, and no reconnect prompt. The
+only audit event was `evaluation.ran`; nothing in the notification plane invoked `notifyExternal`.
+The pre-existing `gmail_reconnect` notification rows are older (ts `1784952014015`) and unrelated.
 
-This is stronger evidence than a passing test: the proactivity path was exercised on a deployment with no usable mailbox token, which is exactly the Google 7-day-testing-token failure mode BEVL-03 exists to survive.
+**CORRECTION — do not read more into this than it proves.** An earlier draft of this summary claimed
+Gmail was DISCONNECTED during the run and that SC#2 was therefore proven end to end on a
+tokenless deployment. **That was wrong.** `gmailTokens` holds a live row for tenant
+`kn73kmcdzqxem7mkq4n5b9x2b18abrnq`, and the cockpit composer rendered on the New-chat thread —
+which only happens when `status.connected` is true. The misread was the sidebar's "Connect Gmail"
+entry, which is a permanent nav link, NOT a connection-state indicator.
+
+**So the live run was performed with Gmail CONNECTED.** SC#2's real guarantee — that the review
+cannot reach a mailbox token — rests on the code path and its guards, which ARE verified:
+`insertReviewNotification` writes the `notifications` row directly, never through
+`notifications.notify`; the two review kinds are absent from `NOTIFICATION_KINDS`, so
+`notifyExternal.dispatch` returns at `if (!KINDS.has(kind)) return;` before `freshAccessToken`; and
+both properties are asserted by static source guards in `proactiveReview.test.ts`.
+
+**Outstanding, cheap, and worth doing:** re-run `runWeekly` with the tenant's `gmailTokens` row
+absent/revoked to confirm the review still delivers. That is the actual Google 7-day-testing-token
+scenario and it has NOT yet been exercised live.
 
 ## Deviations from Plan
 
@@ -159,7 +177,7 @@ None.
 - Finding count stable at 8 across runs ✓
 - Audit refs-only, no new eventType ✓
 - Pinned tab, no ×, composer suppressed, dated header, clickable notification ✓
-- Gmail disconnected throughout ✓
+- No Gmail send / no token touched during the run ✓ (but run was made with Gmail CONNECTED — tokenless case NOT yet exercised, see SC#2 correction)
 
 ---
 *Phase: 13-proactive-in-app-review*
