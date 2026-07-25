@@ -4,14 +4,214 @@
   "graph": {},
   "nodes": [
     {
+      "label": "business-evaluation.md",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation",
+      "community": 150,
+      "norm_label": "business-evaluation.md"
+    },
+    {
+      "label": "Playbook: Business Evaluation Engine",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "community": 150,
+      "norm_label": "playbook: business evaluation engine"
+    },
+    {
+      "label": "Purpose",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_purpose",
+      "community": 150,
+      "norm_label": "purpose"
+    },
+    {
+      "label": "Key files",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L18",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_key_files",
+      "community": 150,
+      "norm_label": "key files"
+    },
+    {
+      "label": "Dependencies & blast radius",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L54",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_dependencies_blast_radius",
+      "community": 150,
+      "norm_label": "dependencies & blast radius"
+    },
+    {
+      "label": "Data flow",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L71",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_data_flow",
+      "community": 150,
+      "norm_label": "data flow"
+    },
+    {
+      "label": "Invariants \u2014 what must never break",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L93",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_invariants_what_must_never_break",
+      "community": 150,
+      "norm_label": "invariants \u2014 what must never break"
+    },
+    {
+      "label": "\"What changed\" \u2014 the `evaluations.delta` field (13-01, BEVL-03)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L138",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03",
+      "community": 150,
+      "norm_label": "\"what changed\" \u2014 the `evaluations.delta` field (13-01, bevl-03)"
+    },
+    {
+      "label": "Proactive weekly review (BEVL-03, 13-02)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L172",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "community": 150,
+      "norm_label": "proactive weekly review (bevl-03, 13-02)"
+    },
+    {
+      "label": "Invariants",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L186",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_invariants",
+      "community": 150,
+      "norm_label": "invariants"
+    },
+    {
+      "label": "How to change it safely",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L219",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_change_it_safely",
+      "community": 150,
+      "norm_label": "how to change it safely"
+    },
+    {
+      "label": "How to verify",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L230",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_verify",
+      "community": 150,
+      "norm_label": "how to verify"
+    },
+    {
+      "label": "How to change safely",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L240",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_change_safely",
+      "community": 150,
+      "norm_label": "how to change safely"
+    },
+    {
+      "label": "How to verify",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L259",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_how_to_verify_259",
+      "community": 150,
+      "norm_label": "how to verify"
+    },
+    {
+      "label": "Operational notes",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L272",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_operational_notes",
+      "community": 150,
+      "norm_label": "operational notes"
+    },
+    {
+      "label": "Known gaps & deferred work",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L283",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_known_gaps_deferred_work",
+      "community": 150,
+      "norm_label": "known gaps & deferred work"
+    },
+    {
+      "label": "Sharing the `evaluations` table with voice-doc (Phase 14, DOCV-01)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L302",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_sharing_the_evaluations_table_with_voice_doc_phase_14_docv_01",
+      "community": 150,
+      "norm_label": "sharing the `evaluations` table with voice-doc (phase 14, docv-01)"
+    },
+    {
+      "label": "What Phase 14 added to the table",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L308",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_what_phase_14_added_to_the_table",
+      "community": 150,
+      "norm_label": "what phase 14 added to the table"
+    },
+    {
+      "label": "The invariant: a doc-review row never enters this engine",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L319",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_the_invariant_a_doc_review_row_never_enters_this_engine",
+      "community": 150,
+      "norm_label": "the invariant: a doc-review row never enters this engine"
+    },
+    {
+      "label": "The excerpt is content-plane, and strictly so (\u00a74)",
+      "file_type": "document",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L349",
+      "_origin": "ast",
+      "id": "docs_playbooks_business_evaluation_the_excerpt_is_content_plane_and_strictly_so_4",
+      "community": 150,
+      "norm_label": "the excerpt is content-plane, and strictly so (\u00a74)"
+    },
+    {
       "label": "ROADMAP.md",
       "file_type": "document",
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_roadmap",
       "community": 0,
-      "norm_label": "roadmap.md"
+      "norm_label": "roadmap.md",
+      "id": "planning_roadmap"
     },
     {
       "label": "Roadmap: Pikar-AI",
@@ -19,9 +219,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_roadmap_roadmap_pikar_ai",
       "community": 0,
-      "norm_label": "roadmap: pikar-ai"
+      "norm_label": "roadmap: pikar-ai",
+      "id": "planning_roadmap_roadmap_pikar_ai"
     },
     {
       "label": "Overview",
@@ -29,9 +229,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L3",
       "_origin": "ast",
-      "id": "planning_roadmap_overview",
       "community": 0,
-      "norm_label": "overview"
+      "norm_label": "overview",
+      "id": "planning_roadmap_overview"
     },
     {
       "label": "Phases",
@@ -39,9 +239,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L7",
       "_origin": "ast",
-      "id": "planning_roadmap_phases",
       "community": 0,
-      "norm_label": "phases"
+      "norm_label": "phases",
+      "id": "planning_roadmap_phases"
     },
     {
       "label": "Milestone v2.0 - Platform -> Private Beta (Phases 10-25)",
@@ -49,9 +249,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L39",
       "_origin": "ast",
-      "id": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25",
       "community": 0,
-      "norm_label": "milestone v2.0 - platform -> private beta (phases 10-25)"
+      "norm_label": "milestone v2.0 - platform -> private beta (phases 10-25)",
+      "id": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25"
     },
     {
       "label": "Phase Details",
@@ -59,9 +259,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L72",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_details",
       "community": 0,
-      "norm_label": "phase details"
+      "norm_label": "phase details",
+      "id": "planning_roadmap_phase_details"
     },
     {
       "label": "Phase 1: Foundation & Governance Substrate",
@@ -69,9 +269,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L74",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_1_foundation_governance_substrate",
       "community": 0,
-      "norm_label": "phase 1: foundation & governance substrate"
+      "norm_label": "phase 1: foundation & governance substrate",
+      "id": "planning_roadmap_phase_1_foundation_governance_substrate"
     },
     {
       "label": "Phase 2: Thin End-to-End Slice",
@@ -79,9 +279,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L98",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_2_thin_end_to_end_slice",
       "community": 0,
-      "norm_label": "phase 2: thin end-to-end slice"
+      "norm_label": "phase 2: thin end-to-end slice",
+      "id": "planning_roadmap_phase_2_thin_end_to_end_slice"
     },
     {
       "label": "Phase 3: Guardrails",
@@ -89,9 +289,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L125",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_guardrails",
       "community": 0,
-      "norm_label": "phase 3: guardrails"
+      "norm_label": "phase 3: guardrails",
+      "id": "planning_roadmap_phase_3_guardrails"
     },
     {
       "label": "Phase 3.1: Cockpit Core (INSERTED)",
@@ -99,9 +299,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L146",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_1_cockpit_core_inserted",
       "community": 0,
-      "norm_label": "phase 3.1: cockpit core (inserted)"
+      "norm_label": "phase 3.1: cockpit core (inserted)",
+      "id": "planning_roadmap_phase_3_1_cockpit_core_inserted"
     },
     {
       "label": "Phase 3.2: Inbox Reading (INSERTED)",
@@ -109,9 +309,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L168",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_2_inbox_reading_inserted",
       "community": 0,
-      "norm_label": "phase 3.2: inbox reading (inserted)"
+      "norm_label": "phase 3.2: inbox reading (inserted)",
+      "id": "planning_roadmap_phase_3_2_inbox_reading_inserted"
     },
     {
       "label": "Phase 03.2.1: Agent-Driven Cockpit (INSERTED)",
@@ -119,9 +319,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L187",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted",
       "community": 0,
-      "norm_label": "phase 03.2.1: agent-driven cockpit (inserted)"
+      "norm_label": "phase 03.2.1: agent-driven cockpit (inserted)",
+      "id": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted"
     },
     {
       "label": "Phase 3.3: Attachment Generation (INSERTED)",
@@ -129,9 +329,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L203",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_3_attachment_generation_inserted",
       "community": 0,
-      "norm_label": "phase 3.3: attachment generation (inserted)"
+      "norm_label": "phase 3.3: attachment generation (inserted)",
+      "id": "planning_roadmap_phase_3_3_attachment_generation_inserted"
     },
     {
       "label": "Phase 3.4: Per-Recipient Personalization (INSERTED)",
@@ -139,9 +339,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L221",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted",
       "community": 0,
-      "norm_label": "phase 3.4: per-recipient personalization (inserted)"
+      "norm_label": "phase 3.4: per-recipient personalization (inserted)",
+      "id": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted"
     },
     {
       "label": "Phase 3.5: Deferred Send (INSERTED)",
@@ -149,9 +349,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L236",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_5_deferred_send_inserted",
       "community": 0,
-      "norm_label": "phase 3.5: deferred send (inserted)"
+      "norm_label": "phase 3.5: deferred send (inserted)",
+      "id": "planning_roadmap_phase_3_5_deferred_send_inserted"
     },
     {
       "label": "Phase 3.6: Agent Eval Gate (INSERTED)",
@@ -159,9 +359,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L255",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_6_agent_eval_gate_inserted",
       "community": 0,
-      "norm_label": "phase 3.6: agent eval gate (inserted)"
+      "norm_label": "phase 3.6: agent eval gate (inserted)",
+      "id": "planning_roadmap_phase_3_6_agent_eval_gate_inserted"
     },
     {
       "label": "Phase 3.7: Inbox Briefing (INSERTED)",
@@ -169,9 +369,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L274",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_7_inbox_briefing_inserted",
       "community": 0,
-      "norm_label": "phase 3.7: inbox briefing (inserted)"
+      "norm_label": "phase 3.7: inbox briefing (inserted)",
+      "id": "planning_roadmap_phase_3_7_inbox_briefing_inserted"
     },
     {
       "label": "Phase 3.8: Vault Document Extraction (INSERTED)",
@@ -179,9 +379,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L300",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_8_vault_document_extraction_inserted",
       "community": 0,
-      "norm_label": "phase 3.8: vault document extraction (inserted)"
+      "norm_label": "phase 3.8: vault document extraction (inserted)",
+      "id": "planning_roadmap_phase_3_8_vault_document_extraction_inserted"
     },
     {
       "label": "Phase 3.9: Agent Activity Streaming (INSERTED)",
@@ -189,9 +389,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L314",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted",
       "community": 0,
-      "norm_label": "phase 3.9: agent activity streaming (inserted)"
+      "norm_label": "phase 3.9: agent activity streaming (inserted)",
+      "id": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted"
     },
     {
       "label": "Phase 3.10: Cockpit Conversation Repair (INSERTED)",
@@ -199,9 +399,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L330",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted",
       "community": 0,
-      "norm_label": "phase 3.10: cockpit conversation repair (inserted)"
+      "norm_label": "phase 3.10: cockpit conversation repair (inserted)",
+      "id": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted"
     },
     {
       "label": "Phase 3.11: Inbox Reply (INSERTED)",
@@ -209,9 +409,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L345",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_3_11_inbox_reply_inserted",
       "community": 0,
-      "norm_label": "phase 3.11: inbox reply (inserted)"
+      "norm_label": "phase 3.11: inbox reply (inserted)",
+      "id": "planning_roadmap_phase_3_11_inbox_reply_inserted"
     },
     {
       "label": "Phase 4: Attachment & Voice-Dictation Intake",
@@ -219,9 +419,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L359",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_4_attachment_voice_dictation_intake",
       "community": 0,
-      "norm_label": "phase 4: attachment & voice-dictation intake"
+      "norm_label": "phase 4: attachment & voice-dictation intake",
+      "id": "planning_roadmap_phase_4_attachment_voice_dictation_intake"
     },
     {
       "label": "Phase 5: Knowledge Vault & GraphRAG",
@@ -229,9 +429,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L376",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_5_knowledge_vault_graphrag",
       "community": 0,
-      "norm_label": "phase 5: knowledge vault & graphrag"
+      "norm_label": "phase 5: knowledge vault & graphrag",
+      "id": "planning_roadmap_phase_5_knowledge_vault_graphrag"
     },
     {
       "label": "Phase 6: Live Voice Sessions",
@@ -239,9 +439,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L396",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_6_live_voice_sessions",
       "community": 0,
-      "norm_label": "phase 6: live voice sessions"
+      "norm_label": "phase 6: live voice sessions",
+      "id": "planning_roadmap_phase_6_live_voice_sessions"
     },
     {
       "label": "Phase 7: Resilience & Operations Hardening",
@@ -249,9 +449,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L416",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_7_resilience_operations_hardening",
       "community": 0,
-      "norm_label": "phase 7: resilience & operations hardening"
+      "norm_label": "phase 7: resilience & operations hardening",
+      "id": "planning_roadmap_phase_7_resilience_operations_hardening"
     },
     {
       "label": "Phase 8: Self-Improvement",
@@ -259,9 +459,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L435",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_8_self_improvement",
       "community": 0,
-      "norm_label": "phase 8: self-improvement"
+      "norm_label": "phase 8: self-improvement",
+      "id": "planning_roadmap_phase_8_self_improvement"
     },
     {
       "label": "Phase 9: Private Beta Productionization",
@@ -269,9 +469,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L453",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_9_private_beta_productionization",
       "community": 0,
-      "norm_label": "phase 9: private beta productionization"
+      "norm_label": "phase 9: private beta productionization",
+      "id": "planning_roadmap_phase_9_private_beta_productionization"
     },
     {
       "label": "Phase Details - Milestone v2.0",
@@ -279,9 +479,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L466",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_details_milestone_v2_0",
       "community": 0,
-      "norm_label": "phase details - milestone v2.0"
+      "norm_label": "phase details - milestone v2.0",
+      "id": "planning_roadmap_phase_details_milestone_v2_0"
     },
     {
       "label": "Phase 10: Vault->Agent Grounding",
@@ -289,9 +489,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L468",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_10_vault_agent_grounding",
       "community": 0,
-      "norm_label": "phase 10: vault->agent grounding"
+      "norm_label": "phase 10: vault->agent grounding",
+      "id": "planning_roadmap_phase_10_vault_agent_grounding"
     },
     {
       "label": "Phase 11: Persona Onboarding & Business Profile",
@@ -299,9 +499,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L483",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_11_persona_onboarding_business_profile",
       "community": 0,
-      "norm_label": "phase 11: persona onboarding & business profile"
+      "norm_label": "phase 11: persona onboarding & business profile",
+      "id": "planning_roadmap_phase_11_persona_onboarding_business_profile"
     },
     {
       "label": "Phase 12: Business Evaluation Engine",
@@ -309,9 +509,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L494",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_12_business_evaluation_engine",
       "community": 0,
-      "norm_label": "phase 12: business evaluation engine"
+      "norm_label": "phase 12: business evaluation engine",
+      "id": "planning_roadmap_phase_12_business_evaluation_engine"
     },
     {
       "label": "Phase 13: Proactive In-App Review",
@@ -319,9 +519,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L514",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_13_proactive_in_app_review",
       "community": 0,
-      "norm_label": "phase 13: proactive in-app review"
+      "norm_label": "phase 13: proactive in-app review",
+      "id": "planning_roadmap_phase_13_proactive_in_app_review"
     },
     {
       "label": "Phase 14: Flagship Voice-Doc Workflow",
@@ -329,9 +529,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L530",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_14_flagship_voice_doc_workflow",
       "community": 0,
-      "norm_label": "phase 14: flagship voice-doc workflow"
+      "norm_label": "phase 14: flagship voice-doc workflow",
+      "id": "planning_roadmap_phase_14_flagship_voice_doc_workflow"
     },
     {
       "label": "Phase 15: Sub-Agent Dispatch & Generalized Action Executor",
@@ -339,9 +539,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L552",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor",
       "community": 0,
-      "norm_label": "phase 15: sub-agent dispatch & generalized action executor"
+      "norm_label": "phase 15: sub-agent dispatch & generalized action executor",
+      "id": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor"
     },
     {
       "label": "Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED)",
@@ -349,9 +549,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L564",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted",
       "community": 0,
-      "norm_label": "phase 15.1: fact-derived tier & conversational onboarding (inserted)"
+      "norm_label": "phase 15.1: fact-derived tier & conversational onboarding (inserted)",
+      "id": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted"
     },
     {
       "label": "Phase 16: Research Sub-Agent & Web Research",
@@ -359,9 +559,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L577",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_16_research_sub_agent_web_research",
       "community": 0,
-      "norm_label": "phase 16: research sub-agent & web research"
+      "norm_label": "phase 16: research sub-agent & web research",
+      "id": "planning_roadmap_phase_16_research_sub_agent_web_research"
     },
     {
       "label": "Phase 17: Calendar Actions",
@@ -369,9 +569,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L588",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_17_calendar_actions",
       "community": 0,
-      "norm_label": "phase 17: calendar actions"
+      "norm_label": "phase 17: calendar actions",
+      "id": "planning_roadmap_phase_17_calendar_actions"
     },
     {
       "label": "Phase 18: Document & Content Creation",
@@ -379,9 +579,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L598",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_18_document_content_creation",
       "community": 0,
-      "norm_label": "phase 18: document & content creation"
+      "norm_label": "phase 18: document & content creation",
+      "id": "planning_roadmap_phase_18_document_content_creation"
     },
     {
       "label": "Phase 19: Contacts, CRM & Follow-ups",
@@ -389,9 +589,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L608",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_19_contacts_crm_follow_ups",
       "community": 0,
-      "norm_label": "phase 19: contacts, crm & follow-ups"
+      "norm_label": "phase 19: contacts, crm & follow-ups",
+      "id": "planning_roadmap_phase_19_contacts_crm_follow_ups"
     },
     {
       "label": "Phase 20: Media Canvas",
@@ -399,9 +599,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L618",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_20_media_canvas",
       "community": 0,
-      "norm_label": "phase 20: media canvas"
+      "norm_label": "phase 20: media canvas",
+      "id": "planning_roadmap_phase_20_media_canvas"
     },
     {
       "label": "Phase 21: User-Authored Skills",
@@ -409,9 +609,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L629",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_21_user_authored_skills",
       "community": 0,
-      "norm_label": "phase 21: user-authored skills"
+      "norm_label": "phase 21: user-authored skills",
+      "id": "planning_roadmap_phase_21_user_authored_skills"
     },
     {
       "label": "Phase 22: Owner Authorization Primitive (requireOwner)",
@@ -419,9 +619,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L639",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner",
       "community": 0,
-      "norm_label": "phase 22: owner authorization primitive (requireowner)"
+      "norm_label": "phase 22: owner authorization primitive (requireowner)",
+      "id": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner"
     },
     {
       "label": "Phase 23: Agent-Authored Skills",
@@ -429,9 +629,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L649",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_23_agent_authored_skills",
       "community": 0,
-      "norm_label": "phase 23: agent-authored skills"
+      "norm_label": "phase 23: agent-authored skills",
+      "id": "planning_roadmap_phase_23_agent_authored_skills"
     },
     {
       "label": "Phase 24: ISO 9001 Conformance Map",
@@ -439,9 +639,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L659",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_24_iso_9001_conformance_map",
       "community": 0,
-      "norm_label": "phase 24: iso 9001 conformance map"
+      "norm_label": "phase 24: iso 9001 conformance map",
+      "id": "planning_roadmap_phase_24_iso_9001_conformance_map"
     },
     {
       "label": "Phase 25: Private Beta Productionization",
@@ -449,9 +649,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L668",
       "_origin": "ast",
-      "id": "planning_roadmap_phase_25_private_beta_productionization",
       "community": 0,
-      "norm_label": "phase 25: private beta productionization"
+      "norm_label": "phase 25: private beta productionization",
+      "id": "planning_roadmap_phase_25_private_beta_productionization"
     },
     {
       "label": "Progress",
@@ -459,9 +659,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L680",
       "_origin": "ast",
-      "id": "planning_roadmap_progress",
       "community": 0,
-      "norm_label": "progress"
+      "norm_label": "progress",
+      "id": "planning_roadmap_progress"
     },
     {
       "label": "STATE.md",
@@ -469,9 +669,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_state",
       "community": 63,
-      "norm_label": "state.md"
+      "norm_label": "state.md",
+      "id": "planning_state"
     },
     {
       "label": "Project State",
@@ -479,9 +679,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L15",
       "_origin": "ast",
-      "id": "planning_state_project_state",
       "community": 63,
-      "norm_label": "project state"
+      "norm_label": "project state",
+      "id": "planning_state_project_state"
     },
     {
       "label": "Project Reference",
@@ -489,9 +689,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L17",
       "_origin": "ast",
-      "id": "planning_state_project_reference",
       "community": 63,
-      "norm_label": "project reference"
+      "norm_label": "project reference",
+      "id": "planning_state_project_reference"
     },
     {
       "label": "Current Position",
@@ -499,9 +699,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "planning_state_current_position",
       "community": 63,
-      "norm_label": "current position"
+      "norm_label": "current position",
+      "id": "planning_state_current_position"
     },
     {
       "label": "Milestone v2.0 Phase Map",
@@ -509,9 +709,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L56",
       "_origin": "ast",
-      "id": "planning_state_milestone_v2_0_phase_map",
       "community": 63,
-      "norm_label": "milestone v2.0 phase map"
+      "norm_label": "milestone v2.0 phase map",
+      "id": "planning_state_milestone_v2_0_phase_map"
     },
     {
       "label": "Performance Metrics",
@@ -519,9 +719,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L65",
       "_origin": "ast",
-      "id": "planning_state_performance_metrics",
       "community": 63,
-      "norm_label": "performance metrics"
+      "norm_label": "performance metrics",
+      "id": "planning_state_performance_metrics"
     },
     {
       "label": "Accumulated Context",
@@ -529,9 +729,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L96",
       "_origin": "ast",
-      "id": "planning_state_accumulated_context",
       "community": 63,
-      "norm_label": "accumulated context"
+      "norm_label": "accumulated context",
+      "id": "planning_state_accumulated_context"
     },
     {
       "label": "Decisions",
@@ -539,9 +739,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L98",
       "_origin": "ast",
-      "id": "planning_state_decisions",
       "community": 63,
-      "norm_label": "decisions"
+      "norm_label": "decisions",
+      "id": "planning_state_decisions"
     },
     {
       "label": "Pending Todos",
@@ -549,9 +749,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L142",
       "_origin": "ast",
-      "id": "planning_state_pending_todos",
       "community": 63,
-      "norm_label": "pending todos"
+      "norm_label": "pending todos",
+      "id": "planning_state_pending_todos"
     },
     {
       "label": "Blockers/Concerns",
@@ -559,9 +759,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L147",
       "_origin": "ast",
-      "id": "planning_state_blockers_concerns",
       "community": 63,
-      "norm_label": "blockers/concerns"
+      "norm_label": "blockers/concerns",
+      "id": "planning_state_blockers_concerns"
     },
     {
       "label": "Session Continuity",
@@ -569,9 +769,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L154",
       "_origin": "ast",
-      "id": "planning_state_session_continuity",
       "community": 63,
-      "norm_label": "session continuity"
+      "norm_label": "session continuity",
+      "id": "planning_state_session_continuity"
     },
     {
       "label": "14-01-SUMMARY.md",
@@ -579,9 +779,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary",
       "community": 58,
-      "norm_label": "14-01-summary.md"
+      "norm_label": "14-01-summary.md",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary"
     },
     {
       "label": "Phase 14 Plan 01: Wave-0 Freeze Commit Summary",
@@ -589,9 +789,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L60",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
       "community": 58,
-      "norm_label": "phase 14 plan 01: wave-0 freeze commit summary"
+      "norm_label": "phase 14 plan 01: wave-0 freeze commit summary",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary"
     },
     {
       "label": "What shipped",
@@ -599,9 +799,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L66",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_what_shipped",
       "community": 58,
-      "norm_label": "what shipped"
+      "norm_label": "what shipped",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_what_shipped"
     },
     {
       "label": "Deviations from Plan",
@@ -609,9 +809,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L88",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
       "community": 58,
-      "norm_label": "deviations from plan"
+      "norm_label": "deviations from plan",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan"
     },
     {
       "label": "1. [Rule 4 \u2014 architectural, USER-APPROVED] The \"zero edits to `evaluations.ts`\" premise was false",
@@ -619,9 +819,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L90",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_1_rule_4_architectural_user_approved_the_zero_edits_to_evaluations_ts_premise_was_false",
       "community": 58,
-      "norm_label": "1. [rule 4 \u2014 architectural, user-approved] the \"zero edits to `evaluations.ts`\" premise was false"
+      "norm_label": "1. [rule 4 \u2014 architectural, user-approved] the \"zero edits to `evaluations.ts`\" premise was false",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_1_rule_4_architectural_user_approved_the_zero_edits_to_evaluations_ts_premise_was_false"
     },
     {
       "label": "2. [Rule 3 \u2014 blocking] `proactiveReview.ts` carried the widened framework forward",
@@ -629,9 +829,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L114",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_2_rule_3_blocking_proactivereview_ts_carried_the_widened_framework_forward",
       "community": 58,
-      "norm_label": "2. [rule 3 \u2014 blocking] `proactivereview.ts` carried the widened framework forward"
+      "norm_label": "2. [rule 3 \u2014 blocking] `proactivereview.ts` carried the widened framework forward",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_2_rule_3_blocking_proactivereview_ts_carried_the_widened_framework_forward"
     },
     {
       "label": "3. [Rule 3 \u2014 blocking] Playbook ordering vs. the \u00a79 Stop hook",
@@ -639,9 +839,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L126",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_3_rule_3_blocking_playbook_ordering_vs_the_9_stop_hook",
       "community": 58,
-      "norm_label": "3. [rule 3 \u2014 blocking] playbook ordering vs. the \u00a79 stop hook"
+      "norm_label": "3. [rule 3 \u2014 blocking] playbook ordering vs. the \u00a79 stop hook",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_3_rule_3_blocking_playbook_ordering_vs_the_9_stop_hook"
     },
     {
       "label": "4. [Rule 3 \u2014 environment] No `node_modules` and no `CONVEX_DEPLOYMENT` in this worktree",
@@ -649,9 +849,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L137",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_4_rule_3_environment_no_node_modules_and_no_convex_deployment_in_this_worktree",
       "community": 58,
-      "norm_label": "4. [rule 3 \u2014 environment] no `node_modules` and no `convex_deployment` in this worktree"
+      "norm_label": "4. [rule 3 \u2014 environment] no `node_modules` and no `convex_deployment` in this worktree",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_4_rule_3_environment_no_node_modules_and_no_convex_deployment_in_this_worktree"
     },
     {
       "label": "Verification",
@@ -659,9 +859,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L148",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_verification",
       "community": 58,
-      "norm_label": "verification"
+      "norm_label": "verification",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_verification"
     },
     {
       "label": "Wave 0 Requirements \u2014 all closed",
@@ -669,9 +869,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L164",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_wave_0_requirements_all_closed",
       "community": 58,
-      "norm_label": "wave 0 requirements \u2014 all closed"
+      "norm_label": "wave 0 requirements \u2014 all closed",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_wave_0_requirements_all_closed"
     },
     {
       "label": "For the next plans",
@@ -679,9 +879,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L171",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_for_the_next_plans",
       "community": 58,
-      "norm_label": "for the next plans"
+      "norm_label": "for the next plans",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_for_the_next_plans"
     },
     {
       "label": "Self-Check: PASSED",
@@ -689,9 +889,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L187",
       "_origin": "ast",
-      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_self_check_passed",
       "community": 58,
-      "norm_label": "self-check: passed"
+      "norm_label": "self-check: passed",
+      "id": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_self_check_passed"
     },
     {
       "label": ".mcp.json",
@@ -948,7 +1148,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_dashboard_profile_page"
     },
@@ -958,7 +1158,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "label",
       "id": "apps_web_app_app_dashboard_profile_page_label"
     },
@@ -968,7 +1168,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "field",
       "id": "apps_web_app_app_dashboard_profile_page_field"
     },
@@ -988,7 +1188,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L46",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "profilepage()",
       "id": "apps_web_app_app_dashboard_profile_page_profilepage"
     },
@@ -998,7 +1198,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L263",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "labeledfield()",
       "id": "apps_web_app_app_dashboard_profile_page_labeledfield"
     },
@@ -1628,7 +1828,7 @@
       "source_file": "apps/web/app/(app)/dashboard/voice/PostCall.tsx",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 308,
+      "community": 51,
       "norm_label": "postcall()",
       "id": "apps_web_app_app_dashboard_voice_postcall_postcall"
     },
@@ -2118,7 +2318,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "pad()",
       "id": "apps_web_app_app_dashboard_workspace_cards_pad"
     },
@@ -2128,7 +2328,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L54",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "tolocalinputvalue()",
       "id": "apps_web_app_app_dashboard_workspace_cards_tolocalinputvalue"
     },
@@ -2138,7 +2338,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "formatabsolute()",
       "id": "apps_web_app_app_dashboard_workspace_cards_formatabsolute"
     },
@@ -2148,7 +2348,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 2,
+      "community": 134,
       "norm_label": "badge()",
       "id": "apps_web_app_app_dashboard_workspace_cards_badge"
     },
@@ -2158,7 +2358,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 2,
+      "community": 151,
       "norm_label": "fmtsize()",
       "id": "apps_web_app_app_dashboard_workspace_cards_fmtsize"
     },
@@ -2178,7 +2378,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 2,
+      "community": 151,
       "norm_label": "planattachments()",
       "id": "apps_web_app_app_dashboard_workspace_cards_planattachments"
     },
@@ -2198,7 +2398,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L223",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "plancard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_plancard"
     },
@@ -2208,7 +2408,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L343",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "scheduledcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_scheduledcard"
     },
@@ -2218,7 +2418,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L380",
       "_origin": "ast",
-      "community": 2,
+      "community": 97,
       "norm_label": "canceledcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_canceledcard"
     },
@@ -2268,7 +2468,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L566",
       "_origin": "ast",
-      "community": 2,
+      "community": 134,
       "norm_label": "reportcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_reportcard"
     },
@@ -2288,7 +2488,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L616",
       "_origin": "ast",
-      "community": 2,
+      "community": 152,
       "norm_label": "matchhint()",
       "id": "apps_web_app_app_dashboard_workspace_cards_matchhint"
     },
@@ -2298,7 +2498,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L622",
       "_origin": "ast",
-      "community": 2,
+      "community": 152,
       "norm_label": "resolutioncard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_resolutioncard"
     },
@@ -2318,7 +2518,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L737",
       "_origin": "ast",
-      "community": 2,
+      "community": 120,
       "norm_label": "fmtitemtime()",
       "id": "apps_web_app_app_dashboard_workspace_cards_fmtitemtime"
     },
@@ -2328,7 +2528,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L748",
       "_origin": "ast",
-      "community": 2,
+      "community": 153,
       "norm_label": "senderlabel()",
       "id": "apps_web_app_app_dashboard_workspace_cards_senderlabel"
     },
@@ -2418,7 +2618,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L847",
       "_origin": "ast",
-      "community": 2,
+      "community": 153,
       "norm_label": "sendercell()",
       "id": "apps_web_app_app_dashboard_workspace_cards_sendercell"
     },
@@ -2428,7 +2628,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L868",
       "_origin": "ast",
-      "community": 2,
+      "community": 120,
       "norm_label": "briefingrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_briefingrow"
     },
@@ -2478,7 +2678,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L947",
       "_origin": "ast",
-      "community": 2,
+      "community": 120,
       "norm_label": "priorityrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_priorityrow"
     },
@@ -2648,7 +2848,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1387",
       "_origin": "ast",
-      "community": 2,
+      "community": 139,
       "norm_label": "deltaline()",
       "id": "apps_web_app_app_dashboard_workspace_cards_deltaline"
     },
@@ -2658,7 +2858,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1405",
       "_origin": "ast",
-      "community": 2,
+      "community": 139,
       "norm_label": "evaluationcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_evaluationcard"
     },
@@ -3358,7 +3558,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L236",
       "_origin": "ast",
-      "community": 11,
+      "community": 6,
       "norm_label": "vaulticon()",
       "id": "apps_web_app_auth_icons_vaulticon"
     },
@@ -3368,7 +3568,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L246",
       "_origin": "ast",
-      "community": 6,
+      "community": 11,
       "norm_label": "globeicon()",
       "id": "apps_web_app_auth_icons_globeicon"
     },
@@ -4288,7 +4488,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 102,
+      "community": 13,
       "norm_label": "agentsteps.ts",
       "id": "packages_backend_convex_agentsteps"
     },
@@ -4298,7 +4498,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 102,
+      "community": 13,
       "norm_label": "stepview",
       "id": "packages_backend_convex_agentsteps_stepview"
     },
@@ -4308,7 +4508,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 102,
+      "community": 13,
       "norm_label": "record",
       "id": "packages_backend_convex_agentsteps_record"
     },
@@ -4318,7 +4518,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 102,
+      "community": 13,
       "norm_label": "finish",
       "id": "packages_backend_convex_agentsteps_finish"
     },
@@ -4328,7 +4528,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L103",
       "_origin": "ast",
-      "community": 102,
+      "community": 13,
       "norm_label": "latestturn",
       "id": "packages_backend_convex_agentsteps_latestturn"
     },
@@ -4528,7 +4728,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 112,
+      "community": 102,
       "norm_label": "briefings.ts",
       "id": "packages_backend_convex_briefings"
     },
@@ -4538,7 +4738,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 112,
+      "community": 102,
       "norm_label": "insert",
       "id": "packages_backend_convex_briefings_insert"
     },
@@ -4548,7 +4748,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 112,
+      "community": 102,
       "norm_label": "bythread",
       "id": "packages_backend_convex_briefings_bythread"
     },
@@ -4558,7 +4758,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 112,
+      "community": 102,
       "norm_label": "adr-0004",
       "id": "packages_backend_convex_briefings_ts_docref_adr_0004"
     },
@@ -4698,7 +4898,7 @@
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "notifyifagenttimeout()",
       "id": "packages_backend_convex_cockpit_notifyifagenttimeout"
     },
@@ -5098,7 +5298,7 @@
       "source_file": "packages/backend/convex/deadLetters.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 112,
+      "community": 52,
       "norm_label": "listnew",
       "id": "packages_backend_convex_deadletters_listnew"
     },
@@ -5108,7 +5308,7 @@
       "source_file": "packages/backend/convex/deadLetters.ts",
       "source_location": "L42",
       "_origin": "ast",
-      "community": 112,
+      "community": 52,
       "norm_label": "markresolved",
       "id": "packages_backend_convex_deadletters_markresolved"
     },
@@ -5118,7 +5318,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 24,
+      "community": 76,
       "norm_label": "deliverapprovedplan.ts",
       "id": "packages_backend_convex_deliverapprovedplan"
     },
@@ -5128,7 +5328,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 24,
+      "community": 76,
       "norm_label": "deliverapprovedplan",
       "id": "packages_backend_convex_deliverapprovedplan_deliverapprovedplan"
     },
@@ -5138,7 +5338,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 24,
+      "community": 76,
       "norm_label": "markplandone",
       "id": "packages_backend_convex_deliverapprovedplan_markplandone"
     },
@@ -5178,7 +5378,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 17,
+      "community": 19,
       "norm_label": "documentdraft.test.ts",
       "id": "packages_backend_convex_documentdraft_test"
     },
@@ -5188,7 +5388,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 17,
+      "community": 19,
       "norm_label": "modules",
       "id": "packages_backend_convex_documentdraft_test_modules"
     },
@@ -5198,7 +5398,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "evaluations.test.ts",
       "id": "packages_backend_convex_evaluations_test"
     },
@@ -5208,7 +5408,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "modules",
       "id": "packages_backend_convex_evaluations_test_modules"
     },
@@ -5218,7 +5418,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_evaluations_test_aggregatemodules"
     },
@@ -5228,7 +5428,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "newtest()",
       "id": "packages_backend_convex_evaluations_test_newtest"
     },
@@ -5238,7 +5438,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "profiledoctext()",
       "id": "packages_backend_convex_evaluations_test_profiledoctext"
     },
@@ -5248,7 +5448,7 @@
       "source_file": "packages/backend/convex/evaluations.test.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "seeddoc()",
       "id": "packages_backend_convex_evaluations_test_seeddoc"
     },
@@ -5358,7 +5558,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L124",
       "_origin": "ast",
-      "community": 13,
+      "community": 581,
       "norm_label": "lastforthread",
       "id": "packages_backend_convex_evaluations_lastforthread"
     },
@@ -5378,7 +5578,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L157",
       "_origin": "ast",
-      "community": 13,
+      "community": 581,
       "norm_label": "runevaluation",
       "id": "packages_backend_convex_evaluations_runevaluation"
     },
@@ -5418,7 +5618,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L525",
       "_origin": "ast",
-      "community": 13,
+      "community": 171,
       "norm_label": "recordscorecardanswerinternal",
       "id": "packages_backend_convex_evaluations_recordscorecardanswerinternal"
     },
@@ -5448,7 +5648,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L592",
       "_origin": "ast",
-      "community": 13,
+      "community": 2,
       "norm_label": "actongap",
       "id": "packages_backend_convex_evaluations_actongap"
     },
@@ -5468,7 +5668,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L676",
       "_origin": "ast",
-      "community": 13,
+      "community": 2,
       "norm_label": "bythread",
       "id": "packages_backend_convex_evaluations_bythread"
     },
@@ -5478,7 +5678,7 @@
       "source_file": "packages/backend/convex/feedback.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 107,
+      "community": 371,
       "norm_label": "feedback.test.ts",
       "id": "packages_backend_convex_feedback_test"
     },
@@ -5488,7 +5688,7 @@
       "source_file": "packages/backend/convex/feedback.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 107,
+      "community": 371,
       "norm_label": "modules",
       "id": "packages_backend_convex_feedback_test_modules"
     },
@@ -5498,7 +5698,7 @@
       "source_file": "packages/backend/convex/feedback.test.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 107,
+      "community": 371,
       "norm_label": "seedrequest()",
       "id": "packages_backend_convex_feedback_test_seedrequest"
     },
@@ -5508,7 +5708,7 @@
       "source_file": "packages/backend/convex/feedback.test.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 107,
+      "community": 371,
       "norm_label": "rowsfor()",
       "id": "packages_backend_convex_feedback_test_rowsfor"
     },
@@ -5528,7 +5728,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 112,
+      "community": 2,
       "norm_label": "submitfeedback",
       "id": "packages_backend_convex_feedback_submitfeedback"
     },
@@ -5538,7 +5738,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 112,
+      "community": 2,
       "norm_label": "undofeedback",
       "id": "packages_backend_convex_feedback_undofeedback"
     },
@@ -5738,7 +5938,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "freshaccesstoken()",
       "id": "packages_backend_convex_gmail_freshaccesstoken"
     },
@@ -5758,7 +5958,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "wrap76()",
       "id": "packages_backend_convex_gmail_wrap76"
     },
@@ -5768,7 +5968,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L81",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "buildmime()",
       "id": "packages_backend_convex_gmail_buildmime"
     },
@@ -5778,7 +5978,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L142",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "base64url()",
       "id": "packages_backend_convex_gmail_base64url"
     },
@@ -5798,7 +5998,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 24,
+      "community": 76,
       "norm_label": "send",
       "id": "packages_backend_convex_gmail_send"
     },
@@ -6268,7 +6468,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L166",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "recordspend",
       "id": "packages_backend_convex_guardrails_recordspend"
     },
@@ -6558,7 +6758,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "intakedb.ts",
       "id": "packages_backend_convex_intakedb"
     },
@@ -6568,7 +6768,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "kind",
       "id": "packages_backend_convex_intakedb_kind"
     },
@@ -6578,7 +6778,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "status",
       "id": "packages_backend_convex_intakedb_status"
     },
@@ -6588,7 +6788,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "generateuploadurl",
       "id": "packages_backend_convex_intakedb_generateuploadurl"
     },
@@ -6598,7 +6798,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "insertartifact",
       "id": "packages_backend_convex_intakedb_insertartifact"
     },
@@ -6608,7 +6808,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "patchartifact",
       "id": "packages_backend_convex_intakedb_patchartifact"
     },
@@ -6618,7 +6818,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "bythread",
       "id": "packages_backend_convex_intakedb_bythread"
     },
@@ -6628,7 +6828,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 83,
+      "community": 101,
       "norm_label": "getartifact",
       "id": "packages_backend_convex_intakedb_getartifact"
     },
@@ -6728,7 +6928,7 @@
       "source_file": "packages/backend/convex/lib/hash.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 663,
+      "community": 23,
       "norm_label": "hash.ts",
       "id": "packages_backend_convex_lib_hash"
     },
@@ -6968,7 +7168,7 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L598",
       "_origin": "ast",
-      "community": 12,
+      "community": 22,
       "norm_label": "stripreprefix()",
       "id": "packages_backend_convex_llm_stripreprefix"
     },
@@ -6978,7 +7178,7 @@
       "source_file": "packages/backend/convex/llm.ts",
       "source_location": "L607",
       "_origin": "ast",
-      "community": 12,
+      "community": 22,
       "norm_label": "buildcockpittools()",
       "id": "packages_backend_convex_llm_buildcockpittools"
     },
@@ -7528,7 +7728,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 24,
+      "community": 112,
       "norm_label": "notifications.ts",
       "id": "packages_backend_convex_notifications"
     },
@@ -7568,7 +7768,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "notifyexternal.ts",
       "id": "packages_backend_convex_notifyexternal"
     },
@@ -7578,7 +7778,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "kinds",
       "id": "packages_backend_convex_notifyexternal_kinds"
     },
@@ -7588,7 +7788,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 10,
+      "community": 91,
       "norm_label": "dispatch",
       "id": "packages_backend_convex_notifyexternal_dispatch"
     },
@@ -7758,7 +7958,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L138",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "getprofile",
       "id": "packages_backend_convex_onboarding_getprofile"
     },
@@ -7818,7 +8018,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L290",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "updateprofile",
       "id": "packages_backend_convex_onboarding_updateprofile"
     },
@@ -8168,7 +8368,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 76,
+      "community": 56,
       "norm_label": "request_status",
       "id": "packages_backend_convex_pipeline_request_status"
     },
@@ -8218,7 +8418,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L90",
       "_origin": "ast",
-      "community": 76,
+      "community": 56,
       "norm_label": "pipelineworkflow",
       "id": "packages_backend_convex_pipeline_pipelineworkflow"
     },
@@ -8228,7 +8428,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L341",
       "_origin": "ast",
-      "community": 24,
+      "community": 76,
       "norm_label": "setstatus",
       "id": "packages_backend_convex_pipeline_setstatus"
     },
@@ -8338,7 +8538,7 @@
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L60",
       "_origin": "ast",
-      "community": 95,
+      "community": 119,
       "norm_label": "insertplan",
       "id": "packages_backend_convex_plans_insertplan"
     },
@@ -8348,7 +8548,7 @@
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L76",
       "_origin": "ast",
-      "community": 95,
+      "community": 119,
       "norm_label": "patchplan",
       "id": "packages_backend_convex_plans_patchplan"
     },
@@ -8388,7 +8588,7 @@
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L175",
       "_origin": "ast",
-      "community": 95,
+      "community": 119,
       "norm_label": "clearcandidates",
       "id": "packages_backend_convex_plans_clearcandidates"
     },
@@ -8568,7 +8768,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 13,
+      "community": 581,
       "norm_label": "proactivereview.ts",
       "id": "packages_backend_convex_proactivereview"
     },
@@ -8588,7 +8788,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 13,
+      "community": 581,
       "norm_label": "reviewone",
       "id": "packages_backend_convex_proactivereview_reviewone"
     },
@@ -8598,7 +8798,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L125",
       "_origin": "ast",
-      "community": 13,
+      "community": 581,
       "norm_label": "insertreviewnotification",
       "id": "packages_backend_convex_proactivereview_insertreviewnotification"
     },
@@ -8708,7 +8908,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 76,
+      "community": 56,
       "norm_label": "requests.ts",
       "id": "packages_backend_convex_requests"
     },
@@ -8728,7 +8928,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 76,
+      "community": 56,
       "norm_label": "attachmentarg",
       "id": "packages_backend_convex_requests_attachmentarg"
     },
@@ -8768,7 +8968,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L208",
       "_origin": "ast",
-      "community": 76,
+      "community": 56,
       "norm_label": "get",
       "id": "packages_backend_convex_requests_get"
     },
@@ -8788,7 +8988,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "review.ts",
       "id": "packages_backend_convex_review"
     },
@@ -8798,7 +8998,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "reviewdecisionvalidator",
       "id": "packages_backend_convex_review_reviewdecisionvalidator"
     },
@@ -8808,7 +9008,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "revieweventvalidator",
       "id": "packages_backend_convex_review_revieweventvalidator"
     },
@@ -8818,7 +9018,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "eventname()",
       "id": "packages_backend_convex_review_eventname"
     },
@@ -8828,7 +9028,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "armtimeout",
       "id": "packages_backend_convex_review_armtimeout"
     },
@@ -8838,7 +9038,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L73",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "firetimeout",
       "id": "packages_backend_convex_review_firetimeout"
     },
@@ -8848,7 +9048,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L92",
       "_origin": "ast",
-      "community": 76,
+      "community": 83,
       "norm_label": "senddecision",
       "id": "packages_backend_convex_review_senddecision"
     },
@@ -9048,7 +9248,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 120,
+      "community": 19,
       "norm_label": "skilloptexport.test.ts",
       "id": "packages_backend_convex_skilloptexport_test"
     },
@@ -9058,7 +9258,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 120,
+      "community": 19,
       "norm_label": "modules",
       "id": "packages_backend_convex_skilloptexport_test_modules"
     },
@@ -9068,7 +9268,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 120,
+      "community": 19,
       "norm_label": "seedrated()",
       "id": "packages_backend_convex_skilloptexport_test_seedrated"
     },
@@ -9078,7 +9278,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L60",
       "_origin": "ast",
-      "community": 120,
+      "community": 19,
       "norm_label": "runexport()",
       "id": "packages_backend_convex_skilloptexport_test_runexport"
     },
@@ -9088,7 +9288,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 101,
+      "community": 371,
       "norm_label": "skilloptexport.ts",
       "id": "packages_backend_convex_skilloptexport"
     },
@@ -9108,7 +9308,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 101,
+      "community": 371,
       "norm_label": "hashstring()",
       "id": "packages_backend_convex_skilloptexport_hashstring"
     },
@@ -9188,7 +9388,7 @@
       "source_file": "packages/backend/convex/skills.ts",
       "source_location": "L86",
       "_origin": "ast",
-      "community": 101,
+      "community": 13,
       "norm_label": "getactiveskill",
       "id": "packages_backend_convex_skills_getactiveskill"
     },
@@ -9828,7 +10028,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 121,
+      "community": 19,
       "norm_label": "vault.test.ts",
       "id": "packages_backend_convex_vault_test"
     },
@@ -9838,7 +10038,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 121,
+      "community": 19,
       "norm_label": "withingest()",
       "id": "packages_backend_convex_vault_test_withingest"
     },
@@ -9848,7 +10048,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "vault.ts",
       "id": "packages_backend_convex_vault"
     },
@@ -9858,7 +10058,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "bytelen()",
       "id": "packages_backend_convex_vault_bytelen"
     },
@@ -9888,7 +10088,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L188",
       "_origin": "ast",
-      "community": 55,
+      "community": 53,
       "norm_label": "deletevaultdoc",
       "id": "packages_backend_convex_vault_deletevaultdoc"
     },
@@ -9918,7 +10118,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L273",
       "_origin": "ast",
-      "community": 55,
+      "community": 53,
       "norm_label": "vaultdownloadurl",
       "id": "packages_backend_convex_vault_vaultdownloadurl"
     },
@@ -9928,7 +10128,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L287",
       "_origin": "ast",
-      "community": 55,
+      "community": 53,
       "norm_label": "docentities",
       "id": "packages_backend_convex_vault_docentities"
     },
@@ -9938,7 +10138,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L340",
       "_origin": "ast",
-      "community": 55,
+      "community": 53,
       "norm_label": "vaultsearch",
       "id": "packages_backend_convex_vault_vaultsearch"
     },
@@ -9948,7 +10148,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L380",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "getdoc",
       "id": "packages_backend_convex_vault_getdoc"
     },
@@ -9968,7 +10168,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L416",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "markready",
       "id": "packages_backend_convex_vault_markready"
     },
@@ -9978,7 +10178,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L424",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "markfailed",
       "id": "packages_backend_convex_vault_markfailed"
     },
@@ -9998,7 +10198,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L467",
       "_origin": "ast",
-      "community": 13,
+      "community": 53,
       "norm_label": "profileseeddocs",
       "id": "packages_backend_convex_vault_profileseeddocs"
     },
@@ -10268,7 +10468,7 @@
       "source_file": "packages/backend/convex/vaultExtract.ts",
       "source_location": "L133",
       "_origin": "ast",
-      "community": 643,
+      "community": 107,
       "norm_label": "extractdoc",
       "id": "packages_backend_convex_vaultextract_extractdoc"
     },
@@ -10338,7 +10538,7 @@
       "source_file": "packages/backend/convex/vaultGraph.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 53,
+      "community": 28,
       "norm_label": "vaultgraph.ts",
       "id": "packages_backend_convex_vaultgraph"
     },
@@ -10348,7 +10548,7 @@
       "source_file": "packages/backend/convex/vaultGraph.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 53,
+      "community": 28,
       "norm_label": "node",
       "id": "packages_backend_convex_vaultgraph_node"
     },
@@ -10358,7 +10558,7 @@
       "source_file": "packages/backend/convex/vaultGraph.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 53,
+      "community": 28,
       "norm_label": "edge",
       "id": "packages_backend_convex_vaultgraph_edge"
     },
@@ -10368,7 +10568,7 @@
       "source_file": "packages/backend/convex/vaultGraph.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 53,
+      "community": 28,
       "norm_label": "upsertgraph",
       "id": "packages_backend_convex_vaultgraph_upsertgraph"
     },
@@ -10378,7 +10578,7 @@
       "source_file": "packages/backend/convex/vaultGraph.ts",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 53,
+      "community": 28,
       "norm_label": "expand",
       "id": "packages_backend_convex_vaultgraph_expand"
     },
@@ -10488,7 +10688,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "vaultingest.ts",
       "id": "packages_backend_convex_vaultingest"
     },
@@ -10508,7 +10708,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L56",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "oningestcomplete",
       "id": "packages_backend_convex_vaultingest_oningestcomplete"
     },
@@ -10518,7 +10718,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L85",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "retrystuckingests",
       "id": "packages_backend_convex_vaultingest_retrystuckingests"
     },
@@ -10528,7 +10728,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 643,
+      "community": 53,
       "norm_label": "ingestdoc",
       "id": "packages_backend_convex_vaultingest_ingestdoc"
     },
@@ -10608,7 +10808,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L109",
       "_origin": "ast",
-      "community": 643,
+      "community": 101,
       "norm_label": "extractgraph",
       "id": "packages_backend_convex_vaultllm_extractgraph"
     },
@@ -10628,7 +10828,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "vaultrag.ts",
       "id": "packages_backend_convex_vaultrag"
     },
@@ -10638,7 +10838,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "openaiembeddingv2",
       "id": "packages_backend_convex_vaultrag_openaiembeddingv2"
     },
@@ -10648,7 +10848,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "ragembeddingmodel",
       "id": "packages_backend_convex_vaultrag_ragembeddingmodel"
     },
@@ -10658,7 +10858,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "rag",
       "id": "packages_backend_convex_vaultrag_rag"
     },
@@ -10668,7 +10868,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L88",
       "_origin": "ast",
-      "community": 28,
+      "community": 121,
       "norm_label": "embeddoc",
       "id": "packages_backend_convex_vaultrag_embeddoc"
     },
@@ -10918,7 +11118,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 168,
+      "community": 107,
       "norm_label": "vaultsweep.ts",
       "id": "packages_backend_convex_vaultsweep"
     },
@@ -10928,7 +11128,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 168,
+      "community": 107,
       "norm_label": "sweeppendingextraction",
       "id": "packages_backend_convex_vaultsweep_sweeppendingextraction"
     },
@@ -10938,7 +11138,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 168,
+      "community": 107,
       "norm_label": "runsweep",
       "id": "packages_backend_convex_vaultsweep_runsweep"
     },
@@ -11098,7 +11298,7 @@
       "source_file": "packages/backend/convex/vaultTranscribe.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 643,
+      "community": 107,
       "norm_label": "transcribedoc",
       "id": "packages_backend_convex_vaulttranscribe_transcribedoc"
     },
@@ -12368,7 +12568,7 @@
       "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 107,
+      "community": 371,
       "norm_label": "cockpit_agent_skill",
       "id": "packages_contracts_src_skill_cockpit_agent_skill"
     },
@@ -13198,7 +13398,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L10",
       "_origin": "ast",
-      "community": 91,
+      "community": 147,
       "norm_label": "personas",
       "id": "packages_core_src_businessprofile_personas"
     },
@@ -13298,7 +13498,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 147,
+      "community": 59,
       "norm_label": "bullets()",
       "id": "packages_core_src_businessprofile_bullets"
     },
@@ -13308,7 +13508,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L97",
       "_origin": "ast",
-      "community": 97,
+      "community": 59,
       "norm_label": "serializeprofile()",
       "id": "packages_core_src_businessprofile_serializeprofile"
     },
@@ -13908,7 +14108,7 @@
       "source_file": "packages/core/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 17,
+      "community": 377,
       "norm_label": "index.ts",
       "id": "packages_core_src_index"
     },
@@ -14008,7 +14208,7 @@
       "source_file": "packages/core/src/notificationTemplates.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "notificationtemplates.test.ts",
       "id": "packages_core_src_notificationtemplates_test"
     },
@@ -14018,7 +14218,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "notificationtemplates.ts",
       "id": "packages_core_src_notificationtemplates"
     },
@@ -14028,7 +14228,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "notificationkind",
       "id": "packages_core_src_notificationtemplates_notificationkind"
     },
@@ -14038,7 +14238,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "messages",
       "id": "packages_core_src_notificationtemplates_messages"
     },
@@ -14048,7 +14248,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 119,
+      "community": 65,
       "norm_label": "notificationmessage()",
       "id": "packages_core_src_notificationtemplates_notificationmessage"
     },
@@ -15068,7 +15268,7 @@
       "source_file": "packages/vault/src/constants.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 53,
+      "community": 105,
       "norm_label": "constants.ts",
       "id": "packages_vault_src_constants"
     },
@@ -15188,7 +15388,7 @@
       "source_file": "packages/vault/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 121,
+      "community": 105,
       "norm_label": "index.ts",
       "id": "packages_vault_src_index"
     },
@@ -15198,7 +15398,7 @@
       "source_file": "packages/vault/src/index.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 121,
+      "community": 105,
       "norm_label": "note: ./officetext is deliberately not re-exported here (v8-bundle hygiene \u2014 imp",
       "id": "packages_vault_src_index_rationale_14"
     },
@@ -15208,7 +15408,7 @@
       "source_file": "packages/vault/src/normalize.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 121,
+      "community": 105,
       "norm_label": "normalize.test.ts",
       "id": "packages_vault_src_normalize_test"
     },
@@ -15218,7 +15418,7 @@
       "source_file": "packages/vault/src/normalize.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 121,
+      "community": 105,
       "norm_label": "normalize.ts",
       "id": "packages_vault_src_normalize"
     },
@@ -15228,7 +15428,7 @@
       "source_file": "packages/vault/src/normalize.ts",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 121,
+      "community": 105,
       "norm_label": "normalizename()",
       "id": "packages_vault_src_normalize_normalizename"
     },
@@ -15368,7 +15568,7 @@
       "source_file": "packages/vault/src/traversal.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 53,
+      "community": 105,
       "norm_label": "traversal.test.ts",
       "id": "packages_vault_src_traversal_test"
     },
@@ -15378,7 +15578,7 @@
       "source_file": "packages/vault/src/traversal.test.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 53,
+      "community": 105,
       "norm_label": "adj()",
       "id": "packages_vault_src_traversal_test_adj"
     },
@@ -15388,7 +15588,7 @@
       "source_file": "packages/vault/src/traversal.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 53,
+      "community": 105,
       "norm_label": "traversal.ts",
       "id": "packages_vault_src_traversal"
     },
@@ -15398,7 +15598,7 @@
       "source_file": "packages/vault/src/traversal.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 53,
+      "community": 105,
       "norm_label": "bfsneighbors()",
       "id": "packages_vault_src_traversal_bfsneighbors"
     },
@@ -15548,7 +15748,7 @@
       "source_file": "packages/voice/src/brief.ts",
       "source_location": "L108",
       "_origin": "ast",
-      "community": 308,
+      "community": 51,
       "norm_label": "planseedfrombrief()",
       "id": "packages_voice_src_brief_planseedfrombrief"
     },
@@ -17721,166 +17921,6 @@
       "community": 233,
       "norm_label": "known gaps & deferred work",
       "id": "docs_playbooks_audit_dead_letter_known_gaps_deferred_work"
-    },
-    {
-      "label": "business-evaluation.md",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "business-evaluation.md",
-      "id": "docs_playbooks_business_evaluation"
-    },
-    {
-      "label": "Playbook: Business Evaluation Engine",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "playbook: business evaluation engine",
-      "id": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine"
-    },
-    {
-      "label": "Purpose",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "purpose",
-      "id": "docs_playbooks_business_evaluation_purpose"
-    },
-    {
-      "label": "Key files",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L16",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "key files",
-      "id": "docs_playbooks_business_evaluation_key_files"
-    },
-    {
-      "label": "Dependencies & blast radius",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L52",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "dependencies & blast radius",
-      "id": "docs_playbooks_business_evaluation_dependencies_blast_radius"
-    },
-    {
-      "label": "Data flow",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L69",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "data flow",
-      "id": "docs_playbooks_business_evaluation_data_flow"
-    },
-    {
-      "label": "Invariants \u2014 what must never break",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L91",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "invariants \u2014 what must never break",
-      "id": "docs_playbooks_business_evaluation_invariants_what_must_never_break"
-    },
-    {
-      "label": "\"What changed\" \u2014 the `evaluations.delta` field (13-01, BEVL-03)",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L132",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "\"what changed\" \u2014 the `evaluations.delta` field (13-01, bevl-03)",
-      "id": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03"
-    },
-    {
-      "label": "Proactive weekly review (BEVL-03, 13-02)",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L166",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "proactive weekly review (bevl-03, 13-02)",
-      "id": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02"
-    },
-    {
-      "label": "Invariants",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L180",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "invariants",
-      "id": "docs_playbooks_business_evaluation_invariants"
-    },
-    {
-      "label": "How to change it safely",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L213",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "how to change it safely",
-      "id": "docs_playbooks_business_evaluation_how_to_change_it_safely"
-    },
-    {
-      "label": "How to verify",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L224",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "how to verify",
-      "id": "docs_playbooks_business_evaluation_how_to_verify"
-    },
-    {
-      "label": "How to change safely",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L234",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "how to change safely",
-      "id": "docs_playbooks_business_evaluation_how_to_change_safely"
-    },
-    {
-      "label": "How to verify",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L253",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "how to verify",
-      "id": "docs_playbooks_business_evaluation_how_to_verify_253"
-    },
-    {
-      "label": "Operational notes",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L266",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "operational notes",
-      "id": "docs_playbooks_business_evaluation_operational_notes"
-    },
-    {
-      "label": "Known gaps & deferred work",
-      "file_type": "document",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L277",
-      "_origin": "ast",
-      "community": 150,
-      "norm_label": "known gaps & deferred work",
-      "id": "docs_playbooks_business_evaluation_known_gaps_deferred_work"
     },
     {
       "label": "cockpit.md",
@@ -23288,7 +23328,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L64",
       "_origin": "convex_table",
-      "community": 76,
+      "community": 83,
       "norm_label": "pendingtimeouts (table)",
       "id": "packages_backend_convex_schema_pendingtimeouts_table"
     },
@@ -23308,7 +23348,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L87",
       "_origin": "convex_table",
-      "community": 76,
+      "community": 56,
       "norm_label": "requests (table)",
       "id": "packages_backend_convex_schema_requests_table"
     },
@@ -23328,7 +23368,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L265",
       "_origin": "convex_table",
-      "community": 112,
+      "community": 102,
       "norm_label": "briefings (table)",
       "id": "packages_backend_convex_schema_briefings_table"
     },
@@ -23358,7 +23398,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L410",
       "_origin": "convex_table",
-      "community": 102,
+      "community": 13,
       "norm_label": "agentsteps (table)",
       "id": "packages_backend_convex_schema_agentsteps_table"
     },
@@ -23378,7 +23418,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L497",
       "_origin": "convex_table",
-      "community": 76,
+      "community": 56,
       "norm_label": "attachments (table)",
       "id": "packages_backend_convex_schema_attachments_table"
     },
@@ -23398,7 +23438,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L528",
       "_origin": "convex_table",
-      "community": 24,
+      "community": 581,
       "norm_label": "notifications (table)",
       "id": "packages_backend_convex_schema_notifications_table"
     },
@@ -23438,7 +23478,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L569",
       "_origin": "convex_table",
-      "community": 83,
+      "community": 101,
       "norm_label": "intakeartifacts (table)",
       "id": "packages_backend_convex_schema_intakeartifacts_table"
     },
@@ -23448,7 +23488,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L602",
       "_origin": "convex_table",
-      "community": 643,
+      "community": 53,
       "norm_label": "vaultdocuments (table)",
       "id": "packages_backend_convex_schema_vaultdocuments_table"
     },
@@ -23458,7 +23498,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L636",
       "_origin": "convex_table",
-      "community": 53,
+      "community": 28,
       "norm_label": "graphnodes (table)",
       "id": "packages_backend_convex_schema_graphnodes_table"
     },
@@ -23468,7 +23508,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L647",
       "_origin": "convex_table",
-      "community": 53,
+      "community": 28,
       "norm_label": "graphedges (table)",
       "id": "packages_backend_convex_schema_graphedges_table"
     },
@@ -23478,7 +23518,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L663",
       "_origin": "convex_table",
-      "community": 20,
+      "community": 40,
       "norm_label": "voicesessions (table)",
       "id": "packages_backend_convex_schema_voicesessions_table"
     },
@@ -23488,7 +23528,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L701",
       "_origin": "convex_table",
-      "community": 112,
+      "community": 19,
       "norm_label": "feedback (table)",
       "id": "packages_backend_convex_schema_feedback_table"
     },
@@ -23507,12 +23547,202 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation",
+      "target": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_data_flow",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L54",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_dependencies_blast_radius",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L240",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_how_to_change_safely",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L259",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_how_to_verify_259",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L93",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_invariants_what_must_never_break",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L18",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_key_files",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L283",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_known_gaps_deferred_work",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L272",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_operational_notes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L172",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_purpose",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L302",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_sharing_the_evaluations_table_with_voice_doc_phase_14_docv_01",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L138",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
+      "target": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L219",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_how_to_change_it_safely",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L230",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_how_to_verify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L186",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
+      "target": "docs_playbooks_business_evaluation_invariants",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L349",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_sharing_the_evaluations_table_with_voice_doc_phase_14_docv_01",
+      "target": "docs_playbooks_business_evaluation_the_excerpt_is_content_plane_and_strictly_so_4",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L319",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_sharing_the_evaluations_table_with_voice_doc_phase_14_docv_01",
+      "target": "docs_playbooks_business_evaluation_the_invariant_a_doc_review_row_never_enters_this_engine",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docs/playbooks/business-evaluation.md",
+      "source_location": "L308",
+      "weight": 1.0,
+      "source": "docs_playbooks_business_evaluation_sharing_the_evaluations_table_with_voice_doc_phase_14_docv_01",
+      "target": "docs_playbooks_business_evaluation_what_phase_14_added_to_the_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap",
-      "target": "planning_roadmap_roadmap_pikar_ai",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_roadmap_pikar_ai"
     },
     {
       "relation": "contains",
@@ -23520,9 +23750,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L39",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25"
     },
     {
       "relation": "contains",
@@ -23530,9 +23760,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L3",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_overview",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_overview"
     },
     {
       "relation": "contains",
@@ -23540,9 +23770,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L72",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_phase_details",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_details"
     },
     {
       "relation": "contains",
@@ -23550,9 +23780,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L466",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_phase_details_milestone_v2_0",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_details_milestone_v2_0"
     },
     {
       "relation": "contains",
@@ -23560,9 +23790,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_phases",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phases"
     },
     {
       "relation": "contains",
@@ -23570,9 +23800,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L680",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_roadmap_pikar_ai",
-      "target": "planning_roadmap_progress",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_progress"
     },
     {
       "relation": "contains",
@@ -23580,9 +23810,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L187",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted"
     },
     {
       "relation": "contains",
@@ -23590,9 +23820,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L74",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_1_foundation_governance_substrate",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_1_foundation_governance_substrate"
     },
     {
       "relation": "contains",
@@ -23600,9 +23830,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L98",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_2_thin_end_to_end_slice",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_2_thin_end_to_end_slice"
     },
     {
       "relation": "contains",
@@ -23610,9 +23840,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L330",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted"
     },
     {
       "relation": "contains",
@@ -23620,9 +23850,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L345",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_11_inbox_reply_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_11_inbox_reply_inserted"
     },
     {
       "relation": "contains",
@@ -23630,9 +23860,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L146",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_1_cockpit_core_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_1_cockpit_core_inserted"
     },
     {
       "relation": "contains",
@@ -23640,9 +23870,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L168",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_2_inbox_reading_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_2_inbox_reading_inserted"
     },
     {
       "relation": "contains",
@@ -23650,9 +23880,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L203",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_3_attachment_generation_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_3_attachment_generation_inserted"
     },
     {
       "relation": "contains",
@@ -23660,9 +23890,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L221",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted"
     },
     {
       "relation": "contains",
@@ -23670,9 +23900,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L236",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_5_deferred_send_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_5_deferred_send_inserted"
     },
     {
       "relation": "contains",
@@ -23680,9 +23910,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L255",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_6_agent_eval_gate_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_6_agent_eval_gate_inserted"
     },
     {
       "relation": "contains",
@@ -23690,9 +23920,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L274",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_7_inbox_briefing_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_7_inbox_briefing_inserted"
     },
     {
       "relation": "contains",
@@ -23700,9 +23930,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L300",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_8_vault_document_extraction_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_8_vault_document_extraction_inserted"
     },
     {
       "relation": "contains",
@@ -23710,9 +23940,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L314",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted"
     },
     {
       "relation": "contains",
@@ -23720,9 +23950,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L125",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_3_guardrails",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_3_guardrails"
     },
     {
       "relation": "contains",
@@ -23730,9 +23960,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L359",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_4_attachment_voice_dictation_intake",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_4_attachment_voice_dictation_intake"
     },
     {
       "relation": "contains",
@@ -23740,9 +23970,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L376",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_5_knowledge_vault_graphrag",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_5_knowledge_vault_graphrag"
     },
     {
       "relation": "contains",
@@ -23750,9 +23980,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L396",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_6_live_voice_sessions",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_6_live_voice_sessions"
     },
     {
       "relation": "contains",
@@ -23760,9 +23990,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L416",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_7_resilience_operations_hardening",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_7_resilience_operations_hardening"
     },
     {
       "relation": "contains",
@@ -23770,9 +24000,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L435",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_8_self_improvement",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_8_self_improvement"
     },
     {
       "relation": "contains",
@@ -23780,9 +24010,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L453",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details",
-      "target": "planning_roadmap_phase_9_private_beta_productionization",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_9_private_beta_productionization"
     },
     {
       "relation": "contains",
@@ -23790,9 +24020,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L468",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_10_vault_agent_grounding",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_10_vault_agent_grounding"
     },
     {
       "relation": "contains",
@@ -23800,9 +24030,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L483",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_11_persona_onboarding_business_profile",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_11_persona_onboarding_business_profile"
     },
     {
       "relation": "contains",
@@ -23810,9 +24040,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L494",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_12_business_evaluation_engine",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_12_business_evaluation_engine"
     },
     {
       "relation": "contains",
@@ -23820,9 +24050,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L514",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_13_proactive_in_app_review",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_13_proactive_in_app_review"
     },
     {
       "relation": "contains",
@@ -23830,9 +24060,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L530",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_14_flagship_voice_doc_workflow",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_14_flagship_voice_doc_workflow"
     },
     {
       "relation": "contains",
@@ -23840,9 +24070,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L564",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted"
     },
     {
       "relation": "contains",
@@ -23850,9 +24080,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L552",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor"
     },
     {
       "relation": "contains",
@@ -23860,9 +24090,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L577",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_16_research_sub_agent_web_research",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_16_research_sub_agent_web_research"
     },
     {
       "relation": "contains",
@@ -23870,9 +24100,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L588",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_17_calendar_actions",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_17_calendar_actions"
     },
     {
       "relation": "contains",
@@ -23880,9 +24110,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L598",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_18_document_content_creation",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_18_document_content_creation"
     },
     {
       "relation": "contains",
@@ -23890,9 +24120,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L608",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_19_contacts_crm_follow_ups",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_19_contacts_crm_follow_ups"
     },
     {
       "relation": "contains",
@@ -23900,9 +24130,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L618",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_20_media_canvas",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_20_media_canvas"
     },
     {
       "relation": "contains",
@@ -23910,9 +24140,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L629",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_21_user_authored_skills",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_21_user_authored_skills"
     },
     {
       "relation": "contains",
@@ -23920,9 +24150,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L639",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner"
     },
     {
       "relation": "contains",
@@ -23930,9 +24160,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L649",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_23_agent_authored_skills",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_23_agent_authored_skills"
     },
     {
       "relation": "contains",
@@ -23940,9 +24170,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L659",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_24_iso_9001_conformance_map",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_24_iso_9001_conformance_map"
     },
     {
       "relation": "contains",
@@ -23950,9 +24180,9 @@
       "source_file": ".planning/ROADMAP.md",
       "source_location": "L668",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_roadmap_phase_details_milestone_v2_0",
-      "target": "planning_roadmap_phase_25_private_beta_productionization",
-      "confidence_score": 1.0
+      "target": "planning_roadmap_phase_25_private_beta_productionization"
     },
     {
       "relation": "contains",
@@ -23960,9 +24190,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L15",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state",
-      "target": "planning_state_project_state",
-      "confidence_score": 1.0
+      "target": "planning_state_project_state"
     },
     {
       "relation": "contains",
@@ -23970,9 +24200,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L96",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_accumulated_context",
-      "confidence_score": 1.0
+      "target": "planning_state_accumulated_context"
     },
     {
       "relation": "contains",
@@ -23980,9 +24210,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L24",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_current_position",
-      "confidence_score": 1.0
+      "target": "planning_state_current_position"
     },
     {
       "relation": "contains",
@@ -23990,9 +24220,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L56",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_milestone_v2_0_phase_map",
-      "confidence_score": 1.0
+      "target": "planning_state_milestone_v2_0_phase_map"
     },
     {
       "relation": "contains",
@@ -24000,9 +24230,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L65",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_performance_metrics",
-      "confidence_score": 1.0
+      "target": "planning_state_performance_metrics"
     },
     {
       "relation": "contains",
@@ -24010,9 +24240,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_project_reference",
-      "confidence_score": 1.0
+      "target": "planning_state_project_reference"
     },
     {
       "relation": "contains",
@@ -24020,9 +24250,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L154",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_project_state",
-      "target": "planning_state_session_continuity",
-      "confidence_score": 1.0
+      "target": "planning_state_session_continuity"
     },
     {
       "relation": "contains",
@@ -24030,9 +24260,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L147",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
-      "target": "planning_state_blockers_concerns",
-      "confidence_score": 1.0
+      "target": "planning_state_blockers_concerns"
     },
     {
       "relation": "contains",
@@ -24040,9 +24270,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L98",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
-      "target": "planning_state_decisions",
-      "confidence_score": 1.0
+      "target": "planning_state_decisions"
     },
     {
       "relation": "contains",
@@ -24050,9 +24280,9 @@
       "source_file": ".planning/STATE.md",
       "source_location": "L142",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_state_accumulated_context",
-      "target": "planning_state_pending_todos",
-      "confidence_score": 1.0
+      "target": "planning_state_pending_todos"
     },
     {
       "relation": "contains",
@@ -24060,9 +24290,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L60",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary"
     },
     {
       "relation": "contains",
@@ -24070,9 +24300,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L88",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan"
     },
     {
       "relation": "contains",
@@ -24080,9 +24310,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L171",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_for_the_next_plans",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_for_the_next_plans"
     },
     {
       "relation": "contains",
@@ -24090,9 +24320,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L187",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_self_check_passed",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_self_check_passed"
     },
     {
       "relation": "contains",
@@ -24100,9 +24330,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L148",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_verification",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_verification"
     },
     {
       "relation": "contains",
@@ -24110,9 +24340,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L164",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_wave_0_requirements_all_closed",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_wave_0_requirements_all_closed"
     },
     {
       "relation": "contains",
@@ -24120,9 +24350,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L66",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_phase_14_plan_01_wave_0_freeze_commit_summary",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_what_shipped",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_what_shipped"
     },
     {
       "relation": "contains",
@@ -24130,9 +24360,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L90",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_1_rule_4_architectural_user_approved_the_zero_edits_to_evaluations_ts_premise_was_false",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_1_rule_4_architectural_user_approved_the_zero_edits_to_evaluations_ts_premise_was_false"
     },
     {
       "relation": "contains",
@@ -24140,9 +24370,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L114",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_2_rule_3_blocking_proactivereview_ts_carried_the_widened_framework_forward",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_2_rule_3_blocking_proactivereview_ts_carried_the_widened_framework_forward"
     },
     {
       "relation": "contains",
@@ -24150,9 +24380,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L126",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_3_rule_3_blocking_playbook_ordering_vs_the_9_stop_hook",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_3_rule_3_blocking_playbook_ordering_vs_the_9_stop_hook"
     },
     {
       "relation": "contains",
@@ -24160,9 +24390,9 @@
       "source_file": ".planning/phases/14-flagship-voice-doc-workflow/14-01-SUMMARY.md",
       "source_location": "L137",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_deviations_from_plan",
-      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_4_rule_3_environment_no_node_modules_and_no_convex_deployment_in_this_worktree",
-      "confidence_score": 1.0
+      "target": "planning_phases_14_flagship_voice_doc_workflow_14_01_summary_4_rule_3_environment_no_node_modules_and_no_convex_deployment_in_this_worktree"
     },
     {
       "relation": "contains",
@@ -55277,156 +55507,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L1",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation",
-      "target": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L69",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_data_flow"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L52",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_dependencies_blast_radius"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L234",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_how_to_change_safely"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L253",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_how_to_verify_253"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L91",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_invariants_what_must_never_break"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L16",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_key_files"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L277",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_known_gaps_deferred_work"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L266",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_operational_notes"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L166",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L7",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_purpose"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L132",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_playbook_business_evaluation_engine",
-      "target": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L213",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
-      "target": "docs_playbooks_business_evaluation_how_to_change_it_safely"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L224",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
-      "target": "docs_playbooks_business_evaluation_how_to_verify"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "docs/playbooks/business-evaluation.md",
-      "source_location": "L180",
-      "weight": 1,
-      "confidence_score": 1,
-      "source": "docs_playbooks_business_evaluation_proactive_weekly_review_bevl_03_13_02",
-      "target": "docs_playbooks_business_evaluation_invariants"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L1",
       "weight": 1,
@@ -60266,5 +60346,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "5e4209155eec6b35214b462d66896a99924a579f"
+  "built_at_commit": "d08eea383ab2f4fa2ead6fe07ec0cc51f64ae844"
 }
