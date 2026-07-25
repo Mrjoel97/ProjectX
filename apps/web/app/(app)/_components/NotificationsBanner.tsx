@@ -1,7 +1,17 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
+
+// BEVL-03: the review notification is only useful if it opens the review. `?thread=` is the
+// existing VOIC-04 workspace deep-link — no new route. A kind with no entry stays plain text
+// (today's behaviour for every other kind), so this is opt-in per kind and never a redirect trap.
+const KIND_HREF: Record<string, string> = {
+  weekly_review: `/dashboard/workspace?thread=${REVIEW_THREAD_ID}`,
+  weekly_review_failed: "/dashboard/workspace", // the on-demand evaluateBusiness path is live there
+};
 
 // OPSG-05 in-app render surface. Every failure terminal in the phase routes through
 // notifications.notify, which inserts a row here (the fail-closed floor) AND best-effort
@@ -29,20 +39,29 @@ export function NotificationsBanner() {
   return (
     <section className="notif-banner" aria-label="Notifications">
       <ul className="notif-list">
-        {unread.map((n) => (
-          <li key={n._id} className="notif-row">
-            <span className="notif-dot" aria-hidden="true" />
-            <span className="notif-msg">{n.message}</span>
-            <button
-              type="button"
-              className="notif-dismiss"
-              aria-label={`Dismiss: ${n.message}`}
-              onClick={() => void markRead({ notificationId: n._id })}
-            >
-              Dismiss
-            </button>
-          </li>
-        ))}
+        {unread.map((n) => {
+          const href = KIND_HREF[n.kind];
+          return (
+            <li key={n._id} className="notif-row">
+              <span className="notif-dot" aria-hidden="true" />
+              {href ? (
+                <Link className="notif-msg" href={href}>
+                  {n.message}
+                </Link>
+              ) : (
+                <span className="notif-msg">{n.message}</span>
+              )}
+              <button
+                type="button"
+                className="notif-dismiss"
+                aria-label={`Dismiss: ${n.message}`}
+                onClick={() => void markRead({ notificationId: n._id })}
+              >
+                Dismiss
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

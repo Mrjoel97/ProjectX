@@ -7,7 +7,9 @@ import { api } from "@pikar/backend/api";
 import { buildBriefingView } from "@pikar/core/briefing";
 // Far-future cap (SCHD-01): the soft UI complement to executePlan's hard send_time_too_far refusal —
 // one shared horizon, so the picker can't offer a time the server will reject.
-import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+// REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
+// can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
+import { REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
@@ -1374,6 +1376,21 @@ function GapRow({
   );
 }
 
+// "What changed since last week" (BEVL-03), from the persisted `delta` — never re-derived here.
+// Only a cron run writes one, so an on-demand evaluation has none and the line simply never
+// appears. Every-term-zero returns null too: a hollow "no change" line is noise, and the engine
+// emits no score or percentage, so the card must not invent one.
+// ponytail: plain interpolation, not Intl.PluralRules — copy is en-only today; swap if it localises.
+function deltaLine(delta: Evaluation["delta"]): string | null {
+  if (!delta) return null;
+  const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (delta.newFindings > 0) parts.push(plural(delta.newFindings, "new finding"));
+  if (delta.gapsClosed.length > 0) parts.push(`${plural(delta.gapsClosed.length, "gap")} closed`);
+  if (delta.gapsOpened.length > 0) parts.push(plural(delta.gapsOpened.length, "new gap"));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 /**
  * The EVALUATION card (BEVL-01): a DUMB renderer over evaluations.byThread (the SourceCard/briefing
  * precedent — self-queries on threadId, null when the thread has no evaluation). Renders the honest
@@ -1387,7 +1404,21 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
     api.evaluations.byThread,
     threadId ? { threadId } : "skip",
   );
-  if (!evaluation) return null;
+  const isReview = threadId === REVIEW_THREAD_ID;
+  if (!evaluation) {
+    // Pre-first-run: only on the pinned review tab, and only once the query has RESOLVED to null
+    // (undefined is still loading — no flash). Everywhere else this stays the original `return null`,
+    // so an on-demand thread never gains a card it did not have before.
+    if (!isReview || evaluation === undefined) return null;
+    return (
+      <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="evaluation-empty">
+        <p style={capsTeal}>Weekly review</p>
+        <p style={{ margin: "0.45rem 0 0", color: "var(--ink-soft)", fontSize: "0.9rem" }}>
+          Your first weekly review runs Monday. It reads your vault — nothing to do.
+        </p>
+      </div>
+    );
+  }
   const { framework, findings, gaps, notEnoughData, verdict } = evaluation;
   const frameworkLabel = FRAMEWORK_LABEL[framework];
   const thin = findings.length === 0;
@@ -1400,10 +1431,23 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
   const topGaps = rankedGaps.slice(0, 5);
   const moreGaps = rankedGaps.slice(5);
   const sections = [...new Set(findings.map((f) => f.section))];
+  const changed = isReview ? deltaLine(evaluation.delta) : null;
 
   return (
     <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="evaluation-card">
-      <p style={capsTeal}>Evaluation · {frameworkLabel}</p>
+      {/* On the review thread the DATE is the freshness signal — that is why there is no unread dot
+          or badge (deferred by decision). The framework stays visible so the user compares like with
+          like week over week. A non-review thread renders exactly the header it always did. */}
+      <p style={capsTeal}>
+        {isReview &&
+          `Weekly review · ${new Date(evaluation.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · `}
+        Evaluation · {frameworkLabel}
+      </p>
+      {changed && (
+        <p data-testid="evaluation-delta" style={{ margin: "0.3rem 0 0", color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+          {changed}
+        </p>
+      )}
 
       {thin ? (
         // Thin-data ONLY: the distinct dashed nudge, no fabricated findings or gaps (SC #1).
@@ -1414,6 +1458,13 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
               <li key={n.section}>{n.needs}</li>
             ))}
           </ul>
+          {/* The one action that unblocks the one dead-end state: /dashboard/profile is the Phase-11
+              enrichment surface, and its save re-embeds the profile doc so the next run grounds on it.
+              --teal-900, not --teal-600: BRAND §6 — teal-600 is ~2.9:1 on light paper, fine for a
+              white-text button fill but not for small teal TEXT ("darken it" is the doc's own rule). */}
+          <Link href="/dashboard/profile" data-testid="evaluation-enrich" style={{ display: "inline-block", marginTop: "0.55rem", color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}>
+            Add more about your business →
+          </Link>
         </div>
       ) : (
         <>
