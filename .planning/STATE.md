@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: planning
-stopped_at: Completed 12-06-PLAN.md — **Phase 12 CLOSED.** Tasks 1-2 shipped (`4a04ca5`, `d11d3c0`); Task 3's eval gate ran 27/27 green ($0.1686, run `ed251c29`), `cockpit-agent@15` is ACTIVE on that evidence, and the owner approved the three-part visual verification. BEVL-01 + BEVL-02 complete.
-last_updated: "2026-07-25T09:53:15.457Z"
+stopped_at: Phase 13 context gathered
+last_updated: "2026-07-25T12:09:01.268Z"
 last_activity: "2026-07-25 — Phase 12 plan 06 COMPLETE; PHASE 12 CLOSED. `pnpm eval:golden --skill cockpit-agent@15` → **27/27 PASSED, $0.1686, run `ed251c29`**; both new fixtures (27-grounded-assessment, 28-healthy-no-gaps) passed first try, one retry on the pre-existing flaky 18-briefing-then-action. **cockpit-agent@15 is ACTIVE** on that recorded evidence (verified live via `getActiveSkill`), teaching WHEN to call `evaluateBusiness` + the `recordScorecardAnswer` store half. The 7 Phase-12 rubrics needed no `activateSkill` — they had never been seeded, so their FIRST seed took the `rows.length === 0` bootstrap path and each landed **v1 ACTIVE** (SC #4 intact; only cockpit-agent rode the gate). Deviations: (Rule 2) `findingsPresent` added as a third expect key — `gapCount: 0` alone passes VACUOUSLY on the not-enough-data verdict because the engine force-clears gaps at zero findings; (Rule 3) the fixture-floor bump 18→27 moved from Task 1's commit to Task 2's. Five defects found and fixed during live verification (see PRIOR-FIXES below)."
 progress:
   total_phases: 37
@@ -129,6 +129,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T01:55:00.000Z
-Stopped at: Completed 12-06-PLAN.md — **Phase 12 CLOSED.** Tasks 1-2 shipped (`4a04ca5`, `d11d3c0`); Task 3's eval gate ran 27/27 green ($0.1686, run `ed251c29`), `cockpit-agent@15` is ACTIVE on that evidence, and the owner approved the three-part visual verification. BEVL-01 + BEVL-02 complete.
-Resume file: none — run `/gsd:verify-work` for Phase 12, then plan Phase 13 (Proactive In-App Review).
+Last session: 2026-07-25T12:09:01.253Z
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-proactive-in-app-review/13-CONTEXT.md
