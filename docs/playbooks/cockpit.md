@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-25 (2) — session tabs are CLOSABLE (owner-reported: tabs could be opened but never dismissed). Each tab is now a `span.chat-tab.has-close` wrapping a `button.chat-tab-label` (select) and a `button.chat-tab-close` (dismiss) — a wrapper is required because a `<button>` cannot legally nest another button; the `+` new-chat pill stays a plain `button.chat-tab.is-new`. `closeTab(id)` removes the tab from the `tabs` view state and, ONLY when the closed tab was active, falls back to its neighbour (right first via `next[idx]`, then left via `next[idx-1]`, else `undefined` → a fresh New chat); closing a background tab never moves the user. The fallback is computed OUTSIDE the `setTabs` updater so the updater stays side-effect free under StrictMode double-invocation. **Closing is NOT deleting:** the tab strip is `useState` view state, so the thread, its messages, and its plan row are untouched — and the already-existing "Past chats" `HeaderMenu` (backed by the persisted, tenant-scoped `api.cockpit.listThreads`) reopens any closed conversation via `openThread`, so no new history UI was needed (ponytail rung 2 — the reopen surface already existed). The `×` glyph deliberately mirrors the existing `+` pill rather than introducing an icon-library dependency (§10: the app has no component library). A11y: each close button carries `aria-label={`Close ${label}`}` plus a `:focus-visible` teal outline. Verified: web typecheck clean; no e2e selector referenced `.chat-tab` (grepped before changing the markup). Prior: 2026-07-25 — cockpit attach `ATTACH_ACCEPT` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown`) and adds `text/markdown`, which it had never carried at all. Owner-reported: picking a `.md` opened the dialog to an apparently EMPTY folder. Two causes, both client-side — the string omitted markdown entirely, and Chrome resolves `accept` MIME types to extensions via the OS registry, where Windows has no `text/markdown` entry (so even the onboarding picker, which did list the MIME type, hid `.md`). The server was never the constraint: `classify()` routes `text/markdown` (via the `text/` prefix) AND a `.md` filename to the `document` path already. Distinct from the same-day `resolveMimeType` fix, which addressed the ALLOW-LIST check on an empty `File.type` after a file is picked; this one is about which files are offered. Verified: web typecheck clean. Prior: 2026-07-25 (12-05 — the gap-action + MEMO terminal, BEVL-02). **`executePlan` is no
+> Last verified: 2026-07-25 (3) — the PINNED "Weekly review" tab landed (13-03, BEVL-03): `REVIEW_TAB` is seeded into the `tabs` useState initialiser, renders WITHOUT a `×` (and without `has-close`), `closeTab` refuses its id, and selecting it renders a one-line explainer INSTEAD of `ChatPane` — the composer is suppressed because the synthetic review thread has no `plans` row. See "Phase 13 — the pinned Weekly review tab" below. Prior: 2026-07-25 (2) — session tabs are CLOSABLE (owner-reported: tabs could be opened but never dismissed). Each tab is now a `span.chat-tab.has-close` wrapping a `button.chat-tab-label` (select) and a `button.chat-tab-close` (dismiss) — a wrapper is required because a `<button>` cannot legally nest another button; the `+` new-chat pill stays a plain `button.chat-tab.is-new`. `closeTab(id)` removes the tab from the `tabs` view state and, ONLY when the closed tab was active, falls back to its neighbour (right first via `next[idx]`, then left via `next[idx-1]`, else `undefined` → a fresh New chat); closing a background tab never moves the user. The fallback is computed OUTSIDE the `setTabs` updater so the updater stays side-effect free under StrictMode double-invocation. **Closing is NOT deleting:** the tab strip is `useState` view state, so the thread, its messages, and its plan row are untouched — and the already-existing "Past chats" `HeaderMenu` (backed by the persisted, tenant-scoped `api.cockpit.listThreads`) reopens any closed conversation via `openThread`, so no new history UI was needed (ponytail rung 2 — the reopen surface already existed). The `×` glyph deliberately mirrors the existing `+` pill rather than introducing an icon-library dependency (§10: the app has no component library). A11y: each close button carries `aria-label={`Close ${label}`}` plus a `:focus-visible` teal outline. Verified: web typecheck clean; no e2e selector referenced `.chat-tab` (grepped before changing the markup). Prior: 2026-07-25 — cockpit attach `ATTACH_ACCEPT` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown`) and adds `text/markdown`, which it had never carried at all. Owner-reported: picking a `.md` opened the dialog to an apparently EMPTY folder. Two causes, both client-side — the string omitted markdown entirely, and Chrome resolves `accept` MIME types to extensions via the OS registry, where Windows has no `text/markdown` entry (so even the onboarding picker, which did list the MIME type, hid `.md`). The server was never the constraint: `classify()` routes `text/markdown` (via the `text/` prefix) AND a `.md` filename to the `document` path already. Distinct from the same-day `resolveMimeType` fix, which addressed the ALLOW-LIST check on an empty `File.type` after a file is picked; this one is about which files are offered. Verified: web typecheck clean. Prior: 2026-07-25 (12-05 — the gap-action + MEMO terminal, BEVL-02). **`executePlan` is no
 > longer email-only.** A plan now carries an optional `kind: "memo"` discriminator and the approve
 > gate branches on it AFTER the CAS read and BEFORE the mailbox pre-check: a memo-plan persists its
 > body as a `next_step_memo` vault doc (`evaluations.persistNextStepMemo` → `startIngest`) and goes
@@ -288,6 +288,55 @@ already in this file (no new surface, no new query). Three cockpit-side rules:
   renders an inline `role="alert"` line telling the user to start a new chat; `gap_not_found`
   (a stale index after a re-evaluation) says the gap is no longer on the latest evaluation.
 
+## Phase 13 — the pinned Weekly review tab (BEVL-03, 13-03)
+
+The weekly cron (`proactiveReview.ts`, see `business-evaluation.md`) writes one `evaluations` row
+per tenant per week on the STABLE `REVIEW_THREAD_ID` (`"proactive-review"`, exported from
+`@pikar/core`). This is the cockpit-side surface that renders it. Three rules, all in
+`workspace/page.tsx` + `cards.tsx`:
+
+- **The tab is seeded, not persisted.** `const REVIEW_TAB: Tab = { id: REVIEW_THREAD_ID, label:
+  "Weekly review" }` goes straight into `useState<Tab[]>([REVIEW_TAB])`. The thread id is
+  deterministic, so the tab needs no storage and the "tabs are session-only view state" note above
+  still holds. Seeding it as a REAL `Tab` (rather than rendering it beside the strip) is what makes
+  the `?thread=proactive-review` deep-link dedupe for free — `openThread` already skips ids it is
+  already showing, so the notification click-through lands on the existing tab instead of a twin.
+- **It never closes.** `pinned = t.id === REVIEW_THREAD_ID` drops both the `chat-tab-close` button
+  and the `has-close` wrapper class (the label reclaims the gutter), and `closeTab` returns early on
+  that id as defence in depth. There is no surface that would reopen it, so closing it must be
+  impossible rather than merely inconvenient.
+- **The COMPOSER is suppressed on it — and that is the fix, NOT loosening the backend.** The review
+  thread is synthetic: no `plans` row exists for it, so `api.cockpit.sendCockpitMessage` throws
+  `"cockpit: plan row missing for thread"` (`cockpit.ts:93`) on any send. READING degrades
+  gracefully (`listThreadMessages` → empty page, `plans.byThread`/`briefings.byThread` → null, and
+  `cockpit.listThreads` reads agent-component threads so the review stays out of "Past chats" for
+  free), so only the send path needs blocking. The branch renders "This is your weekly business
+  review. Start a new chat to act on anything here." instead of `<ChatPane>`. **Do not relax the
+  `cockpit.ts:93` guard to make this thread sendable** — that guard protects every real cockpit
+  thread from a plan-less send.
+- **The review branch is checked BEFORE the gmail-status branch, on purpose.** The review has
+  nothing to do with a mailbox; a user who has never connected Gmail must still see it (SC#2 — the
+  whole point of the review is that it cannot break on the Google 7-day testing token).
+
+`EvaluationCard` gains four review-only branches and stays a dumb single-row renderer over
+`evaluations.byThread` (no new query, no new card component, no new card idiom):
+
+- **Pre-first-run empty state** — when `isReview` AND the query has RESOLVED to `null` (`undefined`
+  is still loading, so no flash), a small `briefingSheet` card says the first review runs Monday.
+  Off the review thread this is still the original bare `return null`: an on-demand evaluation
+  thread must never gain a card it did not have before.
+- **Dated header** — `Weekly review · <MMM D> · Evaluation · <framework>`. The DATE is the freshness
+  signal, which is why there is deliberately no unread dot or badge. The framework stays visible so
+  the user compares like with like week over week. A non-review header is byte-identical to before.
+- **Delta line** — one muted line from the PERSISTED `evaluation.delta`, joined with ` · `, zero
+  terms omitted (`2 new findings · 1 gap closed`). Only a cron run writes a `delta`, and only from
+  the SECOND review onward, so the line is absent on the first review and on every on-demand
+  evaluation. Never re-derived in the card, and never a score or percentage — the engine emits none.
+- **Profile CTA** — the `evaluation-insufficient` box links to `/dashboard/profile` (the Phase-11
+  enrichment surface, whose save re-embeds the profile doc), turning the one dead-end state into the
+  one action that unblocks it. `--teal-900`, not `--teal-600`: BRAND §6 forbids teal-600 as small
+  body text (~2.9:1) and says to darken it.
+
 ## How to verify
 
 - `pnpm --filter @pikar/core test` — the surviving pure validators: `isValidEmail`, `parseAddress`, `rankCandidates`, `applyRecipientEdit` (add/remove/set bounce), `buildRecipientView`
@@ -299,6 +348,8 @@ already in this file (no new surface, no new query). Three cockpit-side rules:
 - Manual-only (SCHD-01, human-verify): a real DEFERRED Gmail send — connect Gmail, say "send this in 3 minutes" (or use the PLAN-card picker), confirm the PLAN card shows the RESOLVED ABSOLUTE time in your tz before Approve (and an ambiguous "send at 4" is RE-ASKED), Approve ONCE, confirm the card becomes "Scheduled for … · Cancel" with NOTHING arriving before the minute, let it fire and confirm it ARRIVES at the requested moment (audit/deadLetters/telemetry refs-only, no sendAt content, §4); separately Cancel another scheduled send before fire (nothing sent, "Canceled", refs-only `plan.canceled` audit); and with an expired token let a scheduled send fire → `awaiting_reauth` + reauth notification exactly like an immediate send (fake timers cannot observe real inbox arrival or real token expiry at fire — the sole live-only proof). See `03.5-VALIDATION.md`
 - Manual-only (V10, human-verify): a real Gmail send of a generated PDF — connect Gmail, ask the agent to attach a document, Approve, confirm the PDF lands in the inbox and opens, and inspect the audit/deadLetters for refs-only (storageId/filename/size/messageId/counts — no bytes/base64/URL). The E2E harness user has a stale token so offline sends settle at `awaiting_reauth` by design; see `03.1-VALIDATION.md`
 - Manual-only (CKPT-03, human-verify): a real 2-recipient distinct-wording send — connect Gmail, compose to TWO real inboxes, give a shared subject + base body, ask the agent to tailor recipient #1's wording distinctly (leave #2 shared), confirm the PLAN card shows TWO DISTINCT bodies BEFORE Approve, Approve ONCE, open BOTH inboxes to confirm each received its OWN wording under the SHARED subject, and inspect audit/deadLetters for refs-only (no raw body/subject/address, no `recipientBodies` content — §4). A group-mode send with personalization should be refused with a switch-to-individual prompt
+
+- Manual-only (BEVL-03, 13-03): open `/dashboard/workspace` — the "Weekly review" tab is present with NO `×`, and selecting it shows the explainer with NO composer. Before any cron run it shows the "first review runs Monday" card. Force one with `npx convex run proactiveReview:runWeekly '{}'`, reload, and confirm the dated header; run it a second time after changing a vault doc to see the delta line. Disconnect Gmail and confirm the tab still renders (SC#2)
 
 ## Operational notes
 

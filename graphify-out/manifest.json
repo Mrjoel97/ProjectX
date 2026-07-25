@@ -250,18 +250,18 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1784944179.4555516,
-    "ast_hash": "0f31d7fbc6e3d37f87e64ce1fac65938",
+    "mtime": 1784990701.3905275,
+    "ast_hash": "ebaa94e1579e2390ce9c0523e86ee523",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1784985695.7868543,
-    "ast_hash": "e335673c31d262b536de829db9ad7ae0",
+    "mtime": 1784990701.150073,
+    "ast_hash": "c85d6c11b40ab6ff3487d3bfd7aa2dcd",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1784985725.6073873,
-    "ast_hash": "734364d4d09ee714590019f105c1509d",
+    "mtime": 1784990796.3559484,
+    "ast_hash": "f8331960435af87c32d9ef8728d884fa",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/page.tsx": {
-    "mtime": 1784974010.9329462,
-    "ast_hash": "368b4e9fa64dce2757d5969abc108084",
+    "mtime": 1784991078.8299067,
+    "ast_hash": "fdd28adb208ed298fb605b86ee6fc62f",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitDraft.test.ts": {
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/cards.tsx": {
-    "mtime": 1784935837.8791676,
-    "ast_hash": "19be79597139cd38f548903db56929cf",
+    "mtime": 1784991443.2895553,
+    "ast_hash": "eee9a68370e9eb23f9381bffe597b95e",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-08-SUMMARY.md": {
@@ -1580,13 +1580,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/audit-dead-letter.md": {
-    "mtime": 1784990163.8630095,
-    "ast_hash": "7d89f82c55dea49033e996ecb2da6a51",
+    "mtime": 1784991673.9956872,
+    "ast_hash": "08ee4eef6318ccb6708c8966c904e53e",
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1784974082.0233395,
-    "ast_hash": "54550eb179bf520eeebbf0017eb6e34a",
+    "mtime": 1784991630.3566487,
+    "ast_hash": "602fa815168daff61366578b9df4c5d4",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -3770,8 +3770,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/_components/NotificationsBanner.tsx": {
-    "mtime": 1784596843.1352499,
-    "ast_hash": "f9ac988a992b6e8a2f0a6b42b59e3d20",
+    "mtime": 1784991372.2319787,
+    "ast_hash": "be75de22a6c6b24375a0be043c4fedb9",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-07-21-tenant-scope-per-session-fix-design.md": {
@@ -4812,6 +4812,11 @@
   "packages/backend/convex/proactiveReview.ts": {
     "mtime": 1784989736.0723832,
     "ast_hash": "4554fc138d848cc98b47079bfb11ad77",
+    "semantic_hash": ""
+  },
+  ".planning/phases/13-proactive-in-app-review/13-02-SUMMARY.md": {
+    "mtime": 1784990680.8511438,
+    "ast_hash": "352634ff65cd9a671735188a65cdaaf9",
     "semantic_hash": ""
   }
 }
