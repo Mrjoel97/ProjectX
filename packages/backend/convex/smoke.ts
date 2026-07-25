@@ -8,6 +8,7 @@
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
 import { categoryFor } from "@pikar/vault";
+import { DOC_GAP_PLAYBOOK, DOC_GAP_ROUTE, DOC_REVIEW_FRAMEWORK, voiceDocThreadId } from "@pikar/voice";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -581,6 +582,113 @@ export const seedVoiceBrief = internalMutation({
       createdAt: now,
     });
     return { vaultDocId };
+  },
+});
+
+// DOCV-01 SC3 seed. The report the e2e "discusses" — short on purpose; the spec asserts the
+// post-call surface, not extraction. FIRST_EXCERPT is a VERBATIM substring of this text, which is
+// what the real write path (`shapeDocReview` → `reviewDocument`) substring-verifies before
+// persisting. Keep them in sync or the seed stops representing a legal row.
+const SEED_DOC_REPORT_TEXT = [
+  "Q3 Performance Report",
+  "",
+  "Revenue grew 12% quarter over quarter, driven almost entirely by two enterprise accounts.",
+  "Exit interviews cite setup friction in 7 of 9 cancellations, not price.",
+  "Support volume rose 40% while headcount was flat.",
+].join("\n");
+const FIRST_EXCERPT = "Exit interviews cite setup friction in 7 of 9 cancellations, not price.";
+
+/**
+ * DOCV-01 SC3: seed an ENDED voice-doc session + its persisted review, so the offline e2e can drive
+ * the post-call surface with no mic and no Realtime call. Nothing else calls this.
+ *
+ * The two findings are deliberately asymmetric: the first carries a `citationExcerpt`, the second
+ * carries NONE — so the spec exercises the quoted AND the quote-less render path, and a regression
+ * that renders an empty quote block for an absent excerpt is caught.
+ */
+export const seedVoiceDocSession = internalMutation({
+  args: { tenantId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId },
+  ): Promise<{
+    sessionId: Id<"voiceSessions">;
+    threadId: string;
+    vaultDocId: Id<"vaultDocuments">;
+  }> => {
+    const now = Date.now();
+    const vaultDocId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Q3 Performance Report",
+      kind: "document",
+      category: categoryFor({ source: "upload" }),
+      source: "upload",
+      mimeType: "text/markdown",
+      size: new TextEncoder().encode(SEED_DOC_REPORT_TEXT).length,
+      contentHash: `smoke-voicedoc-${now}`,
+      text: SEED_DOC_REPORT_TEXT,
+      status: "ready", // a doc-scoped session refuses anything not ready (SC1)
+      createdAt: now,
+    });
+
+    const sessionId = await ctx.db.insert("voiceSessions", {
+      tenantId,
+      status: "ended_clean",
+      startedAt: now - 5 * 60 * 1000,
+      endsAt: now + 10 * 60 * 1000,
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+      docRef: vaultDocId, // the ONE report under discussion
+      createdAt: now - 5 * 60 * 1000,
+    });
+
+    // The synthetic thread — derived, never stored as a second column.
+    const threadId = voiceDocThreadId(sessionId);
+    await ctx.db.insert("evaluations", {
+      tenantId,
+      threadId,
+      framework: DOC_REVIEW_FRAMEWORK,
+      findings: [
+        {
+          label: "Churn is driven by onboarding friction, not price",
+          section: "findings",
+          citationDocId: vaultDocId,
+          citationTitle: "Q3 Performance Report",
+          citationExcerpt: FIRST_EXCERPT, // verbatim substring of the seeded text
+          confidence: "high",
+          source: "vault",
+        },
+        {
+          // NO citationExcerpt — the absent-quote render path.
+          label: "Revenue is concentrated in two enterprise accounts",
+          section: "findings",
+          citationDocId: vaultDocId,
+          citationTitle: "Q3 Performance Report",
+          confidence: "medium",
+          source: "vault",
+        },
+      ],
+      gaps: [
+        {
+          label: "Onboarding friction is not instrumented",
+          leverageRank: 1,
+          route: DOC_GAP_ROUTE, // code-owned routing, never model-chosen
+          playbook: DOC_GAP_PLAYBOOK,
+          citationDocId: vaultDocId,
+          reason: "Cancellations name setup friction, but no step-level drop-off is measured.",
+          proofMetric: "Activation rate from signup to first successful setup",
+        },
+      ],
+      notEnoughData: [],
+      scorecard: {},
+      userProvided: [],
+      verdict: "gaps",
+      createdAt: now,
+    });
+
+    return { sessionId, threadId, vaultDocId };
   },
 });
 

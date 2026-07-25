@@ -1,5 +1,8 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams + stubs only,
+> no behavior change to the Phase-6 flow. See the "Voice-doc sessions (Phase 14)" section below.
+
 > Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
 
@@ -269,3 +272,99 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   heartbeat pushing a short second timer (Pitfall 3).
 - Client-reported usage is trusted for metering because cost control is time-cap-only; no
   server-side usage reconciliation for beta (`ponytail:` the cap bounds worst-case spend).
+
+## Voice-doc sessions (Phase 14, DOCV-01)
+
+The flagship "discuss a report by voice" flow: a user picks ONE ready vault document and holds a
+live session scoped to it. It reuses the whole Phase-6 spine (mint → WebRTC → watchdog → brief) and
+adds a doc scope, a retrieval tool, and a persisted review. **Wave 0 (plan 14-01) landed the seams
+only** — the sections below describe contracts that exist on disk now; the behavior fills in across
+plans 14-02 … 14-09.
+
+### The `document-review` framework literal
+
+`evaluations.framework` is widened with `"document-review"` (schema.ts). The literal is deliberately
+HUMAN-READABLE and is not a free choice: `evaluations.ts buildMemo` prints
+`Diagnosed on the **${row.framework}** framework` as user-visible prose inside an approvable memo, so
+a slug like `docrev` would leak into the product. It is DELIBERATELY absent from `FRAMEWORK_SKILL` —
+an unmapped literal is what keeps `runEvaluation` from ever treating a doc review as a business
+evaluation.
+
+**Invariant (14-01, approved deviation):** `runEvaluation`'s `framework` arg is explicitly PINNED to
+the four business frameworks rather than derived from `evalFields`. `evalFields.framework` feeds two
+signatures — `insertEvaluation`'s write surface (which SHOULD widen for free, and is how a voice-doc
+row is persisted) and `runEvaluation`'s entrypoint (which must NOT). Do not "simplify" that pin back
+to `evalFields.framework`; it is what refuses a doc-review row at the validator boundary.
+`proactiveReview.ts` correspondingly never carries a `document-review` framework into the weekly
+business review.
+
+### `voiceSessions.docRef`
+
+The ONE report under discussion, `v.optional(v.id("vaultDocuments"))`. Optional so existing rows need
+no migration; **no index** — it is read through the existing `ctx.db.get(sessionId)`. One document per
+session is the product decision, not a limitation to route around.
+
+### The synthetic `voice-doc:<sessionId>` thread
+
+A voice session has no cockpit thread, but an `evaluations` row needs one. `voiceDocThreadId()`
+(`@pikar/voice`) derives it deterministically from the session id, so PostCall, `actOnGap` and
+`byThread` all compute the same id with **no extra column**. Never store it as a second field — a
+stored copy can drift from the derivation.
+
+### Citations: document-level always, quoted passage where available
+
+`evaluations.findings[].citationExcerpt` (`v.optional(v.string())`) is the persisted half of the
+LOCKED citation decision. `optional` is load-bearing: an **absent excerpt is a valid, non-degraded
+state** — never an error, never an empty string — and the render path branches on presence, so a
+quote-less finding must render exactly as it does today.
+
+The value is capped at `EXCERPT_CHAR_CAP` (300) and **substring-verified against the document text**
+before it is written — never trusted raw from a model. Citations, verdict, route, playbook and rank
+are all welded in code; `excerpt` is the ONE field the model contributes to, which is why its
+provenance check exists.
+
+**Content-plane / log-plane line (§4).** An excerpt IS report content. It is legal in
+`evaluations.findings[]`, in the memo body, and on the post-call card. It is ILLEGAL in every
+`audit` / `deadLetters` / `telemetry` `payload:` and in every `agentSteps` row. There is no third
+state: if something needs to log "which finding", it logs an index or a count, never the quote.
+Plan 14-09 pins this with a mutation-verified static scan.
+
+### Char budgets (`packages/voice/src/docSession.ts`)
+
+`DIGEST_CHAR_CAP` (6,000) bounds the report text baked into the mint-time instructions.
+gpt-realtime is a 32k window and **instructions are re-billed as input on every turn**, so the digest
+is a hard cap, not a target — depth comes from the retrieval tool instead. That hybrid split (small
+always-present digest + on-demand retrieval) is the design, not a compromise. `RETRIEVAL_CHAR_CAP`
+(1,200) and `RETRIEVAL_MAX_PASSAGES` (3) bound each drill-in.
+
+### `search_document` tool shape
+
+`SEARCH_DOCUMENT_TOOL` is the **FLAT** Realtime shape — `{type, name, description, parameters}` — NOT
+the Chat-Completions `{type, function:{...}}` nesting, which 400s the mint. Its `parameters` are
+STRICT-legal: every key in `properties` also appears in `required`, and `additionalProperties` is
+`false`. `docSession.test.ts` asserts both, including the absence of a `function` key.
+
+### Gap routing is code-owned
+
+`DOC_GAP_ROUTE` / `DOC_GAP_PLAYBOOK` are welded constants. `buildMemo` prints them as user-visible
+prose in an approvable memo, so the MODEL never chooses them — the same discipline as citations.
+`ponytail:` one route until Phase 15 dispatch exists; upgrade path is a route map keyed on the
+finding section once real specialists are dispatchable.
+
+### File ownership + how to verify
+
+`packages/backend/convex/voiceDoc.ts` is the lane-owned module (V8 runtime, **no `"use node"`** —
+`vaultLlm.ts:2-7` records the TS circular-inference cliff a second node module re-triggers; every
+handler carries an explicit `Promise<>` return type). It and `voiceDoc.test.ts` and
+`apps/web/e2e/voice-doc.spec.ts` are registered under this playbook in `watch.json` — note
+`packages/backend/convex/voice.ts` does NOT prefix-match `voiceDoc.ts`, so the explicit entries are
+required. `voice-doc.spec.ts` also falls under `cockpit.md`'s `apps/web/e2e/` prefix, so a change
+there touches both playbooks.
+
+Verify with `pnpm --filter @pikar/voice test`, `pnpm --filter @pikar/backend test voiceDoc`, and
+`node scripts/check-playbooks.mjs check`. The SC3 e2e is seeded offline by
+`smoke:seedVoiceDocSession`, which deliberately seeds TWO findings — one WITH a `citationExcerpt`
+(a verbatim substring of the seeded report text) and one WITHOUT — so both render paths are
+exercised. Keep the seeded excerpt in sync with the seeded text or the fixture stops representing a
+legal row. The live drill-in, the spoken "no gaps" and the real memo-vs-plan choice are
+**manual-only** (14-VALIDATION.md).

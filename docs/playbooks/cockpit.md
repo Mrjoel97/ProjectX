@@ -8,7 +8,11 @@
 > The EVALUATION card itself is unchanged — a voice-doc review is rendered by the same dumb
 > single-`byThread`-read card as every business evaluation ("no new card idiom" still holds).
 > Phase 14 also adds `apps/web/e2e/voice-doc.spec.ts` under this playbook's watched `apps/web/e2e/`
-> prefix; its SC3 assertions are filled in by plan 14-08, not here.
+> prefix (it is therefore covered by BOTH this playbook and `voice.md` — a change there touches
+> both). At Wave 0 it is a `test.fixme` placeholder carrying the agreed harness copied verbatim from
+> `e2e/voice.spec.ts` — the `convexRun` node-spawn helper, the `CLI_FAILURE` output regex, and the
+> `resolveTenantId` JWT reader. Plan 14-08 fills the body; do not invent a different harness, and do
+> not un-`fixme` it before the post-call surface it drives exists.
 
 > Last verified: 2026-07-25 (4) — **chat-head + tab strip density pass** (owner-reported: both were
 > taking too much vertical space). The dominant cost was NOT the icons — it was the global
