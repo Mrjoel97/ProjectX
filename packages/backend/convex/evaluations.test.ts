@@ -31,13 +31,15 @@ function newTest(): ReturnType<typeof convexTest> {
 }
 
 /** A committed business-profile vault doc (round-trips through deserializeProfile) + financial lines. */
-function profileDocText(withFinancials: boolean): string {
+function profileDocText(withFinancials: boolean, withOffering = true): string {
   const md = serializeProfile({
     name: "Acme Dog Training",
     oneLineDescription: "In-home dog training for busy urban owners.",
     persona: "solopreneur",
     stage: "early-revenue",
-    offering: "6-week private obedience program",
+    // Sparse-start allows an empty offering — the honest idea-stage shape, and what pins diagnose()
+    // to Gate 1 ("No offer worth buying yet") in the delta tests below.
+    offering: withOffering ? "6-week private obedience program" : "",
     targetCustomer: "urban dog owners with new puppies",
     primaryGoals: ["more clients"],
     knownConstraints: [],
@@ -241,6 +243,119 @@ describe("thin-data honesty (idea-stage → not enough data, never a fabricated 
     expect(row?.findings).toHaveLength(0); // nothing grounded → nothing asserted (no fabrication)
     expect(row?.gaps).toHaveLength(0); // no grounded basis → no fabricated prescription
     expect(row?.notEnoughData.length).toBeGreaterThanOrEqual(1); // an honest nudge instead
+  });
+});
+
+// BEVL-03 "what changed" — the delta the weekly cron's review card reads. Computed INSIDE
+// runEvaluation (the append-only table forbids a follow-up patch) and only when the caller asks
+// for it, so an on-demand run never shows a delta line.
+describe("delta (BEVL-03 — what changed since the previous evaluation)", () => {
+  test("delta is absent on a first run", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true));
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+      withDelta: true,
+    });
+
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    expect(row?.delta).toBeUndefined(); // no previous row ⇒ nothing to compare against
+  });
+
+  test("delta is absent without the withDelta flag", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true));
+
+    for (let i = 0; i < 2; i++) {
+      await t.action(internal.evaluations.runEvaluation, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        query: `SMOKE::${docId}`,
+      });
+    }
+
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    expect(row?.delta).toBeUndefined(); // an on-demand run never renders a "what changed" line
+  });
+
+  test("delta reports gaps opened and closed by route/playbook", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    // Run 1: a profile with NO offering → Gate 1 ("No offer worth buying yet").
+    const noOffer = await seedDoc(t, TENANT, profileDocText(false, false));
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${noOffer}`,
+      withDelta: true,
+    });
+    const first = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    expect(first?.gaps.map((g) => `${g.route}/${g.playbook}`)).toEqual([
+      "offer-architect/02-build-offer",
+    ]);
+
+    // Run 2: the offer now exists and financials are stated → the constraint MOVES down the ladder.
+    const withOffer = await seedDoc(t, TENANT, profileDocText(true, true));
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${withOffer}`,
+      withDelta: true,
+    });
+
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    // Assert on the KEY STRING: a route-only key would report this real move as "no change" only
+    // when the route is unchanged, but the key must be the full route/playbook pair regardless.
+    expect(row?.delta?.gapsClosed).toEqual(["offer-architect/02-build-offer"]);
+    expect(row?.delta?.gapsOpened).toEqual(["money-model-designer/06-assemble"]);
+  });
+
+  test("delta counts newly added findings", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    // A user-answered figure seeds a carrier row with zero findings; the first real run cites it.
+    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: "SMOKE::",
+      withDelta: true,
+    });
+    const grew = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    expect(grew?.delta?.newFindings).toBeGreaterThan(0);
+
+    // An unchanged re-run: same carried figure, same diagnosis → nothing moved.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: "SMOKE::",
+      withDelta: true,
+    });
+    const same = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, { threadId: THREAD });
+    expect(same?.delta?.newFindings).toBe(0);
+    expect(same?.delta?.gapsClosed).toEqual([]);
+    expect(same?.delta?.gapsOpened).toEqual([]);
   });
 });
 
