@@ -724,6 +724,35 @@ test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, 
   }
 });
 
+// ── 15-03 (DISP-01): the sub-agent LINEAGE rows are refs-only at the SOURCE (§4) ─────────────────
+// dispatch.ts writes three `internal.audit.log` rows per hop, and the thing they must never carry
+// is the specialist's REPLY — grounded business prose, exactly the content §4 keeps out of the
+// audit plane. A runtime scan only covers the payload shapes a test happened to write; this covers
+// the SOURCE, so a field added tomorrow fails here even with no new test. Mutation-checked the
+// 03.7 way: adding `bodyLen: turn.reply.length` to the completed payload trips it RED.
+
+test("dispatch.ts lineage payloads reference no specialist output (reply/body/text/output) — §4", () => {
+  // Prose names the forbidden fields by design ("NO reply, NO body…") — the invariant is about CODE.
+  const src = readSource("dispatch.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  // refused / dispatched / completed. A FOURTH lineage write is a new §4 surface, so the count is
+  // pinned the way cockpit.ts's two audit.log sites are.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(3);
+  // All three SPREAD a shared `refs` object — scanning the payloads alone would miss a leak added
+  // one line above them, so the spread source is scanned as a payload too.
+  const refs = src.match(/const refs = (\{[^}]*\})/);
+  expect(refs, "the shared `refs` object is gone from dispatch.ts — the scan is half-blind").not.toBeNull();
+
+  for (const p of [...payloads, refs![1] ?? ""]) {
+    expect(p, `a dispatch lineage payload carries specialist output: ${p}`).not.toMatch(
+      /\b(reply|body|text|output)\b/,
+    );
+  }
+});
+
 // ── 07-05 (OPSG-05): the notify choke point + external channel carry NO content (§4) ──────────────
 // Every Phase-7 notification MESSAGE is a static label — `notificationMessage(kind)` or a static-label
 // interpolation (`${LABELS[reason]}`) — NEVER an interpolated content field (body/subject/recipient/

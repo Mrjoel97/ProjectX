@@ -283,6 +283,237 @@ describe("SC#1/#2 — every refusal is conversational, costs nothing, and DLQs n
   });
 });
 
+// ── The shared root-request envelope + the refs-only lineage ──────────────────────────────────
+
+/** The lineage rows, in the order they were written. `by_correlation` is a (correlationId,
+ *  _creationTime) index, so `.collect()` already yields insertion order; the `ts` sort makes the
+ *  "ordered by ts" reconstruction SC#3 names explicit rather than incidental. */
+const orderedLineage = async (t: T, correlationId = ROOT) =>
+  (await readLineage(t, correlationId)).sort(
+    (a, b) => a.ts - b.ts || a._creationTime - b._creationTime,
+  );
+const completedRows = <R extends { eventType: string }>(rows: readonly R[]) =>
+  rows.filter((r) => r.eventType === "subagent.completed");
+
+/** Hop 2 of a tree: a DIFFERENT specialist, parented on hop 1, threading its envelope + spend. */
+const secondHop = (hop1: Extract<DispatchResult, { ok: true }>, planId: Id<"plans">) => ({
+  ...BASE,
+  planId,
+  primary: [REPLY_STEP],
+  route: "lead-engine",
+  parentAgentId: "offer-architect",
+  ancestry: ["offer-architect"],
+  envelopeCents: hop1.envelopeCents, // carried UNCHANGED — ONE envelope for the whole tree
+  spentCents: hop1.spentCents, // …drawn down as the tree runs
+});
+
+describe("the shared root-request cost envelope", () => {
+  test("ONE envelope derives from the LIVE daily rail at the root of the tree", async () => {
+    const { t, planId } = await setup();
+    const rail = await remaining(t);
+    expect(rail, "the daily rail is already drained — the derivation is untestable").toBeGreaterThan(
+      0,
+    );
+
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+
+    expect(res.envelopeCents).toBeGreaterThan(0);
+    expect(res.envelopeCents).toBeLessThanOrEqual(rail);
+    // A FRACTION of the rail, not the rail itself: one sub-agent tree can never drain the day.
+    expect(res.envelopeCents, "the envelope is the whole rail — the fraction is not applied").toBeLessThan(rail);
+    // Non-vacuity companion for the `incomplete` assertions below: a hop well inside its
+    // envelope is NOT labelled incomplete, so `incomplete: true` means something.
+    expect(res.incomplete, "a hop well inside the envelope was labelled incomplete").toBe(false);
+    expect(res.spentCents).toBe(Math.ceil(res.costUsd * 100));
+  });
+
+  test("the envelope is drawn down ACROSS hops — the second starts where the first stopped", async () => {
+    const { t, planId } = await setup();
+    const hop1 = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(hop1.spentCents).toBeGreaterThan(0);
+
+    const hop2 = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, secondHop(hop1, planId)),
+    );
+
+    // A non-zero incoming envelope is carried through UNCHANGED — that is what makes it ONE
+    // envelope for the tree rather than a fresh allowance per hop.
+    expect(hop2.envelopeCents, "hop 2 re-derived its own envelope").toBe(hop1.envelopeCents);
+    expect(hop2.spentCents).toBe(hop1.spentCents + Math.ceil(hop2.costUsd * 100));
+
+    // OBSERVABLE, not inferred: the drawdown is on the lineage rows themselves.
+    const done = completedRows(await orderedLineage(t));
+    expect(done.map((r) => r.payload.spentCents)).toEqual([hop1.spentCents, hop2.spentCents]);
+    expect(done.map((r) => r.payload.envelopeCents)).toEqual([
+      hop1.envelopeCents,
+      hop1.envelopeCents,
+    ]);
+  });
+
+  test("a DRAINED envelope refuses conversationally mid-tree — no model call, no DLQ, no step", async () => {
+    const { t, planId } = await setup();
+    const before = await remaining(t);
+
+    const res = await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...BASE,
+      planId,
+      primary: [REPLY_STEP],
+      envelopeCents: 10,
+      spentCents: 10, // the tree has already spent its whole allowance
+    });
+
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.reason).toBe("budget_exhausted");
+    expect(res.reply.length).toBeGreaterThan(20);
+    expect(res.reply).not.toContain("budget_exhausted");
+    expect(await remaining(t), "an exhausted envelope still spent model budget").toBe(before);
+    expect(await readDeadLetters(t)).toEqual([]);
+    expect(await readSteps(t)).toEqual([]);
+    expect((await readLineage(t)).map((r) => r.eventType)).toEqual(["subagent.refused"]);
+  });
+
+  test("an OVERRUNNING hop keeps its output and is labelled incomplete", async () => {
+    const { t, planId } = await setup();
+    // 5 cents left, an 8-cent turn: the guard passes (0 < 5), the call overruns. Stop AFTER the
+    // call that overran — never discard work already paid for.
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+        envelopeCents: 5,
+        spentCents: 0,
+      }),
+    );
+
+    expect(res.body, "the overrunning hop's output was discarded").toBe(REPLY);
+    expect(res.incomplete).toBe(true);
+    expect(res.spentCents).toBeGreaterThanOrEqual(5);
+    expect(completedRows(await orderedLineage(t))[0]?.payload).toMatchObject({ incomplete: true });
+  });
+
+  test("a rail driven NEGATIVE clamps to a ZERO envelope — never a negative ceiling", async () => {
+    const { t, planId } = await setup();
+    // recordSpend consumes with `reserve: true`, so the window goes NEGATIVE on purpose
+    // (guardrails.ts:166-173). remainingDailyCents clamps that to 0.
+    await t.mutation(internal.guardrails.recordSpend, { costUsd: 20 }); // 2000 cents vs a 500 rail
+    expect(await remaining(t)).toBe(0);
+
+    const res = await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...BASE,
+      planId,
+      primary: [REPLY_STEP],
+      envelopeCents: 0, // derive at the root — off a rail that is underwater
+    });
+
+    expect(res.ok, "a negative rail computed a runnable envelope").toBe(false);
+    if (res.ok) return;
+    expect(res.reason).toBe("budget_exhausted");
+    expect(await readSteps(t)).toEqual([]);
+  });
+});
+
+describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequestId)", () => {
+  test("every lineage row carries the refs, the edges rebuild, and the costs sum to the root", async () => {
+    const { t, planId } = await setup();
+    const hop1 = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    const hop2 = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, secondHop(hop1, planId)),
+    );
+
+    const lineage = await orderedLineage(t);
+    expect(lineage.map((r) => r.eventType)).toEqual([
+      "subagent.dispatched",
+      "subagent.completed",
+      "subagent.dispatched",
+      "subagent.completed",
+    ]);
+
+    for (const row of lineage) {
+      expect(row.correlationId).toBe(ROOT);
+      expect(row.actor).toBe("system");
+      expect(row.payload, `${row.eventType} is missing a lineage ref`).toMatchObject({
+        rootRequestId: ROOT,
+        planId: String(planId),
+      });
+      expect(typeof row.payload.parentAgentId).toBe("string");
+      expect(typeof row.payload.specialist).toBe("string");
+      expect(typeof row.payload.depth).toBe("number");
+      expect(typeof row.payload.ancestryDepth).toBe("number");
+    }
+
+    // parentAgentId is what rebuilds the EDGES: hop 2 hangs off hop 1's specialist.
+    expect(lineage.map((r) => [r.payload.parentAgentId, r.payload.specialist])).toEqual([
+      ["executive", "offer-architect"],
+      ["executive", "offer-architect"],
+      ["offer-architect", "lead-engine"],
+      ["offer-architect", "lead-engine"],
+    ]);
+
+    // skillVersion rides the COMPLETED rows only — `subagent.dispatched` is written BEFORE the
+    // loop, and the §5 loader resolves the active version inside runSpecialistTurn.
+    const done = completedRows(lineage);
+    const active = await t.query(internal.skills.getActiveSkill, { name: "offer-architect" });
+    expect(done[0]?.payload.skillVersion).toBe(active.version);
+    for (const r of done) expect(r.payload.skillVersion).toBeGreaterThan(0);
+
+    // Cost attribution to the ROOT is a SUM over these rows — no new table, no new index.
+    const total = done.reduce((s, r) => s + (r.payload.costUsd as number), 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeCloseTo(hop1.costUsd + hop2.costUsd, 10);
+  });
+
+  test("§4 — NO audit payload value carries any of the specialist's output", async () => {
+    const { t, planId } = await setup();
+    await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...BASE,
+      planId,
+      primary: [REPLY_STEP],
+    });
+
+    // EVERY audit row written during the run, not just the lineage ones — and every VALUE of
+    // every payload, so a future field addition cannot leak without failing here.
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(rows.length, "no audit rows were written — the scan is vacuous").toBeGreaterThan(0);
+    const words = REPLY.split(/\W+/).filter((w) => w.length >= 5);
+    expect(words.length, "the scripted reply has too few distinctive words").toBeGreaterThan(3);
+
+    for (const row of rows) {
+      for (const [key, value] of Object.entries(row.payload ?? {})) {
+        const text = typeof value === "string" ? value : JSON.stringify(value);
+        expect(text, `audit ${row.eventType}.${key} carries the specialist's reply`).not.toContain(
+          REPLY,
+        );
+        for (const word of words) {
+          expect(
+            text,
+            `audit ${row.eventType}.${key} carries "${word}" from the specialist's output`,
+          ).not.toContain(word);
+        }
+      }
+    }
+  });
+});
+
 describe("the activity trace always terminalizes", () => {
   test("a THROWN specialist turn still ends its step in phase `error`", async () => {
     const { t, planId } = await setup();
