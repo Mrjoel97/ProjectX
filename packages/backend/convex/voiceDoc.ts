@@ -20,7 +20,7 @@
 //     memo body, ILLEGAL in every `audit` / `deadLetters` / `telemetry` payload and in
 //     `agentSteps`. Plan 14-09 pins that with a mutation-verified static scan.
 //
-import { RETRIEVAL_CHAR_CAP, RETRIEVAL_MAX_PASSAGES, isEnded } from "@pikar/voice";
+import { isEnded, RETRIEVAL_CHAR_CAP, RETRIEVAL_MAX_PASSAGES } from "@pikar/voice";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
