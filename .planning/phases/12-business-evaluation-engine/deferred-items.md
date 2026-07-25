@@ -69,3 +69,25 @@ this verification and were fixed (`d5814ae`, `f971613`, `b5e0f7f`+`7efa4f9`, `f5
 
   Workarounds explicitly ruled out by the owner: do not activate a gated skill to force the flow, do
   not hardcode agent teaching into source (§5), do not add throwaway seeding scaffolding.
+
+## Eval fixture `18-briefing-then-action` is degrading — OPEN (logged 2026-07-25)
+
+Post-phase regression run of `pnpm eval:golden` (run `8b43e179`, 26/27, $0.1644) after the
+chunk-precise hydration change: `18-briefing-then-action` FAILED both the first attempt and the
+harness's one automatic re-run, on `briefingPresent: expected true, got false`.
+
+**Not caused by that change, and this was checked rather than assumed:**
+- All four fixtures on the changed retrieval path PASSED — `25-vault-grounded`, `26-vault-empty`,
+  `27-grounded-assessment`, `28-healthy-no-gaps`.
+- The briefing path cannot reach the changed code: `briefInbox` calls `internal.gmail.listInbox`,
+  and neither `briefings.ts` nor `gmail.ts` references `vaultGround`/`searchVault` at all (grepped).
+
+**Why it still matters:** this case was already the harness's known flake — it needed a retry in the
+PREVIOUS run (`ed251c29`, 27/27) — and it has now gone from "passes on retry" to "fails twice". The
+assertion depends on the live model actually calling `briefInbox` on a follow-up turn, so the
+fixture's turns may no longer reliably steer it there.
+
+**Action:** treat a green gate as 27/27, not "26/27 plus the usual flake". Before the next
+activation that depends on this gate, either tighten fixture 18's turns so the briefing call is
+unambiguous, or split the briefing assertion from the follow-up action assertion. Do NOT raise the
+retry count to paper over it — the harness's one-retry flake policy is deliberate.
