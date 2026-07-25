@@ -206,6 +206,30 @@ async function runIntake(
     payload: { artifactId, kind, piiCounts: counts, charCount: safeText.length },
   });
 
+  // 8b. ALSO persist the attachment as a vault doc, so it is embedded/graph-extracted and can
+  // ground a LATER turn instead of vanishing with this thread. Stores RAW text (every other vault
+  // doc does — the conversation below still gets the redacted safeText); hash-dedup means
+  // re-attaching a file already in the vault is a no-op. Dictation is excluded: a voice note IS
+  // the request, not a document.
+  //
+  // FAIL-OPEN, deliberately: the attachment's first job is answering the question in front of it,
+  // so a vault-ingest problem must never turn into a failed conversation. The fail-CLOSED PII gate
+  // above is upstream, so scan-failed content can never reach here.
+  if (!isDictation) {
+    try {
+      await ctx.runMutation(internal.vault.ingestFromAttachment, {
+        tenantId,
+        storageId,
+        filename,
+        mimeType,
+        size: bytes.byteLength,
+        text: rawText,
+      });
+    } catch {
+      // Swallowed on purpose — see FAIL-OPEN above. The reply still goes out below.
+    }
+  }
+
   // 9. MERGE — the ONLY call into the governed cockpit pipeline (ZERO edits to cockpit.ts/llm.ts).
   // Dictation's frameForConversation returns safeText VERBATIM: the transcript IS the request.
   return respond(frameForConversation(kind, filename, safeText));

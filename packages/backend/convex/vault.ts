@@ -446,6 +446,63 @@ export const markExtracting = internalMutation({
  * scanText at extraction time is the lanes' fail-closed gate + audit-counts source, and every
  * downstream model path re-scans). Fail-closed tenant guard, like getDoc.
  */
+/**
+ * The cockpit-attachment seam: a file attached in a thread ALSO becomes a vault doc, so it is
+ * embedded, graph-extracted, browsable, and able to ground a LATER turn — instead of being
+ * one-shot prompt context that vanishes with the thread (the Phase-2/Phase-5 seam; see
+ * docs/superpowers/specs/2026-07-25-cockpit-attachments-to-vault-design.md).
+ *
+ * An INTERNAL twin of `vaultIngestText` rather than a caller of it: the public mutation throws
+ * UNAUTHENTICATED from an action (Pitfall 3, same as `ingestExtractedText` below) and accepts no
+ * `storageId`. Explicit `tenantId`, mirroring the `recordScorecardAnswerInternal` precedent —
+ * no public tenantMutation is loosened.
+ *
+ * Stores the RAW extracted text, consistent with every other vault doc; the redacted `safeText`
+ * is what `runIntake` merges into the conversation. Hash-dedup means re-attaching a file already
+ * in the vault reuses that row — no duplicate, no re-embed, no second embedding spend.
+ */
+export const ingestFromAttachment = internalMutation({
+  args: {
+    tenantId: v.string(),
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    text: v.string(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, storageId, filename, mimeType, size, text },
+  ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+    const hash = await contentHash(text);
+    const dup = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant_contentHash", (q) => q.eq("tenantId", tenantId).eq("contentHash", hash))
+      .first();
+    if (dup) return { vaultDocId: dup._id, deduped: true };
+
+    const source: VaultSource = "upload";
+    const vaultDocId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: filename.slice(0, 80) || "Untitled",
+      kind: "upload",
+      // categoryFor already routes docs to my-uploads and lets an image/video mimeType win into
+      // images/videos — so an attachment lands in the same category as the identical direct upload.
+      category: categoryFor({ source, mimeType }),
+      source,
+      mimeType,
+      size,
+      contentHash: hash,
+      storageId,
+      text,
+      status: "processing",
+      createdAt: Date.now(),
+    });
+    await startIngest(ctx, { vaultDocId, tenantId, correlationId: crypto.randomUUID() });
+    return { vaultDocId, deduped: false };
+  },
+});
+
 export const ingestExtractedText = internalMutation({
   args: {
     docId: v.id("vaultDocuments"),

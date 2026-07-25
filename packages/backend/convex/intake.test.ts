@@ -21,6 +21,8 @@ import schema from "./schema";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -30,6 +32,10 @@ const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/com
 const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
 
 const TENANT = "tenant_intake";
 type T = ReturnType<typeof convexTest>;
@@ -41,8 +47,14 @@ function setup(): T {
   t.registerComponent("agent", agentSchema, agentModules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  // The attachment→vault seam (step 8b) reaches workflow.start via startIngest. The row insert and
+  // startIngest share ONE transaction, so without these the whole vault write would roll back.
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   return t;
 }
+
+const vaultDocs = (t: T) => t.run((ctx) => ctx.db.query("vaultDocuments").collect());
 
 /** Mint a thread + its plans row the same way the cockpit composer does (first turn), so
  *  attachToThread/dictateToThread have an in-progress conversation to merge into. The skill
@@ -220,5 +232,96 @@ describe("dictateToThread (INTK-03) — transcribe -> redact -> merge VERBATIM a
     const page = await allMessages(asT, threadId);
     expect(page.page.some((m) => m.text === TRANSCRIPT)).toBe(true);
     expect(page.page.some((m) => m.text?.includes("attached file"))).toBe(false);
+  });
+});
+
+// The Phase-2/Phase-5 seam closed: a cockpit attachment ALSO becomes a vault doc, so it is
+// embedded/graph-extracted and can ground a LATER turn instead of vanishing with the thread.
+// Spec: docs/superpowers/specs/2026-07-25-cockpit-attachments-to-vault-design.md
+describe("attachToThread -> vault (attachments persist, not one-shot prompt context)", () => {
+  const attach = async (
+    t: T,
+    asT: ReturnType<T["withIdentity"]>,
+    threadId: string,
+    body: string,
+    filename = "profile.md",
+    mimeType = "text/markdown",
+  ) => {
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([body], { type: mimeType })));
+    return asT.action(api.intake.attachToThread, {
+      threadId,
+      storageId,
+      filename,
+      mimeType,
+      size: body.length,
+    });
+  };
+
+  test("an attached document becomes ONE groundable vault doc carrying the raw text + storageId", async () => {
+    const t = setup();
+    const { asT, threadId } = await seedThread(t);
+    await attach(t, asT, threadId, "# Northwind Cartage\n\nCAC: $180\n");
+
+    const docs = await vaultDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]).toMatchObject({
+      tenantId: TENANT,
+      title: "profile.md",
+      kind: "upload",
+      source: "upload",
+      category: "my-uploads",
+      mimeType: "text/markdown",
+      status: "processing",
+    });
+    // Raw text, so a later evaluation can actually ground on the figure.
+    expect(docs[0]?.text).toContain("CAC: $180");
+    // storageId carried through, so the doc stays downloadable from the vault UI.
+    expect(docs[0]?.storageId).toBeTruthy();
+  });
+
+  test("the vault copy keeps RAW pii while the conversation still gets the REDACTED text", async () => {
+    const t = setup();
+    const { asT, threadId } = await seedThread(t);
+    const RAW_EMAIL = "john@example.com";
+    await attach(t, asT, threadId, `Owner contact: ${RAW_EMAIL}`, "contacts.txt", "text/plain");
+
+    // Vault = raw (every other vault doc does this; redacting here would degrade grounding).
+    const docs = await vaultDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.text).toContain(RAW_EMAIL);
+
+    // Artifact (the prompt-bound plane) = redacted. GRDL-01 is untouched by this change.
+    const artifacts = await t.run((ctx) => ctx.db.query("intakeArtifacts").collect());
+    expect(artifacts[0]?.extracted).toContain("[EMAIL_1]");
+    expect(artifacts[0]?.extracted).not.toContain(RAW_EMAIL);
+  });
+
+  test("re-attaching identical content dedups — one row, no second embed", async () => {
+    const t = setup();
+    const { asT, threadId } = await seedThread(t);
+    const body = "# Same File\n\nidentical bytes\n";
+    await attach(t, asT, threadId, body);
+    await attach(t, asT, threadId, body, "renamed-copy.md");
+
+    expect(await vaultDocs(t)).toHaveLength(1);
+  });
+
+  test("dictation creates NO vault doc — a voice note is the request, not a document", async () => {
+    const t = setup();
+    const { asT, threadId } = await seedThread(t);
+    const bytes = "SMOKE::transcribe::remind me to call the lab";
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: "audio/webm" })));
+
+    await asT.action(api.intake.dictateToThread, { threadId, storageId });
+
+    expect(await vaultDocs(t)).toHaveLength(0);
+  });
+
+  test("content that fails the PII scan never reaches the vault (fail-closed gate is upstream)", async () => {
+    const t = setup();
+    const { asT, threadId } = await seedThread(t);
+    await attach(t, asT, threadId, "PII_POISON::must never be stored", "poison.txt", "text/plain");
+
+    expect(await vaultDocs(t)).toHaveLength(0);
   });
 });
