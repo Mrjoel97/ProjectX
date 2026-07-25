@@ -51,3 +51,52 @@ renders the `FALLBACK` `["Working…", "Done"]`. This is the SAME class of gap 1
 `evaluateBusiness`, but 15-01's plan named only `evaluateBusiness` and `apps/web` is FROZEN for
 Phase 15 after Wave 0 — so this is deliberately left alone rather than smuggled into the freeze
 commit. One line to fix whenever `apps/web` next opens.
+
+## UNPAID GATE — the 15-06 specialist-body eval run was never executed (BLOCKING for activation)
+
+Found during: 15-06 Task 3.
+
+15-06 rewrote all three specialist bodies (`offer-architect`, `money-model-designer`, `lead-engine`)
+so they name `searchVault`, state the read-only posture and give an honest not-enough-data answer.
+All three are in `GATED_SKILLS`, so a body EDIT publishes a CANDIDATE that
+`activateSkillVersion` refuses to activate without recorded passing eval evidence (the Phase-3.6
+`EVAL_GATE`).
+
+**The gate was not run and was not faked.** This worktree (`.worktrees/lane-a-dispatch`) has no
+`CONVEX_DEPLOYMENT` — 15-01 bootstrapped it with a COPIED `packages/backend/convex/_generated`,
+because `convex codegen` refuses to run without one. Everything offline was completed and is green:
+the six-file body mirror + `skillBodies.test.ts`, the multi-pin runner, the three end-to-end
+fixtures, `--self-check` (30 fixtures, 11 derived gated skills), the full backend suite and both
+playbooks. Nothing that needs a LIVE backend or a real model call was run:
+`pnpm eval:golden`, `seedSkills`, `getActiveSkill`, `activateSkill`.
+
+**Consequence (pre-decided by 15-CONTEXT — SHIP DARK):** the rewritten bodies are parked as source
+only. On the production deployment the ACTIVE rows are still the v1 bodies carrying the
+*"Registered now; a full build runs later"* framing, so a dispatched specialist today runs the OLD
+body. Phase 15's five success criteria are proven by 15-01..15-05 and none of them requires a
+rewritten body, so this blocks nothing that shipped.
+
+**What closes it** (owner, on a checkout with a live deployment):
+
+1. `pnpm dev` (or `npm run seed`) — `npx convex dev` ALONE does not run `skills:seedSkills`.
+2. Read back the LIVE version carrying each of the three bodies. Do NOT guess: `seedSkills` writes
+   `maxVersion + 1` and optimizer dry-run candidates already occupy versions.
+3. `pnpm eval:golden --skill offer-architect@N --skill money-model-designer@N --skill lead-engine@N`
+   — ONE run, ~30 cases, budget ≈ $0.19 extrapolated from the last recorded run (27 cases /
+   $0.1686 / run `ed251c29`) plus three dispatched specialist turns.
+4. GREEN → the runner records one evidence row per pin; `activateSkill` each, then VERIFY LIVE with
+   `getActiveSkill` that the active row is the version you pinned.
+   RED / flaky / over `COST_CAP_USD` → leave them parked. Do NOT weaken a fixture, do NOT
+   hand-activate. Record the failing case(s) and the cost here.
+
+**Evidence that would close it:** the run id, case count and cost, plus a `getActiveSkill` readback
+showing each of the three at the pinned version.
+
+**Also unverified because of the same constraint:** the three new fixtures
+(`29-gap-dispatch-offer-architect`, `30-gap-dispatch-money-model`, `31-gap-dispatch-lead-engine`)
+have never run against a live model. Their turns were authored against `diagnose()`'s gate order
+(gate 1 no offer / gate 2 one offer type / gate 3 no channel) and the 27/28 precedent, so a
+`gapCount` mismatch on the first live run is most likely the model recording no scorecard path or a
+wrong one — the 12-06 lesson — not an engine fault. `citesVaultDoc` is the other first-run risk: it
+requires the specialist to actually quote a seeded vault title.
+
