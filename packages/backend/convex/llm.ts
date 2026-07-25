@@ -1660,6 +1660,10 @@ async function runAgentLoop(
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
+    // DISP-01: the specialist's tool-set. ABSENT ⇒ the full record, byte-identical to today —
+    // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
+    // THIS function; there is no second loop.
+    toolNames?: readonly string[];
   },
 ): Promise<{ reply: string; costUsd: number }> {
   const {
@@ -1673,8 +1677,21 @@ async function runAgentLoop(
     turnId,
     threadId,
     omitRecipientEdits,
+    toolNames,
   } = args;
-  const tools = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions, omitRecipientEdits);
+  const built = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions, omitRecipientEdits);
+  // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
+  // `toolNames ? … : built` would hand a zero-tool specialist the full 20-key set.
+  const tools =
+    toolNames === undefined
+      ? built
+      : Object.fromEntries(Object.entries(built).filter(([n]) => toolNames.includes(n)));
+  // ponytail: ceiling is a filtered record. ai@7 also has `activeTools` (one line,
+  // dist/index.d.ts:903), but the withheld tool's `execute` closure would still exist in the
+  // record and stay reachable via invokeTool (:1602). Structural absence is the omitRecipientEdits
+  // precedent (:619-626) — the capability is withheld by CONSTRUCTION, not by skill wording.
+  // Upgrade path if the filter ever gets hot: `activeTools` PLUS an invokeTool allow-list check,
+  // not activeTools alone.
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
@@ -1754,6 +1771,74 @@ async function runAgentLoop(
       throw e2;
     }
   }
+}
+
+/**
+ * Run ONE specialist turn through THE governed loop (DISP-01). This is the whole "swappable
+ * (skill body, tool-set) pair" seam: the body comes from the skills registry (§5), the tool-set
+ * comes from @pikar/core's code-owned allow-list (ADR-007), and everything else — stepCountIs(8),
+ * AbortSignal.timeout, recordModelSpend, the fallback retry, the CKPT-05 emitters — is the same
+ * machinery runCockpitAgent gets. There is NO second loop and NO generateText outside this file.
+ *
+ * `runAgentLoop` itself stays module-private on purpose: keeping the loop private and the
+ * specialist entry point narrow is what makes "no agent spawns an agent" checkable by reading
+ * one file (dispatchGuard.test.ts).
+ *
+ * Explicit return type keeps this out of the `internal`-graph circular inference (§96, Pitfall 4).
+ * Exported plain async function (not a Convex function) — the persistNextStepMemo precedent.
+ */
+export async function runSpecialistTurn(
+  ctx: GenericActionCtx<DataModel>,
+  args: {
+    tenantId: string;
+    planId: Id<"plans">;
+    skillName: string;
+    toolNames: readonly string[];
+    prompt: string;
+    turnId?: string;
+    threadId?: string;
+    skillVersions?: Record<string, number>;
+    /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
+     *  shim's mechanism). Absent ⇒ the real gateway models. */
+    mockScript?: { primary: unknown[]; fallback?: unknown[] };
+  },
+): Promise<{ reply: string; costUsd: number; skillVersion: number }> {
+  const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
+  // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
+  // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
+  const pin = skillVersions?.[skillName];
+  const skill: { body: string; version: number } =
+    pin !== undefined
+      ? await ctx.runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
+      : await ctx.runQuery(internal.skills.getActiveSkill, { name: skillName });
+  const mock = args.mockScript;
+  const res = await runAgentLoop(ctx, {
+    tenantId,
+    planId,
+    system: skill.body,
+    prompt,
+    primary: {
+      model: mock
+        ? (new MockLanguageModelV4({ doGenerate: mock.primary as never }) as unknown as LanguageModel)
+        : resolveModel(DEFAULT_MODEL),
+      id: DEFAULT_MODEL,
+    },
+    fallback: {
+      model: mock
+        ? (new MockLanguageModelV4({
+            doGenerate: (mock.fallback ?? mock.primary) as never,
+          }) as unknown as LanguageModel)
+        : resolveModel(CHEAP_MODEL),
+      id: CHEAP_MODEL,
+    },
+    skillVersions,
+    turnId,
+    threadId,
+    toolNames,
+  });
+  // The version rides the return so the caller can put {name, version} on the lineage audit row
+  // (closing the §5 / IMPR-03 "record the skill version for every use" loop).
+  return { ...res, skillVersion: skill.version };
 }
 
 // ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────
@@ -2128,10 +2213,13 @@ export const __runCockpitAgentWithScript = internalAction({
     // catch a silently-swallowed emitter). Test-support surface, append-only.
     turnId: v.optional(v.string()),
     threadId: v.optional(v.string()),
+    // DISP-01 (15-02): drive the loop's tool-set filter offline. Append-only test-support arg —
+    // ABSENT is the pre-existing full-record behaviour, `[]` is an empty record (not the full one).
+    toolNames: v.optional(v.array(v.string())),
   },
   handler: async (
     ctx,
-    { tenantId, planId, primary, fallback, failPrimary, skillVersions, turnId, threadId },
+    { tenantId, planId, primary, fallback, failPrimary, skillVersions, turnId, threadId, toolNames },
   ): Promise<{ reply: string; costUsd: number; skillVersion: number }> => {
     const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
     const skill: { body: string; version: number } =
@@ -2160,6 +2248,7 @@ export const __runCockpitAgentWithScript = internalAction({
       skillVersions,
       turnId,
       threadId,
+      toolNames,
     });
     return { ...res, skillVersion: skill.version };
   },
