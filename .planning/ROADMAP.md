@@ -544,7 +544,13 @@ Plans:
   3. Every sub-agent audit/telemetry row carries `rootRequestId` + `parentAgentId` lineage (refs/ids only), so the insert-only audit reconstructs the call tree and cost attributes to the root request.
   4. An approved plan can execute a non-email action type through a generalized executor (`executePlan`/`deliverApprovedPlan` dispatches by action type); the human Approve gate stays a mutation, never a tool.
   5. A cross-tenant isolation assertion ships for the dispatch/lineage rows (a sub-agent run keyed on `rootRequestId` is still tenant-scoped).
-**Plans**: TBD
+**Plans**: 6 plans in 5 waves (Wave 0 freeze, then Lane A / Lane B — see `.planning/PARALLELIZATION.md`)
+- [ ] 15-01-PLAN.md - Wave-0 freeze: agentSteps dispatch literals, readable daily budget, VERB map, core stubs, watch.json, finalized lane table (run on `main`)
+- [ ] 15-02-PLAN.md - Lane A: specialist registry + closed `Prescription.route` + the ONE loop seam (`toolNames`) + ADR-007
+- [ ] 15-03-PLAN.md - Lane A: governed dispatcher - depth cap, cycle refusal, shared root envelope, refs-only lineage, two-tenant isolation + ADR-008
+- [ ] 15-04-PLAN.md - Lane A: "Act on this" handoff - `collecting` staging, scheduled dispatch, attribution/incomplete body, honest fallback
+- [ ] 15-05-PLAN.md - Lane B: generalized action executor - exhaustive arm table in `executePlan`, `deliverApprovedPlan.ts` byte-unchanged, Approve-not-a-tool scan
+- [ ] 15-06-PLAN.md - Lane A: rewritten specialist bodies, multi-pin eval runner, 3 golden fixtures, one eval-gate run (ship dark on red)
 
 ### Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED)
 **Goal**: The business tier stops being something a user can assign themselves and becomes a fact-derived, auditable property of the tenant — because tier now selects agent voice and which Growth OS specialists get offered, making a self-writable tier a behavioral control rather than a preference.
