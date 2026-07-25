@@ -1,9 +1,14 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-03 — the doc scope becomes REAL: `startSession` accepts and
+> Last verified: 2026-07-26 (14-04 — the doc-grounded MINT: `mintClientSecret({docId?})` bakes the
+> `document-analyst` persona plus a fenced digest of that report into the ephemeral session and
+> declares the one read-only retrieval tool, with a pre-written `session.update` fallback). The
+> unscoped Phase-6 mint body is pinned byte-unchanged. See "The doc-grounded mint (14-04)" below.
+>
+> Prior: 2026-07-26 (14-03 — the doc scope becomes REAL: `startSession` accepts and
 > validates an optional `docRef`, and `voiceDoc.searchDocument` answers a mid-call drill-in from
 > that document alone). This is the first Phase-14 plan that changes runtime behavior; the
-> no-`docRef` Phase-6 path is unchanged. See "Voice-doc sessions (Phase 14)" below.
+> no-`docRef` Phase-6 path is unchanged.
 >
 > Prior: 2026-07-25 (14-02 — the pure voice-doc domain: `buildDocDigest`, `shapeDocReview`,
 > `composeDocMemo`, and the pinned Realtime function-call vocabulary).
@@ -528,6 +533,69 @@ not fill it in from a doc page.
 the Chat-Completions `{type, function:{...}}` nesting, which 400s the mint. Its `parameters` are
 STRICT-legal: every key in `properties` also appears in `required`, and `additionalProperties` is
 `false`. `docSession.test.ts` asserts both, including the absence of a `function` key.
+
+### The doc-grounded mint (14-04) — `voiceToken.mintClientSecret({ docId? })`
+
+The mint is where a voice session becomes *about a report*. It is also the **first** trust boundary
+in wall-clock order: the browser mints BEFORE it has a session row (`useVoiceSession.ts:269` →
+handshake → `voice.startSession`), so the mint validates the document itself and does not lean on
+`startSession`'s check.
+
+**Persona — registry-loaded, fail-closed, both branches (§5).** `docId` present ⇒
+`DOCUMENT_ANALYST_SKILL`; absent ⇒ `VOICE_SESSION_SKILL`, byte-unchanged from Phase 6. Both go
+through `internal.skills.getActiveSkill`, which throws `NO_ACTIVE_SKILL` when the persona has no
+active row — there is **no hardcoded fallback prompt**, and no request leaves Convex when the
+registry cannot answer. Because the two personas are separate rows, a Phase-14 prompt change
+cannot regress the Phase-6 live-session behavior.
+
+**Digest.** `instructions` = the persona body, a blank line, then `buildDocDigest(...)`. The digest
+is already capped (`DIGEST_CHAR_CAP` on the document slice), fenced and truncation-disclosing in
+`@pikar/voice` — **do not re-slice, re-fence, or add a behavioural line at the mint.** Every rule
+the analyst follows is the registry body. The document row is read through a module-local
+`voiceToken.docForMint` internalQuery, NOT `internal.vault.getDoc`: that query returns
+`{text, contentHash, title}` with no `status` and no `extractionTruncated`, so it cannot answer
+either the readiness check or the truncation disclosure (the same wrong premise 14-03 hit at
+`startSession`). `docForMint` returns `null` for missing/cross-tenant so the mint owns the thrown
+message, and the two boundaries speak with one voice: `voicedoc: document not found` /
+`voicedoc: document not ready` — a STATUS, never content.
+
+**The instruction budget is a real constraint, not a style note.** `gpt-realtime-2.1` is a 32k
+window / 4,096 max output and `instructions` are re-billed as input on EVERY turn. Depth is
+supposed to come from `search_document`. `voiceToken.test.ts` pins
+`instructions.length < personaBody.length + DIGEST_CHAR_CAP + 500`, so a future digest change
+cannot silently blow the budget.
+
+**One tool, read-only — this is the tool-SET containment.** A doc-scoped body carries exactly
+`tools: [SEARCH_DOCUMENT_TOOL]` and `tool_choice: "auto"` (keys via `SESSION_TOOL_KEYS`). No write,
+no send, no plan mutation is reachable from a voice session at all, so an instruction planted in
+the report **has nothing to actuate**. That matters more here than anywhere else in the repo: the
+digest sits in the SYSTEM `instructions` field, a materially stronger exposure than ADR-006's
+tool-RETURN case. Three containments and no fourth — the fence + its one safety line, this tool
+set, and the human Approve gate on anything the post-call flow proposes. The `ponytail:` block in
+`voiceToken.ts` names the upgrade path (move the digest out of `instructions` into a first
+`conversation.item.create` user-role message, at the cost of first-second fluency).
+
+**Open Question 3 — both branches ship, the answer is still blank.** The mint POSTs WITH `tools`
+first (server-owned, and it races nothing — the tools exist before the data channel opens). On a
+**400** — and only 400 — it re-POSTs the identical body minus `tools`/`tool_choice` and returns
+`toolsAtMint: false`; any other non-OK status throws on the first attempt as before. This is a
+SHAPE fallback, not a retry policy. `toolsAtMint` is the ONE deliberate extension to the Phase-6
+`{clientSecret, expiresAt}` return contract — **transport control, not a secret and not document
+content**; it is trivially `true` on an unscoped mint (nothing was declared, so the browser's
+branch stays a single `if (!toolsAtMint)`). 14-06's relay sends
+`{type:"session.update", session:{tools, tool_choice}}` over the data channel when it is false.
+**The accepted branch is still NOT live-verified** — fill in the dated
+`LIVE-VERIFIED ____-__-__:` line in `packages/voice/src/realtime.ts` at 14-09's live verify, from
+the API's actual behavior, never from a doc page.
+
+**What never leaves.** `OPENAI_API_KEY` is structurally absent from the return value, from every
+thrown message (`mintClientSecret: <status>`) and from every log line. Nothing in this path writes
+an audit row. `voiceToken.test.ts` asserts the exact key set and searches the serialized result for
+the fake key.
+
+Verify with `pnpm --filter @pikar/backend test voiceToken` (12 tests: persona, digest, flat tool
+shape, the 400 fallback, the 500 throw, both refusals, fail-closed, and the unscoped Phase-6 body
+pinned to no-`tools`-key).
 
 ### Gap routing is code-owned
 
