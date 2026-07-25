@@ -59,7 +59,10 @@ function profileDocText(): string {
   return `${md}\n\nCAC: $150\nLTGP: $4500\n30-day cash: $200\n`;
 }
 
-async function seedDoc(t: ReturnType<typeof convexTest>, text: string): Promise<Id<"vaultDocuments">> {
+async function seedDoc(
+  t: ReturnType<typeof convexTest>,
+  text: string,
+): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
     ctx.db.insert("vaultDocuments", {
       tenantId: TENANT,
@@ -142,8 +145,14 @@ describe("memo terminal (approving a memo SAVES it — it is never an email)", (
 
     const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
     const memoBody = plan?.body ?? "";
-    // NOTE: no gmailTokens row is seeded — an email plan would refuse with gmail_not_connected
-    // here, so a passing approve proves the memo branch runs BEFORE the mailbox pre-check.
+    // 15-05 ACTN-01: the ARM is selected BEFORE the mailbox pre-check, and that ordering is the
+    // property — a memo must never require a connected Gmail. Asserted, not noted: with ZERO
+    // gmailTokens rows an email plan refuses with gmail_not_connected here, so a passing approve
+    // is only possible if the inline arm was chosen first.
+    const tokenRows = await t.run((ctx) => ctx.db.query("gmailTokens").collect());
+    expect(tokenRows, "the no-mailbox premise must hold or this test proves nothing").toHaveLength(
+      0,
+    );
     const res = await asT.mutation(api.cockpit.executePlan, { planId: plan?._id as Id<"plans"> });
     expect(res.ok).toBe(true);
 
@@ -174,5 +183,30 @@ describe("memo terminal (approving a memo SAVES it — it is never an email)", (
 
     const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
     expect(docs.filter((d) => d.kind === "next_step_memo")).toHaveLength(1);
+  });
+
+  // 15-05 ACTN-01: arm selection replaced the `plan.kind === "memo"` if, and it sits in exactly the
+  // same place — AFTER the CAS read and the escalated guard, BEFORE the mailbox pre-check. The
+  // "before" half is asserted above (no mailbox, still succeeds); this is the "after" half. Moving
+  // the dispatch one line earlier would let a fail-closed escalated plan execute an action, which
+  // is the failure mode a table-shaped refactor makes easy to introduce silently.
+  test("an ESCALATED memo refuses (review_escalated) — the arm never runs, no doc, no requests", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await evaluateWithGap(t);
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+    const planId = plan?._id as Id<"plans">;
+    await t.run((ctx) => ctx.db.patch(planId, { escalated: true })); // REVW-02 fail-closed terminal
+
+    const res = await asT.mutation(api.cockpit.executePlan, { planId });
+    expect(res).toEqual({ ok: false, reason: "review_escalated" });
+
+    const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(docs.filter((d) => d.kind === "next_step_memo")).toHaveLength(0); // inline arm never ran
+    const requests = await t.run((ctx) => ctx.db.query("requests").collect());
+    expect(requests).toHaveLength(0); // …and neither did the workflow arm
+    const after = await asT.query(api.plans.byThread, { threadId: THREAD });
+    expect(after?.status).toBe("proposed"); // no CAS flip, no terminal
   });
 });
