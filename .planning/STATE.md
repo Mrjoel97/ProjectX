@@ -3,14 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: executing
-stopped_at: Phase 13 plan 01 complete (wave 1 of 4)
-last_updated: "2026-07-25T16:19:00.000Z"
-last_activity: "2026-07-25 — Phase 12 plan 06 COMPLETE; PHASE 12 CLOSED. `pnpm eval:golden --skill cockpit-agent@15` → **27/27 PASSED, $0.1686, run `ed251c29`**; both new fixtures (27-grounded-assessment, 28-healthy-no-gaps) passed first try, one retry on the pre-existing flaky 18-briefing-then-action. **cockpit-agent@15 is ACTIVE** on that recorded evidence (verified live via `getActiveSkill`), teaching WHEN to call `evaluateBusiness` + the `recordScorecardAnswer` store half. The 7 Phase-12 rubrics needed no `activateSkill` — they had never been seeded, so their FIRST seed took the `rows.length === 0` bootstrap path and each landed **v1 ACTIVE** (SC #4 intact; only cockpit-agent rode the gate). Deviations: (Rule 2) `findingsPresent` added as a third expect key — `gapCount: 0` alone passes VACUOUSLY on the not-enough-data verdict because the engine force-clears gaps at zero findings; (Rule 3) the fixture-floor bump 18→27 moved from Task 1's commit to Task 2's. Five defects found and fixed during live verification (see PRIOR-FIXES below)."
+stopped_at: Phase 13 plan 02 complete (wave 2 of 4)
+last_updated: "2026-07-25T14:46:03.674Z"
 progress:
   total_phases: 37
   completed_phases: 20
-  total_plans: 146
-  completed_plans: 142
+  total_plans: 150
+  completed_plans: 144
 ---
 
 # Project State
@@ -20,15 +19,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 13 — Proactive In-App Review (EXECUTING, 1/4 plans)
+**Current focus:** Phase 13 — Proactive In-App Review (EXECUTING, 2/4 plans)
 
 ## Current Position
 
-Phase: 13 of 25 (Proactive In-App Review) — **IN PROGRESS** (1/4 plans, 4 waves)
-Plan: 13-01 COMPLETE (evaluation delta + `by_kind` index + review constants + playbook registration); next 13-02 (the weekly cron)
-Status: Wave 1 done. `evaluations.delta` (`{ newFindings, gapsClosed, gapsOpened }`, gap identity = `route/playbook`) is computed IN-ENGINE inside `runEvaluation({ withDelta: true })` and written through `insertEvaluation` — the append-only table gained no patch surface. `vaultDocuments.by_kind` is the ONE deliberately cross-tenant index (0 callers until 13-02's fan-out; yields tenant ids only, never content). `REVIEW_THREAD_ID`/`REVIEW_READY_MESSAGE`/`REVIEW_FAILED_MESSAGE` export from `@pikar/core` and are DELIBERATELY absent from `NOTIFICATION_KINDS` — that absence is the security property (`notifyExternal.dispatch` returns before `freshAccessToken`, so the review can never reach a Gmail token). Deviation: (Rule 1) returning the delta collapsed the whole generated Convex API to `any`/`{}` (Pitfall 9, 90 errors in `apps/web`) — fixed with a named `EvaluationDelta` type + explicit handler return annotation. Backend 485/486 (sole red is the documented pre-existing `audit.test.ts` auditCounts row).
+Phase: 13 of 25 (Proactive In-App Review) — **IN PROGRESS** (2/4 plans, 4 waves)
+Plan: 13-02 COMPLETE (the weekly cron + fan-out + in-app notification + the provenance fix); next 13-03 (the review card)
+Status: Wave 2 done. BEVL-03's spine is live. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
 
-**CARRY-FORWARD for 13-02/03:** the Phase-12 repeat-run provenance collapse now matters. Carry-forward preserves scorecard VALUES but not PROVENANCE, so a second run over the same doc re-cites nothing and `findingCount` drops — and a weekly review runs repeatedly on ONE pinned thread (`REVIEW_THREAD_ID`), exactly that shape. The earlier note "Phase 13 runs on its own thread, so it is unaffected" is true of tenant isolation only, NOT of repeat runs. 13-02/03 must use a fresh thread id per week or close the provenance gap, or the card shows a shrinking finding count week over week.
+**CARRY-FORWARD RESOLVED (13-02):** the repeat-run provenance collapse is **CLOSED** — option (b), not a fresh weekly thread. A date-derived thread id was rejected because `lastForThread` is indexed on `(tenantId, threadId)`: rotating it resets the Scorecard weekly, re-asks answered figures (breaking Phase-12's LOCKED store half), makes `delta` permanently `undefined`, and leaves 13-03 with no stable "the review thread" to render. Root cause instead: `provenance` is rebuilt from the corpus every run and never persisted, but `fillVault` returned EARLY when the slot was already carried — skipping the CITATION, not just the write. Now the VALUE is first-write-wins and the CITATION is re-recorded on every restatement (`!provenance.has(path)` keeps a `user-provided` cite from being downgraded); the two upstream short-circuits (`currentOffers.length === 0`, the `FINANCIAL_PATTERNS` `continue`) are gone. Regression-guarded by `proactiveReview.test.ts > notifies only on change` (run 2 must have the SAME finding count and an empty delta) — confirmed RED before the fix.
+
+PRIOR (13-01): Wave 1. `evaluations.delta` (`{ newFindings, gapsClosed, gapsOpened }`, gap identity = `route/playbook`) is computed IN-ENGINE inside `runEvaluation({ withDelta: true })` and written through `insertEvaluation` — the append-only table gained no patch surface. `vaultDocuments.by_kind` is the ONE deliberately cross-tenant index (0 callers until 13-02's fan-out; yields tenant ids only, never content). `REVIEW_THREAD_ID`/`REVIEW_READY_MESSAGE`/`REVIEW_FAILED_MESSAGE` export from `@pikar/core` and are DELIBERATELY absent from `NOTIFICATION_KINDS` — that absence is the security property (`notifyExternal.dispatch` returns before `freshAccessToken`, so the review can never reach a Gmail token). Deviation: (Rule 1) returning the delta collapsed the whole generated Convex API to `any`/`{}` (Pitfall 9, 90 errors in `apps/web`) — fixed with a named `EvaluationDelta` type + explicit handler return annotation. Backend 485/486 (sole red is the documented pre-existing `audit.test.ts` auditCounts row).
+
+**FOR 13-03 (the card):** read `api.evaluations.byThread({ threadId: REVIEW_THREAD_ID })` — one stable thread per tenant, latest row first. `delta` is populated from the SECOND review onward and `undefined` on the first (and on every on-demand cockpit evaluation), so render "what changed" conditionally; `newFindings` is meaningful only when `> 0`. The finding count no longer shrinks week over week — do not build UI that compensates for it. `NotificationsBanner` already renders `weekly_review` / `weekly_review_failed` (it shows every unread row except `gmail_reconnect`); a dedicated review surface must exclude them the way `ReconnectBanner` does or they double-surface. Do NOT add the review kinds to `NOTIFICATION_KINDS` and do NOT route the review through `notifications.notify` — both are asserted, both arm the mailbox.
 
 Last activity (Phase 12): 2026-07-25 — Phase 12 plan 06 COMPLETE; PHASE 12 CLOSED. `pnpm eval:golden --skill cockpit-agent@15` → **27/27 PASSED, $0.1686, run `ed251c29`**; both new fixtures (27-grounded-assessment, 28-healthy-no-gaps) passed first try, one retry on the pre-existing flaky 18-briefing-then-action. **cockpit-agent@15 is ACTIVE** on that recorded evidence (verified live via `getActiveSkill`), teaching WHEN to call `evaluateBusiness` + the `recordScorecardAnswer` store half. The 7 Phase-12 rubrics needed no `activateSkill` — they had never been seeded, so their FIRST seed took the `rows.length === 0` bootstrap path and each landed **v1 ACTIVE** (SC #4 intact; only cockpit-agent rode the gate). Deviations: (Rule 2) `findingsPresent` added as a third expect key — `gapCount: 0` alone passes VACUOUSLY on the not-enough-data verdict because the engine force-clears gaps at zero findings; (Rule 3) the fixture-floor bump 18→27 moved from Task 1's commit to Task 2's. Five defects found and fixed during live verification (see PRIOR-FIXES below).
 
@@ -40,7 +43,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6)
+Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6; Phase 13 at 2/4)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -80,6 +83,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 12 P04 | ~35 min | 2 of 3 tasks (Task 3 deferred) | 6 files |
 | Phase 12 P05 | ~25 min | 3 tasks | 8 files |
 | Phase 12 P06 | ~120 min (incl. human eval gate) | 3 tasks | 8 files |
+| Phase 13 P02 | ~40 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -117,11 +121,12 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 12]: 12-06: a GATED skill's FIRST seed lands v1 ACTIVE (the `rows.length === 0` bootstrap path) — gating costs nothing until a skill's first body EDIT. The 7 Phase-12 rubrics were never seeded on this deployment (`convex dev` alone does not seed; only `pnpm dev` / `npm run seed` runs `skills:seedSkills`), so they self-activated at v1 and only `cockpit-agent` rode the gate (→ **@15**, on 27/27 passing evidence, $0.1686, run `ed251c29`). This CORRECTS 12-04's "seeded but gated-not-activated" inference.
 - [Phase 12]: 12-06 (verification-driven, `f5c279e`): grounding must PREPEND the tenant's own profile-shaped docs (`internal.vault.profileSeedDocs`) — `rag.search` top-K is per CHUNK, so one large reference PDF monopolises the corpus and the engine honestly reports "not enough data" while the user's own profile sits unread. Paired defect: `fillVault` could never fill `identity.currentOffers` (an empty-array default is not `null`), pinning `diagnose()` to Gate 1 on every vault-grounded run.
 - [Phase 12]: 12-04: Task 3 human-verify DEFERRED to 12-06 (owner decision) — **PAID at 12-06; owner ran all three accumulated visual checks and approved 2026-07-25** — the plan's checkpoint asked for end-to-end verification of a flow whose two enabling halves land in 12-06 (agent teaching = Task 2, EVAL_GATE rubric activation = Task 3). Verified-not-litigated: cockpit-agent.md has 0 evaluate/scorecard/swot/diagnose mentions; all 7 Phase-12 rubrics are in GATED_SKILLS. Workarounds refused: no gated skill activated, no teaching hardcoded (§5), no throwaway seeding.
+- [Phase 13]: 13-02: PINNED THREAD + close the provenance gap (option b), NOT a fresh weekly thread id. `lastForThread` is indexed on (tenantId, threadId), so rotating the id resets the Scorecard weekly, re-asks answered figures (breaks Phase-12's LOCKED store half), makes `delta` permanently undefined, and leaves 13-03 with no stable review thread. Fixed the engine instead: `fillVault` records a CITATION on every restatement while the VALUE stays first-write-wins.
 
 ### Pending Todos
 
 - ~~**12-04 AND 12-05 visual verification is UNPAID debt**~~ — **PAID 2026-07-25.** The owner ran all three checks (12-04 card states, 12-05 tap → NEXT-STEP MEMO → "Approve & save" → memo at `/dashboard/vault` with no email sent, 12-06 teaching) and reported "Everything worked. I approve."
-- **Repeat-evaluation provenance gap (logged, not fixed)** — re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1): carry-forward preserves the scorecard VALUES but not their PROVENANCE, so only freshly-filled paths are re-cited. Workaround: a fresh thread per evaluation. Phase 13's proactive review runs on its own thread, so it is unaffected. Detail in `.planning/phases/12-business-evaluation-engine/deferred-items.md`.
+- ~~**Repeat-evaluation provenance gap (logged, not fixed)**~~ — **CLOSED 2026-07-25 at 13-02.** Re-running an evaluation in the SAME thread used to collapse `findingCount` (8 → 1): carry-forward preserved the scorecard VALUES but not their PROVENANCE, so only freshly-filled paths were re-cited. `fillVault` now separates the two rules — the VALUE is first-write-wins, the CITATION is re-recorded whenever a grounded document restates the field — and the two upstream short-circuits are gone. No fresh-thread workaround is needed any more. Regression guard: `proactiveReview.test.ts > notifies only on change`. The historical detail stays in `.planning/phases/12-business-evaluation-engine/deferred-items.md`.
 
 ### Blockers/Concerns
 
@@ -132,6 +137,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T12:09:01.253Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-proactive-in-app-review/13-CONTEXT.md
+Last session: 2026-07-25T14:45:00.818Z
+Stopped at: Completed 13-02-PLAN.md
+Resume file: None
