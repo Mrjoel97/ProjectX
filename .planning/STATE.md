@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-07-25T19:41:14.558Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-07-25T20:08:53.331Z"
 progress:
   total_phases: 38
   completed_phases: 21
   total_plans: 156
-  completed_plans: 147
+  completed_plans: 148
 current_phase: 15
 ---
 
@@ -21,14 +21,14 @@ current_phase: 15
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 1/6 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 2/6 plans)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (1/6 plans, 5 waves)
-Current Plan: 2
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (2/6 plans, 5 waves)
+Current Plan: 3
 Total Plans in Phase: 6
-Plan: 15-01 COMPLETE (the Wave-0 freeze); next 15-02 (wave 1)
+Plan: 15-02 COMPLETE (Wave 1 — the registry + the loop seam); next 15-03 (the dispatcher)
 
 **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
@@ -37,7 +37,46 @@ finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may 
 — that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
 dispatch work even with one agent doing both.
 
-Status (15-01): **Wave 0 is FROZEN.** Every shared seam Phase 15 needs landed in one plan, and
+Status (15-02): **A named specialist is now a resolvable `(skill body, tool-set)` pair, and THE
+governed loop can run one without being forked.** Two halves. (1) The REGISTRY: the three growth
+specialists (`offer-architect` / `money-model-designer` / `lead-engine`) are registered as
+`(skillName, tools, stepTool)` triples in `packages/core/src/specialists.ts`; `SpecialistSpec.tools`
+is `["searchVault"]` for all three, asserted as an EQUALITY over the WHOLE registry so a write tool
+added to any one of them fails a test instead of shipping quietly. `evaluateBusiness` is
+deliberately NOT granted — its read-shaped name hides an `internal.evaluations.runEvaluation` call
+that PERSISTS an evaluations row + an audit row per call and re-enters the diagnostic engine
+mid-dispatch; the snapshot rides the PROMPT (`internal.evaluations.lastForThread`) in 15-03 instead,
+and the reasoning is pinned as a comment so a later phase does not "fix" it. `Prescription.route` is
+now closed to `SpecialistRoute | ""` with `""` deliberately representable (the not-enough-data ask
+branch emits it; `resolveSpecialist("")` refuses it at runtime), direction `growth/ → specialists`.
+The COVERAGE BIND is a real runtime assertion: `specialists.test.ts` reads `diagnose.ts` off disk,
+balanced-paren slices every `rx(...)` call plus the object-literal `route:` branch (skipping quoted
+spans whole — a depth-only walker mis-read `" money model"` out of the `"scale"` branch's prose) and
+feeds all 11 literals through the real lookup, so a new gate with a new route fails until its
+specialist is registered. Also shipped: `wouldCycle` (the A→B→A predicate, in core so it is correct
+BEFORE `MAX_DEPTH` rises) and `specialistMemoBody` (the incomplete/cost-ceiling marker lives in the
+BODY — a `plans.status` literal would touch the PINNED enum with `apps/web` blast radius).
+(2) The LOOP SEAM: `runAgentLoop` gained ONE append-only optional `toolNames?: readonly string[]`.
+ABSENT ⇒ the full 20-key record (the entire unchanged 79-test `runCockpitAgent`/`cockpitTools` suite
+is the proof, not a claim); `[]` ⇒ an EMPTY record, because the filter tests `=== undefined` and a
+truthiness test would hand a zero-tool specialist all 20 keys. Withholding is STRUCTURAL ABSENCE
+from the record — NOT ai@7's `activeTools`, which leaves the withheld tool's `execute` closure in
+the record and reachable via `invokeTool` — the `omitRecipientEdits` precedent generalized.
+`runSpecialistTurn` is the ONLY exported specialist entry into the loop (`runAgentLoop` stays
+module-private, which is what keeps "no agent spawns an agent" checkable by reading one file); it
+loads its body through the §5 loaders fail-closed and returns `skillVersion` for the lineage audit
+row. **ADR-007** records why the BODY is registry-owned and the TOOL-SET is code-owned. Deviations
+(3, all auto-fixed): closing the route type broke `diagnose.test.ts`'s TYPECHECK (an un-annotated
+fixture helper widened `""` to `string`) — invisible to the plan's own vitest verify command, fixed
+with one `as const`; the plan's `proposePlan` withholding fixture could not discriminate (it refuses
+an incomplete plan, so the control case failed too) — switched to `setSubject` + `addRecipients`;
+and the source-scan walker bug above. Gates: `@pikar/core` 219/219, backend 504/505 (sole red the
+documented `audit.test.ts` `auditCounts` row), `apps/web` typecheck exit 0 (Pitfall-4 tripwire held
+— `runSpecialistTurn` has an explicit return type), backend `tsc` +0 new errors over the 52
+pre-existing test-file ones, `check-playbooks` exit 0, and `git diff` proves Lane A touched none of
+`deliverApprovedPlan.ts` / `cockpit.ts` / `actionType.ts` / `apps/`.
+
+PRIOR (15-01): **Wave 0 is FROZEN.** Every shared seam Phase 15 needs landed in one plan, and
 three of them would have failed SILENTLY if skipped. (1) Three literals — `dispatchOfferArchitect`
 / `dispatchMoneyModelDesigner` / `dispatchLeadEngine` — now sit on the CLOSED `agentSteps.tool`
 union. N literals, deliberately NOT a `specialist: v.string()` field: §4 on the trace plane is
@@ -90,7 +129,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6; Phase 13 at 3/4)
+Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 2/6)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -133,6 +172,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 13 P02 | ~40 min | 3 tasks | 6 files |
 | Phase 13 P03 | ~25 min | 3 tasks | 5 files |
 | Phase 15 P01 | 35 min | 3 tasks | 15 files |
+| Phase 15 P02 | 25 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -181,6 +221,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-01: dispatch literals are N LITERALS on the closed agentSteps.tool union, never a specialist: v.string() field — §4 on the trace plane is enforced by the ABSENCE of anywhere to put text, and a string field would re-open the hole the closed union closed. Guarded by dispatch.test.ts inserting each literal against the REAL schema (a missing literal throws inside an SDK callback, which the SDK SWALLOWS).
 - [Phase 15]: 15-01: resolveSpecialist uses Object.prototype.hasOwnProperty.call, not a bare SPECIALISTS[route] index read — "__proto__"/"constructor"/"toString" resolve to TRUTHY Object.prototype members, so a truthiness guard would happily route on them. Mirrors parseRouting: discriminated result, never a throw, NO default specialist. The runtime branch stays load-bearing after 15-02 narrows the type, because gap.route persists as v.string() including diagnose.ts's deliberate "".
 - [Phase 15]: 15-01 (owner): Phase 15 executes SERIALLY on lane-a/dispatch-core, not in 2 parallel lanes. The Wave-0 freeze still ran in FULL (the seams are real architecture), only its 'land on main to unblock lanes' framing is moot. PARALLELIZATION.md's Phase-15 table was finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT. apps/web is FROZEN after Wave 0 (the VERB map was Phase 15's only web edit); watch.json is a Wave-0 singleton; cockpit.md is append-only per-plan subsections.
+- [Phase 15]: 15-02: the sub-agent BODY is registry-owned (§5) but the TOOL-SET is CODE-owned (ADR-007) — a tool-set is a CAPABILITY GRANT, not a prompt, and §5's eval gate stands in front of words, not capabilities. A DB-writable tool list would let a row edit widen what a sub-agent can do with nothing in front of it. SPECIALISTS stays a pure readonly data record in @pikar/core, which is also the seam 15.1 plugs its tier filter into.
+- [Phase 15]: 15-02: withholding a tool from a specialist is STRUCTURAL ABSENCE from the tool record, never ai@7's activeTools and never skill wording — activeTools leaves the withheld tool's execute closure in the record and reachable via invokeTool (llm.ts:1602). The omitRecipientEdits precedent generalized. runAgentLoop's toolNames tests === undefined, not truthiness: [] must yield an EMPTY record, and a truthiness test would hand a zero-tool specialist all 20 keys.
+- [Phase 15]: 15-02: evaluateBusiness is deliberately NOT in any specialist's grant despite its read-shaped name — it calls internal.evaluations.runEvaluation, which persists an evaluations row + an audit row per call and re-enters the engine mid-dispatch. The evaluation snapshot reaches the specialist through its PROMPT (internal.evaluations.lastForThread) instead. Reasoning pinned as a comment on the registry so a later phase does not 'fix' it.
+- [Phase 15]: 15-02: the 'incomplete — cost ceiling reached' marker lives in the memo BODY, never on the plan row — a new plans.status literal would touch the PINNED status enum (schema.ts:155-164) with apps/web blast radius, and the body is visible at the Approve gate where the human actually decides. runAgentLoop stays module-private; runSpecialistTurn is the ONLY exported specialist entry, which is what keeps 'no agent spawns an agent' checkable by reading one file.
 
 ### Pending Todos
 
@@ -196,6 +240,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T19:40:53.570Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-07-25T20:08:18.538Z
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None

@@ -124,7 +124,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 ### S2 — Breadth of Action
 
-- [ ] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
+- [x] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
 - [ ] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
 - [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
 - [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
@@ -241,7 +241,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
 | DOCV-01 | Phase 14 | Pending |
-| DISP-01 | Phase 15 | In Progress (seams landed 15-01; needs 15-02/03/04/06) |
+| DISP-01 | Phase 15 | In Progress (seams 15-01; registry + loop seam 15-02; needs 15-03/04/06) |
 | ACTN-01 | Phase 15 | In Progress (closed action-type union landed 15-01; needs 15-05) |
 | DISP-02 | Phase 16 | Pending |
 | ACTN-03 | Phase 16 | Pending |
