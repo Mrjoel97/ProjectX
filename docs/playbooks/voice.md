@@ -1,7 +1,8 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams + stubs only,
-> no behavior change to the Phase-6 flow. See the "Voice-doc sessions (Phase 14)" section below.
+> Last verified: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
+> `document-analyst` persona row only; no behavior change to the Phase-6 flow. See the "Voice-doc
+> sessions (Phase 14)" section below.
 
 > Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
@@ -274,6 +275,29 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   server-side usage reconciliation for beta (`ponytail:` the cap bounds worst-case spend).
 
 ## Voice-doc sessions (Phase 14, DOCV-01)
+
+### The `document-analyst` persona — registry-loaded and DELIBERATELY UNGATED
+
+The persona is a versioned `skills` registry row loaded at runtime (CLAUDE.md §5), never a
+hardcoded prompt, and it fails closed when unseeded (`getActiveSkill` throws `NO_ACTIVE_SKILL`).
+It ships as the standard 5-file mirror: `packages/contracts/skills/document-analyst.md` (canonical),
+`src/skills/documentAnalyst.ts` (derived, bundler-safe), the `DOCUMENT_ANALYST_SKILL` name const in
+`src/skill.ts`, the `seedSkills` row in `convex/skills.ts`, and the `skillBodies.test.ts` drift row
+that holds the `.md` and `.ts` byte-identical (LF-normalized).
+
+**It is NOT in `GATED_SKILLS`, and that is deliberate — do not "fix" it.** Locked user decision
+(2026-07-25), following the `voice-session` / `voice-brief` precedent exactly.
+`packages/backend/scripts/run-eval-golden.mjs` — the runner that clears the `EVAL_GATE` — drives
+`runCockpitAgent` over TEXT fixtures and hard-validates `--skill` against a closed name list. It
+structurally cannot exercise a Realtime voice persona. Gating this skill would therefore deadlock it
+at v1 the first time anyone edits the body, with no runner able to clear the gate. `run-eval-golden.mjs`
+is byte-unchanged by Phase 14 and must stay that way.
+
+Editing the persona: change the `.md`, regenerate the `.ts` constant from it, and let
+`skillBodies.test.ts` prove they match. Because the skill is ungated, a seed publishes a new ACTIVE
+version directly — `seedSkills` writes `maxVersion + 1`, so verify which version carries your body
+before relying on it.
+
 
 The flagship "discuss a report by voice" flow: a user picks ONE ready vault document and holds a
 live session scoped to it. It reuses the whole Phase-6 spine (mint → WebRTC → watchdog → brief) and
