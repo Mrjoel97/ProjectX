@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 15-05-PLAN.md
-last_updated: "2026-07-25T20:29:34.160Z"
+stopped_at: Completed 15-03-PLAN.md
+last_updated: "2026-07-25T21:11:47.874Z"
 progress:
   total_phases: 38
   completed_phases: 21
   total_plans: 156
-  completed_plans: 149
+  completed_plans: 150
 current_phase: 15
 ---
 
@@ -21,16 +21,15 @@ current_phase: 15
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 3/6 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 4/6 plans)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (3/6 plans, 5 waves)
-Current Plan: 3
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (4/6 plans, 5 waves)
+Current Plan: 4
 Total Plans in Phase: 6
-Plan: 15-05 COMPLETE (Wave 2 — the generalized executor; run OUT OF ORDER because it depends only
-on Wave 0 and owns files no other plan touches). Done: 15-01, 15-02, 15-05. Next: 15-03 (the
-dispatcher), then 15-04, then 15-06.
+Plan: 15-03 COMPLETE (Wave 3 — the governed dispatcher, the heart of DISP-01).
+Done: 15-01, 15-02, 15-03, 15-05. Next: 15-04 (the memo surface), then 15-06 (phase close).
 
 **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
@@ -39,7 +38,60 @@ finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may 
 — that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
 dispatch work even with one agent doing both.
 
-Status (15-05): **The approve→execute spine is action-agnostic, and "adding an action type without
+Status (15-03): **The governed dispatcher is real: a named specialist runs in THE loop behind four
+CONVERSATIONAL refusals, one tree-local cost envelope, and a call tree that reconstructs from an
+index that already existed — no new table, no new index, no schema change.** `convex/dispatch.ts` is
+ONE `governedDispatch` plus two thin entry points (`runSpecialist` production /
+`__runSpecialistWithScript` offline twin), so a guard cannot be true in tests and absent in prod —
+the whole 22-test suite drives the REAL loop through the REAL guards at zero model spend. The guard
+ORDER is load-bearing and now documented as such: **resolve → depth → cycle → envelope → run**.
+`resolveSpecialist` is FIRST because `gaps[].route` persists as `v.string()` (schema.ts:350), so
+rows written before 15-02 closed the union — including `diagnose()`'s deliberate `""` — reach it
+un-narrowed; the envelope check is LAST so a refusal that costs nothing is never charged against the
+tree. All four refusals (`unknown_route` / `depth_exceeded` / `cycle_refused` / `budget_exhausted`)
+RETURN a calm sentence that never names its reason code, write **ZERO deadLetters rows**, spend ZERO
+model budget (asserted on the untouched daily rail, not inferred) and paint ZERO `agentSteps` rows —
+a refused dispatch never started; the step is finished in a `finally`, the only construct that
+terminalizes on success, on a thrown turn, AND on a governed stop that returns as data. `MAX_DEPTH =
+1` makes cycles structurally impossible, but `wouldCycle` (the SHARED @pikar/core predicate, never a
+re-derived inline `includes`) runs and is tested in both shapes, so the guarantee is tested the day
+the cap rises rather than written that day. THE ENVELOPE: `floor(remainingDailyCents × 0.25)`,
+derived at the ROOT only; a non-zero incoming value is carried through UNCHANGED, which is what makes
+it ONE tree ceiling instead of a fresh allowance per hop — the drawdown is asserted on the
+`subagent.completed` rows' `spentCents` so it is OBSERVABLE, not inferred. It is a TREE-LOCAL SECOND
+ceiling over the deployment-wide (keyless) rail, not a replacement, and deliberately NOT
+`guardrails.preCall` (which checks `{count: 1}` — "is there ANY budget left", not "enough for this
+call"). A rail driven negative by `recordSpend(reserve: true)` clamps to a ZERO envelope and refuses,
+never a negative ceiling (driven with a real 2000-cent overspend against a 500-cent rail). An
+OVERRUNNING hop KEEPS its output and is labelled `incomplete: true` — stop AFTER the call that
+overran, never discard work already paid for — with a non-vacuity companion proving a hop inside its
+envelope is NOT so labelled. SC#3: three `internal.audit.log` inserts per hop, all with
+`correlationId := rootRequestId`, so a two-hop run reconstructs as four ordered rows, `parentAgentId`
+rebuilds the EDGES (executive → offer-architect → lead-engine) and the tree's cost is a SUM matching
+the hops' returned `costUsd`. Three deliberate NON-decisions pinned as source comments: no
+`subAgentRuns` table (a second log plane beside an insert-only audit is the anti-pattern), no
+telemetry mirror (`telemetry.requestId` is `v.id("requests")` and a specialist run seeds ZERO
+requests rows by design — 12-05), nothing on `agentSteps` (its own header forbids a shadow log). §4
+is asserted TWICE and both mutation-checked: at runtime every payload VALUE of every audit row is
+scanned against the scripted reply and its distinctive words, and statically `llmRedaction.test.ts`
+pins `dispatch.ts` to exactly three `payload:` expressions and scans them PLUS the shared `refs`
+object they spread. SC#5 is asserted under a deliberate COLLISION — tenant B dispatches with tenant
+A's `rootRequestId` verbatim on the same `threadId`, both hops really write, and the lineage
+partitions cleanly with NON-EMPTY partitions on both sides (a zero-size partition would pass a naive
+no-leakage check vacuously); the audit table is read DIRECTLY because it has no public tenant-scoped
+reader, so the `plans.byThread` form (also shipped) would prove isolation of the PLAN, not of the
+lineage rows SC#5 names. **ADR-008** records why six pieces of state travel as validator-checked
+`internalAction` args rather than DB state, and that `rootRequestId` is minted fresh — it is neither
+`planId` (RECYCLED per thread, 12-05, so two dispatches would merge into one unreconstructable tree)
+nor `plans.correlationId` (only written at `executePlan`, i.e. after Approve). Zero auto-fix
+deviations: the plan's premises held. Gates: backend 528/529 (sole red the documented `audit.test.ts`
+`auditCounts` row), @pikar/core 223/223, apps/web typecheck exit 0 (Pitfall-4 tripwire held — explicit
+`Promise<DispatchResult>`), backend `tsc` at the exact 52-error test-file baseline with ZERO in any
+non-test file, `check-playbooks` exit 0, and `git diff --name-only 4065571^..HEAD` shows exactly the
+5 authorized files — `schema.ts`, `guardrails.ts`, `apps/`, `cockpit.ts`, `deliverApprovedPlan.ts`
+and `actionType.ts` all absent.
+
+PRIOR (15-05): **The approve→execute spine is action-agnostic, and "adding an action type without
 an arm is a compile error" is a VERIFIED `tsc` failure rather than a comment.** `executePlan` no
 longer branches on an ad-hoc `if (plan.kind === "memo")`; it is the DISPATCHER, selecting an arm via
 `armFor(actionTypeOf(plan.kind))` in an exhaustive switch with an `assertNever` backstop. The memo
@@ -165,7 +217,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 3/6 — 01, 02, 05)
+Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 4/6 — 01, 02, 03, 05)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -210,6 +262,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 15 P01 | 35 min | 3 tasks | 15 files |
 | Phase 15 P02 | 25 min | 3 tasks | 9 files |
 | Phase 15 P05 | 13 min | 3 tasks | 6 files |
+| Phase 15 P03 | 35 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -265,6 +318,11 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-05: cockpit.ts keeps its OWN `_ARM_TABLE` bind on top of core's table because the `workflow` case in executePlan's switch falls through to the GMAIL FAN-OUT — a new ActionType that merely classified as `workflow` would inherit the email terminal without anyone deciding to, undoing what 12-05 bought by leaving deliverApprovedPlan.ts untouched. assertNever covers a new ARM; _ARM_TABLE covers a new TYPE. So "zero spine edits" means the spine's STRUCTURE never changes — a new type still adds one compiler-demanded line.
 - [Phase 15]: 15-05: two-level dispatch — executePlan picks the arm, deliverApprovedPlan.ts is the workflow-backed EMAIL arm's entry point and NOT the universal dispatcher (byte-unchanged, enforced by `git diff --exit-code` in the plan gate). A future inline arm executes inline; a future durable arm starts its OWN workflow. Arm selection stays exactly where 12-05's memo `if` sat — after the CAS read + escalated guard, before the mailbox pre-check — and gapAction.test.ts now asserts BOTH sides of that position.
 - [Phase 15]: 15-02: the 'incomplete — cost ceiling reached' marker lives in the memo BODY, never on the plan row — a new plans.status literal would touch the PINNED status enum (schema.ts:155-164) with apps/web blast radius, and the body is visible at the Approve gate where the human actually decides. runAgentLoop stays module-private; runSpecialistTurn is the ONLY exported specialist entry, which is what keeps 'no agent spawns an agent' checkable by reading one file.
+- [Phase 15]: 15-03: the guard ORDER is load-bearing — resolve -> depth -> cycle -> envelope -> run. resolveSpecialist is FIRST because gaps[].route persists as v.string() (schema.ts:350) including diagnose()'s deliberate "", so rows written before 15-02 closed the union reach it un-narrowed; the envelope check is LAST so a refusal that costs nothing is never charged against the tree. All four refusals RETURN a conversational reply with ZERO deadLetters, ZERO model spend and ZERO agentSteps rows — a refused dispatch never started.
+- [Phase 15]: 15-03: the cost envelope is a TREE-LOCAL SECOND ceiling over the deployment-wide dailySpendCents rail, never a replacement — floor(remaining x 0.25) derived at the ROOT only, with a non-zero incoming value carried through UNCHANGED (that is what makes it ONE tree ceiling instead of a fresh allowance per hop). NOT guardrails.preCall, which checks {count:1} = 'is there ANY budget left', not 'enough for this call'. An overrunning hop KEEPS its output and is labelled incomplete: true — stop AFTER the call that overran.
+- [Phase 15]: 15-03: SC#3 lineage is audit-ONLY with correlationId := rootRequestId — by_correlation already existed, so the call tree reconstructs and its cost sums to the root with NO new table, NO new index and NO schema change. Three deliberate NON-decisions pinned as source comments: no subAgentRuns table, no telemetry mirror (telemetry.requestId is v.id("requests") and a specialist run seeds zero requests rows by design), nothing on agentSteps (a shadow log there would be a section-4 regression).
+- [Phase 15]: 15-03: ADR-008 — depth/ancestry/envelope/spend travel as validator-checked internalAction args, never DB state. A Convex action has no ambient ctx and a ctx cannot be extended across runAction, so the only alternative was a row: a lost-update race on the one field whose job is to be a ceiling, for zero benefit at depth 1. rootRequestId is minted fresh and is NEITHER planId (recycled per thread, 12-05) NOR plans.correlationId (only set at executePlan, i.e. after Approve).
+- [Phase 15]: 15-03: a cross-tenant isolation test must assert NON-EMPTY partitions on BOTH sides — a zero-size partition passes a naive no-leakage check vacuously. And it must read the audit table DIRECTLY: audit has no public tenant-scoped reader, so the plans.byThread form alone would prove isolation of the PLAN, not of the lineage rows SC#5 names. Driven under a deliberate rootRequestId + threadId collision, not two unrelated runs.
 
 ### Pending Todos
 
@@ -280,6 +338,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T20:29:34.160Z
-Stopped at: Completed 15-05-PLAN.md
+Last session: 2026-07-25T21:10:11.961Z
+Stopped at: Completed 15-03-PLAN.md
 Resume file: None

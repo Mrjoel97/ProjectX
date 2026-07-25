@@ -19,6 +19,28 @@ without `--continue`, STOPS before running any other package's typecheck.
   this and `@pikar/backend`'s 52 documented pre-existing test-file errors.
 - Fix when someone owns it: add `packages/audit/tsconfig.json` mirroring `packages/cost/`'s.
 
+## Two full-suite timeout flakes on the `"use node"` llm.ts import (pre-existing, load-induced)
+
+Found during: 15-03 plan-level verification (`pnpm --filter @pikar/backend exec vitest run`).
+
+On a busy machine, two tests cross vitest's 5s default `testTimeout` during the PARALLEL full run:
+
+- `convex/cockpitDraft.test.ts > draftCockpit loads the email-drafter body from the registry` (5.4s)
+- `convex/voice.test.ts > storeBrief drafts via the SMOKE transcript and ingests a kind:brief vault doc` (9.0s)
+
+Both pass in isolation (11/11 when the two files are run together) and both passed on the
+immediately-following full run (528/529, the sole red being the documented `audit.test.ts`
+`auditCounts` row). The cost is the first `ai` + `@ai-sdk/openai` import through the `"use node"`
+`llm.ts` inside convex-test's lazy module loader — the SAME wall `runCockpitAgent.test.ts` (15-01)
+and `dispatch.test.ts` (15-03) already side-step with an explicit
+`vi.setConfig({ testTimeout: 30_000 })` at the top of the file.
+
+- Nothing in 15-03 caused it: this plan touched no source file either test loads, and both files
+  predate Phase 15. Adding more mock-model tests to the parallel run makes it surface more often,
+  which is how it was noticed.
+- Fix when someone owns those files: one `vi.setConfig({ testTimeout: 30_000 })` line each. Lane A
+  does not own `cockpitDraft.test.ts` or `voice.test.ts` this phase, so it is logged, not fixed.
+
 ## `replyToMessage` has no `VERB` entry (pre-existing since Phase 3.11)
 
 Found during: 15-01 Task 1 (adding the dispatch `VERB` entries).
