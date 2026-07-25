@@ -242,7 +242,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-03 | Phase 13 | Complete |
 | DOCV-01 | Phase 14 | Pending |
 | DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
-| ACTN-01 | Phase 15 | In Progress (closed action-type union landed 15-01; needs 15-05) |
+| ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
 | DISP-02 | Phase 16 | Pending |
 | ACTN-03 | Phase 16 | Pending |
 | ACTN-02 | Phase 17 | Pending |
