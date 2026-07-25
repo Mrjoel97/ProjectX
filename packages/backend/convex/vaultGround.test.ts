@@ -103,6 +103,19 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
 
     expect(docIds).toEqual([]);
   });
+
+  // Chunk-precise hydration added `matchedByDoc` to the INTERNAL engine result. The public action
+  // must not leak it: golden fixtures 25/26 and the searchVault tool both ride this exact shape.
+  test("the public action still returns exactly {docIds, context} — no internal fields leak", async () => {
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+
+    const result = await asTenant(t, TENANT).action(api.vaultGround.vaultGround, {
+      query: `SMOKE::${docA}`,
+    });
+
+    expect(Object.keys(result).sort()).toEqual(["context", "docIds"]);
+  });
 });
 
 describe("vaultGroundHydrated (identity-less internalAction — real titles + capped chunk text)", () => {

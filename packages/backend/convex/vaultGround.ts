@@ -36,9 +36,14 @@ async function runVaultGround(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   query: string,
-): Promise<{ docIds: string[]; context: string[] }> {
+): Promise<{ docIds: string[]; context: string[]; matchedByDoc: Record<string, string> }> {
   let hits: VectorHit[];
   let seedDocIds: Id<"vaultDocuments">[];
+  // The ACTUAL matched passage per doc, keyed by docId. Without this a long document is hydrated
+  // from its first characters (its title page), so the passage that matched is never read — a
+  // 100-page PDF answered from page 1. Populated for vector seeds only; graph neighbours have no
+  // matched chunk and still fall back to the doc-text slice.
+  const matchedByDoc: Record<string, string> = {};
 
   if (query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
@@ -75,6 +80,14 @@ async function runVaultGround(
       if (!docId) continue;
       hits.push({ docId, score: r.score });
       if (!seedDocIds.includes(docId)) seedDocIds.push(docId);
+      // Keep the matched passage(s). Several results can share one doc — concatenate in score
+      // order so a long document contributes MULTIPLE relevant passages, not just its opening.
+      const text = r.content
+        .map((c) => c.text)
+        .join("\n\n")
+        .trim();
+      if (!text) continue;
+      matchedByDoc[docId] = matchedByDoc[docId] ? `${matchedByDoc[docId]}\n\n${text}` : text;
     }
   }
 
@@ -86,13 +99,17 @@ async function runVaultGround(
   });
 
   // Merge vector seeds with graph neighbors → one deduped, ranked context block (@pikar/vault).
-  return fuse(hits, seedDocIds, neighborDocIds);
+  return { ...fuse(hits, seedDocIds, neighborDocIds), matchedByDoc };
 }
 
 export const vaultGround = tenantAction({
   args: { query: v.string() },
-  handler: (ctx, { query }): Promise<{ docIds: string[]; context: string[] }> =>
-    runVaultGround(ctx, ctx.tenantId, query),
+  // Public shape is UNCHANGED — matchedByDoc is an internal hydration detail; destructure so the
+  // documented {docIds, context} contract (and its tests) stay byte-for-byte identical.
+  handler: async (ctx, { query }): Promise<{ docIds: string[]; context: string[] }> => {
+    const { docIds, context } = await runVaultGround(ctx, ctx.tenantId, query);
+    return { docIds, context };
+  },
 });
 
 // The HYDRATED grounding surface for the identity-less cockpit tool loop (Plan 02 calls this as
@@ -101,15 +118,18 @@ export const vaultGround = tenantAction({
 // Returns three PARALLEL arrays: docIds, titles (via tenant-scoped ownedDocsMeta), and capped
 // chunk text (via getDoc). Text is returned into the LOOP only — never into any audit/DLQ payload
 // (§4; Plan 02's tool owns the refs-only `vault.searched` audit).
-// ponytail: doc-level text, not chunk-precise — upgrade path is threading `rag.search` result
-// `content` for the vector seeds and reserving `getDoc` for the graph neighbors only.
+// CHUNK-PRECISE (2026-07-25): vector seeds hydrate from the `rag.search` result `content` — the
+// passage that actually matched — and `getDoc` is reserved for graph neighbours + the SMOKE:: seam.
+// This was the `ponytail:` upgrade path noted here; it is now taken. Before, every doc hydrated
+// from its first PER_DOC_CHAR_CAP characters, so a long PDF was answered from its title page no
+// matter where the match was (observed: a 300-page book grounded as its copyright notice).
 export const vaultGroundHydrated = internalAction({
   args: { tenantId: v.string(), query: v.string() },
   handler: async (
     ctx,
     { tenantId, query },
   ): Promise<{ docIds: string[]; titles: string[]; chunks: string[] }> => {
-    const { docIds } = await runVaultGround(ctx, tenantId, query);
+    const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query);
 
     // Titles: one tenant-scoped batch read; map _id → title so titles stay parallel to docIds.
     const meta = await ctx.runQuery(internal.vault.ownedDocsMeta, {
@@ -129,10 +149,18 @@ export const vaultGroundHydrated = internalAction({
         chunks.push("");
         continue;
       }
-      const { text } = await ctx.runQuery(internal.vault.getDoc, {
-        vaultDocId: docId as Id<"vaultDocuments">,
-        tenantId,
-      });
+      // Chunk-precise when we have it: the passage that actually matched, not the doc's opening.
+      // Falls back to the doc-text slice for graph NEIGHBOURS (no matched chunk by definition) and
+      // for the SMOKE:: seam. getDoc is still the tenant-scoped, fail-closed read.
+      const matched = matchedByDoc[docId];
+      const text =
+        matched ??
+        (
+          await ctx.runQuery(internal.vault.getDoc, {
+            vaultDocId: docId as Id<"vaultDocuments">,
+            tenantId,
+          })
+        ).text;
       const slice = text.slice(0, Math.min(PER_DOC_CHAR_CAP, remaining));
       chunks.push(slice);
       used += slice.length;
