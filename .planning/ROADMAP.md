@@ -514,7 +514,13 @@ Plans:
   1. A Convex-scheduled job runs the evaluation engine per tenant on a recurring cadence and writes an in-app review card + notification - no email, no mailbox token touched.
   2. The proactive review survives past 7 days (no `invalid_grant` dependency); any future scheduled Google-bound call is explicitly deferred to production OAuth (S4).
   3. The scheduled review is tenant-scoped (the cron iterates tenants, every read/write scoped) and writes refs/counts only to audit.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 13-01-PLAN.md - Engine delta (route/playbook keyed), by_kind index, shared review constants, watch.json registration
+- [ ] 13-02-PLAN.md - proactiveReview.ts (runWeekly fan-out + reviewOne + direct notification insert), crons.weekly, SC#2/SC#3 guard tests
+- [ ] 13-03-PLAN.md - Pinned Weekly-review tab + composer suppression, dated card header + delta line + profile CTA, notification click-through
+- [ ] 13-04-PLAN.md - Full phase gate + live dashboard runWeekly {} verification (checkpoint)
 
 ### Phase 14: Flagship Voice-Doc Workflow
 **Goal**: The flagship experience - a user uploads a report, has it understood in the vault, discusses it by voice with the grounded agent, and receives surfaced insights/patterns/gaps plus a memo or a gap-bridging plan, with an honest "no gaps" path and the user deciding after the discussion.
