@@ -391,6 +391,57 @@ The `voice.session_started` audit payload may gain **`docRef` and nothing else**
 Never the title, the status, or a character count of the text (§4). Without a `docRef` the payload is
 byte-identical to the Phase-6 `{sessionId}`, which `voice.test.ts` asserts exactly.
 
+### `voiceDoc.searchDocument` — the mid-call drill-in (14-03)
+
+`searchDocument({sessionId, query})` → `{passages: string[], found: boolean}` is the server side of
+`SEARCH_DOCUMENT_TOOL`. The browser relays the model's tool call to it over the authenticated Convex
+client and hands the result back on the data channel. It is a `tenantAction` (retrieval needs an
+action — `rag.search` is action-only), V8 runtime, explicit `Promise<>` return type.
+
+- **Retrieval is scoped by the SESSION ROW's `docRef` — never by a model- or client-supplied id.**
+  The model supplies only the free-text `query`. The document id is read off the row (already
+  ownership-and-status-validated at `startSession`), so a prompt-injected "search document X"
+  has nothing to steer: there is no document parameter to poison. A session that is missing, not
+  this tenant's, already ended, or carries no `docRef` yields `{passages: [], found: false}`.
+  Enforced by: the doc-scoping + BETA-05 cases in `voiceDoc.test.ts`.
+- **`searchDocument` NEVER throws.** Every failure — including an unexpected one — returns
+  `{passages: [], found: false}`. A tool call the browser cannot answer leaves the model waiting
+  with no `function_call_output`, and the user hears silence for the rest of a turn inside a capped
+  15 minutes (14-RESEARCH Pitfall 5). An honest empty result is always better than a thrown relay.
+- **The `voicedoc.searched` audit payload is `{sessionId, queryHash, resultCount}` and NOTHING
+  else** (§4). The `queryHash` is `lib/hash.ts contentHash()` — the `gmail.ts mailbox.searched`
+  precedent. The split, restated: CONTENT PLANE = the passages, which go to the model over the data
+  channel and nowhere else; LOG PLANE = refs, a hash and a count. The query is the user's own words
+  about their own report, and the passages ARE report content — neither may enter the audit table.
+  This is the module's ONLY log-plane write: no `agentSteps` row (that table has no text field by
+  construction and `llmRedaction.test.ts` scans a closed allow-list), no `telemetry`, no
+  `deadLetters`. Enforced by: the payload-keys assertion in `voiceDoc.test.ts` and (14-09) a
+  mutation-verified static scan; `grep -c "audit.log" voiceDoc.ts` must stay `1`.
+- **Caps:** at most `RETRIEVAL_MAX_PASSAGES` (3) passages totalling at most `RETRIEVAL_CHAR_CAP`
+  (1,200) characters. Realtime input tokens are re-billed on every turn, so this is a hard total,
+  not a target.
+
+**Doc scoping is POST-HOC, and that ceiling is deliberate (Open Question 2, resolved 14-03).**
+`searchDocument` calls the frozen Phase-10 `internal.vaultGround.vaultGroundHydrated`, which searches
+the tenant's WHOLE vault (`namespace = tenantId` — the isolation linchpin), then drops every hit whose
+`docId` is not `docRef`. Accepted failure mode: when another document dominates the top-K, this
+report's best passage can fall out of the window and a legitimate drill-in returns nothing — the same
+shape as the Phase-12 grounding defect fixed in `f5c279e`. Two named upgrade paths, in cost order:
+
+1. **Raise `rag.search`'s `limit` for a doc-scoped call** and keep filtering post-hoc. One number —
+   but it lives in `vaultGround.ts`, which is Phase-10-owned, so it is a contract change.
+2. **A real doc-scoped rag filter.** `@convex-dev/rag` 0.7.5 **does** support one (verified
+   2026-07-26 against the installed types): `new RAG(…, {filterNames})` + `rag.add({filterValues})`
+   + `rag.search({filters})`. It is not usable today — `vaultRag.ts` declares no `filterNames` and
+   `embedDoc` passes `vaultDocId` as `metadata`, which the package documents as *"not indexed or
+   filtered or searched"*, and filters only match entries **inserted** with those values. Taking
+   this path means changing the single shared RAG instance **and re-embedding every existing
+   entry**: a migration, not a swap.
+
+Explicitly **not** a cache. Cost control for voice is time-cap-only by decision (ADR-005), so a
+digest/retrieval cache would add a store to maintain for no bound the 15-minute wall clock does not
+already give.
+
 ### The synthetic `voice-doc:<sessionId>` thread
 
 A voice session has no cockpit thread, but an `evaluations` row needs one. `voiceDocThreadId()`
