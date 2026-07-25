@@ -45,6 +45,7 @@ key-files:
     - docs/playbooks/voice.md
     - docs/playbooks/cockpit.md
     - docs/playbooks/skill-registry.md
+    - docs/playbooks/business-evaluation.md
     - .planning/PARALLELIZATION.md
 decisions:
   - "runEvaluation's framework arg is PINNED, not schema-derived — the research premise 'zero edits to evaluations.ts' was false"
@@ -130,9 +131,18 @@ copied verbatim from `voice.spec.ts` behind one `test.fixme`.
   Task 2 (`voiceDoc.ts`, `voice-doc.spec.ts` → `voice.md` + `cockpit.md`) each needed their own
   playbook touch. Each commit now carries the playbook content for its OWN code, which is what
   CLAUDE.md §9 actually asks for.
-- **Also:** the plan did not mention `docs/playbooks/skill-registry.md`, but it watches
-  `convex/skills.ts`, `contracts/src/skill.ts`, `contracts/src/skills/` and `contracts/skills/` — all
-  four touched by Task 3. Added its entry.
+- **Also:** the plan named only `voice.md` and `cockpit.md`, but two more playbooks watch paths this
+  plan touched, and both were caught by the Stop hook rather than by the plan:
+  - `skill-registry.md` watches `convex/skills.ts`, `contracts/src/skill.ts`,
+    `contracts/src/skills/` and `contracts/skills/` — all four touched by Task 3.
+  - `business-evaluation.md` watches `evaluations.ts` and `proactiveReview.ts` — both touched by
+    Task 1's approved deviation. This is the playbook where the `runEvaluation` pin most belongs, so
+    it got a full section ("Sharing the `evaluations` table with voice-doc") plus a new bullet in its
+    Invariants list, not just a `Last verified` bump. The table is shared with voice-doc; the engine
+    is not, and that line is now written down.
+- **Note for future plans in this phase:** `check-playbooks.mjs check` evaluates the *uncommitted*
+  file set, so it can pass per-commit while the Stop hook (which sees the whole turn) still blocks.
+  Budget for a playbook touch per subsystem you cross, not per plan.
 
 ### 4. [Rule 3 — environment] No `node_modules` and no `CONVEX_DEPLOYMENT` in this worktree
 
