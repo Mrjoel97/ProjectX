@@ -55,7 +55,12 @@ Lanes A and B at execution time. When both finish, **merge both branches to `mai
 dirs are disjoint so only `STATE.md` conflicts (resolve by **keeping both**, per the singleton
 rule below).
 
-### Stage 1 — Wave-0 freeze commit on `main` (serial, small, unavoidable)
+### Stage 1 — Wave-0 freeze commit on `main` (serial, unavoidable)
+
+> **The full execution spec is `.planning/WAVE-0.md`** — written ahead of time so the day itself is
+> mechanical. It carries the plan-independent work (the `evaluations` facts split, per Convex
+> `guidelines.md:159/:160`), the fill-in-from-plans checklist, the sibling cron-hardening commit,
+> the verification gates, and the scope guard. Read it before executing Stage 1.
 
 ONE session, on `main`, reads **both** finished plans and lands **one commit** that:
 
