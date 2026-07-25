@@ -25,7 +25,12 @@ import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 const INTAKE_UPLOAD_CAP_BYTES = 20 * 1024 * 1024; // 20 MiB — keep in sync with intake.ts
 const CAP_LABEL = `${Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024))}MB`;
 
-const ATTACH_ACCEPT = "image/*,application/pdf,audio/*,text/plain";
+// Extensions are listed ALONGSIDE the MIME types on purpose: Chrome resolves an `accept` MIME type
+// to extensions via the OS registry, and Windows has no entry for text/markdown — so a MIME-only
+// list makes .md files invisible in the picker (the folder just looks empty). classify() already
+// routes both text/markdown and a .md filename to the "document" path.
+const ATTACH_ACCEPT =
+  "image/*,application/pdf,audio/*,text/plain,text/markdown,.txt,.md,.markdown";
 
 type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
 

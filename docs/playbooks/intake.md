@@ -1,6 +1,6 @@
 # Playbook: Attachment & Voice-Dictation Intake
 
-> Last verified: 2026-07-15 against the post-merge `ChatPane.tsx` composer mount
+> Last verified: 2026-07-25 — the attach picker's `accept` string (`IntakeControls.tsx`) gained `text/markdown` plus literal extensions (`.txt,.md,.markdown`); a `.md` was previously unselectable, so the intake document path could never be reached with one from the cockpit. No change to `classify()` or any extraction path — `sniffMime` already mapped the `text/` prefix and `sniffExtension` already mapped `md` to the `document` kind, so this only lets the picker offer what intake already handled. Prior: 2026-07-15 against the post-merge `ChatPane.tsx` composer mount
 > (`<IntakeControls threadId={threadId} />` renders once `threadId` is minted; disabled
 > paperclip/mic placeholders before the first send; the controls reshaped to the composer's
 > `icon-btn` idiom — hidden file input triggered by a paperclip button, `MicIcon` dictate

@@ -322,7 +322,9 @@ export default function OnboardingPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf,audio/*,text/plain,text/markdown,text/csv"
+                  // Extensions listed alongside the MIME types: Windows has no registry entry for
+                  // text/markdown, so a MIME-only accept hides .md files in the picker.
+                  accept="image/*,application/pdf,audio/*,text/plain,text/markdown,text/csv,.txt,.md,.markdown,.csv"
                   aria-label="Upload a document"
                   onChange={onPickFile}
                   style={{ display: "none" }}

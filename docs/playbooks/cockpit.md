@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-25 (12-05 — the gap-action + MEMO terminal, BEVL-02). **`executePlan` is no
+> Last verified: 2026-07-25 — cockpit attach `ATTACH_ACCEPT` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown`) and adds `text/markdown`, which it had never carried at all. Owner-reported: picking a `.md` opened the dialog to an apparently EMPTY folder. Two causes, both client-side — the string omitted markdown entirely, and Chrome resolves `accept` MIME types to extensions via the OS registry, where Windows has no `text/markdown` entry (so even the onboarding picker, which did list the MIME type, hid `.md`). The server was never the constraint: `classify()` routes `text/markdown` (via the `text/` prefix) AND a `.md` filename to the `document` path already. Distinct from the same-day `resolveMimeType` fix, which addressed the ALLOW-LIST check on an empty `File.type` after a file is picked; this one is about which files are offered. Verified: web typecheck clean. Prior: 2026-07-25 (12-05 — the gap-action + MEMO terminal, BEVL-02). **`executePlan` is no
 > longer email-only.** A plan now carries an optional `kind: "memo"` discriminator and the approve
 > gate branches on it AFTER the CAS read and BEFORE the mailbox pre-check: a memo-plan persists its
 > body as a `next_step_memo` vault doc (`evaluations.persistNextStepMemo` → `startIngest`) and goes
