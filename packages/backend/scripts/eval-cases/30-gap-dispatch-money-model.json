@@ -1,0 +1,20 @@
+{
+  "id": "30-gap-dispatch-money-model",
+  "description": "DISP-01 end to end, gate 2: an offer exists and a lifetime figure is on file, but there is only ONE thing to sell — the diagnostic routes to money-model-designer, the gap is tapped, and the specialist's grounded memo lands at the Approve gate. The same three dispatch observables as 29, on a different route, so the attribution assertion cannot be satisfied by a hardcoded string.",
+  "turns": [
+    "Context on my business to keep on file: the Northwind logistics platform. What we sell is a done-for-you shipment onboarding package — that is our attraction offer, the front door customers buy first. Lifetime gross profit per customer (LTGP) is about 3200 dollars.",
+    "Nothing at all is sold after that: no upsell, no downsell, no recurring plan. Warm outreach is the one channel we run and it keeps us full.",
+    "That's everything. Now evaluate my business using my vault and what I've told you."
+  ],
+  "actOnGap": 0,
+  "expect": {
+    "evaluationPresent": true,
+    "findingsPresent": true,
+    "gapCount": 1,
+    "status": "proposed",
+    "planKind": "memo",
+    "attributionRoute": "money-model-designer",
+    "citesVaultDoc": true
+  },
+  "needles": ["Northwind", "3200 dollars"]
+}

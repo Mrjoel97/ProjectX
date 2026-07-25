@@ -1,0 +1,19 @@
+{
+  "id": "29-gap-dispatch-offer-architect",
+  "description": "DISP-01 end to end: a grounded evaluation of the vault's own business surfaces an OFFER gap (nothing in the corpus describes something to buy), the gap is tapped, internal.dispatch.runSpecialist runs offer-architect in THE governed loop, and its output lands on the same single Approve gate. planKind+status prove the collecting→proposed flip; attributionRoute proves it was the SPECIALIST and not the fallback memo; citesVaultDoc proves the grounding really went through searchVault.",
+  "turns": [
+    "Some context on my business before anything else, and keep it on file: it's the Northwind logistics platform, and our CAC is 240 dollars per new customer. That's the only hard number I have to hand — save it so I don't have to repeat it.",
+    "Good. Now evaluate my business against what's in my knowledge vault and the figure I just gave you, and tell me where the constraint is."
+  ],
+  "actOnGap": 0,
+  "expect": {
+    "evaluationPresent": true,
+    "findingsPresent": true,
+    "gapCount": 1,
+    "status": "proposed",
+    "planKind": "memo",
+    "attributionRoute": "offer-architect",
+    "citesVaultDoc": true
+  },
+  "needles": ["Northwind", "240 dollars"]
+}

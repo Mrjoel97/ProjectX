@@ -603,10 +603,18 @@ function buildMemo(
   ].join("\n");
 }
 
+export type ActOnGapResult =
+  | { ok: true; planId: Id<"plans"> }
+  | { ok: false; reason: "gap_not_found" | "plan_busy" };
+
 /**
- * Turn a surfaced gap into an approvable next step (BEVL-02 → DISP-01). Tenant-scoped (§2) and
- * UI-driven, so it carries live identity — no internal twin is needed (unlike the tool-loop writes
- * above).
+ * Turn a surfaced gap into an approvable next step (BEVL-02 → DISP-01).
+ *
+ * ONE implementation behind TWO surfaces, taking an EXPLICIT tenantId: the auth-scoped `actOnGap`
+ * (the UI path, which carries live identity) and the identity-less `actOnGapInternal` (the golden-eval
+ * harness — `npx convex run` has no identity). Same shape, and same reason, as
+ * `applyScorecardAnswer` above: there must be no second copy of the terminal choice, the plan
+ * recycle, or the scheduled dispatch to drift.
  *
  * It REUSES the thread's single `plans` row rather than inserting a second one: `plans.byThread`
  * is a `.unique()` read, so a second row for the same thread would throw for every reader of the
@@ -631,90 +639,108 @@ function buildMemo(
  * new guard, no new status literal, no `apps/web` change. `PlanCard` renders only at `proposed`
  * (cards.tsx:1624), so the CKPT-05 trace step is the progress indicator.
  */
-export const actOnGap = tenantMutation({
-  args: { threadId: v.string(), gapIndex: v.number() },
-  handler: async (
-    ctx,
-    { threadId, gapIndex },
-  ): Promise<
-    { ok: true; planId: Id<"plans"> } | { ok: false; reason: "gap_not_found" | "plan_busy" }
-  > => {
-    const row = await ctx.db
-      .query("evaluations")
-      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
-      .order("desc")
-      .first();
-    const gap = row?.gaps[gapIndex];
-    // A healthy (or thin-data) evaluation carries no gaps — there is simply nothing to act on, and
-    // nothing crosses the Approve gate. Same answer for a stale index.
-    if (!row || !gap) return { ok: false, reason: "gap_not_found" };
+async function applyActOnGap(
+  ctx: MutationCtx,
+  tenantId: string,
+  threadId: string,
+  gapIndex: number,
+): Promise<ActOnGapResult> {
+  const row = await ctx.db
+    .query("evaluations")
+    .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+    .order("desc")
+    .first();
+  const gap = row?.gaps[gapIndex];
+  // A healthy (or thin-data) evaluation carries no gaps — there is simply nothing to act on, and
+  // nothing crosses the Approve gate. Same answer for a stale index.
+  if (!row || !gap) return { ok: false, reason: "gap_not_found" };
 
-    const plan = await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
-      .unique();
-    if (plan && !ACTABLE_PLAN_STATUS.has(plan.status)) return { ok: false, reason: "plan_busy" };
+  const plan = await ctx.db
+    .query("plans")
+    .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+    .unique();
+  if (plan && !ACTABLE_PLAN_STATUS.has(plan.status)) return { ok: false, reason: "plan_busy" };
 
-    let planId: Id<"plans">;
-    if (plan) {
-      planId = plan._id;
-      // resetPlan, not patchPlan: patchPlan DROPS undefined so it can never clear a filled slot —
-      // a half-composed email's recipients/attachments would survive onto the memo.
-      await ctx.runMutation(internal.plans.resetPlan, { planId });
-    } else {
-      planId = await ctx.runMutation(internal.plans.insertPlan, {
-        tenantId: ctx.tenantId,
-        threadId,
-      });
-    }
-    const shared = {
-      planId,
-      kind: "memo" as const,
-      recipients: [], // a memo has no recipients — it is not an email
-      subject: `Next step: ${gap.label}`.slice(0, 120),
-    };
+  let planId: Id<"plans">;
+  if (plan) {
+    planId = plan._id;
+    // resetPlan, not patchPlan: patchPlan DROPS undefined so it can never clear a filled slot —
+    // a half-composed email's recipients/attachments would survive onto the memo.
+    await ctx.runMutation(internal.plans.resetPlan, { planId });
+  } else {
+    planId = await ctx.runMutation(internal.plans.insertPlan, {
+      tenantId: tenantId,
+      threadId,
+    });
+  }
+  const shared = {
+    planId,
+    kind: "memo" as const,
+    recipients: [], // a memo has no recipients — it is not an email
+    subject: `Next step: ${gap.label}`.slice(0, 120),
+  };
 
-    // The RUNTIME resolve is the terminal chooser. `gaps[].route` persists as `v.string()`
-    // (schema.ts:350), so a stored route reaches here un-narrowed.
-    if (!resolveSpecialist(gap.route).ok) {
-      await ctx.runMutation(internal.plans.patchPlan, {
-        ...shared,
-        body: buildMemo(row, gap),
-        status: "proposed", // the pinned collecting→proposed spine, unchanged (12-05)
-      });
-      return { ok: true, planId };
-    }
-
+  // The RUNTIME resolve is the terminal chooser. `gaps[].route` persists as `v.string()`
+  // (schema.ts:350), so a stored route reaches here un-narrowed.
+  if (!resolveSpecialist(gap.route).ok) {
     await ctx.runMutation(internal.plans.patchPlan, {
       ...shared,
-      // NO template body: the specialist's output is the only body this plan will ever carry, and
-      // a staged template is exactly what must not become approvable under an attribution header.
-      body: "",
-      status: "collecting", // ← not approvable until landSpecialistResult flips it
+      body: buildMemo(row, gap),
+      status: "proposed", // the pinned collecting→proposed spine, unchanged (12-05)
     });
-    // Minted HERE, at the dispatch entry point, and deliberately NOT derived from `planId`:
-    // `plans.byThread` is `.unique()` and this very function RECYCLES the thread's one row, so two
-    // dispatches on a thread would merge into one unreconstructable lineage tree. It is not
-    // `plans.correlationId` either — that is only written at `executePlan`, i.e. after Approve.
-    // ADR-008.
-    const rootRequestId = crypto.randomUUID();
-    await ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist, {
-      tenantId: ctx.tenantId,
-      threadId,
-      planId,
-      gapIndex,
-      route: gap.route,
-      rootRequestId,
-      parentAgentId: "executive", // a code-owned constant, never user or model text
-      depth: 1,
-      ancestry: [],
-      envelopeCents: 0, // the ROOT signal — 15-03 derives the real envelope from the live rail
-      spentCents: 0,
-    });
-    // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
-    // keep working untouched.
     return { ok: true, planId };
-  },
+  }
+
+  await ctx.runMutation(internal.plans.patchPlan, {
+    ...shared,
+    // NO template body: the specialist's output is the only body this plan will ever carry, and
+    // a staged template is exactly what must not become approvable under an attribution header.
+    body: "",
+    status: "collecting", // ← not approvable until landSpecialistResult flips it
+  });
+  // Minted HERE, at the dispatch entry point, and deliberately NOT derived from `planId`:
+  // `plans.byThread` is `.unique()` and this very function RECYCLES the thread's one row, so two
+  // dispatches on a thread would merge into one unreconstructable lineage tree. It is not
+  // `plans.correlationId` either — that is only written at `executePlan`, i.e. after Approve.
+  // ADR-008.
+  const rootRequestId = crypto.randomUUID();
+  await ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist, {
+    tenantId: tenantId,
+    threadId,
+    planId,
+    gapIndex,
+    route: gap.route,
+    rootRequestId,
+    parentAgentId: "executive", // a code-owned constant, never user or model text
+    depth: 1,
+    ancestry: [],
+    envelopeCents: 0, // the ROOT signal — 15-03 derives the real envelope from the live rail
+    spentCents: 0,
+  });
+  // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
+  // keep working untouched.
+  return { ok: true, planId };
+}
+
+export const actOnGap = tenantMutation({
+  args: { threadId: v.string(), gapIndex: v.number() },
+  handler: (ctx, { threadId, gapIndex }): Promise<ActOnGapResult> =>
+    applyActOnGap(ctx, ctx.tenantId, threadId, gapIndex),
+});
+
+/**
+ * The identity-less twin of `actOnGap` (15-06). `npx convex run` carries no auth identity, so the
+ * golden-eval harness cannot call the tenant-scoped mutation above — this takes the tenantId
+ * directly, exactly like `recordScorecardAnswerInternal`. It exists so an eval fixture can drive the
+ * REAL user path (gap → tap → scheduled dispatch → staged specialist body) rather than a re-implemented
+ * imitation of it; both surfaces share `applyActOnGap`, so a guard cannot be true in one and absent
+ * in the other. Explicit return type per Convex guidelines §96 (an inferred one collapses the
+ * generated API for `apps/web`).
+ */
+export const actOnGapInternal = internalMutation({
+  args: { tenantId: v.string(), threadId: v.string(), gapIndex: v.number() },
+  handler: (ctx, { tenantId, threadId, gapIndex }): Promise<ActOnGapResult> =>
+    applyActOnGap(ctx, tenantId, threadId, gapIndex),
 });
 
 /** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one

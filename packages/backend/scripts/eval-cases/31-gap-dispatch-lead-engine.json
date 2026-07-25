@@ -1,0 +1,20 @@
+{
+  "id": "31-gap-dispatch-lead-engine",
+  "description": "DISP-01 end to end, gate 3: offer and money model both clear (an attraction offer plus continuity, a lifetime figure on file) and NO lead channel is running — the diagnostic routes to lead-engine, the gap is tapped, and the specialist's grounded memo lands at the Approve gate. Completes the three-route dispatch set (29 offer, 30 money model, 31 leads) that one pinned run certifies together.",
+  "turns": [
+    "Context to keep on file about my business, the Northwind logistics platform. We sell a done-for-you shipment onboarding package as our attraction offer, and customers then stay on a monthly monitoring plan — that is our continuity offer. Lifetime gross profit per customer (LTGP) is about 3200 dollars.",
+    "On acquisition, be blunt in the record: we run no outreach at all right now. No warm outreach, no posted content, no cold outreach, no paid ads — not one channel is active.",
+    "That's everything. Now evaluate my business using my vault and what I've told you."
+  ],
+  "actOnGap": 0,
+  "expect": {
+    "evaluationPresent": true,
+    "findingsPresent": true,
+    "gapCount": 1,
+    "status": "proposed",
+    "planKind": "memo",
+    "attributionRoute": "lead-engine",
+    "citesVaultDoc": true
+  },
+  "needles": ["Northwind", "monthly monitoring plan"]
+}

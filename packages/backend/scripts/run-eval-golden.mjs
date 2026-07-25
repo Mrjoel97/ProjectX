@@ -21,11 +21,12 @@
 // Mirrors run-smoke-*.mjs conventions: `must()` judges success by CLI OUTPUT
 // (Windows/Node24 exit-code crash), `convex run` prints the return value as JSON
 // on stdout (logs go to stderr).
-import { readdirSync, readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -35,8 +36,75 @@ const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 // gpt-4o-mini). Cumulative costUsd beyond this ABORTS the run (exit 2).
 const COST_CAP_USD = 1.0;
 
-// The v1 gated skills — the only valid --skill pin targets (matches GATED_SKILLS).
-const SKILL_NAMES = ["cockpit-agent", "document-drafter", "inbox-digest"];
+// 15-06: how long a tapped gap's SCHEDULED specialist dispatch gets to leave `collecting`.
+// `landSpecialistResult` runs in a `finally` on every outcome (success, overrun, the four governed
+// refusals, a throw), so a row still at `collecting` past this means the deployment never ran the
+// job — an environment problem, not a case failure.
+const DISPATCH_TIMEOUT_MS = 150_000;
+const DISPATCH_POLL_MS = 3_000;
+
+// The needle `vaultSmoke:seedCorpus` stamps into every seeded brief's TITLE and BODY. It is what
+// makes `citesVaultDoc` NON-VACUOUS: this token exists nowhere in any fixture's turns (asserted in
+// --self-check), so it can only reach a specialist's memo through a live `searchVault` result.
+const VAULT_NEEDLE = "evalgrd";
+
+// The gated skills — the only valid --skill pin targets — DERIVED from GATED_SKILLS
+// (packages/contracts/src/skill.ts), never re-listed here. The old hardcoded
+// ["cockpit-agent","document-drafter","inbox-digest"] excluded `reply-drafter` AND all seven Phase-12
+// rubric/specialist skills, so `--skill offer-architect@N` threw before it could ever be evaluated.
+// A second list is a second thing to drift; deriving means a newly gated skill is pinnable the day
+// it is gated. This runner is plain .mjs and cannot import the TS workspace package, so it READS the
+// constant off disk — the specialists.test.ts "scan diagnose.ts for its own literals" precedent.
+const skillSrcPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "contracts",
+  "src",
+  "skill.ts",
+);
+
+function gatedSkillNames() {
+  const src = readFileSync(skillSrcPath, "utf8");
+  const block = /export const GATED_SKILLS[^=]*=\s*\[([\s\S]*?)\]\s*;/.exec(src);
+  if (!block) throw new Error(`GATED_SKILLS not found in ${skillSrcPath}`);
+  const idents = block[1]
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return idents.map((id) => {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(id))
+      throw new Error(`GATED_SKILLS entry "${id}" is not a const name`);
+    const m = new RegExp(`export const ${id}\\s*=\\s*"([a-z0-9.-]+)"`).exec(src);
+    if (!m) throw new Error(`GATED_SKILLS entry ${id} has no string literal in skill.ts`);
+    return m[1];
+  });
+}
+
+const SKILL_NAMES = gatedSkillNames();
+
+// The DISPATCHABLE routes, read off @pikar/core's registry for the same reason as above: a fixture
+// asserting `attributionRoute: "swot"` names a real GATED skill that no gap can ever dispatch to,
+// and would fail live for a reason that has nothing to do with the model. Gated ⊃ dispatchable.
+const specialistSrcPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "core",
+  "src",
+  "specialists.ts",
+);
+
+function specialistRoutes() {
+  const src = readFileSync(specialistSrcPath, "utf8");
+  const block = /export const SPECIALIST_ROUTES\s*=\s*\[([\s\S]*?)\]\s*as const/.exec(src);
+  if (!block) throw new Error(`SPECIALIST_ROUTES not found in ${specialistSrcPath}`);
+  return [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
+}
+
+const SPECIALIST_ROUTES = specialistRoutes();
 
 // CLOSED expect vocabulary. The runner rejects any fixture using anything else
 // BEFORE the first spawn — a bad fixture must never cost a cent.
@@ -72,10 +140,33 @@ const EXPECT_KEYS = new Set([
   "evaluationPresent",
   "findingsPresent",
   "gapCount",
+  // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
+  // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
+  // plan row that a non-dispatching case never stages.
+  //   planKind         — plans.kind. "memo" alongside status "proposed" IS the collecting→proposed
+  //     flip: landSpecialistResult is the only writer that performs it, so the pair proves the
+  //     scheduled dispatch actually completed rather than the tap merely staging a row.
+  //   attributionRoute — the specialist named by specialistMemoBody's leading attribution line. A
+  //     body that came from the buildMemo FALLBACK (a refusal, a throw) carries no such line, so
+  //     this is what separates "the specialist ran" from "the plan reached proposed".
+  //   citesVaultDoc    — the seeded vault corpus needle appears in the body. Non-vacuous by
+  //     construction: no fixture turn may contain that token (--self-check asserts it), so it can
+  //     only have arrived through a live searchVault result.
+  "planKind",
+  "attributionRoute",
+  "citesVaultDoc",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
-const STATUS_ORDER = ["collecting", "proposed", "approved", "scheduled", "delivering", "done", "canceled"];
+const STATUS_ORDER = [
+  "collecting",
+  "proposed",
+  "approved",
+  "scheduled",
+  "delivering",
+  "done",
+  "canceled",
+];
 
 // ── fixture loading + validation (offline) ───────────────────────────────────
 
@@ -100,6 +191,34 @@ function validateFixture(fx, source) {
     if (!STATUS_ORDER.includes(s)) fail(`unknown status "${s}"`);
   }
   if (!Array.isArray(fx.needles) || fx.needles.length === 0) fail("must list at least one needle");
+  // 15-06: `actOnGap` is the gap INDEX to tap after the turns (the "Act on this" control), which
+  // runs the real evaluations→dispatch→landSpecialistResult path.
+  if (fx.actOnGap !== undefined) {
+    if (!Number.isInteger(fx.actOnGap) || fx.actOnGap < 0)
+      fail("actOnGap must be a gap index >= 0");
+    // Pair it with a gap assertion. Tapping index N on an evaluation that surfaced no gap returns
+    // `gap_not_found` and nothing dispatches, so a dispatch fixture that never asserts a gap exists
+    // is measuring the tap's refusal path, not the specialist (12-06's vacuous-pass lesson).
+    if (!(fx.expect.gapCount > fx.actOnGap)) {
+      fail(`actOnGap ${fx.actOnGap} requires expect.gapCount > ${fx.actOnGap}`);
+    }
+  }
+  for (const key of ["planKind", "attributionRoute", "citesVaultDoc"]) {
+    if (fx.expect[key] !== undefined && fx.actOnGap === undefined) {
+      fail(`expect.${key} requires actOnGap (nothing dispatches without the tap)`);
+    }
+  }
+  if (
+    fx.expect.attributionRoute !== undefined &&
+    !SPECIALIST_ROUTES.includes(fx.expect.attributionRoute)
+  ) {
+    fail(`attributionRoute "${fx.expect.attributionRoute}" is not a registered specialist route`);
+  }
+  if (fx.turns.some((t) => t.includes(VAULT_NEEDLE))) {
+    fail(
+      `a turn contains the vault corpus needle "${VAULT_NEEDLE}" — that makes citesVaultDoc vacuous`,
+    );
+  }
   return fx;
 }
 
@@ -114,13 +233,38 @@ function loadFixtures() {
 
 function parseSkillPin(spec) {
   const m = /^([a-z0-9-]+)@(\d+)$/.exec(spec ?? "");
-  if (!m) throw new Error(`malformed --skill "${spec}" (expected <name>@<version>, e.g. cockpit-agent@3)`);
+  if (!m)
+    throw new Error(
+      `malformed --skill "${spec}" (expected <name>@<version>, e.g. cockpit-agent@3)`,
+    );
   const [, name, versionStr] = m;
   if (!SKILL_NAMES.includes(name)) {
     throw new Error(`unknown --skill name "${name}" (gated skills: ${SKILL_NAMES.join(", ")})`);
   }
   return { name, version: Number(versionStr) };
 }
+
+/**
+ * 15-06: `--skill` is MULTI-pin. Every occurrence is collected, so ONE run (one cost, one sitting)
+ * can certify several candidates at once — the runner records one evidence row PER pin off that
+ * same run. A repeated NAME is rejected: two versions of one skill is a bug, not a request.
+ */
+function parseSkillPins(argv) {
+  const pins = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== "--skill") continue;
+    const pin = parseSkillPin(argv[i + 1]);
+    if (pins.some((p) => p.name === pin.name)) {
+      throw new Error(`--skill ${pin.name} pinned twice (two versions of one skill is a bug)`);
+    }
+    pins.push(pin);
+  }
+  return pins;
+}
+
+/** The merged record threaded into every turn AND recorded on every evidence row: the run really
+ *  did carry all of these versions, so each pin's evidence must say so. */
+const skillVersionsOf = (pins) => Object.fromEntries(pins.map((p) => [p.name, p.version]));
 
 // ── expect evaluation (plan/briefing STATE, never reply text) ────────────────
 
@@ -130,7 +274,9 @@ function parseSkillPin(spec) {
  *  fixture does not ask for `ledePresent` — the read is skipped).
  *  @param evaluationCount smoke:evaluationCountForThread (0 when unasked — read skipped).
  *  @param findingCount smoke:findingCountForThread, the LATEST row's findings (0 when unasked).
- *  @param gapCount smoke:gapCountForThread, the LATEST row's gaps (0 when unasked). */
+ *  @param gapCount smoke:gapCountForThread, the LATEST row's gaps (0 when unasked).
+ *  @param vaultNeedle the token vaultSmoke:seedCorpus stamped into every seeded brief — the
+ *  `citesVaultDoc` probe. "" when unasked (offline self-check), which makes the key fail closed. */
 function evaluateExpect(
   expect,
   plan,
@@ -139,6 +285,7 @@ function evaluateExpect(
   evaluationCount = 0,
   findingCount = 0,
   gapCount = 0,
+  vaultNeedle = "",
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -162,7 +309,8 @@ function evaluateExpect(
         break;
       }
       case "recipientCount":
-        if ((plan.recipients ?? []).length !== expected) miss(key, expected, (plan.recipients ?? []).length);
+        if ((plan.recipients ?? []).length !== expected)
+          miss(key, expected, (plan.recipients ?? []).length);
         break;
       case "mode":
         if (plan.mode !== expected) miss(key, expected, plan.mode);
@@ -174,7 +322,8 @@ function evaluateExpect(
         if (present(plan.body) !== expected) miss(key, expected, present(plan.body));
         break;
       case "attachmentCount":
-        if ((plan.attachments ?? []).length !== expected) miss(key, expected, (plan.attachments ?? []).length);
+        if ((plan.attachments ?? []).length !== expected)
+          miss(key, expected, (plan.attachments ?? []).length);
         break;
       case "attachmentError":
         if ((plan.attachmentError !== undefined && plan.attachmentError !== null) !== expected) {
@@ -182,26 +331,44 @@ function evaluateExpect(
         }
         break;
       case "candidatesPending":
-        if (((plan.candidates ?? []).length > 0) !== expected) {
+        if ((plan.candidates ?? []).length > 0 !== expected) {
           miss(key, expected, (plan.candidates ?? []).length > 0);
         }
         break;
       case "briefingPresent":
-        if ((briefingCount > 0) !== expected) miss(key, expected, briefingCount > 0);
+        if (briefingCount > 0 !== expected) miss(key, expected, briefingCount > 0);
         break;
       case "ledePresent":
         // FAIL when the live synthesis returned a blank lede but the fixture expects one.
         if (synopsisPresent !== expected) miss(key, expected, synopsisPresent);
         break;
       case "evaluationPresent":
-        if ((evaluationCount > 0) !== expected) miss(key, expected, evaluationCount > 0);
+        if (evaluationCount > 0 !== expected) miss(key, expected, evaluationCount > 0);
         break;
       case "findingsPresent":
-        if ((findingCount > 0) !== expected) miss(key, expected, findingCount > 0);
+        if (findingCount > 0 !== expected) miss(key, expected, findingCount > 0);
         break;
       case "gapCount":
         if (gapCount !== expected) miss(key, expected, gapCount);
         break;
+      case "planKind":
+        if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
+        break;
+      case "attributionRoute": {
+        // specialistMemoBody puts this FIRST, so match the prefix — a fallback memo (refusal,
+        // throw, empty reply) starts with "# Next step" and fails here.
+        const line = `> Produced by the **${expected}** specialist.`;
+        if (!present(plan.body) || !plan.body.startsWith(line)) {
+          miss(key, line, present(plan.body) ? plan.body.slice(0, line.length) : "empty body");
+        }
+        break;
+      }
+      case "citesVaultDoc": {
+        const cited =
+          vaultNeedle.length > 0 && present(plan.body) && plan.body.includes(vaultNeedle);
+        if (cited !== expected) miss(key, expected, cited);
+        break;
+      }
     }
   }
   return failures;
@@ -218,9 +385,10 @@ function overCap(totalCost, cap = COST_CAP_USD) {
 function selfCheck() {
   // 1. Every real fixture parses, has non-empty turns, needles, closed vocabulary.
   const fixtures = loadFixtures();
-  // Floor bumped 18 → 27 with the two BEVL-01 assessment fixtures (25 on disk + 2). The floor is a
-  // deletion tripwire: a fixture quietly dropped must not quietly shrink the gate.
-  assert.ok(fixtures.length >= 27, `expected >= 27 fixtures, found ${fixtures.length}`);
+  // Floor bumped 18 → 27 (the two BEVL-01 assessment fixtures) → 30 (the three DISP-01
+  // gap→tap→dispatch fixtures). The floor is a deletion tripwire: a fixture quietly dropped must
+  // not quietly shrink the gate.
+  assert.ok(fixtures.length >= 30, `expected >= 30 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -294,7 +462,10 @@ function selfCheck() {
   // 2d. 12-06 (BEVL-01): the evaluation keys are IN the closed vocabulary and evaluate against the
   // evaluations reads (args 5/6/7), never the plan row.
   for (const expect of [{ evaluationPresent: true }, { findingsPresent: true }, { gapCount: 0 }]) {
-    assert.ok(validateFixture({ ...base, expect }, "<synthetic>"), `${Object.keys(expect)[0]} accepted`);
+    assert.ok(
+      validateFixture({ ...base, expect }, "<synthetic>"),
+      `${Object.keys(expect)[0]} accepted`,
+    );
   }
   assert.equal(
     evaluateExpect({ evaluationPresent: true }, collecting, 0, false, 1).length,
@@ -339,10 +510,167 @@ function selfCheck() {
   // third-party mail, so a pinned candidate must be evaluable.
   assert.deepEqual(parseSkillPin("inbox-digest@1"), { name: "inbox-digest", version: 1 });
   assert.throws(() => parseSkillPin("cockpit-agent"), /malformed/, "pin without @version rejected");
-  assert.throws(() => parseSkillPin("cockpit-agent@x"), /malformed/, "non-numeric version rejected");
-  assert.throws(() => parseSkillPin("unknown-skill@3"), /unknown --skill name/, "unknown skill rejected");
+  assert.throws(
+    () => parseSkillPin("cockpit-agent@x"),
+    /malformed/,
+    "non-numeric version rejected",
+  );
+  assert.throws(
+    () => parseSkillPin("unknown-skill@3"),
+    /unknown --skill name/,
+    "unknown skill rejected",
+  );
 
-  console.log(`[eval:golden] self-check PASSED (${fixtures.length} fixtures valid, vocabulary/cap/pin logic proven offline)`);
+  // 4b. 15-06: SKILL_NAMES is DERIVED from GATED_SKILLS, so every gated skill is pinnable and there
+  // is no second list to drift. The three Phase-12 specialists are the reason this plan exists —
+  // before the derivation `--skill offer-architect@N` threw, and eight of the eleven gated skills
+  // were unpinnable. The derivation must also RESOLVE every entry (an unresolved identifier throws
+  // in gatedSkillNames, so reaching here means all eleven resolved to string literals).
+  assert.ok(SKILL_NAMES.length >= 11, `expected >= 11 gated skills, derived ${SKILL_NAMES.length}`);
+  assert.equal(
+    new Set(SKILL_NAMES).size,
+    SKILL_NAMES.length,
+    "derived gated skills must be unique",
+  );
+  assert.deepEqual(
+    SKILL_NAMES,
+    gatedSkillNames(),
+    "SKILL_NAMES must equal the GATED_SKILLS derivation (no hand-maintained copy)",
+  );
+  for (const name of [
+    "cockpit-agent",
+    "document-drafter",
+    "inbox-digest",
+    "reply-drafter",
+    "growth-os-diagnostic",
+    "offer-architect",
+    "money-model-designer",
+    "lead-engine",
+  ]) {
+    assert.ok(SKILL_NAMES.includes(name), `${name} must be derivable from GATED_SKILLS`);
+    assert.deepEqual(parseSkillPin(`${name}@2`), { name, version: 2 }, `${name} must be pinnable`);
+  }
+
+  // 5. 15-06: --skill is MULTI-pin — one run, one cost, one sitting certifies all three specialists.
+  assert.deepEqual(parseSkillPins([]), [], "no --skill ⇒ no pins");
+  const trio = parseSkillPins([
+    "--skill",
+    "offer-architect@4",
+    "--skill",
+    "money-model-designer@5",
+    "--skill",
+    "lead-engine@6",
+  ]);
+  assert.equal(trio.length, 3, "every --skill occurrence is collected");
+  assert.deepEqual(skillVersionsOf(trio), {
+    "offer-architect": 4,
+    "money-model-designer": 5,
+    "lead-engine": 6,
+  });
+  assert.throws(
+    () => parseSkillPins(["--skill", "cockpit-agent@3", "--skill", "cockpit-agent@4"]),
+    /pinned twice/,
+    "two versions of ONE skill is a bug, not a request",
+  );
+  assert.throws(
+    () => parseSkillPins(["--skill", "offer-architect@3", "--skill", "nope@1"]),
+    /unknown --skill name/,
+    "a bad name anywhere in the pin list still aborts before the first spawn",
+  );
+
+  // 6. 15-06: the dispatch fixture contract (actOnGap + its three observables).
+  const disp = { ...base, actOnGap: 0, expect: { gapCount: 1, planKind: "memo" } };
+  assert.ok(validateFixture(disp, "<synthetic>"), "a paired dispatch fixture is accepted");
+  assert.throws(
+    () => validateFixture({ ...disp, expect: { gapCount: 0, planKind: "memo" } }, "<synthetic>"),
+    /requires expect.gapCount/,
+    "tapping a gap the evaluation never surfaced measures the refusal path, not the specialist",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { attributionRoute: "lead-engine" } }, "<synthetic>"),
+    /requires actOnGap/,
+    "a dispatch observable without the tap can never be satisfied",
+  );
+  // `swot` is a real GATED skill but not a DISPATCHABLE route — gated ⊃ dispatchable, and the
+  // fixture contract is about what a gap can actually dispatch to.
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...disp, expect: { gapCount: 1, attributionRoute: "swot" } },
+        "<synthetic>",
+      ),
+    /not a registered specialist route/,
+    "attributionRoute must name a route @pikar/core's SPECIALISTS registry resolves",
+  );
+  assert.deepEqual(
+    SPECIALIST_ROUTES,
+    ["offer-architect", "money-model-designer", "lead-engine"],
+    "the three dispatchable routes, read off the core registry (not re-listed here)",
+  );
+  for (const route of SPECIALIST_ROUTES) {
+    assert.ok(
+      SKILL_NAMES.includes(route),
+      `${route} must also be GATED — a body edit rides the gate`,
+    );
+  }
+  assert.throws(
+    () => validateFixture({ ...base, turns: [`tell me about ${VAULT_NEEDLE}`] }, "<synthetic>"),
+    /vacuous/,
+    "a turn carrying the vault needle would make citesVaultDoc pass without searchVault",
+  );
+
+  // 6b. The three observables evaluate against the LANDED plan row.
+  const landedBody = [
+    "> Produced by the **offer-architect** specialist.",
+    "",
+    `Per "Northwind launch ${VAULT_NEEDLE}", there is nothing on file that a buyer picks over price.`,
+  ].join("\n");
+  const landed = { status: "proposed", kind: "memo", body: landedBody };
+  const fallback = {
+    status: "proposed",
+    kind: "memo",
+    body: ["# Next step", "", "I could not run the specialist for this one."].join("\n"),
+  };
+  const dispatched = { planKind: "memo", attributionRoute: "offer-architect", citesVaultDoc: true };
+  assert.equal(
+    evaluateExpect(dispatched, landed, 0, false, 0, 0, 0, VAULT_NEEDLE).length,
+    0,
+    "a landed specialist body satisfies all three dispatch observables",
+  );
+  // The FALLBACK memo is the whole reason attributionRoute exists: it reaches `proposed` with
+  // `kind: "memo"` too, so status+kind alone cannot tell a specialist run from a refusal or a throw.
+  assert.equal(
+    evaluateExpect({ status: "proposed", planKind: "memo" }, fallback).length,
+    0,
+    "status+kind alone CANNOT discriminate the fallback (which is why the next assertion matters)",
+  );
+  assert.equal(
+    evaluateExpect(dispatched, fallback, 0, false, 0, 0, 0, VAULT_NEEDLE).length,
+    2,
+    "the fallback memo MUST fail attributionRoute AND citesVaultDoc",
+  );
+  // citesVaultDoc fails closed when the probe is absent — an un-seeded corpus must never pass it.
+  assert.equal(
+    evaluateExpect({ citesVaultDoc: true }, landed, 0, false, 0, 0, 0, "").length,
+    1,
+    "citesVaultDoc:true MUST FAIL with no vault needle to look for",
+  );
+  assert.equal(
+    evaluateExpect({ attributionRoute: "lead-engine" }, landed, 0, false, 0, 0, 0, VAULT_NEEDLE)
+      .length,
+    1,
+    "attributionRoute must name the specialist that actually produced the body",
+  );
+  assert.equal(
+    evaluateExpect({ planKind: "memo" }, { status: "proposed" }).length,
+    1,
+    "planKind MUST FAIL on a plan row with no kind (an email plan, never dispatched)",
+  );
+
+  console.log(
+    `[eval:golden] self-check PASSED (${fixtures.length} fixtures valid, ${SKILL_NAMES.length} gated skills` +
+      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/dispatch logic proven offline)`,
+  );
 }
 
 // ── live run ─────────────────────────────────────────────────────────────────
@@ -357,7 +685,23 @@ function abortEnv(message) {
   process.exit(2);
 }
 
-function attemptCase(fixture, tenant, pin) {
+/** Block the (synchronous) case driver without spinning the CPU. */
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** 15-06: poll the plan row until the scheduled specialist dispatch has landed. `collecting` is the
+ *  staged, NOT-YET-APPROVABLE state; `landSpecialistResult` runs in a `finally` on every outcome, so
+ *  leaving it is unconditional. Returns the landed plan, or null on timeout. */
+function waitForDispatch(planId) {
+  const deadline = Date.now() + DISPATCH_TIMEOUT_MS;
+  for (;;) {
+    const plan = parse(must("plans:getById", { planId }));
+    if (plan && plan.status !== "collecting") return plan;
+    if (Date.now() >= deadline) return null;
+    sleepSync(DISPATCH_POLL_MS);
+  }
+}
+
+function attemptCase(fixture, tenant, pins) {
   const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
   let caseCost = 0;
   // UAT-E (03.10-06): accumulate {role, content} history across turns and pass it, exactly as the
@@ -373,12 +717,14 @@ function attemptCase(fixture, tenant, pin) {
         planId,
         text,
         ...(history.length ? { history } : {}),
-        ...(pin && { skillVersions: { [pin.name]: pin.version } }),
+        ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
       }),
     );
     if (res.blocked) {
       const hint =
-        res.blocked === "daily_budget_exhausted" ? " — try: npx convex run smoke:resetDailySpend" : "";
+        res.blocked === "daily_budget_exhausted"
+          ? " — try: npx convex run smoke:resetDailySpend"
+          : "";
       abortEnv(`environment drained (${res.blocked}) — not an eval failure${hint}`);
     }
     caseCost += res.costUsd ?? 0;
@@ -388,9 +734,41 @@ function attemptCase(fixture, tenant, pin) {
     }
     history.push({ role: "user", content: text }, { role: "assistant", content: res.reply ?? "" });
   }
-  // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
-  // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
-  const plan = parse(must("plans:getById", { planId }));
+  // 15-06 (DISP-01): the "Act on this" tap, between the turns and the assertions. This drives the
+  // REAL user path — evaluations.actOnGap's shared implementation stages `collecting` and schedules
+  // internal.dispatch.runSpecialist — through the identity-less twin, because `npx convex run`
+  // carries no auth identity. The specialist turn is a SECOND model call whose cost lands on the
+  // deployment's daily rail, not on this runner's COST_CAP_USD (the runner only sees runCockpitAgent's
+  // costUsd); the dispatcher's own tree envelope is the ceiling there.
+  let plan;
+  if (fixture.actOnGap !== undefined) {
+    const tap = parse(
+      must("evaluations:actOnGapInternal", {
+        tenantId: tenant,
+        threadId,
+        gapIndex: fixture.actOnGap,
+      }),
+    );
+    if (!tap.ok) {
+      return {
+        pass: false,
+        failures: [{ key: "actOnGap", expected: "ok", actual: tap.reason }],
+        caseCost,
+      };
+    }
+    plan = waitForDispatch(tap.planId);
+    if (!plan) {
+      return {
+        pass: false,
+        failures: [{ key: "actOnGap", expected: "left collecting", actual: "still collecting" }],
+        caseCost,
+      };
+    }
+  } else {
+    // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
+    // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
+    plan = parse(must("plans:getById", { planId }));
+  }
   const briefingCount =
     fixture.expect.briefingPresent === undefined
       ? 0
@@ -420,17 +798,22 @@ function attemptCase(fixture, tenant, pin) {
     evaluationCount,
     findingCount,
     gapCount,
+    VAULT_NEEDLE,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
     must("smokeAssert:assertEvalCaseClean", { tenant, needles: fixture.needles });
   } catch (e) {
-    failures.push({ key: "standing-invariants", expected: "clean", actual: e.message.split("\n")[0] });
+    failures.push({
+      key: "standing-invariants",
+      expected: "clean",
+      actual: e.message.split("\n")[0],
+    });
   }
   return { pass: failures.length === 0, failures, caseCost };
 }
 
-async function runLive(pin) {
+async function runLive(pins) {
   const fixtures = loadFixtures(); // fail fast BEFORE the first spawn
   const runId = randomUUID().slice(0, 8);
   const tenant = `eval-${runId}`; // throwaway — isolates every tenant-scoped table
@@ -439,7 +822,7 @@ async function runLive(pin) {
 
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
-      (pin ? `, pin ${pin.name}@${pin.version}` : ""),
+      (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : ""),
   );
 
   // 03.7-05: seed the eval tenant's inbox ONCE, before the first turn. The eval tenant has no
@@ -448,7 +831,9 @@ async function runLive(pin) {
   // poisoned body reaches the LIVE toolless digest, so 17's zero-actuation is a real result and
   // not a fixture short-circuit. Every case shares the one inbox — the injected mail sits in it
   // for ALL of them, because the defense must hold whichever case reads it.
-  const { messageCount } = parse(must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false }));
+  const { messageCount } = parse(
+    must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false }),
+  );
   console.log(`[eval:golden] seeded inbox fixture: ${messageCount} message(s), live digest`);
 
   // 10-04 (VGND-01): seed a REAL embedded vault corpus ONCE, same one-shot shape as the inbox seed.
@@ -457,25 +842,35 @@ async function runLive(pin) {
   // an internalAction callable via `convex run` (identity-less, explicit tenantId) that embeds two
   // "Northwind-evalgrd" logistics briefs. The eval tenant is throwaway (`eval-${runId}`) — no purge
   // (the inbox seed isn't purged either). Needs the deployment OPENAI_API_KEY the eval already requires.
-  const { docIds: vaultDocIds } = parse(must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: "evalgrd" }));
+  const { docIds: vaultDocIds } = parse(
+    must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE }),
+  );
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
 
   for (const fixture of fixtures) {
     let outcome;
     let retried = false;
     try {
-      outcome = attemptCase(fixture, tenant, pin);
+      outcome = attemptCase(fixture, tenant, pins);
     } catch (e) {
-      outcome = { pass: false, failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }], caseCost: 0 };
+      outcome = {
+        pass: false,
+        failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
+        caseCost: 0,
+      };
     }
     if (!outcome.pass) {
       // Flake policy (locked): exactly ONE automatic re-run on a FRESH seeded plan.
       retried = true;
       let second;
       try {
-        second = attemptCase(fixture, tenant, pin);
+        second = attemptCase(fixture, tenant, pins);
       } catch (e) {
-        second = { pass: false, failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }], caseCost: 0 };
+        second = {
+          pass: false,
+          failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
+          caseCost: 0,
+        };
       }
       if (second.pass) {
         retriedCases.push(fixture.id);
@@ -490,7 +885,9 @@ async function runLive(pin) {
     console.log(`  ${tag.padEnd(15)} ${fixture.id}  ($${outcome.caseCost.toFixed(4)})`);
     if (!outcome.pass) {
       for (const f of outcome.failures) {
-        console.log(`      ${f.key}: expected ${JSON.stringify(f.expected)}, got ${JSON.stringify(f.actual)}`);
+        console.log(
+          `      ${f.key}: expected ${JSON.stringify(f.expected)}, got ${JSON.stringify(f.actual)}`,
+        );
       }
     }
   }
@@ -504,23 +901,28 @@ async function runLive(pin) {
       ` — total cost $${totalCost.toFixed(4)}`,
   );
 
-  // Evidence: only on an ALL-GREEN run with a --skill pin (refs/counts only, §4) —
-  // the exact EvalEvidence shape hasPassingEvidence parses (03.6-01).
-  if (allGreen && pin) {
-    const evidence = JSON.stringify({
-      runner: "eval:golden",
-      runId,
-      pass: true,
-      casesPassed,
-      casesTotal,
-      retriedCases,
-      costUsd: totalCost,
-      model: "openai/gpt-4o-mini",
-      skillVersions: { [pin.name]: pin.version },
-      ts: Date.now(),
-    });
-    must("skills:recordEvalEvidence", { name: pin.name, version: pin.version, evidence });
-    console.log(`[eval:golden] evidence recorded on ${pin.name} v${pin.version}`);
+  // Evidence: only on an ALL-GREEN run with at least one --skill pin (refs/counts only, §4) —
+  // the exact EvalEvidence shape hasPassingEvidence parses (03.6-01). 15-06: ONE row per pin off
+  // the SAME run, each carrying the FULL merged skillVersions record, because that is what the run
+  // actually carried on every turn.
+  if (allGreen && pins.length) {
+    const skillVersions = skillVersionsOf(pins);
+    for (const pin of pins) {
+      const evidence = JSON.stringify({
+        runner: "eval:golden",
+        runId,
+        pass: true,
+        casesPassed,
+        casesTotal,
+        retriedCases,
+        costUsd: totalCost,
+        model: "openai/gpt-4o-mini",
+        skillVersions,
+        ts: Date.now(),
+      });
+      must("skills:recordEvalEvidence", { name: pin.name, version: pin.version, evidence });
+      console.log(`[eval:golden] evidence recorded on ${pin.name} v${pin.version}`);
+    }
   }
 
   process.exit(allGreen ? 0 : 1);
@@ -534,9 +936,7 @@ try {
     selfCheck();
     process.exit(0);
   }
-  const skillIdx = argv.indexOf("--skill");
-  const pin = skillIdx >= 0 ? parseSkillPin(argv[skillIdx + 1]) : null;
-  await runLive(pin);
+  await runLive(parseSkillPins(argv));
 } catch (e) {
   console.error(`[eval:golden] ${e.message}`);
   process.exit(1);
