@@ -119,8 +119,11 @@ describe("coverage bind: every route diagnose() emits resolves", () => {
     );
     const out: string[] = [];
     for (const m of src.matchAll(/\broute:\s*"([^"]*)"/g)) out.push(m[1]!);
-    // Balanced-depth slice of each rx(...) call, split on DEPTH-0 commas (the dispatchGuard.test.ts
+    // Balanced-depth slice of each rx(...) call, split on DEPTH-1 commas (the dispatchGuard.test.ts
     // idiom) — robust to reformatting and to the template-literal constraint arg's nested parens.
+    // Quoted/templated spans are SKIPPED whole: the prose args carry both commas ("No failing
+    // gate — offer, money model, and leads are healthy.") and parens, and a walker blind to
+    // strings mis-splits on them.
     for (const m of src.matchAll(/\brx\(/g)) {
       let depth = 1;
       let i = m.index + m[0].length;
@@ -128,6 +131,10 @@ describe("coverage bind: every route diagnose() emits resolves", () => {
       const args: string[] = [];
       for (; i < src.length && depth > 0; i++) {
         const c = src[i]!;
+        if (c === '"' || c === "'" || c === "`") {
+          for (i++; i < src.length && src[i] !== c; i++) if (src[i] === "\\") i++;
+          continue;
+        }
         if (c === "(" || c === "[" || c === "{") depth++;
         else if (c === ")" || c === "]" || c === "}") depth--;
         else if (c === "," && depth === 1) {

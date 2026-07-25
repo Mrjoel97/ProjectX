@@ -7,13 +7,20 @@
  * are all null there is no basis to route OR to declare health, so it ASKS (naming the missing
  * figure) instead of fabricating a metric or a false "scale" verdict.
  */
+import type { SpecialistRoute } from "../specialists";
 import { FLOOR_RATIO, INDUSTRY_MULTIPLE } from "./financialSpine";
 import type { Scorecard } from "./scorecard";
 
 export type Prescription = {
   constraint: string;
   gate: 0 | 1 | 2 | 3 | "scale";
-  route: string;
+  /**
+   * Closed to the dispatchable specialists (DISP-01). `""` stays representable ON PURPOSE — the
+   * not-enough-data ask branch below emits it deliberately, and `resolveSpecialist("")` refuses it
+   * at runtime rather than routing on a guess. Dependency direction is growth/ → specialists,
+   * never the reverse.
+   */
+  route: SpecialistRoute | "";
   playbook: string;
   reason: string;
   proofMetric: string;
@@ -27,7 +34,9 @@ export function diagnose(sc: Scorecard): Prescription {
   const rx = (
     gate: Prescription["gate"],
     constraint: string,
-    route: string,
+    // Every rx() gate routes somewhere; only the ask branch below (which builds its object
+    // literal directly) emits "". Narrower than Prescription["route"] on purpose.
+    route: SpecialistRoute,
     playbook: string,
     reason: string,
     proofMetric: string,

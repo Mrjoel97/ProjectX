@@ -158,7 +158,9 @@ describe("leverageRank — fix the ONE bottleneck first (gate order)", () => {
     const mk = (gate: 0 | 1 | 2 | 3 | "scale") => ({
       constraint: "",
       gate,
-      route: "",
+      // `as const`: Prescription.route is closed to SpecialistRoute | "" (15-02), and a bare ""
+      // in an un-annotated helper widens to `string` — which no longer satisfies the type.
+      route: "" as const,
       playbook: "",
       reason: "",
       proofMetric: "",
