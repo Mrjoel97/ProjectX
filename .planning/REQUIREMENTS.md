@@ -241,8 +241,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
 | DOCV-01 | Phase 14 | Pending |
-| DISP-01 | Phase 15 | Pending |
-| ACTN-01 | Phase 15 | Pending |
+| DISP-01 | Phase 15 | In Progress (seams landed 15-01; needs 15-02/03/04/06) |
+| ACTN-01 | Phase 15 | In Progress (closed action-type union landed 15-01; needs 15-05) |
 | DISP-02 | Phase 16 | Pending |
 | ACTN-03 | Phase 16 | Pending |
 | ACTN-02 | Phase 17 | Pending |

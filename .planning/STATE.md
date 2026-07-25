@@ -2,28 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-status: completed
-stopped_at: Phase 15 context gathered
-last_updated: "2026-07-25T18:19:47.921Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-07-25T19:41:14.558Z"
 progress:
   total_phases: 38
   completed_phases: 21
-  total_plans: 150
-  completed_plans: 146
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-status: completed
-stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-07-25T15:36:38.120Z"
-progress:
-  total_phases: 37
-  completed_phases: 21
-  total_plans: 150
-  completed_plans: 146
+  total_plans: 156
+  completed_plans: 147
+current_phase: 15
 ---
 
 # Project State
@@ -33,13 +21,56 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 13 — Proactive In-App Review (EXECUTING, 3/4 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 1/6 plans)
 
 ## Current Position
 
-Phase: 13 of 25 (Proactive In-App Review) — **IN PROGRESS** (3/4 plans, 4 waves)
-Plan: 13-03 COMPLETE (the in-app review surface); next 13-04 (wave 4)
-Status: Wave 3 done. BEVL-03 is now visible end to end — the cron's rows have a surface. `/dashboard/workspace` always shows a PINNED, non-closable "Weekly review" tab: `REVIEW_TAB` is seeded straight into `useState<Tab[]>([REVIEW_TAB])`, which is also what makes the `?thread=proactive-review` notification deep-link dedupe for free (`openThread` already skips ids it is showing). The tab drops both its `×` and the `has-close` class, and `closeTab` refuses the id. Selecting it renders a one-line explainer INSTEAD of `ChatPane` — the review thread is synthetic (no `plans` row), so `sendCockpitMessage` would throw `cockpit: plan row missing for thread` (cockpit.ts:93); the composer is suppressed and that backend guard was deliberately NOT loosened (it protects every real thread). The review branch precedes the gmail-status branch on purpose, so a user who never connected Gmail still sees it (SC#2 at the surface). `EvaluationCard` gained four review-ONLY branches and is still one dumb read of one `byThread` row: a pre-first-run empty state gated on the query RESOLVING to `null` (`undefined` is loading — no flash), a dated `Weekly review · MMM D ·` header prefix (the date IS the freshness signal, so no unread dot/badge), a `deltaLine()` "what changed" line off the PERSISTED `evaluation.delta` with zero terms omitted (nothing renders on an all-zero delta or an on-demand row), and a `/dashboard/profile` CTA inside the thin-data box — the one action that unblocks the one dead-end state, at `--teal-900` because BRAND §6 forbids `--teal-600` as small text. `NotificationsBanner` gained `KIND_HREF`, an OPT-IN kind→href map (absent kind ⇒ today's plain text; hrefs are code-owned constants, never row data), routing `weekly_review` over the existing VOIC-04 `?thread=` deep-link — no new route, no new component, no component library. Gates: web typecheck + `check-playbooks` exit 0, backend 494/495 unchanged (this plan touched zero backend files). PRIOR (13-02): the spine. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (1/6 plans, 5 waves)
+Current Plan: 2
+Total Plans in Phase: 6
+Plan: 15-01 COMPLETE (the Wave-0 freeze); next 15-02 (wave 1)
+
+**EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
+`.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
+Phase-15 lane, no merges to `main` mid-phase. `PARALLELIZATION.md`'s Phase-15 lane table was
+finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may touch which file)
+— that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
+dispatch work even with one agent doing both.
+
+Status (15-01): **Wave 0 is FROZEN.** Every shared seam Phase 15 needs landed in one plan, and
+three of them would have failed SILENTLY if skipped. (1) Three literals — `dispatchOfferArchitect`
+/ `dispatchMoneyModelDesigner` / `dispatchLeadEngine` — now sit on the CLOSED `agentSteps.tool`
+union. N literals, deliberately NOT a `specialist: v.string()` field: §4 on the trace plane is
+enforced by the ABSENCE of anywhere to put text, and a string field would re-open the hole the
+closed union closed. Without them the dispatch step's insert throws inside an SDK tool callback,
+which the SDK SWALLOWS — prod shows a blank activity card while every test stays green.
+`dispatch.test.ts` inserts each literal against the REAL schema; that is the guard. (2) All four
+matching `VERB` entries landed in `cards.tsx`, INCLUDING the pre-existing Phase-12
+`evaluateBusiness` gap that had rendered the `["Working…","Done"]` FALLBACK since 12-04. This was
+the ONLY `apps/web` edit in Phase 15 — attribution rides the plan BODY (15-04) and `PlanCard`
+renders only at `status === "proposed"`, so a `collecting` plan needs no pending state; **`apps/web`
+is now FROZEN for the phase.** (3) `internal.guardrails.remainingDailyCents` gives the daily-spend
+rail a READER (`rateLimiter.getValue` — utilization without consuming tokens), clamped
+`Math.max(0, …)` because `recordSpend`'s `reserve: true` drives the window negative on purpose,
+with an explicit `Promise<number>` return type (an inferred one collapses the generated API to
+`any` — how 13-01 shipped 90 `apps/web` errors). It reads the DEPLOYMENT's budget, not the
+tenant's: `dailySpendCents` is a KEYLESS window; per-tenant keying is the upgrade path.
+Two pure-TS stubs shipped tested: `packages/core/src/specialists.ts` (`resolveSpecialist` fails
+closed to `unknown_route` with ZERO registrations and NO default, mirroring `parseRouting`;
+`hasOwnProperty` lookup because `"__proto__"`/`"constructor"` resolve to TRUTHY `Object.prototype`
+members through a bare index read) and `packages/core/src/actionType.ts` (`ACTION_TYPES =
+["email","memo"]` + `actionTypeOf` — an absent `plans.kind` means the email plan every prior phase
+built, so ACTN-01 needs no migration). `convex/dispatch.ts` is an empty lane-owned stub, registered
+NOW so the Stop hook can protect it from day one. `dispatchGuard.test.ts` holds the SC#2
+no-nested-loop scan. **Zero lineage schema change was needed** (RESEARCH Q5 held: `AuditPayload`
+already permits `rootRequestId`/`parentAgentId`, `audit.by_correlation` exists, and `telemetry`
+structurally cannot carry them). Gates: `@pikar/core` 208/208, backend 500/501 (sole red the
+documented `audit.test.ts` `auditCounts` row), `dispatch`+`dispatchGuard` 5/5, `apps/web` typecheck
+exit 0 (Pitfall-4 tripwire), backend `tsc` +0 new errors over the 52 pre-existing test-file ones,
+`check-playbooks` exit 0, and `git diff` proves Wave 0 touched NONE of `llm.ts` / `cockpit.ts` /
+`deliverApprovedPlan.ts`.
+
+PRIOR (13-03): Wave 3 done. BEVL-03 is now visible end to end — the cron's rows have a surface. `/dashboard/workspace` always shows a PINNED, non-closable "Weekly review" tab: `REVIEW_TAB` is seeded straight into `useState<Tab[]>([REVIEW_TAB])`, which is also what makes the `?thread=proactive-review` notification deep-link dedupe for free (`openThread` already skips ids it is showing). The tab drops both its `×` and the `has-close` class, and `closeTab` refuses the id. Selecting it renders a one-line explainer INSTEAD of `ChatPane` — the review thread is synthetic (no `plans` row), so `sendCockpitMessage` would throw `cockpit: plan row missing for thread` (cockpit.ts:93); the composer is suppressed and that backend guard was deliberately NOT loosened (it protects every real thread). The review branch precedes the gmail-status branch on purpose, so a user who never connected Gmail still sees it (SC#2 at the surface). `EvaluationCard` gained four review-ONLY branches and is still one dumb read of one `byThread` row: a pre-first-run empty state gated on the query RESOLVING to `null` (`undefined` is loading — no flash), a dated `Weekly review · MMM D ·` header prefix (the date IS the freshness signal, so no unread dot/badge), a `deltaLine()` "what changed" line off the PERSISTED `evaluation.delta` with zero terms omitted (nothing renders on an all-zero delta or an on-demand row), and a `/dashboard/profile` CTA inside the thin-data box — the one action that unblocks the one dead-end state, at `--teal-900` because BRAND §6 forbids `--teal-600` as small text. `NotificationsBanner` gained `KIND_HREF`, an OPT-IN kind→href map (absent kind ⇒ today's plain text; hrefs are code-owned constants, never row data), routing `weekly_review` over the existing VOIC-04 `?thread=` deep-link — no new route, no new component, no component library. Gates: web typecheck + `check-playbooks` exit 0, backend 494/495 unchanged (this plan touched zero backend files). PRIOR (13-02): the spine. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
 
 **CARRY-FORWARD RESOLVED (13-02):** the repeat-run provenance collapse is **CLOSED** — option (b), not a fresh weekly thread. A date-derived thread id was rejected because `lastForThread` is indexed on `(tenantId, threadId)`: rotating it resets the Scorecard weekly, re-asks answered figures (breaking Phase-12's LOCKED store half), makes `delta` permanently `undefined`, and leaves 13-03 with no stable "the review thread" to render. Root cause instead: `provenance` is rebuilt from the corpus every run and never persisted, but `fillVault` returned EARLY when the slot was already carried — skipping the CITATION, not just the write. Now the VALUE is first-write-wins and the CITATION is re-recorded on every restatement (`!provenance.has(path)` keeps a `user-provided` cite from being downgraded); the two upstream short-circuits (`currentOffers.length === 0`, the `FINANCIAL_PATTERNS` `continue`) are gone. Regression-guarded by `proactiveReview.test.ts > notifies only on change` (run 2 must have the SAME finding count and an empty delta) — confirmed RED before the fix.
 
@@ -101,6 +132,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 12 P06 | ~120 min (incl. human eval gate) | 3 tasks | 8 files |
 | Phase 13 P02 | ~40 min | 3 tasks | 6 files |
 | Phase 13 P03 | ~25 min | 3 tasks | 5 files |
+| Phase 15 P01 | 35 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -144,6 +176,11 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 13]: 13-03: the review branch is checked BEFORE the gmail-status branch — the review has nothing to do with a mailbox, so a never-connected user must still see it (SC#2 at the surface). And the empty state branches on evaluation === null specifically, not falsiness: undefined is still loading, so a falsiness gate would flash 'first review runs Monday' on every load of a thread that HAS a review.
 - [Phase 13]: 13-03: deltaLine stayed INLINE in cards.tsx rather than moving to @pikar/core for a unit test — apps/web has no unit runner (only Playwright) and CLAUDE.md §8 forbids standing up frameworks for a check; the failure mode is a cosmetic plural, and the cross-package move (new file + test + watch.json + playbook) is a bigger diff than the 8 lines it would guard. Also: the profile CTA uses --teal-900 not --teal-600 (BRAND §6 — teal-600 is ~2.9:1, a button FILL color, not small text).
 - [Phase 13]: 13-03: KIND_HREF is an OPT-IN kind->href map, so absence is the default and no existing notification kind changed behaviour. The hrefs are code-owned constants built from @pikar/core, never derived from row data (no row can steer a user), and message is a static §4 label so using it as link TEXT carries no PII. Routed over the existing VOIC-04 ?thread= deep-link — no new route.
+- [Phase 15]: 15-01: the no-nested-loop scan counts TOOL-BEARING generateText call sites, not total ones — llm.ts legitimately holds 3, two being the TOOLLESS ingestion firewall (digestInbox/draftReply) already pinned by llmRedaction.test.ts. Counting raw sites would break whenever that firewall grew a legitimate member while still missing a second loop hidden inside a tool. Also: runAgentLoop passes tools by SHORTHAND (tools,), so the scan matches tools\s*[,:] — a colon-only regex silently counted 0.
+- [Phase 15]: 15-01: ZERO lineage schema change was needed for SC#3 (RESEARCH Q5 held) — AuditPayload already permits rootRequestId/parentAgentId, audit.by_correlation already exists, and telemetry structurally cannot carry them (requestId: v.id("requests"), and a specialist run seeds zero requests rows by design). PARALLELIZATION Stage-1 item (1)'s 'lineage fields' was a no-op; what Wave 0 actually needed were the three agentSteps.tool literals.
+- [Phase 15]: 15-01: dispatch literals are N LITERALS on the closed agentSteps.tool union, never a specialist: v.string() field — §4 on the trace plane is enforced by the ABSENCE of anywhere to put text, and a string field would re-open the hole the closed union closed. Guarded by dispatch.test.ts inserting each literal against the REAL schema (a missing literal throws inside an SDK callback, which the SDK SWALLOWS).
+- [Phase 15]: 15-01: resolveSpecialist uses Object.prototype.hasOwnProperty.call, not a bare SPECIALISTS[route] index read — "__proto__"/"constructor"/"toString" resolve to TRUTHY Object.prototype members, so a truthiness guard would happily route on them. Mirrors parseRouting: discriminated result, never a throw, NO default specialist. The runtime branch stays load-bearing after 15-02 narrows the type, because gap.route persists as v.string() including diagnose.ts's deliberate "".
+- [Phase 15]: 15-01 (owner): Phase 15 executes SERIALLY on lane-a/dispatch-core, not in 2 parallel lanes. The Wave-0 freeze still ran in FULL (the seams are real architecture), only its 'land on main to unblock lanes' framing is moot. PARALLELIZATION.md's Phase-15 table was finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT. apps/web is FROZEN after Wave 0 (the VERB map was Phase 15's only web edit); watch.json is a Wave-0 singleton; cockpit.md is append-only per-plan subsections.
 
 ### Pending Todos
 
@@ -159,6 +196,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T18:19:47.880Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-sub-agent-dispatch-action-executor/15-CONTEXT.md
+Last session: 2026-07-25T19:40:53.570Z
+Stopped at: Completed 15-01-PLAN.md
+Resume file: None
