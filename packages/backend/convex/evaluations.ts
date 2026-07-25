@@ -18,7 +18,7 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import { deserializeProfile, resolveSpecialist } from "@pikar/core";
+import { deserializeProfile, resolveSpecialist, specialistMemoBody } from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -539,13 +539,47 @@ const ACTABLE_PLAN_STATUS: ReadonlySet<Doc<"plans">["status"]> = new Set([
 ] as const);
 
 /**
+ * Why a memo is being shown INSTEAD of a specialist's work, one calm sentence per governed stop.
+ *
+ * Code-owned map: the caller passes a reason CODE and never prose, and the code itself never
+ * reaches the user (the PAUSED_REPLY / dispatch.ts refusal-reply precedent). An internal error
+ * message must never land in a document the user reads, let alone one they can save to the vault.
+ */
+const FALLBACK_SENTENCE: Record<string, string> = {
+  unknown_route: "I don't have a specialist I can run for this one, so what follows is the",
+  depth_exceeded: "I keep this to a single hand-off, so rather than pass it on again here is the",
+  cycle_refused: "We have already been round this one on this request, so here is the",
+  budget_exhausted: "This request used up the budget I set aside for it, so here is the",
+  error: "The specialist run did not finish, so here is the",
+};
+const FALLBACK_TAIL =
+  "diagnosis it would have started from. Approving this memo SAVES it to your vault as the agreed" +
+  " next action, and nothing is sent to anyone — ask me to try again whenever you like.";
+
+/**
  * Compose the memo body from what was DIAGNOSED — a deterministic template over the persisted row
  * (§5: this is a document the user reads, not an agent prompt; nothing here is model-authored and
  * no metric is invented). Every claim is either a cited grounded finding or the prescription's own
  * prose, so an approved memo can never assert a number the evaluation did not ground.
+ *
+ * 15-04: this is now the FALLBACK, not the terminal. `fallbackReason` present ⇒ a specialist WAS
+ * dispatched and stopped (refused, ceilinged out, or threw). Absent ⇒ the gap names no specialist
+ * at all, which is the only branch where the 12-05 wording is still true.
  */
-function buildMemo(row: Doc<"evaluations">, gap: Doc<"evaluations">["gaps"][number]): string {
+function buildMemo(
+  row: Doc<"evaluations">,
+  gap: Doc<"evaluations">["gaps"][number],
+  fallbackReason?: string,
+): string {
   const grounded = row.findings.map((f) => `- ${f.label} [${f.citationTitle}]`).join("\n");
+  const nextStep =
+    fallbackReason === undefined
+      ? [
+          // No specialist exists for this route — nothing was ever going to run, so this stays true.
+          "That specialist does not execute yet — approving this memo SAVES it to your vault as the",
+          "agreed next action. Nothing is sent to anyone.",
+        ]
+      : [`${FALLBACK_SENTENCE[fallbackReason] ?? FALLBACK_SENTENCE.error} ${FALLBACK_TAIL}`];
   return [
     `# Next step: ${gap.label}`,
     "",
@@ -561,8 +595,7 @@ function buildMemo(row: Doc<"evaluations">, gap: Doc<"evaluations">["gaps"][numb
     "",
     "## The next step",
     `Run the **${gap.route}** specialist against its \`${gap.playbook}\` playbook.`,
-    "That specialist does not execute yet — approving this memo SAVES it to your vault as the",
-    "agreed next action. Nothing is sent to anyone.",
+    ...nextStep,
     "",
     "## Done when",
     gap.proofMetric || "the constraint above no longer blocks the next gate.",
@@ -681,6 +714,69 @@ export const actOnGap = tenantMutation({
     // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
     // keep working untouched.
     return { ok: true, planId };
+  },
+});
+
+/** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one
+ *  honest sentence rather than throwing — a throw would leave the plan stuck at `collecting`, which
+ *  is the ONE outcome this whole function exists to prevent. */
+const LOST_CONTEXT_MEMO =
+  "# Next step\n\nI could not run the specialist for this one, and the evaluation it was based on" +
+  " is no longer on file. Ask me to run the assessment again and I'll pick it up from there.";
+
+/**
+ * Where a dispatched specialist's run LANDS on the plan row (DISP-01). Called ONLY by
+ * `internal.dispatch.runSpecialist`, on every outcome — success, overrun, each of the four governed
+ * refusals, and a thrown turn. Flipping `collecting → proposed` is what makes the row APPROVABLE;
+ * until this runs it structurally is not (`executePlan` refuses anything else, cockpit.ts:530).
+ *
+ * An `internalMutation` with an EXPLICIT `tenantId` arg, because the scheduled action carries no
+ * live identity — the 12-04 `recordScorecardAnswerInternal` precedent. That makes the tenant check
+ * MANUAL, so it is written out below rather than inherited from a wrapper.
+ */
+export const landSpecialistResult = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    gapIndex: v.number(),
+    route: v.string(),
+    /** the specialist's own output; ABSENT ⇒ fall back to the deterministic buildMemo template */
+    body: v.optional(v.string()),
+    incomplete: v.boolean(),
+    /** a reason CODE (unknown_route|depth_exceeded|cycle_refused|budget_exhausted|error) — never
+     *  prose, and never surfaced to the user (§4 + the refusal-reply precedent). */
+    fallbackReason: v.optional(v.string()),
+  },
+  handler: async (ctx, a): Promise<void> => {
+    const plan = await ctx.db.get(a.planId);
+    // The CAS, mirroring executePlan:530. A dispatch that finishes after the user cancelled,
+    // re-composed, approved, or switched threads must NOT clobber the row they moved on to.
+    if (!plan || plan.tenantId !== a.tenantId) return;
+    if (plan.status !== "collecting" || plan.kind !== "memo") return;
+
+    // A specialist that returned nothing has not answered; treat it as a failed run rather than
+    // publishing a bare attribution header over an empty document.
+    const produced = a.body?.trim() ? a.body : undefined;
+    let body: string;
+    if (produced !== undefined) {
+      // The attribution line AND the cost-ceiling marker ride the BODY (15-02), not a new
+      // plans.status literal: the status enum is PINNED with apps/web blast radius, and the body
+      // is rendered verbatim at the Approve gate — exactly where the human decides.
+      body = specialistMemoBody({ route: a.route, body: produced, incomplete: a.incomplete });
+    } else {
+      const row = await ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) =>
+          q.eq("tenantId", a.tenantId).eq("threadId", a.threadId),
+        )
+        .order("desc")
+        .first();
+      const gap = row?.gaps[a.gapIndex];
+      body = row && gap ? buildMemo(row, gap, a.fallbackReason ?? "error") : LOST_CONTEXT_MEMO;
+    }
+    // patchPlan, not resetPlan: we are FILLING a staged row, and resetPlan would clear `kind: memo`.
+    await ctx.runMutation(internal.plans.patchPlan, { planId: a.planId, body, status: "proposed" });
   },
 });
 

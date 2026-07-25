@@ -193,20 +193,22 @@ async function buildSpecialistPrompt(
  * NO reply, NO body, no finding text, no citation titles — a specialist's output is grounded
  * business prose and the audit log must never become a PII honeypot (CLAUDE.md §4).
  */
+const lineageRefs = (a: DispatchArgs) => ({
+  rootRequestId: a.rootRequestId,
+  parentAgentId: a.parentAgentId,
+  specialist: a.route,
+  depth: a.depth,
+  ancestryDepth: a.ancestry.length,
+  planId: String(a.planId),
+});
+
 async function governedDispatch(
   ctx: Ctx,
   args: DispatchArgs,
   run: SpecialistRunner,
 ): Promise<DispatchResult> {
-  const { tenantId, threadId, planId, route, rootRequestId, parentAgentId, depth, ancestry } = args;
-  const refs = {
-    rootRequestId,
-    parentAgentId,
-    specialist: route,
-    depth,
-    ancestryDepth: ancestry.length,
-    planId: String(planId),
-  };
+  const { tenantId, threadId, route, rootRequestId, depth, ancestry } = args;
+  const refs = lineageRefs(args);
   const refuse = async (reason: DispatchRefusal, reply: string): Promise<DispatchResult> => {
     await ctx.runMutation(internal.audit.log, {
       tenantId,
@@ -325,6 +327,69 @@ async function governedDispatch(
   }
 }
 
+/** What `landSpecialistResult` needs to know: either the specialist PRODUCED something, or it did
+ *  not and the memo falls back — never both, never neither. */
+type Landing =
+  | { body: string; incomplete: boolean }
+  | { incomplete: boolean; fallbackReason: string };
+
+/**
+ * The dispatch, plus the ONE thing every outcome owes the user: the plan row must LEAVE
+ * `collecting` (15-04). `actOnGap` parks it there with no body and schedules this; if nothing ever
+ * lands, the control the user tapped silently did nothing — `PlanCard` renders only at `proposed`
+ * (cards.tsx:1624), so there would be no card, no error, and no way back.
+ *
+ * The landing sits in a `finally` for the same reason the `agentSteps` row's does: it is the only
+ * construct that runs on success, on a governed stop that RETURNS as data, and on a throw. "The
+ * plan always leaves collecting" is therefore as unconditional as "a started step always ends".
+ *
+ * Both entry points below call THIS, never `governedDispatch` directly — the 15-03 rule that a
+ * behaviour cannot be true in tests and absent in production applies to the landing too.
+ */
+async function dispatchAndLand(
+  ctx: Ctx,
+  args: DispatchArgs,
+  run: SpecialistRunner,
+): Promise<DispatchResult> {
+  // Pre-seeded for the throw path, which never reaches the assignment below.
+  let landing: Landing = { incomplete: false, fallbackReason: "error" };
+  try {
+    const result = await governedDispatch(ctx, args, run);
+    landing = result.ok
+      ? { body: result.body, incomplete: result.incomplete }
+      : // A governed refusal is a paused conversation, not an error — the user still gets the
+        // deterministic memo, worded honestly for THIS reason (never the code itself).
+        { incomplete: false, fallbackReason: result.reason };
+    return result;
+  } catch (err) {
+    // A thrown turn is a real failure (the §5 loader fails closed by throwing, for instance), not a
+    // governed stop. Audit it as a refusal with the CODE only — never `err.message`, which can
+    // carry prompt or grounded prose (§4) — and do NOT dead-letter: the cockpit has never DLQ'd a
+    // user-facing turn, and the `finally` below still returns the user to an approvable row.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "subagent.refused",
+      actor: "system",
+      payload: { ...lineageRefs(args), reason: "error" },
+    });
+    // Rethrown on purpose: `DispatchResult`'s refusal union is the GOVERNED-stop contract (four
+    // conversational reasons), and an unexpected throw is not one of them. Dressing it as a
+    // refusal would hide a genuine bug from the only place it is visible in production — the
+    // scheduled function's own failure state.
+    throw err;
+  } finally {
+    await ctx.runMutation(internal.evaluations.landSpecialistResult, {
+      tenantId: args.tenantId,
+      threadId: args.threadId,
+      planId: args.planId,
+      gapIndex: args.gapIndex,
+      route: args.route,
+      ...landing,
+    });
+  }
+}
+
 /**
  * PRODUCTION entry point. `internalAction`, so the model can never supply the lineage or the
  * limits (the runCockpitAgent.skillVersions precedent, llm.ts:1935-1938) — ADR-008.
@@ -332,7 +397,7 @@ async function governedDispatch(
 export const runSpecialist = internalAction({
   args: dispatchArgs,
   handler: async (ctx, args): Promise<DispatchResult> =>
-    governedDispatch(ctx, args, (a) =>
+    dispatchAndLand(ctx, args, (a) =>
       runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
     ),
 });
@@ -345,7 +410,7 @@ export const runSpecialist = internalAction({
 export const __runSpecialistWithScript = internalAction({
   args: { ...dispatchArgs, primary: v.array(v.any()), fallback: v.optional(v.array(v.any())) },
   handler: async (ctx, args): Promise<DispatchResult> =>
-    governedDispatch(ctx, args, (a) =>
+    dispatchAndLand(ctx, args, (a) =>
       runSpecialistTurn(ctx, {
         tenantId: args.tenantId,
         planId: args.planId,

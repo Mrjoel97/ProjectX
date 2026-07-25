@@ -8,6 +8,7 @@
 //
 // `node` environment (the runCockpitAgent.test.ts idiom): `dispatch.ts` imports
 // `runSpecialistTurn` from the `"use node"` llm.ts, and the mock-model loop wants the node runtime.
+import { serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
@@ -574,6 +575,213 @@ describe("two-tenant isolation (SC #5)", () => {
     expect(
       await t.withIdentity({ subject: TENANT_B }).query(api.plans.byThread, { threadId: THREAD }),
     ).toBeNull();
+  });
+});
+
+// ── 15-04: where the run LANDS (DISP-01) ──────────────────────────────────────────────────────
+//
+// `actOnGap` parks the thread's plan row at `collecting` with NO body and schedules this
+// dispatcher. `internal.evaluations.landSpecialistResult` is the only writer that gets it out of
+// `collecting`, and it must do so on EVERY outcome — success, overrun, all four governed refusals,
+// and an unexpected throw. A row stuck at `collecting` is a dead end: `PlanCard` renders only at
+// `proposed` (cards.tsx:1624), so the user would be left with a control that did nothing.
+
+/** A grounded evaluation whose gap routes at BASE.route, plus the plan row `actOnGap` stages.
+ *  Rides the same SMOKE:: seam (no embedding, no network) evaluations.test.ts / gapAction.test.ts
+ *  ride. No offering + no financials ⇒ diagnose() stops at Gate 1 ⇒ `offer-architect`. */
+async function setupDispatched(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const { t, planId } = await setup();
+  const text = serializeProfile({
+    name: "Acme Dog Training",
+    oneLineDescription: "In-home dog training for busy urban owners.",
+    persona: "solopreneur",
+    stage: "early-revenue",
+    offering: "", // sparse-start: no offer stated ⇒ Gate 1 ⇒ the offer-architect gap
+    targetCustomer: "urban dog owners with new puppies",
+    primaryGoals: ["more clients"],
+    knownConstraints: [],
+  });
+  const docId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Business profile",
+      kind: "brief",
+      category: "business",
+      source: "seam",
+      mimeType: "text/markdown",
+      size: text.length,
+      contentHash: `hash_${Math.random().toString(36).slice(2)}`,
+      text,
+      status: "ready",
+      createdAt: Date.now(),
+    }),
+  );
+  await t.action(internal.evaluations.runEvaluation, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    query: `SMOKE::${docId}`,
+  });
+  const gap = (
+    await t.run((ctx) => ctx.db.query("evaluations").order("desc").first())
+  )?.gaps[0];
+  expect(gap?.route, "the fixture's gap does not route at BASE.route").toBe("offer-architect");
+  // Exactly what actOnGap stages before scheduling: memo-shaped, parked, no body.
+  await t.run((ctx) =>
+    ctx.db.patch(planId, {
+      kind: "memo",
+      status: "collecting",
+      recipients: [],
+      subject: `Next step: ${gap?.label}`.slice(0, 120),
+      body: "",
+    }),
+  );
+  return { t, planId };
+}
+
+const ATTRIBUTION = "Produced by the **offer-architect** specialist.";
+const CEILING_MARKER = "Incomplete — cost ceiling reached.";
+/** The 12-05 sentence that becomes a LIE the moment dispatch ships. */
+const STALE_CLAIM = "does not execute yet";
+
+describe("landSpecialistResult — every outcome leaves the plan row approvable (DISP-01)", () => {
+  test("SUCCESS: the body is the specialist's, under an attribution line naming it", async () => {
+    const { t, planId } = await setupDispatched();
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(res.incomplete).toBe(false);
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "the plan never left `collecting`").toBe("proposed");
+    expect(plan?.kind).toBe("memo");
+    expect(plan?.body?.startsWith(`> ${ATTRIBUTION}`)).toBe(true);
+    expect(plan?.body).toContain(REPLY); // the specialist's own output, not a template
+    expect(plan?.body).not.toContain(CEILING_MARKER);
+    expect(plan?.body).not.toContain(STALE_CLAIM);
+  });
+
+  test("INCOMPLETE: the cost-ceiling marker sits ABOVE the kept partial output", async () => {
+    const { t, planId } = await setupDispatched();
+    // 5 cents left, an 8-cent turn: the guard passes, the call overruns (the 15-03 fixture).
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+        envelopeCents: 5,
+        spentCents: 0,
+      }),
+    );
+    expect(res.incomplete).toBe(true);
+
+    const body = (await readPlan(t, planId))?.body ?? "";
+    expect(body).toContain(CEILING_MARKER);
+    expect(body, "the overrunning hop's output was discarded at the landing").toContain(REPLY);
+    expect(body.indexOf(CEILING_MARKER), "the marker landed BELOW the body").toBeLessThan(
+      body.indexOf(REPLY),
+    );
+    // The marker rides the BODY, at the Approve gate where the human decides — the plan row's
+    // status enum is PINNED and gains no "partial" literal (15-02).
+    expect((await readPlan(t, planId))?.status).toBe("proposed");
+  });
+
+  const REFUSAL_CASES: readonly (readonly [string, Record<string, unknown>])[] = [
+    ["an unknown route", { route: "does-not-exist" }],
+    ["a depth breach", { depth: 2 }],
+    ["a cycle", { ancestry: ["offer-architect"] }],
+    ["a drained envelope", { envelopeCents: 10, spentCents: 10 }],
+  ];
+
+  test.each(REFUSAL_CASES)(
+    "REFUSAL (%s): the control falls back to the deterministic memo, never a dead end",
+    async (_name, over) => {
+      const { t, planId } = await setupDispatched();
+      const res = await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+        ...over,
+      } as never);
+      expect(res.ok).toBe(false);
+
+      const plan = await readPlan(t, planId);
+      expect(plan?.status, "a refused dispatch left the plan stuck at `collecting`").toBe(
+        "proposed",
+      );
+      expect(plan?.kind).toBe("memo");
+      const body = plan?.body ?? "";
+      expect(body).toContain("# Next step:"); // the buildMemo template
+      expect(body).toContain("02-build-offer"); // …grounded in the persisted gap, not invented
+      expect(body).not.toContain(`> ${ATTRIBUTION}`); // nothing was produced, so nothing is attributed
+      // HONEST wording: the 12-05 sentence is false the moment dispatch ships, and an approved
+      // memo must not tell the user something untrue.
+      expect(body, "the fallback still claims the specialist cannot run at all").not.toContain(
+        STALE_CLAIM,
+      );
+      // …and it says WHY, without ever surfacing the internal reason code.
+      expect(body).toMatch(/specialist/i);
+      if (!res.ok) expect(body).not.toContain(res.reason);
+      expect(await readDeadLetters(t)).toEqual([]);
+    },
+  );
+
+  test("a THROWN turn lands the fallback too — no DLQ, and the stop is on the lineage", async () => {
+    const { t, planId } = await setupDispatched();
+    // An EMPTY script exhausts the mock on its first call → the loop throws.
+    await expect(
+      t.action(internal.dispatch.__runSpecialistWithScript, { ...BASE, planId, primary: [] }),
+    ).rejects.toThrow();
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "a thrown specialist turn left the user at a dead end").toBe("proposed");
+    expect(plan?.body).toContain("# Next step:");
+    expect(plan?.body).not.toContain(STALE_CLAIM);
+    expect(await readDeadLetters(t)).toEqual([]);
+    // §4: the CODE is audited, never the thrown message.
+    const refused = (await readLineage(t)).filter((r) => r.eventType === "subagent.refused");
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.payload).toMatchObject({ reason: "error", rootRequestId: ROOT });
+  });
+
+  test("CAS: a plan the user moved on from is NEVER clobbered", async () => {
+    const { t, planId } = await setupDispatched();
+    // The user cancelled while the specialist was running (the mirror of executePlan's CAS).
+    await t.run((ctx) => ctx.db.patch(planId, { status: "canceled", body: "user's own draft" }));
+
+    ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "a finished dispatch clobbered a canceled plan").toBe("canceled");
+    expect(plan?.body).toBe("user's own draft");
+  });
+
+  test("cross-tenant: a landing under a foreign tenantId is a no-op", async () => {
+    const { t, planId } = await setupDispatched();
+    // An explicit-tenantId internal twin carries no live identity (the 12-04
+    // recordScorecardAnswerInternal precedent), so the check is MANUAL and must exist.
+    await t.mutation(internal.evaluations.landSpecialistResult, {
+      tenantId: TENANT_B,
+      threadId: THREAD,
+      planId,
+      gapIndex: 0,
+      route: "offer-architect",
+      body: "tenant B's specialist output",
+      incomplete: false,
+    });
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "a cross-tenant landing moved the plan row").toBe("collecting");
+    expect(plan?.body).toBe("");
   });
 });
 

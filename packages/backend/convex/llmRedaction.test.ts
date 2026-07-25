@@ -738,13 +738,16 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
     .replace(/\/\/[^\n]*/g, "");
 
   const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
-  // refused / dispatched / completed. A FOURTH lineage write is a new §4 surface, so the count is
-  // pinned the way cockpit.ts's two audit.log sites are.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(3);
-  // All three SPREAD a shared `refs` object — scanning the payloads alone would miss a leak added
-  // one line above them, so the spread source is scanned as a payload too.
-  const refs = src.match(/const refs = (\{[^}]*\})/);
-  expect(refs, "the shared `refs` object is gone from dispatch.ts — the scan is half-blind").not.toBeNull();
+  // refused / dispatched / completed, plus 15-04's thrown-turn `subagent.refused` — the one place
+  // an EXCEPTION reaches the audit plane, and therefore the one most likely to be handed
+  // `err.message`. A FIFTH lineage write is a new §4 surface, so the count is pinned the way
+  // cockpit.ts's two audit.log sites are.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(4);
+  // All four SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
+  // path could not drift from the rest) — scanning the payloads alone would miss a leak added
+  // inside it, so its body is scanned as a payload too.
+  const refs = src.match(/const lineageRefs = \([^)]*\) => \(?(\{[^}]*\})/);
+  expect(refs, "the shared refs object is gone from dispatch.ts — the scan is half-blind").not.toBeNull();
 
   for (const p of [...payloads, refs![1] ?? ""]) {
     expect(p, `a dispatch lineage payload carries specialist output: ${p}`).not.toMatch(
