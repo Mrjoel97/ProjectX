@@ -1,6 +1,9 @@
 // Voice-doc discussion domain (DOCV-01) — pure TS, no Convex import (CLAUDE.md §1;
-// `importGuard.test.ts` enforces it). Every literal the voice-doc flow needs lives HERE
-// exactly once, so no downstream plan re-derives one and drifts.
+// `@pikar/voice` depends only on `@pikar/core`, so a Convex import cannot even resolve here).
+// Every literal the voice-doc flow needs lives HERE exactly once, so no downstream plan
+// re-derives one and drifts.
+
+import { BRIEF_HEADERS, type TranscriptTurn, composeBrief } from "./brief";
 
 /** The evaluations.framework literal for a voice-doc review. Printed verbatim by
  *  evaluations.ts buildMemo as user-visible memo prose — keep it human-readable. */
@@ -114,3 +117,193 @@ export function buildDocDigest(doc: {
  *  finding section once real specialists are dispatchable. */
 export const DOC_GAP_ROUTE = "document-analyst" as const;
 export const DOC_GAP_PLAYBOOK = "document-review" as const;
+
+/** Document-shaped finding sections — the closed taxonomy the model may emit. Mirrors Success
+ *  Criterion 2's own language (insights / patterns / gaps) rather than Phase 12's business
+ *  quadrants: this is a report review, not a growth diagnostic. */
+export const DOC_REVIEW_SECTIONS = ["insight", "pattern", "strength", "risk"] as const;
+export type DocReviewSection = (typeof DOC_REVIEW_SECTIONS)[number];
+
+/** Mirrors evaluations.findings[].confidence. A finding outside it is DROPPED, never guessed. */
+export const DOC_REVIEW_CONFIDENCE = ["high", "medium", "low"] as const;
+export type DocReviewConfidence = (typeof DOC_REVIEW_CONFIDENCE)[number];
+
+/** The RAW model object — deliberately carries NO citation, route, rank or verdict field, so the
+ *  model has nothing to omit or invent (Success Criterion 2). `excerpt` is the ONE declared
+ *  exception: a quote can only come from whoever read the passage. */
+export type RawDocReview = {
+  findings: { label: string; section: string; confidence: string; excerpt?: string | null }[];
+  gaps: { label: string; reason: string; proofMetric: string }[];
+  notEnoughData: { section: string; needs: string }[];
+};
+
+/** One shaped finding — the exact evaluations.findings[] row shape (schema.ts). */
+export type ShapedDocFinding = {
+  label: string;
+  section: DocReviewSection;
+  citationDocId: string;
+  citationTitle: string;
+  /** Present ONLY when the model quoted the report. Absent is valid and non-degraded — never "". */
+  citationExcerpt?: string;
+  confidence: DocReviewConfidence;
+  source: "vault";
+};
+
+/** One shaped gap — the exact evaluations.gaps[] row shape (schema.ts). */
+export type ShapedDocGap = {
+  label: string;
+  leverageRank: number;
+  route: string;
+  playbook: string;
+  citationDocId: string;
+  reason?: string;
+  proofMetric?: string;
+};
+
+export type ShapedDocReview = {
+  findings: ShapedDocFinding[];
+  gaps: ShapedDocGap[];
+  notEnoughData: { section: string; needs: string }[];
+  verdict: "gaps" | "healthy" | "insufficient";
+};
+
+const isSection = (s: unknown): s is DocReviewSection =>
+  (DOC_REVIEW_SECTIONS as readonly unknown[]).includes(s);
+const isConfidence = (c: unknown): c is DocReviewConfidence =>
+  (DOC_REVIEW_CONFIDENCE as readonly unknown[]).includes(c);
+
+/** Normalize a model-authored quote: collapse whitespace runs, trim, hard-cap. Returns `undefined`
+ *  — never `""` — when there is no quote, so the caller can OMIT the key rather than persist an
+ *  empty one. Same hard-cap discipline as DIGEST_CHAR_CAP / RETRIEVAL_CHAR_CAP.
+ *  Provenance (is the quote actually IN the report?) is verified at the producer, where the
+ *  document text is in hand (plan 14-05) — this pure function caps and normalizes, it never fetches. */
+const normalizeExcerpt = (value: string | null | undefined): string | undefined => {
+  const collapsed = (value ?? "").replace(/\s+/g, " ").trim();
+  return collapsed.length === 0 ? undefined : collapsed.slice(0, EXCERPT_CHAR_CAP);
+};
+
+const cleaned = (value: string | undefined): string => (value ?? "").trim();
+
+/**
+ * Shape a raw model review into the persisted `evaluations` row — every citation, route, playbook,
+ * rank and the verdict welded HERE, in code (14-RESEARCH Pattern 4; the same discipline that welds
+ * the transcript onto the brief in `brief.ts`, never model-authored).
+ *
+ * The honesty rule at the bottom is the Phase-12 engine's rule restated: a gap can never be
+ * fabricated out of an unread document, and "healthy" can never be reached by emptiness.
+ */
+export function shapeDocReview(
+  raw: RawDocReview,
+  doc: { id: string; title: string },
+): ShapedDocReview {
+  // 1 + 2 + 2b. Drop the malformed (never coerce), then weld the doc-level citation onto survivors.
+  const findings: ShapedDocFinding[] = [];
+  for (const f of raw.findings ?? []) {
+    const label = cleaned(f?.label);
+    if (label.length === 0 || !isSection(f?.section) || !isConfidence(f?.confidence)) continue;
+    const excerpt = normalizeExcerpt(f.excerpt);
+    findings.push({
+      label,
+      section: f.section,
+      confidence: f.confidence,
+      citationDocId: doc.id,
+      citationTitle: doc.title,
+      source: "vault",
+      ...(excerpt === undefined ? {} : { citationExcerpt: excerpt }),
+    });
+  }
+
+  // 4 (first half). Zero grounded findings ⇒ there is nothing to have found a gap IN.
+  // 3. Route/playbook/rank are ours; `reason`/`proofMetric` are the model's prose because
+  //    evaluations.ts buildMemo prints them as the memo's "Why this first" / "Done when".
+  const gaps: ShapedDocGap[] =
+    findings.length === 0
+      ? []
+      : (raw.gaps ?? [])
+          .filter((g) => cleaned(g?.label).length > 0)
+          .map((g, i) => {
+            const reason = cleaned(g.reason);
+            const proofMetric = cleaned(g.proofMetric);
+            return {
+              label: cleaned(g.label),
+              leverageRank: i + 1,
+              route: DOC_GAP_ROUTE,
+              playbook: DOC_GAP_PLAYBOOK,
+              citationDocId: doc.id,
+              ...(reason.length === 0 ? {} : { reason }),
+              ...(proofMetric.length === 0 ? {} : { proofMetric }),
+            };
+          });
+
+  const notEnoughData = (raw.notEnoughData ?? [])
+    .map((n) => ({ section: cleaned(n?.section), needs: cleaned(n?.needs) }))
+    .filter((n) => n.section.length > 0 && n.needs.length > 0);
+
+  // 4 (second half). The honesty verdict — SC2's code half.
+  const verdict: ShapedDocReview["verdict"] =
+    findings.length === 0 ? "insufficient" : gaps.length === 0 ? "healthy" : "gaps";
+
+  return { findings, gaps, notEnoughData, verdict };
+}
+
+/** Header for the gap list. NOT a BRIEF_HEADERS entry on purpose — `planSeedFromBrief` only parses
+ *  DECISIONS + ACTION ITEMS, and adding a header to the shared set would change how BOTH brief
+ *  flavors are parsed. */
+const MEMO_GAPS_HEADER = "GAPS";
+
+const VERDICT_LINE: Record<ShapedDocReview["verdict"], string> = {
+  healthy: "No gaps were found — the report holds up on the points discussed.",
+  gaps: "The discussion surfaced gaps worth acting on. They are listed below, most leverage first.",
+  insufficient:
+    "Not enough of the report could be grounded to draw findings, so nothing below is a gap.",
+};
+
+const renderMemoFindings = (findings: ShapedDocFinding[]): string =>
+  findings.length === 0
+    ? "None"
+    : findings
+        .flatMap((f) => [
+          `- ${f.label} [${f.citationTitle}]`,
+          // "Where available" — an absent excerpt renders NOTHING, never an empty quote line.
+          ...(f.citationExcerpt ? [`    "${f.citationExcerpt}"`] : []),
+        ])
+        .join("\n");
+
+const renderMemoGaps = (gaps: ShapedDocGap[]): string =>
+  gaps.length === 0
+    ? "None"
+    : gaps
+        .flatMap((g) => [
+          `- ${g.leverageRank}. ${g.label}`,
+          ...(g.reason ? [`    Why this first: ${g.reason}`] : []),
+          ...(g.proofMetric ? [`    Done when: ${g.proofMetric}`] : []),
+        ])
+        .join("\n");
+
+/**
+ * The ONE vault artifact a voice-doc session produces — the memo IS the brief, document-flavored.
+ *
+ * Built ON `composeBrief` so `BRIEF_HEADERS` stay shared and `planSeedFromBrief` keeps parsing
+ * (drifting them silently breaks the plan seed — `brief.ts`'s own warning). The review fills the
+ * three headers the client brief leaves unused: SUMMARY (verdict), DISCUSSION (cited findings),
+ * OPEN QUESTIONS (what could not be grounded). Same clean PLAIN TEXT rule as `composeBrief` —
+ * no `#`/`*`; a brief is READ in the vault, not rendered.
+ */
+export function composeDocMemo(
+  turns: TranscriptTurn[],
+  review: ShapedDocReview,
+  docTitle: string,
+  date: string,
+): string {
+  return `${[
+    composeBrief(turns, date).trimEnd(),
+    `${BRIEF_HEADERS.summary}\nDocument review — ${docTitle}. ${VERDICT_LINE[review.verdict]}`,
+    `${BRIEF_HEADERS.discussion}\n${renderMemoFindings(review.findings)}`,
+    `${BRIEF_HEADERS.openQuestions}\n${
+      review.notEnoughData.length === 0
+        ? "None"
+        : review.notEnoughData.map((n) => `- ${n.section}: ${n.needs}`).join("\n")
+    }`,
+    `${MEMO_GAPS_HEADER}\n${renderMemoGaps(review.gaps)}`,
+  ].join("\n\n")}\n`;
+}
