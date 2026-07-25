@@ -11,7 +11,12 @@ crons.daily("worm-export", { hourUTC: 3, minuteUTC: 0 }, internal.worm.exportAud
 // DLVR-03 proactive half: flag Gmail tokens within ~24h of their 7-day refresh expiry
 // into an in-app "Reconnect Gmail" notification before delivery breaks. Logic lives in
 // gmailAuth.ts (the gmail DB module), mirroring worm-export → worm.ts.
-crons.daily("gmail-token-expiry-scan", { hourUTC: 4, minuteUTC: 0 }, internal.gmailAuth.flagExpiringTokens, {});
+crons.daily(
+  "gmail-token-expiry-scan",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.gmailAuth.flagExpiringTokens,
+  {},
+);
 // BEVL-03: the proactive weekly business review. In-app only — no mailbox token (SC#2). Logic
 // lives in proactiveReview.ts, mirroring worm-export → worm.ts.
 //
@@ -20,5 +25,10 @@ crons.daily("gmail-token-expiry-scan", { hourUTC: 4, minuteUTC: 0 }, internal.gm
 // already runs two `crons.daily` jobs and `weekly` is a fully-typed, non-deprecated public API in
 // the pinned convex@1.42.1 (WeeklySchedule / CronJobs.weekly). Do not re-litigate.
 // `dayOfWeek` MUST be lowercase — the runtime validator rejects "Monday"; the JSDoc example is wrong.
-crons.weekly("proactive-review", { dayOfWeek: "monday", hourUTC: 6, minuteUTC: 0 }, internal.proactiveReview.runWeekly, {});
+crons.weekly(
+  "proactive-review",
+  { dayOfWeek: "monday", hourUTC: 6, minuteUTC: 0 },
+  internal.proactiveReview.runWeekly,
+  {},
+);
 export default crons;

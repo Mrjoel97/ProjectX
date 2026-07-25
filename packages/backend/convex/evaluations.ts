@@ -88,7 +88,9 @@ const DEFAULT_QUERY = "business profile offer financials leads market position";
 
 /** Read a Scorecard dot-path (null-safe). */
 function getPath(obj: unknown, path: string): unknown {
-  return path.split(".").reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), obj);
+  return path
+    .split(".")
+    .reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), obj);
 }
 
 /** Return a CLONE with the dot-path set (JSON-clone — the Scorecard is JSON-safe). */
@@ -193,7 +195,11 @@ export const runEvaluation = internalAction({
       // A carried user-provided figure is cited honestly + never re-asked.
       for (const field of userProvided) {
         if (getPath(scorecard, field) != null) {
-          provenance.set(field, { title: "user-provided", confidence: "high", source: "user-provided" });
+          provenance.set(field, {
+            title: "user-provided",
+            confidence: "high",
+            source: "user-provided",
+          });
         }
       }
 
@@ -284,7 +290,9 @@ export const runEvaluation = internalAction({
         scorecard.identity.headlinePrice != null;
       const chosen: Framework =
         framework ??
-        (financialsPresent ? "growth-os" : (PERSONA_FRAMEWORK[personaHint ?? "solopreneur"] ?? "lean"));
+        (financialsPresent
+          ? "growth-os"
+          : (PERSONA_FRAMEWORK[personaHint ?? "solopreneur"] ?? "lean"));
 
       // ── Load the rubric method (fail-closed-if-missing → fail-open verdict) ─────────────────────
       let skillOk = true;
@@ -576,7 +584,9 @@ export const actOnGap = tenantMutation({
   handler: async (
     ctx,
     { threadId, gapIndex },
-  ): Promise<{ ok: true; planId: Id<"plans"> } | { ok: false; reason: "gap_not_found" | "plan_busy" }> => {
+  ): Promise<
+    { ok: true; planId: Id<"plans"> } | { ok: false; reason: "gap_not_found" | "plan_busy" }
+  > => {
     const row = await ctx.db
       .query("evaluations")
       .withIndex("by_tenant_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
@@ -658,9 +668,7 @@ export const byThread = tenantQuery({
   handler: async (ctx, { threadId }) =>
     await ctx.db
       .query("evaluations")
-      .withIndex("by_tenant_thread", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("threadId", threadId),
-      )
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
       .order("desc")
       .first(),
 });

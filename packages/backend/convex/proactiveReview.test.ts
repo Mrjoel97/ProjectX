@@ -1,7 +1,10 @@
 // BEVL-03 — the proactive weekly review. Behaviour tests over convex-test (zero network: the
 // engine's `rag.search` is unregistered here and fails open, and the tenant's own profile doc
 // still enters the corpus through `internal.vault.profileSeedDocs`, which is a plain DB read).
-import { REVIEW_THREAD_ID, serializeProfile } from "@pikar/core";
+//
+// The static SC#2 / SC#3 guards live in the SAME file (bottom) deliberately: the raw-source scan
+// idiom needs no `node` environment, so a second file would buy nothing but a second harness.
+import { NOTIFICATION_KINDS, REVIEW_THREAD_ID, serializeProfile } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
@@ -86,10 +89,7 @@ async function reviewRows(t: ReturnType<typeof convexTest>, tenantId: string) {
     ctx.db
       .query("evaluations")
       .filter((q) =>
-        q.and(
-          q.eq(q.field("tenantId"), tenantId),
-          q.eq(q.field("threadId"), REVIEW_THREAD_ID),
-        ),
+        q.and(q.eq(q.field("tenantId"), tenantId), q.eq(q.field("threadId"), REVIEW_THREAD_ID)),
       )
       .collect(),
   );
@@ -209,3 +209,73 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
   });
 });
 
+// ── Static guards ─────────────────────────────────────────────────────────────────────────────
+// The behaviour tests above prove the review WORKS; these prove it cannot QUIETLY grow a mailbox
+// dependency or an unscoped read. Raw-source scan (the importGuard.test.ts idiom) — edge-runtime
+// has no node:fs, so file contents ride in through Vite's raw loader.
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const sources = import.meta.glob("./**/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const src = sources["./proactiveReview.ts"] ?? "";
+// Comments are stripped before scanning. The module deliberately DOCUMENTS the choke point it must
+// never call, so a guard that a comment can trip is a guard that teaches people to delete comments.
+const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+
+describe("proactive review guards (SC#2 no mailbox token, SC#3 tenant-scoped)", () => {
+  test("the scanned source actually loaded", () => {
+    // A rename must fail LOUDLY here rather than let every assertion below pass vacuously.
+    expect(src.length).toBeGreaterThan(500);
+    expect(code.length).toBeGreaterThan(500); // …and the comment strip left real code behind.
+  });
+
+  test("no mailbox token can be reached from the weekly review", () => {
+    // 1. It imports no mailbox module.
+    expect(code).not.toMatch(/from\s+["']\.\/(gmail|gmailAuth|notifyExternal)["']/);
+    // 2. It never routes through the choke point: `notifications.notify` UNCONDITIONALLY schedules
+    //    internal.notifyExternal.dispatch, which calls freshAccessToken → the Gmail refresh path.
+    expect(code).not.toMatch(/notifications\.notify/);
+    // 3. Second, INDEPENDENT barrier: both review kinds are absent from NOTIFICATION_KINDS, so even
+    //    a future refactor through `notify` returns at `if (!KINDS.has(kind)) return;` BEFORE any
+    //    token work. Neither assertion alone is the guarantee — 2 is the current path, 3 is the
+    //    backstop if the path ever changes.
+    expect(NOTIFICATION_KINDS).not.toContain("weekly_review");
+    expect(NOTIFICATION_KINDS).not.toContain("weekly_review_failed");
+    // The positive half: it really does deliver in-app. Without this, a module that stopped
+    // notifying at all would sail through every assertion above.
+    expect(code).toMatch(/ctx\.db\.insert\(\s*["']notifications["']/);
+  });
+
+  test("every read and write in the review is tenant-scoped", () => {
+    // The cron has no ctx.auth, so tenantQuery/tenantMutation (which call requireTenant) are
+    // structurally uncallable here. This test is what replaces them.
+    const queries = [...code.matchAll(/ctx\.db\s*\.?\s*\n?\s*\.query\(\s*["'](\w+)["']/g)];
+    expect(queries.length).toBeGreaterThan(0);
+    let byKindCount = 0;
+    for (const m of queries) {
+      const tail = code.slice(m.index, m.index + 300);
+      const idx = /\.withIndex\(\s*["'](\w+)["']\s*,\s*\(q\)\s*=>\s*q\.eq\(\s*["'](\w+)["']/.exec(
+        tail,
+      );
+      expect(idx, `unindexed ctx.db.query("${m[1]}")`).not.toBeNull();
+      const [, indexName, firstField] = idx ?? [];
+      if (firstField === "kind") {
+        // The ONE deliberate cross-tenant read: it yields tenant ids only, never content.
+        expect(indexName).toBe("by_kind");
+        byKindCount++;
+      } else {
+        expect(firstField).toBe("tenantId");
+      }
+    }
+    // Pinned so a SECOND unscoped scan cannot be added silently.
+    expect(byKindCount).toBe(1);
+
+    // Every insert carries a tenantId in its object literal.
+    for (const m of code.matchAll(/ctx\.db\.insert\(\s*["'](\w+)["']\s*,\s*\{/g)) {
+      const tail = code.slice(m.index, m.index + 400);
+      expect(tail, `untenanted ctx.db.insert("${m[1]}")`).toMatch(/\btenantId\b/);
+    }
+  });
+});
