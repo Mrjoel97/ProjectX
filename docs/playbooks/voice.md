@@ -288,7 +288,15 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   `realtime.ts` self-check (unit; no deployment).
 - `pnpm --filter @pikar/cost test` — `priceRealtime` fail-closed pricing math (unit).
 - `pnpm --filter @pikar/backend test voice` — the session engine (convex-test + fake timers):
-  watchdog arm/fire/cancel, parallel guard, clean/abnormal CAS, `storeBrief` ingest, `recordUsage`.
+  watchdog arm/fire/cancel, parallel guard, clean/abnormal CAS, `storeBrief` ingest, `recordUsage`,
+  and the four `startSession` `docRef` cases (persist · refuse non-ready · refuse cross-tenant ·
+  unchanged no-`docRef` payload).
+- `pnpm --filter @pikar/backend test voiceDoc` — the voice-doc module (convex-test over the
+  `SMOKE::` seam, `fetch` stubbed to THROW so the offline claim is structural): the drill-in, the
+  doc-scoping drop, the retrieval caps, the three never-throw bail cases, the
+  `{sessionId, queryHash, resultCount}` audit shape, and the BETA-05 two-tenant assertion (which is
+  anti-vacuous — it also proves the same seed IS retrievable from tenant B's own session, so the
+  empty result is a tenant boundary and not a malformed fixture).
 - `pnpm --filter @pikar/backend test llmRedaction` — the refs/counts-only session-audit static scan.
 - `pnpm --filter @pikar/web test:e2e -- voice` — the offline post-call e2e: a seeded stored brief
   (`smoke:seedVoiceBrief`) surfaces in the banner, "Turn into a plan" routes through
@@ -345,9 +353,10 @@ before relying on it.
 
 The flagship "discuss a report by voice" flow: a user picks ONE ready vault document and holds a
 live session scoped to it. It reuses the whole Phase-6 spine (mint → WebRTC → watchdog → brief) and
-adds a doc scope, a retrieval tool, and a persisted review. **Wave 0 (plan 14-01) landed the seams
-only** — the sections below describe contracts that exist on disk now; the behavior fills in across
-plans 14-02 … 14-09.
+adds a doc scope, a retrieval tool, and a persisted review. Wave 0 (14-01) landed the seams, 14-02
+the pure domain, and **14-03 the first real runtime behavior** — `startSession`'s validated `docRef`
+and `voiceDoc.searchDocument`. The mint body (14-04), the review producer (14-05), the browser relay
+(14-06) and the UI (14-07/08) still fill in; sections below say which plan owns which.
 
 ### The `document-review` framework literal
 

@@ -5,9 +5,6 @@
 import { CAP_MS } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import schema from "./schema";
 // Register the components the voice spine touches offline (vaultTranscribe.test.ts set): rateLimiter
 // (recordUsage → recordSpend), auditCounts (audit.log aggregate), workflow + workpool (storeBrief →
 // ingestDoc). Durable workflow steps do NOT run synchronously — `status: "processing"` on the brief
@@ -17,17 +14,28 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_voice_session";
 const FAKE_KEY = "sk-voice-test-key";
@@ -73,7 +81,9 @@ test("startSession persists the callId, marks active, and arms ONE watchdog at s
   try {
     const t = setup();
     const t0 = Date.now();
-    const { sessionId } = await asTenant(t).mutation(api.voice.startSession, { callId: "call_abc" });
+    const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+      callId: "call_abc",
+    });
 
     const s = await get(t, sessionId);
     expect(s?.status).toBe("active");
@@ -325,9 +335,9 @@ test("startSession REFUSES a non-ready document and leaves no active session beh
 
   for (const status of ["processing", "extracting", "pending_extraction", "failed"] as const) {
     const docRef = await seedDoc(t, { status });
-    await expect(asT.mutation(api.voice.startSession, { callId: "call_x", docRef })).rejects.toThrow(
-      /voicedoc: document not ready/,
-    );
+    await expect(
+      asT.mutation(api.voice.startSession, { callId: "call_x", docRef }),
+    ).rejects.toThrow(/voicedoc: document not ready/);
   }
   // A ready doc with no extracted text is equally undiscussable.
   const empty = await seedDoc(t, { text: "   " });
@@ -352,7 +362,9 @@ test("startSession REFUSES another tenant's document (fail-closed, no cross-tena
 
 test("startSession with NO docRef is byte-equivalent to the Phase-6 path (docRef stays absent)", async () => {
   const t = setup();
-  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, { callId: "call_plain" });
+  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+    callId: "call_plain",
+  });
 
   const s = await get(t, sessionId);
   expect(s?.status).toBe("active");
@@ -375,7 +387,7 @@ test("recordUsage accumulates the counters and prices the delta onto spend; a ba
     textOutTok: 20,
   });
   expect(r1).toEqual({ ok: true });
-  let s = await get(t, sessionId);
+  const s = await get(t, sessionId);
   expect(s?.inAudioTok).toBe(100);
   expect(s?.outAudioTok).toBe(200);
   expect(s?.textInTok).toBe(10);

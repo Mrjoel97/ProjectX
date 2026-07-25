@@ -1,12 +1,19 @@
 // Voice-doc discussion (DOCV-01) — convex-test. Wave-0 coverage: this file exists to prove the
 // 14-01 schema widening actually reached the SCHEMA-DERIVED write validator, with zero edits to
 // `insertEvaluation`. SC1 / SC2 / BETA-05 assertions land here in plans 14-03 and 14-05.
+
+import {
+  CAP_MS,
+  DOC_REVIEW_FRAMEWORK,
+  RETRIEVAL_CHAR_CAP,
+  RETRIEVAL_MAX_PASSAGES,
+  voiceDocThreadId,
+} from "@pikar/voice";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // The evaluation write path's refs-only audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier), the evaluations.test.ts idiom.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import { DOC_REVIEW_FRAMEWORK, voiceDocThreadId } from "@pikar/voice";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -69,7 +76,12 @@ function seedReadyDoc(
 
 const asTenant = (t: ReturnType<typeof convexTest>, subject: string) => t.withIdentity({ subject });
 
-/** Open a doc-scoped session through the REAL public entry point (so the docRef guard runs too). */
+/**
+ * Open a doc-scoped session through the REAL public entry point, so the `docRef` guard runs too.
+ * ONE call per tenant per instance: a second one trips the parallel-session guard, whose force-end
+ * schedules `storeBrief` → the ingest WORKFLOW component. Seed the row directly (`seedSession`)
+ * when the session itself is fixture, not subject.
+ */
 async function startDocSession(
   t: ReturnType<typeof convexTest>,
   tenantId: string,
@@ -81,6 +93,55 @@ async function startDocSession(
   });
   return sessionId;
 }
+
+/** A session row inserted directly — the post-handshake state, with no watchdog and no guard. */
+function seedSession(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    tenantId?: string;
+    docRef?: Id<"vaultDocuments">;
+    status?: "active" | "ended_clean" | "ended_abnormal";
+  } = {},
+): Promise<Id<"voiceSessions">> {
+  return t.run((ctx) =>
+    ctx.db.insert("voiceSessions", {
+      tenantId: opts.tenantId ?? TENANT,
+      status: opts.status ?? ("active" as const),
+      callId: "call_seed",
+      startedAt: Date.now(),
+      endsAt: Date.now() + CAP_MS,
+      inAudioTok: 0,
+      outAudioTok: 0,
+      textInTok: 0,
+      textOutTok: 0,
+      ...(opts.docRef && { docRef: opts.docRef }),
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+/** The tenant's `voicedoc.searched` audit rows. */
+const searchAudits = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .filter((q) =>
+        q.and(q.eq(q.field("tenantId"), tenantId), q.eq(q.field("eventType"), "voicedoc.searched")),
+      )
+      .collect(),
+  );
+
+// Any network call is a test failure. The SMOKE:: seam must carry the whole flow, so this suite
+// passes with no OPENAI_API_KEY and no embedding request — stubbing `fetch` proves that
+// structurally rather than trusting the ambient environment.
+beforeEach(() => {
+  vi.stubGlobal("fetch", () => {
+    throw new Error("voiceDoc.test: no network is allowed in this suite");
+  });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("voiceDoc.searchDocument (SC1 — the mid-call drill-in)", () => {
   test("returns passages from THIS document, offline over the SMOKE:: seam", async () => {
@@ -97,6 +158,166 @@ describe("voiceDoc.searchDocument (SC1 — the mid-call drill-in)", () => {
     expect(res.passages.length).toBeGreaterThan(0);
     // An answer the agent did NOT have at connect — grounded in the report's own words.
     expect(res.passages.join("\n")).toContain("setup friction");
+  });
+
+  test("a hit on ANOTHER of the tenant's own documents is dropped — this report is the only source", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const otherId = await seedReadyDoc(t, TENANT, OTHER_TEXT, "Logistics review");
+    const sessionId = await startDocSession(t, TENANT, docId);
+
+    // The seam seeds the OTHER document — the same shape as a vector hit landing on it.
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, {
+      sessionId,
+      query: `SMOKE::${otherId}`,
+    });
+
+    expect(res).toEqual({ passages: [], found: false });
+    // It never leaks a neighbouring doc's passage as if it were this report's.
+    expect(JSON.stringify(res)).not.toContain("Warehouse throughput");
+  });
+
+  test("passages respect RETRIEVAL_MAX_PASSAGES and RETRIEVAL_CHAR_CAP", async () => {
+    const t = newTest();
+    // Five 600-char paragraphs — more passages and more characters than either cap allows.
+    const long = Array.from({ length: 5 }, (_, i) => `${i}`.repeat(600)).join("\n\n");
+    const docId = await seedReadyDoc(t, TENANT, long, "Long report");
+    const sessionId = await startDocSession(t, TENANT, docId);
+
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, {
+      sessionId,
+      query: `SMOKE::${docId}`,
+    });
+
+    expect(res.found).toBe(true);
+    expect(res.passages.length).toBeLessThanOrEqual(RETRIEVAL_MAX_PASSAGES);
+    expect(res.passages.join("").length).toBeLessThanOrEqual(RETRIEVAL_CHAR_CAP);
+  });
+
+  test("an unscoped, an ended, and another tenant's session all yield an honest empty — never a throw", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const query = `SMOKE::${docId}`;
+    const asA = asTenant(t, TENANT);
+
+    // (a) A session with no docRef — the Phase-6 voice flow has nothing to search.
+    const unscoped = await seedSession(t);
+    expect(await asA.action(api.voiceDoc.searchDocument, { sessionId: unscoped, query })).toEqual({
+      passages: [],
+      found: false,
+    });
+
+    // (b) An ended session — the call is over; retrieval must not keep answering.
+    const ended = await seedSession(t, { docRef: docId, status: "ended_clean" });
+    expect(await asA.action(api.voiceDoc.searchDocument, { sessionId: ended, query })).toEqual({
+      passages: [],
+      found: false,
+    });
+
+    // (c) Another tenant's session id — a bail, NOT a thrown relay (Pitfall 5).
+    const live = await seedSession(t, { docRef: docId });
+    expect(
+      await asTenant(t, TENANT_B).action(api.voiceDoc.searchDocument, { sessionId: live, query }),
+    ).toEqual({ passages: [], found: false });
+  });
+});
+
+describe("voiceDoc.searchDocument (SC4 — the refs-only retrieval audit)", () => {
+  test("writes exactly one voicedoc.searched row whose payload keys are sessionId/queryHash/resultCount", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await startDocSession(t, TENANT, docId);
+    const query = `SMOKE::${docId}`;
+
+    await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, { sessionId, query });
+
+    const rows = await searchAudits(t, TENANT);
+    expect(rows).toHaveLength(1); // exactly one per invocation
+    const payload = rows[0]?.payload as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(["queryHash", "resultCount", "sessionId"]);
+    expect(payload.sessionId).toBe(sessionId);
+    expect(payload.resultCount).toBeGreaterThan(0);
+    // A HASH, not the query — and never the passages or the report's words (§4).
+    expect(payload.queryHash).not.toBe(query);
+    expect(String(payload.queryHash)).toMatch(/^[0-9a-f]{64}$/);
+    const serialized = JSON.stringify(rows);
+    expect(serialized).not.toContain("setup friction");
+    expect(serialized).not.toContain("SMOKE::");
+  });
+});
+
+describe("BETA-05 — tenant A's voice-doc session can never reach tenant B's document", () => {
+  test("a cross-tenant seed retrieves nothing and is named in no audit row", async () => {
+    const t = newTest();
+    const aDoc = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const bDoc = await seedReadyDoc(t, TENANT_B, OTHER_TEXT, "Tenant B logistics review");
+    const sessionId = await startDocSession(t, TENANT, aDoc);
+
+    // Tenant A's own session, searching for TENANT B's document id. The seed drops out inside
+    // vaultGround's tenant-scoped ownedDocsMeta — the same way `namespace = tenantId` excludes it.
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, {
+      sessionId,
+      query: `SMOKE::${bDoc}`,
+    });
+    expect(res).toEqual({ passages: [], found: false });
+
+    // ANTI-VACUOUS: the same seed IS retrievable from tenant B's own session, so the empty result
+    // above is a TENANT BOUNDARY, not a malformed id or a seam that silently returns nothing.
+    const bSession = await seedSession(t, { tenantId: TENANT_B, docRef: bDoc });
+    const bRes = await asTenant(t, TENANT_B).action(api.voiceDoc.searchDocument, {
+      sessionId: bSession,
+      query: `SMOKE::${bDoc}`,
+    });
+    expect(bRes.found).toBe(true);
+    expect(bRes.passages.join("\n")).toContain("Warehouse throughput");
+
+    // The log plane names neither tenant B's document nor a word of its content.
+    const serialized = JSON.stringify(await searchAudits(t, TENANT));
+    expect(serialized).not.toContain(bDoc);
+    expect(serialized).not.toContain("Warehouse throughput");
+    expect(serialized).not.toContain("Tenant B logistics review");
+    // Tenant A's audit row exists (the search DID run) and is a hash + a zero count.
+    expect(JSON.parse(serialized)).toHaveLength(1);
+    expect(
+      (JSON.parse(serialized)[0] as { payload: { resultCount: number } }).payload.resultCount,
+    ).toBe(0);
+  });
+
+  test("startSession refuses a non-ready doc and refuses tenant B's doc outright", async () => {
+    const t = newTest();
+    const processing = await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Still ingesting",
+        kind: "upload",
+        category: "business",
+        source: "seam",
+        mimeType: "text/markdown",
+        size: 10,
+        contentHash: "hash_processing",
+        text: REPORT_TEXT,
+        status: "processing" as const,
+        createdAt: Date.now(),
+      }),
+    );
+    const bDoc = await seedReadyDoc(t, TENANT_B, OTHER_TEXT, "Tenant B logistics review");
+
+    await expect(
+      asTenant(t, TENANT).mutation(api.voice.startSession, {
+        callId: "call_a",
+        docRef: processing,
+      }),
+    ).rejects.toThrow(/voicedoc: document not ready/);
+    await expect(
+      asTenant(t, TENANT).mutation(api.voice.startSession, { callId: "call_a", docRef: bDoc }),
+    ).rejects.toThrow(/voicedoc: document not found/);
+
+    // Tenant B may open a session on its OWN document — the guard is scoping, not a blanket refusal.
+    const ok = await startDocSession(t, TENANT_B, bDoc);
+    expect(await t.run((ctx) => ctx.db.get(ok))).toMatchObject({
+      tenantId: TENANT_B,
+      docRef: bDoc,
+    });
   });
 });
 
