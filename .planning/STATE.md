@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 4
+current_plan: 6
 status: executing
-stopped_at: Completed 15-03-PLAN.md
-last_updated: "2026-07-25T21:11:47.874Z"
+stopped_at: Completed 15-04-PLAN.md
+last_updated: "2026-07-26T00:50:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 21
   total_plans: 156
-  completed_plans: 150
+  completed_plans: 151
 current_phase: 15
 ---
 
@@ -21,15 +21,15 @@ current_phase: 15
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 4/6 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 5/6 plans)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (4/6 plans, 5 waves)
-Current Plan: 4
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (5/6 plans, 5 waves)
+Current Plan: 6
 Total Plans in Phase: 6
-Plan: 15-03 COMPLETE (Wave 3 — the governed dispatcher, the heart of DISP-01).
-Done: 15-01, 15-02, 15-03, 15-05. Next: 15-04 (the memo surface), then 15-06 (phase close).
+Plan: 15-04 COMPLETE (Wave 4 — the memo surface; DISP-01 is now closed end to end).
+Done: 15-01, 15-02, 15-03, 15-04, 15-05. Next: 15-06 (phase close).
 
 **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
@@ -38,7 +38,61 @@ finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may 
 — that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
 dispatch work even with one agent doing both.
 
-Status (15-03): **The governed dispatcher is real: a named specialist runs in THE loop behind four
+Status (15-04): **"Act on this" RUNS the specialist, and the phase's user-visible claim is one
+test.** `actOnGap` stays a `tenantMutation` (a Convex mutation cannot call an action, and converting
+to a `tenantAction` would make the `resetPlan`+`patchPlan` recycle interruptible while STILL leaving
+the card blank for 30s) and now has TWO terminals chosen by a RUNTIME `resolveSpecialist(gap.route)`
+at the entry point: a REGISTERED specialist stages `status: "collecting"`, `kind: "memo"`, subject
+set, **`body: ""`** and schedules `internal.dispatch.runSpecialist`; `""` (diagnose()'s ask branch)
+and `"scale"` (its healthy branch) keep the 12-05 memo at `proposed` with NOTHING scheduled — the
+honest terminal when there is nothing to run, and the fail-closed guarantee now sits in front of the
+scheduler as well as inside the dispatcher. **The Approve race is closed BY CONSTRUCTION, not by a
+new guard:** `executePlan` has always returned `alreadyStarted` for any non-`proposed` row
+(cockpit.ts:530), so a `collecting` plan is un-approvable — proven (executePlan on the staged row
+persists ZERO vault docs, ZERO requests rows, no CAS flip), with NO new status literal and **zero
+`apps/web` edits** (`PlanCard` renders only at `proposed`, cards.tsx:1624, so a `collecting` plan
+already shows nothing and the CKPT-05 trace step is the progress indicator). `rootRequestId` is
+minted fresh per call and the test proves it cannot be `planId`: two `actOnGap` calls on one thread
+queue two jobs with an IDENTICAL `planId` (the row is RECYCLED, 12-05) and DIFFERENT roots — exactly
+what ADR-008 forbids collapsing. `internal.evaluations.landSpecialistResult` (an explicit-tenantId
+`internalMutation`, the 12-04 `recordScorecardAnswerInternal` precedent) is the ONLY writer of a
+dispatched body and CASes three ways — wrong tenant, not `collecting`, not `kind: "memo"` ⇒ no-op
+(mutation-checked: deleting the status check lets a finished run clobber a CANCELED plan's own
+draft). `dispatchAndLand` wraps `governedDispatch` and lands in a **`finally`**, the same construct
+that terminalizes the `agentSteps` row, so "the plan always leaves `collecting`" is unconditional
+across success, an overrun, all four governed refusals AND a throw — a row stuck at `collecting`
+renders no card at all, i.e. the user's tap would silently have done nothing. Both entry points call
+it, so the landing cannot be true in tests and absent in prod. Success ⇒ the body STARTS with
+`> Produced by the **<route>** specialist.`; an overrun ⇒ the cost-ceiling marker sits ABOVE the KEPT
+partial output (asserted by string INDEX, not presence) — both in the BODY, never a `plans.status`
+literal (the enum is PINNED). **The fallback stopped lying:** 12-05's *"That specialist does not
+execute yet"* became false the moment dispatch shipped, so `buildMemo` gained an optional
+`fallbackReason` and branches through a code-owned `FALLBACK_SENTENCE` map — the reason CODE never
+reaches the user (asserted). A THROWN turn audits `subagent.refused` with `reason: "error"` (the code
+only — `err.message` can carry prompt/grounded prose, §4), writes NO deadLetters row, lands the
+fallback, and RETHROWS: `DispatchResult`'s refusal union is the four-member GOVERNED-stop contract and
+an exception is not one of them, the `finally` already returned the user to an approvable row, and
+15-03 ships a test asserting that a thrown turn rejects. The end-to-end test is the phase's claim:
+tap → `collecting` + not approvable → the queued job really IS `runSpecialist` → replay its EXACT args
+through the scripted twin → `proposed` + attribution → Approve → exactly ONE `next_step_memo` vault
+doc → **ZERO `requests` rows on the whole path** (12-05's structural property SURVIVES dispatch) →
+the lineage reconstructs from `audit.by_correlation` within one tenant. Four auto-fixed deviations:
+`gapAction.test.ts`'s fixture routes at a REGISTERED specialist so 4 of its 5 tests asserted exactly
+what this plan changes (re-pointed at `"scale"` so it keeps characterizing the memo TERMINAL, every
+other assertion byte-identical); its untyped convex-test instance then broke the typecheck (52→56,
+the SystemIndexes wall — fixed with `TestConvex<typeof schema>`); the e2e test RACED a real gateway
+call and lost, because **convex-test flushes due scheduled work in the background** — the production
+`runSpecialist` fired, threw `AI_LoadAPIKeyError`, landed the error fallback, and the twin's landing
+correctly no-op'd (the CAS working); every dispatching test now CANCELS what it queued, so the suite
+has no hidden `OPENAI_API_KEY` dependency; and the 15-03 §4 source scan fired on the new 4th audit
+payload (the guard working — pin raised to 4, shared-refs scan follows the new `lineageRefs` helper,
+mutation-checked with `body: String(err)`). Gates: backend **544/545** (sole red the documented
+`audit.test.ts` `auditCounts` row), @pikar/core 223/223, `apps/web` typecheck exit 0 (Pitfall-4
+tripwire held), backend `tsc` at the exact 52-error test-file baseline with ZERO in any non-test
+file, `check-playbooks` exit 0, turbo 8/10 baseline, and `git diff` proves `apps/`, `schema.ts`,
+`guardrails.ts`, `cockpit.ts`, `deliverApprovedPlan.ts` and `actionType.ts` are all untouched.
+
+PRIOR (15-03): **The governed dispatcher is real: a named specialist runs in THE loop behind four
 CONVERSATIONAL refusals, one tree-local cost envelope, and a call tree that reconstructs from an
 index that already existed — no new table, no new index, no schema change.** `convex/dispatch.ts` is
 ONE `governedDispatch` plus two thin entry points (`runSpecialist` production /
@@ -217,7 +271,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 4/6 — 01, 02, 03, 05)
+Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 5/6 — 01, 02, 03, 04, 05)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -263,6 +317,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 15 P02 | 25 min | 3 tasks | 9 files |
 | Phase 15 P05 | 13 min | 3 tasks | 6 files |
 | Phase 15 P03 | 35 min | 3 tasks | 5 files |
+| Phase 15 P04 | 35 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -323,6 +378,11 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-03: SC#3 lineage is audit-ONLY with correlationId := rootRequestId — by_correlation already existed, so the call tree reconstructs and its cost sums to the root with NO new table, NO new index and NO schema change. Three deliberate NON-decisions pinned as source comments: no subAgentRuns table, no telemetry mirror (telemetry.requestId is v.id("requests") and a specialist run seeds zero requests rows by design), nothing on agentSteps (a shadow log there would be a section-4 regression).
 - [Phase 15]: 15-03: ADR-008 — depth/ancestry/envelope/spend travel as validator-checked internalAction args, never DB state. A Convex action has no ambient ctx and a ctx cannot be extended across runAction, so the only alternative was a row: a lost-update race on the one field whose job is to be a ceiling, for zero benefit at depth 1. rootRequestId is minted fresh and is NEITHER planId (recycled per thread, 12-05) NOR plans.correlationId (only set at executePlan, i.e. after Approve).
 - [Phase 15]: 15-03: a cross-tenant isolation test must assert NON-EMPTY partitions on BOTH sides — a zero-size partition passes a naive no-leakage check vacuously. And it must read the audit table DIRECTLY: audit has no public tenant-scoped reader, so the plans.byThread form alone would prove isolation of the PLAN, not of the lineage rows SC#5 names. Driven under a deliberate rootRequestId + threadId collision, not two unrelated runs.
+- [Phase 15]: 15-04: actOnGap STAYS a tenantMutation and SCHEDULES the specialist — a Convex mutation cannot call an action, and a tenantAction would make the resetPlan+patchPlan recycle interruptible while still leaving the card blank for the same 30s. It stages status: "collecting" with an EMPTY body, and THAT is the Approve-race mitigation: executePlan already refuses any non-proposed row (cockpit.ts:530), so the race closes BY CONSTRUCTION — no new guard, no new status literal, and zero apps/web edits (PlanCard renders only at proposed, cards.tsx:1624). Do not "simplify" it back to proposed: the failure it prevents is a user approving a TEMPLATE under a specialist attribution header, at the exact surface where consent is irreversible.
+- [Phase 15]: 15-04: the terminal is chosen by a RUNTIME resolveSpecialist(gap.route) at the ENTRY point, not only inside the dispatcher — a gap with no registered specialist ("" from diagnose()'s ask branch, "scale" from its healthy branch) keeps the 12-05 memo at proposed with NOTHING scheduled. landSpecialistResult is the ONLY writer of a dispatched body and no-ops unless the row is still collecting, still kind: "memo", and under the SAME tenantId (an explicit-tenantId internal twin carries no live identity, so that check is manual — mutation-checked: removing it lets a finished run clobber a canceled plan's own draft).
+- [Phase 15]: 15-04: dispatchAndLand lands in a `finally`, so "the plan always leaves collecting" is as unconditional as "a started step always ends" — success, overrun, all four refusals, and a throw. A THROWN turn is NOT a fifth refusal: it audits subagent.refused with the CODE only (never err.message, §4), DLQs nothing, lands the fallback, and RETHROWS — DispatchResult's union is the GOVERNED-stop contract, and swallowing an exception would hide a real bug (the §5 loader fails closed by throwing) from the scheduled function's own failure state.
+- [Phase 15]: 15-04: buildMemo is now the FALLBACK and its wording BRANCHES — 12-05's "That specialist does not execute yet" became FALSE the moment dispatch shipped, and an approved memo may not tell the user something untrue. The reason is a CODE mapped through a code-owned FALLBACK_SENTENCE map and never surfaces. The attribution line and the cost-ceiling marker ride the plan BODY (specialistMemoBody), never a plans.status literal — the enum is PINNED with apps/web blast radius.
+- [Phase 15]: 15-04 (test infrastructure, generalizes): convex-test FLUSHES due scheduled work in the background, so any test that schedules a PRODUCTION action and does not cancel it has a hidden dependency on whether OPENAI_API_KEY is set — the e2e test lost that race to a real gateway call. Assert the queued job through ctx.db.system (_scheduled_functions: name + args), CANCEL it, then replay its EXACT args through the offline twin.
 
 ### Pending Todos
 
@@ -338,6 +398,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T21:10:11.961Z
-Stopped at: Completed 15-03-PLAN.md
+Last session: 2026-07-26T00:50:00.000Z
+Stopped at: Completed 15-04-PLAN.md
 Resume file: None
