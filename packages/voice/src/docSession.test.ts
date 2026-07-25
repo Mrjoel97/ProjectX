@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { BRIEF_HEADERS, planSeedFromBrief } from "./brief";
+import {
+  REALTIME_EVENTS,
+  REALTIME_FUNCTION_CALL,
+  SESSION_TOOL_KEYS,
+  TOOL_CHOICE_AUTO,
+} from "./realtime";
 import type { RawDocReview } from "./docSession";
 import {
   DIGEST_CHAR_CAP,
@@ -75,6 +81,24 @@ describe("char budgets", () => {
     expect(EXCERPT_CHAR_CAP).toBeGreaterThan(0);
     expect(EXCERPT_CHAR_CAP).toBeLessThanOrEqual(400);
     expect(EXCERPT_CHAR_CAP).toBeLessThan(RETRIEVAL_CHAR_CAP);
+  });
+});
+
+describe("the search_document relay vocabulary", () => {
+  // Both halves of one contract: the tool DECLARED at mint time and the call READ back off
+  // response.done. A rename to either now fails loudly instead of silently disabling the relay.
+  it("pins the function-call item names and keeps the tool declaration FLAT", () => {
+    expect(REALTIME_FUNCTION_CALL.itemType).toBe("function_call");
+    expect(REALTIME_FUNCTION_CALL.outputItemType).toBe("function_call_output");
+    expect(SEARCH_DOCUMENT_TOOL).not.toHaveProperty("function");
+    expect(SEARCH_DOCUMENT_TOOL.name).toBe("search_document");
+  });
+
+  it("triggers off the EXISTING response.done — no second event vocabulary", () => {
+    expect(REALTIME_EVENTS.responseDone).toBe("response.done");
+    expect(SESSION_TOOL_KEYS.tools).toBe("tools");
+    expect(SESSION_TOOL_KEYS.toolChoice).toBe("tool_choice");
+    expect(TOOL_CHOICE_AUTO).toBe("auto");
   });
 });
 

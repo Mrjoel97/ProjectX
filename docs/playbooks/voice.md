@@ -1,8 +1,11 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
-> `document-analyst` persona row only; no behavior change to the Phase-6 flow. See the "Voice-doc
-> sessions (Phase 14)" section below.
+> Last verified: 2026-07-25 (14-02 — the pure voice-doc domain: `buildDocDigest`, `shapeDocReview`,
+> `composeDocMemo`, and the pinned Realtime function-call vocabulary). Still no behavior change to
+> the Phase-6 flow — nothing calls these yet. See the "Voice-doc sessions (Phase 14)" section below.
+>
+> Prior: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
+> `document-analyst` persona row only.
 
 > Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
@@ -39,6 +42,13 @@ Pure packages (`packages/*` — no Convex, unit-testable):
   metering) and stamps (wrap-up nudge, text-turn fallback). Same re-confirm caveat as the URLs.
 - `packages/voice/src/metering.ts` — `accumulateUsage()` folds `response.done` usage
   deltas into cumulative token counters.
+- `packages/voice/src/docSession.ts` — the WHOLE voice-doc discussion domain (Phase 14), pure:
+  the welded literals (framework, thread prefix, char caps, `SEARCH_DOCUMENT_TOOL`, gap route +
+  playbook), `buildDocDigest(doc)` (bounded + fenced mint-time document facts),
+  `shapeDocReview(raw, doc)` (drops malformed findings, welds citations/route/playbook/rank, and
+  decides the honesty verdict), and `composeDocMemo(turns, review, docTitle, date)` (the ONE vault
+  artifact per doc session, built ON `composeBrief` so `BRIEF_HEADERS` never fork). It imports
+  `./brief` and nothing else — no Convex, no network.
 - `packages/cost/src/cost.ts` — `priceRealtime()` + `REALTIME_PRICING` (fail-closed,
   mirrors `priceTranscription`).
 
@@ -162,6 +172,36 @@ Run `graphify query "voice"` for the current subgraph. Couplings graphify cannot
   counter and records no spend. Enforced by: the `recordUsage` fail-closed test in `voice.test.ts`.
 - **The transcript is welded onto the brief in code, never model-authored.** Enforced by:
   `buildBriefMarkdown` composes it deterministically; `brief.test.ts`.
+- **The doc-review VERDICT is a code rule, not a prompt hope (Success Criterion 2).**
+  `shapeDocReview` decides it in exactly one place: zero surviving findings ⇒ `gaps` are FORCED
+  empty and the verdict is `insufficient` (a gap can never be fabricated out of an unread
+  document); findings present with zero gaps ⇒ `healthy`; otherwise `gaps`. This is the Phase-12
+  engine's rule restated. **"Healthy" can never be reached by emptiness** — the assertion must
+  pair `findings.length > 0` with `gaps.length === 0` and pin `verdict === "healthy"`, because
+  `gaps.length === 0` ALONE also holds on the thin-data `insufficient` verdict (the Phase-12
+  anti-vacuous lesson). A finding whose `section` is outside `DOC_REVIEW_SECTIONS` or whose
+  `confidence` is outside high/medium/low is DROPPED, never coerced — so a garbage section cannot
+  quietly become a grounded finding and turn `insufficient` into `healthy`. Enforced by:
+  `docSession.test.ts` (both branches, asserted as pairs).
+- **Citations, route, playbook and rank are welded in `shapeDocReview`; `excerpt` is the ONE
+  declared exception.** The `RawDocReview` type the model fills has NO citation, route, rank or
+  verdict field, so there is nothing to omit or invent. `citationDocId`/`citationTitle`/
+  `source: "vault"` come from the `doc` argument; `route`/`playbook`/`leverageRank` (dense, 1-based)
+  come from the module constants regardless of anything in the raw object. `citationExcerpt` is
+  trimmed, whitespace-collapsed and hard-capped at `EXCERPT_CHAR_CAP`, and **the key is OMITTED
+  entirely** when the raw excerpt is missing/null/empty/whitespace-only — never `""`. Provenance
+  (is the quote really in the report?) is checked at the producer, where the document text is in
+  hand; the pure function caps and normalizes, it never fetches. Enforced by: `docSession.test.ts`.
+- **Document text reaching the `instructions` field is BOUNDED and FENCED.** `buildDocDigest`
+  slices at most `DIGEST_CHAR_CAP` characters of DOCUMENT TEXT (title / truncation disclosure /
+  fence / safety line are chrome and are not charged to the cap) and wraps it in
+  `DIGEST_FENCE_OPEN` … `DIGEST_FENCE_CLOSE`. A fence marker planted inside the document is
+  neutralized to a strictly SHORTER literal, so the fence is not escapable and neutralizing can
+  never push the slice back over the cap. A truncated extraction discloses that in a plain
+  sentence BEFORE the fence opens; empty/whitespace-only text says so plainly and still fences.
+  **§5 boundary:** the digest emits document FACTS plus ONE safety line (a fence with no stated
+  rule is not a fence) — every behavioural instruction is the `document-analyst` registry skill
+  body. Enforced by: `docSession.test.ts` (cap measured on the fenced slice, not the whole string).
 - **A brief is CLEAN PLAIN TEXT — no markdown `#` or `*`.** It is read as-is in the vault and
   welded into the plan seed, so markdown syntax is noise both places. Headers are bare UPPERCASE
   labels, lists `- item`, turns `Speaker: text`. The two composers (`buildBriefMarkdown` server,
@@ -360,6 +400,44 @@ gpt-realtime is a 32k window and **instructions are re-billed as input on every 
 is a hard cap, not a target — depth comes from the retrieval tool instead. That hybrid split (small
 always-present digest + on-demand retrieval) is the design, not a compromise. `RETRIEVAL_CHAR_CAP`
 (1,200) and `RETRIEVAL_MAX_PASSAGES` (3) bound each drill-in.
+
+### The pure domain surface (14-02) — what each function owns
+
+Three functions in `docSession.ts` carry the whole doc flow's domain logic. Every later plan
+imports them from `@pikar/voice`; none of them may be re-derived in `convex/`.
+
+- **`buildDocDigest({title, text, truncated})` → the mint-time document block.** Composition order
+  is load-bearing: title → truncation disclosure (only when truncated) → `DIGEST_FENCE_OPEN` →
+  the capped, marker-neutralized slice → `DIGEST_FENCE_CLOSE` → the one safety line. See the
+  bounded-and-fenced invariant above.
+- **`shapeDocReview(raw, {id, title})` → the persisted `evaluations` row.** Drops the malformed,
+  welds the citations/route/playbook/rank, decides the verdict. See the two invariants above.
+- **`composeDocMemo(turns, review, docTitle, date)` → the ONE vault artifact per doc session.**
+  The memo IS the brief, document-flavored: it is built ON `composeBrief(turns, date)`, then the
+  review fills the three headers the client brief leaves unused — `SUMMARY` (the verdict sentence),
+  `DISCUSSION` (each finding as `- <label> [<citationTitle>]`, with the quoted passage on its own
+  indented line in plain quotation marks ONLY when present), `OPEN QUESTIONS` (what could not be
+  grounded) — with the gaps beneath under a plain `GAPS` label. Do NOT write a second brief
+  builder and do NOT add `GAPS` to `BRIEF_HEADERS`: that set is what `planSeedFromBrief` uses to
+  find section boundaries in BOTH brief flavors, so widening it changes how existing briefs parse.
+  Plain text only (no `#`/`*`) — a memo is read in the vault, not rendered.
+
+### Tool declaration: an OPEN branch, recorded not guessed (14-02)
+
+`realtime.ts` gained `REALTIME_FUNCTION_CALL` (the `function_call` /
+`function_call_output` / `name` / `call_id` / `arguments` item names read out of
+`response.done`'s `response.output[]`), `SESSION_TOOL_KEYS` and `TOOL_CHOICE_AUTO`. **No new
+event name was added** — the relay triggers off the EXISTING `responseDone: "response.done"`,
+which this repo has already live-verified for metering, so a rename breaks in one place.
+
+Directly above them sits a dated decision-record block that is deliberately **blank until
+live-verify**: the TypeScript `client_secrets` reference lists `tools`/`tool_choice` on
+`RealtimeSessionCreateRequest` and the REST reference for the same endpoint does not, and
+`voiceToken.ts` has been wrong about this body TWICE. Plan 14-04 implements mint-time first and
+falls back to a `session.update` over the data channel on a 400. **Whoever runs the live verify
+fills in the `LIVE-VERIFIED ____-__-__:` line with the branch the API actually accepted** — that
+line is the record, exactly as Phase 6 did for the `audio.input` nesting. Do not delete it and do
+not fill it in from a doc page.
 
 ### `search_document` tool shape
 
