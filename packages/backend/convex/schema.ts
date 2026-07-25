@@ -363,6 +363,17 @@ export default defineSchema({
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
+    // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
+    // an on-demand row has none and the card simply hides the line. Optional → no migration.
+    // Gap identity is `${route}/${playbook}`: there are only THREE routes in diagnose() and several
+    // distinct prescriptions share each, so a route-only key reports real progress as "no change".
+    delta: v.optional(
+      v.object({
+        newFindings: v.number(),
+        gapsClosed: v.array(v.string()), // `${route}/${playbook}` keys present last run, gone now
+        gapsOpened: v.array(v.string()), // keys present now, absent last run
+      }),
+    ),
     createdAt: v.number(),
   })
     // SC #5 isolation + "latest per tenant" ; by_tenant_thread = the card's latest-per-thread read.
@@ -596,7 +607,11 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse
-    .index("by_tenant_contentHash", ["tenantId", "contentHash"]), // dedup
+    .index("by_tenant_contentHash", ["tenantId", "contentHash"]) // dedup
+    .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
+  // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
+  // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
+  // single caller (the weekly review fan-out) and yielding tenant ids only, never content.
 
   // A typed entity extracted from vault documents. Cross-doc dedup upserts to
   // ONE node on (tenantId, normalizedName) [type filtered in-handler] via

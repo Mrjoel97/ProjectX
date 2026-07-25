@@ -37,6 +37,20 @@ export const NOTIFICATION_KINDS = [
   "optimizer.candidate",
 ] as const satisfies readonly NotificationKind[];
 
+/**
+ * BEVL-03 proactive weekly review. The thread id is deterministic and SHARED by the backend cron
+ * and the web pinned tab — the one string that must not drift across that boundary.
+ *
+ * The two review kinds are DELIBERATELY ABSENT from NOTIFICATION_KINDS above. That absence is the
+ * SC#2 guarantee: notifyExternal.dispatch returns at `if (!KINDS.has(kind)) return;` BEFORE
+ * freshAccessToken, so an unregistered kind can never reach a Gmail token. Adding them here would
+ * arm the mailbox path and break notificationTemplates.test.ts:36. Do not.
+ */
+export const REVIEW_THREAD_ID = "proactive-review";
+export const REVIEW_READY_MESSAGE = "Your weekly business review is ready.";
+export const REVIEW_FAILED_MESSAGE =
+  "We couldn't run your weekly review — open the cockpit to run one now.";
+
 /** Static label per kind. `Record<NotificationKind, …>` makes a missing kind a compile error. */
 const MESSAGES: Record<NotificationKind, string> = {
   "validation.rejected": "A submission was rejected by validation.",
