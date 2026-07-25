@@ -5,6 +5,39 @@
 to `main`. Wave 0 reads both plan sets; it cannot be executed before they exist.
 **Written:** 2026-07-25 (ahead of time, so the day itself is mechanical).
 
+---
+
+> # ⚠ STATUS 2026-07-25 — PARTLY SUPERSEDED. Do NOT execute this as a Stage-1 sequence.
+>
+> This doc was written expecting Stage 0 to be planning-only. It was overtaken within hours:
+> **both lanes absorbed the freeze into their own phase plans and are executing.**
+> Lane A is on `15-05` (executor generalization, plan 5 of 6); Lane C is past `14-01` and has
+> already widened the `evaluations` schema on its branch.
+>
+> | § | Revised status |
+> |---|---|
+> | **§C** plan-derived (schema, stubs, seams, lane table) | **SUPERSEDED.** Lane A's `15-01` did its own freeze; Lane C's `14-01` widened `evaluations`. Both on branches, not `main`. Nothing to execute here |
+> | **§A** facts split | **Re-scoped to POST-INTEGRATION.** Do not land on `main` while lanes are mid-flight |
+> | **§B** `proofMetricPath` | Same — rides with §A |
+> | **§D** cron hardening | **Re-derive before applying.** The claim that `proactiveReview.ts` is unowned is now FALSE — Lane C edited `reviewOne`, the exact function §D.4 targets |
+>
+> **The Monday-06:00-UTC migration deadline in §A is DOWNGRADED.** It was right in principle and
+> wrong in proportion: at one tenant the cron writes one row per week, so missing it costs the
+> ~20-line backfill §A already prices — not a project. That is not worth disrupting two live lanes.
+> It becomes a real deadline only at scale, which is months out. Re-check row count at integration.
+>
+> **Region-disjointness still holds** (the reason §A survives intact): Lane C added a `framework`
+> literal and `findings[].citationExcerpt`; §A touches `scorecard` and `userProvided`. No overlap.
+>
+> **Known merge hazard:** `PARALLELIZATION.md` is now edited in THREE places — `main` (Phase-15.1
+> constraint + this doc's pointer), Lane A (finalized lane table), Lane C (a recorded deviation).
+> Per the contract's own singleton rule, **keep all sides** at merge; do not pick one.
+>
+> Everything below is unchanged from the original write-up and is still the reference for **what**
+> §A/§B/§D should do and why — only **when** changed.
+
+---
+
 ## What Wave 0 is for
 
 After this commit, `convex/schema.ts`, `convex/llm.ts` and `convex/deliverApprovedPlan.ts` are

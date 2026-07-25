@@ -57,10 +57,13 @@ rule below).
 
 ### Stage 1 — Wave-0 freeze commit on `main` (serial, unavoidable)
 
-> **The full execution spec is `.planning/WAVE-0.md`** — written ahead of time so the day itself is
-> mechanical. It carries the plan-independent work (the `evaluations` facts split, per Convex
-> `guidelines.md:159/:160`), the fill-in-from-plans checklist, the sibling cron-hardening commit,
-> the verification gates, and the scope guard. Read it before executing Stage 1.
+> **⚠ OVERTAKEN 2026-07-25 — read `.planning/WAVE-0.md`'s STATUS banner before acting on this
+> stage.** Both lanes absorbed the freeze into their own phase plans and are executing, so there is
+> no separate Stage-1 freeze commit to land on `main`. `WAVE-0.md` remains the reference for the
+> `evaluations` facts split (per Convex `guidelines.md:159/:160`) and the cron hardening — both now
+> **post-integration** work, not a precondition for Stage 2.
+>
+> Lanes mid-flight: do NOT wait for a Stage-1 commit that is not coming. Carry on to Stage 3.
 
 ONE session, on `main`, reads **both** finished plans and lands **one commit** that:
 
