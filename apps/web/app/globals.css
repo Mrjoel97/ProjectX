@@ -572,8 +572,15 @@ a {
   transition: width 160ms ease;
 }
 
+/* Collapsed rail: 3.2rem, 30% narrower than the 4.6rem it replaced. That leaves a 2.4rem content
+   box after the tightened side padding, so the brand tile has to come down with it — at its
+   expanded 2.4rem the logo would exactly fill the box and clip its own glow. NOTE: the
+   `@media (max-width: 48rem)` block near the bottom of this file re-implements the collapsed look
+   for the mobile auto-collapse; the two must be changed together. */
 .rail.is-collapsed {
-  width: 4.6rem;
+  width: 3.2rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .rail.is-collapsed .rail-label,
@@ -585,6 +592,23 @@ a {
 .rail.is-collapsed .rail-item {
   justify-content: center;
   padding: 0.65rem 0;
+}
+
+.rail.is-collapsed .rail-brand {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.rail.is-collapsed .rail-logo {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.65rem;
+}
+
+.rail.is-collapsed .rail-logo svg {
+  width: 16px;
+  height: 16px;
 }
 
 .rail-brand {
@@ -766,9 +790,12 @@ button.rail-item:hover {
   overflow: hidden;
 }
 
+/* Mobile auto-collapse — mirrors `.rail.is-collapsed` above. Keep the two in sync. */
 @media (max-width: 48rem) {
   .rail {
-    width: 4.6rem;
+    width: 3.2rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
   }
 
   .rail .rail-label,
@@ -780,6 +807,23 @@ button.rail-item:hover {
   .rail .rail-item {
     justify-content: center;
     padding: 0.65rem 0;
+  }
+
+  .rail .rail-brand {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .rail .rail-logo {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.65rem;
+  }
+
+  .rail .rail-logo svg {
+    width: 16px;
+    height: 16px;
   }
 
   .rail .rail-badge {
