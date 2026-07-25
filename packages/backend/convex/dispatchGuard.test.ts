@@ -49,7 +49,10 @@ function generateTextCalls(file: string): string[] {
 test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop, not two)", () => {
   const calls = generateTextCalls("llm.ts");
   // Non-vacuity: a rename would otherwise make every count below trivially 0.
-  expect(calls.length, "no generateText call sites in llm.ts — was the loop renamed?").toBeGreaterThan(0);
+  expect(
+    calls.length,
+    "no generateText call sites in llm.ts — was the loop renamed?",
+  ).toBeGreaterThan(0);
 
   // The count that matters is TOOL-BEARING calls, not total calls. llm.ts deliberately holds
   // several TOOLLESS generateText calls (digestInbox / draftReply / draftCockpit) — that is the
@@ -70,3 +73,65 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
 // 15-05 adds: the Approve gate is a `tenantMutation`, never a tool (ACTN-01 — the human gate
 // cannot be reachable from the model's tool surface). Append below this marker so the two lanes'
 // additions to this file do not collide.
+
+// ── SC #4: the human Approve gate is a tenantMutation, never a tool ───────────────────────────
+//
+// The standing v2.0 architecture rule: every capability is ONE of two shapes — a read-only tool
+// returning content in-loop, or a WRITE staged into the plan for the human Approve mutation. There
+// is no third mechanism. `executePlan` is that Approve mutation: the single point of irreversible
+// consent (it seeds the requests rows and starts the ONLY `workflow.start(deliverApprovedPlan)`
+// call site). A model that can call it has removed the human from the loop — so it must be
+// unreachable from the tool surface by CONSTRUCTION, not by skill wording. Generalizing the
+// executor (15-05) is exactly the moment that could slip: an "action executor" is a tempting thing
+// to hand the agent.
+//
+// Block comments are stripped too here — the doc comments in these files legitimately NAME
+// executePlan and deliverApprovedPlan; that prose IS the documentation, not a call path.
+const readExecutableCode = (file: string): string =>
+  readFileSync(join(convexDir, file), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+test("cockpit.ts declares executePlan as a tenantMutation (not an action, not a tool wrapper)", () => {
+  expect(
+    readExecutableCode("cockpit.ts"),
+    "executePlan is no longer declared `export const executePlan = tenantMutation({` — the Approve " +
+      "gate must stay a tenant-scoped MUTATION: an action could be invoked from the tool loop, and " +
+      "the CAS on plan.status that makes a double-approve send once needs mutation serializability.",
+  ).toContain("export const executePlan = tenantMutation({");
+});
+
+test("executePlan / approvePlan / deliverApprovedPlan are absent from the cockpit TOOL record", () => {
+  const src = readExecutableCode("llm.ts");
+  // Every key of the record buildCockpitTools returns is declared `name: tool({`.
+  const toolKeys = [...src.matchAll(/^\s*([A-Za-z_$][\w$]*):\s*tool\(\{/gm)].map((m) => m[1]);
+  // Non-vacuity floor: the record holds 20 keys today and only grows (Phases 16-19 add tools). A
+  // zero here would mean the scan stopped seeing the tool surface, not that the gate is safe.
+  expect(
+    toolKeys.length,
+    "no `name: tool({` keys found in llm.ts — did the tool idiom change?",
+  ).toBeGreaterThanOrEqual(20);
+
+  for (const forbidden of ["executePlan", "approvePlan", "deliverApprovedPlan"]) {
+    expect(
+      toolKeys,
+      `${forbidden} is a KEY in the cockpit tool record — the model can now approve/deliver without ` +
+        `a human. Approve is the single point of irreversible consent; stage the write into the plan ` +
+        `row instead and let the human call api.cockpit.executePlan.`,
+    ).not.toContain(forbidden);
+  }
+});
+
+test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not even by name)", () => {
+  const src = readExecutableCode("llm.ts");
+  // Not just "absent as a tool key" — absent as a callable reference. A tool that internally did
+  // `ctx.runMutation(internal.cockpit.executePlan, …)` under any OTHER key would defeat the scan
+  // above, and so would a scheduler.runAfter to it.
+  for (const ref of [/\b(?:internal|api)\.cockpit\.executePlan\b/, /\bdeliverApprovedPlan\b/]) {
+    expect(
+      src.match(ref) ?? [],
+      `llm.ts references ${ref.source} — the agent loop must have NO path to Approve or to the ` +
+        `gmail fan-out, directly or by name. executePlan is the SOLE starter of deliverApprovedPlan.`,
+    ).toHaveLength(0);
+  }
+});

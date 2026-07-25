@@ -1,5 +1,11 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-25 (15-05 — Phase 15 Lane B, generalized executor). See "Phase 15 — Lane B
+> (generalized executor)" below. `executePlan` now dispatches over a closed action-type table
+> (`armFor(actionTypeOf(plan.kind))` + a `satisfies Record<ActionType, Arm>` bind) instead of an
+> ad-hoc `plan.kind === "memo"` if. Pure refactor — the arms are the existing paths, the branch
+> order is unchanged, and `deliverApprovedPlan.ts` is byte-unchanged.
+
 > Last verified: 2026-07-25 (15-02 — Phase 15 Lane A, dispatch core). See "Phase 15 — Lane A
 > (dispatch core)" below. `runAgentLoop` gained the append-only optional `toolNames` (absent ⇒ the
 > full record, byte-identical), and `runSpecialistTurn` is the one exported specialist entry into
@@ -436,6 +442,51 @@ BEHAVIOR — it makes later behavior expressible.
 - **Do not add a write tool to a specialist.** `specialists.test.ts` asserts `tools` as an equality
   over the whole registry precisely so that edit fails a test. See ADR-007 for why the tool-set is
   code-owned while the body is registry-owned.
+
+### Phase 15 — Lane B (generalized executor)
+
+15-05 turned the approve→execute spine action-agnostic. `executePlan` stopped branching on an ad-hoc
+`if (plan.kind === "memo")` and became a DISPATCHER over a closed action-type table. **This is a
+refactor: the arms are the existing code paths and no behavior changed.**
+
+- **`executePlan` is the action-type DISPATCHER.** `armFor(actionTypeOf(plan.kind))` selects the
+  arm; the switch has an `assertNever` backstop for a new `Arm`. The table itself is
+  `satisfies Record<ActionType, Arm>` — in `@pikar/core` behind `armFor` (THE table; deliberately
+  not a ternary, which would be total by construction and would silently route a new member to the
+  else-branch's arm) and re-bound as `_ARM_TABLE` in `cockpit.ts`. **Adding an action type without
+  deciding its arm is a COMPILE error in both places**, which is stronger than any test —
+  mutation-checked by adding `"calendar"` to `ACTION_TYPES` and watching `tsc` fail (TS2741) in
+  `packages/core/src/actionType.ts`, `actionType.test.ts` and `convex/cockpit.ts`. Phases 16-19 add
+  an arm; they do not re-fork the executor.
+- **Why `cockpit.ts` re-binds the table instead of trusting `armFor` alone:** the `workflow` case
+  falls through to the GMAIL fan-out (seed `requests` → `startFanout` → `deliverApprovedPlan`). A
+  new action type that merely *classified* as `workflow` would inherit the email terminal silently.
+  The bind forces that author to visit the dispatcher and decide. The switch's `assertNever` covers
+  a new ARM; `_ARM_TABLE` covers a new TYPE.
+- **The branch ORDER is load-bearing and UNCHANGED**: tenant check → CAS (`status !== "proposed"` ⇒
+  `alreadyStarted`) → `escalated` (REVW-02 fail-closed) → **arm selection** → mailbox pre-check →
+  far-future cap (SCHD-01) → CAS flip → seed `requests` → fan-out. Arm selection sits exactly where
+  12-05's memo `if` sat. Both sides of that position are asserted in `gapAction.test.ts`: a memo
+  approves with ZERO `gmailTokens` rows (selection is BEFORE the mailbox pre-check — a memo must
+  never need a connected Gmail), and an ESCALATED memo refuses with `review_escalated` running
+  NEITHER arm (selection is AFTER the fail-closed guard).
+- **Two-level dispatch.** `executePlan` picks the arm; **`deliverApprovedPlan.ts` is the
+  workflow-backed EMAIL arm's entry point, NOT the universal dispatcher.** It is BYTE-UNCHANGED
+  (`git diff --exit-code` is part of this plan's verification) and must stay so. Routing an inline
+  arm through it would add orchestration, workflow rows and latency for one DB write, and would
+  re-expose the gmail fan-out as reachable-in-principle from every action type — undoing the
+  structural property 12-05 bought. **A future inline arm executes inline; a future durable arm
+  starts its OWN workflow.**
+- **The Approve gate is a `tenantMutation` and is statically asserted absent from every tool
+  record** (`dispatchGuard.test.ts`, below the `// 15-05 adds:` marker): `cockpit.ts` must declare
+  `export const executePlan = tenantMutation({`; `executePlan` / `approvePlan` /
+  `deliverApprovedPlan` must not appear among `buildCockpitTools`' `name: tool({` keys (with a
+  ≥20-key non-vacuity floor); and `llm.ts` must contain no `internal.cockpit.executePlan` /
+  `api.cockpit.executePlan` / `deliverApprovedPlan` reference at all, so a tool cannot reach Approve
+  under some other key. Why: the standing v2.0 rule is that every capability is either a read-only
+  tool returning content in-loop or a write STAGED into the plan for the human Approve mutation —
+  no third mechanism. Approve is the single point of irreversible consent; a model that can call it
+  has removed the human from the loop. Generalizing the executor is exactly when that slips.
 
 ## How to verify
 
