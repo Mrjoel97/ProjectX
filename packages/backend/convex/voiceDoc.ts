@@ -378,14 +378,16 @@ async function modelDocReview(
 /**
  * Turn a finished discussion into ONE persisted, cited `evaluations` row (Success Criterion 2).
  *
- * `tenantId` is an EXPLICIT arg (the `vaultGroundHydrated` / `runEvaluation` convention) so this is
+ * `tenantId` is an EXPLICIT arg (the `vaultGroundHydrated` explicit-tenant convention) so this is
  * callable from a context carrying no live identity. Deliberately does NOT refuse an ended session:
  * the review runs AFTER the call, so `ended_clean` is the normal state here.
  *
  * The row lands through the UNMODIFIED `internal.evaluations.insertEvaluation`, whose arg validator
- * is derived from the schema and was already widened by 14-01. Never `runEvaluation`: its framework
- * arg is pinned to the four business frameworks and `FRAMEWORK_SKILL` has no document-review entry,
- * so `getActiveSkill(undefined)` would throw mid-run.
+ * is derived from the schema and was already widened by 14-01. NEVER route a document review
+ * through the Phase-12 business-evaluation engine instead: 14-01 pinned that engine's framework arg
+ * to the four business frameworks, and its hand-written `FRAMEWORK_SKILL` map has no
+ * document-review entry, so an unmapped literal yields `undefined` and the skill lookup throws
+ * mid-run. This module names no engine entry point at all, which is what makes that greppable.
  */
 export const reviewDocument = internalAction({
   args: {
@@ -446,5 +448,85 @@ export const reviewDocument = internalAction({
       gapCount: review.gaps.length,
       verdict: review.verdict,
     };
+  },
+});
+
+/**
+ * The post-call screen's entry point: review THIS session's report and hand back the thread the
+ * findings landed on (SC2).
+ *
+ * ONE shared implementation with `reviewDocument` — the Phase-12 `applyScorecardAnswer` precedent —
+ * so the write path cannot drift between the client caller and any future scheduled one. Unlike
+ * `searchDocument` this is NOT relayed to the model mid-turn, so it may throw: a refusal reaches a
+ * screen, not a silent voice turn. The thrown message is a STATUS, never content.
+ *
+ * IDEMPOTENT per session. `evaluations` is append-only, so this is a READ-GUARD rather than a
+ * patch: an existing row on the thread is returned as-is. The post-call screen re-mounts (a
+ * refresh, a dropped call resumed) and the user must see ONE consolidated list, not three.
+ */
+export const reviewSession = tenantAction({
+  args: {
+    sessionId: v.id("voiceSessions"),
+    transcript: v.array(v.object({ speaker: v.string(), text: v.string() })),
+  },
+  handler: async (
+    ctx,
+    { sessionId, transcript },
+  ): Promise<{
+    threadId: string;
+    findingCount: number;
+    gapCount: number;
+    verdict: "gaps" | "healthy" | "insufficient";
+  }> => {
+    const threadId = voiceDocThreadId(String(sessionId));
+
+    // Fail-closed ownership check. A cross-tenant id reads as missing — one message, no oracle.
+    const session = await ctx.runQuery(internal.voice.getSession, { sessionId });
+    if (!session || session.tenantId !== ctx.tenantId) {
+      throw new Error("voicedoc: session not found");
+    }
+
+    const existing = await ctx.runQuery(internal.evaluations.lastForThread, {
+      tenantId: ctx.tenantId,
+      threadId,
+    });
+    if (existing) {
+      return {
+        threadId,
+        findingCount: existing.findings.length,
+        gapCount: existing.gaps.length,
+        verdict: existing.verdict,
+      };
+    }
+
+    const result = await ctx.runAction(internal.voiceDoc.reviewDocument, {
+      tenantId: ctx.tenantId,
+      sessionId,
+      transcript,
+    });
+
+    // The §4 split again, at the module's SECOND and last log-plane write:
+    //   CONTENT PLANE — findings, gaps and their quoted passages live in the `evaluations` row and
+    //                   render on the post-call screen. That is where report content belongs.
+    //   LOG PLANE     — a session ref, two counts and a closed-enum verdict. No finding label, no
+    //                   `citationExcerpt`, no passage, no transcript turn, not even the document
+    //                   title. 14-09 pins this payload with a mutation-verified static scan.
+    // No `agentSteps` row, no `telemetry`, no `deadLetters` — as with `voicedoc.searched`.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: String(sessionId),
+      eventType: "voicedoc.reviewed",
+      actor: "user",
+      payload: {
+        sessionId,
+        findingCount: result.findingCount,
+        gapCount: result.gapCount,
+        verdict: result.verdict,
+      },
+    });
+
+    // The thread id travels back so the caller points `CardList` at it without re-deriving the
+    // `voice-doc:<sessionId>` convention (a second derivation is a second thing that can drift).
+    return { threadId, ...result };
   },
 });
