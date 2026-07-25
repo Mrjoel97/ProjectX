@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 6
-status: executing
-stopped_at: Completed 15-04-PLAN.md
-last_updated: "2026-07-26T00:50:00.000Z"
+status: verifying
+stopped_at: Completed 15-06-PLAN.md (eval gate UNPAID — no deployment)
+last_updated: "2026-07-25T22:18:46.451Z"
 progress:
   total_phases: 38
-  completed_phases: 21
+  completed_phases: 22
   total_plans: 156
-  completed_plans: 151
+  completed_plans: 152
 current_phase: 15
 ---
 
@@ -21,15 +21,15 @@ current_phase: 15
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 5/6 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (COMPLETE, 6/6 plans — ready for verification; ONE unpaid eval gate carried forward)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (5/6 plans, 5 waves)
-Current Plan: 6
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **ALL 6 PLANS COMPLETE** (5 waves)
+Current Plan: 6 (last)
 Total Plans in Phase: 6
-Plan: 15-04 COMPLETE (Wave 4 — the memo surface; DISP-01 is now closed end to end).
-Done: 15-01, 15-02, 15-03, 15-04, 15-05. Next: 15-06 (phase close).
+Plan: 15-06 COMPLETE (Wave 5 — runnable specialist bodies + a multi-pin eval gate).
+Done: 15-01, 15-02, 15-03, 15-04, 15-05, 15-06. Next: phase verification.
 
 **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
@@ -38,7 +38,62 @@ finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may 
 — that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
 dispatch work even with one agent doing both.
 
-Status (15-04): **"Act on this" RUNS the specialist, and the phase's user-visible claim is one
+Status (15-06): **The three specialists now instruct their own grounding through the one tool they
+have — and the gate they must ride is UNPAID, so the phase ships dark.** All three bodies
+(`offer-architect` / `money-model-designer` / `lead-engine`) carried 12-02's placeholder framing
+*"Registered now; a full build runs later"* — honest when written, FALSE the moment 15-03 shipped
+dispatch. Each `.md` (+ its byte-identical derived `.ts`; `skillBodies.test.ts` green) now drops it
+and gains a **`## How to ground this`** section naming `searchVault`. That is the material change:
+every body already ended with *"Cite the user's own material for every claim"* and the specialist
+had NO retrieval tool until this phase, so the instruction was literally unsatisfiable. Three
+properties are deliberate — the tool is NAMED not implied; the READ-ONLY posture is stated in prose
+(*"You cannot send anything, save anything, or change the plan"*), reinforcing at the PROMPT layer
+what `SPECIALIST_TOOLS` enforces STRUCTURALLY (ADR-007); and not-enough-data is an AFFIRMATIVE
+answer, tuned per body (money-model: invention does the most damage on NUMBERS; lead-engine:
+channel advice is worthless when guessed). METHOD content untouched, and each body's financial-spine
+deferral now says it never restates a figure the evaluation did not ground. THE RUNNER: `SKILL_NAMES`
+was a hardcoded three that excluded `reply-drafter` AND all seven Phase-12 skills — **eight of eleven
+gated skills were unpinnable and `--skill offer-architect@N` THREW**, i.e. this plan could not have
+run its own gate under the old runner. It is now DERIVED from `GATED_SKILLS`, read off
+`packages/contracts/src/skill.ts` (the runner is plain `.mjs`; the `specialists.test.ts`
+scan-the-source precedent), so a newly gated skill is pinnable the day it is gated with no second
+list to drift. `--skill` is now MULTI-pin: every occurrence collected, the merged record threaded on
+EVERY turn, evidence recorded ONE ROW PER PIN off the SAME run (each carrying the full merged
+`skillVersions`), a repeated NAME rejected outright. THE FIXTURES: a new `actOnGap: <gapIndex>` field
+taps the gap after the turns through `evaluations:actOnGapInternal` — an identity-less twin over a
+SHARED `applyActOnGap` (the 12-04 `recordScorecardAnswerInternal` precedent; `npx convex run` carries
+no auth identity), so the fixture drives the REAL path and not an imitation — then POLLS
+`plans:getById` out of `collecting`, which is the right signal precisely because
+`landSpecialistResult` lands in a `finally` on every outcome. Three new closed-vocabulary keys:
+`planKind` (+ `status: proposed` = the collecting→proposed flip), **`attributionRoute`** (the one
+that DISCRIMINATES — the fallback memo reaches `proposed` with `kind: "memo"` too, and `--self-check`
+asserts exactly that before asserting the fallback FAILS attribution), and **`citesVaultDoc`**, which
+probes the seeded corpus NEEDLE `evalgrd` rather than a vault title root: a title root ("Northwind")
+is echoed straight out of the fixture's own turns, so it would pass with or without a search —
+`validateFixture` now FORBIDS any turn from containing the needle. 12-06's pair-every-zero-count
+lesson is enforced STRUCTURALLY, not by discipline: `actOnGap` requires `expect.gapCount > actOnGap`
+and every dispatch observable requires `actOnGap`. Three fixtures added (29 gate-1 no offer, 30
+gate-2 one offer type, 31 gate-3 no channel — three DIFFERENT routes, so `attributionRoute` cannot be
+satisfied by one hardcoded string), floor 27 → 30. Three self-check assertions mutation-checked
+(re-hardcode `SKILL_NAMES`, force `citesVaultDoc` true, drop the duplicate-pin guard → all RED),
+reverted. Deviations: 3 auto-fixed — the plan's fixtures were UNBUILDABLE without a callable tap
+(Rule 3 → `actOnGapInternal` over a shared helper, zero behaviour change, 54/54 dispatch-side tests
+green unchanged); `citesVaultDoc` as literally specified would have passed VACUOUSLY (Rule 1 →
+needle probe + validator rule); and `attributionRoute` was first validated against `GATED_SKILLS`,
+which accepts `swot` — a gated skill no gap can ever dispatch to (Rule 1 → a second source
+derivation of `SPECIALIST_ROUTES`; gated ⊃ dispatchable). **UNPAID GATE (carry-forward):**
+`pnpm eval:golden` was NOT run — this worktree has no `CONVEX_DEPLOYMENT` (15-01 bootstrapped it with
+a COPIED `_generated`). Nothing faked, no fixture weakened, nothing hand-activated. SHIP DARK per
+CONTEXT: the candidates park, the ACTIVE v1 bodies stay live (so a dispatched specialist today still
+runs the OLD body), and Phase 15's five success criteria are proven by 15-01..15-05 — none of them
+requires a rewritten body. Gates: contracts 13/13, backend **544/545** (sole red the documented
+`audit.test.ts` `auditCounts` row), @pikar/core 223/223, `--self-check` exit 0 (30 fixtures, 11
+derived gated skills), backend `tsc` at the exact pre-existing baseline with ZERO in any non-test
+file, `apps/web` typecheck exit 0 (Pitfall-4 tripwire held — explicit `Promise<ActOnGapResult>`),
+turbo 8/10 baseline, `check-playbooks` exit 0, and `git diff` proves `cockpit.ts`,
+`deliverApprovedPlan.ts`, `actionType.ts` and `apps/` all untouched.
+
+PRIOR (15-04): **"Act on this" RUNS the specialist, and the phase's user-visible claim is one
 test.** `actOnGap` stays a `tenantMutation` (a Convex mutation cannot call an action, and converting
 to a `tenantAction` would make the `resetPlan`+`patchPlan` recycle interruptible while STILL leaving
 the card blank for 30s) and now has TWO terminals chosen by a RUNTIME `resolveSpecialist(gap.route)`
@@ -271,7 +326,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 5/6 — 01, 02, 03, 04, 05)
+Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4, Phase 15 shipped 6/6 — 01, 02, 03, 04, 05, 06)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -318,6 +373,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 15 P05 | 13 min | 3 tasks | 6 files |
 | Phase 15 P03 | 35 min | 3 tasks | 5 files |
 | Phase 15 P04 | 35 min | 3 tasks | 8 files |
+| Phase 15 P06 | 45 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -383,9 +439,28 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-04: dispatchAndLand lands in a `finally`, so "the plan always leaves collecting" is as unconditional as "a started step always ends" — success, overrun, all four refusals, and a throw. A THROWN turn is NOT a fifth refusal: it audits subagent.refused with the CODE only (never err.message, §4), DLQs nothing, lands the fallback, and RETHROWS — DispatchResult's union is the GOVERNED-stop contract, and swallowing an exception would hide a real bug (the §5 loader fails closed by throwing) from the scheduled function's own failure state.
 - [Phase 15]: 15-04: buildMemo is now the FALLBACK and its wording BRANCHES — 12-05's "That specialist does not execute yet" became FALSE the moment dispatch shipped, and an approved memo may not tell the user something untrue. The reason is a CODE mapped through a code-owned FALLBACK_SENTENCE map and never surfaces. The attribution line and the cost-ceiling marker ride the plan BODY (specialistMemoBody), never a plans.status literal — the enum is PINNED with apps/web blast radius.
 - [Phase 15]: 15-04 (test infrastructure, generalizes): convex-test FLUSHES due scheduled work in the background, so any test that schedules a PRODUCTION action and does not cancel it has a hidden dependency on whether OPENAI_API_KEY is set — the e2e test lost that race to a real gateway call. Assert the queued job through ctx.db.system (_scheduled_functions: name + args), CANCEL it, then replay its EXACT args through the offline twin.
+- [Phase 15]: 15-06: citesVaultDoc probes the seeded corpus NEEDLE (evalgrd), not a vault title root — a title root is echoed straight out of the fixture's own turns, so the assertion would pass without searchVault ever running; validateFixture forbids any turn from containing the needle
+- [Phase 15]: 15-06: SKILL_NAMES is DERIVED from GATED_SKILLS (read off skill.ts) and --skill is MULTI-pin with one evidence row per pin — a newly gated skill is pinnable the day it is gated, and one run certifies a whole family
+- [Phase 15]: 15-06: the specialist-body EVAL GATE is UNPAID (no CONVEX_DEPLOYMENT in this worktree) — SHIP DARK per CONTEXT: candidates park, active v1 bodies stay live, nothing faked or hand-activated
 
 ### Pending Todos
 
+- **UNPAID EVAL GATE (15-06) — the three rewritten specialist bodies are PARKED.** `offer-architect`,
+  `money-model-designer` and `lead-engine` now name `searchVault`, state the read-only posture and give an
+  honest not-enough-data answer — but all three are in `GATED_SKILLS`, and `pnpm eval:golden` was NEVER RUN
+  because `.worktrees/lane-a-dispatch` has no `CONVEX_DEPLOYMENT`. Nothing was faked, no fixture weakened,
+  nothing hand-activated. **On the deployment the ACTIVE rows are still the v1 bodies with the "runs later"
+  framing, so a dispatched specialist today runs the OLD body.** To close it, on a checkout with a live
+  deployment: `pnpm dev` (seeds — `npx convex dev` ALONE does not) -> READ BACK the live version carrying
+  each body (`seedSkills` writes `maxVersion + 1` and optimizer dry-runs occupy versions; a fresh deployment
+  also LIES via the `rows.length === 0` bootstrap path) -> ONE run:
+  `pnpm eval:golden --skill offer-architect@N --skill money-model-designer@N --skill lead-engine@N`
+  (multi-pin ships in 15-06; one evidence row per pin; budget ~$0.19 + three dispatched specialist turns)
+  -> GREEN: `activateSkill` each and VERIFY LIVE with `getActiveSkill`; RED/flaky/over-cap: leave them
+  parked, do NOT weaken a fixture and do NOT hand-activate. Full recipe + first-run risks in
+  `.planning/phases/15-sub-agent-dispatch-action-executor/deferred-items.md` and
+  `docs/playbooks/skill-registry.md`'s GATE OUTCOME paragraph. The three new fixtures
+  (29/30/31-gap-dispatch-*) have also never run live.
 - ~~**12-04 AND 12-05 visual verification is UNPAID debt**~~ — **PAID 2026-07-25.** The owner ran all three checks (12-04 card states, 12-05 tap → NEXT-STEP MEMO → "Approve & save" → memo at `/dashboard/vault` with no email sent, 12-06 teaching) and reported "Everything worked. I approve."
 - ~~**Repeat-evaluation provenance gap (logged, not fixed)**~~ — **CLOSED 2026-07-25 at 13-02.** Re-running an evaluation in the SAME thread used to collapse `findingCount` (8 → 1): carry-forward preserved the scorecard VALUES but not their PROVENANCE, so only freshly-filled paths were re-cited. `fillVault` now separates the two rules — the VALUE is first-write-wins, the CITATION is re-recorded whenever a grounded document restates the field — and the two upstream short-circuits are gone. No fresh-thread workaround is needed any more. Regression guard: `proactiveReview.test.ts > notifies only on change`. The historical detail stays in `.planning/phases/12-business-evaluation-engine/deferred-items.md`.
 
@@ -398,6 +473,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T00:50:00.000Z
-Stopped at: Completed 15-04-PLAN.md
+Last session: 2026-07-25T22:18:07.890Z
+Stopped at: Completed 15-06-PLAN.md (eval gate UNPAID — no deployment)
 Resume file: None

@@ -241,7 +241,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
 | DOCV-01 | Phase 14 | Pending |
-| DISP-01 | Phase 15 | In Progress (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; needs 15-04/06 for the memo surface + phase close) |
+| DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
 | ACTN-01 | Phase 15 | In Progress (closed action-type union landed 15-01; needs 15-05) |
 | DISP-02 | Phase 16 | Pending |
 | ACTN-03 | Phase 16 | Pending |

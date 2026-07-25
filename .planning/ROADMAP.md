@@ -48,7 +48,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 14: Flagship Voice-Doc Workflow** - Upload a report -> discuss by voice -> grounded insights/patterns/gaps -> memo or gap-bridging plan
 
 **S2 - Breadth of Action**
-- [ ] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
+- [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides) (completed 2026-07-25)
 - [ ] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md`
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
@@ -699,7 +699,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 12. Business Evaluation Engine | 6/6 | Complete    | 2026-07-25 |
 | 13. Proactive In-App Review | 4/4 | Complete    | 2026-07-25 |
 | 14. Flagship Voice-Doc Workflow | 0/TBD | Not started | - |
-| 15. Sub-Agent Dispatch & Generalized Action Executor | 5/6 | In Progress|  |
+| 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete   | 2026-07-25 |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
