@@ -1,8 +1,8 @@
 ---
 phase: 13
 slug: proactive-in-app-review
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-25
 ---
@@ -18,7 +18,7 @@ created: 2026-07-25
 | Property | Value |
 |----------|-------|
 | **Framework** | vitest ^3.2.7 + convex-test 0.0.54 |
-| **Config file** | `packages/backend/vitest.config.ts` (env `edge-runtime`, include `convex/**/*.test.ts`, no watch mode) |
+| **Config file** | `packages/backend/vitest.config.mts` (env `edge-runtime`, include `convex/**/*.test.ts`, no watch mode) |
 | **Quick run command** | `pnpm --filter @pikar/backend exec vitest run convex/proactiveReview.test.ts convex/evaluations.test.ts` |
 | **Full suite command** | `pnpm test` (turbo, all packages) |
 | **Estimated runtime** | ~30 seconds quick · ~3 min full |
@@ -81,11 +81,11 @@ created: 2026-07-25
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references — no `<automated>MISSING</automated>` exists; `proactiveReview.test.ts` is created inside plan 13-02 Task 1 as a `tdd="true"` task (a convex-test file referencing `internal.proactiveReview` cannot typecheck before the module exists)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-25 (gsd-plan-checker, Dimension 8 PASS)
