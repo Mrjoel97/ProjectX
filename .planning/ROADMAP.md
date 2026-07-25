@@ -532,7 +532,7 @@ Plans:
   2. The agent surfaces insights/patterns/gaps each carrying a vault citation; when the document reveals no gaps it says so honestly rather than fabricating one.
   3. After the discussion the user chooses the outcome - a memo or a gap-bridging plan - and any resulting action crosses the normal plan -> Approve gate.
   4. No report content leaks into audit/telemetry/step rows (refs/counts only).
-**Plans**: 9 plans (6 waves)
+**Plans**: 9 plans (9 waves — serialized: every plan writes docs/playbooks/voice.md, see 14-VALIDATION.md § Wave / File-Ownership Contract)
 
 Plans:
 - [ ] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
