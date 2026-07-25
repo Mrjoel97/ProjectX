@@ -2,6 +2,8 @@
 // network, no live OpenAI): the tests assert the OUTGOING request shape and that the resolved
 // value NEVER carries OPENAI_API_KEY. There is no convex-test fixture seam here — the whole
 // contract is "what leaves Convex, and what comes back", so a captured mock fetch is the seam.
+
+import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import {
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
@@ -13,7 +15,6 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
-import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -69,16 +70,20 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
   expect(body.session.instructions).toBe(voiceSessionSkillBody);
 });
 
-test("mintClientSecret returns ONLY {clientSecret, expiresAt} and NEVER the API key", async () => {
+test("mintClientSecret returns ONLY {clientSecret, expiresAt, toolsAtMint} and NEVER the API key", async () => {
   const t = convexTest(schema, modules);
   await t.mutation(internal.skills.seedSkills, {});
   stubFetch(() => Response.json({ value: "ek_ephemeral_xyz", expires_at: 9999 }));
 
   const res = await asTenant(t).action(internal.voiceToken.mintClientSecret, {});
 
-  expect(Object.keys(res).sort()).toEqual(["clientSecret", "expiresAt"]);
+  // `toolsAtMint` (14-04) is the ONE deliberate extension to the Phase-6 contract — transport
+  // control, not a secret. The key set is still asserted EXACTLY, so a third field cannot creep in.
+  expect(Object.keys(res).sort()).toEqual(["clientSecret", "expiresAt", "toolsAtMint"]);
   expect(res.clientSecret).toBe("ek_ephemeral_xyz");
   expect(res.expiresAt).toBe(9999);
+  // Trivially true with no doc scope: nothing was declared, so the browser has nothing to re-declare.
+  expect(res.toolsAtMint).toBe(true);
   // The linchpin: the server key is structurally absent from what the browser receives.
   expect(JSON.stringify(res)).not.toContain(FAKE_KEY);
 });
