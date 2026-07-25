@@ -131,6 +131,7 @@ export const insertEvaluation = internalMutation({
     scorecard: evalFields.scorecard,
     userProvided: evalFields.userProvided,
     verdict: evalFields.verdict,
+    delta: evalFields.delta,
   },
   handler: async (ctx, args) =>
     await ctx.db.insert("evaluations", { ...args, createdAt: Date.now() }),
@@ -147,8 +148,9 @@ export const runEvaluation = internalAction({
     threadId: v.string(),
     framework: v.optional(evalFields.framework),
     query: v.optional(v.string()),
+    withDelta: v.optional(v.boolean()),
   },
-  handler: async (ctx, { tenantId, threadId, framework, query }) => {
+  handler: async (ctx, { tenantId, threadId, framework, query, withDelta }) => {
     const turnId = crypto.randomUUID();
     const stepKey = "evaluateBusiness";
     const startedAt = Date.now();
@@ -324,6 +326,26 @@ export const runEvaluation = internalAction({
               ? "gaps"
               : "insufficient";
 
+      // ── "What changed" (BEVL-03) — pure arithmetic over values already in memory ───────────────
+      // Keyed on `${route}/${playbook}`, NOT route alone: diagnose() only ever emits three routes
+      // and several distinct prescriptions share each, so a route-only key would report a real move
+      // (e.g. "no offer yet" → "offer is a commodity", both offer-architect) as "no change".
+      // `playbook` is a code-owned string literal, never LLM prose — the objection to keying on
+      // `label` does not apply to it. Arrays (not a scalar) so a future multi-prescription
+      // diagnose() needs no shape change.
+      const gapKey = (g: { route: string; playbook: string }) => `${g.route}/${g.playbook}`;
+      const prevKeys = new Set((last?.gaps ?? []).map(gapKey));
+      const nextKeys = new Set(gaps.map(gapKey));
+      const delta =
+        withDelta && last
+          ? {
+              // Clamped: a DROP in findings is not "new findings", and the card only renders > 0.
+              newFindings: Math.max(0, findings.length - (last.findings?.length ?? 0)),
+              gapsClosed: [...prevKeys].filter((k) => !nextKeys.has(k)),
+              gapsOpened: [...nextKeys].filter((k) => !prevKeys.has(k)),
+            }
+          : undefined;
+
       // ── Persist ONE content-plane row ──────────────────────────────────────────────────────────
       await ctx.runMutation(internal.evaluations.insertEvaluation, {
         tenantId,
@@ -335,6 +357,7 @@ export const runEvaluation = internalAction({
         scorecard,
         userProvided,
         verdict,
+        delta,
       });
 
       // ── ONE refs-only audit: counts + enums ONLY, never a finding/citation string (§4) ─────────
@@ -362,7 +385,7 @@ export const runEvaluation = internalAction({
         endedAt: Date.now(),
       });
 
-      return { verdict, findingCount: findings.length, gapCount: gaps.length };
+      return { verdict, findingCount: findings.length, gapCount: gaps.length, delta };
     } catch {
       // Fail open (SC1): never throw out of the governed loop.
       await ctx.runMutation(internal.agentSteps.finish, {
@@ -372,7 +395,9 @@ export const runEvaluation = internalAction({
         phase: "error",
         endedAt: Date.now(),
       });
-      return { verdict: "insufficient" as const, findingCount: 0, gapCount: 0 };
+      // Both branches share ONE return shape — a union return is what collapses Convex's internal
+      // API type inference (Pitfall 9).
+      return { verdict: "insufficient" as const, findingCount: 0, gapCount: 0, delta: undefined };
     }
   },
 });
