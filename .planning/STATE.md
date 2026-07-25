@@ -3,6 +3,20 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 status: completed
+stopped_at: Phase 14 context gathered
+last_updated: "2026-07-25T18:20:52.360Z"
+progress:
+  total_phases: 38
+  completed_phases: 21
+  total_plans: 150
+  completed_plans: 146
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+status: completed
 stopped_at: Completed 13-03-PLAN.md
 last_updated: "2026-07-25T15:36:38.120Z"
 progress:
@@ -145,6 +159,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T15:09:17.203Z
-Stopped at: Completed 13-03-PLAN.md
-Resume file: None
+Last session: 2026-07-25T18:20:52.340Z
+Stopped at: Phase 14 context gathered
+Resume file: .planning/phases/14-flagship-voice-doc-workflow/14-CONTEXT.md
