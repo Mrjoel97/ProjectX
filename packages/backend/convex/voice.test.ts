@@ -266,6 +266,102 @@ test("storeBrief drafts via the SMOKE transcript and ingests a kind:brief vault 
   expect(again).toEqual({ vaultDocId });
 });
 
+// ── 14-03 Task 1: startSession's optional, ownership-and-status-validated docRef (DOCV-01) ──────
+//
+// The server is the TRUST BOUNDARY for the doc scope, not the UI (14-07's picker is a courtesy):
+// the CONTEXT decision "never burn capped 15-minute time discussing a document the agent cannot
+// actually see" is only TRUE if startSession refuses. A rejected doc must also never leave an
+// `active` row holding a watchdog — validation runs before any write.
+
+/** Seed a vault doc for the docRef tests. `status`/`text`/`tenantId` are the three axes validated. */
+function seedDoc(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    tenantId?: string;
+    status?: "processing" | "ready" | "failed" | "pending_extraction" | "extracting";
+    text?: string;
+  } = {},
+) {
+  return t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: opts.tenantId ?? TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "seam",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: `hash_${Math.random().toString(36).slice(2)}`,
+      text: opts.text ?? "Churn rose to 9% in Q3, concentrated in the self-serve tier.",
+      status: opts.status ?? ("ready" as const),
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+test("startSession persists a READY, tenant-owned docRef and audits it as a ref (never the title/text)", async () => {
+  const t = setup();
+  const docRef = await seedDoc(t);
+
+  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+    callId: "call_doc",
+    docRef,
+  });
+
+  expect((await get(t, sessionId))?.docRef).toBe(docRef);
+
+  // The session_started payload may gain the docRef (an id IS a ref) and NOTHING else (§4).
+  const started = await audits(t, "voice.session_started");
+  const payload = JSON.stringify(started[0]?.payload);
+  expect(payload).toContain(docRef);
+  expect(payload).not.toContain("Q3 Performance Report"); // no title
+  expect(payload).not.toContain("Churn rose"); // no document text
+  expect(payload).not.toContain("call_doc"); // still never the callId-as-secret
+});
+
+test("startSession REFUSES a non-ready document and leaves no active session behind", async () => {
+  const t = setup();
+  const asT = asTenant(t);
+
+  for (const status of ["processing", "extracting", "pending_extraction", "failed"] as const) {
+    const docRef = await seedDoc(t, { status });
+    await expect(asT.mutation(api.voice.startSession, { callId: "call_x", docRef })).rejects.toThrow(
+      /voicedoc: document not ready/,
+    );
+  }
+  // A ready doc with no extracted text is equally undiscussable.
+  const empty = await seedDoc(t, { text: "   " });
+  await expect(
+    asT.mutation(api.voice.startSession, { callId: "call_x", docRef: empty }),
+  ).rejects.toThrow(/voicedoc: document not ready/);
+
+  // No row was left `active` holding a watchdog, and nothing was scheduled.
+  expect(await t.query(internal.voice.getActiveSession, { tenantId: TENANT })).toBeNull();
+  expect(await listScheduled(t)).toHaveLength(0);
+});
+
+test("startSession REFUSES another tenant's document (fail-closed, no cross-tenant scope)", async () => {
+  const t = setup();
+  const foreign = await seedDoc(t, { tenantId: "tenant_other" });
+
+  await expect(
+    asTenant(t).mutation(api.voice.startSession, { callId: "call_x", docRef: foreign }),
+  ).rejects.toThrow(/voicedoc: document not found/);
+  expect(await t.query(internal.voice.getActiveSession, { tenantId: TENANT })).toBeNull();
+});
+
+test("startSession with NO docRef is byte-equivalent to the Phase-6 path (docRef stays absent)", async () => {
+  const t = setup();
+  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, { callId: "call_plain" });
+
+  const s = await get(t, sessionId);
+  expect(s?.status).toBe("active");
+  expect(s?.docRef).toBeUndefined(); // absent, not null — the row shape is unchanged
+  expect(s?.watchdogFnId).toBeDefined();
+  const payload = JSON.stringify((await audits(t, "voice.session_started"))[0]?.payload);
+  expect(payload).toBe(JSON.stringify({ sessionId })); // exactly the Phase-6 payload
+});
+
 test("recordUsage accumulates the counters and prices the delta onto spend; a bad count fails closed", async () => {
   const t = setup();
   const sessionId = await seedActive(t, "call_meter");

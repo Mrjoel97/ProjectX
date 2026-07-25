@@ -1,8 +1,12 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-25 (14-02 — the pure voice-doc domain: `buildDocDigest`, `shapeDocReview`,
-> `composeDocMemo`, and the pinned Realtime function-call vocabulary). Still no behavior change to
-> the Phase-6 flow — nothing calls these yet. See the "Voice-doc sessions (Phase 14)" section below.
+> Last verified: 2026-07-26 (14-03 — the doc scope becomes REAL: `startSession` accepts and
+> validates an optional `docRef`, and `voiceDoc.searchDocument` answers a mid-call drill-in from
+> that document alone). This is the first Phase-14 plan that changes runtime behavior; the
+> no-`docRef` Phase-6 path is unchanged. See "Voice-doc sessions (Phase 14)" below.
+>
+> Prior: 2026-07-25 (14-02 — the pure voice-doc domain: `buildDocDigest`, `shapeDocReview`,
+> `composeDocMemo`, and the pinned Realtime function-call vocabulary).
 >
 > Prior: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
 > `document-analyst` persona row only.
@@ -367,6 +371,25 @@ business review.
 The ONE report under discussion, `v.optional(v.id("vaultDocuments"))`. Optional so existing rows need
 no migration; **no index** — it is read through the existing `ctx.db.get(sessionId)`. One document per
 session is the product decision, not a limitation to route around.
+
+**Invariant (14-03) — `startSession` is the TRUST BOUNDARY for the doc scope, and it refuses.**
+`voice.startSession({callId, docRef})` validates the document BEFORE any write: the row must exist,
+be **this tenant's**, be `status: "ready"`, and carry non-blank `text`. Anything else throws
+`voicedoc: document not found` (missing / cross-tenant, fail-closed) or `voicedoc: document not ready`
+(non-`ready` status or no extracted text). Why the server and not just the picker: 14-07's vault
+"Discuss by voice" gate is a courtesy, and the locked CONTEXT decision *"never burn capped
+15-minute time discussing a document the agent cannot actually see"* is only true if the server
+refuses. Validation runs FIRST, before the parallel-session guard and the insert, so a rejected doc
+can never leave an `active` row holding a watchdog. The thrown message is a **status, never
+content** — no title, no text, no character count. The read is a direct `ctx.db.get(docRef)` +
+`doc.tenantId !== ctx.tenantId` (this file's own `endSessionClean` / `abortSession` idiom), NOT
+`internal.vault.getDoc`: that query returns `{text, contentHash, title}` with **no `status`**, so it
+structurally cannot answer the readiness half. Enforced by: the four `docRef` cases in
+`voice.test.ts` (persist + refuse-non-ready + refuse-cross-tenant + the unchanged no-`docRef` path).
+
+The `voice.session_started` audit payload may gain **`docRef` and nothing else** — an id is a ref.
+Never the title, the status, or a character count of the text (§4). Without a `docRef` the payload is
+byte-identical to the Phase-6 `{sessionId}`, which `voice.test.ts` asserts exactly.
 
 ### The synthetic `voice-doc:<sessionId>` thread
 

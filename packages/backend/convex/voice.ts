@@ -48,10 +48,35 @@ export const getSession = internalQuery({
  * force-ended first (cancel its watchdog + schedule its abnormal end) so a tenant never runs two.
  * Arms exactly ONE scheduler.runAt(endsAt, forceEndSession) — armed once, never re-armed (the cap is
  * a wall-clock bound a hung client cannot stall). Emits a refs-only session_started audit.
+ *
+ * DOCV-01: an optional `docRef` scopes the session to exactly ONE vault report. This is the TRUST
+ * BOUNDARY for that scope — 14-07's document picker is a courtesy, not a gate. The locked CONTEXT
+ * decision "never burn capped 15-minute time discussing a document the agent cannot actually see"
+ * is only true if the SERVER refuses a non-ready or cross-tenant document.
  */
 export const startSession = tenantMutation({
-  args: { callId: v.string(), language: v.optional(v.string()) },
-  handler: async (ctx, { callId, language }): Promise<{ sessionId: Id<"voiceSessions"> }> => {
+  args: {
+    callId: v.string(),
+    language: v.optional(v.string()),
+    // The ONE report under discussion (DOCV-01). Optional — the Phase-6 path is unchanged without it.
+    docRef: v.optional(v.id("vaultDocuments")),
+  },
+  handler: async (
+    ctx,
+    { callId, language, docRef },
+  ): Promise<{ sessionId: Id<"voiceSessions"> }> => {
+    // Validate the doc scope BEFORE any write — never after. A rejected document must not leave an
+    // `active` row holding a watchdog. Read straight off `ctx.db` (this file's own endSessionClean /
+    // abortSession ownership idiom): `internal.vault.getDoc` carries no `status`, so it structurally
+    // cannot answer the readiness half of this check.
+    // Thrown messages are a STATUS, never content — no title, no text, no character count (§4).
+    if (docRef !== undefined) {
+      const doc = await ctx.db.get(docRef);
+      if (!doc || doc.tenantId !== ctx.tenantId) throw new Error("voicedoc: document not found");
+      if (doc.status !== "ready" || !doc.text?.trim())
+        throw new Error("voicedoc: document not ready");
+    }
+
     // Parallel-session guard: force-end any prior active session before opening a new one. It is
     // still `active` (watchdog pending) so cancelling its timer is safe (never a fired-id throw),
     // then its abnormal-end path (hangup + auto-store) runs asynchronously.
@@ -77,6 +102,7 @@ export const startSession = tenantMutation({
       textInTok: 0,
       textOutTok: 0,
       language,
+      ...(docRef && { docRef }),
       createdAt: startedAt,
     });
     // Arm the ONE durable watchdog (cockpit.executePlan deferred-send precedent). runAt(endsAt) so
@@ -86,13 +112,14 @@ export const startSession = tenantMutation({
     });
     await ctx.db.patch(sessionId, { watchdogFnId });
 
-    // Refs-only session_started audit: {sessionId} ONLY — never the callId (a secret handle, §4).
+    // Refs-only session_started audit: {sessionId} + at most the docRef — both IDS. Never the
+    // callId (a secret handle), never the document title, text or a character count of it (§4).
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
       correlationId: String(sessionId),
       eventType: "voice.session_started",
       actor: "user",
-      payload: { sessionId },
+      payload: { sessionId, ...(docRef && { docRef }) },
     });
     return { sessionId };
   },
