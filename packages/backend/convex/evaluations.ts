@@ -190,6 +190,22 @@ export const runEvaluation = internalAction({
         // fail open — no grounding this run; carried values still stand.
       }
 
+      // ── Authoritative seed: the user's OWN profile docs, PREPENDED ────────────────────────────
+      // Similarity alone cannot answer "evaluate MY business": rag.search takes its top-K by CHUNK,
+      // so one large reference PDF can occupy every seed slot and the user's own profile never
+      // enters the corpus (observed live — grounding returned a single 300-page book, and the
+      // engine honestly reported "not enough data"). Prepending matters: `fillVault` keeps the
+      // FIRST value it sees for a path, so the user's own figures beat any book prose.
+      try {
+        const seeds = await ctx.runQuery(internal.vault.profileSeedDocs, { tenantId });
+        const fresh = seeds.filter((s) => !docIds.includes(s.docId));
+        docIds = [...fresh.map((s) => s.docId), ...docIds];
+        titles = [...fresh.map((s) => s.title), ...titles];
+        chunks = [...fresh.map((s) => s.text), ...chunks];
+      } catch {
+        // fail open — retrieval-only grounding still stands.
+      }
+
       // ── Fill remaining nulls from grounded text (profile parse + labeled-number scan) ──────────
       let personaHint: string | undefined;
       for (let i = 0; i < chunks.length; i++) {
@@ -197,7 +213,13 @@ export const runEvaluation = internalAction({
         const docId = docIds[i];
         const title = titles[i] ?? "";
         const fillVault = (path: string, value: unknown): void => {
-          if (value == null || value === "" || getPath(scorecard, path) != null) return;
+          // An EMPTY ARRAY counts as unset. `emptyScorecard.identity.currentOffers` is `[]`, not
+          // null, so a bare `!= null` guard skipped it forever — `hasOffer` stayed false and
+          // diagnose() returned Gate 1 ("No offer worth buying yet") for EVERY vault-grounded run,
+          // masking the real constraint. The caller's own `.length === 0` check shows the intent.
+          const current = getPath(scorecard, path);
+          const isUnset = current == null || (Array.isArray(current) && current.length === 0);
+          if (value == null || value === "" || !isUnset) return;
           scorecard = setPath(scorecard, path, value);
           provenance.set(path, { docId, title, confidence: "high", source: "vault" });
         };

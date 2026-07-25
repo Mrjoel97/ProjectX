@@ -446,6 +446,52 @@ export const markExtracting = internalMutation({
  * scanText at extraction time is the lanes' fail-closed gate + audit-counts source, and every
  * downstream model path re-scans). Fail-closed tenant guard, like getDoc.
  */
+/** A profile-shaped doc is recognised by the marker `serializeProfile` always writes. */
+const PROFILE_MARKER = "- **Persona:**";
+/** Enough to carry a profile's front-matter AND its figures; these docs are small by construction. */
+const PROFILE_SEED_CHAR_CAP = 4000;
+
+/**
+ * The AUTHORITATIVE seed for a business evaluation: the tenant's own profile-shaped docs.
+ *
+ * Pure similarity search cannot answer "evaluate MY business". A reference book ABOUT business
+ * (e.g. a marketing PDF) out-ranks a two-paragraph description OF a business on generic business
+ * vocabulary, and since `rag.search` takes its top-K by CHUNK, one large PDF can occupy every seed
+ * slot — observed live: the evaluation's grounding returned exactly ONE doc, a 300-page book, so
+ * the engine saw zero facts about the user and reported "not enough data". The user's own profile
+ * is authoritative here regardless of its score, so the engine seeds it directly.
+ *
+ * Cheap by construction: the metadata pre-filter (`business_profile` kind, or markdown) keeps big
+ * PDFs out, so this never loads a book's text just to test it for the marker.
+ */
+export const profileSeedDocs = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId },
+  ): Promise<{ docId: string; title: string; text: string }[]> => {
+    const rows = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .order("desc")
+      .take(40);
+    return rows
+      .filter(
+        (d) =>
+          d.status === "ready" &&
+          !!d.text &&
+          (d.kind === "business_profile" || d.mimeType === "text/markdown") &&
+          (d.kind === "business_profile" || (d.text ?? "").includes(PROFILE_MARKER)),
+      )
+      .slice(0, 3)
+      .map((d) => ({
+        docId: d._id,
+        title: d.title,
+        text: (d.text ?? "").slice(0, PROFILE_SEED_CHAR_CAP),
+      }));
+  },
+});
+
 /**
  * The cockpit-attachment seam: a file attached in a thread ALSO becomes a vault doc, so it is
  * embedded, graph-extracted, browsable, and able to ground a LATER turn — instead of being

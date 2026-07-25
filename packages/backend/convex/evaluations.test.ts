@@ -243,3 +243,34 @@ describe("thin-data honesty (idea-stage → not enough data, never a fabricated 
     expect(row?.notEnoughData.length).toBeGreaterThanOrEqual(1); // an honest nudge instead
   });
 });
+
+// Regression (owner-reported, 2026-07-25): a grounded profile that clearly STATES an offering was
+// still diagnosed "No offer worth buying yet" — `emptyScorecard.identity.currentOffers` is `[]`,
+// not null, so fillVault's `!= null` guard skipped it forever. hasOffer stayed false and Gate 1
+// fired on EVERY vault-grounded run, masking the real constraint further down the ladder.
+describe("fillVault treats an empty array as unset (offer gate is reachable)", () => {
+  test("a profile stating an offering passes Gate 1 and routes to the real constraint", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true));
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+
+    // The offering from the profile actually landed on the scorecard.
+    expect(row?.scorecard?.identity?.currentOffers ?? []).toHaveLength(1);
+
+    // ...so diagnose() got PAST the offer gate. Gate 1 would route to offer-architect.
+    for (const gap of row?.gaps ?? []) {
+      expect(gap.route).not.toBe("offer-architect");
+      expect(gap.label).not.toContain("No offer worth buying yet");
+    }
+  });
+});
