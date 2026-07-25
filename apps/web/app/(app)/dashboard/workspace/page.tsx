@@ -168,6 +168,18 @@ export default function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const newChat = () => setThreadId(undefined);
+  // Close a session tab. The tab strip is view state, so this only stops SHOWING the chat — the
+  // thread and its messages are untouched and stay reopenable from the "Past chats" menu, which
+  // reads the persisted `cockpit.listThreads`. Closing the ACTIVE tab falls back to its neighbour
+  // (right first, then left); closing the last one lands on a fresh New chat. Closing a background
+  // tab never moves the user. Computed outside the setState updater so it stays side-effect free.
+  const closeTab = (id: string) => {
+    const idx = tabs.findIndex((t) => t.id === id);
+    if (idx === -1) return;
+    const next = tabs.filter((t) => t.id !== id);
+    setTabs(next);
+    if (id === threadId) setThreadId(next[idx]?.id ?? next[idx - 1]?.id);
+  };
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -239,16 +251,31 @@ export default function WorkspacePage() {
 
             {/* Chat tabs: one per minted thread this session + the compact New-chat pill. */}
             <div className="chat-tabs">
+              {/* A tab is a label button + its own close button, so the wrapper is a span — a
+                  button cannot legally nest another button. */}
               {tabs.map((t) => (
-                <button
+                <span
                   key={t.id}
-                  type="button"
-                  className={`chat-tab${t.id === threadId ? " is-active" : ""}`}
-                  title={t.label}
-                  onClick={() => setThreadId(t.id)}
+                  className={`chat-tab has-close${t.id === threadId ? " is-active" : ""}`}
                 >
-                  {t.label}
-                </button>
+                  <button
+                    type="button"
+                    className="chat-tab-label"
+                    title={t.label}
+                    onClick={() => setThreadId(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-tab-close"
+                    aria-label={`Close ${t.label}`}
+                    title={`Close ${t.label}`}
+                    onClick={() => closeTab(t.id)}
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
               <button
                 type="button"

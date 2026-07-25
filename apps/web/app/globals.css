@@ -930,6 +930,52 @@ button.clay-card:hover {
   white-space: nowrap;
 }
 
+/* A closable session tab: the padding moves onto the two inner buttons so each has its own
+   comfortable hit target and the × sits inside the tab's border, not beside it. */
+.chat-tab.has-close {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  max-width: 12rem;
+}
+
+.chat-tab-label {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem 0.2rem 0.35rem 0.8rem;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Matches the "+" new-chat pill's glyph idiom — no icon library, no new visual language. */
+.chat-tab-close {
+  font: inherit;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem 0.6rem 0.35rem 0.2rem;
+  opacity: 0.5;
+}
+
+.chat-tab-close:hover {
+  opacity: 1;
+  color: var(--ink);
+}
+
+.chat-tab-close:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--teal-600);
+  outline-offset: -2px;
+  border-radius: 0.4rem;
+}
+
 .chat-tab:hover {
   border-color: var(--teal-400);
   color: var(--ink);
