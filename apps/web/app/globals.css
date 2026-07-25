@@ -560,7 +560,11 @@ a {
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem 0.75rem;
-  overflow-y: auto;
+  /* The rail itself NEVER scrolls — the scroll container is `.rail-nav` below, so the brand
+     lockup and the foot (incl. the collapse toggle) stay frozen while the nav list moves.
+     Putting `overflow-y` here instead scrolls the whole rail and draws a rail-wide scrollbar
+     that is visible even when collapsed. */
+  overflow: hidden;
   /* Glass-over-clay depth: a soft vertical light falloff instead of a flat fill. */
   background: linear-gradient(180deg, #0e5f58 0%, var(--teal-900) 45%, #073733 100%);
   color: #fff;
@@ -617,11 +621,26 @@ a {
   white-space: nowrap;
 }
 
+/* The rail's ONLY scroll container. `min-height: 0` is load-bearing: a column flex item defaults
+   to `min-height: auto`, which refuses to shrink below its content, so without it `overflow-y`
+   never engages and the rail overflows instead. */
 .rail-nav {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Collapsed = icons only, no room for a scrollbar beside them. Hidden visually, still fully
+   scrollable by wheel, trackpad, and keyboard — this removes the affordance, not the behaviour. */
+.rail.is-collapsed .rail-nav {
+  scrollbar-width: none;
+}
+
+.rail.is-collapsed .rail-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .rail-item {
