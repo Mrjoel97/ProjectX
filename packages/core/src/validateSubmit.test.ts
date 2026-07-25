@@ -3,6 +3,8 @@ import {
   MAX_ATTACHMENTS,
   MAX_GOAL_LEN,
   MAX_ATTACHMENT_SIZE,
+  MIME_ALLOWLIST,
+  resolveMimeType,
   validateSubmit,
   type Attachment,
 } from "./validateSubmit";
@@ -84,5 +86,31 @@ describe("validateSubmit — INTK-04 content checks", () => {
     });
     const exact = Array.from({ length: MAX_ATTACHMENTS }, () => att());
     expect(validateSubmit({ ...base, attachments: exact })).toEqual({ ok: true });
+  });
+});
+
+describe("resolveMimeType", () => {
+  test("a browser-supplied type always wins", () => {
+    expect(resolveMimeType("note.md", "text/markdown")).toBe("text/markdown");
+    expect(resolveMimeType("photo.png", "image/png")).toBe("image/png");
+  });
+
+  // The regression: Windows reports no MIME for .md, so the raw "" failed the allow-list check
+  // even though text/markdown is allow-listed. Both upload surfaces depend on this fallback.
+  test("falls back to the extension when the browser gives none", () => {
+    expect(resolveMimeType("business-profile.md", "")).toBe("text/markdown");
+    expect(resolveMimeType("notes.markdown", "")).toBe("text/markdown");
+    expect(resolveMimeType("data.csv", "")).toBe("text/csv");
+    expect(resolveMimeType("plain.TXT", "")).toBe("text/plain");
+  });
+
+  test("an untyped .md resolves to something the allow-list actually accepts", () => {
+    expect(MIME_ALLOWLIST.has(resolveMimeType("business-profile.md", ""))).toBe(true);
+  });
+
+  test("an unknown extension stays opaque rather than guessing something allow-listed", () => {
+    expect(resolveMimeType("archive.xyz", "")).toBe("application/octet-stream");
+    expect(resolveMimeType("noextension", "")).toBe("application/octet-stream");
+    expect(MIME_ALLOWLIST.has(resolveMimeType("archive.xyz", ""))).toBe(false);
   });
 });

@@ -33,6 +33,28 @@ export const MIME_ALLOWLIST: ReadonlySet<string> = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
 ]);
 
+/** Extension → MIME for the text types browsers routinely fail to type. */
+const EXT_MIME: Readonly<Record<string, string>> = {
+  txt: "text/plain",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  csv: "text/csv",
+};
+
+/**
+ * Resolve a file's MIME type, falling back to its extension when the browser gives none.
+ *
+ * `File.type` is unreliable: Windows has no registered MIME type for `.md`/`.csv`, so Chrome
+ * reports `""` and an allow-list check on the raw value rejects a file the list actually permits
+ * (`text/markdown` IS allow-listed). Both upload surfaces — the cockpit AttachmentPicker and the
+ * vault Dropzone — resolve through here, so the fallback cannot drift between them.
+ */
+export function resolveMimeType(filename: string, browserType: string): string {
+  if (browserType) return browserType;
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_MIME[ext] ?? "application/octet-stream";
+}
+
 /** Structural email check — shape only, NOT deliverability. Anchored, single address. */
 export const isValidEmail = (s: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 

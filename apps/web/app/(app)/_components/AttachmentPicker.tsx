@@ -5,6 +5,7 @@ import {
   MAX_ATTACHMENT_SIZE,
   MAX_ATTACHMENTS,
   MIME_ALLOWLIST,
+  resolveMimeType,
 } from "@pikar/core/validateSubmit";
 import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex/react";
@@ -46,7 +47,10 @@ export function AttachmentPicker({
     const next = [...attachments];
     try {
       for (const file of picked) {
-        if (!MIME_ALLOWLIST.has(file.type)) {
+        // Resolve BEFORE the allow-list check: a .md picked on Windows arrives with an empty
+        // file.type and would be rejected despite text/markdown being allow-listed.
+        const mimeType = resolveMimeType(file.name, file.type);
+        if (!MIME_ALLOWLIST.has(mimeType)) {
           setError(`${file.name}: unsupported file type.`);
           continue;
         }
@@ -57,7 +61,7 @@ export function AttachmentPicker({
         const url = await generateUploadUrl();
         const res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": file.type },
+          headers: { "Content-Type": mimeType },
           body: file,
         });
         if (!res.ok) {
@@ -65,7 +69,7 @@ export function AttachmentPicker({
           continue;
         }
         const { storageId } = (await res.json()) as { storageId: UploadedAttachment["storageId"] };
-        next.push({ storageId, filename: file.name, mimeType: file.type, size: file.size });
+        next.push({ storageId, filename: file.name, mimeType, size: file.size });
       }
       onChange(next);
     } finally {

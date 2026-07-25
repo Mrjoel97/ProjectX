@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { resolveMimeType } from "@pikar/core/validateSubmit";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
@@ -25,20 +26,9 @@ const FILE_CAP_BYTES = 100 * 1024 * 1024; // VAULT_FILE_CAP_BYTES
 const VIDEO_CAP_BYTES = 25 * 1000 * 1000; // VAULT_VIDEO_CAP_BYTES
 
 const SEARCHABLE_MIME = new Set(["text/plain", "text/markdown", "text/csv"]);
-const EXT_MIME: Record<string, string> = {
-  txt: "text/plain",
-  md: "text/markdown",
-  markdown: "text/markdown",
-  csv: "text/csv",
-};
 
-// Browser file.type is unreliable for .md/.csv (often empty) — fall back to the extension so the
-// server's isSearchable() sees a recognized MIME and starts the ingest workflow.
-function resolveMime(file: File): string {
-  if (file.type) return file.type;
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_MIME[ext] ?? "application/octet-stream";
-}
+// Browser file.type is unreliable for .md/.csv (often empty) — the extension fallback lives in
+// @pikar/core/validateSubmit so this and the cockpit AttachmentPicker cannot drift apart.
 
 async function hashBytes(buf: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -59,7 +49,7 @@ export function Dropzone() {
   const [paste, setPaste] = useState("");
 
   async function ingestOne(file: File) {
-    const mimeType = resolveMime(file);
+    const mimeType = resolveMimeType(file.name, file.type);
     // Client-side size guard: fail fast with a clear message BEFORE uploading the bytes, so an
     // oversize file doesn't waste a full upload round-trip only to be rejected server-side.
     if (mimeType.startsWith("video/")) {
