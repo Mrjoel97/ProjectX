@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 3
 status: executing
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-07-25T20:08:53.331Z"
+stopped_at: Completed 15-05-PLAN.md
+last_updated: "2026-07-25T20:29:34.160Z"
 progress:
   total_phases: 38
   completed_phases: 21
   total_plans: 156
-  completed_plans: 148
+  completed_plans: 149
 current_phase: 15
 ---
 
@@ -21,14 +21,16 @@ current_phase: 15
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 2/6 plans)
+**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (EXECUTING, 3/6 plans)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (2/6 plans, 5 waves)
+Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **IN PROGRESS** (3/6 plans, 5 waves)
 Current Plan: 3
 Total Plans in Phase: 6
-Plan: 15-02 COMPLETE (Wave 1 — the registry + the loop seam); next 15-03 (the dispatcher)
+Plan: 15-05 COMPLETE (Wave 2 — the generalized executor; run OUT OF ORDER because it depends only
+on Wave 0 and owns files no other plan touches). Done: 15-01, 15-02, 15-05. Next: 15-03 (the
+dispatcher), then 15-04, then 15-06.
 
 **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
@@ -37,7 +39,41 @@ finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may 
 — that still holds, and is what keeps 15-05's executor work from colliding with 15-02/03/04's
 dispatch work even with one agent doing both.
 
-Status (15-02): **A named specialist is now a resolvable `(skill body, tool-set)` pair, and THE
+Status (15-05): **The approve→execute spine is action-agnostic, and "adding an action type without
+an arm is a compile error" is a VERIFIED `tsc` failure rather than a comment.** `executePlan` no
+longer branches on an ad-hoc `if (plan.kind === "memo")`; it is the DISPATCHER, selecting an arm via
+`armFor(actionTypeOf(plan.kind))` in an exhaustive switch with an `assertNever` backstop. The memo
+arm and the email arm are two entries in one table, and the arms are the EXISTING code paths — the
+24-test `cockpit.test.ts` is unchanged and green, which is the refactor's proof. `armFor` is a
+`satisfies Record<ActionType, Arm>` TABLE in `@pikar/core`, deliberately NOT the plan's ternary: a
+ternary is total by construction, so widening `ACTION_TYPES` would compile fine and silently
+classify a new type as `inline`, voiding the plan's own headline guarantee and making its totality
+test (`armFor(t) !== undefined`) vacuous forever. `cockpit.ts` keeps its OWN `_ARM_TABLE` bind on
+top of that, because the `workflow` case falls through to the GMAIL FAN-OUT (seed `requests` →
+`startFanout` → `deliverApprovedPlan`): a new action type that merely *classified* as `workflow`
+would inherit the email terminal without anyone deciding to. The switch's `assertNever` covers a new
+ARM; `_ARM_TABLE` covers a new TYPE; both are compiler-forced, so they cannot drift — mutation-
+checked by adding `"calendar"` to `ACTION_TYPES` and watching TS2741 fire in `actionType.ts`,
+`actionType.test.ts` AND `cockpit.ts`. Honest qualification: "zero spine edits" means the spine's
+STRUCTURE never changes again — a new type still adds one compiler-demanded line to `_ARM_TABLE`.
+The branch ORDER is unchanged and now pinned on BOTH sides in `gapAction.test.ts`: a memo approves
+with ZERO `gmailTokens` rows (selection is BEFORE the mailbox pre-check — 12-05 left that as a
+comment, it is now an assertion) and an ESCALATED memo refuses with `review_escalated` running
+NEITHER arm (selection is AFTER the fail-closed guard). `deliverApprovedPlan.ts` is BYTE-UNCHANGED
+(a gate, not a claim): two-level dispatch — `executePlan` picks the arm, `deliverApprovedPlan` is the
+workflow-backed EMAIL arm's entry point, not the universal dispatcher. And the human Approve gate is
+statically fenced off from the model by three new `dispatchGuard.test.ts` scans: `cockpit.ts` must
+declare `export const executePlan = tenantMutation({`; `executePlan`/`approvePlan`/
+`deliverApprovedPlan` must be absent from `buildCockpitTools`' 20 `name: tool({` keys (floor ≥20, so
+Phases 16-19 can add tools without breaking it); and `llm.ts` must contain no
+`internal.cockpit.executePlan` / `api.cockpit.executePlan` / `deliverApprovedPlan` reference AT ALL,
+so a tool cannot reach Approve under some other key. Both scans mutation-checked. Gates: `@pikar/core`
+223/223, backend 508/509 (sole red the documented `audit.test.ts` `auditCounts` row), gapAction +
+cockpit 29/29, `apps/web` typecheck exit 0, backend `tsc` at the exact 52-error test-file baseline,
+`check-playbooks` exit 0, and `git diff` proves Lane B touched none of `llm.ts` / `dispatch.ts` /
+`evaluations.ts` / `specialists.ts` / `apps/`.
+
+PRIOR (15-02): **A named specialist is now a resolvable `(skill body, tool-set)` pair, and THE
 governed loop can run one without being forked.** Two halves. (1) The REGISTRY: the three growth
 specialists (`offer-architect` / `money-model-designer` / `lead-engine`) are registered as
 `(skillName, tools, stepTool)` triples in `packages/core/src/specialists.ts`; `SpecialistSpec.tools`
@@ -129,7 +165,7 @@ PRIOR — Phase 12 plan 04 CLOSED. evaluateBusiness read-tool + quiet recordScor
 
 PRIOR — plan 03 COMPLETE: Business Evaluation Engine shipped. Dedicated append-only evaluations table (by_tenant SC#5 / by_tenant_thread) + runEvaluation (carry-forward → ground via vaultGroundHydrated → pure diagnose()/leverageRank() → persist ONE cited row → refs-only evaluation.ran audit → evaluateBusiness step). recordScorecardAnswer = the LOCKED store half (a user figure persists forward, cited user-provided, never re-asked); byThread feeds the card (plan 04). v1 findings deterministic (profile-parse + labeled-number scan); rich LLM narrative deferred to the plan-06 eval gate. Zero grounded findings → insufficient + suppressed gaps (no fabricated diagnosis, SC#1). 6/6 convex-test over the SMOKE:: seam; check-playbooks exit 0.
 
-Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 2/6)
+Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Phases 10 + 11 shipped 4/4 each, Phase 12 shipped 6/6, Phase 13 shipped 4/4; Phase 15 at 3/6 — 01, 02, 05)
 
 *v1.0 milestone (Phases 1-9, less the superseded Phase 9) shipped: governed email cockpit + guardrails + vault/GraphRAG + live voice + resilience/ops + self-improvement. That is the spine v2.0 builds on.*
 
@@ -173,6 +209,7 @@ Progress (v2.0): [██░░░░░░░░] 19%  (3/16 phases complete; Ph
 | Phase 13 P03 | ~25 min | 3 tasks | 5 files |
 | Phase 15 P01 | 35 min | 3 tasks | 15 files |
 | Phase 15 P02 | 25 min | 3 tasks | 9 files |
+| Phase 15 P05 | 13 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -224,6 +261,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-02: the sub-agent BODY is registry-owned (§5) but the TOOL-SET is CODE-owned (ADR-007) — a tool-set is a CAPABILITY GRANT, not a prompt, and §5's eval gate stands in front of words, not capabilities. A DB-writable tool list would let a row edit widen what a sub-agent can do with nothing in front of it. SPECIALISTS stays a pure readonly data record in @pikar/core, which is also the seam 15.1 plugs its tier filter into.
 - [Phase 15]: 15-02: withholding a tool from a specialist is STRUCTURAL ABSENCE from the tool record, never ai@7's activeTools and never skill wording — activeTools leaves the withheld tool's execute closure in the record and reachable via invokeTool (llm.ts:1602). The omitRecipientEdits precedent generalized. runAgentLoop's toolNames tests === undefined, not truthiness: [] must yield an EMPTY record, and a truthiness test would hand a zero-tool specialist all 20 keys.
 - [Phase 15]: 15-02: evaluateBusiness is deliberately NOT in any specialist's grant despite its read-shaped name — it calls internal.evaluations.runEvaluation, which persists an evaluations row + an audit row per call and re-enters the engine mid-dispatch. The evaluation snapshot reaches the specialist through its PROMPT (internal.evaluations.lastForThread) instead. Reasoning pinned as a comment on the registry so a later phase does not 'fix' it.
+- [Phase 15]: 15-05: armFor is a `satisfies Record<ActionType, Arm>` TABLE in @pikar/core, never the ternary the plan specified — a ternary is TOTAL by construction, so widening ACTION_TYPES would compile fine and silently classify a new type as `inline`, voiding the plan's own "adding an action type without an arm is a COMPILE error" guarantee and making its `armFor(t) !== undefined` totality test vacuous forever. Verified by mutation: adding "calendar" fires TS2741 in actionType.ts, actionType.test.ts and cockpit.ts.
+- [Phase 15]: 15-05: cockpit.ts keeps its OWN `_ARM_TABLE` bind on top of core's table because the `workflow` case in executePlan's switch falls through to the GMAIL FAN-OUT — a new ActionType that merely classified as `workflow` would inherit the email terminal without anyone deciding to, undoing what 12-05 bought by leaving deliverApprovedPlan.ts untouched. assertNever covers a new ARM; _ARM_TABLE covers a new TYPE. So "zero spine edits" means the spine's STRUCTURE never changes — a new type still adds one compiler-demanded line.
+- [Phase 15]: 15-05: two-level dispatch — executePlan picks the arm, deliverApprovedPlan.ts is the workflow-backed EMAIL arm's entry point and NOT the universal dispatcher (byte-unchanged, enforced by `git diff --exit-code` in the plan gate). A future inline arm executes inline; a future durable arm starts its OWN workflow. Arm selection stays exactly where 12-05's memo `if` sat — after the CAS read + escalated guard, before the mailbox pre-check — and gapAction.test.ts now asserts BOTH sides of that position.
 - [Phase 15]: 15-02: the 'incomplete — cost ceiling reached' marker lives in the memo BODY, never on the plan row — a new plans.status literal would touch the PINNED status enum (schema.ts:155-164) with apps/web blast radius, and the body is visible at the Approve gate where the human actually decides. runAgentLoop stays module-private; runSpecialistTurn is the ONLY exported specialist entry, which is what keeps 'no agent spawns an agent' checkable by reading one file.
 
 ### Pending Todos
@@ -240,6 +280,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T20:08:18.538Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-07-25T20:29:34.160Z
+Stopped at: Completed 15-05-PLAN.md
 Resume file: None

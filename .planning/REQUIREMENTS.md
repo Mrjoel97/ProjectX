@@ -125,7 +125,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 ### S2 — Breadth of Action
 
 - [x] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
-- [ ] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
+- [x] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
 - [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
 - [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
 - [ ] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
