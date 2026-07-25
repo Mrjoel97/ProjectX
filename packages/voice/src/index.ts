@@ -25,6 +25,8 @@ export type { UsageDelta } from "./metering";
 // Voice-doc discussion (Phase 14, DOCV-01) — the contract surface every downstream plan imports.
 export {
   DIGEST_CHAR_CAP,
+  DIGEST_FENCE_CLOSE,
+  DIGEST_FENCE_OPEN,
   DOC_GAP_PLAYBOOK,
   DOC_GAP_ROUTE,
   DOC_REVIEW_FRAMEWORK,
@@ -33,5 +35,6 @@ export {
   RETRIEVAL_MAX_PASSAGES,
   SEARCH_DOCUMENT_TOOL,
   VOICE_DOC_THREAD_PREFIX,
+  buildDocDigest,
   voiceDocThreadId,
 } from "./docSession";
