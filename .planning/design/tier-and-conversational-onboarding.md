@@ -167,6 +167,16 @@ The three persona pills are **removed**. In their place:
 Editing headcount to 12 moves the tier. No control sets the tier directly. This is the whole
 anti-manipulation mechanism, and it is mostly a subtraction.
 
+**The subtraction must reach the mutation, not just the page** (amended 2026-07-25). Removing the
+pills is a client-side change; today `onboarding.ts:56` still accepts
+`v.union("solopreneur","startup","sme")` from the caller and `validateProfile`
+(`businessProfile.ts:81`) only checks set membership — nothing re-derives, nothing compares
+against the facts. A UI-only fix hides the button and leaves the control. `updateProfile` must
+stop taking a tier argument at all; the tier is a *derived output* of the facts write, never an
+input to it. Rationale: once §8 lands, the tier selects agent voice and which specialists are
+offered — a user-writable field that selects code paths needs the scrutiny of a permission, not
+of a preference.
+
 **Tier change is a moment, not a setting.** When the facts move someone from solopreneur to
 startup, that is the product noticing they grew — surface it as such.
 
@@ -182,6 +192,13 @@ until the user completes the facts, and they are prompted to do so on their next
 - A guard that the onboarding conversation cannot complete with a required slot empty.
 - A regression asserting the profile page exposes **no direct tier control** — this is what stops
   the pills quietly returning in six months.
+- **A regression asserting the MUTATION refuses a caller-supplied tier** (added 2026-07-25). The
+  page-level check above only proves the widget is gone; this one proves the control is gone.
+  Without it, "no tier control" is a UI claim, not a system property.
+- **An assertion that the audit row is truthful on an edit path** (added 2026-07-25).
+  `onboarding.ts:278` and `:307` hardcode `personaConfirmed: true`, so an edit that contradicts
+  onboarding still logs as a human confirmation. Under CLAUDE.md §3 the audit is insert-only and
+  cannot be corrected after the fact — a false row is worse than a missing one.
 
 ## 12. Affected surfaces
 

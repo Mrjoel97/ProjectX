@@ -49,6 +49,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **S2 - Breadth of Action**
 - [ ] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
+- [ ] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md`
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
@@ -543,6 +544,19 @@ Plans:
   3. Every sub-agent audit/telemetry row carries `rootRequestId` + `parentAgentId` lineage (refs/ids only), so the insert-only audit reconstructs the call tree and cost attributes to the root request.
   4. An approved plan can execute a non-email action type through a generalized executor (`executePlan`/`deliverApprovedPlan` dispatches by action type); the human Approve gate stays a mutation, never a tool.
   5. A cross-tenant isolation assertion ships for the dispatch/lineage rows (a sub-agent run keyed on `rootRequestId` is still tenant-scoped).
+**Plans**: TBD
+
+### Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED)
+**Goal**: The business tier stops being something a user can assign themselves and becomes a fact-derived, auditable property of the tenant — because tier now selects agent voice and which Growth OS specialists get offered, making a self-writable tier a behavioral control rather than a preference.
+**Depends on**: Phase 15 (dispatch seam exists, so tier plugs in as a filter/ordering layer rather than forking the router). Design doc D7 originally sequenced this "after Phase 13"; deferred one phase so Phase 15 can ship tier-agnostic dispatch and keep the seam clean.
+**Requirements**: consumes `.planning/design/tier-and-conversational-onboarding.md` (decisions D1-D7 are LOCKED)
+**Success Criteria** (what must be TRUE):
+  1. `deriveTier(facts)` is the ONLY writer of the tier; no UI control and **no mutation argument** accepts a caller-supplied tier — the profile page and `updateProfile` both refuse it (defect 1b). Enterprise stays admin-granted only (D6).
+  2. The tier lives in a queryable, indexed tenant-profile table with `tierSource` + `derivedAt`, not string-matched out of markdown (defect 1d); a malformed doc can no longer silently reclassify a tenant as solopreneur.
+  3. Onboarding asks the determining facts (headcount/paid staff) instead of letting an LLM guess the persona from prose (defect 1a); a required slot cannot be left empty.
+  4. The audit row reflects what actually happened — the hardcoded `personaConfirmed: true` on edits is gone (an insert-only log must not assert a confirmation that never occurred, CLAUDE.md §3).
+  5. Tier visibly changes treatment: agent voice/framing and which specialists are offered off a diagnosis (D5); a tier change is surfaced as an event, not a silent setting.
+  6. Existing tenants backfill as `tierSource: "legacy"` with no forced re-onboarding (§10).
 **Plans**: TBD
 
 ### Phase 16: Research Sub-Agent & Web Research

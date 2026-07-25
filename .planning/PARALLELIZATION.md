@@ -30,6 +30,15 @@ resolution. That is the single failure mode this contract exists to prevent.
 dependency of Phases 16, 17, 18 and 19. Phase 14 is a leaf (flagship demo) and unblocks nothing.
 Throughput should follow the dependency graph, not split evenly.
 
+### Constraint on Lane A: dispatch stays tier-agnostic
+
+**Phase 15 routes specialists by NAME only.** Tier-based filtering/ordering of Growth OS
+specialists is **Phase 15.1**, not Phase 15 — it plugs into the dispatch seam afterwards as a
+filter layer. Lane A must not build tier awareness into the router, and must not read the tier in
+`llm.ts`. Reason: the tier is currently self-assignable by any caller
+(`onboarding.ts:56` accepts it as a mutation arg), so routing on it today would make a
+user-writable field select code paths. Phase 15.1 fixes the write path first.
+
 ### Stage 0 — parallel planning (start first; no `pnpm install` needed)
 
 Planners **read** code and **write** only to disjoint `.planning/phases/14-*/` and
