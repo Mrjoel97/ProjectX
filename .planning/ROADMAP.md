@@ -532,7 +532,18 @@ Plans:
   2. The agent surfaces insights/patterns/gaps each carrying a vault citation; when the document reveals no gaps it says so honestly rather than fabricating one.
   3. After the discussion the user chooses the outcome - a memo or a gap-bridging plan - and any resulting action crosses the normal plan -> Approve gate.
   4. No report content leaks into audit/telemetry/step rows (refs/counts only).
-**Plans**: TBD
+**Plans**: 9 plans (6 waves)
+
+Plans:
+- [ ] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
+- [ ] 14-02-PLAN.md — Pure doc-session domain: bounded fenced digest, welded citations/routes, the honesty verdict rule, doc memo composer, pinned Realtime function-call vocabulary
+- [ ] 14-03-PLAN.md — Doc-scoped session start + the doc-filtered retrieval action with its refs-only audit and the BETA-05 isolation assertion
+- [ ] 14-04-PLAN.md — Doc-grounded mint: document-analyst persona + digest + the flat read-only tool, with the session.update fallback
+- [ ] 14-05-PLAN.md — Findings producer: transcript → cited evaluations row on the synthetic thread, honest healthy / no-fabricated-gap
+- [ ] 14-06-PLAN.md — Browser relay: ?doc= connect, the response.done function-call round trip, always-send-an-output
+- [ ] 14-07-PLAN.md — Vault "Discuss by voice" entry with status gating, plus the in-call doc context strip and partial badge
+- [ ] 14-08-PLAN.md — Post-call outcome: cited findings via CardList, memo-vs-plan choice, gap → proposed plan → the single Approve gate, SC3 e2e
+- [ ] 14-09-PLAN.md — §4 static scans (mutation-verified), playbook consolidation, and the live human-verify checkpoint
 
 ### Phase 15: Sub-Agent Dispatch & Generalized Action Executor
 **Goal**: The hollow `sub_agent` route becomes real - specialists are swappable (skill body, tool-set) pairs the ONE governed loop runs - and the approve->execute spine becomes action-agnostic, so all breadth of action rides a single governed seam instead of re-forking the loop or the executor.
