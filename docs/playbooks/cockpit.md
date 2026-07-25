@@ -1,5 +1,11 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
+> Lane A (dispatch core)" below. `convex/dispatch.ts` is now real: the guard order
+> (resolve → depth → cycle → envelope → run), four CONVERSATIONAL refusals that never DLQ, one
+> tree-local cost envelope, and refs-only lineage on `audit.by_correlation(rootRequestId)`. No
+> schema change, no new table, no new index. Related ADR: ADR-008.
+
 > Last verified: 2026-07-25 (15-05 — Phase 15 Lane B, generalized executor). See "Phase 15 — Lane B
 > (generalized executor)" below. `executePlan` now dispatches over a closed action-type table
 > (`armFor(actionTypeOf(plan.kind))` + a `satisfies Record<ActionType, Arm>` bind) instead of an
@@ -442,6 +448,65 @@ BEHAVIOR — it makes later behavior expressible.
 - **Do not add a write tool to a specialist.** `specialists.test.ts` asserts `tools` as an equality
   over the whole registry precisely so that edit fails a test. See ADR-007 for why the tool-set is
   code-owned while the body is registry-owned.
+
+15-03 built the dispatcher itself (`convex/dispatch.ts`). Entry points: `runSpecialist`
+(production) and `__runSpecialistWithScript` (the offline twin). Both call ONE `governedDispatch`,
+so a guard cannot be true in tests and absent in production.
+
+- **The guard ORDER is load-bearing: resolve → depth → cycle → envelope → run.** Keep it.
+  `resolveSpecialist` first because `gaps[].route` persists as `v.string()` (`schema.ts:350`)
+  including `diagnose()`'s deliberate `""` — rows written before the union was closed reach here
+  un-narrowed, so the RUNTIME branch is the real guard, not belt-and-braces. Cycle uses the SHARED
+  `wouldCycle` from `@pikar/core`; do NOT re-derive `ancestry.includes` inline or the unit-tested
+  guarantee and the shipped one drift. The envelope check is LAST of the four so a refusal that
+  costs nothing is never charged against the tree.
+- **Four refusals — `unknown_route`, `depth_exceeded`, `cycle_refused`, `budget_exhausted` — and
+  every one is a conversational REPLY with ZERO `deadLetters` rows and ZERO model spend.** This is
+  the `PAUSED_REPLY` precedent (`llm.ts:1588`, `guardrails.ts:1-5`): a governed stop is a paused
+  conversation, not a system failure, and the cockpit has never DLQ'd a user-facing turn. The reply
+  strings are module constants and NONE of them names its internal reason code to the user. They
+  are driver-plane synthetic strings, NOT agent prompts, so §5 does not apply (the
+  `RESOLUTION_CONTINUE` precedent). **A refusal never paints an `agentSteps` row** — a refused
+  dispatch never started — and the step is finished in a `finally`, the only construct that
+  terminalizes on success, on a thrown turn, AND on a governed stop that returns as data.
+- **`MAX_DEPTH = 1`**, so a specialist can never dispatch anything and cycles are structurally
+  impossible. Cycle refusal ships anyway (SC #2 names it) so the guarantee is tested the day the
+  cap rises. Raising it is a ONE-constant change — `ancestry` already travels (ADR-008).
+- **The envelope is a TREE-LOCAL SECOND ceiling, not a replacement for the rail.**
+  `envelopeCents = floor(remainingDailyCents × ENVELOPE_FRACTION)`, derived ONLY at the root
+  (`envelopeCents: 0` in ⇒ derive; non-zero in ⇒ carried through UNCHANGED, which is what makes it
+  ONE envelope for the tree instead of a fresh allowance per hop). The global `dailySpendCents`
+  window is still drawn down independently by `recordSpend` inside the loop. Two traps: the rail is
+  **DEPLOYMENT-wide, not per-tenant** (`dailySpendCents` is a KEYLESS window — per-tenant keying is
+  the upgrade path, matching `guardrails.ts:19-20`), and **do not lean on `guardrails.preCall`** —
+  it checks `{ count: 1 }`, i.e. "is there ANY budget left", never "is there enough for this call".
+- **An overrunning hop KEEPS its output and is labelled `incomplete: true`.** Stop AFTER the call
+  that overran; never discard work already paid for — the same honesty posture as Phase 12's
+  not-enough-data verdict. The marker rides the memo BODY (15-02), never a `plans.status` literal.
+- **Lineage is audit-ONLY, with `correlationId := rootRequestId`.** Three inserts per hop —
+  `subagent.dispatched` / `subagent.completed` / `subagent.refused`. That IS the whole SC #3
+  mechanism: `audit.by_correlation` already existed, so the call tree reconstructs and the tree's
+  cost sums to the root with **no new table, no new index, no schema change**. Three deliberate
+  NON-decisions, so nobody "fixes" them: (1) **no `subAgentRuns` table** — a second log plane beside
+  an insert-only audit is the anti-pattern; (2) **no telemetry mirror** — `telemetry.requestId` is
+  `v.id("requests")` and a specialist run seeds ZERO `requests` rows by design (12-05), so
+  inventing one would re-enter the delivery spine; (3) **nothing on `agentSteps`** — its own header
+  says it writes no log-plane row, and a shadow log there would be a §4 regression.
+- **Lineage payloads are refs/ids/counts ONLY (§4).** `{ rootRequestId, parentAgentId, specialist,
+  depth, ancestryDepth, planId, skillVersion, costUsd, spentCents, envelopeCents, incomplete,
+  reason }`. NO reply, NO body, no finding text, no citation titles — a specialist's output is
+  grounded business prose. Asserted twice: over every payload VALUE of every row a run writes
+  (`dispatch.test.ts`) and STATICALLY over the source, payloads plus the shared `refs` object they
+  spread (`llmRedaction.test.ts`). Both mutation-checked.
+- **The specialist's evaluation context rides the PROMPT**, built from
+  `internal.evaluations.lastForThread` and capped (8 findings, 160 chars a label). That is why
+  `evaluateBusiness` is not in the grant and must not be added — it WRITES a row and re-enters the
+  engine mid-dispatch (ADR-007).
+- **There is no `generateText` in `dispatch.ts`, ever.** Dispatch is a SEQUENTIAL second call into
+  the ONE loop, never a loop nested inside a tool `execute`. `dispatchGuard.test.ts` asserts it.
+- **Lineage/limit state travels as validator-checked ARGS, never DB state — ADR-008.** Both entry
+  points share one `dispatchArgs` validator object. A multi-hop caller must thread hop N's returned
+  `spentCents` and `envelopeCents` into hop N+1; `DispatchResult` returns both for exactly that.
 
 ### Phase 15 — Lane B (generalized executor)
 

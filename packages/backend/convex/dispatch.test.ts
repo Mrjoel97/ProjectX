@@ -16,9 +16,10 @@ import { describe, expect, test, vi } from "vitest";
 // registered". The evaluations.test.ts / runCockpitAgent.test.ts idiom, verbatim.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { DispatchResult } from "./dispatch";
+import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -77,6 +78,7 @@ test.each(DISPATCH_STEP_TOOLS)("agentSteps accepts the %s literal", async (tool)
 type T = TestConvex<typeof schema>;
 
 const TENANT = "tenant_a";
+const TENANT_B = "tenant_b";
 const THREAD = "thread_1";
 const ROOT = "root-req-1";
 /** Distinctive scripted specialist output — the §4 leak scan searches every payload for its words. */
@@ -511,6 +513,67 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
         }
       }
     }
+  });
+});
+
+describe("two-tenant isolation (SC #5)", () => {
+  /** Both forms below run a REAL dispatch first — an isolation assertion over rows that were
+   *  never written is the vacuous pass this describe block exists to avoid. */
+  const runAs = (t: T, tenantId: string, planId: Id<"plans">) =>
+    t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...BASE,
+      tenantId,
+      planId,
+      primary: [REPLY_STEP],
+    });
+
+  test("the SAME rootRequestId under two tenants partitions cleanly — no row crosses", async () => {
+    const { t, planId } = await setup();
+    // `plans.by_thread` is (tenantId, threadId), so the SAME threadId under tenant B is a second
+    // legitimate row — which makes this the maximal collision: same thread id, same rootRequestId.
+    const planB = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT_B,
+      threadId: THREAD,
+    });
+
+    ok(await runAs(t, TENANT, planId));
+    // Attacker-shaped, not accidental: tenant B names tenant A's rootRequestId verbatim. The
+    // envelope is deployment-wide, so B's hop still runs — that is the point (it WRITES rows).
+    ok(await runAs(t, TENANT_B, planB));
+
+    // Read the table DIRECTLY: `audit` has no public tenant-scoped reader, so the plan-level
+    // assertion in the next test would prove isolation of the PLAN, not of the LINEAGE rows
+    // SC #5 actually names ("a sub-agent run keyed on rootRequestId is still tenant-scoped").
+    const lineage = await orderedLineage(t);
+    const a = lineage.filter((r) => r.tenantId === stableTenant(TENANT));
+    const b = lineage.filter((r) => r.tenantId === stableTenant(TENANT_B));
+
+    // NON-EMPTY on both sides first — a partition of size zero passes a naive "no leakage" check
+    // vacuously, and every assertion below would then be true of nothing.
+    expect(a.length, "tenant A wrote no lineage rows — the isolation check is vacuous").toBeGreaterThan(0);
+    expect(b.length, "tenant B wrote no lineage rows — the isolation check is vacuous").toBeGreaterThan(0);
+    expect(a.length + b.length, "a lineage row carries a THIRD tenantId").toBe(lineage.length);
+
+    // …and NO row carries the other tenant's id, despite sharing the correlation key.
+    for (const r of a) expect(r.tenantId, `${r.eventType} leaked to tenant B`).not.toBe(TENANT_B);
+    for (const r of b) expect(r.tenantId, `${r.eventType} leaked to tenant A`).not.toBe(TENANT);
+    // Every row does share the collided key — otherwise the partition above proves nothing about
+    // a rootRequestId-keyed read.
+    for (const r of lineage) expect(r.correlationId).toBe(ROOT);
+  });
+
+  test("the observable surface stays scoped too — tenant B cannot read tenant A's plan", async () => {
+    const { t, planId } = await setup();
+    ok(await runAs(t, TENANT, planId));
+
+    // The evaluations.test.ts:205-226 shape verbatim: write through the INTERNAL path with an
+    // explicit tenantId, read back through the PUBLIC tenant-scoped query under two identities.
+    expect(
+      await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, { threadId: THREAD }),
+    ).not.toBeNull();
+    expect(
+      await t.withIdentity({ subject: TENANT_B }).query(api.plans.byThread, { threadId: THREAD }),
+    ).toBeNull();
   });
 });
 
