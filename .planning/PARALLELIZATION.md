@@ -4,6 +4,101 @@ Three Claude Code sessions run in parallel, each in its own **git worktree** on 
 **branch**, integrating to `main`. This file is the shared contract — **every session reads it
 first** and stays inside its lane. Set up 2026-07-14 after Phase 3.3.
 
+> **CURRENT CONTRACT: Phases 14 + 15 — see the section directly below.** The Phase 3.x and
+> Phase 3.8 sections further down are kept as *precedent* (they are what proved the pattern);
+> they are not live lanes. The **shared-singleton discipline** and **rules of the road** at the
+> bottom apply to every contract, current and historical.
+
+## Phases 14 + 15 — voice-doc flagship ∥ dispatch framework (set up 2026-07-25)
+
+Approved shape: **plan-parallel, then execute-laned.** Four stages, each removing a different
+serial wait. Owner runs the sessions; lanes merge on automated gates.
+
+### Why these two phases can run together — and where they can't
+
+Phase 15 restructures the ONE governed loop (`convex/llm.ts`, **2,985 lines**) and generalizes
+the executor (`convex/deliverApprovedPlan.ts`, **69 lines**). Phase 14 is "mostly integration of
+shipped machinery" (Phase 6 voice + Phase 10 grounding + the Phase 12 evaluation engine).
+
+They are **not naturally disjoint** — Phase 14 *reads* the very loop Phase 15 is rewriting.
+**Wave 0 is what makes them disjoint.** It lands the seams on `main` first, so each lane fills in
+its OWN file instead of three lanes editing `llm.ts`. Skipping Wave 0 converts a textual merge
+conflict inside a 2,985-line file that one lane just restructured into a *re-derivation*, not a
+resolution. That is the single failure mode this contract exists to prevent.
+
+**Lane weighting is deliberate: 2 lanes on Phase 15, 1 on Phase 14.** Phase 15 is a hard
+dependency of Phases 16, 17, 18 and 19. Phase 14 is a leaf (flagship demo) and unblocks nothing.
+Throughput should follow the dependency graph, not split evenly.
+
+### Stage 0 — parallel planning (start first; no `pnpm install` needed)
+
+Planners **read** code and **write** only to disjoint `.planning/phases/14-*/` and
+`15-*/` directories. There is no code-conflict surface, so this stage is free.
+Planning sessions do **not** need `node_modules` or a Convex deployment — defer both to Stage 2.
+
+| Session | Worktree | Branch | Command |
+|---------|----------|--------|---------|
+| **Plan 15** | `.worktrees/lane-a-dispatch` | `lane-a/dispatch-core` | `/gsd:discuss-phase 15` → `/gsd:plan-phase 15` |
+| **Plan 14** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | `/gsd:discuss-phase 14` → `/gsd:plan-phase 14` |
+
+One planning pass per **phase**, not per lane — Phase 15's single plan set is split across
+Lanes A and B at execution time. When both finish, **merge both branches to `main`**; the phase
+dirs are disjoint so only `STATE.md` conflicts (resolve by **keeping both**, per the singleton
+rule below).
+
+### Stage 1 — Wave-0 freeze commit on `main` (serial, small, unavoidable)
+
+ONE session, on `main`, reads **both** finished plans and lands **one commit** that:
+
+1. adds every `convex/schema.ts` table/field either phase needs — including Phase 15's
+   `rootRequestId` / `parentAgentId` lineage fields (SC #3) and any Phase 14 voice-doc rows;
+2. creates an **empty stub file** for every new module a lane will own;
+3. lands the **seams** as no-op passthroughs — the executor's dispatch-by-action-type `switch`
+   carrying only today's email + memo arms, and the specialist-route lookup **failing closed to
+   `unknown_route`** (SC #1) with no specialists registered yet.
+
+After this commit, `convex/llm.ts`, `convex/schema.ts` and `convex/deliverApprovedPlan.ts` are
+**FROZEN to their owning lane** for the rest of the phase. A lane that believes it needs an edit
+outside its column stops and coordinates — that is a contract change, not a code change.
+
+### Stage 2 — three execution lanes (PROVISIONAL until Stage 0 lands)
+
+**This table is provisional on purpose.** Real file ownership can only be read off the finished
+plans; writing it before planning would be inventing the constraint instead of measuring it.
+The Stage-1 session finalizes this table in the same commit as the freeze.
+
+| Lane | Worktree | Branch | Scope | Owns (edit freely) | Must NOT touch |
+|------|----------|--------|-------|--------------------|----------------|
+| **A · Dispatch core** | `.worktrees/lane-a-dispatch` | `lane-a/dispatch-core` | Phase 15 SC #1, #2 | `convex/llm.ts` (route → specialist skill+tool-set swap, depth cap, cycle refusal, shared cost envelope), specialist skill rows in `convex/skills.ts` + `packages/contracts` | executor files, any voice file |
+| **B · Executor + lineage** | `.worktrees/lane-b-executor` | `lane-b/executor-lineage` | Phase 15 SC #4, #3, #5 | `convex/deliverApprovedPlan.ts`, `convex/plans.ts`, audit/telemetry lineage rows, the cross-tenant isolation assertion | `convex/llm.ts` (zero edits), voice files |
+| **C · Voice-doc flagship** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | Phase 14 (all SC) | `convex/voice.ts`, the new voice-doc module, `apps/web/app/(app)/dashboard/voice/*`, read-only use of `convex/evaluations.ts` | `convex/llm.ts`, executor files |
+
+**Per-worktree setup, once, at Stage 2 only:** `pnpm install` → `npx convex dev` (codegen + its
+own dev deployment) → `pnpm dev`. Each lane gets an isolated deployment, which is what lets a
+lane run a live smoke without clobbering another's.
+
+### Stage 3 — integrate, then verify once
+
+**Merge gate is automated only.** A lane merges to `main` when its tests + `tsc --noEmit` +
+`scripts/check-playbooks.mjs` are green. Lanes do **not** block on owner sign-off — that would
+re-serialize exactly the wait this contract removes.
+
+The owner's **live human-verify happens ONCE, on integrated `main`, after all three lanes land**,
+covering both phases in one pass (real voice, real Gmail, real dispatch). Accepted risk: a defect
+found at that point can span two lanes' work.
+
+### Phase 14/15 additions to the shared-singleton list
+
+8. **`convex/skills.ts` seeding — Lane A only this phase.** Phase 15's specialists need skill
+   rows, and seeding is version-collision-prone: `seedSkills` writes `maxVersion + 1`, and
+   optimizer dry-run candidates already occupy versions, so a plan's pinned version number can be
+   wrong against the live DB. Two lanes seeding concurrently will silently cross versions.
+   **Verify which version carries your body before any eval or activate.** Any skill-body edit
+   still rides the Phase-3.6 `EVAL_GATE`.
+9. **`convex/llm.ts` — Lane A's exclusive property after Wave 0.** Lanes B and C get zero edits.
+10. **`convex/schema.ts` — Wave-0-owned this phase.** Both phases' fields land in Stage 1; no
+    lane adds a field afterwards without coordinating.
+
 ## Why this split works
 
 The remaining roadmap's deep tail (`5 → 6 → 7 → 8 → 9`) is a **strict dependency chain** — not
