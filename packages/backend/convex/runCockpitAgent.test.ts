@@ -502,6 +502,89 @@ test("agent.timeout (AGNT-04): a NON-timeout failure fires NO agent.timeout noti
   expect(notifs).toHaveLength(0);
 });
 
+// ── 15-02 (DISP-01): the toolNames seam — ONE loop, a swapped (skill body, tool-set) pair ────
+//
+// A specialist is not a second loop. It is runAgentLoop with a different `system` (already the
+// seam runCockpitAgent uses) and a RESTRICTED tool record. The restriction has to be STRUCTURAL
+// ABSENCE from the record — `activeTools` would leave the withheld tool's `execute` closure in
+// the record and reachable via invokeTool, and skill wording is not a capability boundary at all.
+// This is the omitRecipientEdits precedent (llm.ts:619-626) generalized to an explicit allow-list.
+//
+// Every assertion below is on the SIDE EFFECT, never on an error string: what "withheld" means is
+// that the plan row does not move, whatever the SDK chooses to do with a name it cannot resolve.
+
+/** Drive the shim, tolerating a throw: a hallucinated tool name may propagate out of generateText. */
+async function runTolerant(t: T, args: Record<string, unknown>): Promise<void> {
+  try {
+    await t.action(internal.llm.__runCockpitAgentWithScript, args as never);
+  } catch {
+    /* the assertion is the ABSENCE of the side effect, not the error */
+  }
+}
+
+/** Two write tools, two independently observable slots on the plan row. */
+const EDIT_SCRIPT = [
+  toolStep("setSubject", { subject: "Kept" }),
+  toolStep("addRecipients", { addresses: ["bob@example.com"] }),
+  textStep("done", 0, 0),
+];
+
+test("toolNames ABSENT: the full tool record — every existing caller is byte-identical", async () => {
+  const { t, planId } = await setup();
+  await runTolerant(t, { tenantId: "t1", planId, ...TURN, primary: EDIT_SCRIPT });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.subject, "an absent toolNames changed the tool set — existing callers regressed").toBe("Kept");
+  expect(plan?.recipients).toEqual(["bob@example.com"]);
+  expect((await readSteps(t)).map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
+});
+
+test("toolNames ['searchVault']: the withheld tools are ABSENT — the plan row does not move", async () => {
+  const { t, planId } = await setup();
+  await runTolerant(t, {
+    tenantId: "t1",
+    planId,
+    ...TURN,
+    primary: EDIT_SCRIPT,
+    toolNames: ["searchVault"],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.subject, "a withheld setSubject still wrote the plan row").toBeFalsy();
+  expect(plan?.recipients ?? [], "a withheld addRecipients still wrote the plan row").toEqual([]);
+  // A withheld tool never even STARTS: the trace has nothing to show, because the key is gone.
+  expect(await readSteps(t), "a withheld tool emitted an activity step").toHaveLength(0);
+});
+
+test("toolNames: a NAMED tool still runs; only the unnamed ones are withheld", async () => {
+  const { t, planId } = await setup();
+  await runTolerant(t, {
+    tenantId: "t1",
+    planId,
+    ...TURN,
+    primary: EDIT_SCRIPT,
+    toolNames: ["setSubject"],
+  });
+
+  const plan = await readPlan(t, planId);
+  // Non-vacuity: without this the two tests above would pass against a filter that returns {}.
+  expect(plan?.subject, "the ALLOWED tool was filtered out too — the allow-list is inverted").toBe("Kept");
+  expect(plan?.recipients ?? [], "addRecipients was not in toolNames but still ran").toEqual([]);
+  expect((await readSteps(t)).map((s) => s.tool)).toEqual(["setSubject"]);
+});
+
+test("toolNames []: an EMPTY array is NOT the same as ABSENT (the falsy-vs-undefined bug)", async () => {
+  const { t, planId } = await setup();
+  await runTolerant(t, { tenantId: "t1", planId, ...TURN, primary: EDIT_SCRIPT, toolNames: [] });
+
+  const plan = await readPlan(t, planId);
+  // `toolNames ? filtered : built` would hand back the FULL record here and this would read "Kept",
+  // which is exactly why the implementation must test `=== undefined`.
+  expect(plan?.subject, "an empty toolNames yielded the FULL tool record").toBeFalsy();
+  expect(plan?.recipients ?? []).toEqual([]);
+  expect(await readSteps(t)).toHaveLength(0);
+});
+
 test("draftDocument pin: loads the pinned drafter version, fails closed on a missing one", async () => {
   const { t } = await setup(); // seedSkills → document-drafter v1 ACTIVE
   const args = {
