@@ -1,6 +1,7 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
+> Last verified: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
+> Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
 > Lane A (dispatch core)" below. `convex/dispatch.ts` is now real: the guard order
 > (resolve → depth → cycle → envelope → run), four CONVERSATIONAL refusals that never DLQ, one
 > tree-local cost envelope, and refs-only lineage on `audit.by_correlation(rootRequestId)`. No
@@ -507,6 +508,33 @@ so a guard cannot be true in tests and absent in production.
 - **Lineage/limit state travels as validator-checked ARGS, never DB state — ADR-008.** Both entry
   points share one `dispatchArgs` validator object. A multi-hop caller must thread hop N's returned
   `spentCents` and `envelopeCents` into hop N+1; `DispatchResult` returns both for exactly that.
+
+**15-04 — where the run lands, and why the cockpit surface did not move:**
+
+- **`PlanCard` renders ONLY at `plan.status === "proposed"`** (`cards.tsx:1624`). That single fact
+  is why a dispatched gap needs no card pending state, no spinner variant, and no new plan status:
+  a `collecting` plan already shows nothing, and the CKPT-05 dispatch trace step is the progress
+  indicator. **Phase 15 makes ZERO `apps/web` edits after Wave 0** (the `VERB` map), and that is a
+  consequence of this, not a coincidence.
+- **The specialist attribution header and the cost-ceiling marker ride the plan BODY**
+  (`specialistMemoBody`, `@pikar/core`), NOT a new `plans.status` literal. The status enum is PINNED
+  (`schema.ts:155-164`) with `apps/web` blast radius, the body is already rendered verbatim
+  (`cards.tsx:255`, `white-space: pre-wrap`), and the body is what the human is looking at when they
+  give irreversible consent — which is exactly where an "incomplete, cost ceiling reached" warning
+  belongs. Upgrade path (from 15-02): add a status literal only if something OTHER than a human
+  needs to branch on incompleteness.
+- **`dispatchAndLand` wraps `governedDispatch` and calls `internal.evaluations.landSpecialistResult`
+  in a `finally`.** Every outcome — success, an overrun, all four governed refusals and a thrown
+  turn — must leave the plan row `proposed`, because a row parked at `collecting` renders no card:
+  the user's tap would silently have done nothing. Both entry points call `dispatchAndLand`, never
+  `governedDispatch` directly, for the same reason both call one governance function: a behaviour
+  cannot be true in tests and absent in production.
+- **A thrown turn is NOT a fifth refusal.** It audits `subagent.refused` with `reason: "error"` (the
+  CODE only — `err.message` can carry prompt or grounded prose, §4), writes no `deadLetters` row,
+  lands the fallback memo, and then RETHROWS. `DispatchResult`'s refusal union is the GOVERNED-stop
+  contract; dressing an unexpected exception as one of the four would hide a real bug from the only
+  place it surfaces in production — the scheduled function's own failure state. (The §5 skill loader
+  fails closed by throwing, so this path is reachable, not theoretical.)
 
 ### Phase 15 — Lane B (generalized executor)
 

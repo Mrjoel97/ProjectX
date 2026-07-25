@@ -1,6 +1,7 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-25 (4) — 13-02: the **proactive weekly review** (`proactiveReview.ts`, BEVL-03) — a Monday-06:00-UTC cron enumerates onboarded tenants over `vaultDocuments.by_kind`, fans out one `reviewOne` per tenant, runs this engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, and writes an in-app notification only when something changed. See the **Proactive weekly review** section below. **The repeat-run provenance collapse recorded in the previous line is now CLOSED** — it had to be, because a weekly review is by design a repeat run on one pinned thread. `fillVault` now records a CITATION whenever a grounded document restates a field, even when the slot is already filled by carry-forward (the VALUE stays first-write-wins, and a pre-seeded `user-provided` citation is never downgraded); the two "already set → skip" short-circuits above it (the `currentOffers.length === 0` pre-check and the `FINANCIAL_PATTERNS` `continue`) are gone for the same reason. Regression-guarded by `proactiveReview.test.ts > notifies only on change`, which asserts run 2 has the SAME finding count as run 1 and an empty delta — that test was CONFIRMED red before the fix (a second `weekly_review` notification fired off a false "gaps closed"). `proactiveReview.test.ts` 8/8, `evaluations.test.ts` 11/11 unchanged, backend 494/495 (sole red the pre-existing `audit.test.ts auditCounts`). Prior: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
+> Last verified: 2026-07-26 — 15-04 (DISP-01): **"Act on this" RUNS the specialist.** `actOnGap` stays a `tenantMutation` and now has TWO terminals — a gap routed at a REGISTERED specialist stages `status: "collecting"` with NO body and schedules `internal.dispatch.runSpecialist`; a gap with no registered specialist keeps the 12-05 memo at `proposed` and schedules nothing. The `collecting` staging IS the Approve-race mitigation (a template must never be approvable under a specialist attribution header) and must not be "simplified" back. `landSpecialistResult` is the only writer of the dispatched body and no-ops on any row that is not still `collecting`/`kind: "memo"` under the same tenant; `buildMemo` is now the FALLBACK and its wording branches on `fallbackReason`. See the **"Act on this" now RUNS the specialist** section below. `evaluations.test.ts` 18/18, `gapAction.test.ts` 5/5.
+> Prior: 2026-07-25 (4) — 13-02: the **proactive weekly review** (`proactiveReview.ts`, BEVL-03) — a Monday-06:00-UTC cron enumerates onboarded tenants over `vaultDocuments.by_kind`, fans out one `reviewOne` per tenant, runs this engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, and writes an in-app notification only when something changed. See the **Proactive weekly review** section below. **The repeat-run provenance collapse recorded in the previous line is now CLOSED** — it had to be, because a weekly review is by design a repeat run on one pinned thread. `fillVault` now records a CITATION whenever a grounded document restates a field, even when the slot is already filled by carry-forward (the VALUE stays first-write-wins, and a pre-seeded `user-provided` citation is never downgraded); the two "already set → skip" short-circuits above it (the `currentOffers.length === 0` pre-check and the `FINANCIAL_PATTERNS` `continue`) are gone for the same reason. Regression-guarded by `proactiveReview.test.ts > notifies only on change`, which asserts run 2 has the SAME finding count as run 1 and an empty delta — that test was CONFIRMED red before the fix (a second `weekly_review` notification fired off a false "gaps closed"). `proactiveReview.test.ts` 8/8, `evaluations.test.ts` 11/11 unchanged, backend 494/495 (sole red the pre-existing `audit.test.ts auditCounts`). Prior: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
 > Prior: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
 
@@ -25,6 +26,10 @@ Backend (`packages/backend/convex/`):
   — the card's latest-row read). **12-05 (the ACTING half):** `actOnGap` (tenantMutation — a gap →
   a proposed memo-plan), `buildMemo` (the deterministic memo template), `persistNextStepMemo`
   (a plain exported helper — the MEMO TERMINAL, called by `cockpit.executePlan`).
+  **15-04 (the DISPATCHING half):** `actOnGap` stages `collecting` + schedules
+  `internal.dispatch.runSpecialist`; `landSpecialistResult` (internalMutation, explicit `tenantId`)
+  is where the run lands and the only thing that flips a dispatched plan to `proposed`; `buildMemo`
+  gained the optional `fallbackReason` branch + the code-owned `FALLBACK_SENTENCE` map.
 - `schema.ts` — the append-only `evaluations` table (`by_tenant` / `by_tenant_thread`) + the
   `"evaluateBusiness"` literal in the closed `agentSteps.tool` union + (12-05) the optional
   `plans.kind: "memo"` discriminator and the optional `gaps[].reason`/`gaps[].proofMetric`.
@@ -230,6 +235,71 @@ crons.weekly("proactive-review", monday 06:00 UTC)
   the corpus through `internal.vault.profileSeedDocs` (a plain DB read).
 - LOCKED manual procedure: *Convex dashboard → function runner → `proactiveReview:runWeekly` with
   `{}` → open `/dashboard/workspace`.*
+
+## "Act on this" now RUNS the specialist (15-04, DISP-01)
+
+12-05 shipped `actOnGap` as a deterministic memo that NAMED the target specialist and cited its
+playbook. 15-04 closes that loop: the specialist actually runs, and the memo is what you get when
+it cannot.
+
+`actOnGap` is STILL a `tenantMutation`. It does not become a `tenantAction` — a Convex mutation
+cannot call an action, and converting would make the plan-row recycle (`resetPlan` + `patchPlan`)
+interruptible while leaving the card blank for the same 10-30s anyway. It stages the row and
+schedules `internal.dispatch.runSpecialist`.
+
+**Two terminals, chosen by `resolveSpecialist(gap.route)` at the entry point:**
+
+| gap route | plan row after `actOnGap` | scheduled |
+|---|---|---|
+| a REGISTERED specialist | `status: "collecting"`, `kind: "memo"`, subject set, `body: ""` | one `runSpecialist` |
+| anything else (`""`, `"scale"`, a pre-union route) | `status: "proposed"` with the `buildMemo` body — the 12-05 behaviour verbatim | nothing |
+
+The runtime resolve is mandatory, not belt-and-braces: `gaps[].route` persists as `v.string()`
+(`schema.ts:350`), so a stored route reaches here un-narrowed — including `diagnose()`'s deliberate
+`""`. Resolving at the entry point puts the fail-closed guarantee in front of the scheduler as well
+as inside the dispatcher.
+
+### Invariants
+
+- **The `collecting` staging IS the Approve-race mitigation. Do NOT "simplify" it back to
+  `proposed`.** The failure it prevents: the user taps *Act on this*, a template body is instantly
+  approvable, and they approve it at the exact surface where consent is irreversible — saving a
+  template to the vault under a header that will shortly claim a specialist produced it. It costs
+  nothing because `executePlan` already returns `alreadyStarted` for any non-`proposed` row
+  (`cockpit.ts:530`) and `PlanCard` renders only at `proposed` (`cards.tsx:1624`) — so the race is
+  closed BY CONSTRUCTION: no new guard, no new status literal, and zero `apps/web` edits. The
+  CKPT-05 dispatch trace step is the progress indicator.
+- **`rootRequestId` is minted fresh with `crypto.randomUUID()` and is NEVER derived from `planId`.**
+  `plans.byThread` is a `.unique()` read and `actOnGap` RECYCLES the thread's one row (12-05), so a
+  planId-derived lineage key would merge two dispatches into one unreconstructable tree. It is not
+  `plans.correlationId` either — that is only written at `executePlan`, i.e. after Approve. ADR-008.
+- **`landSpecialistResult` is the ONLY writer of a dispatched body**, and it no-ops unless the row
+  is still `collecting`, still `kind: "memo"`, and under the SAME `tenantId`. It is an
+  explicit-tenantId `internalMutation` (a scheduled action carries no live identity — the 12-04
+  `recordScorecardAnswerInternal` precedent), so that tenant check is MANUAL and must not be
+  deleted. It patches (never `resetPlan`, which would clear `kind: "memo"`).
+- **Every outcome leaves `collecting`.** `dispatch.ts`'s `dispatchAndLand` lands in a `finally`, so
+  success, a cost-ceilinged run, all four governed refusals and a thrown turn all end at an
+  approvable row. A row stuck at `collecting` renders no card at all — the control would silently
+  have done nothing.
+- **`buildMemo` is now the FALLBACK, and its wording branches on `fallbackReason`.** With a reason
+  it must NOT say *"That specialist does not execute yet"* — that sentence became false the moment
+  dispatch shipped, and an approved memo may not tell the user something untrue. The reason is a
+  CODE mapped through the code-owned `FALLBACK_SENTENCE`; the code itself never reaches the user.
+- **The attribution line and the cost-ceiling marker ride the plan BODY** (`specialistMemoBody`,
+  `@pikar/core`), never a new `plans.status` literal — see the cockpit playbook.
+
+### How to verify
+
+- `pnpm --filter @pikar/backend exec vitest run convex/evaluations.test.ts convex/gapAction.test.ts`
+  — 23/23. `evaluations.test.ts` owns the dispatch assertions (staging, the queued args, the fresh
+  `rootRequestId`, both non-specialist terminals, and the end-to-end
+  gap → collecting → run → proposed → approve → ONE vault doc → ZERO `requests` rows).
+  `gapAction.test.ts` characterizes the no-specialist terminal.
+- The end-to-end test drives the queued job through `internal.dispatch.__runSpecialistWithScript`
+  after CANCELLING it. Do not replace that with `t.finishAllScheduledFunctions()`: the production
+  `runSpecialist` resolves a real gateway model, and convex-test flushes due scheduled work in the
+  background — an uncancelled job makes the suite depend on whether `OPENAI_API_KEY` is set.
 
 ## How to change safely
 

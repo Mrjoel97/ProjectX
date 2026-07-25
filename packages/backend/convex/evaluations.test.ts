@@ -22,6 +22,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -444,7 +445,7 @@ async function seedGapEvaluation(t: ReturnType<typeof convexTest>): Promise<void
   });
 }
 
-type ScheduledRow = { name: string; args: unknown[] };
+type ScheduledRow = { _id: Id<"_scheduled_functions">; name: string; args: unknown[] };
 /** The pending scheduler queue. `_scheduled_functions` is a SYSTEM table — read it through
  *  `ctx.db.system`, which is the only way to prove "exactly one dispatch was queued" BEFORE
  *  anything runs it. */
@@ -455,6 +456,13 @@ async function readScheduled(t: ReturnType<typeof convexTest>): Promise<Schedule
 }
 const dispatchArgsOf = (row: ScheduledRow): Record<string, unknown> =>
   row.args[0] as Record<string, unknown>;
+/** Drop whatever `actOnGap` queued. The PRODUCTION `runSpecialist` resolves a REAL gateway model,
+ *  and convex-test flushes due scheduled work in the background — leaving a job queued would make
+ *  these tests depend on whether OPENAI_API_KEY happens to be set on the machine. Every test below
+ *  asserts the QUEUE and then clears it; the run itself is driven through the scripted twin. */
+async function cancelQueued(t: ReturnType<typeof convexTest>): Promise<void> {
+  for (const row of await readScheduled(t)) await t.run((ctx) => ctx.scheduler.cancel(row._id));
+}
 
 describe("actOnGap dispatches the specialist (DISP-01)", () => {
   test("a dispatchable gap stages `collecting` and queues exactly ONE runSpecialist", async () => {
@@ -496,6 +504,7 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
     });
     expect(typeof args.rootRequestId).toBe("string");
     expect(String(args.rootRequestId).length).toBeGreaterThan(10);
+    await cancelQueued(t);
   });
 
   test("the Approve race is closed: executePlan on a `collecting` plan persists NOTHING", async () => {
@@ -503,6 +512,7 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
     const asT = t.withIdentity({ subject: TENANT });
     await seedGapEvaluation(t);
     await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    await cancelQueued(t);
     const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
 
     const res = await asT.mutation(api.cockpit.executePlan, { planId: plan?._id as Id<"plans"> });
@@ -532,6 +542,7 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
     const planIds = new Set(scheduled.map((s) => dispatchArgsOf(s).planId));
     expect(planIds.size).toBe(1);
     expect(new Set(roots).size).toBe(2);
+    await cancelQueued(t);
   });
 
   // The other terminal: there is no specialist to run, so the 12-05 behaviour IS the right answer.
@@ -580,5 +591,98 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
       reason: "plan_busy",
     });
     expect(await readScheduled(t)).toHaveLength(1); // only the first (successful) call queued one
+    await cancelQueued(t);
+  });
+});
+
+// ── The phase's user-visible claim, end to end ────────────────────────────────────────────────
+//
+// "Act on this" → the specialist RUNS → the result reaches the SAME single Approve gate → one
+// saved memo → and the gmail fan-out was never reachable.
+//
+// The scheduled function is driven through `__runSpecialistWithScript` rather than
+// `t.finishAllScheduledFunctions()`: the production `runSpecialist` resolves a REAL gateway model,
+// and a test that spends money (or fails on a missing key) proves nothing. The twin is the SAME
+// `dispatchAndLand` over the SAME governed loop with a scripted model — and the test first asserts
+// that what `actOnGap` queued really is `runSpecialist`, then replays its EXACT args, so nothing
+// about the hand-off is assumed.
+const SPECIALIST_REPLY =
+  "Tier the offer: a 3-month sprint at $1,500 with the onboarding audit bundled in.";
+/** One scripted `doGenerate` step (LanguageModelV4 provider shape, the runCockpitAgent.test.ts
+ *  idiom). Zero usage ⇒ zero cost ⇒ the run stays well inside its envelope. */
+const scriptedReply = (text: string) => ({
+  content: [{ type: "text", text }],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: {
+    inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 0, text: 0, reasoning: 0 },
+  },
+  warnings: [],
+});
+
+describe("Act on this → dispatch → approvable (DISP-01)", () => {
+  test("a tapped gap runs its specialist and lands ONE saved memo, with ZERO requests rows", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+
+    // 1. Tap. The plan is staged and NOT approvable.
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    const staged = await asT.query(api.plans.byThread, { threadId: THREAD });
+    const planId = staged?._id as Id<"plans">;
+    expect(staged?.status).toBe("collecting");
+    expect(
+      await asT.mutation(api.cockpit.executePlan, { planId }),
+      "a template was approvable while the specialist was still running",
+    ).toEqual({ ok: true, alreadyStarted: true });
+
+    // 2. Run what was queued, with a scripted model (no network, no spend).
+    const queued = await readScheduled(t);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.name).toContain("runSpecialist");
+    const args = dispatchArgsOf(queued[0] as ScheduledRow);
+    const rootRequestId = String(args.rootRequestId);
+    // Cancel the queued PRODUCTION job first: it resolves a real gateway model, and convex-test
+    // flushes due scheduled work as soon as the next action runs — so leaving it queued would race
+    // a network call against the replay below (and win, landing the error fallback).
+    await t.run((ctx) => ctx.scheduler.cancel((queued[0] as ScheduledRow)._id));
+    await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...(args as never),
+      primary: [scriptedReply(SPECIALIST_REPLY)],
+    });
+
+    // 3. The specialist's work is now on the plan row, attributed, at the ONE Approve gate.
+    const proposed = await asT.query(api.plans.byThread, { threadId: THREAD });
+    expect(proposed?.status).toBe("proposed");
+    expect(proposed?.kind).toBe("memo");
+    expect(proposed?.body?.startsWith("> Produced by the **money-model-designer** specialist.")).toBe(
+      true,
+    );
+    expect(proposed?.body).toContain(SPECIALIST_REPLY);
+
+    // 4. Approve now works, and takes the MEMO terminal.
+    expect(await asT.mutation(api.cockpit.executePlan, { planId })).toMatchObject({ ok: true });
+    const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    const memos = docs.filter((d) => d.kind === "next_step_memo");
+    expect(memos).toHaveLength(1);
+    expect(memos[0]?.text).toBe(proposed?.body);
+    expect(memos[0]?.tenantId).toBe(TENANT);
+
+    // 5. The 12-05 structural property SURVIVES dispatch: zero requests rows on the whole path, so
+    //    deliverApprovedPlan / gmail.send stayed unreachable — not merely unused.
+    expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+
+    // 6. …and the run is reconstructable from the lineage index, entirely within this tenant.
+    const lineage = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", rootRequestId))
+        .collect(),
+    );
+    expect(lineage.map((r) => r.eventType)).toEqual([
+      "subagent.dispatched",
+      "subagent.completed",
+    ]);
+    for (const r of lineage) expect(r.tenantId).toBe(stableTenant(TENANT));
   });
 });
