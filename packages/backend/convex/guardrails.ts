@@ -171,3 +171,21 @@ export const recordSpend = internalMutation({
     await rateLimiter.limit(ctx, "dailySpendCents", { count: cents, reserve: true });
   },
 });
+
+/**
+ * The READABLE half of the daily-spend rail (Phase-15 DISP-01, Wave 0 — this file is FROZEN
+ * after this commit). `getValue` reads utilization WITHOUT consuming tokens.
+ * Clamped: recordSpend uses `reserve: true` so the window goes NEGATIVE rather than
+ * under-counting, and a negative envelope is not an envelope — it would refuse everything.
+ * The explicit `Promise<number>` return type is mandatory: an inferred return type collapses
+ * the generated API to `any` (13-01 shipped 90 `apps/web` errors that way).
+ * ponytail: this is the DEPLOYMENT's remaining budget, not the tenant's — `dailySpendCents`
+ * is a KEYLESS window (:23-28), matching the "fixed constants for the single-owner beta;
+ * per-tenant policy is the upgrade path" comment already at :19-20. Keying the limit by
+ * tenantId is the upgrade path and is NOT required by any Phase-15 success criterion.
+ */
+export const remainingDailyCents = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<number> =>
+    Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents")).value),
+});

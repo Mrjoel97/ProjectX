@@ -427,6 +427,14 @@ export default defineSchema({
       // engine's "Assessing…" step insert throws and is silently swallowed in prod while tests
       // pass (Pitfall 2 — the same closed-union trap as searchVault above).
       v.literal("evaluateBusiness"),
+      // Phase-15 (DISP-01): the sub-agent dispatch steps. N literals, NOT a `specialist: v.string()`
+      // field — §4 on this path is enforced by the ABSENCE of anywhere to put text ("a
+      // `count: v.number()` literally cannot hold a subject line", :435-439). Adding a text field
+      // would re-open exactly the hole this union closed. Without these literals the dispatch step's
+      // insert throws and the SDK SWALLOWS it → no trace in prod while every test passes.
+      v.literal("dispatchOfferArchitect"),
+      v.literal("dispatchMoneyModelDesigner"),
+      v.literal("dispatchLeadEngine"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

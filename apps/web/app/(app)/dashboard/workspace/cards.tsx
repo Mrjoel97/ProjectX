@@ -1119,6 +1119,13 @@ const VERB: Record<string, [running: string, done: string]> = {
   listInbox: ["Checking your inbox…", "Checked your inbox"],
   briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
   searchVault: ["Searching your knowledge vault…", "Grounded in the vault"],
+  evaluateBusiness: ["Assessing your business…", "Assessed your business"],
+  dispatchOfferArchitect: ["Working with the offer architect…", "Offer architect finished"],
+  dispatchMoneyModelDesigner: [
+    "Working with the money-model designer…",
+    "Money-model designer finished",
+  ],
+  dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
