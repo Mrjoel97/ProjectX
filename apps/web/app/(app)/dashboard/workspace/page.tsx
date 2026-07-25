@@ -1,12 +1,14 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+// BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
+import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
-import { CardList } from "./cards";
 import { ChatPane } from "./ChatPane";
+import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SplitPane } from "./SplitPane";
 
@@ -47,6 +49,12 @@ const capsTeal = {
 };
 
 type Tab = { id: string; label: string };
+
+// BEVL-03: the weekly review lives on ONE deterministic thread per tenant, so its tab needs no
+// persistence — it is seeded into the session tab strip and never closes. Seeding it as a real
+// Tab (rather than rendering it separately) is what makes the ?thread= deep-link dedupe for free:
+// openThread already skips ids it is already showing.
+const REVIEW_TAB: Tab = { id: REVIEW_THREAD_ID, label: "Weekly review" };
 
 // Header dropdown: an icon button that toggles a light-dismiss menu. The scrim is a real
 // full-screen button so an outside click (or its focus) closes the menu — no document listener.
@@ -89,7 +97,13 @@ function HeaderMenu({
 // slow `listThreads` (a cross-component `listThreadsByUserId` call that can exceed Convex's 1s
 // query limit under memory pressure and THROW inside render) is caught by the ErrorBoundary around
 // it (WorkspacePage renders it wrapped) and degrades to "no history" — chat + workspace keep working.
-function PastChats({ threadId, onOpen }: { threadId?: string; onOpen: (id: string, label: string) => void }) {
+function PastChats({
+  threadId,
+  onOpen,
+}: {
+  threadId?: string;
+  onOpen: (id: string, label: string) => void;
+}) {
   const history = useQuery(api.cockpit.listThreads);
   return (
     <HeaderMenu label="Past chats" icon={<ClockIcon size={16} />}>
@@ -138,7 +152,7 @@ function PastChatsFallback() {
 
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
-  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   // "A turn is in flight" — lifted here so BOTH trace surfaces (ChatPane's bubble + CardList's
   // ActivityCard) share ONE signal (FIX 4). It is the difference between "no thread, nothing sent"
@@ -154,7 +168,9 @@ export default function WorkspacePage() {
   };
   // Open a past chat from the history menu — add a session tab if it isn't already showing.
   const openThread = (id: string, label: string) => {
-    setTabs((t) => (t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }]));
+    setTabs((t) =>
+      t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }],
+    );
     setThreadId(id);
   };
 
@@ -174,6 +190,7 @@ export default function WorkspacePage() {
   // (right first, then left); closing the last one lands on a fresh New chat. Closing a background
   // tab never moves the user. Computed outside the setState updater so it stays side-effect free.
   const closeTab = (id: string) => {
+    if (id === REVIEW_THREAD_ID) return; // pinned — defence in depth, its × button is not rendered
     const idx = tabs.findIndex((t) => t.id === id);
     if (idx === -1) return;
     const next = tabs.filter((t) => t.id !== id);
@@ -192,7 +209,10 @@ export default function WorkspacePage() {
       <SplitPane
         left={
           <section data-testid="chat-pane" className="pane-chat" style={panel}>
-            <header className="chat-head" style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <header
+              className="chat-head"
+              style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
+            >
               <span aria-hidden="true" className="chat-logo">
                 <BrainIcon size={16} />
               </span>
@@ -253,30 +273,37 @@ export default function WorkspacePage() {
             <div className="chat-tabs">
               {/* A tab is a label button + its own close button, so the wrapper is a span — a
                   button cannot legally nest another button. */}
-              {tabs.map((t) => (
-                <span
-                  key={t.id}
-                  className={`chat-tab has-close${t.id === threadId ? " is-active" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="chat-tab-label"
-                    title={t.label}
-                    onClick={() => setThreadId(t.id)}
+              {tabs.map((t) => {
+                // The review tab is PINNED: no × (and the wrapper drops has-close so the label
+                // reclaims the gutter). It is always present, so there is nothing to reopen it with.
+                const pinned = t.id === REVIEW_THREAD_ID;
+                return (
+                  <span
+                    key={t.id}
+                    className={`chat-tab${pinned ? "" : " has-close"}${t.id === threadId ? " is-active" : ""}`}
                   >
-                    {t.label}
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-tab-close"
-                    aria-label={`Close ${t.label}`}
-                    title={`Close ${t.label}`}
-                    onClick={() => closeTab(t.id)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
+                    <button
+                      type="button"
+                      className="chat-tab-label"
+                      title={t.label}
+                      onClick={() => setThreadId(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                    {!pinned && (
+                      <button
+                        type="button"
+                        className="chat-tab-close"
+                        aria-label={`Close ${t.label}`}
+                        title={`Close ${t.label}`}
+                        onClick={() => closeTab(t.id)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
               <button
                 type="button"
                 className={`chat-tab is-new${threadId === undefined ? " is-active" : ""}`}
@@ -288,10 +315,25 @@ export default function WorkspacePage() {
               </button>
             </div>
 
-            {status === undefined ? (
+            {/* The review thread is synthetic — it has no `plans` row, and sendCockpitMessage throws
+                "cockpit: plan row missing for thread" (cockpit.ts:93) on any send. Reading degrades
+                gracefully (listThreadMessages returns an empty page), so only the COMPOSER is
+                suppressed. Do NOT loosen that backend guard instead — it protects the real cockpit.
+                Checked BEFORE the gmail-status branch on purpose: the review has nothing to do with
+                a mailbox, so a disconnected user must still see it (SC#2). */}
+            {threadId === REVIEW_THREAD_ID ? (
+              <p style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}>
+                This is your weekly business review. Start a new chat to act on anything here.
+              </p>
+            ) : status === undefined ? (
               <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
             ) : status.connected ? (
-              <ChatPane threadId={threadId} onThread={registerThread} sending={sending} onSending={setSending} />
+              <ChatPane
+                threadId={threadId}
+                onThread={registerThread}
+                sending={sending}
+                onSending={setSending}
+              />
             ) : (
               <Link
                 href="/connect-gmail"
@@ -312,7 +354,11 @@ export default function WorkspacePage() {
           </section>
         }
         right={
-          <section data-testid="workspace-pane" className="pane-canvas" style={{ ...panel, padding: "1.25rem 1.6rem" }}>
+          <section
+            data-testid="workspace-pane"
+            className="pane-canvas"
+            style={{ ...panel, padding: "1.25rem 1.6rem" }}
+          >
             <header style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={capsTeal}>Agent workspace</p>
@@ -336,7 +382,14 @@ export default function WorkspacePage() {
               <button
                 type="button"
                 className="cta-dark"
-                style={{ margin: 0, padding: "0.55rem 1rem", fontSize: "0.85rem", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+                style={{
+                  margin: 0,
+                  padding: "0.55rem 1rem",
+                  fontSize: "0.85rem",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
                 title="Clears this canvas by starting a new chat"
                 onClick={newChat}
               >
