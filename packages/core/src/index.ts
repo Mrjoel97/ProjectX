@@ -1,3 +1,4 @@
+export * from "./actionType";
 export * from "./briefing";
 export * from "./buildTelemetry";
 export * from "./businessProfile";
@@ -10,4 +11,5 @@ export * from "./optimizerBreach";
 export * from "./result";
 export * from "./retention";
 export * from "./reviewThreshold";
+export * from "./specialists";
 export * from "./validateSubmit";
