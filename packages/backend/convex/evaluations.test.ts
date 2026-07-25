@@ -1,14 +1,25 @@
+// @vitest-environment node
+//
 // Business Evaluation Engine (BEVL-01) — convex-test over the SMOKE:: grounding seam (zero network).
 // This file rides `vaultGroundHydrated`'s offline seam (`SMOKE::<docId,…>`): a grounding query that
 // starts with the sentinel resolves the seed docs tenant-scoped, no embedding call. The engine then
 // carries the prior Scorecard forward, grounds, runs the pure diagnose(), and persists ONE row.
+//
+// `node` environment (15-04, the cockpitTools.test.ts / dispatch.test.ts idiom): the DISP-01
+// end-to-end block below drives `internal.dispatch.__runSpecialistWithScript`, and `dispatch.ts`
+// imports `runSpecialistTurn` from the `"use node"` llm.ts — a Convex-runtime module cannot load it.
 import { serializeProfile } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (the cockpitTools.test.ts idiom).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+// The dispatcher's envelope reads/spends hit the rate-limiter's daily-spend window, and the memo
+// terminal ingests through the SAME startIngest spine persistBrief uses (workflow + workpool).
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -19,14 +30,34 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
+
+// The DISP-01 block loads `ai` + `@ai-sdk/openai` through the "use node" llm.ts inside convex-test's
+// lazy module loader; on a cold checkout that first import alone exceeds vitest's 5s default
+// (dispatch.test.ts / runCockpitAgent.test.ts carry the same line for the same reason).
+vi.setConfig({ testTimeout: 30_000 });
 
 const TENANT = "tenant_a";
 const THREAD = "thread_1";
 
-/** convex-test instance with the auditCounts aggregate component registered. */
+/** convex-test instance with every component the engine + the dispatch terminal touch. */
 function newTest(): ReturnType<typeof convexTest> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   return t;
 }
 
@@ -387,5 +418,167 @@ describe("fillVault treats an empty array as unset (offer gate is reachable)", (
       expect(gap.route).not.toBe("offer-architect");
       expect(gap.label).not.toContain("No offer worth buying yet");
     }
+  });
+});
+
+// ── 15-04 (DISP-01): "Act on this" RUNS the specialist ────────────────────────────────────────
+//
+// Lane A's assertions live HERE. `gapAction.test.ts` is the 12-05 characterization file; it is run
+// as a regression check by this plan's verify command.
+//
+// The property the first two tests exist for: a dispatched gap must not be APPROVABLE while the
+// specialist is still running. Otherwise the user can approve a deterministic template that will
+// shortly be overwritten by — or sit under — a specialist attribution header, at the exact surface
+// where consent is irreversible. `actOnGap` stages `collecting`, and `executePlan` already refuses
+// anything but `"proposed"` (cockpit.ts:530), so the race is closed BY CONSTRUCTION: no new guard,
+// no new status literal, no UI change.
+
+/** A grounded evaluation whose single gap routes at a REGISTERED specialist (money-model-designer). */
+async function seedGapEvaluation(t: ReturnType<typeof convexTest>): Promise<void> {
+  await t.mutation(internal.skills.seedSkills, {});
+  const docId = await seedDoc(t, TENANT, profileDocText(true));
+  await t.action(internal.evaluations.runEvaluation, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    query: `SMOKE::${docId}`,
+  });
+}
+
+type ScheduledRow = { name: string; args: unknown[] };
+/** The pending scheduler queue. `_scheduled_functions` is a SYSTEM table — read it through
+ *  `ctx.db.system`, which is the only way to prove "exactly one dispatch was queued" BEFORE
+ *  anything runs it. */
+async function readScheduled(t: ReturnType<typeof convexTest>): Promise<ScheduledRow[]> {
+  return (await t.run(async (ctx) =>
+    ctx.db.system.query("_scheduled_functions").collect(),
+  )) as unknown as ScheduledRow[];
+}
+const dispatchArgsOf = (row: ScheduledRow): Record<string, unknown> =>
+  row.args[0] as Record<string, unknown>;
+
+describe("actOnGap dispatches the specialist (DISP-01)", () => {
+  test("a dispatchable gap stages `collecting` and queues exactly ONE runSpecialist", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+
+    const row = await asT.query(api.evaluations.byThread, { threadId: THREAD });
+    const gap = row?.gaps[0];
+    expect(gap?.route).toBe("money-model-designer"); // the premise: a REGISTERED specialist
+
+    const res = await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    expect(res.ok).toBe(true);
+
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+    expect(plan?.status).toBe("collecting"); // NOT "proposed" — nothing to approve yet
+    expect(plan?.kind).toBe("memo"); // the shape is already decided
+    expect(plan?.recipients ?? []).toHaveLength(0);
+    expect(plan?.subject).toContain(gap?.label ?? "");
+    // No template body is staged: the specialist's output is the only body this plan will ever have.
+    expect(plan?.body ?? "").toBe("");
+
+    const scheduled = await readScheduled(t);
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.name).toContain("runSpecialist");
+    expect(scheduled[0]?.name).toContain("dispatch");
+    const args = dispatchArgsOf(scheduled[0] as ScheduledRow);
+    expect(args).toMatchObject({
+      tenantId: TENANT,
+      threadId: THREAD,
+      planId: plan?._id,
+      gapIndex: 0,
+      route: "money-model-designer",
+      parentAgentId: "executive", // a code-owned constant, never user or model text
+      depth: 1,
+      ancestry: [],
+      envelopeCents: 0, // the ROOT signal — 15-03 derives the real envelope from the live rail
+      spentCents: 0,
+    });
+    expect(typeof args.rootRequestId).toBe("string");
+    expect(String(args.rootRequestId).length).toBeGreaterThan(10);
+  });
+
+  test("the Approve race is closed: executePlan on a `collecting` plan persists NOTHING", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+
+    const res = await asT.mutation(api.cockpit.executePlan, { planId: plan?._id as Id<"plans"> });
+    expect(res).toEqual({ ok: true, alreadyStarted: true }); // the CAS refuses a non-proposed row
+
+    const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(docs.filter((d) => d.kind === "next_step_memo")).toHaveLength(0);
+    const requests = await t.run((ctx) => ctx.db.query("requests").collect());
+    expect(requests).toHaveLength(0);
+    const after = await asT.query(api.plans.byThread, { threadId: THREAD });
+    expect(after?.status).toBe("collecting"); // no CAS flip — the plan is still the specialist's
+  });
+
+  test("rootRequestId is minted FRESH per call — two dispatches never share a lineage key", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+
+    const scheduled = await readScheduled(t);
+    expect(scheduled).toHaveLength(2);
+    const roots = scheduled.map((s) => dispatchArgsOf(s).rootRequestId);
+    // planId is IDENTICAL across the two (actOnGap recycles the thread's one row, 12-05), which is
+    // exactly why the lineage key must not be derived from it — ADR-008.
+    const planIds = new Set(scheduled.map((s) => dispatchArgsOf(s).planId));
+    expect(planIds.size).toBe(1);
+    expect(new Set(roots).size).toBe(2);
+  });
+
+  // The other terminal: there is no specialist to run, so the 12-05 behaviour IS the right answer.
+  // `""` is diagnose()'s deliberate not-enough-data emission; `scale` is its healthy branch. Both
+  // persist as `v.string()` on gaps[].route, so the runtime resolve is the real guard.
+  test.each(["", "scale"])(
+    "a gap routed at %j runs nothing — the 12-05 memo lands `proposed` immediately",
+    async (route) => {
+      const t = newTest();
+      const asT = t.withIdentity({ subject: TENANT });
+      await seedGapEvaluation(t);
+      const row = await asT.query(api.evaluations.byThread, { threadId: THREAD });
+      // Re-point the persisted gap at a non-specialist route (the engine only emits these on
+      // branches that carry no gap, so the row is edited directly rather than contrived upstream).
+      await t.run((ctx) =>
+        ctx.db.patch(row?._id as Id<"evaluations">, {
+          gaps: (row?.gaps ?? []).map((g) => ({ ...g, route })),
+        }),
+      );
+
+      const res = await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+      expect(res.ok).toBe(true);
+
+      const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+      expect(plan?.status).toBe("proposed"); // approvable at once — nothing is coming
+      expect(plan?.kind).toBe("memo");
+      expect(plan?.body).toContain("## The next step"); // the deterministic buildMemo template
+      expect(await readScheduled(t)).toHaveLength(0);
+    },
+  );
+
+  test("the 12-05 refusals are unchanged: gap_not_found and plan_busy still queue nothing", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+
+    expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 99 })).toEqual(
+      { ok: false, reason: "gap_not_found" },
+    );
+
+    await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+    await t.run((ctx) => ctx.db.patch(plan?._id as Id<"plans">, { status: "delivering" }));
+    expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 })).toEqual({
+      ok: false,
+      reason: "plan_busy",
+    });
+    expect(await readScheduled(t)).toHaveLength(1); // only the first (successful) call queued one
   });
 });

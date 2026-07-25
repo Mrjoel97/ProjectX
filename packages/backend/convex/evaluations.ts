@@ -18,7 +18,7 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import { deserializeProfile } from "@pikar/core";
+import { deserializeProfile, resolveSpecialist } from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -571,13 +571,32 @@ function buildMemo(row: Doc<"evaluations">, gap: Doc<"evaluations">["gaps"][numb
 }
 
 /**
- * Turn a surfaced gap into a PROPOSED memo-plan (BEVL-02). Tenant-scoped (§2) and UI-driven, so it
- * carries live identity — no internal twin is needed (unlike the tool-loop writes above).
+ * Turn a surfaced gap into an approvable next step (BEVL-02 → DISP-01). Tenant-scoped (§2) and
+ * UI-driven, so it carries live identity — no internal twin is needed (unlike the tool-loop writes
+ * above).
  *
  * It REUSES the thread's single `plans` row rather than inserting a second one: `plans.byThread`
  * is a `.unique()` read, so a second row for the same thread would throw for every reader of the
  * workspace. A row that is mid-flight or already delivered is refused outright (`plan_busy`) —
  * staging a memo must never clobber an in-flight send.
+ *
+ * 15-04 — TWO terminals, chosen by whether the gap names a REGISTERED specialist:
+ *
+ *   - **No specialist** (`diagnose()`'s deliberate `""` ask branch, its `"scale"` healthy branch,
+ *     or any route written before the union closed): the 12-05 behaviour verbatim — the
+ *     deterministic `buildMemo` template, `proposed`, nothing scheduled. There is nothing to run,
+ *     so this IS the honest terminal. Resolving here also means the fail-closed guarantee holds at
+ *     the ENTRY point as well as inside the dispatcher.
+ *   - **A specialist**: stage `collecting` with NO body and schedule `internal.dispatch.runSpecialist`.
+ *
+ * This stays a `tenantMutation` — it does NOT become a `tenantAction`, and a later reader should
+ * not "simplify" it back. A Convex mutation cannot call an action and the specialist takes 10-30s;
+ * awaiting it in an action would make the recycle (`resetPlan` + `patchPlan`) interruptible and
+ * still leave the card blank for the same 30s. Scheduling keeps the mutation atomic AND closes the
+ * Approve race STRUCTURALLY: `executePlan` already returns `alreadyStarted` for anything that is
+ * not `"proposed"` (cockpit.ts:530), so a `collecting` row is not approvable by construction — no
+ * new guard, no new status literal, no `apps/web` change. `PlanCard` renders only at `proposed`
+ * (cards.tsx:1624), so the CKPT-05 trace step is the progress indicator.
  */
 export const actOnGap = tenantMutation({
   args: { threadId: v.string(), gapIndex: v.number() },
@@ -615,14 +634,52 @@ export const actOnGap = tenantMutation({
         threadId,
       });
     }
-    await ctx.runMutation(internal.plans.patchPlan, {
+    const shared = {
       planId,
-      kind: "memo",
+      kind: "memo" as const,
       recipients: [], // a memo has no recipients — it is not an email
       subject: `Next step: ${gap.label}`.slice(0, 120),
-      body: buildMemo(row, gap),
-      status: "proposed", // the pinned collecting→proposed spine, unchanged
+    };
+
+    // The RUNTIME resolve is the terminal chooser. `gaps[].route` persists as `v.string()`
+    // (schema.ts:350), so a stored route reaches here un-narrowed.
+    if (!resolveSpecialist(gap.route).ok) {
+      await ctx.runMutation(internal.plans.patchPlan, {
+        ...shared,
+        body: buildMemo(row, gap),
+        status: "proposed", // the pinned collecting→proposed spine, unchanged (12-05)
+      });
+      return { ok: true, planId };
+    }
+
+    await ctx.runMutation(internal.plans.patchPlan, {
+      ...shared,
+      // NO template body: the specialist's output is the only body this plan will ever carry, and
+      // a staged template is exactly what must not become approvable under an attribution header.
+      body: "",
+      status: "collecting", // ← not approvable until landSpecialistResult flips it
     });
+    // Minted HERE, at the dispatch entry point, and deliberately NOT derived from `planId`:
+    // `plans.byThread` is `.unique()` and this very function RECYCLES the thread's one row, so two
+    // dispatches on a thread would merge into one unreconstructable lineage tree. It is not
+    // `plans.correlationId` either — that is only written at `executePlan`, i.e. after Approve.
+    // ADR-008.
+    const rootRequestId = crypto.randomUUID();
+    await ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist, {
+      tenantId: ctx.tenantId,
+      threadId,
+      planId,
+      gapIndex,
+      route: gap.route,
+      rootRequestId,
+      parentAgentId: "executive", // a code-owned constant, never user or model text
+      depth: 1,
+      ancestry: [],
+      envelopeCents: 0, // the ROOT signal — 15-03 derives the real envelope from the live rail
+      spentCents: 0,
+    });
+    // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
+    // keep working untouched.
     return { ok: true, planId };
   },
 });

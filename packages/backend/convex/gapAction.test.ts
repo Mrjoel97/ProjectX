@@ -7,7 +7,7 @@
 //      vault doc and the plan goes terminal WITHOUT seeding a single `requests` row (i.e. it never
 //      enters the gmail fan-out — deliverApprovedPlan/gmail.send are structurally unreachable).
 import { serializeProfile } from "@pikar/core";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 // The memo terminal ingests the doc through the SAME startIngest spine persistBrief uses, so the
@@ -36,7 +36,7 @@ const workpoolModules = import.meta.glob(
 const TENANT = "tenant_a";
 const THREAD = "thread_1";
 
-function newTest(): ReturnType<typeof convexTest> {
+function newTest(): TestConvex<typeof schema> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
@@ -60,7 +60,7 @@ function profileDocText(): string {
 }
 
 async function seedDoc(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   text: string,
 ): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
@@ -80,14 +80,32 @@ async function seedDoc(
   );
 }
 
-/** Run a grounded evaluation that surfaces exactly one leverage-ranked gap. */
-async function evaluateWithGap(t: ReturnType<typeof convexTest>): Promise<void> {
+/**
+ * Run a grounded evaluation that surfaces exactly one leverage-ranked gap, then re-point that gap
+ * at a route NO specialist is registered for.
+ *
+ * 15-04 (DISP-01): `actOnGap` now has two terminals. A gap routed at a REGISTERED specialist stages
+ * `collecting` and schedules the dispatch — that branch, and its end-to-end approve, are asserted
+ * in `evaluations.test.ts`, which owns them. This file characterizes the OTHER terminal, unchanged
+ * since 12-05: no specialist to run ⇒ the deterministic `buildMemo` template lands `proposed`
+ * immediately, and Approve persists it. `"scale"` is `diagnose()`'s own healthy-branch route and is
+ * deliberately not a specialist, so this is a real emission rather than a contrived string.
+ */
+async function evaluateWithGap(t: TestConvex<typeof schema>): Promise<void> {
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t, profileDocText());
   await t.action(internal.evaluations.runEvaluation, {
     tenantId: TENANT,
     threadId: THREAD,
     query: `SMOKE::${docId}`,
+  });
+  await t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("evaluations")
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", TENANT).eq("threadId", THREAD))
+      .order("desc")
+      .first();
+    if (row) await ctx.db.patch(row._id, { gaps: row.gaps.map((g) => ({ ...g, route: "scale" })) });
   });
 }
 
