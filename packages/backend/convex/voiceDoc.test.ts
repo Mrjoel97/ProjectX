@@ -5,6 +5,7 @@
 import {
   CAP_MS,
   DOC_REVIEW_FRAMEWORK,
+  EXCERPT_CHAR_CAP,
   RETRIEVAL_CHAR_CAP,
   RETRIEVAL_MAX_PASSAGES,
   voiceDocThreadId,
@@ -318,6 +319,125 @@ describe("BETA-05 — tenant A's voice-doc session can never reach tenant B's do
       tenantId: TENANT_B,
       docRef: bDoc,
     });
+  });
+});
+
+// ── 14-05: the review producer (SC2 — citations, the verified quote, the honesty verdict) ────────
+//
+// Every case below rides the `SMOKE::docreview::` seam: the FIRST transcript turn's sentinel picks
+// a deterministic `RawDocReview` fixture and the model call is skipped entirely, so the whole
+// matrix runs with no `OPENAI_API_KEY` — and `fetch` is stubbed to THROW above, which makes the
+// no-network claim structural rather than ambient.
+
+/** A transcript whose first turn drives the offline fixture. */
+const smokeTranscript = (
+  kind: "healthy" | "gaps" | "empty",
+): { speaker: string; text: string }[] => [
+  { speaker: "user", text: `SMOKE::docreview::${kind}` },
+  { speaker: "agent", text: "Let me pull the numbers from the report." },
+];
+
+/** The persisted review row on this session's synthetic `voice-doc:<sessionId>` thread. */
+const reviewRow = (
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  sessionId: Id<"voiceSessions">,
+) =>
+  t.query(internal.evaluations.lastForThread, {
+    tenantId,
+    threadId: voiceDocThreadId(sessionId),
+  });
+
+const collapse = (s: string): string => s.replace(/\s+/g, " ").trim().toLowerCase();
+
+describe("voiceDoc.reviewDocument (SC2 — the producer)", () => {
+  test("the SMOKE:: seam persists a cited row offline, and returns counts + a verdict ONLY", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    const res = await t.action(internal.voiceDoc.reviewDocument, {
+      tenantId: TENANT,
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+
+    // Counts and a closed-enum verdict — nothing that could carry prose out of the producer.
+    expect(Object.keys(res).sort()).toEqual(["findingCount", "gapCount", "verdict"]);
+    expect(res).toEqual({ findingCount: 3, gapCount: 1, verdict: "gaps" });
+    const serialized = JSON.stringify(res);
+    expect(serialized).not.toContain("setup friction");
+    expect(serialized).not.toContain("Churn");
+
+    const row = await reviewRow(t, TENANT, sessionId);
+    expect(row?.framework).toBe(DOC_REVIEW_FRAMEWORK);
+    expect(row?.findings).toHaveLength(3);
+    // A document review has no Growth-OS Scorecard and no user-provided figures.
+    expect(row?.scorecard).toEqual({});
+    expect(row?.userProvided).toEqual([]);
+    expect(row?.delta).toBeUndefined();
+  });
+
+  test("a quoted passage survives ONLY when it is really in the report — the finding always survives", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    await t.action(internal.voiceDoc.reviewDocument, {
+      tenantId: TENANT,
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+    const findings = (await reviewRow(t, TENANT, sessionId))?.findings ?? [];
+    expect(findings).toHaveLength(3);
+
+    // (a) CARRIED THROUGH — the fixture's first quote is lifted verbatim out of the document.
+    const quoted = findings[0]?.citationExcerpt;
+    expect(quoted).toBeTruthy();
+    expect(String(quoted).length).toBeLessThanOrEqual(EXCERPT_CHAR_CAP);
+    expect(collapse(REPORT_TEXT)).toContain(collapse(String(quoted)));
+
+    // (b) ABSENT BY DESIGN — the model quoted nothing. The KEY is omitted, never "".
+    expect(findings[1]).not.toHaveProperty("citationExcerpt");
+
+    // (c) REJECTED — the model's quote is nowhere in the report. The EXCERPT is dropped; the
+    //     finding is NOT, and its doc-level citation floor still holds.
+    expect(findings[2]).not.toHaveProperty("citationExcerpt");
+
+    for (const f of findings) {
+      expect(f.citationDocId).toBe(docId);
+      expect(f.citationTitle).toBe("Q3 Performance Report");
+      expect(f.source).toBe("vault");
+    }
+  });
+
+  test("no document scope, and another tenant's session, both bail to insufficient with NO row", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const bail = { findingCount: 0, gapCount: 0, verdict: "insufficient" };
+
+    // (a) A Phase-6 session with no `docRef` — there is no report to review.
+    const unscoped = await seedSession(t);
+    expect(
+      await t.action(internal.voiceDoc.reviewDocument, {
+        tenantId: TENANT,
+        sessionId: unscoped,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).toEqual(bail);
+    expect(await reviewRow(t, TENANT, unscoped)).toBeNull();
+
+    // (b) Tenant B asking for tenant A's session — fail-closed, and nothing is written anywhere.
+    const foreign = await seedSession(t, { docRef: docId });
+    expect(
+      await t.action(internal.voiceDoc.reviewDocument, {
+        tenantId: TENANT_B,
+        sessionId: foreign,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).toEqual(bail);
+    expect(await reviewRow(t, TENANT_B, foreign)).toBeNull();
+    expect(await reviewRow(t, TENANT, foreign)).toBeNull();
   });
 });
 
