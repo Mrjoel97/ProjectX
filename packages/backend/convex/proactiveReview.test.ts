@@ -63,18 +63,33 @@ async function seedDoc(
   });
 }
 
-/** Run the cron and drain the per-tenant fan-out (cockpit.test.ts:331 idiom). */
+/**
+ * Run the cron and drain the per-tenant fan-out.
+ *
+ * `finishInProgressScheduledFunctions` (the cockpit.test.ts:331 idiom) only awaits jobs that have
+ * already STARTED; a `runAfter(0, …)` posted from a mutation is still `pending` when the mutation
+ * resolves, so it needs one macrotask tick first. (`finishAllScheduledFunctions(vi.runAllTimers)`
+ * is the documented alternative but deadlocks here: the review's module graph loads through
+ * dynamic imports that fake timers never let settle.)
+ */
 async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
   await t.mutation(internal.proactiveReview.runWeekly, {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await t.finishInProgressScheduledFunctions();
 }
 
+// `t.run`'s ctx is a GENERIC data model (convex-test does not thread the schema through it), so
+// `.withIndex` does not typecheck here — these read with `.filter`, the evaluations.test.ts idiom.
+// Production scoping is asserted on the module source by the SC#3 guard below, not here.
 async function reviewRows(t: ReturnType<typeof convexTest>, tenantId: string) {
   return t.run(async (ctx) =>
     ctx.db
       .query("evaluations")
-      .withIndex("by_tenant_thread", (q) =>
-        q.eq("tenantId", tenantId).eq("threadId", REVIEW_THREAD_ID),
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("tenantId"), tenantId),
+          q.eq(q.field("threadId"), REVIEW_THREAD_ID),
+        ),
       )
       .collect(),
   );
@@ -84,7 +99,7 @@ async function notifications(t: ReturnType<typeof convexTest>, tenantId: string)
   return t.run(async (ctx) =>
     ctx.db
       .query("notifications")
-      .withIndex("by_tenant_read", (q) => q.eq("tenantId", tenantId))
+      .filter((q) => q.eq(q.field("tenantId"), tenantId))
       .collect(),
   );
 }
@@ -179,7 +194,7 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
     const events = await t.run(async (ctx) =>
       ctx.db
         .query("audit")
-        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant_a"))
+        .filter((q) => q.eq(q.field("tenantId"), "tenant_a"))
         .collect(),
     );
     expect(events.map((e) => e.eventType)).toEqual(["evaluation.ran"]);

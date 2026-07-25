@@ -233,15 +233,25 @@ export const runEvaluation = internalAction({
         const docId = docIds[i];
         const title = titles[i] ?? "";
         const fillVault = (path: string, value: unknown): void => {
+          if (value == null || value === "") return;
           // An EMPTY ARRAY counts as unset. `emptyScorecard.identity.currentOffers` is `[]`, not
           // null, so a bare `!= null` guard skipped it forever — `hasOffer` stayed false and
           // diagnose() returned Gate 1 ("No offer worth buying yet") for EVERY vault-grounded run,
           // masking the real constraint. The caller's own `.length === 0` check shows the intent.
           const current = getPath(scorecard, path);
           const isUnset = current == null || (Array.isArray(current) && current.length === 0);
-          if (value == null || value === "" || !isUnset) return;
-          scorecard = setPath(scorecard, path, value);
-          provenance.set(path, { docId, title, confidence: "high", source: "vault" });
+          // The VALUE is first-write-wins (carried/user-provided/earlier-doc beats a later doc)…
+          if (isUnset) scorecard = setPath(scorecard, path, value);
+          // …but the CITATION is recorded whenever a doc actually states the field, even when the
+          // slot was already filled by carry-forward. Provenance is NOT persisted on the row, so a
+          // re-run over the same documents used to re-cite nothing: every carried value hit the
+          // `!isUnset` early return, `findings` collapsed toward zero, the engine then suppressed
+          // gaps (SC #1) and the delta reported a false "gaps closed". That is fatal for BEVL-03,
+          // which by design re-runs weekly on ONE pinned thread. First writer of the citation wins
+          // so a pre-seeded user-provided entry is never downgraded to a vault cite.
+          if (!provenance.has(path)) {
+            provenance.set(path, { docId, title, confidence: "high", source: "vault" });
+          }
         };
 
         if (text.includes("- **Persona:**")) {
@@ -250,13 +260,15 @@ export const runEvaluation = internalAction({
           fillVault("businessName", p.name);
           fillVault("identity.niche", p.oneLineDescription);
           fillVault("identity.avatar", p.targetCustomer);
-          if (p.offering && scorecard.identity.currentOffers.length === 0) {
-            fillVault("identity.currentOffers", [p.offering]);
-          }
+          // No `.length === 0` pre-check: fillVault owns both the empty-array unset rule AND the
+          // re-citation rule, and short-circuiting here would skip the citation on a re-run.
+          if (p.offering) fillVault("identity.currentOffers", [p.offering]);
         }
 
         for (const { field, re } of FINANCIAL_PATTERNS) {
-          if (getPath(scorecard, field) != null) continue; // carried/user-provided wins
+          // No "already set → skip" guard: fillVault keeps the carried/user-provided VALUE and the
+          // pre-seeded user-provided CITATION, while still re-citing a vault-sourced figure the
+          // document restates. Skipping here is what made week 2's finding count collapse.
           const m = re.exec(text);
           if (!m) continue;
           const n = Number((m[1] ?? "").replace(/,/g, ""));
