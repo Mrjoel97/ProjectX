@@ -199,7 +199,10 @@ describe("deserializeProfile (inverse of serializeProfile — pre-fills the edit
     // the `tenantProfiles` table (plan 02); plan 04 removes the last authoritative consumer of this
     // parse (`evaluations.ts`'s personaHint). Do NOT delete the fallback — `getProfile` still
     // pre-fills an edit form from stored markdown and must not throw on a legacy/garbled line.
-    const md = serializeProfile(complete).replace("**Persona:** solopreneur", "**Persona:** wizard");
+    const md = serializeProfile(complete).replace(
+      "**Persona:** solopreneur",
+      "**Persona:** wizard",
+    );
     expect(deserializeProfile(md).persona).toBe("solopreneur");
   });
 });

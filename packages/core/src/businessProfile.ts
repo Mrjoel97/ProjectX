@@ -27,8 +27,22 @@ export type BusinessProfile = {
   name: string;
   /** One-line description of what the business does. */
   oneLineDescription: string;
-  /** Inferred-then-confirmed persona. */
-  persona: Persona;
+  /**
+   * The tenant's TIER, projected into the serialized markdown (Phase 15.1, design §4.2 — "the
+   * markdown is a projection, the `tenantProfiles` table is the record"). It is `Tier`, not
+   * `Persona`, because the table can hold the operator-granted `enterprise` (D6) and a granted
+   * tenant's profile doc must round-trip it rather than silently reading back "solopreneur".
+   *
+   * The LABEL stays `- **Persona:**` in `serializeProfile`: `evaluations.ts` detects a profile doc
+   * by that exact marker and every legacy doc on disk carries it. Renaming it would orphan them.
+   *
+   * Widening the PROJECTION does not widen DERIVATION — `deriveTier` still returns `DerivedTier`,
+   * and `PERSONAS` / `isPersona` / `decideConfirm` are untouched, so "enterprise is not an emittable
+   * persona" (the Phase-11 invariant) still holds everywhere it means something.
+   *
+   * This field is NOT part of `ProfileInput`: no caller may supply it (defect 1b).
+   */
+  persona: Tier;
   /** Lifecycle stage in the user's own words (e.g. "idea", "early-revenue", "scaling"). */
   stage: string;
   /** What the business sells / offers. */
@@ -40,6 +54,15 @@ export type BusinessProfile = {
   /** Known constraints / limitations (may be empty). */
   knownConstraints: string[];
 };
+
+/**
+ * The shape a CALLER may supply — the profile MINUS the tier (Phase 15.1, design §9, defect 1b).
+ *
+ * The tier is a derived OUTPUT of the facts write (`tenantProfile.saveFacts`), never an input to a
+ * profile write. `onboarding.ts`'s `vProfile` mirrors this exactly, so a caller that sends a tier is
+ * rejected by the Convex arg validator — the control is GONE, not hidden.
+ */
+export type ProfileInput = Omit<BusinessProfile, "persona">;
 
 /** An extraction inference carrying a candidate persona, pre-confirmation. */
 export type PersonaInference = { persona: Persona };
@@ -62,26 +85,26 @@ export type ValidationResult = { ok: true } | { ok: false; errors: string[] };
 // Sparse-start (idea-stage onboarding): the ONLY required text field is a one-line description
 // of the idea/business. name/stage/offering/targetCustomer are legitimately empty for someone
 // arriving with a vague idea and no business yet (ONBD-02 covers "business/idea") — they are
-// enriched later on the profile page as the idea becomes a venture. persona is validated
-// separately (always inferred + confirmed). This is the front-door gate: admit an idea, don't
-// demand a finished business.
-const REQUIRED_STRINGS: readonly (keyof BusinessProfile)[] = ["oneLineDescription"];
+// enriched later on the profile page as the idea becomes a venture. This is the front-door gate:
+// admit an idea, don't demand a finished business.
+const REQUIRED_STRINGS: readonly (keyof ProfileInput)[] = ["oneLineDescription"];
 
 /**
- * Validate a Lean-core profile at the trust boundary (before it is committed as a vault doc).
+ * Validate a Lean-core profile INPUT at the trust boundary (before it is committed as a vault doc).
  * SPARSE-START: only `oneLineDescription` must be non-empty (an idea-stage user has that but not
- * yet a name/offering/customer); persona must be emittable; the two lists must be arrays (empty is
- * allowed — an absent goal is not fabricated). The optional strings may be empty and are filled in
- * later as the idea matures.
+ * yet a name/offering/customer); the two lists must be arrays (empty is allowed — an absent goal is
+ * not fabricated). The optional strings may be empty and are filled in later as the idea matures.
+ *
+ * Phase 15.1: the old `isPersona(profile.persona)` branch is GONE. Nothing can supply a tier any
+ * more (`ProfileInput` has no such field, and `onboarding.ts`'s `vProfile` rejects one at the arg
+ * validator), so a set-membership check on an unsendable field is an assertion that can never fire.
+ * The tier's own gate is `deriveTier`'s return type plus `saveFacts` having no tier argument.
  */
-export function validateProfile(profile: BusinessProfile): ValidationResult {
+export function validateProfile(profile: ProfileInput): ValidationResult {
   const errors: string[] = [];
   for (const key of REQUIRED_STRINGS) {
     const value = profile[key];
     if (typeof value !== "string" || value.trim() === "") errors.push(`${key} is required`);
-  }
-  if (!isPersona(profile.persona)) {
-    errors.push(`persona must be one of ${PERSONAS.join(" | ")}`);
   }
   if (!Array.isArray(profile.primaryGoals)) errors.push("primaryGoals must be an array");
   if (!Array.isArray(profile.knownConstraints)) errors.push("knownConstraints must be an array");
@@ -172,7 +195,12 @@ export function deserializeProfile(markdown: string): BusinessProfile {
   return {
     name,
     oneLineDescription,
-    persona: isPersona(persona) ? persona : "solopreneur",
+    // `isTier`, not `isPersona`: the line projects the tenant's TIER, and the table can hold the
+    // operator-granted `enterprise` (D6). The "solopreneur" fallback stays — this parse feeds an
+    // EDIT FORM and must never throw on a legacy or garbled line. Phase 15.1 demotes the fallback
+    // to a DISPLAY convenience: the authoritative tier is the `tenantProfiles` row, and plan 04
+    // repoints the last authoritative consumer (`evaluations.ts`'s personaHint) at that table.
+    persona: isTier(persona) ? persona : "solopreneur",
     stage: field("Stage"),
     offering: field("Offering"),
     targetCustomer: field("Target customer"),
