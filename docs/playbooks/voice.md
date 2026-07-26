@@ -1,6 +1,10 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-08 — the POST-CALL OUTCOME: the review runs once, the cited findings
+> Last verified: 2026-07-26 (14-09 — SC4 proven statically by EIGHT mutation-verified scans, and
+> this playbook consolidated into one coherent Phase-14 record: see "Voice-doc: the consolidated
+> Phase-14 record" at the end. The live-verify half is still OPEN — the `LIVE-VERIFIED` line in
+> `packages/voice/src/realtime.ts` is deliberately blank until the owner runs a real call).
+> Prior: 14-08 — the POST-CALL OUTCOME: the review runs once, the cited findings
 > render IN PLACE via the exported `CardList` on the synthetic thread, the memo is the brief in
 > document flavour (ONE vault artifact), and a gap crosses the EXISTING single Approve gate with no
 > route jump). Prior: 14-07 — the ENTRY POINT + in-call context: a ready vault document offers
@@ -900,3 +904,156 @@ from `DOC_REVIEW_SECTIONS` (`insight | pattern | strength | risk`): 14-01 origin
 can never emit and the spec would have passed against an impossible shape. **A fixture that is not a
 legal row is not a fixture.** Keep the seeded excerpt a verbatim substring of the seeded text, too —
 the producer substring-verifies it.
+
+---
+
+## Voice-doc: the consolidated Phase-14 record (14-09)
+
+Six plans appended to this file as they landed. This section is the coherent version — the
+invariants, the traps, how to verify, and the accepted ceilings. The per-plan sections above remain
+as the build history; **this is the part to read before changing anything.**
+
+### What it is
+
+A user opens `/dashboard/voice?doc=<vaultDocId>` from a ready vault report and holds a live voice
+conversation grounded in that one document. Afterwards they get cited insights / patterns / gaps and
+choose an outcome: save a memo, or turn a gap into a plan that crosses the normal Approve gate.
+
+### The entry contract
+
+- The **vault is the entry point** — no new upload surface, no picker in the pre-flight.
+- `ready` → enabled. `processing` / `extracting` / `pending_extraction` → a **real `disabled`
+  button**, never a dead-styled link. `failed` → **no voice action at all**, with copy saying why and
+  what to do next.
+- The gate is **subscription-driven**: `listVaultDocs` is a live query, so the control enables itself
+  when the status flips. **No poll, no timer, no second query — and none should be added.**
+- The `?doc=` value is read **once**, in `page.tsx`, via `window.location.search` in a mount effect
+  (not `useSearchParams`), and threaded as a prop to `useVoiceSession`, `<LiveSession>` and
+  `<PostCall>`. Neither child may add a second reader.
+
+### Grounding is HYBRID, and both halves are load-bearing
+
+1. **A bounded, fenced digest at mint time** (`buildDocDigest`, `DIGEST_CHAR_CAP`) — so the agent's
+   very first sentence is specific to the report rather than a generic greeting.
+2. **ONE read-only relayed retrieval tool** (`search_document` → `voiceDoc.searchDocument`) — so a
+   question the digest cannot answer is answered from the document instead of guessed.
+
+Neither alone is sufficient: the digest cannot hold a long report, and a cold tool-only session opens
+with nothing to say. Budget against a **32k context / 4,096 max output** window for
+`gpt-realtime-2.1`.
+
+### §4 — the log plane, quoted verbatim
+
+The module makes **exactly two** log-plane writes, and the count is pinned by a test:
+
+```
+voicedoc.searched  payload: { sessionId, queryHash, resultCount }
+voicedoc.reviewed  payload: { sessionId, findingCount, gapCount, verdict }
+```
+
+`queryHash` and `resultCount` are derived **outside** the payload literal (the `gmail.ts:279`
+`mailbox.searched` shape) so the literal contains only bare refs and counts and the static scan needs
+no carve-out. **The retrieval relay writes no `agentSteps` row** — that table has no text field by
+construction, and its closed allow-list scan already lives in `llmRedaction.test.ts`. No `telemetry`,
+no `deadLetters`.
+
+**`citationExcerpt` is the most dangerous identifier in the phase.** It is verbatim report content:
+legal in the `evaluations` row, legal on screen, and **illegal in every `payload:` object and every
+`agentSteps` row**. Eight mutation-verified scans hold this line, including one over the three UI
+components that read it.
+
+### The honesty invariants
+
+- Zero grounded findings ⇒ `verdict: "insufficient"` and gaps **force-cleared**. The engine cannot
+  report a gap it has no evidence for.
+- Findings present and no gaps ⇒ `verdict: "healthy"`, stated affirmatively and in **document**
+  language ("no gaps in this report"), never business language ("your business is solid here").
+- **Any future assertion must keep the anti-vacuous pairing:** `verdict === "healthy"` **AND**
+  `findings.length > 0` **AND** `gaps.length === 0`. `gapCount === 0` alone also passes on the
+  thin-data `insufficient` verdict, so on its own it proves nothing (the Phase-12
+  `28-healthy-no-gaps` lesson).
+
+### Welded in code — what the model may never author
+
+`citationDocId`, `citationTitle`, `route`, `playbook`, `leverageRank` and `verdict` are all set by
+`shapeDocReview` in pure code. The model output schema **has no such field**, which is Success
+Criterion 2 by construction rather than by instruction — a test asserts their absence.
+
+**The ONE model-authored citation input is `excerpt`** (the locked "quoted passage where available"
+half): only whoever read the passage can quote it. It is capped at `EXCERPT_CHAR_CAP`,
+whitespace-normalised **substring-verified against the document text** (on failure the *excerpt* is
+dropped, never the finding), optional by design, and rendered only when present. A test asserts its
+**presence** in the schema so a "tighten the schema" cleanup cannot silently delete half a locked
+decision.
+
+### The persona is UNGATED, by decision
+
+The `document-analyst` skill row is seeded **ungated** (owner decision, 2026-07-25), following the
+`voice-session` / `voice-brief` precedent. **Do not "fix" this by adding it to `GATED_SKILLS`.** The
+reason is structural: `run-eval-golden.mjs` validates `--skill` against a closed `SKILL_NAMES` list
+and drives `runCockpitAgent` over text fixtures — it **cannot** exercise a Realtime voice persona, so
+gating it would create a permanent activation deadlock the first time the body is edited. SC #2's
+honesty proof lives instead in the code-level verdict rule, the `voiceDoc.test.ts` fixtures, and the
+live human-verify.
+
+### Standing traps
+
+- **Never call `runEvaluation` with `document-review`.** Its validator is deliberately pinned to the
+  four business frameworks and must not be re-derived from `evalFields.framework` — a doc-review row
+  has no rubric skill and no `diagnose()` path.
+- **Never route a voice-doc synthetic thread to the workspace composer.** `voice-doc:<sessionId>` is
+  not a Convex Agent thread: reads degrade gracefully, but `sendCockpitMessage` would throw. The e2e
+  drives that URL as a **test harness only**; no navigation entry point to it may ever be added.
+- **Never add a second `"use node"` Convex module.** `llm.ts` is the one, and a second re-triggers the
+  TypeScript circular-inference cliff that collapses the generated API to `any`. Every handler here
+  carries an explicit `Promise<...>` return type for the same reason.
+- **Never widen `BRIEF_HEADERS`** to include the memo's `GAPS` label — that set is what
+  `planSeedFromBrief` uses to find section boundaries in both existing brief flavours.
+
+### Accepted ceilings, each with its upgrade path
+
+- **Doc-scoped retrieval is post-hoc filtered.** `vaultGroundHydrated` searches the whole tenant vault
+  and non-matching docs are dropped after the fact, so a report's best passage can fall out of the
+  top-K when another document dominates. Upgrade, in cost order: (1) raise `rag.search`'s `limit` for
+  the doc-scoped call — one number, but it lives in Phase-10-frozen `vaultGround.ts`; (2) a real
+  per-entry filter, which `@convex-dev/rag` 0.7.5 **does** support (`filterNames` / `filterValues` /
+  `filters`, verified against the installed types) but which is unusable today because `vaultRag.ts`
+  declares no `filterNames` and `embedDoc` passes `vaultDocId` as unindexed `metadata` — adopting it
+  means changing the shared RAG instance **and re-embedding every entry**. A migration, not a swap.
+- **Prompt injection via the digest.** The digest sits in the **system** `instructions` field, a
+  stronger exposure than ADR-006's tool-return case. Containment is the **tool set**: exactly one
+  read-only tool, so an instruction planted in a report has nothing to actuate. Upgrade path: move the
+  digest into a first `conversation.item.create` user-role message, at the cost of first-second
+  fluency.
+- **`listVaultDocs` returns whole rows including `text`** (`vault.ts:230` `.collect()`), which gets
+  heavy once reports are book-sized. Pre-existing and **deliberately not fixed in this lane** — an
+  observation only. This is why the voice page reads `voiceDoc.docContext` (a three-field projection)
+  instead.
+- **Cost control is time-cap-only** (ADR-005). There is no retrieval cache by decision; the 15-minute
+  wall-clock watchdog is the bound.
+
+### How to verify
+
+**Automated:** `pnpm --filter @pikar/backend test voiceDoc` (doc scope, retrieval, SC2 honesty,
+BETA-05) · `test voice` (one artifact per session) · `test gapAction` (gap → proposed memo → Approve
+gate intact, zero `requests` rows) · `test voiceToken` (mint body, fail-closed persona) ·
+`test llmRedaction` (the eight §4 scans) · `pnpm --filter @pikar/voice test` (the pure domain and the
+pinned Realtime vocabulary) · `pnpm --filter @pikar/web typecheck` **then**
+`pnpm --filter @pikar/web build` — the build is the only gate that catches a prerender/Suspense
+regression, and `/dashboard/voice` must stay `ƒ (Dynamic)`.
+
+**Manual-only, and honestly so:** the live drill-in, interrupt/redirect, the spoken "no gaps", the
+truncation disclosure, the real memo-vs-plan choice, and which tool-declaration branch the API
+accepts. `apps/web/e2e/voice.spec.ts` is deliberately offline and the golden runner cannot drive a
+voice persona, so these are human-verify rows in `14-VALIDATION.md` — never faked as automated.
+
+### Operations
+
+- The persona and every prompt load from the `skills` registry and **fail closed** when unseeded: an
+  unseeded deployment refuses to mint rather than falling back to a hardcoded prompt. If a live
+  session errors immediately, check `getActiveSkill("document-analyst")` first.
+- The 15-minute cap is a **server-side watchdog** armed against the `call_id` at `startSession`. It is
+  never re-armed or extended — a mic-loss grace period and a silence fall-through both consume cap
+  time.
+- Retrieval round-trip latency inside the cap is **unmeasured** in-repo; the live-verify step records
+  it. If it is slow, the knob is a larger pre-load digest, not a cache.
