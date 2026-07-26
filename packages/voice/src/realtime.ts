@@ -76,7 +76,10 @@ export const REALTIME_EVENTS = {
   outputTranscriptDelta: "response.output_audio_transcript.delta",
   /** Assistant spoken output → final text for the turn. Carries `transcript`. */
   outputTranscriptDone: "response.output_audio_transcript.done",
-  /** One per completed agent response — carries `response.usage` (metering, Pattern 4). */
+  /** One per completed agent response — carries `response.usage` (metering, Pattern 4) AND,
+   *  since Phase 14, the model's FUNCTION CALLS in `response.output[]` (see
+   *  REALTIME_FUNCTION_CALL below). The voice-doc retrieval relay triggers off this same event —
+   *  no new event name was added, so a future rename breaks in exactly one place. */
   responseDone: "response.done",
   /** Server VAD boundaries — the user side of the speaking orb. */
   userSpeechStarted: "input_audio_buffer.speech_started",
@@ -92,7 +95,43 @@ export const REALTIME_EVENTS = {
 export const REALTIME_CLIENT_EVENTS = {
   createItem: "conversation.item.create",
   createResponse: "response.create",
+  /** Re-declare session config after the channel opens. Used for ONE thing: Open Question 3's
+   *  contingency — when the mint refused a mint-time `tools` array (400), the browser declares the
+   *  retrieval tool here instead. This is the ONLY branch the guides actually exemplify for tools,
+   *  which is why it is the fallback rather than the primary. */
+  updateSession: "session.update",
 } as const;
+
+// ─── Tool calling (Phase 14, DOCV-01) ────────────────────────────────────────────────────────
+//
+// TOOL DECLARATION BRANCH — NOT YET LIVE-VERIFIED (as of 2026-07-25).
+// The TypeScript client_secrets reference lists `tools`/`tool_choice` on
+// RealtimeSessionCreateRequest; the REST reference page for the same endpoint does not.
+// voiceToken.ts has been wrong about this body TWICE. mintClientSecret implements mint-time
+// FIRST and falls back to a session.update over the data channel on a 400 (plan 14-04).
+// >>> Record the branch the API actually accepted, WITH A DATE, on the line below at live-verify.
+// LIVE-VERIFIED ____-__-__: <mint-time | session.update>
+
+/** Item shape inside response.done's `response.output[]` when the model calls a tool.
+ *  ponytail: pinned 2026-07-25 from developers.openai.com/api/docs/guides/realtime-conversations
+ *  (MEDIUM confidence, not live-verified). If a tool call never reaches the relay, dump the raw
+ *  event from useVoiceSession's `default:` diagnostic branch and fix the names HERE. */
+export const REALTIME_FUNCTION_CALL = {
+  itemType: "function_call",
+  outputItemType: "function_call_output",
+  nameField: "name",
+  callIdField: "call_id",
+  argumentsField: "arguments",
+} as const;
+
+/** Where the tool array + tool-choice hang off the mint body's `session` object (or off a
+ *  `session.update` payload — see the undecided branch above). Kept beside SESSION_CONFIG_KEYS so
+ *  the whole session vocabulary stays in one module. */
+export const SESSION_TOOL_KEYS = { tools: "tools", toolChoice: "tool_choice" } as const;
+
+/** Let the model decide when to drill into the document — the retrieval tool is useful only when
+ *  the user asks something the digest does not already answer. */
+export const TOOL_CHOICE_AUTO = "auto" as const;
 
 /** Shape of `response.done.response.usage` (only the fields we meter). Everything is
  *  optional because a text-only turn omits the audio counts (and vice versa). */

@@ -8,6 +8,10 @@ import {
   readUsage,
   REALTIME_CLIENT_EVENTS,
   REALTIME_EVENTS,
+  REALTIME_FUNCTION_CALL,
+  SEARCH_DOCUMENT_TOOL,
+  SESSION_TOOL_KEYS,
+  TOOL_CHOICE_AUTO,
 } from "@pikar/voice";
 import type { FunctionArgs } from "convex/server";
 import { useAction, useMutation } from "convex/react";
@@ -16,6 +20,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // The voiceSessions row id, derived from the mutation's own args (the IntakeControls precedent) so
 // this client file never needs the Convex-only `dataModel` types (@pikar/backend exports only ./api).
 type SessionId = FunctionArgs<typeof api.voice.recordUsage>["sessionId"];
+// Same derivation for the vaultDocuments id: `?doc=` arrives as a plain string from the route, and
+// startSession's own arg type is the only place the branded id shape is available to this client.
+type DocRef = NonNullable<FunctionArgs<typeof api.voice.startSession>["docRef"]>;
 
 // VOIC-01/02 — the browser half of the live voice session (RESEARCH Pattern 1). This hook owns the
 // WebRTC lifecycle end-to-end: mint an ephemeral secret (never the key), capture the mic with echo
@@ -64,16 +71,26 @@ export type VoiceSession = {
   sendText: (text: string) => void;
 };
 
+/** A tool call the model emitted, as it appears inside `response.done`'s `response.output[]`. */
+type FnCallItem = { type?: string; name?: string; call_id?: string; arguments?: string };
+
 type ServerEvent = {
   type?: string;
   transcript?: string;
   delta?: string;
-  response?: { usage?: Parameters<typeof readUsage>[0] };
+  response?: { usage?: Parameters<typeof readUsage>[0]; output?: FnCallItem[] };
 };
 
-export function useVoiceSession(): VoiceSession {
+/**
+ * @param docId Optional `vaultDocuments` id (from `?doc=`). When present the session is DOC-SCOPED:
+ *   the mint carries the document-analyst persona + digest + the retrieval tool (14-04), and the
+ *   model's `search_document` calls are relayed to Convex (Task 2). Absent ⇒ the Phase-6 general
+ *   voice session, byte-identical behaviour: no new branch, no new event, no extra send.
+ */
+export function useVoiceSession(docId?: string): VoiceSession {
   const mint = useAction(api.voiceToken.mintClientSecret);
   const startSession = useMutation(api.voice.startSession);
+  const searchDocument = useAction(api.voiceDoc.searchDocument);
   const recordUsage = useMutation(api.voice.recordUsage);
   const endSessionClean = useMutation(api.voice.endSessionClean);
   const abortSession = useMutation(api.voice.abortSession);
@@ -238,18 +255,70 @@ export function useVoiceSession(): VoiceSession {
             usageAccumRef.current.textInTok += u.textInTok;
             usageAccumRef.current.textOutTok += u.textOutTok;
           }
+
+          // ── The voice-doc retrieval relay (DOCV-01 / SC1's drill-in) ──────────────────────
+          // TRIGGERED FROM response.done ON PURPOSE, adding no new pinned event name: this event is
+          // already live-verified in this repo AND the guides state it carries the complete
+          // function_call item. `response.function_call_arguments.done` sits in exactly the
+          // MEDIUM-confidence class realtime.ts warns about, and its field list was never verified.
+          //
+          // Placed AFTER `responseActiveRef` is cleared, which is what makes the `response.create`
+          // below legal — sent mid-response it silently 400s ("conversation already has an active
+          // response"), the failure mode that once swallowed the wrap-up nudge entirely.
+          //
+          // NO `docId &&` guard: a Phase-6 session declares no tools, so `output[]` can never hold a
+          // function_call item and this loop is already a no-op there. A condition would instead
+          // silently disable any tool added later.
+          for (const item of ev.response?.output ?? []) {
+            if (item.type !== REALTIME_FUNCTION_CALL.itemType) continue;
+            const callId = item.call_id;
+            const sid = sessionIdRef.current;
+            if (!callId || !sid) continue;
+            void (async () => {
+              // ALWAYS send an output, even on failure (Pitfall 5). A tool call with no
+              // function_call_output leaves the model waiting and the user hearing silence for the
+              // remainder of a capped 15 minutes — an honest "found nothing" beats a dead turn.
+              let output: string;
+              try {
+                // Only the model's free-text `query` crosses. The document id is NEVER sent:
+                // searchDocument reads `docRef` off the server session row, so nothing the model
+                // says can widen the scope or name a different document.
+                const { query } = JSON.parse(item.arguments ?? "{}") as { query?: string };
+                output = JSON.stringify(await searchDocument({ sessionId: sid, query: query ?? "" }));
+              } catch {
+                output = JSON.stringify({ passages: [], found: false, error: "unavailable" });
+              }
+              send({
+                type: REALTIME_CLIENT_EVENTS.createItem,
+                item: {
+                  type: REALTIME_FUNCTION_CALL.outputItemType,
+                  [REALTIME_FUNCTION_CALL.callIdField]: callId,
+                  output,
+                },
+              });
+              send({ type: REALTIME_CLIENT_EVENTS.createResponse });
+            })();
+          }
           break;
         }
         default:
           // UAT diagnostic (ponytail: remove/quiet at phase close): if the agent speaks but no text
           // appears, the real event name OpenAI sent shows up here — the pinned output_audio_transcript
           // names are the MEDIUM-confidence risk realtime.ts flags. Filter the console by "[voice]".
-          if (ev.type?.includes("transcript") || ev.type?.includes("audio"))
-            console.debug("[voice] unhandled audio/transcript event:", ev.type);
+          // `function_call` is included for Open Question 4's live verify: if a tool call never
+          // reaches the relay above, the name OpenAI actually sent surfaces here.
+          if (
+            ev.type?.includes("transcript") ||
+            ev.type?.includes("audio") ||
+            ev.type?.includes("function_call")
+          )
+            console.debug("[voice] unhandled audio/transcript/function_call event:", ev.type);
           break;
       }
     },
-    [],
+    // The retrieval relay closes over both: `send` is stable ([] deps) and `searchDocument` is a
+    // Convex action hook, so this list does not churn the data-channel handler in practice.
+    [searchDocument, send],
   );
 
   // Mic loss mid-call (hardware unplug / OS revoke → track "ended", or a failed re-acquire): drop the
@@ -266,7 +335,9 @@ export function useVoiceSession(): VoiceSession {
 
   // ── Connect: mint → mic → handshake → relay callId → startSession ────────────
   const connect = useCallback(async () => {
-    const { clientSecret } = await mint({});
+    // `?doc=` is an unbranded route string; both server calls below re-validate it (ownership +
+    // `status: "ready"`), so the cast asserts shape for TypeScript, never trust.
+    const { clientSecret, toolsAtMint } = await mint(docId ? { docId: docId as DocRef } : {});
 
     const micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -287,6 +358,30 @@ export function useVoiceSession(): VoiceSession {
     const dc = pc.createDataChannel("oai-events");
     dcRef.current = dc;
     dc.onmessage = onEvent;
+
+    // RESEARCH Open Question 3's CONTINGENCY BRANCH. The REST and TypeScript references disagree on
+    // whether `client_secrets` accepts `tools` in the mint body; `mintClientSecret` tries mint-time
+    // first and, on a 400 ONLY, re-POSTs without them and reports `toolsAtMint: false` (14-04). In
+    // that case the session exists but has no tool, so we declare it here over the data channel.
+    // Event-driven, NOT a timeout: `createDataChannel` returns before the channel opens, and `send`
+    // silently drops a closed-channel write — so a naive immediate send would lose the declaration
+    // with no error. Which branch the API actually accepted gets recorded, with a date, on the
+    // `LIVE-VERIFIED` line in `packages/voice/src/realtime.ts` during 14-09's live verify.
+    if (docId && !toolsAtMint) {
+      dc.addEventListener(
+        "open",
+        () => {
+          send({
+            type: REALTIME_CLIENT_EVENTS.updateSession,
+            session: {
+              [SESSION_TOOL_KEYS.tools]: [SEARCH_DOCUMENT_TOOL],
+              [SESSION_TOOL_KEYS.toolChoice]: TOOL_CHOICE_AUTO,
+            },
+          });
+        },
+        { once: true },
+      );
+    }
 
     const track = micStream.getAudioTracks()[0];
     if (!track) throw new Error("no microphone track");
@@ -314,12 +409,19 @@ export function useVoiceSession(): VoiceSession {
     if (!callId) throw new Error("realtime handshake: missing call_id");
 
     // Relay immediately — startSession arms the ONE server watchdog against this callId.
-    const { sessionId: id } = await startSession({ callId });
+    // `docRef` is the SERVER's record of what this session is about: every later retrieval reads the
+    // document id off this row, never off anything the model or the browser says afterwards.
+    // startSession re-validates ownership + `status: "ready"` and throws `voicedoc: document not
+    // found` / `not ready` — the client is not the trust boundary here (14-03).
+    const { sessionId: id } = await startSession({
+      callId,
+      ...(docId ? { docRef: docId as DocRef } : {}),
+    });
     sessionIdRef.current = id;
     setSessionId(id);
     startedAtRef.current = Date.now();
     lastActivityRef.current = Date.now();
-  }, [mint, onEvent, startSession, onMicLost]);
+  }, [mint, onEvent, startSession, onMicLost, docId, send]);
 
   const start = useCallback(async () => {
     if (status === "connecting" || status === "live") return;

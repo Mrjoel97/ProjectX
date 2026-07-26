@@ -2,46 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 7 (done)
-status: executing
-stopped_at: Completed 15.1-07-PLAN.md (both surfaces — the conversation and the facts; phase 15.1 complete)
-last_updated: "2026-07-26T15:53:39.177Z"
+current_phase: 16
+current_plan: 0
+status: phase_complete
+stopped_at: "Phase 15.1 COMPLETE and VERIFIED (6/6 success criteria). Merged with main: Phase 14 (voice-doc) arrives at 8/9 — one plan outstanding. Phase 15's specialist-body eval gate remains UNPAID and 15.1 has 4 manual-only VALIDATION rows; neither is deployed."
+last_updated: "2026-07-26T00:00:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
-  total_plans: 163
-  completed_plans: 159
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_plan: 4
-status: executing
-stopped_at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
-last_updated: "2026-07-26T14:20:37.488Z"
-progress:
-  total_phases: 38
-  completed_phases: 22
-  total_plans: 163
-  completed_plans: 156
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_phase: 15.1
-current_plan: 1
-status: Ready to execute
-stopped_at: Completed 15.1-01-PLAN.md (Wave 0 freeze — tier rule + tenantProfiles + ADR-009)
-last_updated: "2026-07-26T12:05:22.305Z"
-progress:
-  total_phases: 38
-  completed_phases: 22
-  total_plans: 163
-  completed_plans: 153
+  total_plans: 172
+  completed_plans: 167
 ---
 
 # Project State
@@ -615,6 +585,185 @@ exit 0 (Pitfall-4 tripwire), backend `tsc` +0 new errors over the 52 pre-existin
 `deliverApprovedPlan.ts`.
 
 PRIOR (13-03): Wave 3 done. BEVL-03 is now visible end to end — the cron's rows have a surface. `/dashboard/workspace` always shows a PINNED, non-closable "Weekly review" tab: `REVIEW_TAB` is seeded straight into `useState<Tab[]>([REVIEW_TAB])`, which is also what makes the `?thread=proactive-review` notification deep-link dedupe for free (`openThread` already skips ids it is showing). The tab drops both its `×` and the `has-close` class, and `closeTab` refuses the id. Selecting it renders a one-line explainer INSTEAD of `ChatPane` — the review thread is synthetic (no `plans` row), so `sendCockpitMessage` would throw `cockpit: plan row missing for thread` (cockpit.ts:93); the composer is suppressed and that backend guard was deliberately NOT loosened (it protects every real thread). The review branch precedes the gmail-status branch on purpose, so a user who never connected Gmail still sees it (SC#2 at the surface). `EvaluationCard` gained four review-ONLY branches and is still one dumb read of one `byThread` row: a pre-first-run empty state gated on the query RESOLVING to `null` (`undefined` is loading — no flash), a dated `Weekly review · MMM D ·` header prefix (the date IS the freshness signal, so no unread dot/badge), a `deltaLine()` "what changed" line off the PERSISTED `evaluation.delta` with zero terms omitted (nothing renders on an all-zero delta or an on-demand row), and a `/dashboard/profile` CTA inside the thin-data box — the one action that unblocks the one dead-end state, at `--teal-900` because BRAND §6 forbids `--teal-600` as small text. `NotificationsBanner` gained `KIND_HREF`, an OPT-IN kind→href map (absent kind ⇒ today's plain text; hrefs are code-owned constants, never row data), routing `weekly_review` over the existing VOIC-04 `?thread=` deep-link — no new route, no new component, no component library. Gates: web typecheck + `check-playbooks` exit 0, backend 494/495 unchanged (this plan touched zero backend files). PRIOR (13-02): the spine. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
+**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 8/9 plans, Lane C)
+
+## Current Position
+
+Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (8/9 plans, 9 waves) on `lane-c/voice-doc`
+Plan: 14-08 COMPLETE (the post-call outcome); next 14-09 (wave 9, SC4 static scans + the BLOCKING human-verify)
+
+**TEST BASELINE CHANGED — there is no longer any acceptable red.** The whole monorepo is **892/892,
+zero failures**: backend **526/526** (43/43 files), core 195, voice 57, vault 42, extraction 28, cost
+22, contracts 14, pii 8. The two failures every prior phase summary described as expected baseline
+("494/495", later "524/526") are FIXED, and neither was a product defect: (1) `audit.test.ts` was
+missing `t.registerComponent("auditCounts", …)` — `audit.log` maintains that aggregate, and eight
+sibling tests already had the line; (2) the recurring "flake" (`runCockpitAgent.test.ts > mock loop`,
+`voice.test.ts > storeBrief`) was vitest's default **5_000ms** `testTimeout`, not a bad test — both
+take ~3.4s isolated because every convex-test instance boots an in-memory backend, so under parallel
+load they crossed 5s and then passed alone. Now `testTimeout: 20_000` in
+`packages/backend/vitest.config.mts`. **A failing backend test is now a real regression.** Lesson
+worth keeping: once a genuine bug is named as "the documented pre-existing red", five phases report
+around it instead of at it.
+
+**KNOWN DEBT, deliberately NOT fixed in this lane:** backend `tsc --noEmit` has **49** errors, ALL in
+test files, **0 in shipped code** (bar: +0 new). ~15 are `Property 'glob' does not exist on type
+'ImportMeta'`, fixable by adding `"vite/client"` to `packages/backend/tsconfig.json`'s `types` — but
+that cascades, because every existing `// @ts-expect-error import.meta.glob` then becomes an unused-
+directive error, across ~20 test files owned by Lanes A and B. That is a post-merge job on `main`,
+not a mid-parallel-execution sweep.
+
+Status: Wave 8 done — **the user now DECIDES, and the decision crosses the real gate.** `PostCall`
+branches on `docId`: `reviewSession` fires ONCE (ref-guarded; the server is idempotent per session
+too — belt and braces, because it is the page's only model call), the editor re-seeds from
+`composeDocMemo` once the row lands (guarded, so a late subscription tick cannot clobber an edit in
+progress), and the cited findings render **IN PLACE** via the EXPORTED `CardList` on the synthetic
+thread — cited findings, the affirmative healthy banner, each gap's wired "Act on this" →
+`actOnGap` → a `proposed` memo plan, and the `PlanCard` with the EXISTING single Approve. No new
+card idiom, no second query (same `evaluations.byThread` subscription, Convex dedupes it), **no
+route jump.** **ONE footer action** ("Save this memo"); acting on a gap already lives in the card, so
+a second control would be two controls for one decision. **DELIBERATELY NO "Continue with your
+agent" on this branch** — it pushes `/dashboard/workspace?thread=<id>`, and the synthetic
+`voice-doc:<sessionId>` is NOT a Convex Agent thread, so a composer there would throw (Pitfall 7).
+**A failed review never costs the user their conversation:** it falls back to the plain brief, says so
+in the `aria-live` status, and the save path stays open. **The memo IS the brief, document-flavoured**,
+stored through the SAME `endSessionClean`/`briefRef` spine — so "exactly ONE new thing in the vault"
+is **INHERITED, not re-implemented**, including on the abnormal path (pinned by two new
+`voice.test.ts` cases). `cards.tsx` took FOUR surgical edits: `isDocReview` keyed off the SHARED
+`DOC_REVIEW_FRAMEWORK` (never a re-typed literal); a document branch for the healthy banner ("your
+business is solid here" is the wrong claim about a REPORT); the `/dashboard/profile` CTA suppressed on
+that branch (enriching a business profile does nothing for an unassessable report — a dead link
+dressed as a fix); and `citationExcerpt` rendered as a `<blockquote>`, **framework-agnostic on
+purpose** so Phase-12 rows are byte-identical and absent renders exactly as before. `CardList` gained
+an **opt-in** `noPlanHint` defaulting to today's cockpit string, so no existing caller changes. Gates:
+gapAction **9/9**, voice **14/14**, voiceDoc 23/23, monorepo **903/903 zero failures** (backend
+**537/537**), web typecheck exit 0, web build compiles with both routes `ƒ (Dynamic)`, backend tsc 49
+(+0 new). **FROZEN FILES: zero diff across the ENTIRE phase** (`plans.ts`, `deliverApprovedPlan.ts`,
+`cockpit.ts`, `llm.ts`, `run-eval-golden.mjs`); `evaluations.ts` carries only the 12 authorized lines.
+
+**TWO OF MY OWN ASSUMPTIONS WERE WRONG AND THE CODE WAS RIGHT (14-08)** — the corrections are the
+useful part: (1) `source` is `vault | user-provided`, not "grounded", and "vault" is exactly what
+`shapeDocReview` welds — a fixture must MIRROR the real writer, not paraphrase it. (2) "A second tap
+refuses" is false and should be: a second tap on a still-`proposed` plan SUCCEEDS by recycling the
+row, because changing your mind about which gap to act on must restage the memo. `plan_busy` is for
+mid-flight/delivered only. The invariant that matters — never a SECOND `plans` row, since
+`plans.byThread` is `.unique()` and a duplicate makes every later read THROW — is now what the test
+asserts, plus a separate case driving a plan to `delivering` to confirm the real refusal.
+
+**DEFECT FIXED in 14-01's seeder (14-08):** `smoke:seedVoiceDocSession` seeded `section: "findings"`,
+which is NOT in `DOC_REVIEW_SECTIONS` (`insight | pattern | strength | risk`). `shapeDocReview` DROPS
+findings outside that union, so the e2e fixture described a row production can never emit — the spec
+would have passed against an IMPOSSIBLE shape. Now "pattern"/"insight". **A fixture that is not a
+legal row is not a fixture.**
+
+**CROSS-LANE STATUS (checked 2026-07-26):** `main` is 2 commits ahead, docs-only, cleanly
+auto-mergeable. Lane A (`lane-a/dispatch-core`) has COMPLETED Phase 15 and touches `schema.ts`,
+`evaluations.ts`, `cards.tsx`, `llmRedaction.test.ts`, `gapAction.test.ts`, `watch.json` — all shared
+with this lane. **Every conflict is MECHANICAL, none semantic:** different unions in `schema.ts`,
+different maps in `cards.tsx` (Lane A never touches `FRAMEWORK_LABEL`/`EvaluationCard`/`CardList`),
+different regions in `evaluations.ts`, different entries in `watch.json`, documented keep-both for the
+`.planning` singletons, and `graphify-out/*` is regenerated (≈3,100 of the 3,125 markers).
+**THE IMPORTANT INTERLOCK:** Lane A's 15-04 split `actOnGap` into TWO terminals — a gap whose `route`
+names a REGISTERED specialist now schedules a dispatch instead of staging a memo. Their `SPECIALISTS`
+registry holds exactly `offer-architect`, `money-model-designer`, `lead-engine`; `DOC_GAP_ROUTE` is
+`"document-analyst"`, **not registered anywhere in their branch** — so a voice-doc gap keeps the memo
+branch, which is exactly what SC #3 requires. The lanes interlock correctly without having
+coordinated. 14-08's SC3 assertions were written against the OUTCOME rather than `actOnGap`'s
+internals precisely so they survive that merge.
+
+PRIOR (14-07): Wave 7 done — **the flow has a FRONT DOOR and the call has CONTEXT.** A `ready` vault document
+offers "Discuss by voice" (in the `DocGrid` card AND the `PreviewModal` footer) linking to
+`/dashboard/voice?doc=<id>`. **The status gate is the phase's first honesty moment:**
+`processing`/`extracting`/`pending_extraction` render a REAL `disabled` button ("Reading…"), never a
+`Link` with `pointer-events:none` — a screen reader must not announce an actionable control that does
+nothing; `failed` offers **no voice action at all**, and `PreviewModal`'s explainer now says why in the
+user's terms plus what to do next. Rationale: never open a grounded conversation the agent cannot
+ground, and never burn capped 15-minute time on a document still being read. **THE GATE IS
+SUBSCRIPTION-DRIVEN — do not add a poll:** `listVaultDocs` is a live query returning whole rows, so the
+control re-renders enabled the instant extraction flips the status. The control is a **SIBLING** of the
+card `<button>` (nested interactive elements are invalid HTML and break keyboard order), reusing the
+failed-card Retry's absolute positioning, and a shared `discussPillStyle()` keeps both variants in the
+identical spot so nothing moves under the user. **NEW: `voiceDoc.docContext`** — a tenant-scoped
+`{title, status, truncated}` projection, `null` cross-tenant (fail-closed by null, not throw: a throw
+distinguishes "exists but not yours" from "no such document", an ownership oracle). Deliberately NOT a
+`listVaultDocs` reuse — that `.collect()`s whole rows including `text`, and the voice page must not
+pull a book-sized blob to render a title; a test pins the key set to exactly `[status,title,truncated]`
+and asserts no `text` key so a "just return the row" simplification fails loudly. **`DocStrip`** names
+the report during the call and badges a partial read; it renders nothing for BOTH `undefined` (loading)
+and `null` (not yours) and distinguishes them nowhere. It links to `/dashboard/vault` rather than
+hoisting `PreviewModal` — that modal owns download/delete/retry, and a destructive action one mis-tap
+from a live call is the wrong trade. **No live insights panel** (explicitly deferred). BRAND §6
+honoured: the badge is `--ink-soft` on a ruled chip, not small teal text, and carries the literal word
+"partial" so meaning is never colour-only. Phase-6 layout otherwise untouched, text fallback included.
+Gates: voiceDoc **23/23**, monorepo **896/896 zero failures** (backend **530/530**), web typecheck exit
+0, web build compiles with both routes still `ƒ (Dynamic)`.
+
+**OUT-OF-SCOPE FIX (14-07):** `packages/backend/.convex/` — which holds
+`convex_local_backend.sqlite3` + `convex_local_storage/`, i.e. REAL tenant rows (vault documents, audit
+entries, PII) — was untracked but **UNIGNORED** in both worktrees. Never committed, but one
+`git add -A` would have committed the whole dev database. `**/.convex/` is now in `.gitignore` with the
+reason inline. Surfaced by junctioning the local deployment into this worktree.
+
+PRIOR (14-06): Wave 6 done — **SC #1's drill-in loop is CLOSED end to end.** `/dashboard/voice?doc=<id>`
+mints doc-scoped (persona + digest + tool), threads `docRef` onto `startSession` so the SERVER owns
+what the session is about, and relays the model's `search_document` calls to
+`api.voiceDoc.searchDocument` over the existing `"oai-events"` channel. **OPEN QUESTION 4 SETTLED on
+`response.done`** — already live-verified in this repo and documented to carry the complete
+`function_call` item, so the relay pins **zero** new event names;
+`response.function_call_arguments.done` sits in exactly the MEDIUM-confidence class `realtime.ts`
+warns about. The relay sits AFTER `responseActiveRef.current = false` in the same case, and that
+ordering is what makes the trailing `response.create` legal rather than a silent 400 ("conversation
+already has an active response" — the failure that once swallowed the wrap-up nudge). **A
+`function_call_output` is ALWAYS sent, even on failure** (Pitfall 5) — a missing output leaves the
+model waiting and the user hearing silence for the rest of a capped 15 minutes. **Only the model's
+free-text `query` crosses the wire**; the document id is never sent, because `searchDocument` reads
+`docRef` off the server session row, so nothing the model says can widen scope or pick another
+document. **No `docId &&` guard on the relay loop** — a Phase-6 session declares no tools so
+`output[]` can never hold a `function_call` item, and a condition would silently disable a future
+tool. **Open Question 3's contingency is live:** when the mint reports `toolsAtMint: false` the
+browser declares the tool via `REALTIME_CLIENT_EVENTS.updateSession` on the channel's `open` event —
+event-driven, NOT a timeout, because `createDataChannel` returns before the channel opens and `send`
+silently drops a closed-channel write, so a naive immediate send would lose the declaration with no
+error anywhere. `page.tsx` is the SINGLE `?doc=` reader and threads `docId` as a prop to
+`useVoiceSession`, `<LiveSession>` (14-07's seam) and `<PostCall>` (14-08's seam) — **neither child
+may add a second reader.** Gates: voice **57/57**, web typecheck exit 0, **`pnpm --filter @pikar/web
+build` succeeds with `/dashboard/voice` still `ƒ (Dynamic)`**, monorepo 892/892, zero new npm deps,
+zero hardcoded Realtime literals in `apps/web`.
+
+**DEVIATION worth carrying (14-06):** the plan required `page.tsx` to contain `"Suspense"` AND to
+copy `workspace/page.tsx`'s idiom — but that idiom **deliberately avoids** `useSearchParams` and says
+so in its own comment ("avoids the useSearchParams Suspense boundary … the connect-gmail
+precedent"). Followed the real precedent (`new URLSearchParams(window.location.search)` in a mount
+effect), which **removes** the Pitfall-6 class instead of guarding it — a missing boundary either
+errors at prerender or silently deopts the whole page to CSR, and `typecheck` sees neither. Verified
+with the strict gate anyway (build passes, route stays Dynamic). The `contains: "Suspense"` artifact
+is unmet **by design**; every behavioural truth is met. **This is the FOURTH plan whose asserted
+interface was wrong** (14-03/14-04/14-05 on `internal.vault.getDoc`, now this) — the pattern is that
+`14-RESEARCH.md` and the plans state what a referenced file does without opening it.
+
+PRIOR (14-05): Wave 5 done
+Status: Wave 5 done — **SC #2 is now true and testable without a microphone.** `voiceDoc.reviewSession({sessionId, transcript}) -> {threadId, findingCount, gapCount, verdict}` persists a cited `evaluations` row on the synthetic `voice-doc:<sessionId>` thread, through the **unmodified** `insertEvaluation` — the schema-derived validator widened by 14-01 carried the new `document-review` literal on its own, so `evaluations.ts` stayed frozen for this plan. The model emits **labels only**; `shapeDocReview` (14-02, pure) welds `citationDocId`/`citationTitle`/`route`/`playbook`/rank and applies the honesty verdict in code, so a citation cannot be hallucinated and a gap cannot be self-routed. **`excerpt` is the ONE model-authored exception** — declared STRICT-legally in `docReviewSchema`, then whitespace-normalized substring-verified against `doc.text`, and on failure the EXCERPT is dropped, never the finding (the absent-excerpt path is asserted: `findings[2]` has no `citationExcerpt` key at all, so 14-08's renderer must treat a missing key as normal). **The honesty assertions are anti-vacuous** — `verdict === "healthy"` AND `findings.length > 0` AND `gaps.length === 0` pinned together at BOTH the return value and the persisted row, because `gapCount === 0` alone also passes on the thin-data `insufficient` verdict (the Phase-12 `28-healthy-no-gaps` lesson); the no-fabricated-gap counterpart pins `insufficient` + zero gaps. `reviewSession` is **idempotent on the thread** — an existing row is returned as-is rather than patched, so a post-call remount (refresh, resumed dropped call) shows ONE consolidated list. Gates: voiceDoc **19/19** (was 9), backend **524/526** (baseline held), backend `tsc --noEmit` **49** / 0 non-test (+0 new), web typecheck exit 0, `check-playbooks` exit 0, `evaluations.ts`/`llm.ts`/`deliverApprovedPlan.ts`/`run-eval-golden.mjs` ZERO diff.
+
+**SECURITY FIX carried in this plan (`5678f22`):** a background review flagged `test-seam-exposed-to-untrusted-input` and was right. `reviewSession` is a PUBLIC `tenantAction` whose `transcript` is client-supplied, and the producer branched on `transcript[0].text.startsWith("SMOKE::docreview::")` — so any authenticated tenant user could POST a crafted first turn and persist a **fabricated review** (canned gaps, real citations, no model call) straight into `actOnGap` → memo → the Approve gate. The seam was copied from `vaultLlm.ts` and matches it in SHAPE but **not in EXPOSURE**: `vaultLlm.extractGraph` is an `internalAction`, reachable only by server code. **Idioms carry invisible preconditions; that one did not travel.** Impact was bounded (tenant-scoped, no cross-tenant reach, no exfiltration, fixed fixture content) but it contradicted the very criterion the plan exists to satisfy — SC #2 promises honest gap reporting, and a production gap-forgery primitive would have made it untrue where it matters. Fix: `offlineSeamAvailable()` honours the sentinel ONLY when `OPENAI_API_KEY` is absent — inert in production, live in the keyless suite, **no test weakened** (all 12 SMOKE call sites still green) and **no new deployment config**, preserving the original per-request design goal. Mutation-verified at `voiceDoc.test.ts:613`. **Generalizable lesson: when reusing a seam, check whether what protected it travels with it.**
+
+**DEVIATION worth carrying (14-05):** the plan again specified `internal.vault.getDoc` — the **third consecutive plan** to inherit that false premise from `14-RESEARCH.md` (14-03 at `startSession`, 14-04 at the mint, 14-05 here). It returns `{text, contentHash, title}`: no `extractionTruncated`, and it THROWS on cross-tenant instead of reading as missing, which turns a fail-closed check into an oracle. Reused 14-04's `voiceToken.docForMint` rather than adding a third copy or widening the Phase-10 shared query. **For Phase 15's planner: research errors replicate wherever the planner trusted them** — the `evaluations.ts` "zero edits" claim did exactly this in 14-01.
+
+PRIOR (14-04): Wave 4 done — **the session now OPENS already knowing the report.** `voiceToken.mintClientSecret({docId?}) -> {clientSecret, expiresAt, toolsAtMint}`: with a `docId` the `instructions` field is the `document-analyst` REGISTRY body + a blank line + `buildDocDigest(...)` (fenced, capped, truncation-disclosing — NOT re-sliced or re-fenced at the mint, and no behavioural line added inline, §5); without one it is `voice-session`, byte-unchanged, with **NO `tools`/`tool_choice` keys at all** (absent, not empty — pinned by an exact-equality + `Object.hasOwn` pair so a doc feature can never reshape every ordinary voice call). Both personas fail closed via `getActiveSkill`'s `NO_ACTIVE_SKILL` and **no request leaves Convex when the registry cannot answer** (asserted `calls.length === 0`). **The MINT is the FIRST trust boundary in wall-clock order** — the browser mints BEFORE it has a session row (`useVoiceSession.ts:269` → handshake → `startSession`), so it re-validates the doc itself: `voicedoc: document not found` (missing/cross-tenant, fail-closed) / `voicedoc: document not ready`, the SAME two strings 14-03's `startSession` throws, refused before any request leaves Convex. **Exactly ONE tool, READ-ONLY** — `tools:[SEARCH_DOCUMENT_TOOL]` + `tool_choice:"auto"` via `SESSION_TOOL_KEYS`; the test asserts length 1, the name, a top-level `parameters` key and the ABSENCE of a `function` key (the FLAT Realtime shape; the Chat-Completions nesting 400s the mint). That tool SET is the containment: nothing writable is reachable from a voice session, so an instruction planted in the report has nothing to actuate — which matters more here than anywhere else in the repo because the digest sits in the SYSTEM `instructions` field, a materially stronger exposure than ADR-006's tool-RETURN case (the `ponytail:` block names the upgrade path: move the digest into a first `conversation.item.create` user-role message, at the cost of first-second fluency). **OPEN QUESTION 3 — both branches SHIPPED, the answer still BLANK:** mint-time tools first (server-owned, races nothing), and on a **400 only** an automatic re-POST of the identical body minus the tool keys returning `toolsAtMint:false`; a 500 still throws first time and does NOT re-POST (asserted). It is a SHAPE fallback, not a retry policy. `toolsAtMint` is the ONE deliberate extension to the Phase-6 `{clientSecret,expiresAt}` contract — TRANSPORT CONTROL, not a secret and not document content — and is trivially `true` on an unscoped mint so 14-06's branch stays a single `if (!toolsAtMint)`. The instruction BUDGET is now a test, not a comment (`instructions.length < personaBody.length + DIGEST_CHAR_CAP + 500`). `voiceToken.ts` writes **zero** log-plane rows (`grep -c "audit.log"` = 0, no `payload:` block) — the cleanest possible SC4 result. Gates: voiceToken **12/12** (was 5), backend **515/516** (baseline held, +7 new green; sole red the documented pre-existing `audit.test.ts` auditCounts row), backend `tsc --noEmit` **49** errors / 0 non-test — **BELOW** the 52 baseline, web typecheck exit 0, `check-playbooks` exit 0, `llm.ts`/`evaluations.ts`/`deliverApprovedPlan.ts`/`schema.ts`/`vault.ts`/`vaultGround.ts`/`realtime.ts`/`run-eval-golden.mjs` ZERO diff this plan.
+
+**DEVIATIONS worth carrying (14-04):** (1) the plan's `internal.vault.getDoc` interface was wrong AGAIN — it returns `{text, contentHash, title}` with **no `status`** and **no `extractionTruncated`**, so it can answer neither the readiness refusal nor the truncation disclosure; `getDocForExtraction` has `status` but no `text`, and two round-trips still miss `truncated`. Added a **module-local `voiceToken.docForMint` internalQuery** (returns `null` for missing/cross-tenant so the MINT owns the thrown message) rather than widening the shared Phase-10 query, which would touch `vault.ts` — outside this plan's `files_modified`, outside Wave 4's ownership row, and watched by `vault.md`. (2) **`voiceToken.test.ts` referenced `internal.voiceToken.mintClientSecret` — always wrong**, since `mintClientSecret` is a PUBLIC `tenantAction` and therefore lives under `api`. That was 3 of the documented 52 pre-existing `tsc` errors and my 9 new call sites would have made it 17. Renamed to `api.*`; the file now contributes ZERO tsc errors and the backend baseline is **52 → 49**. This is NOT the stale-`api.d.ts` problem 14-03 documented — that one is real and separate.
+
+PRIOR (14-03): Wave 3 done — the doc scope is REAL and is enforced by the SERVER, and SC1's "drill in" half exists. **`voice.startSession({callId, docRef?})` is the TRUST BOUNDARY**, not 14-07's picker: the doc must exist, be this tenant's, be `status:"ready"` and carry non-blank `text`, else it throws `voicedoc: document not found` (missing/cross-tenant, fail-closed) or `voicedoc: document not ready`. Validation runs FIRST — before the parallel-session guard and before the insert — so a rejected doc can never leave an `active` row holding a watchdog (asserted: no active session, nothing scheduled). The thrown message is a STATUS, never content. With no `docRef` the row and the audit payload are BYTE-IDENTICAL to the Phase-6 path (pinned by an exact `JSON.stringify` equality). **`voiceDoc.searchDocument({sessionId, query}) -> {passages, found}`** answers a mid-call question from THAT report alone: the document id is read off the SESSION ROW — the model supplies only free text and the browser only a session id, so **there is no document parameter to poison**. It reuses the frozen Phase-10 `vaultGroundHydrated` (whose `namespace = tenantId` is the BETA-05 linchpin) instead of reading the book-sized `vaultDocuments.text` or forking chunk selection, drops every hit that is not `docRef`, and caps at `RETRIEVAL_MAX_PASSAGES` (3) / `RETRIEVAL_CHAR_CAP` (1,200). **It NEVER throws** — a missing/foreign/ended/unscoped session and any unexpected error all return `{passages:[], found:false}`, because a missing `function_call_output` leaves the model waiting and the user hearing silence inside a capped 15 minutes (Pitfall 5). **SC4 starts clean:** exactly ONE `audit.log` call site in the module (`grep -c` = 1), `voicedoc.searched` with payload `{sessionId, queryHash, resultCount}` — keys asserted EXACTLY, `queryHash` asserted to be a 64-hex digest and not the query, serialized rows asserted free of the report's words and of the `SMOKE::` sentinel; no `agentSteps`/`telemetry`/`deadLetters`. **BETA-05 proven ANTI-VACUOUSLY:** tenant A searching tenant B's doc id gets nothing and names B nowhere in the log plane — AND the same seed IS retrievable from tenant B's own session, so the empty result is a tenant boundary, not a malformed fixture. **OPEN QUESTION 2 RESOLVED:** `@convex-dev/rag` 0.7.5 DOES support per-entry filters (`filterNames` + `filterValues` + `filters`, verified against the installed types), but they are unusable today — `vaultRag.ts` declares no `filterNames`, `embedDoc` passes `vaultDocId` as UNINDEXED `metadata`, and filters only match entries INSERTED with them, so adopting one is a shared-instance change plus a re-embed MIGRATION. Shipped post-hoc filtering with the honest ceiling and BOTH upgrade paths in a `ponytail:` comment; explicitly NOT a cache (ADR-005 time-cap-only). Gates: voiceDoc 9/9 (was 2), voice 12/12 (was 8), backend **508/509** (baseline held, +11 new green; sole red the documented pre-existing `audit.test.ts` auditCounts row), backend `tsc --noEmit` exactly 52 pre-existing test-file errors (+0 new, 0 non-test), web typecheck exit 0, `check-playbooks` exit 0, frozen files (`llm.ts`/`evaluations.ts`/`deliverApprovedPlan.ts`/`vaultGround.ts`/`schema.ts`/`run-eval-golden.mjs`) ZERO diff this plan.
+
+**DEVIATION worth carrying (14-03):** the plan's `key_links` row `voice.ts -> internal.vault.getDoc` is UNMET and cannot be met. `vault.getDoc` THROWS on cross-tenant (it never returns null, as the plan claimed) and returns `{text, contentHash, title}` with **no `status`**, so it structurally cannot answer the readiness half; the only query carrying `status` (`getDocForExtraction`) carries no `text`. `startSession` is a `tenantMutation` with direct `ctx.db` access, so it reads the row once using this file's OWN existing idiom (`endSessionClean:183` / `abortSession:221` / `recordUsage:276` all do `if (!s || s.tenantId !== ctx.tenantId) throw`). Behavior guaranteed and tested; the link is not.
+
+**ENV (14-03):** `convex/_generated/api.d.ts` in this worktree was copied at 14-01 and predates `voiceDoc.ts`, so `api.voiceDoc` did not typecheck. `npx convex codegen` still REFUSES here (no `CONVEX_DEPLOYMENT`, confirmed again incl. `--typecheck disable`). Hand-added the two lines codegen emits (`import type * as voiceDoc …` + `voiceDoc: typeof voiceDoc;`) — the file is gitignored so it never entered a commit. **Every new Convex module in this worktree needs that two-line manual registration until someone runs `npx convex dev` once.** The same staleness is the source of the pre-existing `voiceToken.test.ts mintClientSecret` errors inside the 52 — do not chase those.
+
+PRIOR (14-02): Wave 2 done — `@pikar/voice` now owns the ENTIRE doc-discussion domain, so Success Criterion 2's honesty rule is provable in a 3-second pure test run instead of only through a live call. Landed: **`buildDocDigest`** — the one place document text enters an `instructions` field: `DIGEST_CHAR_CAP` is enforced on the DOCUMENT SLICE (title/truncation-disclosure/fence/safety chrome is NOT charged to it, so the budget means the same thing whatever the title is), the text is wrapped in `DIGEST_FENCE_OPEN`/`DIGEST_FENCE_CLOSE`, and a planted fence marker collapses to a strictly SHORTER non-empty literal — shorter so sanitizing can never push a cap-length slice back over the cap, non-empty so a split marker can never re-assemble. A truncated read discloses that BEFORE the fence opens; empty/whitespace-only text says so plainly and still fences. §5 boundary held: the digest emits document FACTS plus exactly ONE safety line (a fence with no stated rule is not a fence); every behavioural instruction stays in the `document-analyst` registry body. **`shapeDocReview`** — the honesty rule as code, not prompt: `findings.length === 0` FORCES `gaps = []` and `verdict = "insufficient"`; findings with zero gaps ⇒ `healthy`; else `gaps`. A finding whose `section`/`confidence` falls outside the closed `DOC_REVIEW_SECTIONS`/`DOC_REVIEW_CONFIDENCE` taxonomies is DROPPED, never coerced — which is what stops garbage from flipping `insufficient` into `healthy` by the back door. Citations (`citationDocId`/`citationTitle`/`source:"vault"`), `route`, `playbook` and a dense 1-based `leverageRank` are welded from the `doc` arg and module constants regardless of anything the model sent; `RawDocReview` has no such field to invent. `citationExcerpt` is the ONE model-authored citation input: trimmed, whitespace-collapsed, capped at `EXCERPT_CHAR_CAP`, and **the KEY IS OMITTED** when missing/null/empty/whitespace-only — never `""`. Provenance (is the quote really in the report?) is 14-05's job, where the text is in hand. **`composeDocMemo`** — one vault artifact, no second brief builder: built ON `composeBrief`, then the review fills the three headers the client brief leaves unused (SUMMARY = verdict, DISCUSSION = cited findings, OPEN QUESTIONS = notEnoughData), gaps beneath under a plain `GAPS` label that is DELIBERATELY not a `BRIEF_HEADERS` entry (that set is what `planSeedFromBrief` uses to find section boundaries in BOTH brief flavors — widening it silently changes how existing Phase-6 briefs parse). An absent excerpt renders NOTHING (no empty quote line). **`realtime.ts`** gained `REALTIME_FUNCTION_CALL` / `SESSION_TOOL_KEYS` / `TOOL_CHOICE_AUTO` with NO new event name — the relay triggers off the already-live-verified `responseDone` — plus a dated, blank-until-verify decision record for the mint-time-vs-`session.update` tool-declaration branch. Gates: voice **56/56** (was 36), backend **497/498** (baseline held; sole red the documented pre-existing `audit.test.ts` auditCounts row), backend `tsc --noEmit` exactly 52 pre-existing test-file errors (+0 new), web typecheck exit 0, `check-playbooks` exit 0. Zero deviations; `llm.ts` / `evaluations.ts` / `deliverApprovedPlan.ts` / `run-eval-golden.mjs` byte-unchanged this plan.
+
+PRIOR (14-01): Wave 0/1 done — Phase 14's whole share of the freeze is on the lane branch and is mergeable to `main`. Landed: `evaluations.framework` widened with `"document-review"` (human-readable ON PURPOSE — `buildMemo` prints it verbatim as user-visible memo prose, and it is DELIBERATELY absent from `FRAMEWORK_SKILL` so `runEvaluation` can never treat a doc review as a business evaluation); `evaluations.findings[].citationExcerpt` optional (the persisted half of the LOCKED citation decision — absent is a VALID non-degraded state, never an empty string; capped at `EXCERPT_CHAR_CAP` 300 and substring-verified before write; §4-ILLEGAL in every audit/deadLetters/telemetry payload and in agentSteps); `voiceSessions.docRef` optional, no index. `cards.tsx`'s `FRAMEWORK_LABEL` entry landed in the SAME commit — that map is `Record<Evaluation["framework"], string>`, so splitting them is an instant web-typecheck red. **KEY DEVIATION (user-approved Option A):** the plan's research premise "widening the schema needs ZERO edits to `evaluations.ts`" was FALSE — `evalFields.framework` feeds TWO signatures, `insertEvaluation` (:139, which does widen for free) and `runEvaluation` (:161, which must not). `runEvaluation`'s framework arg is now explicitly PINNED to the four business frameworks, which refuses a doc-review row at the VALIDATOR BOUNDARY rather than only at the `FRAMEWORK_SKILL` lookup — strictly stronger than the planned guarantee. Do not "simplify" it back. `proactiveReview.ts:79` correspondingly never carries a doc-review framework into the weekly review. `insertEvaluation`, the local `Framework` type, `FRAMEWORK_SKILL`, `buildMemo`, `llm.ts`, `deliverApprovedPlan.ts`, `GATED_SKILLS` and `run-eval-golden.mjs` are all byte-unchanged (verified by diff). Recorded as an authorized exception in `PARALLELIZATION.md`. Also landed: `@pikar/voice/docSession.ts` (the whole pure contract surface — framework literal, `voiceDocThreadId` DERIVED not stored, the FLAT Realtime `SEARCH_DOCUMENT_TOOL`, the digest/retrieval/excerpt caps, code-owned gap routing) with 10 assertions; `voiceDoc.ts` as a zero-export lane-owned stub (V8 runtime, no `use node`); `voiceDoc.test.ts` proving the widened schema-derived validator actually accepts `document-review`; `smoke:seedVoiceDocSession` seeding TWO asymmetric findings (one quoted, one NOT) so the SC3 e2e exercises both render paths; `voice-doc.spec.ts` with the verbatim `voice.spec.ts` harness behind one `test.fixme`; `watch.json` registrations (note `voice.ts` does NOT prefix-match `voiceDoc.ts`); and the `document-analyst` persona as the 5-file mirror, seeded **UNGATED** (locked user decision — `run-eval-golden.mjs` hard-validates `--skill` against a closed list and cannot drive a Realtime voice persona, so gating would deadlock it at v1 on its first body edit). Gates: full monorepo suite green (core 195/195, voice 36/36, contracts 14/14, backend **497/498** — sole red the documented pre-existing `audit.test.ts` auditCounts row, up from the 494/495 baseline by 3 new green), backend `tsc --noEmit` 0 non-test errors / exactly 52 pre-existing test-file ones (+0 new), web typecheck exit 0, `check-playbooks` exit 0.
+
+**ENV NOTE for the next Lane-C session:** this worktree had no `node_modules` (ran `pnpm install`) and has **no `CONVEX_DEPLOYMENT`**, so `npx convex codegen` REFUSES to run here. `convex/_generated/` was copied from the main worktree (gitignored, never committed) — sufficient because generated `dataModel.d.ts` derives from `../schema`, so schema edits flow through without a regen. Redo both steps, or run `npx convex dev` once to give this worktree its own deployment (which the lane contract wants before any live smoke anyway).
+
+PRIOR (Phase 13, 3/4 plans — 13-04 still open): Wave 3 done. BEVL-03 is now visible end to end — the cron's rows have a surface. `/dashboard/workspace` always shows a PINNED, non-closable "Weekly review" tab: `REVIEW_TAB` is seeded straight into `useState<Tab[]>([REVIEW_TAB])`, which is also what makes the `?thread=proactive-review` notification deep-link dedupe for free (`openThread` already skips ids it is showing). The tab drops both its `×` and the `has-close` class, and `closeTab` refuses the id. Selecting it renders a one-line explainer INSTEAD of `ChatPane` — the review thread is synthetic (no `plans` row), so `sendCockpitMessage` would throw `cockpit: plan row missing for thread` (cockpit.ts:93); the composer is suppressed and that backend guard was deliberately NOT loosened (it protects every real thread). The review branch precedes the gmail-status branch on purpose, so a user who never connected Gmail still sees it (SC#2 at the surface). `EvaluationCard` gained four review-ONLY branches and is still one dumb read of one `byThread` row: a pre-first-run empty state gated on the query RESOLVING to `null` (`undefined` is loading — no flash), a dated `Weekly review · MMM D ·` header prefix (the date IS the freshness signal, so no unread dot/badge), a `deltaLine()` "what changed" line off the PERSISTED `evaluation.delta` with zero terms omitted (nothing renders on an all-zero delta or an on-demand row), and a `/dashboard/profile` CTA inside the thin-data box — the one action that unblocks the one dead-end state, at `--teal-900` because BRAND §6 forbids `--teal-600` as small text. `NotificationsBanner` gained `KIND_HREF`, an OPT-IN kind→href map (absent kind ⇒ today's plain text; hrefs are code-owned constants, never row data), routing `weekly_review` over the existing VOIC-04 `?thread=` deep-link — no new route, no new component, no component library. Gates: web typecheck + `check-playbooks` exit 0, backend 494/495 unchanged (this plan touched zero backend files). PRIOR (13-02): the spine. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
 
 **CARRY-FORWARD RESOLVED (13-02):** the repeat-run provenance collapse is **CLOSED** — option (b), not a fresh weekly thread. A date-derived thread id was rejected because `lastForThread` is indexed on `(tenantId, threadId)`: rotating it resets the Scorecard weekly, re-asks answered figures (breaking Phase-12's LOCKED store half), makes `delta` permanently `undefined`, and leaves 13-03 with no stable "the review thread" to render. Root cause instead: `provenance` is rebuilt from the corpus every run and never persisted, but `fillVault` returned EARLY when the slot was already carried — skipping the CITATION, not just the write. Now the VALUE is first-write-wins and the CITATION is re-recorded on every restatement (`!provenance.has(path)` keeps a `user-provided` cite from being downgraded); the two upstream short-circuits (`currentOffers.length === 0`, the `FINANCIAL_PATTERNS` `continue`) are gone. Regression-guarded by `proactiveReview.test.ts > notifies only on change` (run 2 must have the SAME finding count and an empty delta) — confirmed RED before the fix.
 
@@ -690,6 +839,10 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.1 P05 | 16min | 3 tasks | 17 files |
 | Phase 15.1 P06 | 19min | 3 tasks | 9 files |
 | Phase 15.1 P07 | 22min | 3 tasks | 5 files |
+| Phase 14 P01 | ~140 min | 3 tasks | 21 files |
+| Phase 14 P02 | ~20 min | 3 tasks | 5 files |
+| Phase 14 P03 | ~25 min | 3 tasks | 5 files |
+| Phase 14 P04 | ~18 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -784,6 +937,21 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.1]: 15.1-07: the closing beat costs a SECOND converse call — nextSlot is derived from the PRE-merge slots, so the turn that completes the set is still under 'obtain <last fact>' and its reply is an acknowledgement, not a beat
 - [Phase 15.1]: 15.1-07: commit order is saveFacts THEN commitProfile and it is load-bearing — commitProfile reads the tier row to splice the projection and refuses without it
 - [Phase 15.1]: 15.1-07: the SC#1c scan gained a POSITIVE row (the BEHAVIOR_PRESETS group must still be present) so 'no tier control' cannot be satisfied by a page with no controls at all
+- [Phase 14]: 14-01: runEvaluation's framework arg is PINNED, not schema-derived — the research premise 'widening the schema needs zero edits to evaluations.ts' was FALSE. evalFields.framework feeds TWO signatures: insertEvaluation (widens for free, correct) and runEvaluation (must not). The pin refuses a doc-review row at the VALIDATOR BOUNDARY, not merely at the FRAMEWORK_SKILL lookup — stronger than planned. Authorized exception recorded in PARALLELIZATION.md; do not simplify back to evalFields.framework.
+- [Phase 14]: 14-01: document-analyst persona seeded UNGATED (locked user decision, overrides 14-CONTEXT.md) — run-eval-golden.mjs drives runCockpitAgent over TEXT fixtures and hard-validates --skill against a closed name list, so it structurally cannot exercise a Realtime voice persona; gating would deadlock the skill at v1 on its first body edit. Follows voice-session/voice-brief precedent. GATED_SKILLS and run-eval-golden.mjs byte-unchanged.
+- [Phase 14]: 14-01: the voice-doc evaluations thread is the DERIVED synthetic id voiceDocThreadId(sessionId) = 'voice-doc:<sessionId>', never a stored second column — PostCall, actOnGap and byThread all recompute it, so a stored copy cannot drift. citationExcerpt is optional-by-design: an absent excerpt is a valid non-degraded state and the render path branches on presence.
+- [Phase 14]: 14-02: composeDocMemo fills the three BRIEF_HEADERS composeBrief leaves unused (SUMMARY=verdict, DISCUSSION=cited findings, OPEN QUESTIONS=notEnoughData) instead of inventing headers; GAPS is a plain label and is DELIBERATELY not added to BRIEF_HEADERS, because that set is what planSeedFromBrief uses to find section boundaries in BOTH Phase-6 brief flavors — widening it silently changes how existing briefs parse. No second brief builder was written.
+- [Phase 14]: 14-02: buildDocDigest neutralizes a planted fence marker with a strictly SHORTER, NON-EMPTY literal — shorter so sanitizing can never push a cap-length slice back over DIGEST_CHAR_CAP, non-empty so a split/nested marker can never re-assemble into a real one. The cap is measured on the DOCUMENT SLICE only; title/disclosure/fence/safety chrome is not charged to it, so the budget means the same thing whatever the title is.
+- [Phase 14]: 14-02: the doc-review verdict is a CODE rule in shapeDocReview, never asked of the model — zero findings FORCES gaps=[] + insufficient, findings-with-no-gaps is healthy, else gaps. A finding outside DOC_REVIEW_SECTIONS/DOC_REVIEW_CONFIDENCE is DROPPED not coerced, which is what stops garbage from flipping insufficient into healthy. Tests pair findings>0 with gaps===0 and the verdict, because gaps===0 alone also passes vacuously on insufficient (the Phase-12 anti-vacuous lesson).
+- [Phase 14]: 14-02: no new Realtime event name for tool calling — the relay triggers off the already-live-verified responseDone 'response.done', which now also carries response.output[] function calls, so a rename breaks in ONE place. The tool-DECLARATION branch (mint-time tools vs a session.update fallback) is genuinely undecided and is recorded in realtime.ts as a dated, BLANK-until-live-verify decision line; 14-04 implements mint-time first and whoever runs the live verify fills the line in.
+- [Phase 14]: 14-03: startSession is the TRUST BOUNDARY for the doc scope — it validates docRef (exists / this tenant's / status ready / non-blank text) BEFORE any write, so a rejected doc never leaves an active row holding a watchdog. Uses a direct ctx.db.get + tenantId compare (voice.ts's own endSessionClean/abortSession idiom), NOT internal.vault.getDoc: that query THROWS on cross-tenant (never returns null) and carries no status field, so it structurally cannot answer the readiness half. Thrown messages are a STATUS, never content.
+- [Phase 14]: 14-03: searchDocument takes NO document parameter — the scope is read off the SESSION ROW, so a prompt-injected 'search document X' has nothing to steer. The model supplies only free text; the browser only a session id; identity rides the authenticated Convex client via tenantAction.
+- [Phase 14]: 14-03: searchDocument NEVER throws — a missing/foreign/ended/unscoped session and any unexpected error all return {passages:[],found:false}. A thrown relay produces no function_call_output, which leaves the model waiting and the user hearing silence for the rest of a turn inside a capped 15 minutes (Pitfall 5). The collector returns [] rather than throwing, which is also what lets exactly ONE audit call site cover both the hit and the miss path.
+- [Phase 14]: 14-03 (Open Question 2 RESOLVED): @convex-dev/rag 0.7.5 DOES support per-entry filters (filterNames + filterValues + filters, verified against installed types) but they are unusable today — vaultRag.ts declares no filterNames, embedDoc passes vaultDocId as UNINDEXED metadata, and filters only match entries INSERTED with them. Adopting one = shared-instance change + re-embed migration. Shipped post-hoc doc filtering with the honest ceiling (a top-K search across the whole vault can miss this doc's best passage — the f5c279e defect shape) and both upgrade paths named in a ponytail: comment. Explicitly NOT a cache: voice cost control is time-cap-only (ADR-005).
+- [Phase 14]: 14-04: the MINT is the FIRST trust boundary in wall-clock order — the browser mints BEFORE it has a session row (useVoiceSession.ts:269 -> handshake -> startSession), so mintClientSecret re-validates docId itself and throws the SAME two strings startSession does (voicedoc: document not found / not ready), before any request leaves Convex. Not a redundant second check.
+- [Phase 14]: 14-04: the document read is a module-local voiceToken.docForMint internalQuery, NOT internal.vault.getDoc — that query returns {text,contentHash,title} with no status and no extractionTruncated, so it can answer neither the readiness refusal nor the truncation disclosure (the same wrong plan premise 14-03 hit). Widening the shared Phase-10 query would touch vault.ts, outside this plan's files_modified/ownership row and watched by vault.md. docForMint returns null on missing/cross-tenant so the MINT owns the message.
+- [Phase 14]: 14-04 (Open Question 3): BOTH branches shipped, the answer still blank. Mint-time tools first (server-owned, races nothing); on a 400 ONLY, an automatic re-POST of the identical body minus tools/tool_choice returning toolsAtMint:false. A 500 still throws first time and does NOT re-POST — a SHAPE fallback, not a retry policy. toolsAtMint is transport control (not a secret, not document content) and is trivially true on an unscoped mint so 14-06's branch stays one line. The dated LIVE-VERIFIED ____-__-__ line in realtime.ts stays BLANK until 14-09's live call.
+- [Phase 14]: 14-04: exactly ONE tool, READ-ONLY, is the tool-SET containment — asserted by length 1 plus the absence of a 'function' key (FLAT Realtime shape). The digest sits in the SYSTEM instructions field, a materially stronger prompt-injection exposure than ADR-006's tool-RETURN case, so the three containments are the fence + its one safety line, this tool set, and the human Approve gate. Upgrade path named in a ponytail: block — move the digest to a first conversation.item.create user-role message, at the cost of first-second fluency.
 
 ### Pending Todos
 
@@ -817,4 +985,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 Last session: 2026-07-26T15:44:14.245Z
 Stopped at: Completed 15.1-07-PLAN.md (both surfaces — the conversation and the facts; phase 15.1 complete)
+Last session: 2026-07-25T22:23:43.857Z
+Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
 Resume file: None

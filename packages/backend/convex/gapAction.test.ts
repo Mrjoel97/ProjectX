@@ -7,6 +7,12 @@
 //      vault doc and the plan goes terminal WITHOUT seeding a single `requests` row (i.e. it never
 //      enters the gmail fan-out — deliverApprovedPlan/gmail.send are structurally unreachable).
 import { serializeProfile } from "@pikar/core";
+import {
+  DOC_GAP_PLAYBOOK,
+  DOC_GAP_ROUTE,
+  DOC_REVIEW_FRAMEWORK,
+  voiceDocThreadId,
+} from "@pikar/voice";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -226,5 +232,154 @@ describe("memo terminal (approving a memo SAVES it — it is never an email)", (
     expect(requests).toHaveLength(0); // …and neither did the workflow arm
     const after = await asT.query(api.plans.byThread, { threadId: THREAD });
     expect(after?.status).toBe("proposed"); // no CAS flip, no terminal
+  });
+});
+
+// ── 14-08: SC3 — the voice-doc gap crosses the SAME Approve gate ──────────────────────────────
+//
+// Phase 14's whole claim is that the synthetic `voice-doc:<sessionId>` thread is a FIRST-CLASS
+// citizen of this existing spine, not a parallel one: no new proposal store, no second gate, no
+// forked memo builder. These tests are what make that claim checkable.
+//
+// Written against the OUTCOME (a `proposed` `kind:"memo"` plan, and no `requests` row) rather than
+// against `actOnGap`'s internals, deliberately: Lane A's Phase 15 splits `actOnGap` into two
+// terminals, routing gaps whose `route` names a REGISTERED specialist to a dispatch instead of a
+// memo. `DOC_GAP_ROUTE` ("document-analyst") is not in that registry, so a voice-doc gap keeps
+// taking the memo branch — and asserting the outcome means these tests survive that merge
+// regardless of how the branch is implemented.
+describe("actOnGap on a voice-doc thread (DOCV-01 / SC3)", () => {
+  const DOC_THREAD = voiceDocThreadId("session_voicedoc_1");
+
+  /** A document-review row with one gap, welded exactly as `shapeDocReview` welds it. */
+  async function seedDocReview(t: ReturnType<typeof convexTest>): Promise<void> {
+    const vaultDocId = await seedDoc(t, "Quarterly report. Churn rose in month two.");
+    await t.mutation(internal.evaluations.insertEvaluation, {
+      tenantId: TENANT,
+      threadId: DOC_THREAD,
+      framework: DOC_REVIEW_FRAMEWORK,
+      findings: [
+        {
+          label: "Churn concentrates in month two",
+          section: "pattern",
+          citationDocId: vaultDocId,
+          citationTitle: "Quarterly report",
+          citationExcerpt: "Churn rose in month two.",
+          confidence: "high",
+          // "vault", not "grounded" — the schema union is `vault | user-provided`, and it is exactly
+          // what `shapeDocReview` welds. The fixture must mirror the real writer, not paraphrase it.
+          source: "vault",
+        },
+      ],
+      gaps: [
+        {
+          label: "No owner is named for retention",
+          leverageRank: 1,
+          route: DOC_GAP_ROUTE,
+          playbook: DOC_GAP_PLAYBOOK,
+          citationDocId: vaultDocId,
+          reason: "The report states the problem but never says who acts on it",
+          proofMetric: "A named owner and a review date",
+        },
+      ],
+      notEnoughData: [],
+      scorecard: [],
+      userProvided: [],
+      verdict: "gaps",
+    });
+  }
+
+  test("a tapped voice-doc gap becomes a PROPOSED memo-plan", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedDocReview(t);
+
+    const res = await asT.mutation(api.evaluations.actOnGap, {
+      threadId: DOC_THREAD,
+      gapIndex: 0,
+    });
+
+    expect(res.ok).toBe(true);
+    const plan = await asT.query(api.plans.byThread, { threadId: DOC_THREAD });
+    expect(plan?.kind).toBe("memo");
+    expect(plan?.status).toBe("proposed");
+  });
+
+  test("the Approve gate is INTACT — nothing is executed before the human approves", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedDocReview(t);
+
+    await asT.mutation(api.evaluations.actOnGap, { threadId: DOC_THREAD, gapIndex: 0 });
+
+    const plan = await asT.query(api.plans.byThread, { threadId: DOC_THREAD });
+    // Not approved, not delivering — the plan is PARKED at the gate.
+    expect(plan?.status).toBe("proposed");
+    expect(["approved", "delivering", "delivered"]).not.toContain(plan?.status);
+    // And nothing was staged for the delivery fan-out. This is the assertion that would catch a
+    // voice-doc gap accidentally being wired to a send path.
+    const requests = await t.run(async (ctx) => await ctx.db.query("requests").collect());
+    expect(requests).toHaveLength(0);
+  });
+
+  test("a second tap REUSES the one plan row, never inserts a second", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedDocReview(t);
+
+    const first = await asT.mutation(api.evaluations.actOnGap, {
+      threadId: DOC_THREAD,
+      gapIndex: 0,
+    });
+    const second = await asT.mutation(api.evaluations.actOnGap, {
+      threadId: DOC_THREAD,
+      gapIndex: 0,
+    });
+
+    // A second tap on a still-`proposed` plan SUCCEEDS by recycling that row — correct behaviour:
+    // changing your mind about which gap to act on must restage the memo, not be refused. What must
+    // never happen is a SECOND row, because `plans.byThread` is a `.unique()` read and a duplicate
+    // would make every later read of the thread THROW, not merely show the wrong thing.
+    expect(second.ok).toBe(true);
+    const plans = await t.run(async (ctx) => await ctx.db.query("plans").collect());
+    expect(plans).toHaveLength(1);
+    expect(first.ok && second.ok && first.planId === second.planId).toBe(true);
+    // Still parked at the gate after the recycle.
+    const plan = await asT.query(api.plans.byThread, { threadId: DOC_THREAD });
+    expect(plan?.status).toBe("proposed");
+  });
+
+  test("an IN-FLIGHT plan is refused — staging a memo never clobbers a send", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedDocReview(t);
+    await asT.mutation(api.evaluations.actOnGap, { threadId: DOC_THREAD, gapIndex: 0 });
+
+    // Drive the plan past the gate, as an approval would.
+    await t.run(async (ctx) => {
+      const p = await ctx.db.query("plans").first();
+      if (p) await ctx.db.patch(p._id, { status: "delivering" });
+    });
+
+    const res = await asT.mutation(api.evaluations.actOnGap, {
+      threadId: DOC_THREAD,
+      gapIndex: 0,
+    });
+
+    expect(res).toEqual({ ok: false, reason: "plan_busy" });
+  });
+
+  test("a cross-tenant caller cannot act on the gap (BETA-05)", async () => {
+    const t = newTest();
+    await seedDocReview(t);
+
+    const res = await t
+      .withIdentity({ subject: "tenant_b" })
+      .mutation(api.evaluations.actOnGap, { threadId: DOC_THREAD, gapIndex: 0 });
+
+    // Reads as "no such gap" — the same answer a genuinely missing gap gives, so the response is
+    // not an ownership oracle.
+    expect(res.ok).toBe(false);
+    const plans = await t.run(async (ctx) => await ctx.db.query("plans").collect());
+    expect(plans).toHaveLength(0);
   });
 });

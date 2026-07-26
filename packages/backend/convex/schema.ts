@@ -329,6 +329,13 @@ export default defineSchema({
       v.literal("lean"),
       v.literal("bmc"),
       v.literal("growth-os"),
+      // Phase 14 (DOCV-01). The literal is HUMAN-READABLE on purpose and is not a free choice:
+      // `evaluations.ts buildMemo` prints "Diagnosed on the **${row.framework}** framework" as
+      // user-visible prose inside an approvable memo. "document-review" reads correctly there;
+      // a slug like "docrev" does not. Deliberately absent from `FRAMEWORK_SKILL` in
+      // evaluations.ts — an unmapped literal is what keeps `runEvaluation` from ever accepting
+      // a doc-review row.
+      v.literal("document-review"),
     ),
     // Cited observations — content-plane, never audited. `source` distinguishes a grounded vault
     // fact from a user-provided figure (honest provenance); a user-provided finding has no docId.
@@ -338,6 +345,16 @@ export default defineSchema({
         section: v.string(), // framework quadrant/section (e.g. "identity", "financials")
         citationDocId: v.optional(v.string()), // absent for a user-provided finding
         citationTitle: v.string(),
+        // The second half of 14-CONTEXT.md's LOCKED citation decision — document-level citation
+        // ALWAYS, plus a quoted passage WHERE AVAILABLE. `optional` is load-bearing: an absent
+        // excerpt is a valid, non-degraded state, never an error and never an empty string. The
+        // value is capped (`EXCERPT_CHAR_CAP`) and substring-verified against the document text
+        // before it is written (`shapeDocReview` in `@pikar/voice`, `reviewDocument` in
+        // `voiceDoc.ts`) — never trusted raw from a model.
+        // §4: an excerpt IS report content. It may live HERE (the product surface) and must NEVER
+        // reach an `audit` / `deadLetters` / `telemetry` `payload:` or an `agentSteps` row — plan
+        // 14-09 pins that with a mutation-verified static scan.
+        citationExcerpt: v.optional(v.string()),
         confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
         source: v.union(v.literal("vault"), v.literal("user-provided")),
       }),
@@ -671,6 +688,9 @@ export default defineSchema({
     textOutTok: v.number(),
     language: v.optional(v.string()), // auto-detected spoken language → brief generated in it
     briefRef: v.optional(v.id("vaultDocuments")), // the stored brief once generated (VOIC-03)
+    // The ONE report under discussion (DOCV-01); optional so existing rows need no migration.
+    // No index: the field is read through the existing `ctx.db.get(sessionId)`.
+    docRef: v.optional(v.id("vaultDocuments")),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse

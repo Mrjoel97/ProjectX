@@ -325,6 +325,27 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     expect(src).not.toMatch(/from\s+["']\.\/llm["']/);
   });
 
+  test("pdf-lib is a STATIC import — a dynamic import() collapses to { default } in the Convex bundle", () => {
+    // ROOT CAUSE of the scanned-PDF failure ("extract_error: Cannot read properties of undefined
+    // (reading 'load')" on a live 12-page image-only PDF, 2026-07-26). pdf-lib ships
+    // `main: cjs/index.js` with NO `exports` map, so it resolves to its CJS build. Convex bundles
+    // node actions with esbuild `platform: node, format: "esm", splitting: true` — and across a
+    // dynamic-import CHUNK boundary esbuild cannot synthesize a CJS module's named exports, so the
+    // namespace carries ONLY `default`. `const { PDFDocument } = await import("pdf-lib")` therefore
+    // destructures to undefined and `PDFDocument.load(...)` throws. Node/vitest read the named
+    // exports out of the CJS source via cjs-module-lexer, so this is INVISIBLE offline — the
+    // Pitfall-1 class of bug where only the deployed run proves it.
+    // A STATIC import is resolved at bundle time and works (llm.ts does exactly this in production
+    // for markdownToPdf). unpdf may stay dynamic: it is ESM-only, so its namespace has real
+    // named exports.
+    expect(src, "pdf-lib must NOT be dynamically imported").not.toMatch(
+      /import\(\s*["']pdf-lib["']\s*\)/,
+    );
+    expect(src, "pdf-lib must be a STATIC top-level import").toMatch(
+      /^import\s*\{[^}]*\bPDFDocument\b[^}]*\}\s*from\s*["']pdf-lib["'];?$/m,
+    );
+  });
+
   test("hosted call carries the extractVisual shape verbatim (skill system, gpt-4o-mini, timeout, retries, spend)", () => {
     for (const needle of [
       'openai("gpt-4o-mini")',

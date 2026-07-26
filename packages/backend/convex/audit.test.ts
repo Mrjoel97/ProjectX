@@ -1,16 +1,25 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+// `audit.log` maintains the auditCounts aggregate (audit.ts:40), so the component must be
+// registered or the REAL insert path throws `Component "auditCounts" is not registered`. Relative
+// import — the package blocks the deep specifier. Same idiom as evaluations/gapAction/gmail tests.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
 // *.test.ts so the harness does not try to load the test files themselves.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 // OPSG-02 insert path: internal.audit.log inserts exactly one redaction-safe
 // row whose fields round-trip and whose ts is a number.
 test("audit.log inserts exactly one row that round-trips", async () => {
   const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
 
   const args = {
     tenantId: "tenant_a",

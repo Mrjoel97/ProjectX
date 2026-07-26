@@ -8,8 +8,11 @@ export {
   MINI_REALTIME_MODEL,
   REALTIME_CLIENT_EVENTS,
   REALTIME_EVENTS,
+  REALTIME_FUNCTION_CALL,
   RESPONSE_DONE_USAGE_FIELDS,
   SESSION_CONFIG_KEYS,
+  SESSION_TOOL_KEYS,
+  TOOL_CHOICE_AUTO,
   TRANSCRIPTION_MODEL,
   TURN_DETECTION_TYPE,
   hangupUrl,
@@ -22,3 +25,32 @@ export { CAP_MS, canTransition, capEndsAt, graceExpired, isEnded } from "./sessi
 export type { SessionStatus } from "./session";
 export { ZERO_USAGE, accumulateUsage } from "./metering";
 export type { UsageDelta } from "./metering";
+// Voice-doc discussion (Phase 14, DOCV-01) — the contract surface every downstream plan imports.
+export {
+  DIGEST_CHAR_CAP,
+  DIGEST_FENCE_CLOSE,
+  DIGEST_FENCE_OPEN,
+  DOC_GAP_PLAYBOOK,
+  DOC_GAP_ROUTE,
+  DOC_REVIEW_CONFIDENCE,
+  DOC_REVIEW_FRAMEWORK,
+  DOC_REVIEW_SECTIONS,
+  EXCERPT_CHAR_CAP,
+  PICKER_DOC_SCAN_CAP,
+  RETRIEVAL_CHAR_CAP,
+  RETRIEVAL_MAX_PASSAGES,
+  SEARCH_DOCUMENT_TOOL,
+  VOICE_DOC_THREAD_PREFIX,
+  buildDocDigest,
+  composeDocMemo,
+  shapeDocReview,
+  voiceDocThreadId,
+} from "./docSession";
+export type {
+  DocReviewConfidence,
+  DocReviewSection,
+  RawDocReview,
+  ShapedDocFinding,
+  ShapedDocGap,
+  ShapedDocReview,
+} from "./docSession";

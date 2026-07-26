@@ -55,7 +55,15 @@ Lanes A and B at execution time. When both finish, **merge both branches to `mai
 dirs are disjoint so only `STATE.md` conflicts (resolve by **keeping both**, per the singleton
 rule below).
 
-### Stage 1 — Wave-0 freeze commit on `main` (serial, small, unavoidable)
+### Stage 1 — Wave-0 freeze commit on `main` (serial, unavoidable)
+
+> **⚠ OVERTAKEN 2026-07-25 — read `.planning/WAVE-0.md`'s STATUS banner before acting on this
+> stage.** Both lanes absorbed the freeze into their own phase plans and are executing, so there is
+> no separate Stage-1 freeze commit to land on `main`. `WAVE-0.md` remains the reference for the
+> `evaluations` facts split (per Convex `guidelines.md:159/:160`) and the cron hardening — both now
+> **post-integration** work, not a precondition for Stage 2.
+>
+> Lanes mid-flight: do NOT wait for a Stage-1 commit that is not coming. Carry on to Stage 3.
 
 ONE session, on `main`, reads **both** finished plans and lands **one commit** that:
 
@@ -85,11 +93,11 @@ ownership below is read off the six finished Phase-15 plans, not guessed.
 > under serial execution and is what keeps 15-05's executor work from silently colliding with
 > 15-02/03/04's dispatch work. Phase 14 / Lane C is unaffected.
 
-| Lane | Branch | Plans | Owns (edit freely) | Must NOT touch |
-|------|--------|-------|--------------------|----------------|
-| **A · Dispatch core** | `lane-a/dispatch-core` | 15-02, 15-03, 15-04, 15-06 | `convex/llm.ts`, `convex/dispatch.ts`, `convex/dispatch.test.ts`, `convex/evaluations.ts` (+`.test.ts`), `packages/core/src/specialists*.ts`, `packages/core/src/growth/diagnose.ts`, `convex/skills.ts` seeding, `packages/contracts/skills/` + `packages/contracts/src/skills/`, `scripts/run-eval-golden.mjs` + `scripts/eval-cases/` | `convex/cockpit.ts`, `convex/deliverApprovedPlan.ts`, `packages/core/src/actionType.ts`, `convex/gapAction.test.ts`, `apps/web/**`, any voice file |
-| **B · Executor** | `lane-b/executor-lineage` | 15-05 | `convex/cockpit.ts`, `packages/core/src/actionType*.ts`, `convex/gapAction.test.ts`, `convex/dispatchGuard.test.ts` | `convex/llm.ts` (ZERO edits), `convex/dispatch.ts`, `convex/evaluations.ts`, `apps/web/**`, voice files |
-| **C · Voice-doc** | `lane-c/voice-doc` | Phase 14 | (unchanged) | (unchanged) |
+| Lane | Worktree | Branch | Scope | Owns (edit freely) | Must NOT touch |
+|------|----------|--------|-------|--------------------|----------------|
+| **A · Dispatch core** | `.worktrees/lane-a-dispatch` | `lane-a/dispatch-core` | Phase 15 SC #1, #2 | `convex/llm.ts` (route → specialist skill+tool-set swap, depth cap, cycle refusal, shared cost envelope), specialist skill rows in `convex/skills.ts` + `packages/contracts` | executor files, any voice file |
+| **B · Executor + lineage** | `.worktrees/lane-b-executor` | `lane-b/executor-lineage` | Phase 15 SC #4, #3, #5 | `convex/deliverApprovedPlan.ts`, `convex/plans.ts`, audit/telemetry lineage rows, the cross-tenant isolation assertion | `convex/llm.ts` (zero edits), voice files |
+| **C · Voice-doc flagship** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | Phase 14 (all SC) | `convex/voice.ts`, the new voice-doc module, `apps/web/app/(app)/dashboard/voice/*`, read-only use of `convex/evaluations.ts` **except the ONE authorized exception below** | `convex/llm.ts`, executor files |
 
 **Contract amendments recorded with this finalization (15-01):**
 
@@ -116,6 +124,18 @@ ownership below is read off the six finished Phase-15 plans, not guessed.
   `requests` rows by design). Stage 1 item (1)'s "lineage fields" turned out to be a no-op — SC #3
   needs zero schema change. What Stage 1 item (1) DID need was the three `agentSteps.tool` dispatch
   literals.
+
+**Authorized exception to Lane C's read-only use of `convex/evaluations.ts` (approved 2026-07-25,
+plan 14-01).** The Wave-0 schema widening (`evaluations.framework` += `"document-review"`) could not
+be "zero edits to `evaluations.ts`" as the Phase-14 research assumed: `evalFields.framework` is
+derived from the schema and feeds **two** signatures — `insertEvaluation` (:139), which SHOULD widen
+for free, and `runEvaluation` (:161), which must not. Lane C therefore pinned `runEvaluation`'s
+`framework` arg to the four business frameworks, so the business-evaluation engine refuses a
+doc-review row at the validator boundary. Same change forced one line in `convex/proactiveReview.ts`
+(:79 carries the persisted framework forward into that now-narrower arg). `insertEvaluation`, the
+local `Framework` type (:44), `FRAMEWORK_SKILL` (:48) and `buildMemo` are byte-unchanged, as is
+`convex/llm.ts` (its `evaluateBusiness` enum is hardcoded, not schema-derived). **Any other lane
+touching `evaluations.ts` or `proactiveReview.ts` coordinates first.**
 
 **Per-worktree setup, once, at Stage 2 only:** `pnpm install` → `npx convex dev` (codegen + its
 own dev deployment) → `pnpm dev`. Each lane gets an isolated deployment, which is what lets a

@@ -167,7 +167,17 @@ export const runEvaluation = internalAction({
   args: {
     tenantId: v.string(),
     threadId: v.string(),
-    framework: v.optional(evalFields.framework),
+    // DELIBERATELY PINNED, NOT DERIVED — do not "simplify" this back to `evalFields.framework`.
+    // Phase 14 widened `evaluations.framework` with the voice-doc `"document-review"` literal, and
+    // `evalFields` feeds TWO signatures: insertEvaluation's write surface (:139, which SHOULD widen
+    // for free) and this engine entrypoint (which must NOT). A doc-review row is written straight
+    // through insertEvaluation by `voiceDoc.ts`; it has no rubric skill and no diagnose() path, so
+    // runEvaluation must refuse it at the VALIDATOR BOUNDARY — not merely at the FRAMEWORK_SKILL
+    // lookup below (14-RESEARCH Pitfall 2). Deriving it here also breaks `const chosen: Framework`
+    // at the type level. Approved deviation 2026-07-25 (14-01); recorded in PARALLELIZATION.md.
+    framework: v.optional(
+      v.union(v.literal("swot"), v.literal("lean"), v.literal("bmc"), v.literal("growth-os")),
+    ),
     query: v.optional(v.string()),
     withDelta: v.optional(v.boolean()),
   },

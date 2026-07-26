@@ -61,6 +61,18 @@ export const VOICE_SESSION_SKILL = "voice-session" as const;
 /** Registry name of the voice-brief structuring skill (VOIC-03 — the toolless call-to-brief writer). */
 export const VOICE_BRIEF_SKILL = "voice-brief" as const;
 
+/**
+ * Registry name of the voice-doc document-analyst persona (DOCV-01 — the realtime
+ * "discuss this report" system prompt).
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (locked user decision 2026-07-25, following
+ * the voice-session / voice-brief precedent). `run-eval-golden.mjs` drives `runCockpitAgent` over
+ * text fixtures and hard-validates `--skill` against a closed name list; it structurally cannot
+ * exercise a Realtime voice persona, so gating this would deadlock the skill at v1 on its first
+ * body edit with no runner able to clear the gate.
+ */
+export const DOCUMENT_ANALYST_SKILL = "document-analyst" as const;
+
 /** Registry name of the business-profile extraction skill (ONBD-02 — onboarding intake→Lean-core profile). */
 export const BUSINESS_PROFILE_SKILL = "business-profile" as const;
 

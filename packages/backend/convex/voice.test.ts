@@ -5,9 +5,6 @@
 import { CAP_MS } from "@pikar/voice";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import schema from "./schema";
 // Register the components the voice spine touches offline (vaultTranscribe.test.ts set): rateLimiter
 // (recordUsage → recordSpend), auditCounts (audit.log aggregate), workflow + workpool (storeBrief →
 // ingestDoc). Durable workflow steps do NOT run synchronously — `status: "processing"` on the brief
@@ -17,17 +14,28 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_voice_session";
 const FAKE_KEY = "sk-voice-test-key";
@@ -73,7 +81,9 @@ test("startSession persists the callId, marks active, and arms ONE watchdog at s
   try {
     const t = setup();
     const t0 = Date.now();
-    const { sessionId } = await asTenant(t).mutation(api.voice.startSession, { callId: "call_abc" });
+    const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+      callId: "call_abc",
+    });
 
     const s = await get(t, sessionId);
     expect(s?.status).toBe("active");
@@ -266,6 +276,104 @@ test("storeBrief drafts via the SMOKE transcript and ingests a kind:brief vault 
   expect(again).toEqual({ vaultDocId });
 });
 
+// ── 14-03 Task 1: startSession's optional, ownership-and-status-validated docRef (DOCV-01) ──────
+//
+// The server is the TRUST BOUNDARY for the doc scope, not the UI (14-07's picker is a courtesy):
+// the CONTEXT decision "never burn capped 15-minute time discussing a document the agent cannot
+// actually see" is only TRUE if startSession refuses. A rejected doc must also never leave an
+// `active` row holding a watchdog — validation runs before any write.
+
+/** Seed a vault doc for the docRef tests. `status`/`text`/`tenantId` are the three axes validated. */
+function seedDoc(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    tenantId?: string;
+    status?: "processing" | "ready" | "failed" | "pending_extraction" | "extracting";
+    text?: string;
+  } = {},
+) {
+  return t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: opts.tenantId ?? TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "seam",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: `hash_${Math.random().toString(36).slice(2)}`,
+      text: opts.text ?? "Churn rose to 9% in Q3, concentrated in the self-serve tier.",
+      status: opts.status ?? ("ready" as const),
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+test("startSession persists a READY, tenant-owned docRef and audits it as a ref (never the title/text)", async () => {
+  const t = setup();
+  const docRef = await seedDoc(t);
+
+  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+    callId: "call_doc",
+    docRef,
+  });
+
+  expect((await get(t, sessionId))?.docRef).toBe(docRef);
+
+  // The session_started payload may gain the docRef (an id IS a ref) and NOTHING else (§4).
+  const started = await audits(t, "voice.session_started");
+  const payload = JSON.stringify(started[0]?.payload);
+  expect(payload).toContain(docRef);
+  expect(payload).not.toContain("Q3 Performance Report"); // no title
+  expect(payload).not.toContain("Churn rose"); // no document text
+  expect(payload).not.toContain("call_doc"); // still never the callId-as-secret
+});
+
+test("startSession REFUSES a non-ready document and leaves no active session behind", async () => {
+  const t = setup();
+  const asT = asTenant(t);
+
+  for (const status of ["processing", "extracting", "pending_extraction", "failed"] as const) {
+    const docRef = await seedDoc(t, { status });
+    await expect(
+      asT.mutation(api.voice.startSession, { callId: "call_x", docRef }),
+    ).rejects.toThrow(/voicedoc: document not ready/);
+  }
+  // A ready doc with no extracted text is equally undiscussable.
+  const empty = await seedDoc(t, { text: "   " });
+  await expect(
+    asT.mutation(api.voice.startSession, { callId: "call_x", docRef: empty }),
+  ).rejects.toThrow(/voicedoc: document not ready/);
+
+  // No row was left `active` holding a watchdog, and nothing was scheduled.
+  expect(await t.query(internal.voice.getActiveSession, { tenantId: TENANT })).toBeNull();
+  expect(await listScheduled(t)).toHaveLength(0);
+});
+
+test("startSession REFUSES another tenant's document (fail-closed, no cross-tenant scope)", async () => {
+  const t = setup();
+  const foreign = await seedDoc(t, { tenantId: "tenant_other" });
+
+  await expect(
+    asTenant(t).mutation(api.voice.startSession, { callId: "call_x", docRef: foreign }),
+  ).rejects.toThrow(/voicedoc: document not found/);
+  expect(await t.query(internal.voice.getActiveSession, { tenantId: TENANT })).toBeNull();
+});
+
+test("startSession with NO docRef is byte-equivalent to the Phase-6 path (docRef stays absent)", async () => {
+  const t = setup();
+  const { sessionId } = await asTenant(t).mutation(api.voice.startSession, {
+    callId: "call_plain",
+  });
+
+  const s = await get(t, sessionId);
+  expect(s?.status).toBe("active");
+  expect(s?.docRef).toBeUndefined(); // absent, not null — the row shape is unchanged
+  expect(s?.watchdogFnId).toBeDefined();
+  const payload = JSON.stringify((await audits(t, "voice.session_started"))[0]?.payload);
+  expect(payload).toBe(JSON.stringify({ sessionId })); // exactly the Phase-6 payload
+});
+
 test("recordUsage accumulates the counters and prices the delta onto spend; a bad count fails closed", async () => {
   const t = setup();
   const sessionId = await seedActive(t, "call_meter");
@@ -279,7 +387,7 @@ test("recordUsage accumulates the counters and prices the delta onto spend; a ba
     textOutTok: 20,
   });
   expect(r1).toEqual({ ok: true });
-  let s = await get(t, sessionId);
+  const s = await get(t, sessionId);
   expect(s?.inAudioTok).toBe(100);
   expect(s?.outAudioTok).toBe(200);
   expect(s?.textInTok).toBe(10);
@@ -306,4 +414,91 @@ test("recordUsage accumulates the counters and prices the delta onto spend; a ba
   });
   expect(bad).toEqual({ ok: false });
   expect((await get(t, sessionId))?.inAudioTok).toBe(before?.inAudioTok); // unchanged — no negative counter
+});
+
+// ── 14-08: SC3 — ONE artifact per voice-doc session, whichever path was taken ──────────────────
+//
+// The CONTEXT decision is that a user should find exactly ONE new thing in their vault after a
+// voice-doc session — not a brief AND a memo, and not two memos because the call dropped and the
+// watchdog also stored one. This is that decision as a test. It holds because the doc branch reuses
+// the SAME `storeBrief`/`briefRef` spine as Phase 6 rather than adding a second write path, so the
+// idempotence was inherited, not re-implemented — these assertions pin that it stays inherited.
+test("a doc-scoped session leaves exactly ONE brief artifact, across repeat stores", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+  const vaultDocId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "upload",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: "hash_docscoped_one_artifact",
+      text: "Churn rose in month two.",
+      status: "ready" as const,
+      createdAt: Date.now(),
+    }),
+  );
+  const sessionId = await seedActive(t, "call_doc_one_artifact", "en");
+  await t.run((ctx) => ctx.db.patch(sessionId, { docRef: vaultDocId }));
+
+  const transcript = [
+    { speaker: "user", text: "SMOKE::route=direct_llm:: what does the report say about churn?" },
+    { speaker: "assistant", text: "Churn concentrates in month two." },
+  ];
+  const first = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+  const second = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+
+  // Same doc back both times — `briefRef` is the idempotence key, so a re-store (a re-click, or a
+  // race between this and the watchdog's auto-store) can never mint a second artifact.
+  expect(second).toEqual(first);
+  const briefs = await t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "brief"),
+  );
+  expect(briefs).toHaveLength(1);
+  expect((await get(t, sessionId))?.docRef).toBe(vaultDocId); // the doc scope survives the store
+});
+
+test("the ABNORMAL end of a doc-scoped session also leaves exactly one", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+  const vaultDocId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "upload",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: "hash_docscoped_abnormal",
+      text: "Churn rose in month two.",
+      status: "ready" as const,
+      createdAt: Date.now(),
+    }),
+  );
+  const sessionId = await seedActive(t, "call_doc_abnormal", "en");
+  await t.run((ctx) => ctx.db.patch(sessionId, { docRef: vaultDocId }));
+
+  // Store once (the auto-store a dropped call performs), then mark the session abnormally ended and
+  // store again — the shape of "the call dropped, then the watchdog fired".
+  const stored = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [{ speaker: "user", text: "SMOKE::route=direct_llm:: quick question" }],
+    language: "en",
+  });
+  await t.run((ctx) => ctx.db.patch(sessionId, { status: "ended_abnormal" as const }));
+  const again = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [{ speaker: "user", text: "SMOKE::route=direct_llm:: quick question" }],
+    language: "en",
+  });
+
+  expect(again).toEqual(stored);
+  const briefs = await t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "brief"),
+  );
+  expect(briefs).toHaveLength(1);
 });

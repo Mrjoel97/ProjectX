@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { bmcSkillBody } from "./bmc";
+import { documentAnalystSkillBody } from "./documentAnalyst";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
 import { leanCanvasSkillBody } from "./leanCanvas";
@@ -38,6 +39,8 @@ const bodies: [string, string][] = [
   // the drift row matters most here, because `converse` fails CLOSED on an unseeded row: a stale
   // derived constant seeds a stale prompt rather than a loud error.
   ["onboarding-agent", onboardingAgentSkillBody],
+  // Phase 14 (DOCV-01) — the voice-doc persona rides the same drift guard.
+  ["document-analyst", documentAnalystSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

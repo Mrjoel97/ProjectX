@@ -22,6 +22,7 @@ import {
   isGatedSkill,
   LEAD_ENGINE_SKILL,
   LEAN_CANVAS_SKILL,
+  DOCUMENT_ANALYST_SKILL,
   type LoadedSkill,
   MONEY_MODEL_DESIGNER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
@@ -40,6 +41,7 @@ import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachment
 import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
+import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalyst";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
@@ -272,6 +274,11 @@ export const seedSkills = internalMutation({
       { name: VOICE_SESSION_SKILL, body: voiceSessionSkillBody },
       // UNGATED (RESEARCH OQ3): its output is a vault document, not tool-state.
       { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
+      // UNGATED (14-01, DOCV-01): the voice-doc "discuss this report" persona. Same reason as
+      // voice-session above — run-eval-golden.mjs drives runCockpitAgent over text fixtures and
+      // hard-validates --skill against a closed name list, so it structurally cannot exercise a
+      // Realtime voice persona; gating would deadlock this skill at v1 on its first body edit.
+      { name: DOCUMENT_ANALYST_SKILL, body: documentAnalystSkillBody },
       // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
       { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
       // UNGATED (15.1-06, Q6): the conversational onboarding system prompt (design §6). Same
