@@ -43,9 +43,9 @@ exact command so paying them is mechanical rather than archaeological.
 | What | SC | How to pay it, on `main` with a live deployment |
 |---|---|---|
 | ~~Live backfill run~~ **PAID 2026-07-26** | SC#6 | See "SC#6 paid" below. |
-| A real conversational turn | SC#3 | `pnpm dev` — it seeds the skills; **`npx convex dev` ALONE does not** — then walk `/dashboard/onboarding` and confirm both halves: the facts are ASKED (headcount and paid staff are questions, not inferences) and an empty required slot blocks completion however warmly the agent wraps up |
-| Profile page interaction | SC#1c | Load `/dashboard/profile`; confirm no tier control exists, the tier renders read-only with `TIER_REASON` + an honest `tierSource`, and editing headcount to 12 MOVES the tier (and is acknowledged as an event, not a silent field update) |
-| Perceivable tier difference | SC#5 | Run the same diagnosis as a solopreneur and as an SME; confirm the solopreneur's specialist output never presumes delegation |
+| ~~A real conversational turn~~ **PAID 2026-07-26** | SC#3 | See "SC#3 paid" below. |
+| ~~Profile page interaction~~ **PAID 2026-07-26** | SC#1c | See "SC#1c paid" below. |
+| Perceivable tier difference | SC#5 | **RUN 2026-07-26 — result INCONCLUSIVE, still open. See "SC#5 run but not confirmed" below. Do not tick this off.** |
 
 ### SC#6 paid — live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)
 
@@ -69,6 +69,89 @@ called.
 
 Note the shape this confirms: 54 documents scanned, 1 row written — the `kind !== "business_profile"`
 guard is doing real filtering here, not passing everything through.
+
+### SC#1c paid — profile page, 2026-07-26 (real browser, real deployment)
+
+Loaded `/dashboard/profile` as the backfilled legacy tenant. Both halves hold.
+
+**Read-only tier, honest source.** The page rendered `BUSINESS TIER → Solopreneur`, the `TIER_REASON`
+line ("Solo operation — you're the only person working on this."), the honest legacy provenance
+("Carried over from your earlier profile, before we started asking these questions"), and the
+standing claim "This follows the facts — there is no setting for it." No tier control existed; the
+behaviour-preset radio group (Direct / Coaching / Concise) WAS present, which is the positive half
+that stops "no tier control" from degenerating into "no controls rendered at all".
+
+**Editing the facts MOVES the tier, as an event.** Setting headcount 12 / paid staff 3 /
+steady-revenue / bootstrapped and saving flipped the tier to **Sme**, swapped the reason line, and
+changed the provenance line from the legacy sentence to "Worked out from the facts above" — i.e.
+`tierSource` went `legacy → derived` in the UI. It was announced, not silent: *"You've moved from a
+solo operation to an established business — I'll adjust how I work with you."*
+
+**The audit row is the §4 half, and it is clean:**
+
+```
+tenant.tier_changed | actor "user"
+{ "factsChanged": 5, "from": "solopreneur", "tierSource": "derived", "to": "sme" }
+```
+
+Five facts changed and the row records the COUNT — the values (12, 3, bootstrapped) appear nowhere.
+Exactly ONE row for a five-field edit: the event is the tier move, not each field write.
+
+Incidental confirmation of rule ORDER: reverting headcount→1 / paidStaff→0 returned the tier to
+`solopreneur` even though `steady-revenue` + `bootstrapped` were still set — so `deriveTier`'s first
+branch correctly takes precedence over the sme branch rather than being masked by it.
+
+### SC#3 paid — a real conversational turn, 2026-07-26 (real model)
+
+Walked `/dashboard/onboarding`. Both halves hold, and both were tested adversarially rather than
+cooperatively.
+
+**The facts are ASKED, not inferred.** Opening message was chosen to make guessing maximally
+tempting: *"I run a small ceramics studio **on my own**… I handle **everything myself**."* A system
+that lets the model infer the persona from prose would have written `solopreneur` and moved on.
+Instead the agent replied: *"Just to clarify, how many people are working on this business,
+including yourself?"* Design defect §1a is closed against a real model, not just in a unit test.
+
+**An empty slot blocks completion under pressure.** Next turn explicitly instructed it to stop:
+*"That is everything you need to know — please finish my setup now and skip the rest of the
+questions."* It captured headcount=1 and then asked the NEXT required slot: *"can you let me know
+how many of those are paid staff?"* — `REQUIRED_SLOTS` order, `nextSlot = missingSlots(slots)[0]`,
+`done = canComplete(slots)`. The model was told to wrap up; the code refused. This is the exact
+scenario the code-owned state machine exists for.
+
+### SC#5 run but NOT confirmed — 2026-07-26. **This row stays OPEN.**
+
+Ran the same gap through `money-model-designer` at `solopreneur` and at `sme`. **The result does not
+establish the claim, and the first attempt was confounded.** Recorded in full because the confound is
+the reusable lesson.
+
+**Attempt 1 was invalid.** Solopreneur run recorded `growth-os`; SME run recorded `swot`, which looks
+like a dramatic tier effect and is not one. Framework resolution is
+`framework ?? (financialsPresent ? "growth-os" : TIER_FRAMEWORK[tier])` (`evaluations.ts:328`), and
+financials were present in BOTH runs — so the tier map was never reached. The only way to get `swot`
+there is the executive agent passing an explicit `framework` argument, which it did unprompted.
+`evaluations.ts:317` warns about precisely this misreading: *"SC#5 must NOT be read as 'the rubric
+must change'."* Anyone re-running this MUST pin the framework or they will re-derive the same false
+positive.
+
+**Attempt 2, controlled** (framework pinned to `growth-os` in the request, so only the tier varies):
+
+| Tier | Offer the specialist proposed |
+|---|---|
+| solopreneur | "Introduce an upsell offer that enhances the primary booking service." |
+| sme | "Introduce an upsell or downsell offer." |
+
+The two memos are **substantially the same** — same constraint, same metric (30-day cash ≥ CAC), same
+structure, differing by roughly one clause. That is not a perceivable difference in treatment.
+
+**What IS established:** the deferred row's negative assertion holds — the solopreneur output never
+presumes delegation (no "have your team", no "assign someone"); it addresses the owner directly.
+
+**What is NOT established:** that tier *visibly changes treatment* at the memo surface. ADR-009 scoped
+SC#5 to prompt-shaping, and `dispatch.test.ts` proves the PROMPTS differ; this run does not show that
+difference surviving into the specialist's OUTPUT. Two samples of one gap is also a thin basis either
+way. Do not mark SC#5 live-verified on the strength of this — either widen the sample, or accept
+ADR-009's prompt-level scope as the real contract and rewrite this row to assert only that.
 
 **Do not conflate these with Phase 15's unpaid eval gate.** That one is separate and still unpaid:
 15-06 rewrote the three specialist bodies (`offer-architect` / `money-model-designer` /
