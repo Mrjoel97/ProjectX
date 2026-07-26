@@ -115,6 +115,7 @@ This project has a knowledge graph at graphify-out/ with god nodes, community st
 
 Rules:
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- This applies to EVERY agent, not just the main session: any subagent with Bash (GSD planners/executors, Explore, general-purpose) MUST run `graphify query`/`explain`/`path` to locate code BEFORE Read/Grep/Glob over source. Read raw files only for the specific spans the graph points at. Subagents re-pay full context cost per spawn, so skipping the graph there is where the token budget actually leaks.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost),
