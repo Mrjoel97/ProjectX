@@ -32,9 +32,10 @@ import {
   TIERS,
 } from "@pikar/core";
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
-import type { DatabaseReader } from "./_generated/server";
-import { internalQuery } from "./_generated/server";
+import type { DatabaseReader, MutationCtx } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import schema from "./schema";
 
@@ -80,6 +81,42 @@ const byTenant = (db: DatabaseReader, tenantId: string): Promise<TpDoc | null> =
 /** Drop `undefined` keys so a partial write never patches a field to absent by accident. */
 const definedOnly = <T extends object>(o: T): T =>
   Object.fromEntries(Object.entries(o).filter(([, val]) => val !== undefined)) as T;
+
+/** The tier facts, in `REQUIRED_SLOTS` order minus the narrative slot this module does not own. */
+const FACT_KEYS = ["headcount", "paidStaff", "revenueStage", "funding", "yearsOperating"] as const;
+
+/**
+ * Design §9's *"a tier change is a MOMENT, not a setting"* on the LOG plane. It rides the existing
+ * insert-only `internal.audit.log` — there is deliberately NO `tierHistory` table: the audit table
+ * already IS the append-only log, and a second one is a second thing to keep honest (the 15-03
+ * `subAgentRuns` non-decision, same reasoning).
+ *
+ * The payload is FOUR keys and they are all enums or a COUNT (the `populatedFieldCount` precedent,
+ * onboarding.ts:182-189). **Never put a fact VALUE here** (CLAUDE.md §4): `headcount` is arguably
+ * just a count, but `revenueStage`/`funding` are business-sensitive and a tenant's staffing numbers
+ * are precisely what §4 exists to keep out of the log. The test asserts the sorted KEY SET, so an
+ * added key fails there rather than shipping a honeypot.
+ */
+const TIER_CHANGED_EVENT = "tenant.tier_changed";
+
+async function logTierChange(
+  ctx: MutationCtx,
+  a: {
+    tenantId: string;
+    from: Tier | null;
+    to: Tier;
+    tierSource: TierSource;
+    factsChanged: number;
+  },
+): Promise<void> {
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: a.tenantId,
+    correlationId: crypto.randomUUID(),
+    eventType: TIER_CHANGED_EVENT,
+    actor: "user",
+    payload: { from: a.from, to: a.to, tierSource: a.tierSource, factsChanged: a.factsChanged },
+  });
+}
 
 /**
  * The tenant's tier row, read WITHOUT an identity. Its callers are `internalAction`s
@@ -181,6 +218,60 @@ export const saveFacts = tenantMutation({
       await ctx.db.patch(existing._id, { ...write, tier, tierSource, derivedAt: Date.now() });
     }
 
+    // How many fact fields THIS call actually moved — a COUNT, never a value.
+    const factsChanged = FACT_KEYS.filter(
+      (k) => args[k] !== undefined && args[k] !== existing?.[k],
+    ).length;
+
+    if (changed) {
+      await logTierChange(ctx, {
+        tenantId: ctx.tenantId,
+        from: existing?.tier ?? null,
+        to: tier,
+        tierSource,
+        factsChanged,
+      });
+    }
+
     return { tier, tierSource, changed };
+  },
+});
+
+/**
+ * D6 — enterprise is NEVER derived; it is GRANTED. `requireOwner` (GOVN-01) does not land until
+ * Phase 22 and is a recorded open blocker, so this is an `internalMutation` with NO public API
+ * surface at all (the `actOnGapInternal` precedent) — an operator invokes it directly:
+ *
+ *   npx convex run tenantProfile:grantEnterprise '{"tenantId":"..."}'
+ *
+ * Deliberately NOT a `tenantMutation`, no UI, no route: a fourth tenant-callable pseudo-admin
+ * function would DEEPEN the Phase-22 blocker (three already exist — STATE.md's Blockers section).
+ * D6 holds by construction regardless of who can call this, because `deriveTier`'s return type
+ * structurally excludes `"enterprise"`. **GOVN-01 IS NOT CLOSED BY THIS PHASE.**
+ *
+ * The grant leaves the facts untouched and makes `tierSource: "admin"` — which `saveFacts` treats
+ * as STICKY, so a later tenant facts edit cannot undo it.
+ */
+export const grantEnterprise = internalMutation({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<SaveFactsResult> => {
+    const existing = await byTenant(ctx.db, tenantId);
+    const grant = { tier: "enterprise", tierSource: "admin", derivedAt: Date.now() } as const;
+    const changed = existing?.tier !== grant.tier;
+
+    if (existing) await ctx.db.patch(existing._id, grant);
+    else await ctx.db.insert("tenantProfiles", { tenantId, ...grant });
+
+    if (changed) {
+      await logTierChange(ctx, {
+        tenantId,
+        from: existing?.tier ?? null,
+        to: grant.tier,
+        tierSource: grant.tierSource,
+        factsChanged: 0, // a grant moves no facts
+      });
+    }
+
+    return { tier: grant.tier, tierSource: grant.tierSource, changed };
   },
 });

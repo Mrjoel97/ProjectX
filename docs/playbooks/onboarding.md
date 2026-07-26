@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` (see "The `saveFacts` contract" below). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
@@ -245,6 +245,21 @@ cannot see:
 
 ## Operational notes
 
+- **Grant an enterprise tier (D6, Q4)** — `enterprise` is NEVER derived, only granted:
+  ```
+  npx convex run tenantProfile:grantEnterprise '{"tenantId":"<tenantId>"}'
+  ```
+  It is an `internalMutation` with **no public API surface at all** — no `tenantMutation`, no UI, no
+  route. It is deliberately *un-permissioned but unreachable*: `requireOwner` / **GOVN-01 is Phase 22
+  and is NOT closed by this phase**, and adding a fourth tenant-callable pseudo-admin function would
+  deepen that blocker. A granted enterprise **survives a later tenant facts edit** (`tierSource:
+  "admin"` is sticky in `saveFacts`), and D6 holds regardless of who can call the grant because
+  `deriveTier`'s return type structurally excludes `"enterprise"`.
+- **A tier move emits `tenant.tier_changed`** on the existing insert-only `internal.audit.log` —
+  payload is exactly `{ from, to, tierSource, factsChanged }`, four enums/counts and **no fact
+  values** (§4). There is deliberately no `tierHistory` table: the audit table already IS the
+  append-only log. An unchanged tier writes no event (`derivedAt` may still be refreshed — the
+  timestamp records when the RULE last ran, the event records when the ANSWER moved).
 - Seed dependency: a fresh deployment must run `seedSkills` (local `convex dev --run skills:seedSkills`,
   prod `npm run seed`) or the extraction action dead-letters `NO_ACTIVE_SKILL: business-profile`.
 - The profile vault doc reuses the vault ingest smoke seam (`SMOKE::<docId>`) for offline tests.

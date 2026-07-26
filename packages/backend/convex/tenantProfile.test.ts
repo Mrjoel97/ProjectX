@@ -299,7 +299,8 @@ describe("the tier change event (SC#5c)", () => {
 
     const rows = await tierChangedRows(t);
     expect(rows).toHaveLength(1);
-    expect((rows[0]?.payload as Record<string, unknown>).from).toBe("solopreneur");
+    const payload = rows[0]?.payload as Record<string, unknown>;
+    expect(payload.from).toBe("solopreneur");
     expect((await rowFor(t, TENANT_A))?.tierSource).toBe("derived");
   });
 });
