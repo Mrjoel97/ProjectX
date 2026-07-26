@@ -54,7 +54,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **S2 - Breadth of Action**
 - [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
  (completed 2026-07-25)
-- [ ] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md`
+- [x] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md` (completed 2026-07-26)
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
