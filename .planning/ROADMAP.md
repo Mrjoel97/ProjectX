@@ -41,14 +41,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 *Defined 2026-07-24. Grow the governed email cockpit into a broadly-capable AI chief-of-staff, then open the invite-only beta on top of it. Dependency-ordered staircase S1->S4; every v2.0 requirement maps to exactly one phase (24/24 covered). Phases 1-9 above are shipped v1.0 history - not renumbered.*
 
 **S1 - Foundation & Intelligence**
-- [x] **Phase 10: Vault->Agent Grounding** - The agent finally reads the vault mid-conversation via a governed `searchVault` tool (the root dependency everything else grounds on) (completed 2026-07-24)
-- [x] **Phase 11: Persona Onboarding & Business Profile** - Guided first-run persona detection (solopreneur/startup/SME) + business/idea intake -> structured profile in the vault (completed 2026-07-24)
-- [x] **Phase 12: Business Evaluation Engine** - On-demand grounded assessment (SWOT/Lean/BMC) + gaps -> governed action proposals + honest "no gaps" (completed 2026-07-25)
-- [x] **Phase 13: Proactive In-App Review** - Scheduled recurring in-app business review, using no OAuth mailbox token (completed 2026-07-25)
+- [x] **Phase 10: Vault->Agent Grounding** - The agent finally reads the vault mid-conversation via a governed `searchVault` tool (the root dependency everything else grounds on)
+ (completed 2026-07-24)
+- [x] **Phase 11: Persona Onboarding & Business Profile** - Guided first-run persona detection (solopreneur/startup/SME) + business/idea intake -> structured profile in the vault
+ (completed 2026-07-24)
+- [x] **Phase 12: Business Evaluation Engine** - On-demand grounded assessment (SWOT/Lean/BMC) + gaps -> governed action proposals + honest "no gaps"
+ (completed 2026-07-25)
+- [x] **Phase 13: Proactive In-App Review** - Scheduled recurring in-app business review, using no OAuth mailbox token
+ (completed 2026-07-25)
 - [ ] **Phase 14: Flagship Voice-Doc Workflow** - Upload a report -> discuss by voice -> grounded insights/patterns/gaps -> memo or gap-bridging plan
 
 **S2 - Breadth of Action**
-- [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides) (completed 2026-07-25)
+- [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
+ (completed 2026-07-25)
 - [ ] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md`
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
@@ -561,9 +566,16 @@ Plans:
   2. The tier lives in a queryable, indexed tenant-profile table with `tierSource` + `derivedAt`, not string-matched out of markdown (defect 1d); a malformed doc can no longer silently reclassify a tenant as solopreneur.
   3. Onboarding asks the determining facts (headcount/paid staff) instead of letting an LLM guess the persona from prose (defect 1a); a required slot cannot be left empty.
   4. The audit row reflects what actually happened — the hardcoded `personaConfirmed: true` on edits is gone (an insert-only log must not assert a confirmation that never occurred, CLAUDE.md §3).
-  5. Tier visibly changes treatment: agent voice/framing and which specialists are offered off a diagnosis (D5); a tier change is surfaced as an event, not a silent setting.
+  5. Tier visibly changes treatment: agent voice/framing and which specialists are offered off a diagnosis (D5); a tier change is surfaced as an event, not a silent setting. **Scoped by ADR-009 (owner decision Q2, 2026-07-26): `diagnose()` emits exactly ONE prescription, so there is no candidate set to filter — SC#5 ships as PROMPT-SHAPING (tier + agent name + behaviour-preset directive ride into the specialist's prompt). A verifier must NOT read it as "the offer set is filtered" or "the rubric pick changes"; widening `diagnose()` is deferred with an ADR.**
   6. Existing tenants backfill as `tierSource: "legacy"` with no forced re-onboarding (§10).
-**Plans**: TBD
+**Plans**: 7 plans in 6 waves (Wave-0 freeze first; runs SERIALLY in `.worktrees/lane-a-dispatch` — no lanes, no merges)
+- [ ] 15.1-01-PLAN.md — Wave-0 freeze: pure tier rules in @pikar/core (deriveTier + slot gate + agent-name sanitizer), the `tenantProfiles` table, watch.json registration, ADR-009
+- [ ] 15.1-02-PLAN.md — `convex/tenantProfile.ts`: the record, derive-on-write, the tier-change audit event, the operator-only enterprise grant, the resumable legacy backfill
+- [ ] 15.1-03-PLAN.md — The subtraction: no tier argument in `vProfile`, tier spliced from the table into the markdown projection, truthful audit rows, both pill sets deleted, the SC#1c source scan
+- [ ] 15.1-04-PLAN.md — `evaluations.ts` picks its rubric from the table; `personaHint` deleted (defect 1d closed on the read side)
+- [ ] 15.1-05-PLAN.md — Tier → treatment: three UNGATED behaviour-preset style skills, pure `tierBriefing`, wired into the dispatched specialist's prompt (ADR-009: prompt-shaping, not an offer-set filter)
+- [ ] 15.1-06-PLAN.md — Conversational onboarding: the `onboarding-agent` skill + a `generateObject` slot-filler where code owns the state machine (Q1)
+- [ ] 15.1-07-PLAN.md — apps/web: the conversational onboarding surface + the profile facts form with a read-only tier and its reason
 
 ### Phase 16: Research Sub-Agent & Web Research
 **Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
