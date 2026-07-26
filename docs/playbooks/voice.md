@@ -61,6 +61,18 @@
 >
 > Prior: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
 > `document-analyst` persona row only.
+> Verified 2026-07-26 (14-10, real sweep, not a prediction): `npx vitest run --root
+> packages/backend --maxWorkers=1 convex/voiceDoc.test.ts` — 1 file, 29/29 GREEN (includes 6
+> new `pickableDocs` cases: ready-only + newest-first projection, non-ready excluded-from-list
+> but counted as processing, `failed` neither listed nor counted, an empty-text `ready` row
+> refused, a no-`text`-field `ready` row refused, cross-tenant empty (BETA-05)); `pnpm --filter
+> @pikar/voice test` — 5 files, 57/57 GREEN; `pnpm --filter @pikar/voice typecheck` (`tsc
+> --noEmit`) — clean, zero errors; `pnpm --filter @pikar/web typecheck` (`tsc --noEmit`) —
+> clean, zero errors; `node scripts/check-playbooks.mjs` — exit 0, GREEN. All five commands
+> exited 0; nothing in this plan's scope is red. (The `npx vitest` invocation from a global npx
+> cache failed to resolve `@edge-runtime/vm` and had to be re-run via the package-local
+> `node_modules/.bin/vitest` binary instead — an environment/PATH artifact of this sandbox, not
+> a test failure; the actual suite run is the one recorded above.)
 
 > Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
