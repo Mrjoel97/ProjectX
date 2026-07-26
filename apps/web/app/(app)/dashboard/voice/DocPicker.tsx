@@ -4,11 +4,11 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PaperclipIcon } from "../../../(auth)/icons";
 import { FileTextIcon, SearchIcon, XIcon } from "../vault/icons";
 
-// 14-07 — the pre-flight document picker.
+// 14-10 — the pre-flight document picker.
 //
 // A voice session only becomes doc-scoped when `startSession` receives a `docRef`. Before this
 // existed the ONLY way to get one was arriving from the vault with `?doc=`, so a session started
@@ -24,16 +24,21 @@ import { FileTextIcon, SearchIcon, XIcon } from "../vault/icons";
 // READY DOCUMENTS ONLY, because `startSession` refuses anything else — a row the server will reject
 // must not be offered. Documents still being read are surfaced as ONE quiet count line so a
 // just-uploaded file does not look like it vanished (the confusion that motivated this feature).
+// The chip branch below covers the two cases where a `?doc=` id arrives WITHOUT going through this
+// list (a stale link, or one followed before extraction finished) — it must never claim readiness
+// the server hasn't confirmed.
 //
-// Reads `voiceDoc.pickableDocs` (id + title) and `voiceDoc.docContext` (title of the current
-// selection, which also covers the `?doc=` arrival where this component never saw the row). It does
-// NOT read `vault.listVaultDocs`, which `.collect()`s whole rows including `text` — same rule
-// <DocStrip> documents.
+// Reads `voiceDoc.pickableDocs` (id + title) and `voiceDoc.docContext` (title, status and truncated
+// for the current selection, which also covers the `?doc=` arrival where this component never saw
+// the row — the chip logic below keys off `status` so it never asserts a readiness it never
+// checked). It does NOT read `vault.listVaultDocs`, which `.collect()`s whole rows including `text`
+// — same rule <DocStrip> documents.
 //
 // BRAND: tokens only, no component library (§10). §6: real <button>s never nested inside another
-// interactive element, a labelled search input, visible focus, and the selected state is structurally
-// distinct (a chip with a clear control, never the toggle button) with explanatory hint text beneath it,
-// so nothing is encoded by colour alone.
+// interactive element, a labelled search input, visible focus (deliberately moved by hand on the
+// list<->chip transitions below, since the focused element unmounts either way), and the selected
+// state is structurally distinct (a chip with a clear control, never the toggle button) with
+// explanatory hint text beneath it, so nothing is encoded by colour alone.
 
 type DocIdArg = FunctionArgs<typeof api.voiceDoc.docContext>["docId"];
 
@@ -46,6 +51,26 @@ export function DocPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
+
+  // Picking a row or clearing the chip unmounts the very control that had focus (the row `<button>`,
+  // or the chip's ✕), which would otherwise drop a keyboard user onto `<body>` (BRAND §6: visible
+  // focus). `pendingFocusRef` records the INTENT at click time; the effect below has no dependency
+  // array on purpose, so it re-checks after every render (including the extra one `selected` causes
+  // when `docContext` resolves a tick after a pick) and fires the instant its target actually exists
+  // in the DOM, then clears itself. A dep-array effect keyed on `selectedId` would miss the chip
+  // entirely on the common case where it isn't mounted yet on the render right after the pick.
+  const clearBtnRef = useRef<HTMLButtonElement | null>(null);
+  const attachBtnRef = useRef<HTMLButtonElement | null>(null);
+  const pendingFocusRef = useRef<"chip" | "toggle" | null>(null);
+  useEffect(() => {
+    if (pendingFocusRef.current === "chip" && clearBtnRef.current) {
+      clearBtnRef.current.focus();
+      pendingFocusRef.current = null;
+    } else if (pendingFocusRef.current === "toggle" && attachBtnRef.current) {
+      attachBtnRef.current.focus();
+      pendingFocusRef.current = null;
+    }
+  });
 
   const data = useQuery(api.voiceDoc.pickableDocs, {});
   // "skip" is the established idiom on this route (PostCall.tsx) for a query that needs an argument
@@ -62,24 +87,36 @@ export function DocPicker({
     return needle ? docs.filter((d) => d.title.toLowerCase().includes(needle)) : docs;
   }, [data, term]);
 
-  // `undefined` = still loading. Render nothing rather than flashing an empty panel — the same rule
-  // <DocStrip> follows for treating `undefined` and `null` as one "nothing to show yet" state.
-  if (!data) return null;
-
-  // A document is attached: show the chip instead of the list. "Change" reopens the picker.
+  // A document is selected: show the chip instead of the list. There is no "Change" control — only
+  // the ✕, which clears the selection and returns to the attach button below.
   if (selectedId) {
+    // `undefined` = `docContext` hasn't resolved yet. Render nothing rather than a chip that would
+    // have to guess readiness before the server has answered — the same "nothing to show yet" rule
+    // <DocStrip> follows for `undefined`/`null`, now applied to `selected` here too (previously it
+    // was applied only to `data`, which is the bug this fixes).
+    if (selected === undefined) return null;
+
+    // `null` = a cross-tenant, deleted, or otherwise malformed `?doc=` id — there is no document to
+    // attach at all. `status !== "ready"` = a link followed while extraction is still running. Both
+    // are cases `startSession` would refuse (`voicedoc: document not found` / `not ready`), so the
+    // chip must never claim "attached and readable" here — that was the false claim this fixes.
+    const unavailable = selected === null;
+    const notReady = !unavailable && selected.status !== "ready";
+
     return (
       <div style={panelWrap}>
         <div style={chip}>
           <span aria-hidden="true" style={leadingIcon}>
             <FileTextIcon size={16} />
           </span>
-          <span style={chipTitle} title={selected?.title ?? undefined}>
-            {selected?.title ?? "Attached document"}
+          <span style={chipTitle} title={unavailable ? undefined : selected.title}>
+            {unavailable ? "Document unavailable" : selected.title}
           </span>
           <button
+            ref={clearBtnRef}
             type="button"
             onClick={() => {
+              pendingFocusRef.current = "toggle";
               onPick(undefined);
               setOpen(false);
             }}
@@ -89,14 +126,25 @@ export function DocPicker({
             <XIcon size={14} />
           </button>
         </div>
-        <p style={hintText}>The assistant can read this document during the session.</p>
+        <p style={hintText}>
+          {unavailable
+            ? "This document is no longer available. Remove it and pick another below."
+            : notReady
+              ? "This document is still being read — the assistant won't be able to reference it until it's ready."
+              : "The assistant can read this document during the session."}
+        </p>
       </div>
     );
   }
 
+  // `undefined` = still loading. Render nothing rather than flashing an empty panel — the same rule
+  // <DocStrip> follows for treating `undefined` and `null` as one "nothing to show yet" state.
+  if (!data) return null;
+
   return (
     <div style={panelWrap}>
       <button
+        ref={attachBtnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -140,6 +188,7 @@ export function DocPicker({
                       <button
                         type="button"
                         onClick={() => {
+                          pendingFocusRef.current = "chip";
                           onPick(d.docId);
                           setOpen(false);
                         }}

@@ -796,14 +796,14 @@ describe("voiceDoc.docContext (14-07 — the doc strip's read)", () => {
   });
 });
 
-// ── 14-07: pickableDocs — the pre-flight picker's list ────────────────────────────────────────
+// ── 14-10: pickableDocs — the pre-flight picker's list ────────────────────────────────────────
 //
 // The picker may only offer what `voice.startSession` will ACCEPT (ready + non-empty text);
 // offering a row the server refuses would be a lie. Non-ready rows are not listed but ARE counted,
 // so a just-uploaded document does not appear to have vanished — the confusion that motivated this
 // feature. Like docContext, this pins the PROJECTION: a future "just return the row" simplification
 // must fail loudly rather than quietly ship document text to the voice page.
-describe("voiceDoc.pickableDocs (14-07 — the pre-flight picker's read)", () => {
+describe("voiceDoc.pickableDocs (14-10 — the pre-flight picker's read)", () => {
   test("lists only READY documents with text, newest first, as id + title", async () => {
     const t = newTest();
     await seedReadyDoc(t, TENANT, REPORT_TEXT, "Older Report");

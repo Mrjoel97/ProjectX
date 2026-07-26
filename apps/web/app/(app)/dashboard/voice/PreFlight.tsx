@@ -25,7 +25,7 @@ export function PreFlight({
   onStart: () => void;
   starting: boolean;
   error: string | null;
-  // DOCV-01 / 14-07: the optional document under discussion. page.tsx owns this state (it is also
+  // DOCV-01 / 14-10: the optional document under discussion. page.tsx owns this state (it is also
   // where `?doc=` is read), so the picker below only reports a choice upward — it stores nothing.
   docId?: string;
   onPickDoc: (docId: string | undefined) => void;
@@ -184,7 +184,7 @@ export function PreFlight({
         )}
       </div>
 
-      {/* 14-07: attach a vault document before spending capped time. Sits after the mic check and
+      {/* 14-10: attach a vault document before spending capped time. Sits after the mic check and
           before consent so the two pre-flight decisions read in order: can we hear you, and what
           are we talking about. Optional — with no document this stays a Phase-6 general session. */}
       <DocPicker selectedId={docId} onPick={onPickDoc} />

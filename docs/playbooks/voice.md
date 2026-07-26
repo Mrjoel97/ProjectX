@@ -1,7 +1,9 @@
 # Playbook: Live Voice Sessions
 
 > Last verified: 2026-07-26 (14-10 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
-> PRE-FLIGHT (14-10 — the document picker `14-07` deferred).** Owner-reported: "I uploaded the
+> PRE-FLIGHT** (the document picker, once informally called `14-07`, ships here as 14-10 — `14-07`
+> already names the entry-point + in-call-context work recorded below, so the picker could not reuse
+> that number). Owner-reported: "I uploaded the
 > document in the knowledge vault but the agent still cannot access it — it's asking me to upload
 > the document in that voice session."
 > ROOT CAUSE: a session only becomes doc-scoped when `startSession` receives a `docRef`, and the
@@ -28,6 +30,21 @@
 > grounding quality** — an attached document still carries whatever text extraction produced, and
 > the scanned-PDF summary defect remains open in `vault.md` "Known gaps". Spec:
 > `docs/superpowers/specs/2026-07-26-voice-doc-picker-design.md`).
+> Verified 2026-07-26 (14-10, real sweep, not a prediction): `packages/backend/node_modules/.bin/vitest
+> run --root packages/backend --maxWorkers=1 convex/voiceDoc.test.ts` — 1 file, 29/29 GREEN (includes 6
+> new `pickableDocs` cases: ready-only + newest-first projection, non-ready excluded-from-list
+> but counted as processing, `failed` neither listed nor counted, an empty-text `ready` row
+> refused, a no-`text`-field `ready` row refused, cross-tenant empty (BETA-05)); `pnpm --filter
+> @pikar/voice test` — 5 files, 57/57 GREEN; `pnpm --filter @pikar/voice typecheck` (`tsc
+> --noEmit`) — clean, zero errors; `pnpm --filter @pikar/web typecheck` (`tsc --noEmit`) —
+> clean, zero errors; `pnpm --filter @pikar/web build` — GREEN, `Route (app)` still lists
+> `ƒ /dashboard/voice` (Dynamic, not prerendered) — the one gate that catches a prerender/Suspense
+> regression on this route, run by the final whole-plan review and re-confirmed on the fix pass;
+> `node scripts/check-playbooks.mjs` — exit 0, GREEN. All six commands exited 0; nothing in this
+> plan's scope is red. (The `npx vitest` invocation from a global npx cache failed to resolve
+> `@edge-runtime/vm` and had to be re-run via the package-local `node_modules/.bin/vitest` binary
+> instead — an environment/PATH artifact of this sandbox, not a test failure; the actual suite run is
+> the one recorded above.)
 > Prior: 14-09 — SC4 proven statically by EIGHT mutation-verified scans, and this playbook
 > consolidated into one coherent Phase-14 record: see "Voice-doc: the consolidated
 > Phase-14 record" at the end. The live-verify half is still OPEN — the `LIVE-VERIFIED` line in
@@ -61,18 +78,6 @@
 >
 > Prior: 2026-07-25 (14-01 — Wave-0 freeze for the voice-doc flagship). Seams, stubs and the
 > `document-analyst` persona row only.
-> Verified 2026-07-26 (14-10, real sweep, not a prediction): `npx vitest run --root
-> packages/backend --maxWorkers=1 convex/voiceDoc.test.ts` — 1 file, 29/29 GREEN (includes 6
-> new `pickableDocs` cases: ready-only + newest-first projection, non-ready excluded-from-list
-> but counted as processing, `failed` neither listed nor counted, an empty-text `ready` row
-> refused, a no-`text`-field `ready` row refused, cross-tenant empty (BETA-05)); `pnpm --filter
-> @pikar/voice test` — 5 files, 57/57 GREEN; `pnpm --filter @pikar/voice typecheck` (`tsc
-> --noEmit`) — clean, zero errors; `pnpm --filter @pikar/web typecheck` (`tsc --noEmit`) —
-> clean, zero errors; `node scripts/check-playbooks.mjs` — exit 0, GREEN. All five commands
-> exited 0; nothing in this plan's scope is red. (The `npx vitest` invocation from a global npx
-> cache failed to resolve `@edge-runtime/vm` and had to be re-run via the package-local
-> `node_modules/.bin/vitest` binary instead — an environment/PATH artifact of this sandbox, not
-> a test failure; the actual suite run is the one recorded above.)
 
 > Last verified: 2026-07-20 against 06-08 (phase close) + live mint-shape fix (audio.input nesting, `value` response) + transcript-completeness fix (agent turns no longer dropped → brief gaps) + brief is now clean PLAIN TEXT (no `#`/`*`; shared `BRIEF_HEADERS`) + a VISIBLE T-2min wrap-up banner and a deferred (collision-safe) wrap-up nudge + the PostCall "Just save" / "Turn this into a plan" buttons show a busy spinner (the shared `.btn-spinner`, now `currentColor` so it shows on the light button too) + a "…" label while the store/handoff is in flight, so a click reads as working, never stuck + the plan-handoff button renamed "Turn this into a plan" → "Continue with your agent" (honesty: the cockpit agent is an EMAIL composer, so a brief with no recipient/subject correctly draws a clarifying question, not an instant plan — behavior unchanged, expectation aligned; the richer non-email "plan" is logged in `.planning/phases/06-live-voice-sessions/deferred-items.md`)
 > Build history: `.planning/phases/06-live-voice-sessions/` · Related ADRs: [ADR-005](../decisions/005-live-voice-browser-direct-realtime.md) (the architecture record), ADR-004 (brief→plan is the peer-actor Approve gate), ADR-003 (voice prompts load from the skill registry)
@@ -138,8 +143,9 @@ Frontend (06-06): `apps/web/app/(app)/dashboard/voice/` — the `/dashboard/voic
 handshake → relay `call_id` → `startSession`), assembles the two-sided transcript, forwards
 throttled `response.done` usage, drives the countdown + T-2min wrap-up, and runs the
 mic-loss pause/recover + silence expiry. `PreFlight.tsx` (mic permission + level meter +
-consent), `LiveSession.tsx` (transcript + orb + countdown + End confirm + text fallback +
-mic-lost paused banner + a11y).
+consent + the 14-10 `DocPicker`), `DocPicker.tsx` (14-10 — the pre-flight document picker:
+paperclip → searchable ready-only list → chip), `LiveSession.tsx` (transcript + orb + countdown +
+End confirm + text fallback + mic-lost paused banner + a11y).
 
 Post-call surface (06-07): `PostCall.tsx` — the always-available screen both end types land on:
 the brief text (composed client-side from the transcript via `composeBrief` in `@pikar/voice`, no
@@ -841,9 +847,13 @@ the agent comes back grounded. There is deliberately no faked automated proof of
 
 ### The entry point and the in-call context (14-07)
 
-**The vault IS the entry point — by decision.** No new upload surface, no document picker in the
-pre-flight. A ready document in `DocGrid` (and in `PreviewModal`'s footer) links to
-`/dashboard/voice?doc=<id>`. If you are tempted to add a picker, re-read `14-CONTEXT.md` first.
+**The vault IS the PRIMARY entry point — by decision.** A ready document in `DocGrid` (and in
+`PreviewModal`'s footer) links to `/dashboard/voice?doc=<id>`. 14-10 later added the pre-flight
+`DocPicker` as an ADDITIVE second entry point — a ready-only courtesy for a session started from
+`/dashboard/voice` directly, not a gate and not a replacement for the vault path (see "The
+pre-flight picker (14-10)" below). **There is still no upload surface anywhere in the voice
+session** — that part of the original decision holds; the picker only lists documents that were
+already uploaded and extracted through the vault.
 
 **The status gate is the phase's first honesty moment.** `ready` → enabled.
 `processing`/`extracting`/`pending_extraction` → a **real `disabled` button**, never a `Link` with
@@ -945,6 +955,61 @@ can never emit and the spec would have passed against an impossible shape. **A f
 legal row is not a fixture.** Keep the seeded excerpt a verbatim substring of the seeded text, too —
 the producer substring-verifies it.
 
+### The pre-flight picker (14-10)
+
+**An ADDITIVE second entry point, not a replacement.** The vault (`DocGrid` / `PreviewModal` →
+`/dashboard/voice?doc=<id>`) remains the PRIMARY way in. Before 14-10, a session started directly
+from `/dashboard/voice` had no way to name a document at all and left the agent with no vault
+reach. `DocPicker.tsx` closes that gap with a paperclip toggle → searchable ready-only list → chip,
+threaded through `page.tsx`'s existing `docId` state (the same state `?doc=` already writes), so
+`useVoiceSession` needed NO change. **Still no upload surface anywhere in the voice session** — the
+picker only lists documents already uploaded and extracted through the vault.
+
+**READY-ONLY BY CONSTRUCTION, and a COURTESY, NOT A GATE.** `voiceDoc.pickableDocs` (tenantQuery)
+lists only this tenant's `status: "ready"` documents with non-blank text, newest-first, scanning the
+newest `PICKER_DOC_SCAN_CAP` (50) rows; non-ready rows are counted (`processingCount`), never
+listed, so a just-uploaded file does not appear to vanish. Offering any other row would be offering
+a click `voice.startSession` refuses. **The trust boundary did not move**: `startSession` and
+`voiceToken.mintClientSecret` each still re-validate ownership and `status: "ready"` from scratch —
+nothing the picker sends is trusted, and nothing here may become client-side validation that implies
+otherwise. Deliberately NOT `vault.listVaultDocs` (whole rows including `text`) — the same
+`docContext` projection rule 14-07 established.
+
+**The chip must never assert a readiness it never checked.** `DocPicker` resolves the current
+selection through `voiceDoc.docContext` (title + status + truncated) rather than trusting the list,
+because a `?doc=` arrival can name a document the component never saw in `pickableDocs` — a
+cross-tenant/deleted id (`docContext` → `null`) or a document still being read
+(`status !== "ready"`). The chip renders nothing while the query is loading, an honest
+"unavailable"/"still being read" message in those two cases, and the ordinary "the assistant can
+read this document" sentence ONLY once `status === "ready"`. This was a real bug in the first cut
+(the chip showed the ready sentence unconditionally off `title` alone) — keep the `status` branch
+whenever this component changes.
+
+**Focus is moved by hand across the list↔chip swap.** Picking a row unmounts the focused row
+`<button>`; clearing the chip unmounts its focused ✕. Both would otherwise drop a keyboard user onto
+`<body>` (BRAND §6). `DocPicker` records the intended focus target at click time in a ref and an
+effect with no dependency array retries every render until that target exists in the DOM (the chip
+can take an extra render tick to mount once `docContext` resolves) — a `useRef` + `.focus()`, no new
+dependency.
+
+**Ceiling — voice briefs and doc-review memos fill the picker too.** `voice.persistBrief` inserts
+one `Voice brief — <date>` `vaultDocuments` row (`kind: "brief"`) per session, and 14-08's memo is
+stored through that SAME write path, so both become `ready` and are listed by `pickableDocs` —
+newest-first, meaning right at the top, with near-identical date-only titles — and they occupy
+slots in the `PICKER_DOC_SCAN_CAP` = 50 scan window, so a real upload can scroll out of "the 50
+newest documents" sooner than that number implies. **No `kind` filter was added** — excluding
+briefs/memos from the picker is a spec change, not a bug fix, and was explicitly out of scope here.
+Upgrade path if this becomes a real problem: filter `row.kind !== "brief"` in `pickableDocs`'s scan
+loop (`voiceDoc.ts`).
+
+**How to verify.** `pnpm --filter @pikar/backend test voiceDoc` (the six `pickableDocs` cases:
+ready-only + newest-first, non-ready excluded-but-counted, `failed` neither listed nor counted, an
+empty-text ready row refused, a no-text-field ready row refused, cross-tenant empty), then
+`pnpm --filter @pikar/web typecheck` and `pnpm --filter @pikar/web build` (`/dashboard/voice` must
+stay `ƒ (Dynamic)`). The chip's three states (loading/unavailable/not-ready/ready) and the focus
+moves are **visual/keyboard checks, manual-only** — no automated claim is made about how they look
+or where focus lands.
+
 ---
 
 ## Voice-doc: the consolidated Phase-14 record (14-09)
@@ -961,7 +1026,10 @@ choose an outcome: save a memo, or turn a gap into a plan that crosses the norma
 
 ### The entry contract
 
-- The **vault is the entry point** — no new upload surface, no picker in the pre-flight.
+- The **vault is the PRIMARY entry point**; the 14-10 pre-flight `DocPicker` is an ADDITIVE second
+  one — ready-only, a courtesy and never a gate (`startSession` / `mintClientSecret` still
+  re-validate). **There is still no upload surface anywhere in the voice session.** See "The
+  pre-flight picker (14-10)" below.
 - `ready` → enabled. `processing` / `extracting` / `pending_extraction` → a **real `disabled`
   button**, never a dead-styled link. `failed` → **no voice action at all**, with copy saying why and
   what to do next.

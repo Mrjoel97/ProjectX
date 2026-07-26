@@ -600,7 +600,7 @@ const DOC_IN_PROGRESS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The pre-flight picker's list (14-07): this tenant's READY documents newest-first as id + title,
+ * The pre-flight picker's list (14-10): this tenant's READY documents newest-first as id + title,
  * plus a count of the ones still being read.
  *
  * WHY IT EXISTS: a session only becomes doc-scoped when `startSession` receives a `docRef`, and
@@ -619,6 +619,17 @@ const DOC_IN_PROGRESS: ReadonlySet<string> = new Set([
  * ponytail: newest-`PICKER_DOC_SCAN_CAP` scan plus a client-side title filter. A vault whose ready
  * documents fall outside that window needs pagination or a real title search index (a schema
  * change) — not built, and not needed at single-owner scale.
+ *
+ * ponytail: this scans the SAME `vaultDocuments` table `voice.persistBrief` writes its one-per-session
+ * `Voice brief — <date>` row into (`kind: "brief"`), and 14-08's doc-review memo is stored through
+ * that IDENTICAL write path (`endSessionClean`'s `briefRef` spine), so it lands with the same
+ * `kind: "brief"` and the same date-only title. Once ingestion finishes both go `ready` and are
+ * therefore LISTED here too — newest-first, so a brief/memo just stored sits right at the top — and
+ * they occupy slots in the `PICKER_DOC_SCAN_CAP` window, so a real upload can scroll out of "the 50
+ * newest documents" sooner than that number implies. No `kind` filter is applied here — excluding
+ * briefs/memos from the picker would be a spec change, not a bug fix, and is explicitly out of scope
+ * for 14-10. Upgrade path, if this becomes a real problem: filter `row.kind !== "brief"` in the loop
+ * below.
  */
 export const pickableDocs = tenantQuery({
   args: {},
