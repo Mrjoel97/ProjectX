@@ -18,7 +18,12 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import { deserializeProfile, resolveSpecialist, specialistMemoBody } from "@pikar/core";
+import {
+  deserializeProfile,
+  resolveSpecialist,
+  specialistMemoBody,
+  type Tier,
+} from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -43,19 +48,23 @@ const evalFields = schema.tables.evaluations.validator.fields;
 
 type Framework = "swot" | "lean" | "bmc" | "growth-os";
 
-// Framework → the gated rubric skill the engine loads (12-02). Auto-pick maps persona when there
-// are no financials; an explicit `framework` arg overrides.
+// Framework → the gated rubric skill the engine loads (12-02). Auto-pick maps the tenant's TIER
+// when there are no financials; an explicit `framework` arg overrides.
 const FRAMEWORK_SKILL: Record<Framework, string> = {
   "growth-os": GROWTH_OS_DIAGNOSTIC_SKILL,
   swot: SWOT_SKILL,
   lean: LEAN_CANVAS_SKILL,
   bmc: BMC_SKILL,
 };
-const PERSONA_FRAMEWORK: Record<string, Framework> = {
+// Tier → rubric. The `satisfies Record<Tier, Framework>` bind is the point: a new tier literal
+// becomes a COMPILE error here instead of silently falling through a `??` into "lean". `enterprise`
+// is operator-granted (D6) and never derived, so an SME-shaped rubric is the honest default for it.
+const TIER_FRAMEWORK = {
   solopreneur: "lean",
   startup: "bmc",
   sme: "swot",
-};
+  enterprise: "swot",
+} as const satisfies Record<Tier, Framework>;
 
 // The Scorecard dot-paths the deterministic engine can ground + cite. Each carries its UI label +
 // framework section. A field NOT here stays null (not-enough-data) — never fabricated.
@@ -186,6 +195,10 @@ export const runEvaluation = internalAction({
     try {
       // ── Carry forward (LOCKED store half): the prior Scorecard + the user-provided keys ────────
       const last = await ctx.runQuery(internal.evaluations.lastForThread, { tenantId, threadId });
+      // ── The tier: read ONCE from its table, the ONLY authority for the rubric pick (design §4.2).
+      // This is an `internalAction` with no live identity, so the tenant travels as an explicit
+      // validated arg through the internal query — the `vaultGroundHydrated` convention.
+      const tp = await ctx.runQuery(internal.tenantProfile.forTenant, { tenantId });
       const userProvided: string[] = [...(last?.userProvided ?? [])];
       let scorecard: Scorecard = JSON.parse(
         JSON.stringify((last?.scorecard as Scorecard | undefined) ?? emptyScorecard),
@@ -233,7 +246,6 @@ export const runEvaluation = internalAction({
       }
 
       // ── Fill remaining nulls from grounded text (profile parse + labeled-number scan) ──────────
-      let personaHint: string | undefined;
       for (let i = 0; i < chunks.length; i++) {
         const text = chunks[i] ?? "";
         const docId = docIds[i];
@@ -262,7 +274,6 @@ export const runEvaluation = internalAction({
 
         if (text.includes("- **Persona:**")) {
           const p = deserializeProfile(text);
-          personaHint = p.persona;
           fillVault("businessName", p.name);
           fillVault("identity.niche", p.oneLineDescription);
           fillVault("identity.avatar", p.targetCustomer);
@@ -282,17 +293,23 @@ export const runEvaluation = internalAction({
         }
       }
 
-      // ── Auto-pick framework: financials present → growth-os; else persona map; arg overrides ───
+      // ── Auto-pick framework: financials present → growth-os; else the TIER map; arg overrides ──
+      //
+      // Q3 (LOCKED): `financialsPresent` KEEPS overriding the tier. That override is correct —
+      // financials mean a growth-os diagnosis is actually POSSIBLE — and the tier's perceivable
+      // effect lands on voice / framing / the specialist prompt (ADR-009), which is unconditional.
+      // SC#5 must NOT be read as "the rubric must change". Do not remove the override.
       const financialsPresent =
         scorecard.financials.cac != null ||
         scorecard.financials.ltgp != null ||
         scorecard.financials.thirtyDayCashPerCustomer != null ||
         scorecard.identity.headlinePrice != null;
+      // No trailing `?? "lean"`: TIER_FRAMEWORK is bound `satisfies Record<Tier, Framework>` and the
+      // index is narrowed to a `Tier` by `?? "solopreneur"`, so the lookup is TOTAL. A `??` here
+      // would be a branch that can never be taken — an assertion that can never fail. Do not re-add
+      // it "for safety"; widening `Tier` is meant to break the MAP, loudly, at compile time.
       const chosen: Framework =
-        framework ??
-        (financialsPresent
-          ? "growth-os"
-          : (PERSONA_FRAMEWORK[personaHint ?? "solopreneur"] ?? "lean"));
+        framework ?? (financialsPresent ? "growth-os" : TIER_FRAMEWORK[tp?.tier ?? "solopreneur"]);
 
       // ── Load the rubric method (fail-closed-if-missing → fail-open verdict) ─────────────────────
       let skillOk = true;
