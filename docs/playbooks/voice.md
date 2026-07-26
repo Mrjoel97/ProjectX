@@ -1,6 +1,9 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-06 — the BROWSER RELAY: `/dashboard/voice?doc=<id>` opens a
+> Last verified: 2026-07-26 (14-07 — the ENTRY POINT + in-call context: a ready vault document offers
+> "Discuss by voice", the status gate is subscription-driven, a failed document is refused with a
+> reason, and the live screen names the report under discussion with a "partial" badge when only part
+> of it could be read). Prior: 14-06 — the BROWSER RELAY: `/dashboard/voice?doc=<id>` opens a
 > doc-scoped session and the model's `search_document` calls are answered from Convex over the
 > existing `"oai-events"` channel, triggered off `response.done` with no new pinned event name).
 > Prior: 14-05 — the REVIEW producer: `voiceDoc.reviewSession` turns a finished discussion into ONE
@@ -788,3 +791,59 @@ because that is the only place a test can see it.
 `pnpm --filter @pikar/voice test` for the pinned vocabulary. The relay's REAL proof is the
 human-verify row in 14-09: a live call where the user asks something the digest cannot answer and
 the agent comes back grounded. There is deliberately no faked automated proof of a tool round trip.
+
+### The entry point and the in-call context (14-07)
+
+**The vault IS the entry point — by decision.** No new upload surface, no document picker in the
+pre-flight. A ready document in `DocGrid` (and in `PreviewModal`'s footer) links to
+`/dashboard/voice?doc=<id>`. If you are tempted to add a picker, re-read `14-CONTEXT.md` first.
+
+**The status gate is the phase's first honesty moment.** `ready` → enabled.
+`processing`/`extracting`/`pending_extraction` → a **real `disabled` button**, never a `Link` with
+`pointer-events: none` (a screen reader would announce an actionable control that silently does
+nothing). `failed` → **no voice action anywhere**, plus copy in the modal explaining the likely cause
+and the next step. Two reasons this matters beyond politeness: never open a grounded conversation the
+agent cannot ground, and never burn capped 15-minute session time on a document still being read.
+
+**The gate is subscription-driven. Do not add a poll.** `vault.listVaultDocs` is a live Convex query
+returning whole rows including `status`, so the control re-renders enabled on its own the moment
+extraction finishes. No timer, no second query, no refresh button. This is stated in a source comment
+too, because it looks like something that needs "making live" and does not.
+
+**Sibling, not nested.** The document card is itself a `<button>`, so the Discuss control is an
+absolutely-positioned sibling in the card's relative wrapper — the same trick the failed-card Retry
+already used. Nested interactive elements are invalid HTML and destroy keyboard order. Both controls
+share the corner because their statuses are mutually exclusive, and a shared `discussPillStyle()`
+keeps the enabled and disabled variants in the identical spot so the control does not jump under the
+user when the status flips mid-look.
+
+**`voiceDoc.docContext` — why a fourth doc read exists.** It projects exactly
+`{title, status, truncated}`. It does NOT reuse `listVaultDocs`, which `.collect()`s whole rows
+including `text`: rendering a title through that would pull a book-sized blob onto the voice page.
+A test pins the returned key set to exactly `[status, title, truncated]` and asserts the absence of a
+`text` key, so a future "just return the row" simplification fails loudly. It is fail-closed
+cross-tenant by returning `null`, not by throwing — a throw distinguishes "exists but not yours" from
+"no such document", which is an ownership oracle (BETA-05).
+
+**`DocStrip` renders nothing for both `undefined` and `null`.** Loading and not-your-document are
+deliberately indistinguishable in the UI: a "not found" message would confirm the id exists, and a
+loading flash during a live call is noise at the worst possible moment.
+
+**The "partial" badge is the visual half of one honesty moment, not the whole of it.** The agent also
+says it aloud in its opening turn. Keep both: audio scrolls past, a badge persists for the whole
+call. It uses `--ink-soft` on a ruled chip rather than teal text — BRAND §6, `--teal-600` is ~2.9:1
+on white and is for button fills with white text — and it carries the literal word "partial" so the
+meaning is never colour-only.
+
+**No live insights panel.** Explicitly deferred in `14-CONTEXT.md`. Insights land on the post-call
+screen, after the discussion, where the user decides what to do with them. `DocStrip` is a context
+strip, not the seed of an in-call dashboard.
+
+**The strip links to `/dashboard/vault`, not a hoisted `PreviewModal`.** That modal owns
+download/delete/retry and a doc-entities subscription; putting destructive actions one mis-tap away
+from an in-progress voice conversation is the wrong trade. The smaller diff is also the safer product.
+
+**How to verify.** `pnpm --filter @pikar/backend test voiceDoc` (the `docContext` projection +
+fail-closed behaviour), then `pnpm --filter @pikar/web typecheck` and
+`pnpm --filter @pikar/web build`. The three status states and the partial badge are **visually**
+confirmed in 14-09's human-verify row — no automated claim is made about how they look.
