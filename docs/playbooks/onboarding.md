@@ -1,7 +1,7 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Behaviour is unchanged for every type that already worked; this only makes already-supported types selectable. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
-> Build history: `.planning/phases/11-persona-onboarding-business-profile/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md)
 
 ## Purpose
 
@@ -21,6 +21,37 @@ Pure packages:
   edit-form loader; there is NO separate structured copy, the markdown IS the record), `decideConfirm`
   (the SC#1 always-confirm decision fn), field validators. `packages/core/src/businessProfile.test.ts`
   is its one runnable check (incl. the serialize↔deserialize round-trip).
+
+### Tier derivation (Phase 15.1, design §5) — same file, `businessProfile.ts`
+
+The tier is **derived from facts, never asked for and never guessed from prose**. All of it is pure
+TS in `businessProfile.ts`, unit-tested in `businessProfile.test.ts`:
+
+- **Closed unions** — `REVENUE_STAGES` (`pre-revenue` | `early-revenue` | `steady-revenue`),
+  `FUNDING_STATES` (`bootstrapped` | `seeking` | `funded`), `TIER_SOURCES`
+  (`derived` | `confirmed` | `admin` | `legacy`), `BEHAVIOR_PRESETS` (`direct` | `coaching` |
+  `concise`). Owner decision Q7: these are literals, never free strings — a free string here
+  reintroduces the string-matching defect class 15.1 exists to close.
+- **Two tier types of deliberately different width** — `DerivedTier` (= `Persona`, three members) is
+  what `deriveTier` returns; `Tier`/`TIERS` (four members, `enterprise` included) is what the TABLE
+  can hold. D6 ("enterprise is never derived") is therefore a TYPE property, not a review note; a
+  `@ts-expect-error` in the test file fails the BUILD if the return type is ever widened.
+- **`deriveTier(facts)`** — `paidStaff === 0 && headcount <= 2` ⇒ `solopreneur`; else not
+  (`steady-revenue` and `bootstrapped`) ⇒ `startup`; else ⇒ `sme`. Branch ORDER is load-bearing (the
+  solo test runs first, so a pre-revenue one-person business is a solopreneur, not a startup).
+  Thresholds are the design doc's defaults and are a **product call** — retune by editing
+  `TIER_BOUNDARY_TABLE` in the test plus the two comparisons, **never** by adding a config row (a
+  DB-tunable threshold makes the tier DB-writable by proxy, which D2 forbids).
+- **`yearsOperating` is captured but unused by the rule** — design §4.1 names it a tier fact and the
+  conversation asks it; a test pins the current contract so nobody "fixes" the omission by accident.
+- **`TIER_REASON`** — the read-only reason the profile page renders next to the tier (design §9). A
+  `satisfies Record<Tier, string>` table, not a switch: a new tier without a reason is a compile error.
+- **`REQUIRED_SLOTS` / `missingSlots` / `canComplete`** — the design §6 completion gate. `0` is an
+  ANSWER (`headcount: 0`, `paidStaff: 0`, `yearsOperating: 0` all count as PRESENT); a truthiness
+  check here would re-ask a solo founder forever. An off-union enum value is MISSING, never admitted.
+- **`sanitizeAgentName`** — 40-char cap, `\p{C}` (Cc + Cf) stripped, whitespace collapsed, trimmed
+  after the cap. This string rides into a model system prompt in plan 15.1-05, so it is a trust
+  boundary: no newline means a name cannot open a fake instruction block.
 
 Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/skills/business-profile.md` — canonical extraction prompt body
@@ -91,6 +122,15 @@ cannot see:
   unconditionally; no branch yields an auto-committed persona. Enforced by `businessProfile.test.ts`.
 - **Enterprise is not an emittable persona** — the `Persona` union is exactly `solopreneur | startup | sme`;
   the validator rejects `"enterprise"`. Enforced by `businessProfile.test.ts`.
+- **Enterprise is never DERIVED (D6)** — `deriveTier`'s return type is `DerivedTier` (= `Persona`), so
+  `enterprise` is structurally unreachable from the facts. Widening it breaks the `@ts-expect-error`
+  bind in `businessProfile.test.ts` and the BUILD fails. `enterprise` is representable on the table
+  and reachable only through an operator grant (`tierSource: "admin"`, Q4).
+- **`deriveTier` is the ONLY writer of the tier** — no caller-supplied tier, no config-row threshold,
+  no string-match out of markdown. The markdown persona line is a PROJECTION (design §4.2).
+- **Zero is an answer** — `missingSlots` tests numbers for finiteness, never truthiness. A solo
+  founder answering `paidStaff: 0` has ANSWERED; treating that as absent makes the design §6
+  conversation uncompletable. Enforced by `businessProfile.test.ts`.
 - **The domain module is Convex-free (CLAUDE.md §1)** — `businessProfile.ts` imports no Convex, no network;
   it is pure and portable. The backend `onboarding.ts` adapter is the only place it meets the DB.
 - **§4 redaction boundary (SC#4)** — `audit` / `telemetry` / `deadLetters` payloads written during
