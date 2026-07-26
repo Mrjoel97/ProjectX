@@ -37,6 +37,7 @@ import {
   type BriefingItem,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
+  actionTypeOf,
   bucket,
   buildDocFilename,
   buildRecipientView,
@@ -477,6 +478,8 @@ const fmtSendInstant = (ms: number, tz?: string) =>
  */
 export function buildAgentContext(
   plan: {
+    /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
+    kind?: "memo";
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -500,6 +503,22 @@ export function buildAgentContext(
   // confirm; the model never supplies it. Defaults to UTC when a turn carries no client clock.
   tz = "UTC",
 ): string {
+  // ACTN-01: a non-email action gets a context shaped like the action it IS. Phase 15 generalized
+  // the EXECUTOR (ACTION_TYPES / actionTypeOf / armFor) but left this, the model-facing half, email-
+  // only — so a `kind: "memo"` plan staged by "Act on this" (evaluations.ts) was announced to the
+  // model as "Current email plan:" with Recipients/Send-mode/Send-time slots, and the model dutifully
+  // offered to send it to recipients. Branch on the SHARED reader, never on `plan.kind` directly, so
+  // a new ACTION_TYPES member surfaces here as a compile error rather than silently rendering as
+  // email. Verified live 2026-07-26.
+  if (actionTypeOf(plan.kind) === "memo") {
+    return [
+      "Current memo plan. A memo is NOT an email: it has no recipients, no send mode and no send" +
+        " time, and approving it saves it to the knowledge vault rather than sending it to anyone." +
+        " Do not offer to add recipients or to send it.",
+      `Subject: ${plan.subject ?? "(not set)"}`,
+      `Body drafted: ${plan.body ? "yes" : "no"}`,
+    ].join("\n");
+  }
   const bodies = plan.recipientBodies ?? {};
   const addrs = plan.recipients ?? [];
   // Picked names looked up by lowercased address (the recipientBodies lookup precedent) — the

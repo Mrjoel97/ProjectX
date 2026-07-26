@@ -911,3 +911,39 @@ test("searchVault gives tenant B NOTHING of tenant A's corpus (BETA-05)", async 
   expect(reply).toMatch(/don't have anything|upload/i); // tenant B gets the honest no-match
   expect(reply).not.toContain(VAULT_NEEDLE); // never A's content
 });
+
+// ── A memo plan must NOT be described to the model as an email ────────────────────────────────
+//
+// Live-verified defect (2026-07-26): after "Act on this" staged a `kind: "memo"` plan
+// (evaluations.ts:709-712 — recipients [], subject "Next step: <gap>"), the NEXT cockpit turn
+// replied "The subject is set, and the email will be sent individually to each recipient. Would
+// you like to proceed…". That was not a mis-route — buildAgentContext had rendered the memo under
+// "Current email plan:" with Recipients/Send mode/Send time slots, and the model read it faithfully.
+//
+// Phase 15 generalized the EXECUTOR (ACTION_TYPES/actionTypeOf/armFor) but not the model-facing
+// CONTEXT. These assertions are what stops that half-generalization from returning.
+test("buildAgentContext describes a memo plan as a memo — never as an email (ACTN-01)", () => {
+  const ctx = buildAgentContext({
+    kind: "memo",
+    subject: "Next step: Customer doesn't pay for themselves in 30 days.",
+    body: "> Produced by the **money-model-designer** specialist.",
+  });
+
+  // Assert on the SLOT STRUCTURE, not on word presence: the memo block deliberately says the words
+  // "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"),
+  // which is the part that steers the model. A bare /email/i ban would forbid the very sentence
+  // doing the work. What must be absent is the email plan's *offered fields*.
+  expect(ctx).not.toContain("Current email plan:"); // the header that mislabelled the action type
+  expect(ctx).toMatch(/^Current memo plan/); // and it must say what it actually is
+  expect(ctx).not.toMatch(/^Recipients \(/m); // no recipient list to populate
+  expect(ctx).not.toMatch(/^Send mode:/m); // a memo is never sent to anyone
+  expect(ctx).not.toMatch(/^Send time:/m);
+  expect(ctx).not.toMatch(/^Attachments \(/m);
+  expect(ctx).toContain("Next step: Customer doesn't pay for themselves in 30 days."); // subject survives
+});
+
+test("buildAgentContext still describes an email plan as an email (no kind ⇒ email, actionTypeOf)", () => {
+  const ctx = buildAgentContext({ recipients: ["bob@example.com"], subject: "Q3 numbers" });
+  expect(ctx).toContain("Current email plan:"); // the absent-kind default is unchanged
+  expect(ctx).toMatch(/Send mode/); // email slots still offered
+});

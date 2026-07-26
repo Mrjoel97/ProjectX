@@ -1815,8 +1815,8 @@
     "semantic_hash": ""
   },
   ".planning/PARALLELIZATION.md": {
-    "mtime": 1785087519.6238832,
-    "ast_hash": "dd77a3159b4ff7e78359df53079818fa",
+    "mtime": 1785094643.4293933,
+    "ast_hash": "a9389509f35a5bac241a9dbdf22d242d",
     "semantic_hash": ""
   },
   ".planning/phases/03.2.1-agent-driven-cockpit/03.2.1-01-SUMMARY.md": {
@@ -4675,8 +4675,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md": {
-    "mtime": 1785087519.7809796,
-    "ast_hash": "1772c770019c139017d31d7d9e6a1e1a",
+    "mtime": 1785097577.92119,
+    "ast_hash": "955fe2ac6c1684969bba5331312770b3",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantProfile.test.ts": {

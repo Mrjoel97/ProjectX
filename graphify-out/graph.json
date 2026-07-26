@@ -4,6 +4,426 @@
   "graph": {},
   "nodes": [
     {
+      "label": "deferred-items.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items",
+      "community": 134,
+      "norm_label": "deferred-items.md"
+    },
+    {
+      "label": "Deferred items \u2014 Phase 15.1",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
+      "community": 134,
+      "norm_label": "deferred items \u2014 phase 15.1"
+    },
+    {
+      "label": "1. Backend full-suite run is FLAKY on this worktree (found during 15.1-01)",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01",
+      "community": 134,
+      "norm_label": "1. backend full-suite run is flaky on this worktree (found during 15.1-01)"
+    },
+    {
+      "label": "2. The four live-only verifications \u2014 RUNNABLE DEBT (recorded during 15.1-07)",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L36",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "community": 134,
+      "norm_label": "2. the four live-only verifications \u2014 runnable debt (recorded during 15.1-07)"
+    },
+    {
+      "label": "SC#6 paid \u2014 live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L50",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1",
+      "community": 134,
+      "norm_label": "sc#6 paid \u2014 live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)"
+    },
+    {
+      "label": "SC#1c paid \u2014 profile page, 2026-07-26 (real browser, real deployment)",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment",
+      "community": 134,
+      "norm_label": "sc#1c paid \u2014 profile page, 2026-07-26 (real browser, real deployment)"
+    },
+    {
+      "label": "SC#3 paid \u2014 a real conversational turn, 2026-07-26 (real model)",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L104",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model",
+      "community": 134,
+      "norm_label": "sc#3 paid \u2014 a real conversational turn, 2026-07-26 (real model)"
+    },
+    {
+      "label": "SC#5 run but NOT confirmed \u2014 2026-07-26. **This row stays OPEN.**",
+      "file_type": "document",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L122",
+      "_origin": "ast",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open",
+      "community": 134,
+      "norm_label": "sc#5 run but not confirmed \u2014 2026-07-26. **this row stays open.**"
+    },
+    {
+      "label": "PARALLELIZATION.md",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "parallelization.md",
+      "id": "planning_parallelization"
+    },
+    {
+      "label": "Parallel Build Lanes (multi-session)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "parallel build lanes (multi-session)",
+      "id": "planning_parallelization_parallel_build_lanes_multi_session"
+    },
+    {
+      "label": "Phases 16 + 17 \u2014 research sub-agent \u2225 calendar actions (set up 2026-07-26)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "phases 16 + 17 \u2014 research sub-agent \u2225 calendar actions (set up 2026-07-26)",
+      "id": "planning_parallelization_phases_16_17_research_sub_agent_calendar_actions_set_up_2026_07_26"
+    },
+    {
+      "label": "Why these two can run together \u2014 and the one place they collide",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "why these two can run together \u2014 and the one place they collide",
+      "id": "planning_parallelization_why_these_two_can_run_together_and_the_one_place_they_collide"
+    },
+    {
+      "label": "The stages",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L51",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "the stages",
+      "id": "planning_parallelization_the_stages"
+    },
+    {
+      "label": "Carried-forward debt neither lane owns",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L69",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "carried-forward debt neither lane owns",
+      "id": "planning_parallelization_carried_forward_debt_neither_lane_owns"
+    },
+    {
+      "label": "Phases 14 + 15 \u2014 voice-doc flagship \u2225 dispatch framework (set up 2026-07-25)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L78",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "phases 14 + 15 \u2014 voice-doc flagship \u2225 dispatch framework (set up 2026-07-25)",
+      "id": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25"
+    },
+    {
+      "label": "Why these two phases can run together \u2014 and where they can't",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L83",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "why these two phases can run together \u2014 and where they can't",
+      "id": "planning_parallelization_why_these_two_phases_can_run_together_and_where_they_can_t"
+    },
+    {
+      "label": "Constraint on Lane A: dispatch stays tier-agnostic",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L99",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "constraint on lane a: dispatch stays tier-agnostic",
+      "id": "planning_parallelization_constraint_on_lane_a_dispatch_stays_tier_agnostic"
+    },
+    {
+      "label": "Stage 0 \u2014 parallel planning (start first; no `pnpm install` needed)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L108",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "stage 0 \u2014 parallel planning (start first; no `pnpm install` needed)",
+      "id": "planning_parallelization_stage_0_parallel_planning_start_first_no_pnpm_install_needed"
+    },
+    {
+      "label": "Stage 1 \u2014 Wave-0 freeze commit on `main` (serial, unavoidable)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L124",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "stage 1 \u2014 wave-0 freeze commit on `main` (serial, unavoidable)",
+      "id": "planning_parallelization_stage_1_wave_0_freeze_commit_on_main_serial_unavoidable"
+    },
+    {
+      "label": "Stage 2 \u2014 execution lanes (FINALIZED at 15-01; Phase 15 runs SERIALLY)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L147",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "stage 2 \u2014 execution lanes (finalized at 15-01; phase 15 runs serially)",
+      "id": "planning_parallelization_stage_2_execution_lanes_finalized_at_15_01_phase_15_runs_serially"
+    },
+    {
+      "label": "Stage 3 \u2014 integrate, then verify once",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L211",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "stage 3 \u2014 integrate, then verify once",
+      "id": "planning_parallelization_stage_3_integrate_then_verify_once"
+    },
+    {
+      "label": "Phase 14/15 additions to the shared-singleton list",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L221",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "phase 14/15 additions to the shared-singleton list",
+      "id": "planning_parallelization_phase_14_15_additions_to_the_shared_singleton_list"
+    },
+    {
+      "label": "Why this split works",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L233",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "why this split works",
+      "id": "planning_parallelization_why_this_split_works"
+    },
+    {
+      "label": "The lanes",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L240",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "the lanes",
+      "id": "planning_parallelization_the_lanes"
+    },
+    {
+      "label": "Phase 3.8 \u2014 Vault document extraction (4 lanes, Wave 0 landed 2026-07-18)",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L251",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "phase 3.8 \u2014 vault document extraction (4 lanes, wave 0 landed 2026-07-18)",
+      "id": "planning_parallelization_phase_3_8_vault_document_extraction_4_lanes_wave_0_landed_2026_07_18"
+    },
+    {
+      "label": "The three shared singletons \u2014 append-only discipline",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L276",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "the three shared singletons \u2014 append-only discipline",
+      "id": "planning_parallelization_the_three_shared_singletons_append_only_discipline"
+    },
+    {
+      "label": "Rules of the road",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L290",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "rules of the road",
+      "id": "planning_parallelization_rules_of_the_road"
+    },
+    {
+      "label": "How each session starts",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L308",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "how each session starts",
+      "id": "planning_parallelization_how_each_session_starts"
+    },
+    {
+      "label": "Sequencing note",
+      "file_type": "document",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L315",
+      "_origin": "ast",
+      "community": 40,
+      "norm_label": "sequencing note",
+      "id": "planning_parallelization_sequencing_note"
+    },
+    {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "claude.md",
+      "id": "claude"
+    },
+    {
+      "label": "Pikar AI \u2014 Repository Conventions",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "pikar ai \u2014 repository conventions",
+      "id": "claude_pikar_ai_repository_conventions"
+    },
+    {
+      "label": "1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "1. domain logic lives in pure-ts `packages/*`; `convex/` is a thin adapter",
+      "id": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
+    },
+    {
+      "label": "2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "2. raw `query`/`mutation`/`action` imports are banned outside the wrapper module",
+      "id": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
+    },
+    {
+      "label": "3. The audit module is insert-only",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L22",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "3. the audit module is insert-only",
+      "id": "claude_3_the_audit_module_is_insert_only"
+    },
+    {
+      "label": "4. Audit and dead-letter payloads must be redaction-safe",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L28",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "4. audit and dead-letter payloads must be redaction-safe",
+      "id": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
+    },
+    {
+      "label": "5. No hardcoded agent prompts \u2014 skills load from the registry",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "5. no hardcoded agent prompts \u2014 skills load from the registry",
+      "id": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
+    },
+    {
+      "label": "6. Pinned pre-1.0 component versions must not be bumped casually",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L41",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "6. pinned pre-1.0 component versions must not be bumped casually",
+      "id": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
+    },
+    {
+      "label": "7. Boot order",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L47",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "7. boot order",
+      "id": "claude_7_boot_order"
+    },
+    {
+      "label": "8. Ponytail discipline \u2014 the laziest solution that works (MANDATED)",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L54",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "8. ponytail discipline \u2014 the laziest solution that works (mandated)",
+      "id": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
+    },
+    {
+      "label": "9. Playbooks and ADRs are part of definition-of-done",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L85",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "9. playbooks and adrs are part of definition-of-done",
+      "id": "claude_9_playbooks_and_adrs_are_part_of_definition_of_done"
+    },
+    {
+      "label": "10. Frontend brand & UI \u2014 read `docs/design/BRAND.md`",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "10. frontend brand & ui \u2014 read `docs/design/brand.md`",
+      "id": "claude_10_frontend_brand_ui_read_docs_design_brand_md"
+    },
+    {
+      "label": "graphify",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L112",
+      "_origin": "ast",
+      "community": 35,
+      "norm_label": "graphify",
+      "id": "claude_graphify"
+    },
+    {
       "label": "voice.md",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
@@ -64,13 +484,13 @@
       "id": "docs_playbooks_voice_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L206",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_voice_invariants_what_must_never_break"
     },
     {
@@ -124,13 +544,13 @@
       "id": "docs_playbooks_voice_voice_doc_sessions_phase_14_docv_01"
     },
     {
-      "label": "The `document-analyst` persona — registry-loaded and DELIBERATELY UNGATED",
+      "label": "The `document-analyst` persona \u2014 registry-loaded and DELIBERATELY UNGATED",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L405",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the `document-analyst` persona — registry-loaded and deliberately ungated",
+      "norm_label": "the `document-analyst` persona \u2014 registry-loaded and deliberately ungated",
       "id": "docs_playbooks_voice_the_document_analyst_persona_registry_loaded_and_deliberately_ungated"
     },
     {
@@ -154,13 +574,13 @@
       "id": "docs_playbooks_voice_voicesessions_docref"
     },
     {
-      "label": "`voiceDoc.searchDocument` — the mid-call drill-in (14-03)",
+      "label": "`voiceDoc.searchDocument` \u2014 the mid-call drill-in (14-03)",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L477",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "`voicedoc.searchdocument` — the mid-call drill-in (14-03)",
+      "norm_label": "`voicedoc.searchdocument` \u2014 the mid-call drill-in (14-03)",
       "id": "docs_playbooks_voice_voicedoc_searchdocument_the_mid_call_drill_in_14_03"
     },
     {
@@ -194,13 +614,13 @@
       "id": "docs_playbooks_voice_char_budgets_packages_voice_src_docsession_ts"
     },
     {
-      "label": "The pure domain surface (14-02) — what each function owns",
+      "label": "The pure domain surface (14-02) \u2014 what each function owns",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L561",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the pure domain surface (14-02) — what each function owns",
+      "norm_label": "the pure domain surface (14-02) \u2014 what each function owns",
       "id": "docs_playbooks_voice_the_pure_domain_surface_14_02_what_each_function_owns"
     },
     {
@@ -224,23 +644,23 @@
       "id": "docs_playbooks_voice_search_document_tool_shape"
     },
     {
-      "label": "The doc-grounded mint (14-04) — `voiceToken.mintClientSecret({ docId? })`",
+      "label": "The doc-grounded mint (14-04) \u2014 `voiceToken.mintClientSecret({ docId? })`",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L606",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the doc-grounded mint (14-04) — `voicetoken.mintclientsecret({ docid? })`",
+      "norm_label": "the doc-grounded mint (14-04) \u2014 `voicetoken.mintclientsecret({ docid? })`",
       "id": "docs_playbooks_voice_the_doc_grounded_mint_14_04_voicetoken_mintclientsecret_docid"
     },
     {
-      "label": "The review producer (14-05) — `voiceDoc.reviewSession` / `voiceDoc.reviewDocument`",
+      "label": "The review producer (14-05) \u2014 `voiceDoc.reviewSession` / `voiceDoc.reviewDocument`",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L669",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the review producer (14-05) — `voicedoc.reviewsession` / `voicedoc.reviewdocument`",
+      "norm_label": "the review producer (14-05) \u2014 `voicedoc.reviewsession` / `voicedoc.reviewdocument`",
       "id": "docs_playbooks_voice_the_review_producer_14_05_voicedoc_reviewsession_voicedoc_reviewdocument"
     },
     {
@@ -264,13 +684,13 @@
       "id": "docs_playbooks_voice_file_ownership_how_to_verify"
     },
     {
-      "label": "The browser relay (14-06) — `useVoiceSession(docId?)` and `?doc=`",
+      "label": "The browser relay (14-06) \u2014 `useVoiceSession(docId?)` and `?doc=`",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L786",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the browser relay (14-06) — `usevoicesession(docid?)` and `?doc=`",
+      "norm_label": "the browser relay (14-06) \u2014 `usevoicesession(docid?)` and `?doc=`",
       "id": "docs_playbooks_voice_the_browser_relay_14_06_usevoicesession_docid_and_doc"
     },
     {
@@ -284,13 +704,13 @@
       "id": "docs_playbooks_voice_the_entry_point_and_the_in_call_context_14_07"
     },
     {
-      "label": "The post-call outcome (14-08) — where the user decides",
+      "label": "The post-call outcome (14-08) \u2014 where the user decides",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L913",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "the post-call outcome (14-08) — where the user decides",
+      "norm_label": "the post-call outcome (14-08) \u2014 where the user decides",
       "id": "docs_playbooks_voice_the_post_call_outcome_14_08_where_the_user_decides"
     },
     {
@@ -344,13 +764,13 @@
       "id": "docs_playbooks_voice_grounding_is_hybrid_and_both_halves_are_load_bearing"
     },
     {
-      "label": "§4 — the log plane, quoted verbatim",
+      "label": "\u00a74 \u2014 the log plane, quoted verbatim",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L1058",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "§4 — the log plane, quoted verbatim",
+      "norm_label": "\u00a74 \u2014 the log plane, quoted verbatim",
       "id": "docs_playbooks_voice_4_the_log_plane_quoted_verbatim"
     },
     {
@@ -364,13 +784,13 @@
       "id": "docs_playbooks_voice_the_honesty_invariants"
     },
     {
-      "label": "Welded in code — what the model may never author",
+      "label": "Welded in code \u2014 what the model may never author",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L1089",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "welded in code — what the model may never author",
+      "norm_label": "welded in code \u2014 what the model may never author",
       "id": "docs_playbooks_voice_welded_in_code_what_the_model_may_never_author"
     },
     {
@@ -424,13 +844,13 @@
       "id": "docs_playbooks_voice_operations"
     },
     {
-      "label": "Live verification — 14-09 Task 3 (owner, 2026-07-26)",
+      "label": "Live verification \u2014 14-09 Task 3 (owner, 2026-07-26)",
       "file_type": "document",
       "source_file": "docs/playbooks/voice.md",
       "source_location": "L1179",
       "_origin": "ast",
       "community": 29,
-      "norm_label": "live verification — 14-09 task 3 (owner, 2026-07-26)",
+      "norm_label": "live verification \u2014 14-09 task 3 (owner, 2026-07-26)",
       "id": "docs_playbooks_voice_live_verification_14_09_task_3_owner_2026_07_26"
     },
     {
@@ -549,7 +969,7 @@
       "source_file": "packages/voice/src/realtime.ts",
       "source_location": "L95",
       "_origin": "ast",
-      "community": 80,
+      "community": 652,
       "norm_label": "realtime_client_events",
       "id": "packages_voice_src_realtime_realtime_client_events"
     },
@@ -599,7 +1019,7 @@
       "source_file": "packages/voice/src/realtime.ts",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 80,
+      "community": 137,
       "norm_label": "readusage()",
       "id": "packages_voice_src_realtime_readusage"
     },
@@ -1018,7 +1438,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "page.tsx",
       "id": "apps_web_app_app_dashboard_profile_page"
     },
@@ -1028,7 +1448,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "label",
       "id": "apps_web_app_app_dashboard_profile_page_label"
     },
@@ -1038,7 +1458,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "field",
       "id": "apps_web_app_app_dashboard_profile_page_field"
     },
@@ -1058,7 +1478,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "card",
       "id": "apps_web_app_app_dashboard_profile_page_card"
     },
@@ -1068,7 +1488,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L85",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "primarybutton()",
       "id": "apps_web_app_app_dashboard_profile_page_primarybutton"
     },
@@ -1078,7 +1498,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L152",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "digits()",
       "id": "apps_web_app_app_dashboard_profile_page_digits"
     },
@@ -1088,7 +1508,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L153",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "tonumber()",
       "id": "apps_web_app_app_dashboard_profile_page_tonumber"
     },
@@ -1098,7 +1518,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L156",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "readmissing()",
       "id": "apps_web_app_app_dashboard_profile_page_readmissing"
     },
@@ -1108,7 +1528,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L164",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "profilepage()",
       "id": "apps_web_app_app_dashboard_profile_page_profilepage"
     },
@@ -1118,7 +1538,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L658",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "presetgroup()",
       "id": "apps_web_app_app_dashboard_profile_page_presetgroup"
     },
@@ -1128,7 +1548,7 @@
       "source_file": "apps/web/app/(app)/dashboard/profile/page.tsx",
       "source_location": "L710",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "labeledfield()",
       "id": "apps_web_app_app_dashboard_profile_page_labeledfield"
     },
@@ -2248,7 +2668,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "pad()",
       "id": "apps_web_app_app_dashboard_workspace_cards_pad"
     },
@@ -2258,7 +2678,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L54",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "tolocalinputvalue()",
       "id": "apps_web_app_app_dashboard_workspace_cards_tolocalinputvalue"
     },
@@ -2268,7 +2688,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "formatabsolute()",
       "id": "apps_web_app_app_dashboard_workspace_cards_formatabsolute"
     },
@@ -2328,7 +2748,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L223",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "plancard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_plancard"
     },
@@ -2338,7 +2758,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L343",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "scheduledcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_scheduledcard"
     },
@@ -2348,7 +2768,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L380",
       "_origin": "ast",
-      "community": 96,
+      "community": 156,
       "norm_label": "canceledcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_canceledcard"
     },
@@ -2448,7 +2868,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L737",
       "_origin": "ast",
-      "community": 178,
+      "community": 139,
       "norm_label": "fmtitemtime()",
       "id": "apps_web_app_app_dashboard_workspace_cards_fmtitemtime"
     },
@@ -2558,7 +2978,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L868",
       "_origin": "ast",
-      "community": 178,
+      "community": 139,
       "norm_label": "briefingrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_briefingrow"
     },
@@ -2608,7 +3028,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L947",
       "_origin": "ast",
-      "community": 178,
+      "community": 139,
       "norm_label": "priorityrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_priorityrow"
     },
@@ -4368,7 +4788,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 112,
+      "community": 13,
       "norm_label": "agentsteps.ts",
       "id": "packages_backend_convex_agentsteps"
     },
@@ -4378,7 +4798,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 112,
+      "community": 13,
       "norm_label": "stepview",
       "id": "packages_backend_convex_agentsteps_stepview"
     },
@@ -4388,7 +4808,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 112,
+      "community": 13,
       "norm_label": "record",
       "id": "packages_backend_convex_agentsteps_record"
     },
@@ -4398,7 +4818,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 112,
+      "community": 13,
       "norm_label": "finish",
       "id": "packages_backend_convex_agentsteps_finish"
     },
@@ -4408,7 +4828,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L103",
       "_origin": "ast",
-      "community": 112,
+      "community": 13,
       "norm_label": "latestturn",
       "id": "packages_backend_convex_agentsteps_latestturn"
     },
@@ -4468,7 +4888,7 @@
       "source_file": "packages/backend/convex/audit.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 159,
+      "community": 51,
       "norm_label": "log",
       "id": "packages_backend_convex_audit_log"
     },
@@ -4538,7 +4958,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "auth.ts",
       "id": "packages_backend_convex_auth"
     },
@@ -4548,7 +4968,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "password",
       "id": "packages_backend_convex_auth_password"
     },
@@ -4558,7 +4978,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "{ auth, signin, signout, store, isauthenticated }",
       "id": "packages_backend_convex_auth_auth_signin_signout_store_isauthenticated"
     },
@@ -4568,7 +4988,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 176,
       "norm_label": "briefings.test.ts",
       "id": "packages_backend_convex_briefings_test"
     },
@@ -4578,7 +4998,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 51,
+      "community": 176,
       "norm_label": "modules",
       "id": "packages_backend_convex_briefings_test_modules"
     },
@@ -4588,7 +5008,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 51,
+      "community": 176,
       "norm_label": "t",
       "id": "packages_backend_convex_briefings_test_t"
     },
@@ -4598,7 +5018,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 51,
+      "community": 176,
       "norm_label": "seed()",
       "id": "packages_backend_convex_briefings_test_seed"
     },
@@ -4608,7 +5028,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "briefings.ts",
       "id": "packages_backend_convex_briefings"
     },
@@ -4618,7 +5038,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "insert",
       "id": "packages_backend_convex_briefings_insert"
     },
@@ -4628,7 +5048,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "bythread",
       "id": "packages_backend_convex_briefings_bythread"
     },
@@ -4638,7 +5058,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "adr-0004",
       "id": "packages_backend_convex_briefings_ts_docref_adr_0004"
     },
@@ -4778,7 +5198,7 @@
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L58",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "notifyifagenttimeout()",
       "id": "packages_backend_convex_cockpit_notifyifagenttimeout"
     },
@@ -5078,7 +5498,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "crons.ts",
       "id": "packages_backend_convex_crons"
     },
@@ -5088,7 +5508,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "crons",
       "id": "packages_backend_convex_crons_crons"
     },
@@ -5098,7 +5518,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 51,
       "norm_label": "deadletter.ts",
       "id": "packages_backend_convex_deadletter"
     },
@@ -5108,7 +5528,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 95,
+      "community": 51,
       "norm_label": "onpipelinecomplete",
       "id": "packages_backend_convex_deadletter_onpipelinecomplete"
     },
@@ -5118,7 +5538,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L116",
       "_origin": "ast",
-      "community": 95,
+      "community": 28,
       "norm_label": "deadletterrecipient",
       "id": "packages_backend_convex_deadletter_deadletterrecipient"
     },
@@ -5738,7 +6158,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 65,
+      "community": 19,
       "norm_label": "documentdraft.test.ts",
       "id": "packages_backend_convex_documentdraft_test"
     },
@@ -5748,7 +6168,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 65,
+      "community": 19,
       "norm_label": "modules",
       "id": "packages_backend_convex_documentdraft_test_modules"
     },
@@ -6048,7 +6468,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L133",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "lastforthread",
       "id": "packages_backend_convex_evaluations_lastforthread"
     },
@@ -6068,7 +6488,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L166",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "runevaluation",
       "id": "packages_backend_convex_evaluations_runevaluation"
     },
@@ -6198,7 +6618,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L841",
       "_origin": "ast",
-      "community": 13,
+      "community": 95,
       "norm_label": "persistnextstepmemo()",
       "id": "packages_backend_convex_evaluations_persistnextstepmemo"
     },
@@ -6208,7 +6628,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L868",
       "_origin": "ast",
-      "community": 13,
+      "community": 308,
       "norm_label": "bythread",
       "id": "packages_backend_convex_evaluations_bythread"
     },
@@ -6278,7 +6698,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 177,
+      "community": 117,
       "norm_label": "feedback.ts",
       "id": "packages_backend_convex_feedback"
     },
@@ -6288,7 +6708,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 177,
+      "community": 117,
       "norm_label": "submitfeedback",
       "id": "packages_backend_convex_feedback_submitfeedback"
     },
@@ -6298,7 +6718,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 177,
+      "community": 117,
       "norm_label": "undofeedback",
       "id": "packages_backend_convex_feedback_undofeedback"
     },
@@ -6308,7 +6728,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 177,
+      "community": 117,
       "norm_label": "myfeedback",
       "id": "packages_backend_convex_feedback_myfeedback"
     },
@@ -6318,7 +6738,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "gapaction.test.ts",
       "id": "packages_backend_convex_gapaction_test"
     },
@@ -6328,7 +6748,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "modules",
       "id": "packages_backend_convex_gapaction_test_modules"
     },
@@ -6338,7 +6758,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_gapaction_test_aggregatemodules"
     },
@@ -6348,7 +6768,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "workflowmodules",
       "id": "packages_backend_convex_gapaction_test_workflowmodules"
     },
@@ -6358,7 +6778,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "workpoolmodules",
       "id": "packages_backend_convex_gapaction_test_workpoolmodules"
     },
@@ -6368,7 +6788,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "newtest()",
       "id": "packages_backend_convex_gapaction_test_newtest"
     },
@@ -6378,7 +6798,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L48",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "profiledoctext()",
       "id": "packages_backend_convex_gapaction_test_profiledoctext"
     },
@@ -6388,7 +6808,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "seeddoc()",
       "id": "packages_backend_convex_gapaction_test_seeddoc"
     },
@@ -6398,7 +6818,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L94",
       "_origin": "ast",
-      "community": 139,
+      "community": 102,
       "norm_label": "evaluatewithgap()",
       "id": "packages_backend_convex_gapaction_test_evaluatewithgap"
     },
@@ -6488,7 +6908,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "freshaccesstoken()",
       "id": "packages_backend_convex_gmail_freshaccesstoken"
     },
@@ -6508,7 +6928,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "wrap76()",
       "id": "packages_backend_convex_gmail_wrap76"
     },
@@ -6518,7 +6938,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L81",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "buildmime()",
       "id": "packages_backend_convex_gmail_buildmime"
     },
@@ -6528,7 +6948,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L142",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "base64url()",
       "id": "packages_backend_convex_gmail_base64url"
     },
@@ -6858,7 +7278,7 @@
       "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L169",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "flagexpiringtokens",
       "id": "packages_backend_convex_gmailauth_flagexpiringtokens"
     },
@@ -6888,7 +7308,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "guardrails.test.ts",
       "id": "packages_backend_convex_guardrails_test"
     },
@@ -6898,7 +7318,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "modules",
       "id": "packages_backend_convex_guardrails_test_modules"
     },
@@ -6908,7 +7328,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "req",
       "id": "packages_backend_convex_guardrails_test_req"
     },
@@ -6918,7 +7338,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "seedconfig()",
       "id": "packages_backend_convex_guardrails_test_seedconfig"
     },
@@ -7038,7 +7458,7 @@
       "source_file": "packages/backend/convex/http.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "http.ts",
       "id": "packages_backend_convex_http"
     },
@@ -7048,7 +7468,7 @@
       "source_file": "packages/backend/convex/http.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "http",
       "id": "packages_backend_convex_http_http"
     },
@@ -7058,7 +7478,7 @@
       "source_file": "packages/backend/convex/importGuard.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "importguard.test.ts",
       "id": "packages_backend_convex_importguard_test"
     },
@@ -7068,7 +7488,7 @@
       "source_file": "packages/backend/convex/importGuard.test.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "sources",
       "id": "packages_backend_convex_importguard_test_sources"
     },
@@ -7078,7 +7498,7 @@
       "source_file": "packages/backend/convex/importGuard.test.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "basename()",
       "id": "packages_backend_convex_importguard_test_basename"
     },
@@ -7318,7 +7738,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "intakedb.ts",
       "id": "packages_backend_convex_intakedb"
     },
@@ -7328,7 +7748,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "kind",
       "id": "packages_backend_convex_intakedb_kind"
     },
@@ -7338,7 +7758,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "status",
       "id": "packages_backend_convex_intakedb_status"
     },
@@ -7348,7 +7768,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "generateuploadurl",
       "id": "packages_backend_convex_intakedb_generateuploadurl"
     },
@@ -7358,7 +7778,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "insertartifact",
       "id": "packages_backend_convex_intakedb_insertartifact"
     },
@@ -7368,7 +7788,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "patchartifact",
       "id": "packages_backend_convex_intakedb_patchartifact"
     },
@@ -7378,7 +7798,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "bythread",
       "id": "packages_backend_convex_intakedb_bythread"
     },
@@ -7388,7 +7808,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 641,
+      "community": 0,
       "norm_label": "getartifact",
       "id": "packages_backend_convex_intakedb_getartifact"
     },
@@ -7398,7 +7818,7 @@
       "source_file": "packages/backend/convex/lib/allowlist.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "allowlist.ts",
       "id": "packages_backend_convex_lib_allowlist"
     },
@@ -7408,7 +7828,7 @@
       "source_file": "packages/backend/convex/lib/allowlist.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "raw_builder_allowlist",
       "id": "packages_backend_convex_lib_allowlist_raw_builder_allowlist"
     },
@@ -7418,7 +7838,7 @@
       "source_file": "packages/backend/convex/lib/allowlist.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 117,
+      "community": 163,
       "norm_label": "note: `internalquery`/`internalmutation`/`internalaction` are not banned by",
       "id": "packages_backend_convex_lib_allowlist_rationale_9"
     },
@@ -7478,7 +7898,7 @@
       "source_file": "packages/backend/convex/lib/functions.ts",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 112,
+      "community": 58,
       "norm_label": "tenantaction",
       "id": "packages_backend_convex_lib_functions_tenantaction"
     },
@@ -7498,7 +7918,7 @@
       "source_file": "packages/backend/convex/lib/hash.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 13,
+      "community": 95,
       "norm_label": "contenthash()",
       "id": "packages_backend_convex_lib_hash_contenthash"
     },
@@ -8188,7 +8608,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 102,
+      "community": 128,
       "norm_label": "notifications.test.ts",
       "id": "packages_backend_convex_notifications_test"
     },
@@ -8198,7 +8618,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 102,
+      "community": 128,
       "norm_label": "modules",
       "id": "packages_backend_convex_notifications_test_modules"
     },
@@ -8208,7 +8628,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 102,
+      "community": 128,
       "norm_label": "notifications()",
       "id": "packages_backend_convex_notifications_test_notifications"
     },
@@ -8218,7 +8638,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 102,
+      "community": 128,
       "norm_label": "listscheduled()",
       "id": "packages_backend_convex_notifications_test_listscheduled"
     },
@@ -8258,7 +8678,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 95,
+      "community": 51,
       "norm_label": "notify",
       "id": "packages_backend_convex_notifications_notify"
     },
@@ -8268,7 +8688,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "notifyexternal.ts",
       "id": "packages_backend_convex_notifyexternal"
     },
@@ -8278,7 +8698,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 10,
+      "community": 83,
       "norm_label": "kinds",
       "id": "packages_backend_convex_notifyexternal_kinds"
     },
@@ -8288,7 +8708,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 134,
+      "community": 83,
       "norm_label": "dispatch",
       "id": "packages_backend_convex_notifyexternal_dispatch"
     },
@@ -8558,7 +8978,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L157",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "getprofile",
       "id": "packages_backend_convex_onboarding_getprofile"
     },
@@ -8678,7 +9098,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L457",
       "_origin": "ast",
-      "community": 13,
+      "community": 95,
       "norm_label": "writeprofiledoc()",
       "id": "packages_backend_convex_onboarding_writeprofiledoc"
     },
@@ -8718,7 +9138,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L610",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "updateprofile",
       "id": "packages_backend_convex_onboarding_updateprofile"
     },
@@ -8948,7 +9368,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 19,
+      "community": 181,
       "norm_label": "optimizereligibility.test.ts",
       "id": "packages_backend_convex_optimizereligibility_test"
     },
@@ -8958,7 +9378,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 19,
+      "community": 181,
       "norm_label": "modules",
       "id": "packages_backend_convex_optimizereligibility_test_modules"
     },
@@ -8968,7 +9388,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 19,
+      "community": 181,
       "norm_label": "seedfeedback()",
       "id": "packages_backend_convex_optimizereligibility_test_seedfeedback"
     },
@@ -9158,7 +9578,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 105,
+      "community": 177,
       "norm_label": "plans.test.ts",
       "id": "packages_backend_convex_plans_test"
     },
@@ -9168,7 +9588,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 105,
+      "community": 177,
       "norm_label": "modules",
       "id": "packages_backend_convex_plans_test_modules"
     },
@@ -9178,7 +9598,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 105,
+      "community": 177,
       "norm_label": "storeblob()",
       "id": "packages_backend_convex_plans_test_storeblob"
     },
@@ -9188,7 +9608,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 105,
+      "community": 177,
       "norm_label": "seedplan()",
       "id": "packages_backend_convex_plans_test_seedplan"
     },
@@ -9468,7 +9888,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "proactivereview.ts",
       "id": "packages_backend_convex_proactivereview"
     },
@@ -9478,7 +9898,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "runweekly",
       "id": "packages_backend_convex_proactivereview_runweekly"
     },
@@ -9488,7 +9908,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "reviewone",
       "id": "packages_backend_convex_proactivereview_reviewone"
     },
@@ -9498,7 +9918,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L117",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "insertreviewnotification",
       "id": "packages_backend_convex_proactivereview_insertreviewnotification"
     },
@@ -9508,7 +9928,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "profileredaction.test.ts",
       "id": "packages_backend_convex_profileredaction_test"
     },
@@ -9518,7 +9938,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "modules",
       "id": "packages_backend_convex_profileredaction_test_modules"
     },
@@ -9528,7 +9948,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_profileredaction_test_aggregatemodules"
     },
@@ -9538,7 +9958,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "workflowmodules",
       "id": "packages_backend_convex_profileredaction_test_workflowmodules"
     },
@@ -9548,7 +9968,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "workpoolmodules",
       "id": "packages_backend_convex_profileredaction_test_workpoolmodules"
     },
@@ -9558,7 +9978,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "setup()",
       "id": "packages_backend_convex_profileredaction_test_setup"
     },
@@ -9568,7 +9988,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L46",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "astenant()",
       "id": "packages_backend_convex_profileredaction_test_astenant"
     },
@@ -9578,7 +9998,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "sentinels",
       "id": "packages_backend_convex_profileredaction_test_sentinels"
     },
@@ -9588,7 +10008,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "fact_numbers",
       "id": "packages_backend_convex_profileredaction_test_fact_numbers"
     },
@@ -9598,7 +10018,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L71",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "profile",
       "id": "packages_backend_convex_profileredaction_test_profile"
     },
@@ -9608,7 +10028,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L82",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "seedfacts()",
       "id": "packages_backend_convex_profileredaction_test_seedfacts"
     },
@@ -9618,7 +10038,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L99",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "logplanejson()",
       "id": "packages_backend_convex_profileredaction_test_logplanejson"
     },
@@ -9628,7 +10048,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L119",
       "_origin": "ast",
-      "community": 132,
+      "community": 77,
       "norm_label": "payloadnumbers()",
       "id": "packages_backend_convex_profileredaction_test_payloadnumbers"
     },
@@ -9718,7 +10138,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "review.ts",
       "id": "packages_backend_convex_review"
     },
@@ -9728,7 +10148,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "reviewdecisionvalidator",
       "id": "packages_backend_convex_review_reviewdecisionvalidator"
     },
@@ -9738,7 +10158,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "revieweventvalidator",
       "id": "packages_backend_convex_review_revieweventvalidator"
     },
@@ -9748,7 +10168,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "eventname()",
       "id": "packages_backend_convex_review_eventname"
     },
@@ -9758,7 +10178,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "armtimeout",
       "id": "packages_backend_convex_review_armtimeout"
     },
@@ -9768,7 +10188,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L73",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "firetimeout",
       "id": "packages_backend_convex_review_firetimeout"
     },
@@ -9778,7 +10198,7 @@
       "source_file": "packages/backend/convex/review.ts",
       "source_location": "L92",
       "_origin": "ast",
-      "community": 40,
+      "community": 28,
       "norm_label": "senddecision",
       "id": "packages_backend_convex_review_senddecision"
     },
@@ -9998,7 +10418,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 176,
+      "community": 178,
       "norm_label": "skilloptexport.test.ts",
       "id": "packages_backend_convex_skilloptexport_test"
     },
@@ -10008,7 +10428,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 176,
+      "community": 178,
       "norm_label": "modules",
       "id": "packages_backend_convex_skilloptexport_test_modules"
     },
@@ -10018,7 +10438,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 176,
+      "community": 178,
       "norm_label": "seedrated()",
       "id": "packages_backend_convex_skilloptexport_test_seedrated"
     },
@@ -10028,7 +10448,7 @@
       "source_file": "packages/backend/convex/skilloptExport.test.ts",
       "source_location": "L60",
       "_origin": "ast",
-      "community": 176,
+      "community": 178,
       "norm_label": "runexport()",
       "id": "packages_backend_convex_skilloptexport_test_runexport"
     },
@@ -10038,7 +10458,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "skilloptexport.ts",
       "id": "packages_backend_convex_skilloptexport"
     },
@@ -10048,7 +10468,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "scrub()",
       "id": "packages_backend_convex_skilloptexport_scrub"
     },
@@ -10058,7 +10478,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "hashstring()",
       "id": "packages_backend_convex_skilloptexport_hashstring"
     },
@@ -10068,7 +10488,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 1,
+      "community": 154,
       "norm_label": "buildtrajectoryexport",
       "id": "packages_backend_convex_skilloptexport_buildtrajectoryexport"
     },
@@ -10218,7 +10638,7 @@
       "source_file": "packages/backend/convex/skills.ts",
       "source_location": "L368",
       "_origin": "ast",
-      "community": 1,
+      "community": 51,
       "norm_label": "insertcandidate",
       "id": "packages_backend_convex_skills_insertcandidate"
     },
@@ -10718,7 +11138,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "telemetry.ts",
       "id": "packages_backend_convex_telemetry"
     },
@@ -10728,7 +11148,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "terminaloutcome",
       "id": "packages_backend_convex_telemetry_terminaloutcome"
     },
@@ -10738,7 +11158,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "writeterminal",
       "id": "packages_backend_convex_telemetry_writeterminal"
     },
@@ -10968,7 +11388,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "tenantprofile.ts",
       "id": "packages_backend_convex_tenantprofile"
     },
@@ -10978,7 +11398,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "tpdoc",
       "id": "packages_backend_convex_tenantprofile_tpdoc"
     },
@@ -10988,7 +11408,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "tpwrite",
       "id": "packages_backend_convex_tenantprofile_tpwrite"
     },
@@ -10998,7 +11418,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "_doctotier",
       "id": "packages_backend_convex_tenantprofile_doctotier"
     },
@@ -11008,7 +11428,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "_doctosource",
       "id": "packages_backend_convex_tenantprofile_doctosource"
     },
@@ -11018,7 +11438,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L63",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "_doctostage",
       "id": "packages_backend_convex_tenantprofile_doctostage"
     },
@@ -11028,7 +11448,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "_doctofunding",
       "id": "packages_backend_convex_tenantprofile_doctofunding"
     },
@@ -11038,7 +11458,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L67",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "_doctopreset",
       "id": "packages_backend_convex_tenantprofile_doctopreset"
     },
@@ -11048,7 +11468,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "bytenant()",
       "id": "packages_backend_convex_tenantprofile_bytenant"
     },
@@ -11058,7 +11478,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L85",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "definedonly()",
       "id": "packages_backend_convex_tenantprofile_definedonly"
     },
@@ -11068,7 +11488,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "fact_keys",
       "id": "packages_backend_convex_tenantprofile_fact_keys"
     },
@@ -11078,7 +11498,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L105",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "logtierchange()",
       "id": "packages_backend_convex_tenantprofile_logtierchange"
     },
@@ -11098,7 +11518,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L139",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "get",
       "id": "packages_backend_convex_tenantprofile_get"
     },
@@ -11108,7 +11528,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L145",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "savefactsresult",
       "id": "packages_backend_convex_tenantprofile_savefactsresult"
     },
@@ -11128,7 +11548,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L258",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "grantenterprise",
       "id": "packages_backend_convex_tenantprofile_grantenterprise"
     },
@@ -11138,7 +11558,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L295",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "backfilllegacytier",
       "id": "packages_backend_convex_tenantprofile_backfilllegacytier"
     },
@@ -11148,7 +11568,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L327",
       "_origin": "ast",
-      "community": 55,
+      "community": 63,
       "norm_label": "runbackfilllegacytier",
       "id": "packages_backend_convex_tenantprofile_runbackfilllegacytier"
     },
@@ -11158,7 +11578,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 166,
+      "community": 19,
       "norm_label": "vault.test.ts",
       "id": "packages_backend_convex_vault_test"
     },
@@ -11168,7 +11588,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 166,
+      "community": 19,
       "norm_label": "withingest()",
       "id": "packages_backend_convex_vault_test_withingest"
     },
@@ -11178,7 +11598,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "vault.ts",
       "id": "packages_backend_convex_vault"
     },
@@ -11188,7 +11608,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "bytelen()",
       "id": "packages_backend_convex_vault_bytelen"
     },
@@ -11218,7 +11638,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L188",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "deletevaultdoc",
       "id": "packages_backend_convex_vault_deletevaultdoc"
     },
@@ -11248,7 +11668,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L273",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "vaultdownloadurl",
       "id": "packages_backend_convex_vault_vaultdownloadurl"
     },
@@ -11258,7 +11678,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L287",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "docentities",
       "id": "packages_backend_convex_vault_docentities"
     },
@@ -11268,7 +11688,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L340",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "vaultsearch",
       "id": "packages_backend_convex_vault_vaultsearch"
     },
@@ -11278,7 +11698,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L380",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "getdoc",
       "id": "packages_backend_convex_vault_getdoc"
     },
@@ -11288,7 +11708,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L398",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "owneddocsmeta",
       "id": "packages_backend_convex_vault_owneddocsmeta"
     },
@@ -11328,7 +11748,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L467",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "profileseeddocs",
       "id": "packages_backend_convex_vault_profileseeddocs"
     },
@@ -11598,7 +12018,7 @@
       "source_file": "packages/backend/convex/vaultExtract.ts",
       "source_location": "L133",
       "_origin": "ast",
-      "community": 422,
+      "community": 112,
       "norm_label": "extractdoc",
       "id": "packages_backend_convex_vaultextract_extractdoc"
     },
@@ -11718,7 +12138,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "vaultground.test.ts",
       "id": "packages_backend_convex_vaultground_test"
     },
@@ -11728,7 +12148,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "modules",
       "id": "packages_backend_convex_vaultground_test_modules"
     },
@@ -11738,7 +12158,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "astenant()",
       "id": "packages_backend_convex_vaultground_test_astenant"
     },
@@ -11748,7 +12168,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "seeddoc()",
       "id": "packages_backend_convex_vaultground_test_seeddoc"
     },
@@ -11758,7 +12178,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "seededge()",
       "id": "packages_backend_convex_vaultground_test_seededge"
     },
@@ -11768,7 +12188,7 @@
       "source_file": "packages/backend/convex/vaultGround.test.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 128,
+      "community": 172,
       "norm_label": "seedchain()",
       "id": "packages_backend_convex_vaultground_test_seedchain"
     },
@@ -11778,7 +12198,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "vaultground.ts",
       "id": "packages_backend_convex_vaultground"
     },
@@ -11788,7 +12208,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "runvaultground()",
       "id": "packages_backend_convex_vaultground_runvaultground"
     },
@@ -11798,7 +12218,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L105",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "vaultground",
       "id": "packages_backend_convex_vaultground_vaultground"
     },
@@ -11808,7 +12228,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L126",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "vaultgroundhydrated",
       "id": "packages_backend_convex_vaultground_vaultgroundhydrated"
     },
@@ -11828,7 +12248,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 13,
+      "community": 95,
       "norm_label": "startingest()",
       "id": "packages_backend_convex_vaultingest_startingest"
     },
@@ -11958,7 +12378,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "vaultrag.ts",
       "id": "packages_backend_convex_vaultrag"
     },
@@ -11968,7 +12388,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "openaiembeddingv2",
       "id": "packages_backend_convex_vaultrag_openaiembeddingv2"
     },
@@ -11978,7 +12398,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "ragembeddingmodel",
       "id": "packages_backend_convex_vaultrag_ragembeddingmodel"
     },
@@ -11988,7 +12408,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 56,
+      "community": 58,
       "norm_label": "rag",
       "id": "packages_backend_convex_vaultrag_rag"
     },
@@ -11998,7 +12418,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L88",
       "_origin": "ast",
-      "community": 422,
+      "community": 58,
       "norm_label": "embeddoc",
       "id": "packages_backend_convex_vaultrag_embeddoc"
     },
@@ -12168,7 +12588,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "vaultsweep.test.ts",
       "id": "packages_backend_convex_vaultsweep_test"
     },
@@ -12178,7 +12598,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "modules",
       "id": "packages_backend_convex_vaultsweep_test_modules"
     },
@@ -12188,7 +12608,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "migrationsmodules",
       "id": "packages_backend_convex_vaultsweep_test_migrationsmodules"
     },
@@ -12198,7 +12618,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "setup()",
       "id": "packages_backend_convex_vaultsweep_test_setup"
     },
@@ -12208,7 +12628,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L33",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "astenant()",
       "id": "packages_backend_convex_vaultsweep_test_astenant"
     },
@@ -12218,7 +12638,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "extractionscheduled()",
       "id": "packages_backend_convex_vaultsweep_test_extractionscheduled"
     },
@@ -12228,7 +12648,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "seeddoc()",
       "id": "packages_backend_convex_vaultsweep_test_seeddoc"
     },
@@ -12238,7 +12658,7 @@
       "source_file": "packages/backend/convex/vaultSweep.test.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 154,
+      "community": 132,
       "norm_label": "runonebatch()",
       "id": "packages_backend_convex_vaultsweep_test_runonebatch"
     },
@@ -12248,7 +12668,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 422,
+      "community": 112,
       "norm_label": "vaultsweep.ts",
       "id": "packages_backend_convex_vaultsweep"
     },
@@ -12258,7 +12678,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L26",
       "_origin": "ast",
-      "community": 422,
+      "community": 112,
       "norm_label": "sweeppendingextraction",
       "id": "packages_backend_convex_vaultsweep_sweeppendingextraction"
     },
@@ -12268,7 +12688,7 @@
       "source_file": "packages/backend/convex/vaultSweep.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 422,
+      "community": 112,
       "norm_label": "runsweep",
       "id": "packages_backend_convex_vaultsweep_runsweep"
     },
@@ -12428,7 +12848,7 @@
       "source_file": "packages/backend/convex/vaultTranscribe.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 422,
+      "community": 112,
       "norm_label": "transcribedoc",
       "id": "packages_backend_convex_vaulttranscribe_transcribedoc"
     },
@@ -12778,7 +13198,7 @@
       "source_file": "packages/backend/convex/voiceToken.ts",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 652,
+      "community": 80,
       "norm_label": "mintclientsecret",
       "id": "packages_backend_convex_voicetoken_mintclientsecret"
     },
@@ -12788,7 +13208,7 @@
       "source_file": "packages/backend/convex/voiceToken.ts",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 652,
+      "community": 80,
       "norm_label": "hangupcall",
       "id": "packages_backend_convex_voicetoken_hangupcall"
     },
@@ -12878,7 +13298,7 @@
       "source_file": "packages/backend/convex/worm.ts",
       "source_location": "L44",
       "_origin": "ast",
-      "community": 134,
+      "community": 96,
       "norm_label": "exportaudit",
       "id": "packages_backend_convex_worm_exportaudit"
     },
@@ -14478,7 +14898,7 @@
       "source_file": "packages/core/src/briefing.ts",
       "source_location": "L111",
       "_origin": "ast",
-      "community": 9,
+      "community": 22,
       "norm_label": "selectfordigest()",
       "id": "packages_core_src_briefing_selectfordigest"
     },
@@ -14598,7 +15018,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "buildtelemetry.test.ts",
       "id": "packages_core_src_buildtelemetry_test"
     },
@@ -14608,7 +15028,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "opsg01_keys",
       "id": "packages_core_src_buildtelemetry_test_opsg01_keys"
     },
@@ -14618,7 +15038,7 @@
       "source_file": "packages/core/src/buildTelemetry.test.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 95,
+      "community": 137,
       "norm_label": "usage()",
       "id": "packages_core_src_buildtelemetry_test_usage"
     },
@@ -14628,7 +15048,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "buildtelemetry.ts",
       "id": "packages_core_src_buildtelemetry"
     },
@@ -14638,7 +15058,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "reviewoutcome",
       "id": "packages_core_src_buildtelemetry_reviewoutcome"
     },
@@ -14648,7 +15068,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "llmusage",
       "id": "packages_core_src_buildtelemetry_llmusage"
     },
@@ -14658,7 +15078,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "terminaloutcome",
       "id": "packages_core_src_buildtelemetry_terminaloutcome"
     },
@@ -14668,7 +15088,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "telemetryrow",
       "id": "packages_core_src_buildtelemetry_telemetryrow"
     },
@@ -14678,7 +15098,7 @@
       "source_file": "packages/core/src/buildTelemetry.ts",
       "source_location": "L54",
       "_origin": "ast",
-      "community": 95,
+      "community": 11,
       "norm_label": "buildtelemetry()",
       "id": "packages_core_src_buildtelemetry_buildtelemetry"
     },
@@ -14768,7 +15188,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 182,
+      "community": 173,
       "norm_label": "businessprofile",
       "id": "packages_core_src_businessprofile_businessprofile"
     },
@@ -14778,7 +15198,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 17,
+      "community": 77,
       "norm_label": "profileinput",
       "id": "packages_core_src_businessprofile_profileinput"
     },
@@ -14898,7 +15318,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L229",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "revenuestage",
       "id": "packages_core_src_businessprofile_revenuestage"
     },
@@ -14908,7 +15328,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L232",
       "_origin": "ast",
-      "community": 35,
+      "community": 173,
       "norm_label": "funding_states",
       "id": "packages_core_src_businessprofile_funding_states"
     },
@@ -14918,7 +15338,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L233",
       "_origin": "ast",
-      "community": 35,
+      "community": 55,
       "norm_label": "funding",
       "id": "packages_core_src_businessprofile_funding"
     },
@@ -14938,7 +15358,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L245",
       "_origin": "ast",
-      "community": 173,
+      "community": 55,
       "norm_label": "tiersource",
       "id": "packages_core_src_businessprofile_tiersource"
     },
@@ -14948,7 +15368,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L252",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "behavior_presets",
       "id": "packages_core_src_businessprofile_behavior_presets"
     },
@@ -14958,7 +15378,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L253",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "behaviorpreset",
       "id": "packages_core_src_businessprofile_behaviorpreset"
     },
@@ -14978,7 +15398,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L267",
       "_origin": "ast",
-      "community": 11,
+      "community": 173,
       "norm_label": "tiers",
       "id": "packages_core_src_businessprofile_tiers"
     },
@@ -14988,7 +15408,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L268",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "tier",
       "id": "packages_core_src_businessprofile_tier"
     },
@@ -15028,7 +15448,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L345",
       "_origin": "ast",
-      "community": 17,
+      "community": 173,
       "norm_label": "required_slots",
       "id": "packages_core_src_businessprofile_required_slots"
     },
@@ -15068,7 +15488,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L377",
       "_origin": "ast",
-      "community": 182,
+      "community": 173,
       "norm_label": "missingslots()",
       "id": "packages_core_src_businessprofile_missingslots"
     },
@@ -15078,7 +15498,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L382",
       "_origin": "ast",
-      "community": 182,
+      "community": 173,
       "norm_label": "cancomplete()",
       "id": "packages_core_src_businessprofile_cancomplete"
     },
@@ -15088,7 +15508,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L406",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "sanitizeagentname()",
       "id": "packages_core_src_businessprofile_sanitizeagentname"
     },
@@ -15678,7 +16098,7 @@
       "source_file": "packages/core/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 65,
+      "community": 170,
       "norm_label": "index.ts",
       "id": "packages_core_src_index"
     },
@@ -15778,7 +16198,7 @@
       "source_file": "packages/core/src/notificationTemplates.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "notificationtemplates.test.ts",
       "id": "packages_core_src_notificationtemplates_test"
     },
@@ -15788,7 +16208,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "notificationtemplates.ts",
       "id": "packages_core_src_notificationtemplates"
     },
@@ -15798,7 +16218,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "notificationkind",
       "id": "packages_core_src_notificationtemplates_notificationkind"
     },
@@ -15808,7 +16228,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "messages",
       "id": "packages_core_src_notificationtemplates_messages"
     },
@@ -15818,7 +16238,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 102,
+      "community": 51,
       "norm_label": "notificationmessage()",
       "id": "packages_core_src_notificationtemplates_notificationmessage"
     },
@@ -15908,7 +16328,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "result.ts",
       "id": "packages_core_src_result"
     },
@@ -15918,7 +16338,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "ok",
       "id": "packages_core_src_result_ok"
     },
@@ -15928,7 +16348,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "err",
       "id": "packages_core_src_result_err"
     },
@@ -15938,7 +16358,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "result",
       "id": "packages_core_src_result_result"
     },
@@ -15948,7 +16368,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "isok()",
       "id": "packages_core_src_result_isok"
     },
@@ -15958,7 +16378,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "iserr()",
       "id": "packages_core_src_result_iserr"
     },
@@ -15968,7 +16388,7 @@
       "source_file": "packages/core/src/result.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 163,
+      "community": 106,
       "norm_label": "unwrap()",
       "id": "packages_core_src_result_unwrap"
     },
@@ -16098,7 +16518,7 @@
       "source_file": "packages/core/src/specialists.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialists.test.ts",
       "id": "packages_core_src_specialists_test"
     },
@@ -16108,7 +16528,7 @@
       "source_file": "packages/core/src/specialists.test.ts",
       "source_location": "L124",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "diagnoserouteliterals()",
       "id": "packages_core_src_specialists_test_diagnoserouteliterals"
     },
@@ -16118,7 +16538,7 @@
       "source_file": "packages/core/src/specialists.test.ts",
       "source_location": "L56",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "adr-0007",
       "id": "packages_core_src_specialists_test_ts_docref_adr_0007"
     },
@@ -16128,7 +16548,7 @@
       "source_file": "packages/core/src/specialists.test.ts",
       "source_location": "L224",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "adr-0009",
       "id": "packages_core_src_specialists_test_ts_docref_adr_0009"
     },
@@ -16138,7 +16558,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialists.ts",
       "id": "packages_core_src_specialists"
     },
@@ -16148,7 +16568,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 11,
+      "community": 219,
       "norm_label": "specialistroute",
       "id": "packages_core_src_specialists_specialistroute"
     },
@@ -16158,7 +16578,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialistspec",
       "id": "packages_core_src_specialists_specialistspec"
     },
@@ -16168,7 +16588,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialist_tools",
       "id": "packages_core_src_specialists_specialist_tools"
     },
@@ -16178,7 +16598,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L48",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialists",
       "id": "packages_core_src_specialists_specialists"
     },
@@ -16188,7 +16608,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "resolvedspecialist",
       "id": "packages_core_src_specialists_resolvedspecialist"
     },
@@ -16208,7 +16628,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L100",
       "_origin": "ast",
-      "community": 11,
+      "community": 160,
       "norm_label": "wouldcycle()",
       "id": "packages_core_src_specialists_wouldcycle"
     },
@@ -16218,7 +16638,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L168",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "tierbriefing()",
       "id": "packages_core_src_specialists_tierbriefing"
     },
@@ -16228,7 +16648,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L198",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "specialistmemobody()",
       "id": "packages_core_src_specialists_specialistmemobody"
     },
@@ -16238,7 +16658,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "adr-0009",
       "id": "packages_core_src_specialists_ts_docref_adr_0009"
     },
@@ -16248,7 +16668,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 11,
+      "community": 91,
       "norm_label": "adr-0007",
       "id": "packages_core_src_specialists_ts_docref_adr_0007"
     },
@@ -16288,7 +16708,7 @@
       "source_file": "packages/core/src/tokenExpiry.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 136,
       "norm_label": "tokenexpiry.test.ts",
       "id": "packages_core_src_tokenexpiry_test"
     },
@@ -16298,7 +16718,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 1,
+      "community": 136,
       "norm_label": "tokenexpiry.ts",
       "id": "packages_core_src_tokenexpiry"
     },
@@ -16308,7 +16728,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 1,
+      "community": 136,
       "norm_label": "isexpiringsoon()",
       "id": "packages_core_src_tokenexpiry_isexpiringsoon"
     },
@@ -16318,7 +16738,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 1,
+      "community": 136,
       "norm_label": "isdead()",
       "id": "packages_core_src_tokenexpiry_isdead"
     },
@@ -16398,7 +16818,7 @@
       "source_file": "packages/core/src/validateSubmit.ts",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 21,
+      "community": 9,
       "norm_label": "isvalidemail()",
       "id": "packages_core_src_validatesubmit_isvalidemail"
     },
@@ -16608,7 +17028,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "classify.test.ts",
       "id": "packages_extraction_src_classify_test"
     },
@@ -16618,7 +17038,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "bytes()",
       "id": "packages_extraction_src_classify_test_bytes"
     },
@@ -16628,7 +17048,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "generic",
       "id": "packages_extraction_src_classify_test_generic"
     },
@@ -16638,7 +17058,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "classify.ts",
       "id": "packages_extraction_src_classify"
     },
@@ -16658,7 +17078,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "classifyresult",
       "id": "packages_extraction_src_classify_classifyresult"
     },
@@ -16668,7 +17088,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "startswith()",
       "id": "packages_extraction_src_classify_startswith"
     },
@@ -16678,7 +17098,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "asciiat()",
       "id": "packages_extraction_src_classify_asciiat"
     },
@@ -16688,7 +17108,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "sniffbytes()",
       "id": "packages_extraction_src_classify_sniffbytes"
     },
@@ -16698,7 +17118,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L51",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "sniffextension()",
       "id": "packages_extraction_src_classify_sniffextension"
     },
@@ -16708,7 +17128,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "sniffmime()",
       "id": "packages_extraction_src_classify_sniffmime"
     },
@@ -16718,7 +17138,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L76",
       "_origin": "ast",
-      "community": 91,
+      "community": 105,
       "norm_label": "classify()",
       "id": "packages_extraction_src_classify_classify"
     },
@@ -16788,7 +17208,7 @@
       "source_file": "packages/pii/src/scan.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "scan.test.ts",
       "id": "packages_pii_src_scan_test"
     },
@@ -16798,7 +17218,7 @@
       "source_file": "packages/pii/src/scan.test.ts",
       "source_location": "L4",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "unwrapok()",
       "id": "packages_pii_src_scan_test_unwrapok"
     },
@@ -16898,18 +17318,18 @@
       "source_file": "packages/pii/src/scan.ts",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 106,
+      "community": 154,
       "norm_label": "scantext()",
       "id": "packages_pii_src_scan_scantext"
     },
     {
-      "label": "NOTE: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
+      "label": "NOTE: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
       "file_type": "rationale",
       "source_file": "packages/pii/src/scan.ts",
       "source_location": "L56",
       "_origin": "ast",
       "community": 106,
-      "norm_label": "note: no \\b before \"(\" — a word boundary can't sit between two non-word chars,",
+      "norm_label": "note: no \\b before \"(\" \u2014 a word boundary can't sit between two non-word chars,",
       "id": "packages_pii_src_scan_rationale_56"
     },
     {
@@ -16928,7 +17348,7 @@
       "source_file": "packages/vault/src/categories.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "categories.test.ts",
       "id": "packages_vault_src_categories_test"
     },
@@ -16938,7 +17358,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "categories.ts",
       "id": "packages_vault_src_categories"
     },
@@ -16948,7 +17368,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L2",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "vaultcategory",
       "id": "packages_vault_src_categories_vaultcategory"
     },
@@ -16958,7 +17378,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "vaultsource",
       "id": "packages_vault_src_categories_vaultsource"
     },
@@ -16968,7 +17388,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "searchable_mime",
       "id": "packages_vault_src_categories_searchable_mime"
     },
@@ -16978,7 +17398,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "categoryfor()",
       "id": "packages_vault_src_categories_categoryfor"
     },
@@ -16988,7 +17408,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 166,
+      "community": 95,
       "norm_label": "issearchable()",
       "id": "packages_vault_src_categories_issearchable"
     },
@@ -17068,7 +17488,7 @@
       "source_file": "packages/vault/src/fusion.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "fusion.test.ts",
       "id": "packages_vault_src_fusion_test"
     },
@@ -17078,7 +17498,7 @@
       "source_file": "packages/vault/src/fusion.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "fusion.ts",
       "id": "packages_vault_src_fusion"
     },
@@ -17088,7 +17508,7 @@
       "source_file": "packages/vault/src/fusion.ts",
       "source_location": "L2",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "vectorhit",
       "id": "packages_vault_src_fusion_vectorhit"
     },
@@ -17098,7 +17518,7 @@
       "source_file": "packages/vault/src/fusion.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "fusionresult",
       "id": "packages_vault_src_fusion_fusionresult"
     },
@@ -17108,7 +17528,7 @@
       "source_file": "packages/vault/src/fusion.ts",
       "source_location": "L29",
       "_origin": "ast",
-      "community": 56,
+      "community": 166,
       "norm_label": "fuse()",
       "id": "packages_vault_src_fusion_fuse"
     },
@@ -17123,13 +17543,13 @@
       "id": "packages_vault_src_index"
     },
     {
-      "label": "NOTE: ./officeText is deliberately NOT re-exported here (V8-bundle hygiene — imp",
+      "label": "NOTE: ./officeText is deliberately NOT re-exported here (V8-bundle hygiene \u2014 imp",
       "file_type": "rationale",
       "source_file": "packages/vault/src/index.ts",
       "source_location": "L14",
       "_origin": "ast",
       "community": 166,
-      "norm_label": "note: ./officetext is deliberately not re-exported here (v8-bundle hygiene — imp",
+      "norm_label": "note: ./officetext is deliberately not re-exported here (v8-bundle hygiene \u2014 imp",
       "id": "packages_vault_src_index_rationale_14"
     },
     {
@@ -17418,7 +17838,7 @@
       "source_file": "packages/voice/src/brief.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 308,
+      "community": 311,
       "norm_label": "header_set",
       "id": "packages_voice_src_brief_header_set"
     },
@@ -17488,7 +17908,7 @@
       "source_file": "packages/voice/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 80,
+      "community": 469,
       "norm_label": "index.ts",
       "id": "packages_voice_src_index"
     },
@@ -17498,7 +17918,7 @@
       "source_file": "packages/voice/src/metering.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 136,
+      "community": 469,
       "norm_label": "metering.test.ts",
       "id": "packages_voice_src_metering_test"
     },
@@ -17508,7 +17928,7 @@
       "source_file": "packages/voice/src/metering.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 136,
+      "community": 469,
       "norm_label": "metering.ts",
       "id": "packages_voice_src_metering"
     },
@@ -17518,7 +17938,7 @@
       "source_file": "packages/voice/src/metering.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 136,
+      "community": 469,
       "norm_label": "usagedelta",
       "id": "packages_voice_src_metering_usagedelta"
     },
@@ -17528,7 +17948,7 @@
       "source_file": "packages/voice/src/metering.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 136,
+      "community": 469,
       "norm_label": "zero_usage",
       "id": "packages_voice_src_metering_zero_usage"
     },
@@ -17538,7 +17958,7 @@
       "source_file": "packages/voice/src/metering.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 136,
+      "community": 469,
       "norm_label": "accumulateusage()",
       "id": "packages_voice_src_metering_accumulateusage"
     },
@@ -17993,13 +18413,13 @@
       "id": "skillopt_envs_pikar_cockpit_init"
     },
     {
-      "label": "pikar_cockpit — the SkillOpt env package that optimizes the `cockpit-agent` skil",
+      "label": "pikar_cockpit \u2014 the SkillOpt env package that optimizes the `cockpit-agent` skil",
       "file_type": "rationale",
       "source_file": "skillopt/envs/pikar_cockpit/__init__.py",
       "source_location": "L1",
       "_origin": "ast",
       "community": 148,
-      "norm_label": "pikar_cockpit — the skillopt env package that optimizes the `cockpit-agent` skil",
+      "norm_label": "pikar_cockpit \u2014 the skillopt env package that optimizes the `cockpit-agent` skil",
       "id": "skillopt_envs_pikar_cockpit_init_rationale_1"
     },
     {
@@ -18083,13 +18503,13 @@
       "id": "skillopt_envs_pikar_cockpit_adapter_pikarcockpitadapter_rollout"
     },
     {
-      "label": "SkillOpt EnvAdapter for the pikar_cockpit env (skillopt==0.2.0) — thin wiring on",
+      "label": "SkillOpt EnvAdapter for the pikar_cockpit env (skillopt==0.2.0) \u2014 thin wiring on",
       "file_type": "rationale",
       "source_file": "skillopt/envs/pikar_cockpit/adapter.py",
       "source_location": "L1",
       "_origin": "ast",
       "community": 148,
-      "norm_label": "skillopt envadapter for the pikar_cockpit env (skillopt==0.2.0) — thin wiring on",
+      "norm_label": "skillopt envadapter for the pikar_cockpit env (skillopt==0.2.0) \u2014 thin wiring on",
       "id": "skillopt_envs_pikar_cockpit_adapter_rationale_1"
     },
     {
@@ -18343,13 +18763,13 @@
       "id": "skillopt_envs_pikar_cockpit_rollout_rationale_1"
     },
     {
-      "label": "Mirror smokeRun.mjs must(): `node <convex/bin/main.js> run <fn> <json>` — node d",
+      "label": "Mirror smokeRun.mjs must(): `node <convex/bin/main.js> run <fn> <json>` \u2014 node d",
       "file_type": "rationale",
       "source_file": "skillopt/envs/pikar_cockpit/rollout.py",
       "source_location": "L35",
       "_origin": "ast",
       "community": 148,
-      "norm_label": "mirror smokerun.mjs must(): `node <convex/bin/main.js> run <fn> <json>` — node d",
+      "norm_label": "mirror smokerun.mjs must(): `node <convex/bin/main.js> run <fn> <json>` \u2014 node d",
       "id": "skillopt_envs_pikar_cockpit_rollout_rationale_35"
     },
     {
@@ -18443,13 +18863,13 @@
       "id": "readme_clean_clone_boot_order_run_verbatim"
     },
     {
-      "label": "Skill registry seed (required — the pipeline fails closed without it)",
+      "label": "Skill registry seed (required \u2014 the pipeline fails closed without it)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L65",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "skill registry seed (required — the pipeline fails closed without it)",
+      "norm_label": "skill registry seed (required \u2014 the pipeline fails closed without it)",
       "id": "readme_skill_registry_seed_required_the_pipeline_fails_closed_without_it"
     },
     {
@@ -18483,33 +18903,33 @@
       "id": "readme_common_commands"
     },
     {
-      "label": "Dev tooling — build discipline & repo knowledge graph",
+      "label": "Dev tooling \u2014 build discipline & repo knowledge graph",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L117",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "dev tooling — build discipline & repo knowledge graph",
+      "norm_label": "dev tooling \u2014 build discipline & repo knowledge graph",
       "id": "readme_dev_tooling_build_discipline_repo_knowledge_graph"
     },
     {
-      "label": "ponytail — minimal-code discipline",
+      "label": "ponytail \u2014 minimal-code discipline",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L123",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "ponytail — minimal-code discipline",
+      "norm_label": "ponytail \u2014 minimal-code discipline",
       "id": "readme_ponytail_minimal_code_discipline"
     },
     {
-      "label": "graphify — repo knowledge graph (query before you read)",
+      "label": "graphify \u2014 repo knowledge graph (query before you read)",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L135",
       "_origin": "ast",
       "community": 33,
-      "norm_label": "graphify — repo knowledge graph (query before you read)",
+      "norm_label": "graphify \u2014 repo knowledge graph (query before you read)",
       "id": "readme_graphify_repo_knowledge_graph_query_before_you_read"
     },
     {
@@ -18593,23 +19013,23 @@
       "id": "docs_readme_docs"
     },
     {
-      "label": "`playbooks/` — one per feature/subsystem",
+      "label": "`playbooks/` \u2014 one per feature/subsystem",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L6",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`playbooks/` — one per feature/subsystem",
+      "norm_label": "`playbooks/` \u2014 one per feature/subsystem",
       "id": "docs_readme_playbooks_one_per_feature_subsystem"
     },
     {
-      "label": "`decisions/` — Architecture Decision Records (ADRs)",
+      "label": "`decisions/` \u2014 Architecture Decision Records (ADRs)",
       "file_type": "document",
       "source_file": "docs/README.md",
       "source_location": "L40",
       "_origin": "ast",
       "community": 236,
-      "norm_label": "`decisions/` — architecture decision records (adrs)",
+      "norm_label": "`decisions/` \u2014 architecture decision records (adrs)",
       "id": "docs_readme_decisions_architecture_decision_records_adrs"
     },
     {
@@ -19103,13 +19523,13 @@
       "id": "docs_decisions_009_tier_shapes_the_specialist_prompt_not_the_offer_set_consequences"
     },
     {
-      "label": "Deferred — and the supersession path",
+      "label": "Deferred \u2014 and the supersession path",
       "file_type": "document",
       "source_file": "docs/decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md",
       "source_location": "L91",
       "_origin": "ast",
       "community": 97,
-      "norm_label": "deferred — and the supersession path",
+      "norm_label": "deferred \u2014 and the supersession path",
       "id": "docs_decisions_009_tier_shapes_the_specialist_prompt_not_the_offer_set_deferred_and_the_supersession_path"
     },
     {
@@ -19123,13 +19543,13 @@
       "id": "docs_decisions_adr_006_vault_chunks_trusted_as_own"
     },
     {
-      "label": "ADR-006: Vault chunks are trusted-as-own — they enter the agent loop directly, not through the toolless-ingestion invariant",
+      "label": "ADR-006: Vault chunks are trusted-as-own \u2014 they enter the agent loop directly, not through the toolless-ingestion invariant",
       "file_type": "document",
       "source_file": "docs/decisions/ADR-006-vault-chunks-trusted-as-own.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 146,
-      "norm_label": "adr-006: vault chunks are trusted-as-own — they enter the agent loop directly, not through the toolless-ingestion invariant",
+      "norm_label": "adr-006: vault chunks are trusted-as-own \u2014 they enter the agent loop directly, not through the toolless-ingestion invariant",
       "id": "docs_decisions_adr_006_vault_chunks_trusted_as_own_adr_006_vault_chunks_are_trusted_as_own_they_enter_the_agent_loop_directly_not_through_the_toolless_ingestion_invariant"
     },
     {
@@ -19183,13 +19603,13 @@
       "id": "docs_design_brand"
     },
     {
-      "label": "Pikar AI — Brand & UI Reference",
+      "label": "Pikar AI \u2014 Brand & UI Reference",
       "file_type": "document",
       "source_file": "docs/design/BRAND.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 244,
-      "norm_label": "pikar ai — brand & ui reference",
+      "norm_label": "pikar ai \u2014 brand & ui reference",
       "id": "docs_design_brand_pikar_ai_brand_ui_reference"
     },
     {
@@ -19243,13 +19663,13 @@
       "id": "docs_design_brand_5_component_patterns_from_the_screenshots"
     },
     {
-      "label": "6. Accessibility (non-negotiable — from `globals.css` notes)",
+      "label": "6. Accessibility (non-negotiable \u2014 from `globals.css` notes)",
       "file_type": "document",
       "source_file": "docs/design/BRAND.md",
       "source_location": "L110",
       "_origin": "ast",
       "community": 244,
-      "norm_label": "6. accessibility (non-negotiable — from `globals.css` notes)",
+      "norm_label": "6. accessibility (non-negotiable \u2014 from `globals.css` notes)",
       "id": "docs_design_brand_6_accessibility_non_negotiable_from_globals_css_notes"
     },
     {
@@ -19333,13 +19753,13 @@
       "id": "docs_playbooks_template_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/TEMPLATE.md",
       "source_location": "L27",
       "_origin": "ast",
       "community": 235,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_template_invariants_what_must_never_break"
     },
     {
@@ -19443,13 +19863,13 @@
       "id": "docs_playbooks_agent_runtime_data_flow_one_agent_turn"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/agent-runtime.md",
       "source_location": "L78",
       "_origin": "ast",
       "community": 3,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_agent_runtime_invariants_what_must_never_break"
     },
     {
@@ -19583,13 +20003,13 @@
       "id": "docs_playbooks_audit_dead_letter_cron_jobs_packages_backend_convex_crons_ts"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/audit-dead-letter.md",
       "source_location": "L130",
       "_origin": "ast",
       "community": 233,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_audit_dead_letter_invariants_what_must_never_break"
     },
     {
@@ -19693,23 +20113,23 @@
       "id": "docs_playbooks_business_evaluation_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
       "source_location": "L100",
       "_origin": "ast",
       "community": 150,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_business_evaluation_invariants_what_must_never_break"
     },
     {
-      "label": "\"What changed\" — the `evaluations.delta` field (13-01, BEVL-03)",
+      "label": "\"What changed\" \u2014 the `evaluations.delta` field (13-01, BEVL-03)",
       "file_type": "document",
       "source_file": "docs/playbooks/business-evaluation.md",
       "source_location": "L160",
       "_origin": "ast",
       "community": 150,
-      "norm_label": "\"what changed\" — the `evaluations.delta` field (13-01, bevl-03)",
+      "norm_label": "\"what changed\" \u2014 the `evaluations.delta` field (13-01, bevl-03)",
       "id": "docs_playbooks_business_evaluation_what_changed_the_evaluations_delta_field_13_01_bevl_03"
     },
     {
@@ -19883,13 +20303,13 @@
       "id": "docs_playbooks_cockpit_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L173",
       "_origin": "ast",
       "community": 101,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_cockpit_invariants_what_must_never_break"
     },
     {
@@ -19903,93 +20323,93 @@
       "id": "docs_playbooks_cockpit_how_to_change_safely"
     },
     {
-      "label": "Phase 10 — Vault grounding (`searchVault`)",
+      "label": "Phase 10 \u2014 Vault grounding (`searchVault`)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L223",
       "_origin": "ast",
       "community": 101,
-      "norm_label": "phase 10 — vault grounding (`searchvault`)",
+      "norm_label": "phase 10 \u2014 vault grounding (`searchvault`)",
       "id": "docs_playbooks_cockpit_phase_10_vault_grounding_searchvault"
     },
     {
-      "label": "Phase 12 — Business evaluation (`evaluateBusiness` + EVALUATION card)",
+      "label": "Phase 12 \u2014 Business evaluation (`evaluateBusiness` + EVALUATION card)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L271",
       "_origin": "ast",
       "community": 101,
-      "norm_label": "phase 12 — business evaluation (`evaluatebusiness` + evaluation card)",
+      "norm_label": "phase 12 \u2014 business evaluation (`evaluatebusiness` + evaluation card)",
       "id": "docs_playbooks_cockpit_phase_12_business_evaluation_evaluatebusiness_evaluation_card"
     },
     {
-      "label": "The `Act on this` control (12-05, BEVL-02) — the ONE write on the review",
+      "label": "The `Act on this` control (12-05, BEVL-02) \u2014 the ONE write on the review",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L306",
       "_origin": "ast",
       "community": 101,
-      "norm_label": "the `act on this` control (12-05, bevl-02) — the one write on the review",
+      "norm_label": "the `act on this` control (12-05, bevl-02) \u2014 the one write on the review",
       "id": "docs_playbooks_cockpit_the_act_on_this_control_12_05_bevl_02_the_one_write_on_the_review"
     },
     {
-      "label": "Phase 13 — the pinned Weekly review tab (BEVL-03, 13-03)",
+      "label": "Phase 13 \u2014 the pinned Weekly review tab (BEVL-03, 13-03)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L327",
       "_origin": "ast",
       "community": 101,
-      "norm_label": "phase 13 — the pinned weekly review tab (bevl-03, 13-03)",
+      "norm_label": "phase 13 \u2014 the pinned weekly review tab (bevl-03, 13-03)",
       "id": "docs_playbooks_cockpit_phase_13_the_pinned_weekly_review_tab_bevl_03_13_03"
     },
     {
-      "label": "Phase 15 — Sub-agent dispatch + generalized executor",
+      "label": "Phase 15 \u2014 Sub-agent dispatch + generalized executor",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L376",
       "_origin": "ast",
       "community": 543,
-      "norm_label": "phase 15 — sub-agent dispatch + generalized executor",
+      "norm_label": "phase 15 \u2014 sub-agent dispatch + generalized executor",
       "id": "docs_playbooks_cockpit_phase_15_sub_agent_dispatch_generalized_executor"
     },
     {
-      "label": "Phase 15 — Wave 0 (freeze)",
+      "label": "Phase 15 \u2014 Wave 0 (freeze)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L382",
       "_origin": "ast",
       "community": 543,
-      "norm_label": "phase 15 — wave 0 (freeze)",
+      "norm_label": "phase 15 \u2014 wave 0 (freeze)",
       "id": "docs_playbooks_cockpit_phase_15_wave_0_freeze"
     },
     {
-      "label": "Phase 15 — Lane A (dispatch core)",
+      "label": "Phase 15 \u2014 Lane A (dispatch core)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L424",
       "_origin": "ast",
       "community": 543,
-      "norm_label": "phase 15 — lane a (dispatch core)",
+      "norm_label": "phase 15 \u2014 lane a (dispatch core)",
       "id": "docs_playbooks_cockpit_phase_15_lane_a_dispatch_core"
     },
     {
-      "label": "Phase 15.1 — the tier in the specialist prompt (15.1-05, ADR-009)",
+      "label": "Phase 15.1 \u2014 the tier in the specialist prompt (15.1-05, ADR-009)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L540",
       "_origin": "ast",
       "community": 543,
-      "norm_label": "phase 15.1 — the tier in the specialist prompt (15.1-05, adr-009)",
+      "norm_label": "phase 15.1 \u2014 the tier in the specialist prompt (15.1-05, adr-009)",
       "id": "docs_playbooks_cockpit_phase_15_1_the_tier_in_the_specialist_prompt_15_1_05_adr_009"
     },
     {
-      "label": "Phase 15 — Lane B (generalized executor)",
+      "label": "Phase 15 \u2014 Lane B (generalized executor)",
       "file_type": "document",
       "source_file": "docs/playbooks/cockpit.md",
       "source_location": "L571",
       "_origin": "ast",
       "community": 543,
-      "norm_label": "phase 15 — lane b (generalized executor)",
+      "norm_label": "phase 15 \u2014 lane b (generalized executor)",
       "id": "docs_playbooks_cockpit_phase_15_lane_b_generalized_executor"
     },
     {
@@ -20083,13 +20503,13 @@
       "id": "docs_playbooks_growth_diagnostic_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/growth-diagnostic.md",
       "source_location": "L152",
       "_origin": "ast",
       "community": 25,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_growth_diagnostic_invariants_what_must_never_break"
     },
     {
@@ -20193,13 +20613,13 @@
       "id": "docs_playbooks_intake_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/intake.md",
       "source_location": "L84",
       "_origin": "ast",
       "community": 70,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_intake_invariants_what_must_never_break"
     },
     {
@@ -20283,53 +20703,53 @@
       "id": "docs_playbooks_onboarding_key_files"
     },
     {
-      "label": "Tier derivation (Phase 15.1, design §5) — same file, `businessProfile.ts`",
+      "label": "Tier derivation (Phase 15.1, design \u00a75) \u2014 same file, `businessProfile.ts`",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L27",
       "_origin": "ast",
       "community": 529,
-      "norm_label": "tier derivation (phase 15.1, design §5) — same file, `businessprofile.ts`",
+      "norm_label": "tier derivation (phase 15.1, design \u00a75) \u2014 same file, `businessprofile.ts`",
       "id": "docs_playbooks_onboarding_tier_derivation_phase_15_1_design_5_same_file_businessprofile_ts"
     },
     {
-      "label": "Tier control plane — `tenantProfiles` (Phase 15.1, design §4.1)",
+      "label": "Tier control plane \u2014 `tenantProfiles` (Phase 15.1, design \u00a74.1)",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L58",
       "_origin": "ast",
       "community": 529,
-      "norm_label": "tier control plane — `tenantprofiles` (phase 15.1, design §4.1)",
+      "norm_label": "tier control plane \u2014 `tenantprofiles` (phase 15.1, design \u00a74.1)",
       "id": "docs_playbooks_onboarding_tier_control_plane_tenantprofiles_phase_15_1_design_4_1"
     },
     {
-      "label": "The `saveFacts` contract (plan 15.1-02) — `convex/tenantProfile.ts`",
+      "label": "The `saveFacts` contract (plan 15.1-02) \u2014 `convex/tenantProfile.ts`",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L91",
       "_origin": "ast",
       "community": 529,
-      "norm_label": "the `savefacts` contract (plan 15.1-02) — `convex/tenantprofile.ts`",
+      "norm_label": "the `savefacts` contract (plan 15.1-02) \u2014 `convex/tenantprofile.ts`",
       "id": "docs_playbooks_onboarding_the_savefacts_contract_plan_15_1_02_convex_tenantprofile_ts"
     },
     {
-      "label": "The conversational turn (plan 15.1-06, design §6) — `convex/onboarding.ts` `converse`",
+      "label": "The conversational turn (plan 15.1-06, design \u00a76) \u2014 `convex/onboarding.ts` `converse`",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L144",
       "_origin": "ast",
       "community": 529,
-      "norm_label": "the conversational turn (plan 15.1-06, design §6) — `convex/onboarding.ts` `converse`",
+      "norm_label": "the conversational turn (plan 15.1-06, design \u00a76) \u2014 `convex/onboarding.ts` `converse`",
       "id": "docs_playbooks_onboarding_the_conversational_turn_plan_15_1_06_design_6_convex_onboarding_ts_converse"
     },
     {
-      "label": "The two surfaces (plan 15.1-07) — `apps/web/.../onboarding/page.tsx` + `.../profile/page.tsx`",
+      "label": "The two surfaces (plan 15.1-07) \u2014 `apps/web/.../onboarding/page.tsx` + `.../profile/page.tsx`",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L240",
       "_origin": "ast",
       "community": 529,
-      "norm_label": "the two surfaces (plan 15.1-07) — `apps/web/.../onboarding/page.tsx` + `.../profile/page.tsx`",
+      "norm_label": "the two surfaces (plan 15.1-07) \u2014 `apps/web/.../onboarding/page.tsx` + `.../profile/page.tsx`",
       "id": "docs_playbooks_onboarding_the_two_surfaces_plan_15_1_07_apps_web_onboarding_page_tsx_profile_page_tsx"
     },
     {
@@ -20353,13 +20773,13 @@
       "id": "docs_playbooks_onboarding_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/onboarding.md",
       "source_location": "L380",
       "_origin": "ast",
       "community": 147,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_onboarding_invariants_what_must_never_break"
     },
     {
@@ -20463,13 +20883,13 @@
       "id": "docs_playbooks_skill_registry_data_flow"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/skill-registry.md",
       "source_location": "L77",
       "_origin": "ast",
       "community": 7,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_skill_registry_invariants_what_must_never_break"
     },
     {
@@ -20513,13 +20933,13 @@
       "id": "docs_playbooks_skill_registry_phase_8_skillopt_write_back_loop_self_improvement"
     },
     {
-      "label": "Phase-9 blockers (owner-approved deferral 2026-07-24 — ship inert in single-owner beta, MUST close before Phase-9 multi-user)",
+      "label": "Phase-9 blockers (owner-approved deferral 2026-07-24 \u2014 ship inert in single-owner beta, MUST close before Phase-9 multi-user)",
       "file_type": "document",
       "source_file": "docs/playbooks/skill-registry.md",
       "source_location": "L157",
       "_origin": "ast",
       "community": 7,
-      "norm_label": "phase-9 blockers (owner-approved deferral 2026-07-24 — ship inert in single-owner beta, must close before phase-9 multi-user)",
+      "norm_label": "phase-9 blockers (owner-approved deferral 2026-07-24 \u2014 ship inert in single-owner beta, must close before phase-9 multi-user)",
       "id": "docs_playbooks_skill_registry_phase_9_blockers_owner_approved_deferral_2026_07_24_ship_inert_in_single_owner_beta_must_close_before_phase_9_multi_user"
     },
     {
@@ -20613,53 +21033,53 @@
       "id": "docs_playbooks_vault_lane_ownership_phase_3_8"
     },
     {
-      "label": "Lane 1 — PDF + images (`convex/vaultExtract.ts` + test)",
+      "label": "Lane 1 \u2014 PDF + images (`convex/vaultExtract.ts` + test)",
       "file_type": "document",
       "source_file": "docs/playbooks/vault.md",
       "source_location": "L101",
       "_origin": "ast",
       "community": 107,
-      "norm_label": "lane 1 — pdf + images (`convex/vaultextract.ts` + test)",
+      "norm_label": "lane 1 \u2014 pdf + images (`convex/vaultextract.ts` + test)",
       "id": "docs_playbooks_vault_lane_1_pdf_images_convex_vaultextract_ts_test"
     },
     {
-      "label": "Lane 2 — Office parsers (`packages/vault/src/officeText.ts` + test)",
+      "label": "Lane 2 \u2014 Office parsers (`packages/vault/src/officeText.ts` + test)",
       "file_type": "document",
       "source_file": "docs/playbooks/vault.md",
       "source_location": "L126",
       "_origin": "ast",
       "community": 107,
-      "norm_label": "lane 2 — office parsers (`packages/vault/src/officetext.ts` + test)",
+      "norm_label": "lane 2 \u2014 office parsers (`packages/vault/src/officetext.ts` + test)",
       "id": "docs_playbooks_vault_lane_2_office_parsers_packages_vault_src_officetext_ts_test"
     },
     {
-      "label": "Lane 3 — Sweep + UI + E2E (`convex/vaultSweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)",
+      "label": "Lane 3 \u2014 Sweep + UI + E2E (`convex/vaultSweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)",
       "file_type": "document",
       "source_file": "docs/playbooks/vault.md",
       "source_location": "L146",
       "_origin": "ast",
       "community": 107,
-      "norm_label": "lane 3 — sweep + ui + e2e (`convex/vaultsweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)",
+      "norm_label": "lane 3 \u2014 sweep + ui + e2e (`convex/vaultsweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`)",
       "id": "docs_playbooks_vault_lane_3_sweep_ui_e2e_convex_vaultsweep_ts_apps_web_dashboard_vault_apps_web_e2e_vault_spec_ts"
     },
     {
-      "label": "Lane 4 — Video transcription (`convex/vaultTranscribe.ts` + test)",
+      "label": "Lane 4 \u2014 Video transcription (`convex/vaultTranscribe.ts` + test)",
       "file_type": "document",
       "source_file": "docs/playbooks/vault.md",
       "source_location": "L172",
       "_origin": "ast",
       "community": 107,
-      "norm_label": "lane 4 — video transcription (`convex/vaulttranscribe.ts` + test)",
+      "norm_label": "lane 4 \u2014 video transcription (`convex/vaulttranscribe.ts` + test)",
       "id": "docs_playbooks_vault_lane_4_video_transcription_convex_vaulttranscribe_ts_test"
     },
     {
-      "label": "Invariants — what must never break",
+      "label": "Invariants \u2014 what must never break",
       "file_type": "document",
       "source_file": "docs/playbooks/vault.md",
       "source_location": "L197",
       "_origin": "ast",
       "community": 174,
-      "norm_label": "invariants — what must never break",
+      "norm_label": "invariants \u2014 what must never break",
       "id": "docs_playbooks_vault_invariants_what_must_never_break"
     },
     {
@@ -23793,13 +24213,13 @@
       "id": "packages_contracts_skills_business_profile_the_intake_is_data_never_instructions"
     },
     {
-      "label": "Never classify the business — those questions are ASKED",
+      "label": "Never classify the business \u2014 those questions are ASKED",
       "file_type": "document",
       "source_file": "packages/contracts/skills/business-profile.md",
       "source_location": "L18",
       "_origin": "ast",
       "community": 16,
-      "norm_label": "never classify the business — those questions are asked",
+      "norm_label": "never classify the business \u2014 those questions are asked",
       "id": "packages_contracts_skills_business_profile_never_classify_the_business_those_questions_are_asked"
     },
     {
@@ -23833,13 +24253,13 @@
       "id": "packages_contracts_skills_cockpit_agent"
     },
     {
-      "label": "Executive Agent — Cockpit (v1)",
+      "label": "Executive Agent \u2014 Cockpit (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/cockpit-agent.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 27,
-      "norm_label": "executive agent — cockpit (v1)",
+      "norm_label": "executive agent \u2014 cockpit (v1)",
       "id": "packages_contracts_skills_cockpit_agent_executive_agent_cockpit_v1"
     },
     {
@@ -23863,13 +24283,13 @@
       "id": "packages_contracts_skills_cockpit_agent_read_the_conversation_not_just_the_last_line"
     },
     {
-      "label": "Recipients — index/label only",
+      "label": "Recipients \u2014 index/label only",
       "file_type": "document",
       "source_file": "packages/contracts/skills/cockpit-agent.md",
       "source_location": "L50",
       "_origin": "ast",
       "community": 27,
-      "norm_label": "recipients — index/label only",
+      "norm_label": "recipients \u2014 index/label only",
       "id": "packages_contracts_skills_cockpit_agent_recipients_index_label_only"
     },
     {
@@ -24123,13 +24543,13 @@
       "id": "packages_contracts_skills_executive_agent_classifier"
     },
     {
-      "label": "Executive Agent — Request Classifier (v1)",
+      "label": "Executive Agent \u2014 Request Classifier (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-agent.classifier.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "norm_label": "executive agent — request classifier (v1)",
+      "norm_label": "executive agent \u2014 request classifier (v1)",
       "id": "packages_contracts_skills_executive_agent_classifier_executive_agent_request_classifier_v1"
     },
     {
@@ -24173,13 +24593,13 @@
       "id": "packages_contracts_skills_executive_router"
     },
     {
-      "label": "Executive Agent — Router (v1)",
+      "label": "Executive Agent \u2014 Router (v1)",
       "file_type": "document",
       "source_file": "packages/contracts/skills/executive-router.md",
       "source_location": "L1",
       "_origin": "ast",
       "community": 84,
-      "norm_label": "executive agent — router (v1)",
+      "norm_label": "executive agent \u2014 router (v1)",
       "id": "packages_contracts_skills_executive_router_executive_agent_router_v1"
     },
     {
@@ -25148,7 +25568,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L31",
       "_origin": "convex_table",
-      "community": 95,
+      "community": 51,
       "norm_label": "deadletters (table)",
       "id": "packages_backend_convex_schema_deadletters_table"
     },
@@ -25168,7 +25588,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L65",
       "_origin": "convex_table",
-      "community": 40,
+      "community": 28,
       "norm_label": "pendingtimeouts (table)",
       "id": "packages_backend_convex_schema_pendingtimeouts_table"
     },
@@ -25208,7 +25628,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L266",
       "_origin": "convex_table",
-      "community": 19,
+      "community": 175,
       "norm_label": "briefings (table)",
       "id": "packages_backend_convex_schema_briefings_table"
     },
@@ -25228,7 +25648,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L324",
       "_origin": "convex_table",
-      "community": 19,
+      "community": 53,
       "norm_label": "evaluations (table)",
       "id": "packages_backend_convex_schema_evaluations_table"
     },
@@ -25238,7 +25658,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L394",
       "_origin": "convex_table",
-      "community": 112,
+      "community": 13,
       "norm_label": "agentsteps (table)",
       "id": "packages_backend_convex_schema_agentsteps_table"
     },
@@ -25268,7 +25688,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L501",
       "_origin": "convex_table",
-      "community": 95,
+      "community": 11,
       "norm_label": "telemetry (table)",
       "id": "packages_backend_convex_schema_telemetry_table"
     },
@@ -25278,7 +25698,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L520",
       "_origin": "convex_table",
-      "community": 134,
+      "community": 96,
       "norm_label": "notifications (table)",
       "id": "packages_backend_convex_schema_notifications_table"
     },
@@ -25318,7 +25738,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L561",
       "_origin": "convex_table",
-      "community": 641,
+      "community": 0,
       "norm_label": "intakeartifacts (table)",
       "id": "packages_backend_convex_schema_intakeartifacts_table"
     },
@@ -25368,7 +25788,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L686",
       "_origin": "convex_table",
-      "community": 177,
+      "community": 117,
       "norm_label": "feedback (table)",
       "id": "packages_backend_convex_schema_feedback_table"
     },
@@ -25388,12 +25808,402 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L727",
       "_origin": "convex_table",
-      "community": 55,
+      "community": 63,
       "norm_label": "tenantprofiles (table)",
       "id": "packages_backend_convex_schema_tenantprofiles_table"
     }
   ],
   "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L36",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L73",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L104",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L122",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
+      "source_location": "L50",
+      "weight": 1.0,
+      "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization",
+      "target": "planning_parallelization_parallel_build_lanes_multi_session"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L308",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_how_each_session_starts"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L251",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_phase_3_8_vault_document_extraction_4_lanes_wave_0_landed_2026_07_18"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L78",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_phases_16_17_research_sub_agent_calendar_actions_set_up_2026_07_26"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L290",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_rules_of_the_road"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L315",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_sequencing_note"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L240",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_the_lanes"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L276",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_the_three_shared_singletons_append_only_discipline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L233",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_parallel_build_lanes_multi_session",
+      "target": "planning_parallelization_why_this_split_works"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L69",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_16_17_research_sub_agent_calendar_actions_set_up_2026_07_26",
+      "target": "planning_parallelization_carried_forward_debt_neither_lane_owns"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L51",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_16_17_research_sub_agent_calendar_actions_set_up_2026_07_26",
+      "target": "planning_parallelization_the_stages"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_16_17_research_sub_agent_calendar_actions_set_up_2026_07_26",
+      "target": "planning_parallelization_why_these_two_can_run_together_and_the_one_place_they_collide"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L99",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_constraint_on_lane_a_dispatch_stays_tier_agnostic"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L221",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_phase_14_15_additions_to_the_shared_singleton_list"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L108",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_stage_0_parallel_planning_start_first_no_pnpm_install_needed"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L124",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_stage_1_wave_0_freeze_commit_on_main_serial_unavoidable"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L147",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_stage_2_execution_lanes_finalized_at_15_01_phase_15_runs_serially"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L211",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_stage_3_integrate_then_verify_once"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/PARALLELIZATION.md",
+      "source_location": "L83",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_parallelization_phases_14_15_voice_doc_flagship_dispatch_framework_set_up_2026_07_25",
+      "target": "planning_parallelization_why_these_two_phases_can_run_together_and_where_they_can_t"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude",
+      "target": "claude_pikar_ai_repository_conventions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_10_frontend_brand_ui_read_docs_design_brand_md"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L6",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_1_domain_logic_lives_in_pure_ts_packages_convex_is_a_thin_adapter"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_2_raw_query_mutation_action_imports_are_banned_outside_the_wrapper_module"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_3_the_audit_module_is_insert_only"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_4_audit_and_dead_letter_payloads_must_be_redaction_safe"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_5_no_hardcoded_agent_prompts_skills_load_from_the_registry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_6_pinned_pre_1_0_component_versions_must_not_be_bumped_casually"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_7_boot_order"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L54",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_8_ponytail_discipline_the_laziest_solution_that_works_mandated"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L85",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_9_playbooks_and_adrs_are_part_of_definition_of_done"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L112",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "claude_pikar_ai_repository_conventions",
+      "target": "claude_graphify"
+    },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
@@ -29362,6 +30172,17 @@
       "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_voice_postcall",
       "target": "packages_backend_convex_cockpit_sendcockpitmessage"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/voice/PostCall.tsx",
+      "source_location": "L67",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_voice_postcall",
+      "target": "packages_backend_convex_evaluations_bythread"
     },
     {
       "relation": "calls",
@@ -46953,6 +47774,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L649",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_evaluations_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
       "source_location": "L531",
       "weight": 1,
       "context": "db_write",
@@ -46992,6 +47824,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_smoke",
       "target": "packages_backend_convex_schema_vaultdocuments_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/smoke.ts",
+      "source_location": "L634",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_smoke",
+      "target": "packages_backend_convex_schema_voicesessions_table"
     },
     {
       "relation": "contains",
@@ -48570,6 +49413,28 @@
       "context": "convex_ref",
       "confidence_score": 1,
       "source": "packages_backend_convex_vaultrag",
+      "target": "packages_backend_convex_vault_getdoc"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/voice.ts",
+      "source_location": "L70",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_voice",
+      "target": "packages_backend_convex_vault_getdoc"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/voiceToken.ts",
+      "source_location": "L40",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_voicetoken",
       "target": "packages_backend_convex_vault_getdoc"
     },
     {
@@ -65811,63 +66676,8 @@
       "confidence_score": 1,
       "source": "sidecars_readme_sidecars",
       "target": "sidecars_readme_planned_sidecars"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L634",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_schema_voicesessions_table"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/smoke.ts",
-      "source_location": "L649",
-      "weight": 1,
-      "context": "db_write",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_smoke",
-      "target": "packages_backend_convex_schema_evaluations_table"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/voice.ts",
-      "source_location": "L70",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_voice",
-      "target": "packages_backend_convex_vault_getdoc"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "packages/backend/convex/voiceToken.ts",
-      "source_location": "L40",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "packages_backend_convex_voicetoken",
-      "target": "packages_backend_convex_vault_getdoc"
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "apps/web/app/(app)/dashboard/voice/PostCall.tsx",
-      "source_location": "L67",
-      "weight": 1,
-      "context": "convex_ref",
-      "confidence_score": 1,
-      "source": "apps_web_app_app_dashboard_voice_postcall",
-      "target": "packages_backend_convex_evaluations_bythread"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "020a01fd02fadee14e2a6fd9fda2656147f5caa0"
+  "built_at_commit": "712da780e2cd8fdef879b113590c125667d792da"
 }
