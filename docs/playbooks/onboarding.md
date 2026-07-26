@@ -1,14 +1,16 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 5 (plan 15.1-06): **onboarding stopped guessing the persona from prose and started ASKING.** `onboarding.converse` is one `generateObject` turn returning `{reply, slots, missing, nextSlot, done}` — stateless, writes nothing, and **the CODE owns the state machine while the model owns only the wording**. Its system prompt is the new UNGATED `onboarding-agent` registry row (Q6), loaded FAIL-CLOSED and FIRST, before the offline `SMOKE::onboard::` short-circuit, so SC#3c is exercised on the offline path too. See "The conversational turn" below for the full contract, the Q1 decision and its ceiling, and the SMOKE grammar. Prior: 2026-07-26 — Phase 15.1 Wave 4 (plan 15.1-04): **the LAST authoritative reader of the markdown persona is gone.** `evaluations.ts`'s `personaHint` is deleted and its framework auto-pick now indexes `TIER_FRAMEWORK` (bound `satisfies Record<Tier, Framework>`, `enterprise` → `swot`) with `tenantProfiles.tier`, read via `internal.tenantProfile.forTenant`. That closes defect 1d on the READ side: a `business_profile` doc with a garbage `- **Persona:**` line can no longer silently reclassify a tenant (SC#2b, proven with TWO different table tiers over ONE identical malformed document). `deserializeProfile`'s `"solopreneur"` fallback is **deliberately retained** as a display convenience for the profile page's edit-form loader — see "Record vs projection" below. Q3 is unchanged: `financialsPresent` still overrides with `growth-os`, and the tier's perceivable effect lands on the specialist prompt ([ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md)), never on the rubric. Prior: 2026-07-26 — Phase 15.1 Wave 3 (plan 15.1-03): **THE SUBTRACTION.** The tier is no longer an INPUT at any layer. `vProfile` has no `persona` field (a Convex `v.object` rejects an EXTRA key, so a caller that sends a tier is REFUSED — the control is gone, not hidden: SC#1b); `profileSchema` has no `persona` property (the model has nowhere to put a guess — defect 1a, structurally); `validateProfile` takes a `ProfileInput` and its `isPersona` branch is DELETED; and both dashboard pages lost their persona pill block, the profile page rendering the tier READ-ONLY with `TIER_REASON`. `commitProfile` and `updateProfile` now READ `tenantProfiles` and splice `row.tier` into the serialized markdown (§4.2 — the markdown is a projection, the table is the record). `commitProfile` is the design §6 COMPLETION GATE: `INCOMPLETE_ONBOARDING` + a `missing` list while any fact slot is empty; `updateProfile` deliberately has NO slot gate (design §10 — no forced re-onboarding of a legacy tenant) but throws `INCOMPLETE_FACTS` when the tier ROW is absent entirely. Both audit payloads now carry `tierSource` and NO `personaConfirmed` — deleted, never corrected, because the audit is insert-only. The `onboarding.ts` module header restates this contract, so a reader who opens the adapter before this playbook still meets it. Prior: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 6 (plan 15.1-07): **both surfaces landed, and first-time onboarding works again.** The onboarding page is now a CONVERSATION over `onboarding.converse` (opening intake → one `extractProfile` → the fact loop → agent identity → the model-authored closing beat → `saveFacts` THEN `commitProfile`), and the profile page is the FACTS surface (the five tier facts editable, the tier read-only with `TIER_REASON` + an honest `tierSource`, a tier move announced as an EVENT, and design §10's non-blocking legacy invitation). See "The two surfaces (plan 15.1-07)" below for the commit ORDER and why it is load-bearing, the `pikar:onboarding-draft-v2` key, and the one place a choice control is legitimate (the behaviour preset) versus where it is forbidden (the tier). The SC#1c source scan was RE-ARMED against the rewritten source — new per-page anchors, a property-position `tier:`/`persona:` rule, a runtime-`TIERS`-import rule, and a positive row proving the preset group is still there — and mutation-checked: a planted `<button onClick={() => saveFacts({ tier: "sme" })}>` turned it **2 RED**, reverting restored 14/14. Prior: 2026-07-26 — Phase 15.1 Wave 5 (plan 15.1-06): **onboarding stopped guessing the persona from prose and started ASKING.** `onboarding.converse` is one `generateObject` turn returning `{reply, slots, missing, nextSlot, done}` — stateless, writes nothing, and **the CODE owns the state machine while the model owns only the wording**. Its system prompt is the new UNGATED `onboarding-agent` registry row (Q6), loaded FAIL-CLOSED and FIRST, before the offline `SMOKE::onboard::` short-circuit, so SC#3c is exercised on the offline path too. See "The conversational turn" below for the full contract, the Q1 decision and its ceiling, and the SMOKE grammar. Prior: 2026-07-26 — Phase 15.1 Wave 4 (plan 15.1-04): **the LAST authoritative reader of the markdown persona is gone.** `evaluations.ts`'s `personaHint` is deleted and its framework auto-pick now indexes `TIER_FRAMEWORK` (bound `satisfies Record<Tier, Framework>`, `enterprise` → `swot`) with `tenantProfiles.tier`, read via `internal.tenantProfile.forTenant`. That closes defect 1d on the READ side: a `business_profile` doc with a garbage `- **Persona:**` line can no longer silently reclassify a tenant (SC#2b, proven with TWO different table tiers over ONE identical malformed document). `deserializeProfile`'s `"solopreneur"` fallback is **deliberately retained** as a display convenience for the profile page's edit-form loader — see "Record vs projection" below. Q3 is unchanged: `financialsPresent` still overrides with `growth-os`, and the tier's perceivable effect lands on the specialist prompt ([ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md)), never on the rubric. Prior: 2026-07-26 — Phase 15.1 Wave 3 (plan 15.1-03): **THE SUBTRACTION.** The tier is no longer an INPUT at any layer. `vProfile` has no `persona` field (a Convex `v.object` rejects an EXTRA key, so a caller that sends a tier is REFUSED — the control is gone, not hidden: SC#1b); `profileSchema` has no `persona` property (the model has nowhere to put a guess — defect 1a, structurally); `validateProfile` takes a `ProfileInput` and its `isPersona` branch is DELETED; and both dashboard pages lost their persona pill block, the profile page rendering the tier READ-ONLY with `TIER_REASON`. `commitProfile` and `updateProfile` now READ `tenantProfiles` and splice `row.tier` into the serialized markdown (§4.2 — the markdown is a projection, the table is the record). `commitProfile` is the design §6 COMPLETION GATE: `INCOMPLETE_ONBOARDING` + a `missing` list while any fact slot is empty; `updateProfile` deliberately has NO slot gate (design §10 — no forced re-onboarding of a legacy tenant) but throws `INCOMPLETE_FACTS` when the tier ROW is absent entirely. Both audit payloads now carry `tierSource` and NO `personaConfirmed` — deleted, never corrected, because the audit is insert-only. The `onboarding.ts` module header restates this contract, so a reader who opens the adapter before this playbook still meets it. Prior: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
 
 The first-run experience: a brand-new user is guided to describe their business
-(pasted text, an uploaded file, or a spoken brief), an LLM extracts a structured
-Lean-core profile with an inferred persona, the user CONFIRMS it, and the confirmed
-profile is stored as a vault document so every downstream agent turn is business-aware.
+(pasted text, an uploaded file, or a spoken brief), an LLM extracts the structured
+Lean-core narrative, the agent then ASKS the determining facts in conversation
+(design §6 — nothing about the business SHAPE is inferred from prose), the user
+confirms the closing beat, and the confirmed profile is stored as a vault document
+so every downstream agent turn is business-aware.
 This is the substrate Phase 12's evaluation engine reads and the reason the cockpit
 becomes a chief-of-staff rather than a generic assistant.
 
@@ -235,6 +237,71 @@ does not**), walk the onboarding flow, and confirm both halves — the fact slot
 (headcount and paid staff are questions, not inferences), and an empty required slot blocks
 completion however warmly the agent wraps up.
 
+#### The two surfaces (plan 15.1-07) — `apps/web/.../onboarding/page.tsx` + `.../profile/page.tsx`
+
+**The onboarding page, step by step.** Every step is the page's, except the two the server owns:
+
+1. **Opening turn.** The three intake modalities (type / upload / speak) still reduce to ONE
+   `intakeText`, unchanged from Phase 11.
+2. **`extractProfile(intakeText)`, ONCE** — the narrative fields only. It emits no classification;
+   `profileSchema` has no persona property, so there is nowhere for a guess to go.
+3. **The fact loop** — `converse({slots, userMessage, history})` per user turn, the returned `slots`
+   passed straight back in. **The page never chooses the next question and never computes `done`**;
+   it renders `reply`, and shows a COUNT of what is left (`{n} more to cover`) — never a checklist
+   of slot names. Design §6 is a conversation, not a form wearing chat's clothes.
+4. **Agent identity (D4)** — a free-text name (`maxLength` client-side; `sanitizeAgentName` on the
+   server is the authoritative trust boundary) and a behaviour PRESET.
+5. **The closing beat (§6)** costs a SECOND `converse` call, and that is deliberate: `nextSlot` is
+   derived from the slots the turn was GIVEN, so the turn that finally completes the set was still
+   under "obtain <last fact>" and its reply is an acknowledgement. Re-asking with the completed
+   slots is what puts the registry prompt on its "nothing left to obtain" branch. **The wording is
+   the model's throughout** — a sentence composed in the page would be prompt content in source
+   (§5) and would drift from the skill body. If the second call fails, the acknowledgement stands
+   and the user is not stranded.
+6. **Commit, FACTS FIRST.** `tenantProfile.saveFacts(...)` — which DERIVES and persists the tier —
+   **then** `onboarding.commitProfile({profile})`. **The order is load-bearing, not stylistic:**
+   `commitProfile` reads `tenantProfiles` to splice the tier into the markdown projection (§4.2) and
+   REFUSES with `INCOMPLETE_ONBOARDING` when the row or a fact is missing. Reversed, every
+   first-time onboarding fails at its last step. The localStorage draft is cleared only after BOTH
+   succeed.
+
+**Draft key: `pikar:onboarding-draft-v2`.** The payload now carries `slots`, the transcript, the
+agent name and the preset. The bump is a correctness requirement, not hygiene: a v1 draft carries a
+`persona` (deleted in plan 03) and no slots. An unknown/absent `v` is **DROPPED, never migrated** —
+a half-migrated draft would resume a conversation whose facts were never asked, which is defect 1a
+wearing a resumability costume.
+
+**The profile page is the FACTS surface.** Two cards, two writers, and the difference is the point:
+
+- **Business shape** → `tenantProfile.saveFacts`. The five facts editable (the three numbers are
+  digits-only at the keystroke, `min={0} step={1}`; the two enums are `<select>`s over
+  `REVENUE_STAGES` / `FUNDING_STATES`), plus the agent name and preset on the SAME call. There is no
+  tier field to send.
+- **The narrative** → `onboarding.updateProfile`, which re-embeds the vault doc in place.
+- **The tier renders as TEXT** — value, `TIER_REASON[tier]`, `tierSource` in plain words, and one
+  line saying the facts are what move it. **Never a disabled control:** a greyed-out picker still
+  reads as "there is a control here", which is the impression design §9 removes.
+- **A tier move is an EVENT** (§9, *"tier change is a moment, not a setting"*), driven off
+  `saveFacts`'s `changed` flag — the server's own comparison, never a diff of what the page happens
+  to be rendering.
+- **The legacy invitation is NON-BLOCKING** (§10): `tierSource === "legacy"` or any missing fact
+  shows an inline note explaining what completing them improves. **Never a modal, never a redirect,
+  never a gate** — `onboarding.status` deliberately still returns `needsOnboarding: false` for these
+  tenants, and a forced re-onboarding would contradict it.
+- **`INCOMPLETE_FACTS` / `INCOMPLETE_ONBOARDING` render inline**, naming the gaps in the user's own
+  language off a `SLOT_LABEL` map. A raw slot name or error code is never shown, and the refusal
+  always returns the user to somewhere they can act.
+
+**Where a choice control is legitimate, and where it is forbidden.** Both pages carry a radio group
+over `BEHAVIOR_PRESETS` — a real `fieldset`/`legend` + `input[type=radio]`, so checked state, group
+semantics and arrow-key navigation come from the platform. **That is NOT the persona pills
+returning.** A preset is a genuine user PREFERENCE (how they want to be spoken to) backed by a
+versioned registry row; the TIER is a derived FACT about the business that no control may set. The
+SC#1c scan encodes exactly that distinction rather than banning all pills: it forbids a `TIERS`
+member on an interactive line, forbids `tier:`/`persona:` in property position, forbids importing
+the runtime `TIERS`/`PERSONAS` arrays — and POSITIVELY asserts the preset group is still present, so
+"no tier control" can never be satisfied by a page with no controls at all.
+
 Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/skills/business-profile.md` — canonical extraction prompt body
 - `packages/contracts/src/skills/businessProfile.ts` — derived `businessProfileSkillBody` constant
@@ -255,21 +322,24 @@ Backend adapter (Wave 2 — LIVE) + frontend (Wave 3 gate+onboarding LIVE; profi
 - `apps/web/app/(app)/layout.tsx` — the first-run GATE (Wave 3, LIVE): inside `<Authenticated>` Shell,
   `useQuery(api.onboarding.status)` → `router.replace("/dashboard/onboarding")` for `needsOnboarding`
   tenants; the shell loader holds while the status query resolves. NOT in `middleware.ts` (invariant below).
-- `apps/web/app/(app)/dashboard/onboarding/page.tsx` — the first-run onboarding flow (Wave 3, LIVE):
-  a conversational surface (BRAND §5 chat idiom, adapted — NOT the thread-bound ChatPane) with the three
-  ONBD-02 intake modalities all reducing to `intakeText` for `extractProfile`: pasted text (compose box) →
-  straight through; uploaded file and spoken brief (MediaRecorder one-shot) → `vault.vaultUpload` → poll
-  `listVaultDocs` until the row's extracted `text` lands (pending_extraction/extracting show a waiting
-  state) → `extractProfile`. The result renders a pre-filled EDITABLE review card + a persona confirm/change
-  control (SC#1); `commitProfile` on confirm releases the gate (`router.replace("/dashboard")`). Resumable
-  via a `pikar:onboarding-draft` localStorage draft (no new table — RESEARCH Open-Q2), cleared on commit.
-- `apps/web/app/(app)/dashboard/profile/page.tsx` — the profile view/EDIT page (Wave 4, LIVE): loads
-  `api.onboarding.getProfile`, renders the Lean-core fields as an editable form (the onboarding
-  review-card shape + BRAND §5 tokens, no new component library), and on Save calls
-  `api.onboarding.updateProfile` which RE-EMBEDS the doc in place (stale rag entry replaced) so
-  grounding stays current. Sparse-start mirror: only `oneLineDescription` is required to Save —
+- `apps/web/app/(app)/dashboard/onboarding/page.tsx` — the first-run onboarding CONVERSATION
+  (Wave 6, LIVE): BRAND §5 chat idiom, adapted — NOT the thread-bound ChatPane. The three ONBD-02
+  intake modalities all reduce to `intakeText` for the opening turn: pasted text (compose box) →
+  straight through; uploaded file and spoken brief (MediaRecorder one-shot) → `vault.vaultUpload` →
+  poll `listVaultDocs` until the row's extracted `text` lands (pending_extraction/extracting show a
+  waiting state). Then `extractProfile` ONCE for the narrative, the `converse` fact loop, agent
+  identity, the model-authored closing beat, and `saveFacts` → `commitProfile` on confirm
+  (`router.replace("/dashboard")` releases the gate). Resumable via the `pikar:onboarding-draft-v2`
+  localStorage draft (no new table — RESEARCH Open-Q2), cleared only after BOTH writes succeed. Full
+  step order and the commit-ordering rationale: "The two surfaces" above.
+- `apps/web/app/(app)/dashboard/profile/page.tsx` — the profile view/EDIT page (Wave 6, LIVE): the
+  BUSINESS SHAPE card (the five tier facts + agent name + behaviour preset → `tenantProfile.saveFacts`,
+  which re-derives the tier; the tier itself read-only with `TIER_REASON` and its `tierSource`) above
+  the NARRATIVE card (`api.onboarding.getProfile` → editable Lean-core fields →
+  `api.onboarding.updateProfile`, which RE-EMBEDS the doc in place so grounding stays current).
+  Sparse-start mirror: only `oneLineDescription` is required to Save the narrative —
   name/stage/offering/target customer never block it. This is the enrichment surface an idea-stage
-  user returns to as the idea matures.
+  user returns to as the idea matures, and the ONLY legitimate way to move a tier.
 
 ## Dependencies & blast radius
 
@@ -322,9 +392,24 @@ cannot see:
   `saveFacts` has no `tier` argument. Three layers, one property: the tier is an OUTPUT. Enforced by
   `onboarding.test.ts` "SC#1b: updateProfile refuses a caller-supplied tier" (mutation-checked).
 - **Neither page carries a tier control (SC#1c)** — the profile page shows the tier read-only with
-  `TIER_REASON`; the onboarding page has no persona pills. Enforced by the source scan in
-  `businessProfile.test.ts` `describe("no tier control")`, which reads both `page.tsx` files off disk
-  and asserts a stable anchor FIRST so a rename fails loudly instead of passing vacuously.
+  `TIER_REASON` and its `tierSource`; the onboarding page never displays it as a choice at all.
+  Enforced by the source scan in `businessProfile.test.ts` `describe("no tier control")`, which reads
+  both `page.tsx` files off disk and asserts PER-PAGE anchors FIRST so a rename, a move or a
+  read-the-same-file-twice bug fails loudly instead of passing vacuously. **If an anchor stops
+  matching, fix the anchor before anything else** — every other row is a `not.toContain`, and a
+  `not.toContain` over the wrong string passes forever. The scan DISTINGUISHES the legitimate
+  `BEHAVIOR_PRESETS` radio group from a tier control (see "The two surfaces") and carries a POSITIVE
+  row asserting that group is present, so the guarantee cannot be satisfied by a page with no
+  controls. Re-armed and mutation-checked in 15.1-07 against the rewritten source.
+- **The onboarding page commits FACTS FIRST, then the profile** — `saveFacts` before
+  `commitProfile`, because `commitProfile` reads the tier row to splice the projection and refuses
+  without it. Reversing the two breaks every first-time onboarding at its last step.
+- **The completion signal comes from the SERVER** — the onboarding page renders `converse`'s `done`
+  and never calls `canComplete` itself (asserted by the SC#1c scan). A client-side mirror of a
+  fail-closed server gate is how a gate quietly stops being one.
+- **The onboarding draft is versioned and never migrated** — `pikar:onboarding-draft-v2`; an unknown
+  or absent `v` is dropped. A v1 draft carries a `persona` and no slots, so rehydrating it would
+  resume a conversation whose facts were never asked.
 - **The completion gate is CODE, never prompt (SC#3b)** — `commitProfile` throws
   `ConvexError({code: "INCOMPLETE_ONBOARDING", missing})` while any `REQUIRED_SLOTS` member is empty.
   A skill body saying "always ask about headcount" is a model-temperature guarantee, which is the
@@ -394,6 +479,9 @@ cannot see:
 
 - `pnpm --filter @pikar/core test -- businessProfile` — pure schema + always-confirm decision + serializer
   roundtrip + enterprise-not-emittable (SC#1). ~5s, no deployment needed.
+- `pnpm --filter @pikar/core exec vitest run src/businessProfile.test.ts -t "no tier control"` — the
+  SC#1c source scan over BOTH rewritten dashboard pages (14 rows). Runs off disk, needs no build and
+  no deployment, and is the ONLY automated guard on the two client surfaces.
 - `pnpm --filter @pikar/backend test -- onboarding` — status gate + extract-no-auto-commit (SC#1) +
   commit→ingest→retrieve + tenant isolation + re-embed (SC#2/#3) + the `converse` turn (SC#3c
   fail-closed, the code-owned next question, the model-cannot-declare-done property, the
@@ -447,5 +535,14 @@ cannot see:
 - **Names-in-prose PII ceiling** (shared S1/S4 open item): `packages/pii` scrubs STRUCTURED PII only;
   grounded business-profile prose containing person names must stay out of exportable/WORM tables until
   the NER spike resolves. `ponytail:` upgrade path = Presidio/NER before any multi-user export.
-- Backend adapter, onboarding UI, and profile page are all LIVE (Waves 2-4). Their watched paths stay
+- Backend adapter, onboarding UI, and profile page are all LIVE (Waves 2-6). Their watched paths stay
   registered here so the Stop hook keeps protecting them.
+- **Four live-only verifications are unpaid**, recorded with their exact commands in
+  `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md` §2: the live
+  backfill run (SC#6), a real conversational turn (SC#3), profile-page interaction (SC#1c) and the
+  perceivable tier difference (SC#5). This worktree has no `CONVEX_DEPLOYMENT`, and **nothing in
+  Phase 15.1 was gated on one** — every offline gate they stand in for is green. They are separate
+  from, and must not be conflated with, Phase 15's still-unpaid specialist-body eval gate.
+- **The closing beat costs a second `converse` call.** `ponytail:` ceiling — `converse` derives
+  `nextSlot` from the PRE-merge slots. Upgrade path: have it also report a post-merge closing
+  instruction so one call covers the last turn. A backend change; plan 15.1-07 did not own it.

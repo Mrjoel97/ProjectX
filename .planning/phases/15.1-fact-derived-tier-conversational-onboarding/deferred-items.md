@@ -32,3 +32,28 @@ unrelated to the plan's changes.
 **Consequence for later plans:** the documented "backend 544/545, sole red = `audit.test.ts`
 `auditCounts`" baseline holds only for ISOLATED runs. Do not read a noisy full-suite number as a
 regression — re-run the specific failing file on its own before concluding anything.
+
+## 2. The four live-only verifications — RUNNABLE DEBT (recorded during 15.1-07)
+
+`15.1-VALIDATION.md`'s **Manual-Only Verifications** cannot be paid in this worktree: there is no
+`CONVEX_DEPLOYMENT`, so `npx convex run|dev`, Playwright and every real model turn fail. Nothing in
+Phase 15.1 was gated on one; these four are the price of that, and each is written here with the
+exact command so paying them is mechanical rather than archaeological.
+
+| What | SC | How to pay it, on `main` with a live deployment |
+|---|---|---|
+| Live backfill run | SC#6 | `npx convex run tenantProfile:runBackfillLegacyTier`, then read one legacy tenant's row back and confirm `tierSource: "legacy"` (and that it has no facts) |
+| A real conversational turn | SC#3 | `pnpm dev` — it seeds the skills; **`npx convex dev` ALONE does not** — then walk `/dashboard/onboarding` and confirm both halves: the facts are ASKED (headcount and paid staff are questions, not inferences) and an empty required slot blocks completion however warmly the agent wraps up |
+| Profile page interaction | SC#1c | Load `/dashboard/profile`; confirm no tier control exists, the tier renders read-only with `TIER_REASON` + an honest `tierSource`, and editing headcount to 12 MOVES the tier (and is acknowledged as an event, not a silent field update) |
+| Perceivable tier difference | SC#5 | Run the same diagnosis as a solopreneur and as an SME; confirm the solopreneur's specialist output never presumes delegation |
+
+**Do not conflate these with Phase 15's unpaid eval gate.** That one is separate and still unpaid:
+15-06 rewrote the three specialist bodies (`offer-architect` / `money-model-designer` /
+`lead-engine`) and they ship DARK as candidates until `pnpm eval:golden` runs on a deployment.
+Paying the four rows above does NOT activate those bodies, and running the eval gate does NOT
+verify any of the four. They are different obligations against the same missing deployment.
+
+**Every offline gate these four stand in for IS paid:** `convex-test` exercises the backfill,
+`converse` and both refusal codes; the SC#1c source scan covers both rewritten pages and was
+mutation-checked in 15.1-07; `tsc --noEmit`, `biome` and `check-playbooks.mjs` all run clean. The
+gap is behavioural confirmation against a real deployment and a real model, nothing else.

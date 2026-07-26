@@ -562,13 +562,28 @@ describe("no tier control", () => {
     ),
   }));
 
+  /**
+   * Per-page non-vacuity anchors, RE-ARMED in 15.1-07 when both pages were rewritten.
+   *
+   * The shared `"api.onboarding"` anchor alone would survive reading the same file twice, so each
+   * page names something ONLY it has after the rewrite. If one of these ever stops matching, the
+   * scan below has been green over the wrong text and the anchor is what to fix FIRST — every
+   * other assertion here is a `not.toContain`, and a `not.toContain` over an empty or wrong string
+   * passes forever.
+   */
+  const ANCHORS = {
+    profile: ["api.tenantProfile.saveFacts", "TIER_REASON"],
+    onboarding: ["api.onboarding.converse", "pikar:onboarding-draft-v2"],
+  } as const satisfies Record<(typeof PAGE_NAMES)[number], readonly string[]>;
+
   // THE most important assertion in this file. Without it a renamed or moved page makes every
   // scan below pass over an empty (or wrong) string — vacuously green forever. `readFileSync`
-  // throws on a missing path, and the anchor catches the subtler case of reading the wrong file.
-  test.each(pages)("$name/page.tsx is really being scanned (non-vacuity)", ({ src }) => {
+  // throws on a missing path, and the anchors catch the subtler case of reading the wrong file.
+  test.each(pages)("$name/page.tsx is really being scanned (non-vacuity)", ({ name, src }) => {
     expect(src.length).toBeGreaterThan(500);
     expect(src).toContain('"use client"');
     expect(src).toContain("api.onboarding");
+    for (const anchor of ANCHORS[name]) expect(src, `anchor missing: ${anchor}`).toContain(anchor);
   });
 
   test.each(pages)("$name/page.tsx never assigns a persona/tier", ({ src }) => {
@@ -577,30 +592,84 @@ describe("no tier control", () => {
     expect(src).not.toMatch(/setProfile\([^)]*persona/);
   });
 
-  test.each(pages)("$name/page.tsx does not import PERSONAS from @pikar/core", ({ src }) => {
-    expect(src).not.toMatch(/import[^;]*\bPERSONAS\b[^;]*@pikar\/core/s);
+  /**
+   * The tightest expression of design §9's amendment: *the tier is a derived OUTPUT of the facts
+   * write, never an input to it.* A page that regains the ability to set a tier has to name one in
+   * an argument or a state setter, and `tier:` / `persona:` is how that reads in TS. `tierSource:`
+   * and `tierRow.tier` are deliberately NOT matched — reading and displaying the tier is the whole
+   * point of the profile page; what is forbidden is WRITING it.
+   *
+   * The key must sit in PROPERTY POSITION (after `{`, `,`, `(` or a line start). Anchoring on the
+   * bare word instead was tried first and matched `{tierRow ? tierRow.tier : "—"}` — a ternary's
+   * colon in a read-only render. A false positive here is not harmless: the obvious "fix" is to
+   * loosen the rule until it stops firing, and a rule loosened under pressure stops guarding.
+   */
+  const WRITES_TIER = /(?:^|[{,(])\s*(?:tier|persona)\s*:/m;
+  test.each(pages)("$name/page.tsx names no tier as a property being written", ({ src }) => {
+    expect(src).not.toMatch(WRITES_TIER);
   });
 
-  test.each(pages)("$name/page.tsx has no tier literal on an interactive control", ({ src }) => {
-    // Deliberately simple and readable: any line carrying BOTH an onClick and a tier literal.
-    // A precise-but-unreadable regex rots faster than the thing it guards, and the pill markup
-    // this guards against always co-locates the two (`onClick={() => set("persona", p)}` sits
-    // inside a <button> whose body is the tier). Both the literal form and the `PERSONAS.map`
-    // form are caught, the latter by the import assertion above.
-    for (const line of src.split("\n")) {
-      if (!line.includes("onClick")) continue;
+  /**
+   * Neither page may import the RUNTIME tier arrays. A pill set has to iterate something: either
+   * `TIERS`/`PERSONAS` (caught here) or hardcoded literals (caught below). The TYPE `Tier` is fine
+   * and the profile page imports it — a type cannot be mapped over to render a control, and
+   * `\bTIERS\b` matches neither `Tier` nor `TIER_REASON`.
+   */
+  test.each(pages)("$name/page.tsx imports no runtime tier array from @pikar/core", ({ src }) => {
+    expect(src).not.toMatch(/import[^;]*\bPERSONAS\b[^;]*@pikar\/core/s);
+    expect(src).not.toMatch(/import[^;]*\bTIERS\b[^;]*@pikar\/core/s);
+  });
+
+  /**
+   * A tier literal on an INTERACTIVE line. Deliberately simple and readable: a precise-but-
+   * unreadable regex rots faster than the thing it guards, and the pill markup this guards against
+   * always co-locates the two.
+   *
+   * **This is the assertion that has to distinguish, not just forbid.** Both pages now carry a
+   * legitimate radio group over `BEHAVIOR_PRESETS` — a preset is a genuine user PREFERENCE, and the
+   * next test proves that group is still there. So the rule is not "no choice controls"; it is "no
+   * TIER in a choice control". The two are distinguished by the VOCABULARY the control iterates,
+   * which is exactly the distinction design §9 draws.
+   *
+   * `\r?\n` split: this worktree is `core.autocrlf=true` and both pages sit on disk as CRLF — a
+   * bare `\n` split leaves a trailing `\r` on every line, which would not break `includes` today
+   * but is the same class of silent no-op that made two 15.1-05 mutation scripts useless.
+   */
+  const INTERACTIVE = /onClick|onChange|<button|<select|<option|<input/;
+  test.each(pages)("$name/page.tsx binds no tier literal to an interactive element", ({ src }) => {
+    for (const line of src.split(/\r?\n/)) {
+      if (!INTERACTIVE.test(line)) continue;
       for (const tier of TIERS) {
-        expect(
-          line,
-          `a tier literal sits on an onClick in this line: ${line.trim()}`,
-        ).not.toContain(tier);
+        expect(line, `a tier literal sits on an interactive line: ${line.trim()}`).not.toContain(
+          tier,
+        );
       }
     }
   });
 
-  test("the profile page renders the tier read-only with its reason", () => {
+  // The other half of the distinction: the LEGITIMATE control is present and iterates the closed
+  // preset enum. Without this row the scan above could be satisfied by a page with no controls at
+  // all, and "no tier control" would be proven by a blank page.
+  test.each(pages)("$name/page.tsx offers the behaviour preset as a real choice", ({ src }) => {
+    expect(src).toContain("BEHAVIOR_PRESETS.map(");
+    expect(src).toContain('type="radio"');
+  });
+
+  test("the profile page renders the tier read-only with its reason and source", () => {
     const profileSrc = pages[0]?.src ?? "";
     expect(profileSrc).toContain("TIER_REASON");
     expect(profileSrc).toContain("api.tenantProfile.get");
+    // The facts are what move the tier, so the facts writer must be on the page…
+    expect(profileSrc).toContain("api.tenantProfile.saveFacts");
+    // …and the tier must be rendered with its provenance, not as a bare label.
+    expect(profileSrc).toContain("tierSource");
+  });
+
+  test("the onboarding page drives the conversational turn, not a classification", () => {
+    const onboardingSrc = pages[1]?.src ?? "";
+    expect(onboardingSrc).toContain("api.onboarding.converse");
+    expect(onboardingSrc).toContain("api.tenantProfile.saveFacts");
+    // `done` comes back from the server; the page must not re-derive completion for itself.
+    expect(onboardingSrc).not.toContain("canComplete(");
   });
 });
