@@ -348,6 +348,14 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                     Reason: {doc.failureReason.replace(/_/g, " ")}
                   </p>
                 )}
+                {/* DOCV-01's first honesty moment, in the user's terms. A failed document offers NO
+                    voice action anywhere — we will not open a grounded conversation the agent has
+                    nothing to ground in, and a silent degradation to "chat about it anyway" would be
+                    worse than the refusal. Says what to do next instead of only what went wrong. */}
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+                  We couldn&apos;t read this file, so it can&apos;t be discussed by voice yet. Scanned
+                  or image-only PDFs are the usual cause — try a text-based version, then retry.
+                </p>
                 <button
                   type="button"
                   onClick={() => void handleRetry()}
@@ -468,6 +476,59 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               borderTop: "1px solid var(--rule)",
             }}
           >
+            {/* "Discuss by voice" (DOCV-01) — the primary action for a ready report, so it leads the
+                footer. Only `ready` gets it: a failed doc is refused in the explainer above, and a
+                still-extracting one shows the disabled wait state below. The gate is
+                subscription-driven (the row is a live query), so it enables itself the moment the
+                status flips — no poll, no timer, no second query. */}
+            {doc.status === "ready" && (
+              <Link
+                href={`/dashboard/voice?doc=${doc._id}`}
+                aria-label={`Discuss by voice: ${doc.title}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.55rem 1rem",
+                  borderRadius: "0.6rem",
+                  border: "none",
+                  background: "var(--teal-600)",
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  textDecoration: "none",
+                }}
+              >
+                Discuss by voice
+              </Link>
+            )}
+            {(doc.status === "processing" ||
+              doc.status === "extracting" ||
+              doc.status === "pending_extraction") && (
+              // A real `disabled` button, not a styled-dead Link — a screen reader must not announce
+              // an actionable control that silently does nothing.
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                title="Still reading your document — this becomes available when it's ready"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.55rem 1rem",
+                  borderRadius: "0.6rem",
+                  border: "1px solid var(--rule)",
+                  background: "var(--card)",
+                  color: "var(--ink-soft)",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: "default",
+                }}
+              >
+                Still reading your document…
+              </button>
+            )}
             {canDownload && (
               <button
                 type="button"

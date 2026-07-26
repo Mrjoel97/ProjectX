@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MicIcon, SendIcon } from "../../../(auth)/icons";
+import { DocStrip } from "./DocStrip";
 import type { Speaker, VoiceSession } from "./useVoiceSession";
 
 // VOIC-01/02 live surface (CONTEXT "Live session UI"): a scrolling two-sided transcript (the
@@ -105,6 +106,11 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
       >
         {announce}
       </div>
+
+      {/* Doc-scoped sessions only (DOCV-01): name the report under discussion. Absent `docId` ⇒ the
+          Phase-6 layout below is untouched — transcript, orb, countdown and the text-input
+          accessibility fallback all stay exactly as they were. */}
+      {docId && <DocStrip docId={docId} />}
 
       {/* Header: orb + who's speaking, always-visible countdown, End */}
       <header style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

@@ -3,6 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 
@@ -41,6 +42,24 @@ export function fmtSize(n: number): string {
   if (n >= MB) return `${(n / MB).toFixed(1)} MB`;
   if (n >= 1024) return `${Math.round(n / 1024)} KB`;
   return `${n} B`;
+}
+
+/** Shared geometry for the "Discuss by voice" pill so the enabled link and the disabled wait state
+ *  occupy the identical spot — the control must not move as the status flips under the user.
+ *  Mirrors the failed-card Retry placement (grid ⇒ bottom-right, list ⇒ vertically centred right). */
+function discussPillStyle(view: "grid" | "list"): React.CSSProperties {
+  return {
+    position: "absolute",
+    right: "0.85rem",
+    ...(view === "grid" ? { bottom: "0.85rem" } : { top: "50%", transform: "translateY(-50%)" }),
+    padding: "0.2rem 0.7rem",
+    borderRadius: "999px",
+    border: "none",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    textDecoration: "none",
+    lineHeight: 1.6,
+  };
 }
 
 function StatusChip({ status }: { status: string }) {
@@ -265,6 +284,48 @@ export function DocGrid({
                 </span>
                 <StatusChip status={doc.status} />
               </button>
+              {/* "Discuss by voice" (DOCV-01). A SIBLING of the card button, never nested inside it —
+                  the card itself is a <button>, so a nested link/button is invalid HTML and wrecks
+                  keyboard order. Same absolute-positioning trick the failed-card Retry already uses,
+                  and the two can share the corner because their statuses are mutually exclusive
+                  (failed ⇒ no discuss; ready/processing ⇒ no retry).
+
+                  THE GATE IS SUBSCRIPTION-DRIVEN. `listVaultDocs` is a live Convex query returning
+                  whole rows, so when extraction finishes and `status` flips to "ready" this control
+                  re-renders enabled ON ITS OWN. Do NOT add a poll, a timer, or a second query to
+                  "make it update" — it already does. */}
+              {doc.status === "ready" && (
+                <Link
+                  href={`/dashboard/voice?doc=${doc._id}`}
+                  aria-label={`Discuss by voice: ${doc.title}`}
+                  style={{ ...discussPillStyle(view), background: "var(--teal-600)", color: "#fff" }}
+                >
+                  Discuss
+                </Link>
+              )}
+              {(doc.status === "processing" ||
+                doc.status === "extracting" ||
+                doc.status === "pending_extraction") && (
+                // A REAL disabled button, not a Link with pointer-events:none — the latter is
+                // invisible to a screen reader, which would read an actionable link that does
+                // nothing. Never open a grounded conversation the agent cannot ground yet, and never
+                // burn capped 15-minute session time on a document still being read.
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title="Still reading your document — this becomes available when it's ready"
+                  aria-label={`Still reading ${doc.title} — voice discussion not ready yet`}
+                  style={{
+                    ...discussPillStyle(view),
+                    background: "var(--rule)",
+                    color: "var(--ink-soft)",
+                    cursor: "default",
+                  }}
+                >
+                  Reading…
+                </button>
+              )}
               {doc.status === "failed" && (
                 <button
                   type="button"
