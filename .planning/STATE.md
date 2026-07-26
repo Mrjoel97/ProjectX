@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 7/9 plans, Lane C)
+**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 8/9 plans, Lane C)
 
 ## Current Position
 
-Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (7/9 plans, 9 waves) on `lane-c/voice-doc`
-Plan: 14-07 COMPLETE (the vault entry point + in-call doc strip); next 14-08 (wave 8, the post-call outcome)
+Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (8/9 plans, 9 waves) on `lane-c/voice-doc`
+Plan: 14-08 COMPLETE (the post-call outcome); next 14-09 (wave 9, SC4 static scans + the BLOCKING human-verify)
 
 **TEST BASELINE CHANGED — there is no longer any acceptable red.** The whole monorepo is **892/892,
 zero failures**: backend **526/526** (43/43 files), core 195, voice 57, vault 42, extraction 28, cost
@@ -46,7 +46,65 @@ that cascades, because every existing `// @ts-expect-error import.meta.glob` the
 directive error, across ~20 test files owned by Lanes A and B. That is a post-merge job on `main`,
 not a mid-parallel-execution sweep.
 
-Status: Wave 7 done — **the flow has a FRONT DOOR and the call has CONTEXT.** A `ready` vault document
+Status: Wave 8 done — **the user now DECIDES, and the decision crosses the real gate.** `PostCall`
+branches on `docId`: `reviewSession` fires ONCE (ref-guarded; the server is idempotent per session
+too — belt and braces, because it is the page's only model call), the editor re-seeds from
+`composeDocMemo` once the row lands (guarded, so a late subscription tick cannot clobber an edit in
+progress), and the cited findings render **IN PLACE** via the EXPORTED `CardList` on the synthetic
+thread — cited findings, the affirmative healthy banner, each gap's wired "Act on this" →
+`actOnGap` → a `proposed` memo plan, and the `PlanCard` with the EXISTING single Approve. No new
+card idiom, no second query (same `evaluations.byThread` subscription, Convex dedupes it), **no
+route jump.** **ONE footer action** ("Save this memo"); acting on a gap already lives in the card, so
+a second control would be two controls for one decision. **DELIBERATELY NO "Continue with your
+agent" on this branch** — it pushes `/dashboard/workspace?thread=<id>`, and the synthetic
+`voice-doc:<sessionId>` is NOT a Convex Agent thread, so a composer there would throw (Pitfall 7).
+**A failed review never costs the user their conversation:** it falls back to the plain brief, says so
+in the `aria-live` status, and the save path stays open. **The memo IS the brief, document-flavoured**,
+stored through the SAME `endSessionClean`/`briefRef` spine — so "exactly ONE new thing in the vault"
+is **INHERITED, not re-implemented**, including on the abnormal path (pinned by two new
+`voice.test.ts` cases). `cards.tsx` took FOUR surgical edits: `isDocReview` keyed off the SHARED
+`DOC_REVIEW_FRAMEWORK` (never a re-typed literal); a document branch for the healthy banner ("your
+business is solid here" is the wrong claim about a REPORT); the `/dashboard/profile` CTA suppressed on
+that branch (enriching a business profile does nothing for an unassessable report — a dead link
+dressed as a fix); and `citationExcerpt` rendered as a `<blockquote>`, **framework-agnostic on
+purpose** so Phase-12 rows are byte-identical and absent renders exactly as before. `CardList` gained
+an **opt-in** `noPlanHint` defaulting to today's cockpit string, so no existing caller changes. Gates:
+gapAction **9/9**, voice **14/14**, voiceDoc 23/23, monorepo **903/903 zero failures** (backend
+**537/537**), web typecheck exit 0, web build compiles with both routes `ƒ (Dynamic)`, backend tsc 49
+(+0 new). **FROZEN FILES: zero diff across the ENTIRE phase** (`plans.ts`, `deliverApprovedPlan.ts`,
+`cockpit.ts`, `llm.ts`, `run-eval-golden.mjs`); `evaluations.ts` carries only the 12 authorized lines.
+
+**TWO OF MY OWN ASSUMPTIONS WERE WRONG AND THE CODE WAS RIGHT (14-08)** — the corrections are the
+useful part: (1) `source` is `vault | user-provided`, not "grounded", and "vault" is exactly what
+`shapeDocReview` welds — a fixture must MIRROR the real writer, not paraphrase it. (2) "A second tap
+refuses" is false and should be: a second tap on a still-`proposed` plan SUCCEEDS by recycling the
+row, because changing your mind about which gap to act on must restage the memo. `plan_busy` is for
+mid-flight/delivered only. The invariant that matters — never a SECOND `plans` row, since
+`plans.byThread` is `.unique()` and a duplicate makes every later read THROW — is now what the test
+asserts, plus a separate case driving a plan to `delivering` to confirm the real refusal.
+
+**DEFECT FIXED in 14-01's seeder (14-08):** `smoke:seedVoiceDocSession` seeded `section: "findings"`,
+which is NOT in `DOC_REVIEW_SECTIONS` (`insight | pattern | strength | risk`). `shapeDocReview` DROPS
+findings outside that union, so the e2e fixture described a row production can never emit — the spec
+would have passed against an IMPOSSIBLE shape. Now "pattern"/"insight". **A fixture that is not a
+legal row is not a fixture.**
+
+**CROSS-LANE STATUS (checked 2026-07-26):** `main` is 2 commits ahead, docs-only, cleanly
+auto-mergeable. Lane A (`lane-a/dispatch-core`) has COMPLETED Phase 15 and touches `schema.ts`,
+`evaluations.ts`, `cards.tsx`, `llmRedaction.test.ts`, `gapAction.test.ts`, `watch.json` — all shared
+with this lane. **Every conflict is MECHANICAL, none semantic:** different unions in `schema.ts`,
+different maps in `cards.tsx` (Lane A never touches `FRAMEWORK_LABEL`/`EvaluationCard`/`CardList`),
+different regions in `evaluations.ts`, different entries in `watch.json`, documented keep-both for the
+`.planning` singletons, and `graphify-out/*` is regenerated (≈3,100 of the 3,125 markers).
+**THE IMPORTANT INTERLOCK:** Lane A's 15-04 split `actOnGap` into TWO terminals — a gap whose `route`
+names a REGISTERED specialist now schedules a dispatch instead of staging a memo. Their `SPECIALISTS`
+registry holds exactly `offer-architect`, `money-model-designer`, `lead-engine`; `DOC_GAP_ROUTE` is
+`"document-analyst"`, **not registered anywhere in their branch** — so a voice-doc gap keeps the memo
+branch, which is exactly what SC #3 requires. The lanes interlock correctly without having
+coordinated. 14-08's SC3 assertions were written against the OUTCOME rather than `actOnGap`'s
+internals precisely so they survive that merge.
+
+PRIOR (14-07): Wave 7 done — **the flow has a FRONT DOOR and the call has CONTEXT.** A `ready` vault document
 offers "Discuss by voice" (in the `DocGrid` card AND the `PreviewModal` footer) linking to
 `/dashboard/voice?doc=<id>`. **The status gate is the phase's first honesty moment:**
 `processing`/`extracting`/`pending_extraction` render a REAL `disabled` button ("Reading…"), never a

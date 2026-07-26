@@ -1,6 +1,9 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-07 — the ENTRY POINT + in-call context: a ready vault document offers
+> Last verified: 2026-07-26 (14-08 — the POST-CALL OUTCOME: the review runs once, the cited findings
+> render IN PLACE via the exported `CardList` on the synthetic thread, the memo is the brief in
+> document flavour (ONE vault artifact), and a gap crosses the EXISTING single Approve gate with no
+> route jump). Prior: 14-07 — the ENTRY POINT + in-call context: a ready vault document offers
 > "Discuss by voice", the status gate is subscription-driven, a failed document is refused with a
 > reason, and the live screen names the report under discussion with a "partial" badge when only part
 > of it could be read). Prior: 14-06 — the BROWSER RELAY: `/dashboard/voice?doc=<id>` opens a
@@ -847,3 +850,53 @@ from an in-progress voice conversation is the wrong trade. The smaller diff is a
 fail-closed behaviour), then `pnpm --filter @pikar/web typecheck` and
 `pnpm --filter @pikar/web build`. The three status states and the partial badge are **visually**
 confirmed in 14-09's human-verify row — no automated claim is made about how they look.
+
+### The post-call outcome (14-08) — where the user decides
+
+**One expensive call, run once.** `PostCall` fires `voiceDoc.reviewSession` from a `useRef` guard, not
+from a dependency array. `reviewSession` is also idempotent per session server-side (it returns the
+existing row rather than patching it), so this is belt-and-braces — deliberately, because it is the
+only model call on the page and a double-fire would be paid for twice.
+
+**A failed review must never cost the user their conversation.** On error the screen falls back to the
+plain brief, says so in the `aria-live` status, and the save path stays open. The memo is the
+artifact; the findings are the bonus.
+
+**The memo IS the brief, document-flavoured.** Seeded from `composeDocMemo` once the row lands, then
+stored through the SAME `endSessionClean` → `briefRef` spine Phase 6 uses. That is what makes "exactly
+ONE new thing in the vault" true for free, including on the abnormal path — the idempotence is
+**inherited, not re-implemented**. Do not add a second write and do not call `persistBrief` directly.
+Pinned by two `voice.test.ts` cases (repeat store, and the abnormal end).
+
+**The re-seed is guarded.** `memoSeededRef` means the editor is re-seeded ONCE. After that the
+textarea belongs to the user, and a late subscription tick must not clobber an edit in progress.
+
+**The findings render IN PLACE, via the exported `CardList`.** One component delivers the cited
+findings, the affirmative healthy banner, each gap's wired "Act on this", and the memo `PlanCard` with
+the single Approve. No new card idiom, no second query (it holds the same `evaluations.byThread`
+subscription `PostCall` reads for the memo, so Convex dedupes it), and **no route jump**.
+
+**NEVER route a voice-doc thread to the workspace.** `PostCall`'s doc branch has no "Continue with
+your agent" button, and nothing may add one. That button calls `sendCockpitMessage` and pushes
+`/dashboard/workspace?thread=<id>`; on this branch the thread is the SYNTHETIC
+`voice-doc:<sessionId>`, which is not a Convex Agent thread, so a composer there would throw
+(Pitfall 7). The gap → `actOnGap` → `proposed` plan → Approve path already reaches the real pipeline
+without leaving the screen. `voice-doc.spec.ts` drives that workspace URL as a **test harness only**
+and carries a comment saying so.
+
+**One footer action on the doc branch.** Acting on a gap already lives inside the card, so a second
+footer control would give the user two controls for one decision.
+
+**What `actOnGap` actually does on a second tap** — worth knowing before "fixing" it: a second tap on
+a still-`proposed` plan SUCCEEDS by recycling the row, which is correct (changing your mind about
+which gap to act on should restage the memo). `plan_busy` is only for a plan that is mid-flight or
+delivered. The invariant to protect is that there is never a SECOND `plans` row, because
+`plans.byThread` is a `.unique()` read and a duplicate makes every later read THROW.
+
+**Fixture discipline.** `smoke:seedVoiceDocSession` seeds two findings — one WITH a
+`citationExcerpt`, one WITHOUT — so the e2e covers both render paths. Its `section` values must come
+from `DOC_REVIEW_SECTIONS` (`insight | pattern | strength | risk`): 14-01 originally seeded
+`section: "findings"`, which `shapeDocReview` **drops**, so the fixture described a row production
+can never emit and the spec would have passed against an impossible shape. **A fixture that is not a
+legal row is not a fixture.** Keep the seeded excerpt a verbatim substring of the seeded text, too —
+the producer substring-verifies it.

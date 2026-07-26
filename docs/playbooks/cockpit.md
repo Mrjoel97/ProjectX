@@ -1,7 +1,13 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-25 (14-01 — Wave-0 freeze, Phase 14 voice-doc) — NO cockpit behavior
-> change. `FRAMEWORK_LABEL` in `cards.tsx` gained one entry, `"document-review": "Document review"`.
+> Last verified: 2026-07-26 (14-08 — Phase 14 voice-doc post-call). FOUR surgical `cards.tsx` edits,
+> no cockpit behaviour change: `EvaluationCard` gained a document-review branch for the healthy
+> banner and suppresses the `/dashboard/profile` CTA on that branch; findings now render an optional
+> `citationExcerpt` quotation (framework-agnostic, so Phase-12 rows are byte-identical); and
+> `CardList` gained an opt-in `noPlanHint` defaulting to today's cockpit string. See "Voice-doc reuse
+> of the evaluation card (14-08)" below. Prior: 2026-07-25 (14-01 — Wave-0 freeze, Phase 14
+> voice-doc) — NO cockpit behavior change. `FRAMEWORK_LABEL` in `cards.tsx` gained one entry,
+> `"document-review": "Document review"`.
 > That map is typed `Record<Evaluation["framework"], string>`, i.e. derived from the Convex schema
 > union, so it is **not optional bookkeeping**: the moment `evaluations.framework` is widened without
 > it, `pnpm --filter @pikar/web typecheck` goes red. The two edits must always land in ONE commit.
@@ -389,3 +395,39 @@ per tenant per week on the STABLE `REVIEW_THREAD_ID` (`"proactive-review"`, expo
 - DraftCard has no inline editor — edits arrive as new guided-conversation turns
 - `rejected` is transient, not a plan column; cross-turn per-address re-ask needs a schema change
 - Divider persistence ceiling: localStorage → Convex userPrefs if cross-device matters
+
+## Voice-doc reuse of the evaluation card (14-08)
+
+Phase 14's post-call screen renders the **exported `CardList`** rather than forking a card. Four
+edits made that possible, and each is deliberately small — `EvaluationCard` stays ONE dumb read of
+ONE `byThread` row, and a new affordance is another branch inside it, never a second query or a
+second card (the standing rule since Phase 13).
+
+1. **`isDocReview`** keys off `DOC_REVIEW_FRAMEWORK` imported from `@pikar/voice`, never a re-typed
+   `"document-review"` string. `schema.ts`, `voiceDoc.ts` and this card must agree; one shared
+   constant is the only way a rename cannot silently desync them.
+2. **The healthy banner** has a document branch. "No gaps found on X — your business is solid here"
+   is simply the wrong claim when the user asked about a *report*. Same `data-testid`, same
+   `healthyBox` styling (both asserted elsewhere).
+3. **The thin-data CTA is suppressed** on a document review. `/dashboard/profile` is the one action
+   that unblocks the *business* dead-end and does nothing for a report that could not be assessed —
+   offering it would be a dead link dressed as a fix. The box's honest message stays.
+4. **`citationExcerpt` renders as a `<blockquote>`** beneath the finding label — the quoted-passage
+   half of 14-CONTEXT.md's citation lock. **Framework-agnostic on purpose:** the field is optional on
+   every `evaluations` row, so Phase-12 business evaluations (which never set it) render
+   byte-identically and no second branch exists. **Absent must render exactly as before** — no empty
+   block, no placeholder, no reserved space, because "where available" means absent is the normal
+   case. §4: an excerpt is report content on the PRODUCT surface only — never add it to a telemetry,
+   analytics or logging call from this component.
+
+**`CardList`'s `noPlanHint`** is opt-in and defaults to the existing cockpit string, so every current
+caller is behaviourally unchanged. It exists because "answer the questions to build one" is wrong on
+a surface with no composer.
+
+**A voice-doc thread must never be routed to the workspace composer.** The synthetic
+`voice-doc:<sessionId>` id is not a Convex Agent thread: reads degrade gracefully but
+`sendCockpitMessage` would throw (Pitfall 7). `apps/web/e2e/voice-doc.spec.ts` drives
+`/dashboard/workspace?thread=<synthetic>` as a **test harness only** — it renders the same
+`CardList` over the same seeded row — and no navigation entry point to that URL may be added
+anywhere in the product. "A workspace EVALUATION card for voice-doc findings" is an explicitly
+deferred idea.
