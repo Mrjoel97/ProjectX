@@ -24,7 +24,9 @@ import type {
 import {
   BEHAVIOR_PRESETS,
   deriveTier,
+  deserializeProfile,
   FUNDING_STATES,
+  isTier,
   missingSlots,
   REVENUE_STAGES,
   sanitizeAgentName,
@@ -37,6 +39,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { migrations } from "./migrations";
 import schema from "./schema";
 
 // Derive the arg validators from the schema (the `evaluations.ts:42` rung-2 precedent) so the
@@ -275,3 +278,50 @@ export const grantEnterprise = internalMutation({
     return { tier: grant.tier, tierSource: grant.tierSource, changed };
   },
 });
+
+/**
+ * SC#6 / design §10 — backfill existing tenants into the control plane.
+ *
+ * OPSG-06: resumable + batched via `@convex-dev/migrations`, NEVER an ad-hoc backfill (the
+ * `vaultSweep.ts:4-5` house rule — a `.collect()` over `vaultDocuments` is an unbounded read over a
+ * table holding book-sized uploads, and it fails mid-way with no cursor). It lives HERE rather than
+ * in a new module because a migration belongs beside the table it fills (the `vaultSweep.ts`
+ * precedent, same instance, same table).
+ *
+ * **NO FORCED RE-ONBOARDING**: the legacy tier stands until the user completes the facts. That is
+ * why the row it writes carries no facts at all and why `saveFacts` patches such a row without
+ * re-deriving.
+ */
+export const backfillLegacyTier = migrations.define({
+  table: "vaultDocuments",
+  migrateOne: async (ctx, doc) => {
+    if (doc.kind !== "business_profile" || doc.status === "failed" || !doc.text) return;
+
+    const existing = await byTenant(ctx.db, doc.tenantId);
+    // Double duty: IDEMPOTENCY (a second run adds nothing, a tenant's second profile doc adds
+    // nothing) AND the never-downgrade rule (a row already at `derived` is authoritative and must
+    // not be reverted to `legacy`). Do NOT "improve" this into an upsert.
+    if (existing) return;
+
+    // `deserializeProfile`'s fallback to "solopreneur" on a garbage `Persona:` line is ACCEPTABLE
+    // here: a legacy row records what the system ALREADY BELIEVED. SC#2b is about the AUTHORITATIVE
+    // read (plan 04 repoints `evaluations.ts` at this table); it is not about the backfill.
+    const persona = deserializeProfile(doc.text).persona;
+    await ctx.db.insert("tenantProfiles", {
+      tenantId: doc.tenantId,
+      tier: isTier(persona) ? persona : "solopreneur",
+      tierSource: "legacy",
+      derivedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * The operator one-shot runner (the `vaultSweep.runSweep` precedent, bound to this migration):
+ *
+ *   npx convex run tenantProfile:runBackfillLegacyTier
+ *
+ * It cannot be RUN for real in this worktree (no `CONVEX_DEPLOYMENT`); it is exercised only through
+ * `convex-test`'s in-memory DB, and the live run is deferred to integration on `main`.
+ */
+export const runBackfillLegacyTier = migrations.runner(internal.tenantProfile.backfillLegacyTier);

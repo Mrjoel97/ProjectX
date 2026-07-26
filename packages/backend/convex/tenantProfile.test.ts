@@ -415,7 +415,9 @@ const queuedJobs = (t: TestConvex<typeof schema>) =>
     ctx.db.system
       .query("_scheduled_functions")
       .collect()
-      .then((jobs) => jobs.filter((j) => j.state.kind === "pending" || j.state.kind === "inProgress")),
+      .then((jobs) =>
+        jobs.filter((j) => j.state.kind === "pending" || j.state.kind === "inProgress"),
+      ),
   );
 
 const cancelQueued = async (t: TestConvex<typeof schema>) => {

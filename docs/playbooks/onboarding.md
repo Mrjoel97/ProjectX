@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
@@ -240,6 +240,9 @@ cannot see:
 - `pnpm --filter @pikar/backend test -- onboarding` — status gate + extract-no-auto-commit (SC#1) +
   commit→ingest→retrieve + tenant isolation + re-embed (SC#2/#3), convex-test. LIVE.
 - `pnpm --filter @pikar/backend test -- profileRedaction` — §4 audit/telemetry/DLQ scan (SC#4). LIVE.
+- `pnpm --filter @pikar/backend test -- tenantProfile` — the tier control plane: SC#2a round-trip +
+  tenant isolation, the `tenant.tier_changed` payload key set (SC#5c), the `grantEnterprise` grant
+  surviving a facts edit, and the legacy backfill's idempotency (SC#6a/6b). convex-test, LIVE.
 - `node scripts/check-playbooks.mjs` — this playbook covers its watched paths.
 - Manual first-run/resumability/review-card checks: see `11-VALIDATION.md` § Manual-Only Verifications.
 
@@ -260,6 +263,20 @@ cannot see:
   values** (§4). There is deliberately no `tierHistory` table: the audit table already IS the
   append-only log. An unchanged tier writes no event (`derivedAt` may still be refreshed — the
   timestamp records when the RULE last ran, the event records when the ANSWER moved).
+- **Backfill pre-15.1 tenants into the control plane (SC#6, design §10)** — one-shot, post-merge on
+  `main`'s deployment (the `vaultSweep:runSweep` precedent):
+  ```
+  npx convex run tenantProfile:runBackfillLegacyTier
+  ```
+  A `@convex-dev/migrations` migration over `vaultDocuments` (OPSG-06: resumable + batched, never an
+  ad-hoc `.collect()` over a table holding book-sized uploads). It writes ONE `tierSource: "legacy"`
+  row per tenant that has a non-`failed` `business_profile` doc, recovering the tier from that doc's
+  markdown `Persona:` line, with **no facts at all** — design §10 forbids forced re-onboarding, so
+  the legacy tier stands until the user completes the facts. `if (existing) return` does double duty
+  (idempotency AND never downgrading a `derived` row back to `legacy`) — do not "improve" it into an
+  upsert. **This worktree cannot run it for real** (no `CONVEX_DEPLOYMENT`); it is exercised only
+  under `convex-test`, and the live run is deferred to integration on `main`
+  (`15.1-VALIDATION.md` Manual-Only row 1).
 - Seed dependency: a fresh deployment must run `seedSkills` (local `convex dev --run skills:seedSkills`,
   prod `npm run seed`) or the extraction action dead-letters `NO_ACTIVE_SKILL: business-profile`.
 - The profile vault doc reuses the vault ingest smoke seam (`SMOKE::<docId>`) for offline tests.
