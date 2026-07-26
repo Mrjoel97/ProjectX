@@ -88,7 +88,19 @@ The Stage-1 session finalizes this table in the same commit as the freeze.
 |------|----------|--------|-------|--------------------|----------------|
 | **A · Dispatch core** | `.worktrees/lane-a-dispatch` | `lane-a/dispatch-core` | Phase 15 SC #1, #2 | `convex/llm.ts` (route → specialist skill+tool-set swap, depth cap, cycle refusal, shared cost envelope), specialist skill rows in `convex/skills.ts` + `packages/contracts` | executor files, any voice file |
 | **B · Executor + lineage** | `.worktrees/lane-b-executor` | `lane-b/executor-lineage` | Phase 15 SC #4, #3, #5 | `convex/deliverApprovedPlan.ts`, `convex/plans.ts`, audit/telemetry lineage rows, the cross-tenant isolation assertion | `convex/llm.ts` (zero edits), voice files |
-| **C · Voice-doc flagship** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | Phase 14 (all SC) | `convex/voice.ts`, the new voice-doc module, `apps/web/app/(app)/dashboard/voice/*`, read-only use of `convex/evaluations.ts` | `convex/llm.ts`, executor files |
+| **C · Voice-doc flagship** | `.worktrees/lane-c-voicedoc` | `lane-c/voice-doc` | Phase 14 (all SC) | `convex/voice.ts`, the new voice-doc module, `apps/web/app/(app)/dashboard/voice/*`, read-only use of `convex/evaluations.ts` **except the ONE authorized exception below** | `convex/llm.ts`, executor files |
+
+**Authorized exception to Lane C's read-only use of `convex/evaluations.ts` (approved 2026-07-25,
+plan 14-01).** The Wave-0 schema widening (`evaluations.framework` += `"document-review"`) could not
+be "zero edits to `evaluations.ts`" as the Phase-14 research assumed: `evalFields.framework` is
+derived from the schema and feeds **two** signatures — `insertEvaluation` (:139), which SHOULD widen
+for free, and `runEvaluation` (:161), which must not. Lane C therefore pinned `runEvaluation`'s
+`framework` arg to the four business frameworks, so the business-evaluation engine refuses a
+doc-review row at the validator boundary. Same change forced one line in `convex/proactiveReview.ts`
+(:79 carries the persisted framework forward into that now-narrower arg). `insertEvaluation`, the
+local `Framework` type (:44), `FRAMEWORK_SKILL` (:48) and `buildMemo` are byte-unchanged, as is
+`convex/llm.ts` (its `evaluateBusiness` enum is hardcoded, not schema-derived). **Any other lane
+touching `evaluations.ts` or `proactiveReview.ts` coordinates first.**
 
 **Per-worktree setup, once, at Stage 2 only:** `pnpm install` → `npx convex dev` (codegen + its
 own dev deployment) → `pnpm dev`. Each lane gets an isolated deployment, which is what lets a

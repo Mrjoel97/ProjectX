@@ -76,8 +76,16 @@ export const reviewOne = internalAction({
       } = await ctx.runAction(internal.evaluations.runEvaluation, {
         tenantId,
         threadId: REVIEW_THREAD_ID, // STABLE, never per-week: lastForThread is indexed on
-        framework: last?.framework, // (tenantId, threadId), so a weekly id would silently
-        withDelta: true, // reset the Scorecard and re-ask answered figures.
+        // (tenantId, threadId), so a weekly id would silently reset the Scorecard and re-ask
+        // answered figures. Carry last week's framework forward to compare like with like —
+        // EXCEPT the Phase-14 voice-doc literal, which runEvaluation refuses at its validator
+        // (see the pin at evaluations.ts runEvaluation args). A "document-review" row cannot
+        // reach this thread today (those live on synthetic `voice-doc:<sessionId>` threads), so
+        // this is a type-level guard, not a live branch: fall back to the engine's auto-pick
+        // rather than throw, because the weekly review must never fail on a framework it can
+        // simply re-derive.
+        framework: last?.framework === "document-review" ? undefined : last?.framework,
+        withDelta: true,
       });
       const d = res.delta;
       // Notify-on-change keeps the bell meaningful: first review ever, verdict moved, or the delta

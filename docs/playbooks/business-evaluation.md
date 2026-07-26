@@ -1,5 +1,7 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-07-25 (5) — 14-01 (Phase-14 Wave-0 freeze, Lane C): the `evaluations` TABLE is now shared with the voice-doc flow, but this ENGINE is not. `evaluations.framework` gained a fifth literal `"document-review"`, `findings[]` gained an optional `citationExcerpt`, and a doc-review row is written STRAIGHT through `insertEvaluation` by `voiceDoc.ts` — it never enters `runEvaluation`, has no rubric skill and no `diagnose()` path. **The load-bearing consequence: `runEvaluation`'s `framework` arg is now explicitly PINNED to the four business frameworks instead of being derived from `evalFields`.** See the new **"Sharing the evaluations table with voice-doc (Phase 14)"** section below. Zero behavior change for every existing business-evaluation caller; `evaluations.test.ts` and `proactiveReview.test.ts` unchanged and green, backend 497/498 (sole red the pre-existing `audit.test.ts auditCounts`).
+
 > Last verified: 2026-07-25 (4) — 13-02: the **proactive weekly review** (`proactiveReview.ts`, BEVL-03) — a Monday-06:00-UTC cron enumerates onboarded tenants over `vaultDocuments.by_kind`, fans out one `reviewOne` per tenant, runs this engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, and writes an in-app notification only when something changed. See the **Proactive weekly review** section below. **The repeat-run provenance collapse recorded in the previous line is now CLOSED** — it had to be, because a weekly review is by design a repeat run on one pinned thread. `fillVault` now records a CITATION whenever a grounded document restates a field, even when the slot is already filled by carry-forward (the VALUE stays first-write-wins, and a pre-seeded `user-provided` citation is never downgraded); the two "already set → skip" short-circuits above it (the `currentOffers.length === 0` pre-check and the `FINANCIAL_PATTERNS` `continue`) are gone for the same reason. Regression-guarded by `proactiveReview.test.ts > notifies only on change`, which asserts run 2 has the SAME finding count as run 1 and an empty delta — that test was CONFIRMED red before the fix (a second `weekly_review` notification fired off a false "gaps closed"). `proactiveReview.test.ts` 8/8, `evaluations.test.ts` 11/11 unchanged, backend 494/495 (sole red the pre-existing `audit.test.ts auditCounts`). Prior: 2026-07-25 (3) — 13-01: the optional `evaluations.delta` "what changed" field (BEVL-03 groundwork for the weekly proactive review). See the **"What changed" delta** section below. No behavior change for any existing caller: `withDelta` is opt-in, absent ⇒ no `delta` is written, and the two pre-existing callers (`llm.ts`'s `evaluateBusiness` tool, the tests) pass it nowhere. `evaluations.test.ts` 11/11 (4 new delta tests, all confirmed RED before the engine change). Prior: 2026-07-25 (2) — TWO owner-reported grounding defects fixed; both made a real business assess as "not enough data". **(1) A reference PDF monopolised the corpus.** `rag.search` takes its top-K by CHUNK (`limit: 8`), and `seedDocIds` dedupes only afterwards — so one large book filled every slot and grounding returned exactly ONE doc. Measured live: with the engine's own `DEFAULT_QUERY` the tenant's grounding came back as a single 300-page marketing PDF, the user's own profile never entered the corpus, `findingCount` was 0, and the framework fell back to the persona map (`swot`) because no financials were found. Similarity alone cannot answer "evaluate MY business" — a book ABOUT business outranks a short description OF one on generic business vocabulary. FIX: `runEvaluation` now PREPENDS the tenant's own profile-shaped docs from the new `internal.vault.profileSeedDocs` before the retrieval result. Prepending is load-bearing — `fillVault` keeps the FIRST value per path, so the user's own figures beat book prose. Fail-open: a seed-query failure leaves retrieval-only grounding intact. The shared `vaultGround` is deliberately UNTOUCHED (it also serves `searchVault` + golden fixtures 25/26 — changing it would risk eval-gate churn). **(2) `fillVault` could never fill `identity.currentOffers`.** `emptyScorecard.identity.currentOffers` is `[]`, not null, so the `!= null` guard skipped it forever; `hasOffer` stayed false and `diagnose()` returned Gate 1 ("No offer worth buying yet") on EVERY vault-grounded run, masking the true constraint further down the ladder. The caller's own `.length === 0` check shows the intent. FIX: an empty array now counts as unset. Verified live on the owner's deployment, fresh thread: framework `growth-os`, **8 cited findings** (incl. the previously-impossible `Offer:`), gap = `"Customer doesn't pay for themselves in 30 days."` → `money-model-designer` — exactly the Gate-2 constraint the fixture's economics were built to produce (30-day cash 90 < CAC 180). `evaluations.test.ts` 7/7 with a new regression test that was CONFIRMED to fail against the old guard (`expected [] to have a length of 1`); full backend 479/480 with only the pre-existing `audit.test.ts` red. KNOWN GAP (not fixed, logged): re-running an evaluation in the SAME thread collapses `findingCount` (8 → 1) — carry-forward preserves the scorecard VALUES but not their provenance, so only freshly-filled paths are re-cited. Evaluate in a fresh thread until this is closed. Prior: 2026-07-25 against 12-05 (the gap-action + memo terminal — the ACTING side, BEVL-02)
 > Prior: 2026-07-25 against 12-04 (the cockpit-tool store surface + the EVALUATION card)
 > Build history: `.planning/phases/12-business-evaluation-engine/` · Related ADRs: none
@@ -94,6 +96,10 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
   gapCount, groundedDocCount, userProvidedCount }` — counts + closed enums ONLY. Findings/citations
   are content-plane (the row), NEVER audited. Enforced by the structural assertion in
   `evaluations.test.ts` ("audit payload carries counts/enums ONLY").
+- **`runEvaluation`'s framework arg is PINNED, not schema-derived (14-01)** — it lists the four
+  business frameworks literally, even though `insertEvaluation` right beside it derives its
+  validator from `evalFields`. This is deliberate and load-bearing; do NOT "simplify" it back to
+  `evalFields.framework`. See the Phase-14 section below for why.
 - **Two-tenant isolation (SC #5)** — `byThread`/`recordScorecardAnswer` are tenant-scoped
   (`ctx.tenantId` via the wrappers); `runEvaluation`/`lastForThread` filter by explicit `tenantId`
   on `by_tenant_thread`. Tenant B never reads tenant A's row. Enforced by the isolation test.
@@ -292,3 +298,62 @@ crons.weekly("proactive-review", monday 06:00 UTC)
   (Phase 16); `marketViable` is a supplied signal, not verified.
 - **Specialist EXECUTION deferred (15+)** — a gap's `route` names the target specialist skill; it is
   not run here.
+
+## Sharing the `evaluations` table with voice-doc (Phase 14, DOCV-01)
+
+Phase 14's voice-doc review persists into the SAME `evaluations` table this engine owns, so the
+post-call surface can reuse the existing `byThread` read and `EvaluationCard`. The table is shared;
+**the engine is not**. Keep that line clean.
+
+### What Phase 14 added to the table
+
+- `framework` gained a fifth literal, `"document-review"`. It is human-readable on purpose:
+  `buildMemo` prints `Diagnosed on the **${row.framework}** framework` as user-visible prose inside
+  an approvable memo, so a slug like `docrev` would leak into the product.
+- `findings[]` gained `citationExcerpt: v.optional(v.string())` — a capped, substring-verified quoted
+  passage. Optional is load-bearing: an absent excerpt is a VALID, non-degraded state, never an empty
+  string. Business evaluations simply never set it, and every pre-Phase-14 row is untouched
+  (additive + optional ⇒ no migration).
+- `voiceSessions.docRef` — not this playbook's table, but it is what scopes a session to one report.
+
+### The invariant: a doc-review row never enters this engine
+
+A voice-doc row is written STRAIGHT through `insertEvaluation` by `voiceDoc.ts`. It never goes
+through `runEvaluation`: there is no `document-review` rubric skill, no `FRAMEWORK_SKILL` entry, and
+no `diagnose()` path for it. Two mechanisms hold that, and they are not redundant:
+
+1. **`FRAMEWORK_SKILL` has no `document-review` key** (the original design). An unmapped literal
+   cannot load a rubric.
+2. **`runEvaluation`'s `framework` arg is explicitly PINNED** to `swot | lean | bmc | growth-os`
+   (14-01). This is the stronger of the two — it refuses a doc-review row at the **validator
+   boundary**, before any handler code runs.
+
+Why the pin exists at all: `const evalFields = schema.tables.evaluations.validator.fields` feeds
+**two** signatures. `insertEvaluation` (the write surface) SHOULD widen for free when the schema
+widens — that is exactly how a voice-doc row gets persisted with no edit here. `runEvaluation` (the
+engine entrypoint) must NOT. Before the pin, widening the schema silently widened the engine's
+public input type and broke `const chosen: Framework` at the type level. Phase 14's research
+predicted "zero edits to `evaluations.ts`" on the assumption that `evalFields.framework` fed only
+`insertEvaluation`; that assumption was wrong, and the pin is the correction (user-approved
+2026-07-25, recorded as an authorized Lane-C exception in `.planning/PARALLELIZATION.md`).
+
+**If you widen `evaluations.framework` again, check every signature that derives from `evalFields`,
+not just the one you intended to widen.**
+
+`proactiveReview.ts` carries the same rule at the call site: `reviewOne` carries last week's
+framework forward, so it explicitly drops a `document-review` value and falls back to auto-pick
+rather than throwing. A doc-review row cannot reach `REVIEW_THREAD_ID` today (voice-doc rows live on
+synthetic `voice-doc:<sessionId>` threads), so that is a type-level guard, not a live branch — but
+the weekly review must never fail on a framework it can simply re-derive.
+
+### The excerpt is content-plane, and strictly so (§4)
+
+`citationExcerpt` is the only verbatim report content Phase 14 persists. It is LEGAL in
+`evaluations.findings[]`, in a memo body, and on the post-call card. It is ILLEGAL in every `audit` /
+`deadLetters` / `telemetry` `payload:` and in every `agentSteps` row. There is no third state: code
+that needs to log "which finding" logs an index or a count, never the quote. This is the same
+content-plane/log-plane split the `evaluation.ran` audit already obeys (counts + closed enums only),
+extended to the one new field that could break it. Plan 14-09 pins it with a mutation-verified static
+scan.
+
+See `voice.md` § "Voice-doc sessions (Phase 14)" for the voice half.

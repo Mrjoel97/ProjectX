@@ -10,6 +10,9 @@ import { buildBriefingView } from "@pikar/core/briefing";
 // REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
 import { REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
+// The voice-doc framework literal, imported rather than re-typed: schema.ts, voiceDoc.ts and this
+// card must agree, and one shared constant is the only way a rename cannot silently desync them.
+import { DOC_REVIEW_FRAMEWORK } from "@pikar/voice";
 import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
@@ -1237,6 +1240,9 @@ const FRAMEWORK_LABEL: Record<Evaluation["framework"], string> = {
   lean: "Lean Canvas",
   bmc: "Business Model Canvas",
   "growth-os": "Growth",
+  // Phase 14 (DOCV-01). This map is `Record<Evaluation["framework"], string>`, so the schema
+  // widening and this entry MUST land in the same commit or web typecheck goes red.
+  "document-review": "Document review",
 };
 
 const evalSection = {
@@ -1421,6 +1427,11 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
   }
   const { framework, findings, gaps, notEnoughData, verdict } = evaluation;
   const frameworkLabel = FRAMEWORK_LABEL[framework];
+  // Keyed off the SHARED constant, never a re-typed "document-review" string — the literal lives in
+  // @pikar/voice and is also what schema.ts and voiceDoc.ts write, so a rename can only break in one
+  // place. Drives the three copy branches below (healthy banner, thin-data CTA, nothing else): a
+  // document review is not a business diagnosis and must not borrow its sentences.
+  const isDocReview = framework === DOC_REVIEW_FRAMEWORK;
   const thin = findings.length === 0;
 
   // Carry each gap's ORIGINAL row index through the sort — actOnGap indexes the persisted gaps[]
@@ -1462,9 +1473,14 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
               enrichment surface, and its save re-embeds the profile doc so the next run grounds on it.
               --teal-900, not --teal-600: BRAND §6 — teal-600 is ~2.9:1 on light paper, fine for a
               white-text button fill but not for small teal TEXT ("darken it" is the doc's own rule). */}
-          <Link href="/dashboard/profile" data-testid="evaluation-enrich" style={{ display: "inline-block", marginTop: "0.55rem", color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}>
-            Add more about your business →
-          </Link>
+          {/* Suppressed on a document review: enriching the business PROFILE does nothing for a
+              report that could not be assessed, so offering it would be a dead link dressed as a
+              fix. The box's honest "not enough data" message is exactly right and stays. */}
+          {!isDocReview && (
+            <Link href="/dashboard/profile" data-testid="evaluation-enrich" style={{ display: "inline-block", marginTop: "0.55rem", color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}>
+              Add more about your business →
+            </Link>
+          )}
         </div>
       ) : (
         <>
@@ -1491,6 +1507,33 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
                             [{f.citationTitle}]
                           </span>
                         )}
+                        {/* The QUOTED PASSAGE half of the locked citation decision — "document-level
+                            always, PLUS a quoted passage where available" (14-CONTEXT.md).
+                            FRAMEWORK-AGNOSTIC on purpose: `citationExcerpt` is optional on every
+                            evaluations row, so Phase-12 business evaluations (which never set it)
+                            render byte-identically and need no second branch.
+                            ABSENT MUST RENDER EXACTLY AS BEFORE — no empty block, no placeholder,
+                            no reserved space: "where available" means absent is the normal case.
+                            §4: an excerpt is report content on the PRODUCT surface only — never add
+                            it to a telemetry, analytics or logging call from this component. */}
+                        {f.citationExcerpt && (
+                          <blockquote
+                            data-testid="evaluation-excerpt"
+                            style={{
+                              margin: "0.3rem 0 0",
+                              paddingLeft: "0.6rem",
+                              borderLeft: "2px solid var(--rule)",
+                              color: "var(--ink-soft)",
+                              fontSize: "0.8rem",
+                              fontStyle: "italic",
+                              // Value is capped server-side (EXCERPT_CHAR_CAP), but wrap anyway so a
+                              // long single token can never widen the card.
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            “{f.citationExcerpt}”
+                          </blockquote>
+                        )}
                       </span>
                     </li>
                   ))}
@@ -1500,7 +1543,13 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
 
           {verdict === "healthy" ? (
             <div data-testid="evaluation-healthy" style={healthyBox}>
-              No gaps found on {frameworkLabel} — your business is solid here.
+              {/* A document review is not a business diagnosis. "Your business is solid here" is
+                  simply the wrong claim when the user asked about a report — so the document branch
+                  states what was actually established: this report shows no gaps, and the strengths
+                  above are what it DID show. Same testid and styling (both asserted elsewhere). */}
+              {isDocReview
+                ? `No gaps in this report — what's above is what it does establish.`
+                : `No gaps found on ${frameworkLabel} — your business is solid here.`}
             </div>
           ) : (
             topGaps.length > 0 && (
@@ -1545,7 +1594,18 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
 }
 
 /** Reads the thread's plan + briefing rows and dispatches BRIEFING / PLAN / DRAFT / REPORT cards. */
-export function CardList({ threadId, sending }: { threadId?: string; sending: boolean }) {
+export function CardList({
+  threadId,
+  sending,
+  // OPT-IN copy override for the no-plan fallback. Defaults to the cockpit wording, so every
+  // existing caller is behaviourally unchanged. Exists because "answer the questions to build one"
+  // is wrong on a surface with no composer — the voice-doc post-call screen (14-08).
+  noPlanHint = "No plan yet — answer the questions to build one.",
+}: {
+  threadId?: string;
+  sending: boolean;
+  noPlanHint?: string;
+}) {
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
   // INDEPENDENT of the plan (research Pitfall 6): "what happened in my inbox?" is typically a
   // thread's FIRST message, so the briefing must render with no plan row at all. Anything gated
@@ -1574,7 +1634,7 @@ export function CardList({ threadId, sending }: { threadId?: string; sending: bo
     if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
 
     if (plan === null)
-      return briefing ? <BriefingCard briefing={briefing} /> : running ? null : <p style={muted}>No plan yet — answer the questions to build one.</p>;
+      return briefing ? <BriefingCard briefing={briefing} /> : running ? null : <p style={muted}>{noPlanHint}</p>;
     return <PlanCards plan={plan} threadId={threadId} briefing={briefing} />;
   };
 

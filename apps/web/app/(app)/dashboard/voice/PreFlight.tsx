@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MicIcon } from "../../../(auth)/icons";
+import { DocPicker } from "./DocPicker";
 
 // VOIC-01 pre-flight (RESEARCH / CONTEXT): before a single second of capped time is spent, confirm
 // the mic actually works and show the one-time consent notice. A dead mic caught here saves the user
@@ -18,10 +19,16 @@ export function PreFlight({
   onStart,
   starting,
   error,
+  docId,
+  onPickDoc,
 }: {
   onStart: () => void;
   starting: boolean;
   error: string | null;
+  // DOCV-01 / 14-10: the optional document under discussion. page.tsx owns this state (it is also
+  // where `?doc=` is read), so the picker below only reports a choice upward — it stores nothing.
+  docId?: string;
+  onPickDoc: (docId: string | undefined) => void;
 }) {
   const [mic, setMic] = useState<MicState>("idle");
   const [level, setLevel] = useState(0); // 0..1 smoothed input level for the meter
@@ -176,6 +183,11 @@ export function PreFlight({
           </>
         )}
       </div>
+
+      {/* 14-10: attach a vault document before spending capped time. Sits after the mic check and
+          before consent so the two pre-flight decisions read in order: can we hear you, and what
+          are we talking about. Optional — with no document this stays a Phase-6 general session. */}
+      <DocPicker selectedId={docId} onPick={onPickDoc} />
 
       {/* One-time consent notice — always visible before Start (no mid-call friction). */}
       <p
