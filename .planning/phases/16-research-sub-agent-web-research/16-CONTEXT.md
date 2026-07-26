@@ -238,6 +238,18 @@ outcome**, and that outcome being tested. Enumerate and specify at least:
 | Sources contradict | Contradiction surfaced in the findings, not silently resolved |
 | Cost ceiling hit mid-run | Partial findings returned and MARKED incomplete (the `specialistMemoBody` precedent) |
 | Step budget exhausted | Same — marked, never a silent truncation presented as complete |
+| **Wall-clock budget approached** (added 2026-07-27) | **Same — partial findings returned and MARKED incomplete, NEVER a throw.** See below; this is the failure mode most likely to actually fire. |
+
+**The wall-clock row is not a sixth item of equal weight — it is the one most likely to occur, and
+today it is the only one that DISCARDS work.** `AbortSignal.timeout(45_000)` on the `generateText`
+call aborts the whole loop and `llm.ts:1789` converts it to a thrown `agent_timeout`, so a run that
+had already gathered four good sources returns nothing at all. Moving to the async terminal
+(D9-REVISED) makes a timeout rarer; it does not make it a governed outcome. Both are required.
+
+Reuse the `specialistMemoBody` incomplete-marker already used for the cost and step ceilings — a
+research run that ran out of clock is exactly as "incomplete" as one that ran out of budget, and it
+must be distinguishable in the marker text (the plans already assert cost-vs-steps produce DIFFERENT
+text; make it three, not two). Test it offline with a scripted slow run — no live call needed.
 
 **Proven two ways, both required:**
 
