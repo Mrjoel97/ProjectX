@@ -415,3 +415,90 @@ test("recordUsage accumulates the counters and prices the delta onto spend; a ba
   expect(bad).toEqual({ ok: false });
   expect((await get(t, sessionId))?.inAudioTok).toBe(before?.inAudioTok); // unchanged — no negative counter
 });
+
+// ── 14-08: SC3 — ONE artifact per voice-doc session, whichever path was taken ──────────────────
+//
+// The CONTEXT decision is that a user should find exactly ONE new thing in their vault after a
+// voice-doc session — not a brief AND a memo, and not two memos because the call dropped and the
+// watchdog also stored one. This is that decision as a test. It holds because the doc branch reuses
+// the SAME `storeBrief`/`briefRef` spine as Phase 6 rather than adding a second write path, so the
+// idempotence was inherited, not re-implemented — these assertions pin that it stays inherited.
+test("a doc-scoped session leaves exactly ONE brief artifact, across repeat stores", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+  const vaultDocId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "upload",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: "hash_docscoped_one_artifact",
+      text: "Churn rose in month two.",
+      status: "ready" as const,
+      createdAt: Date.now(),
+    }),
+  );
+  const sessionId = await seedActive(t, "call_doc_one_artifact", "en");
+  await t.run((ctx) => ctx.db.patch(sessionId, { docRef: vaultDocId }));
+
+  const transcript = [
+    { speaker: "user", text: "SMOKE::route=direct_llm:: what does the report say about churn?" },
+    { speaker: "assistant", text: "Churn concentrates in month two." },
+  ];
+  const first = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+  const second = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+
+  // Same doc back both times — `briefRef` is the idempotence key, so a re-store (a re-click, or a
+  // race between this and the watchdog's auto-store) can never mint a second artifact.
+  expect(second).toEqual(first);
+  const briefs = await t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "brief"),
+  );
+  expect(briefs).toHaveLength(1);
+  expect((await get(t, sessionId))?.docRef).toBe(vaultDocId); // the doc scope survives the store
+});
+
+test("the ABNORMAL end of a doc-scoped session also leaves exactly one", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+  const vaultDocId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Q3 Performance Report",
+      kind: "upload",
+      category: "business",
+      source: "upload",
+      mimeType: "text/markdown",
+      size: 32,
+      contentHash: "hash_docscoped_abnormal",
+      text: "Churn rose in month two.",
+      status: "ready" as const,
+      createdAt: Date.now(),
+    }),
+  );
+  const sessionId = await seedActive(t, "call_doc_abnormal", "en");
+  await t.run((ctx) => ctx.db.patch(sessionId, { docRef: vaultDocId }));
+
+  // Store once (the auto-store a dropped call performs), then mark the session abnormally ended and
+  // store again — the shape of "the call dropped, then the watchdog fired".
+  const stored = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [{ speaker: "user", text: "SMOKE::route=direct_llm:: quick question" }],
+    language: "en",
+  });
+  await t.run((ctx) => ctx.db.patch(sessionId, { status: "ended_abnormal" as const }));
+  const again = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript: [{ speaker: "user", text: "SMOKE::route=direct_llm:: quick question" }],
+    language: "en",
+  });
+
+  expect(again).toEqual(stored);
+  const briefs = await t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "brief"),
+  );
+  expect(briefs).toHaveLength(1);
+});

@@ -653,7 +653,12 @@ export const seedVoiceDocSession = internalMutation({
       findings: [
         {
           label: "Churn is driven by onboarding friction, not price",
-          section: "findings",
+          // A REAL section from DOC_REVIEW_SECTIONS (insight | pattern | strength | risk).
+          // "findings" was used here originally and is NOT in that union: `shapeDocReview` DROPS a
+          // finding whose section is outside it, so the fixture described a row production can never
+          // emit — the e2e would have passed against an impossible shape. A fixture that is not a
+          // legal row is not a fixture.
+          section: "pattern",
           citationDocId: vaultDocId,
           citationTitle: "Q3 Performance Report",
           citationExcerpt: FIRST_EXCERPT, // verbatim substring of the seeded text
@@ -663,7 +668,7 @@ export const seedVoiceDocSession = internalMutation({
         {
           // NO citationExcerpt — the absent-quote render path.
           label: "Revenue is concentrated in two enterprise accounts",
-          section: "findings",
+          section: "insight",
           citationDocId: vaultDocId,
           citationTitle: "Q3 Performance Report",
           confidence: "medium",
