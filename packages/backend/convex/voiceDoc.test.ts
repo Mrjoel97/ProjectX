@@ -135,12 +135,23 @@ const searchAudits = (t: ReturnType<typeof convexTest>, tenantId: string) =>
 // Any network call is a test failure. The SMOKE:: seam must carry the whole flow, so this suite
 // passes with no OPENAI_API_KEY and no embedding request — stubbing `fetch` proves that
 // structurally rather than trusting the ambient environment.
+// The `SMOKE::docreview::` seam is gated on OPENAI_API_KEY being ABSENT (`voiceDoc.ts` explains
+// why: `reviewSession` is a PUBLIC action, so an ungated sentinel would let any tenant user have a
+// fabricated review persisted). Other suites in this package SET the variable, and vitest reuses
+// workers across files, so clear it here rather than trusting the ambient environment — the same
+// discipline as the throwing `fetch` stub.
+let savedKey: string | undefined;
+
 beforeEach(() => {
+  savedKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
   vi.stubGlobal("fetch", () => {
     throw new Error("voiceDoc.test: no network is allowed in this suite");
   });
 });
 afterEach(() => {
+  if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = savedKey;
   vi.unstubAllGlobals();
 });
 
@@ -438,6 +449,206 @@ describe("voiceDoc.reviewDocument (SC2 — the producer)", () => {
     ).toEqual(bail);
     expect(await reviewRow(t, TENANT_B, foreign)).toBeNull();
     expect(await reviewRow(t, TENANT, foreign)).toBeNull();
+  });
+});
+
+describe("voiceDoc.reviewSession (SC2 — the persisted, cited findings row)", () => {
+  test("every persisted finding cites the report; the quoted passage is capped and verified", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+    // The thread travels back so the caller never re-derives the `voice-doc:<id>` convention.
+    expect(res.threadId).toBe(voiceDocThreadId(sessionId));
+
+    const findings = (await reviewRow(t, TENANT, sessionId))?.findings ?? [];
+    expect(findings).toHaveLength(3);
+
+    // SC2's floor: the DOCUMENT-LEVEL citation is on EVERY finding, welded from the doc argument
+    // — the model's schema has no citation field to omit.
+    expect(
+      findings.every(
+        (f) =>
+          f.citationDocId === docId &&
+          f.citationTitle === "Q3 Performance Report" &&
+          f.source === "vault",
+      ),
+    ).toBe(true);
+
+    // …PLUS a quoted passage WHERE AVAILABLE — the three states, all three legal:
+    // carried through (really in the report), absent by design, and rejected as unverifiable.
+    const quoted = findings[0]?.citationExcerpt;
+    expect(quoted).toBeTruthy();
+    expect(String(quoted).length).toBeLessThanOrEqual(EXCERPT_CHAR_CAP);
+    expect(collapse(REPORT_TEXT)).toContain(collapse(String(quoted)));
+    expect(findings[1]).not.toHaveProperty("citationExcerpt");
+    expect(findings[2]).not.toHaveProperty("citationExcerpt");
+  });
+
+  test("honest 'no gaps' — the healthy fixture pairs the verdict WITH findings and zero gaps", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("healthy"),
+    });
+
+    // ANTI-VACUOUS (the Phase-12 `28-healthy-no-gaps` lesson): `gapCount === 0` ALONE also passes
+    // on the thin-data `insufficient` verdict, so all THREE parts are asserted together. This is
+    // an affirmative "the report holds up", not an empty result wearing a healthy label.
+    expect(res.verdict).toBe("healthy");
+    expect(res.findingCount).toBeGreaterThan(0);
+    expect(res.gapCount).toBe(0);
+
+    const row = await reviewRow(t, TENANT, sessionId);
+    expect(row?.verdict).toBe("healthy");
+    expect(row?.findings.length).toBeGreaterThan(0);
+    expect(row?.gaps).toEqual([]);
+  });
+
+  test("no fabricated gap — an ungroundable report is insufficient with zero gaps", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("empty"),
+    });
+
+    // The `empty` fixture DOES offer a gap. Zero grounded findings means there was nothing to have
+    // found a gap IN, so the code rule force-clears them — the model cannot argue its way past it.
+    expect(res.verdict).toBe("insufficient");
+    expect(res.gapCount).toBe(0);
+    const row = await reviewRow(t, TENANT, sessionId);
+    expect(row?.findings).toEqual([]);
+    expect(row?.gaps).toEqual([]);
+    // …and the honest thin-data state is recorded instead of a diagnosis.
+    expect(row?.notEnoughData.length).toBeGreaterThan(0);
+  });
+
+  test("every persisted gap carries the four values buildMemo prints as user-visible prose", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+
+    const gaps = (await reviewRow(t, TENANT, sessionId))?.gaps ?? [];
+    expect(gaps.length).toBeGreaterThan(0);
+    for (const g of gaps) {
+      // `route` and `playbook` are WELDED constants — the model never chooses them — and all four
+      // are printed verbatim into an approvable memo, so an empty one ships nonsense at the
+      // consent screen (Pitfall 8).
+      expect(g.route).toBe("document-analyst");
+      expect(g.playbook).toBe("document-review");
+      expect(String(g.reason).length).toBeGreaterThan(0);
+      expect(String(g.proofMetric).length).toBeGreaterThan(0);
+      expect(g.leverageRank).toBeGreaterThan(0);
+    }
+  });
+
+  test("idempotent per session — a re-mounted post-call screen sees ONE consolidated row", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+    const args = { sessionId, transcript: smokeTranscript("gaps") };
+
+    const first = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, args);
+    const second = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, args);
+    expect(second).toEqual(first);
+
+    // `evaluations` is append-only, so idempotence is a READ-GUARD: exactly one row on the thread.
+    const rows = await t.run((ctx) =>
+      ctx.db
+        .query("evaluations")
+        .filter((q) => q.eq(q.field("threadId"), voiceDocThreadId(sessionId)))
+        .collect(),
+    );
+    expect(rows).toHaveLength(1);
+
+    // …and exactly one refs-only review audit row, whose payload keys are counts and a verdict.
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "voicedoc.reviewed"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(1);
+    const payload = audits[0]?.payload as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual([
+      "findingCount",
+      "gapCount",
+      "sessionId",
+      "verdict",
+    ]);
+    // §4: no finding label, no quoted passage, no report content of any kind in the log plane.
+    const serialized = JSON.stringify(audits);
+    expect(serialized).not.toContain("setup friction");
+    expect(serialized).not.toContain("Churn rose");
+    expect(serialized).not.toContain("citationExcerpt");
+    expect(serialized).not.toContain("workstream");
+  });
+
+  test("the SMOKE:: sentinel is INERT once a model key exists — a public entry cannot fabricate a review", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    // `transcript` is entirely client-supplied on a PUBLIC tenantAction, so an ungated sentinel
+    // would let any authenticated user POST one turn and get canned gaps persisted as a real
+    // `evaluations` row — a production endpoint fabricating a gap on request, which is the exact
+    // opposite of Success Criterion 2. With a key present the sentinel is just text: the ordinary
+    // model path runs, which here fails closed at the unseeded `document-analyst` persona (§5)
+    // rather than short-circuiting into a fixture.
+    process.env.OPENAI_API_KEY = "sk-voicedoc-seam-guard-test";
+    await expect(
+      asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+        sessionId,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+
+    // Nothing was persisted, so there is no fabricated row for `actOnGap` to act on.
+    expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("BETA-05 — tenant B can neither review nor read tenant A's voice-doc thread", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    // Fail-closed: a cross-tenant session id reads as missing — a STATUS, never content.
+    await expect(
+      asTenant(t, TENANT_B).action(api.voiceDoc.reviewSession, {
+        sessionId,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).rejects.toThrow(/voicedoc: session not found/);
+
+    // ANTI-VACUOUS: the owner CAN review the very same session, so the refusal above is a tenant
+    // boundary and not a broken fixture.
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+    expect(res.findingCount).toBe(3);
+
+    // The row exists — and is invisible to tenant B on the very same synthetic thread id.
+    const threadId = voiceDocThreadId(sessionId);
+    expect(
+      await asTenant(t, TENANT).query(api.evaluations.byThread, { threadId }),
+    ).not.toBeNull();
+    expect(await asTenant(t, TENANT_B).query(api.evaluations.byThread, { threadId })).toBeNull();
   });
 });
 

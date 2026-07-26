@@ -249,12 +249,31 @@ const docReviewSchema = jsonSchema<RawDocReview>({
   required: ["findings", "gaps", "notEnoughData"],
 });
 
-// ── Offline SMOKE seam (the vaultLlm.ts idiom) ───────────────────────────────
+// ── Offline SMOKE seam (the vaultLlm.ts idiom, with the exposure closed) ─────
 // A `SMOKE::docreview::<kind>` first transcript turn returns a deterministic fixture with NO model
-// call and no OPENAI_API_KEY, which is what lets `voiceDoc.test.ts` drive retrieval → findings →
-// row → `actOnGap` end to end offline. A content sentinel, not an env flag: the seam stays
-// per-request and out of shared deployment config.
+// call, which is what lets `voiceDoc.test.ts` drive retrieval → findings → row → `actOnGap` end to
+// end offline. A content sentinel, not a deployment flag: the seam stays per-request and out of
+// shared deployment config.
+//
+// EXPOSURE DIFFERENCE FROM `vaultLlm.ts` — read this before touching the guard below.
+// `vaultLlm.extractGraph` is an `internalAction`, so its `SMOKE::graph::` sentinel is reachable
+// only by server code. This module's producer is reached from `reviewSession`, a PUBLIC
+// `tenantAction` whose `transcript` is entirely client-supplied — so the bare sentinel would let
+// any authenticated user POST one turn and have a FABRICATED review persisted as a real
+// `evaluations` row (canned gaps, real citations to their own document), which then feeds
+// `actOnGap` → memo → the Approve gate. Tenant-scoped and non-exfiltrating, but it directly
+// contradicts Success Criterion 2: a production endpoint must never fabricate a gap on request.
+//
+// So the seam is gated on `OPENAI_API_KEY` being ABSENT. That is not a new config knob — it is the
+// exact precondition the seam exists for (a local backend / convex-test with no key). Any real
+// deployment has a key, so the sentinel is INERT in production and a `SMOKE::` transcript there
+// takes the ordinary model path. `voiceDoc.test.ts` deletes the variable in `beforeEach` (beside
+// the throwing `fetch` stub) so the offline precondition is structural rather than ambient, and
+// pins the inert-with-a-key behavior with its own test.
 const SMOKE_REVIEW_PREFIX = "SMOKE::docreview::";
+
+/** True only where the seam is legitimate: a backend with no model credentials at all. */
+const offlineSeamAvailable = (): boolean => !process.env.OPENAI_API_KEY;
 
 /** A quote the model "produced" that is NOT in the document — the rejected-excerpt path. */
 const SMOKE_ABSENT_EXCERPT = "This sentence appears nowhere in the report under discussion.";
@@ -412,10 +431,13 @@ export const reviewDocument = internalAction({
     if (!doc) return NO_REVIEW;
     const docText = doc.text ?? "";
 
+    // The sentinel is honoured ONLY on a keyless backend — see the exposure note on the seam. A
+    // `SMOKE::` transcript on a real deployment is just text and takes the model path.
     const first = transcript[0]?.text ?? "";
-    const raw: RawDocReview = first.startsWith(SMOKE_REVIEW_PREFIX)
-      ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
-      : await modelDocReview(ctx, transcript, doc);
+    const raw: RawDocReview =
+      offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)
+        ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
+        : await modelDocReview(ctx, transcript, doc);
 
     // Citations, gap route/playbook, the leverage rank, the excerpt cap and the honesty verdict all
     // land in pure tested code (14-02). Do NOT re-derive any of them here, and never pass a verdict.
