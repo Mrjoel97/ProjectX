@@ -85,6 +85,15 @@ export const MONEY_MODEL_DESIGNER_SKILL = "money-model-designer" as const;
 /** Registry name of the lead-engine specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
 export const LEAD_ENGINE_SKILL = "lead-engine" as const;
 
+/** Registry name of the `direct` behaviour-preset style overlay (15.1 / design §7). */
+export const STYLE_DIRECT_SKILL = "style-direct" as const;
+
+/** Registry name of the `coaching` behaviour-preset style overlay (15.1 / design §7). */
+export const STYLE_COACHING_SKILL = "style-coaching" as const;
+
+/** Registry name of the `concise` behaviour-preset style overlay (15.1 / design §7). */
+export const STYLE_CONCISE_SKILL = "style-concise" as const;
+
 /**
  * Skills whose CANDIDATE versions may only activate through a recorded passing
  * eval run (EVAL-01). Rollback (archived/rolled_back targets) is structurally
@@ -96,6 +105,15 @@ export const LEAD_ENGINE_SKILL = "lead-engine" as const;
  * (03.11-02) is gated for the SAME reason: it ingests the untrusted original body
  * to write a reply. Bootstrap v1 still activates ungated via seedSkills'
  * rows.length===0 path, so gating costs nothing until the first edit.
+ *
+ * DELIBERATELY ABSENT (15.1, Q6 — do not "fix" this): the three behaviour-preset
+ * style overlays `style-direct` / `style-coaching` / `style-concise`. They match
+ * `business-profile`, the nearest precedent: an overlay changes HOW a specialist
+ * speaks, never what it may do or claim (the capability grant is code-owned —
+ * ADR-007), so there is nothing for an eval corpus to assert that the specialist's
+ * OWN gated body does not already assert. Gating them would add an eval-corpus
+ * obligation this phase has no budget for, on top of a Phase-15 gate that is
+ * already unpaid.
  */
 export const GATED_SKILLS: readonly string[] = [
   COCKPIT_AGENT_SKILL,

@@ -7,6 +7,9 @@ import { leadEngineSkillBody } from "./leadEngine";
 import { leanCanvasSkillBody } from "./leanCanvas";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
+import { styleCoachingSkillBody } from "./styleCoaching";
+import { styleConciseSkillBody } from "./styleConcise";
+import { styleDirectSkillBody } from "./styleDirect";
 import { swotSkillBody } from "./swot";
 
 // Every derived .ts body MUST stay byte-identical (LF-normalized) to its canonical
@@ -24,6 +27,12 @@ const bodies: [string, string][] = [
   ["offer-architect", offerArchitectSkillBody],
   ["money-model-designer", moneyModelDesignerSkillBody],
   ["lead-engine", leadEngineSkillBody],
+  // 15.1-05 (design §7): the three UNGATED behaviour-preset style overlays. Same mirror, same
+  // reason — the `.md` is what a human edits, the `.ts` is what the Convex runtime ships, and a
+  // half-applied mirror would silently seed a stale overlay.
+  ["style-direct", styleDirectSkillBody],
+  ["style-coaching", styleCoachingSkillBody],
+  ["style-concise", styleConciseSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

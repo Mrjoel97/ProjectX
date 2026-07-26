@@ -28,6 +28,9 @@ import {
   NO_SUCH_SKILL_VERSION_ERROR,
   OFFER_ARCHITECT_SKILL,
   REPLY_DRAFTER_SKILL,
+  STYLE_COACHING_SKILL,
+  STYLE_CONCISE_SKILL,
+  STYLE_DIRECT_SKILL,
   SWOT_SKILL,
   VOICE_BRIEF_SKILL,
   VOICE_SESSION_SKILL,
@@ -47,6 +50,9 @@ import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
 import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
 import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
+import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
+import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
 import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
@@ -277,6 +283,14 @@ export const seedSkills = internalMutation({
       { name: OFFER_ARCHITECT_SKILL, body: offerArchitectSkillBody },
       { name: MONEY_MODEL_DESIGNER_SKILL, body: moneyModelDesignerSkillBody },
       { name: LEAD_ENGINE_SKILL, body: leadEngineSkillBody },
+      // UNGATED (15.1-05, Q6): the three behaviour-preset style overlays (design §7). They change
+      // HOW a specialist speaks, never what it may do or claim — the capability grant stays
+      // code-owned (ADR-007) — so they match `business-profile`, not the gated rubrics above.
+      // `dispatch.ts` reads the one the tenant's `behaviorPreset` names and prepends it to the
+      // specialist's prompt, FAIL-OPEN: an unseeded overlay costs voice, never a dispatch.
+      { name: STYLE_DIRECT_SKILL, body: styleDirectSkillBody },
+      { name: STYLE_COACHING_SKILL, body: styleCoachingSkillBody },
+      { name: STYLE_CONCISE_SKILL, body: styleConciseSkillBody },
     ];
 
     for (const { name, body } of seeds) {
