@@ -4,10 +4,76 @@ Three Claude Code sessions run in parallel, each in its own **git worktree** on 
 **branch**, integrating to `main`. This file is the shared contract — **every session reads it
 first** and stays inside its lane. Set up 2026-07-14 after Phase 3.3.
 
-> **CURRENT CONTRACT: Phases 14 + 15 — see the section directly below.** The Phase 3.x and
-> Phase 3.8 sections further down are kept as *precedent* (they are what proved the pattern);
+> **CURRENT CONTRACT: Phases 16 + 17 — see the section directly below.** The Phases 14+15,
+> 3.x and 3.8 sections further down are kept as *precedent* (they are what proved the pattern);
 > they are not live lanes. The **shared-singleton discipline** and **rules of the road** at the
 > bottom apply to every contract, current and historical.
+
+## Phases 16 + 17 — research sub-agent ∥ calendar actions (set up 2026-07-26)
+
+Two Claude Code sessions, run **concurrently** at the owner's direction. Both phases depend on
+Phase 15 (landed) and on **nothing from each other** — the cleanest parallel pair the roadmap has
+offered so far.
+
+| Session | Worktree | Branch | Phase |
+|---------|----------|--------|-------|
+| **Lane R** | `.worktrees/lane-r-research` | `lane-r/research-web` | 16 — Research Sub-Agent & Web Research |
+| **Lane K** | `.worktrees/lane-k-calendar` | `lane-k/calendar-actions` | 17 — Calendar Actions |
+
+### Why these two can run together — and the one place they collide
+
+Phase 16 adds a **specialist** (a new dispatch route + its own least-privilege tool-set) and a
+**research capability**. Phase 17 adds an **action type** (a read tool in-loop + a write arm behind
+the Approve gate). Different seams, different requirements (DISP-02/ACTN-03 vs ACTN-02), no shared
+goal. Phase 15 built both seams *specifically* so a later phase could add an arm or a route with
+zero spine edits — `actionType.ts:23-27` and `specialists.ts:18-21` both say so in their comments.
+
+**They collide in exactly one class of file: the closed unions that Phase 15 deliberately made
+closed.** Both lanes must add literals to unions whose whole design property is that adding a
+member without deciding its behaviour is a *compile* error. That is a feature — and it means two
+lanes editing the same few lines:
+
+| Shared file | Lane R (16) adds | Lane K (17) adds |
+|---|---|---|
+| `convex/schema.ts` — `agentSteps.tool` union (~L420-450) | research/web-search step literals | calendar read + propose literals |
+| `apps/web/.../workspace/cards.tsx` — `VERB` map (L1107) | verbs for its literals | verbs for its literals |
+| `core/src/actionType.ts` — `ACTION_TYPES` + `ARMS` | only if research needs a new action type | `calendar_event` + its arm |
+| `convex/cockpit.ts` — `executePlan` arm switch (L517) | probably none | the new arm |
+| `convex/llm.ts` — the ONE governed loop | dispatch route wiring | the in-loop calendar read tool |
+| `convex/skills.ts` — `seedSkills` | the research specialist body | none expected |
+| `docs/playbooks/watch.json` | its playbook's paths | its playbook's paths |
+| `.planning/STATE.md` + `ROADMAP.md` | phase-16 rows | phase-17 rows |
+
+`llm.ts` is the dangerous one — it is the file the 14∥15 contract was written to protect, for the
+reason recorded there: a textual conflict inside a large restructured file becomes a
+*re-derivation*, not a resolution.
+
+### The stages
+
+**Stage 0 — parallel planning. FREE, start now.** Planners *read* code and *write* only into
+disjoint `.planning/phases/16-*/` and `17-*/` directories. There is no code-conflict surface.
+Planning needs **no `pnpm install` and no Convex deployment** — defer both to Stage 2.
+
+**Stage 1 — Wave-0 freeze on `main` (serial, unavoidable).** When *both* plan sets exist, ONE
+session on `main` lands ONE commit adding **every union member both phases need**, plus the
+`VERB` entries, plus `watch.json` registration — with stub/no-op behaviour where the arm isn't
+built yet. Then each lane fills in its *own* files instead of both editing the union. Skipping
+this is the single failure mode this contract exists to prevent.
+
+**Stage 2 — parallel execution.** Each lane runs `/gsd:execute-phase` in its own worktree, with
+its own `pnpm install`, its own `npx convex dev` deployment, its own `_generated/`.
+
+**Stage 3 — integrate, then verify.** Merge each lane to `main` as it lands; announce it so the
+other lane merges `main` down. Verify each phase after its own merge.
+
+### Carried-forward debt neither lane owns
+
+Both of these predate this contract and are recorded so they are not silently lost:
+
+1. **Phase 15.1 was never `/gsd:verify-work`'d** — 7/7 plans complete, verification skipped.
+2. **`.planning/WAVE-0.md` §A/§B/§D post-integration items** — the `evaluations` facts split, the
+   `gaps[].proofMetricPath` field, and the weekly-cron hardening (`runWeekly`'s unbounded
+   `.collect()` dies as a cliff near ~3,000 tenants).
 
 ## Phases 14 + 15 — voice-doc flagship ∥ dispatch framework (set up 2026-07-25)
 
