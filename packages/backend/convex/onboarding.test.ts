@@ -591,9 +591,7 @@ test("SC#3c: converse fails closed when the onboarding-agent skill is unseeded (
   // NON-VACUITY: the SAME call with the skill seeded resolves, so the rejection above can only be
   // about the missing registry row and not about some unrelated precondition.
   await t.mutation(internal.skills.seedSkills, {});
-  await expect(
-    converse(t, { userMessage: "SMOKE::onboard::headcount=3" }),
-  ).resolves.toBeTruthy();
+  await expect(converse(t, { userMessage: "SMOKE::onboard::headcount=3" })).resolves.toBeTruthy();
 });
 
 test("converse merges the turn's slots over what it was given and reports what is still missing", async () => {

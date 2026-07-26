@@ -23,12 +23,18 @@
 
 import { openai } from "@ai-sdk/openai";
 import type { EntryId } from "@convex-dev/rag";
-import { BUSINESS_PROFILE_SKILL } from "@pikar/contracts/skill";
+import { BUSINESS_PROFILE_SKILL, ONBOARDING_AGENT_SKILL } from "@pikar/contracts/skill";
 import {
   type BusinessProfile,
+  canComplete,
   deserializeProfile,
+  FUNDING_STATES,
   missingSlots,
+  type OnboardingSlots,
   type ProfileInput,
+  REQUIRED_SLOTS,
+  REVENUE_STAGES,
+  type SlotName,
   serializeProfile,
   validateProfile,
 } from "@pikar/core";
@@ -41,6 +47,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
@@ -184,6 +191,244 @@ export const extractProfile = tenantAction({
       maxRetries: 1,
     });
     return object;
+  },
+});
+
+// ── The conversational onboarding turn (design §6, ONBD-01) ───────────────────
+//
+// ponytail: this turn does NOT ride `runAgentLoop` (owner decision Q1, plan 15.1-06). The ceiling
+// is a conversation with NO TOOLS: there is no CKPT-05 activity trace for it and it does not draw
+// on the shared per-tree cost rail `governedDispatch` maintains. That was priced deliberately —
+// `runAgentLoop` takes a mandatory `planId: Id<"plans">` (and `plans.byThread` is `.unique()`, so a
+// synthetic row breaks every workspace reader), its `toolNames` FILTERS `buildCockpitTools` rather
+// than adding to it, and a new tool name also needs a new `agentSteps.tool` literal or the trace
+// insert throws inside an SDK callback the SDK SWALLOWS: a blank activity card in prod with every
+// test green, on the repo's hottest file. Upgrade path if onboarding ever needs REAL tools:
+// generalize `runAgentLoop` with an optional `planId`, a merged extra-tools record, and the
+// matching `agentSteps.tool` literal — then move this handler onto it.
+
+// Arg validators derived from the table (the `tenantProfile.ts` rung-2 precedent) so the closed
+// `revenueStage`/`funding` unions cannot drift from the schema. Q7: a free string here would
+// reintroduce the string-matching defect class this phase exists to close. `oneLineDescription` is
+// Phase-11 narrative that lives on the vault doc, not on the row, so it is the one hand-written
+// field — but it is still a `REQUIRED_SLOTS` member and the conversation must fill it.
+const tpFields = schema.tables.tenantProfiles.validator.fields;
+
+const vSlots = v.object({
+  oneLineDescription: v.optional(v.string()),
+  headcount: tpFields.headcount,
+  paidStaff: tpFields.paidStaff,
+  revenueStage: tpFields.revenueStage,
+  funding: tpFields.funding,
+  yearsOperating: tpFields.yearsOperating,
+});
+
+/** What ONE turn returns. `slotUpdates` is what the user stated THIS turn — never the whole set. */
+type TurnOutput = {
+  reply: string;
+  slotUpdates: Partial<Record<SlotName, string | number | null>>;
+};
+
+// The `generateObject` contract — `jsonSchema`, never zod (this V8 module stays off the TS
+// circular-inference cliff, exactly like `profileSchema`). STRICT mode: `additionalProperties:
+// false` and EVERY property also listed in `required`. That is why "not learned this turn" is an
+// explicit `null` rather than an omission — a required property cannot be omitted, so the honest
+// encoding of "the user did not say" has to be a value. The nulls are filtered out at the merge.
+const turnSchema = jsonSchema<TurnOutput>({
+  type: "object",
+  additionalProperties: false,
+  required: ["reply", "slotUpdates"],
+  properties: {
+    reply: { type: "string" },
+    slotUpdates: {
+      type: "object",
+      additionalProperties: false,
+      required: [...REQUIRED_SLOTS],
+      properties: {
+        oneLineDescription: { type: ["string", "null"] },
+        headcount: { type: ["number", "null"] },
+        paidStaff: { type: ["number", "null"] },
+        revenueStage: { type: ["string", "null"], enum: [...REVENUE_STAGES, null] },
+        funding: { type: ["string", "null"], enum: [...FUNDING_STATES, null] },
+        yearsOperating: { type: ["number", "null"] },
+      },
+    },
+  },
+});
+
+// The CODE-owned half of the turn: the slot's NAME and the shape of a valid answer. Deliberately
+// NOT question text — the wording is the registry skill's job (§5), and writing questions here
+// would put half the prompt in source. The two enums list their literals because the model must
+// choose from the closed union, which is the whole point of Q7.
+const SLOT_SHAPE = {
+  oneLineDescription: "one plain sentence describing what the business does",
+  headcount: "a number — everyone working on the business, paid or not, founders included",
+  paidStaff: "a number — how many of those are PAID staff",
+  revenueStage: `exactly one of: ${REVENUE_STAGES.join(" | ")}`,
+  funding: `exactly one of: ${FUNDING_STATES.join(" | ")}`,
+  yearsOperating: "a number — full years the business has been operating",
+} as const satisfies Record<SlotName, string>;
+
+/** How many prior turns ride along. Bounded so a long conversation cannot grow the prompt forever. */
+const HISTORY_TURNS = 10;
+
+/**
+ * Admission test for ONE incoming slot value, expressed as `missingSlots` over a single-slot
+ * object. Deliberately NOT a second copy of the presence rules: reusing the completion predicate
+ * makes "was it merged" and "does it still count as missing" the SAME question, so `converse` can
+ * never return a slot that is populated on the page and absent to the gate. It also inherits the
+ * two properties that matter — `0` is an ANSWER, and an off-union enum is refused, never coerced.
+ */
+const admits = (slot: SlotName, value: unknown): boolean =>
+  !missingSlots({ [slot]: value } as OnboardingSlots).includes(slot);
+
+/** Provided-over-stored merge, nulls dropped, every admitted value checked. Never coerces. */
+function mergeSlots(base: OnboardingSlots, updates: TurnOutput["slotUpdates"]): OnboardingSlots {
+  const out: Record<string, unknown> = { ...base };
+  for (const slot of REQUIRED_SLOTS) {
+    const value = updates[slot];
+    if (value === null || value === undefined) continue;
+    if (!admits(slot, value)) continue; // a model (or a stale draft) can propose; it cannot impose
+    out[slot] = value;
+  }
+  return out as OnboardingSlots;
+}
+
+/**
+ * The USER-side prompt, assembled in CODE. It carries three things and no question text: what is
+ * already known (the tenant's own data on the CONTENT plane — never logged, §4), the bounded
+ * transcript, and the ONE fact to obtain next with its permitted shape. That split is what keeps
+ * §5 satisfied (the wording is the registry row's) while the completion guarantee stays in code.
+ */
+function turnPrompt(
+  slots: OnboardingSlots,
+  userMessage: string,
+  history: { role: string; text: string }[],
+  nextSlot: SlotName | undefined,
+): string {
+  const known = REQUIRED_SLOTS.filter((s) => slots[s] !== undefined).map(
+    (s) => `- ${s}: ${String(slots[s])}`,
+  );
+  const recent = history.slice(-HISTORY_TURNS).map((h) => `${h.role}: ${h.text}`);
+  return [
+    known.length > 0 ? `Already known:\n${known.join("\n")}` : "Already known: nothing yet.",
+    recent.length > 0 ? `Conversation so far:\n${recent.join("\n")}` : "",
+    `The user just said:\n${userMessage}`,
+    nextSlot === undefined
+      ? "Nothing left to obtain — this turn is the closing beat."
+      : `Next fact to obtain: ${nextSlot} (${SLOT_SHAPE[nextSlot]})`,
+  ]
+    .filter((block) => block !== "")
+    .join("\n\n");
+}
+
+// ── Offline SMOKE seam for the conversation (mirrors SMOKE_PROFILE_PREFIX) ────
+// Grammar: `SMOKE::onboard::<slot>=<value>,<slot>=<value>|reply=<text>` — both halves optional.
+// Content-free and PII-free, exactly like the profile sentinel: it carries slot NAMES and toy
+// values, never a real answer. Unknown keys are dropped silently and off-union values are refused
+// at the merge, because the sentinel stands in for a MODEL and must not be able to smuggle a value
+// the real path would refuse.
+const SMOKE_ONBOARD_PREFIX = "SMOKE::onboard::";
+
+const REPLY_KEY = "reply=";
+
+function smokeTurnFixture(userMessage: string): TurnOutput {
+  const rest = userMessage.slice(SMOKE_ONBOARD_PREFIX.length);
+  const bar = rest.indexOf("|");
+  const factPart = bar < 0 ? rest : rest.slice(0, bar);
+  const replyPart = bar < 0 ? "" : rest.slice(bar + 1);
+
+  const slotUpdates: TurnOutput["slotUpdates"] = {};
+  for (const pair of factPart.split(",")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) continue;
+    const key = pair.slice(0, eq).trim();
+    const raw = pair.slice(eq + 1).trim();
+    if (!(REQUIRED_SLOTS as readonly string[]).includes(key)) continue; // unknown key → dropped
+    const slot = key as SlotName;
+    // Numbers arrive as numbers so the merge's admission test sees what a model would send; a
+    // non-numeric value stays a string and is refused there rather than coerced to NaN here.
+    const num = Number(raw);
+    slotUpdates[slot] = raw !== "" && Number.isFinite(num) ? num : raw;
+  }
+
+  return {
+    reply: replyPart.startsWith(REPLY_KEY) ? replyPart.slice(REPLY_KEY.length) : "",
+    slotUpdates,
+  };
+}
+
+/** What one `converse` turn returns. Plan 07's onboarding page is written against this shape. */
+export type ConverseResult = {
+  reply: string;
+  slots: OnboardingSlots;
+  missing: SlotName[];
+  /** The slot the NEXT turn must obtain — `missingSlots(slots)[0]`, `null` when nothing is left. */
+  nextSlot: SlotName | null;
+  done: boolean;
+};
+
+/**
+ * ONE conversational onboarding turn (design §6). **The code owns the state machine and picks the
+ * next question; the model owns only the wording.**
+ *
+ * Design §6's non-negotiable is that the conversation *"simply cannot COMPLETE with a required slot
+ * empty"*, and that guarantee must not live in the prompt: a skill body saying "always ask about
+ * headcount" is a model-temperature guarantee, which is defect 1a itself. So `nextSlot` comes from
+ * `missingSlots` in `REQUIRED_SLOTS` order and **`done` is `canComplete(slots)`, never read off the
+ * model's reply** — a turn that announces the conversation is over cannot make it over.
+ *
+ * The system prompt is the UNGATED `onboarding-agent` registry row (§5), loaded FIRST — before the
+ * SMOKE short-circuit — so the fail-closed load is exercised on the offline path too (the
+ * `extractProfile` ordering; SC#3c). An unseeded deployment gets `NO_ACTIVE_SKILL`, not a turn.
+ *
+ * **STATELESS: this writes NOTHING.** The caller owns the transcript and the draft; the finished
+ * facts land through `api.tenantProfile.saveFacts` (the ONLY tier writer) and the narrative through
+ * `commitProfile` (the completion gate that makes the guarantee true, SC#3b), both from the UI. Do
+ * not add a write here — it would re-open "who owns the state" and put conversational prose on the
+ * log plane, which §4 forbids.
+ */
+export const converse = tenantAction({
+  args: {
+    slots: vSlots,
+    userMessage: v.string(),
+    history: v.optional(v.array(v.object({ role: v.string(), text: v.string() }))),
+  },
+  handler: async (ctx, a): Promise<ConverseResult> => {
+    // §5, FAIL CLOSED, and FIRST — see the doc comment. Moving this below the SMOKE branch would
+    // make every offline turn run without a governed prompt (SC#3c is mutation-checked on exactly
+    // that reordering).
+    const skill: { body: string; version: number } = await ctx.runQuery(
+      internal.skills.getActiveSkill,
+      { name: ONBOARDING_AGENT_SKILL },
+    );
+
+    const missingBefore = missingSlots(a.slots);
+    const nextSlot = missingBefore[0];
+    const prompt = turnPrompt(a.slots, a.userMessage, a.history ?? [], nextSlot);
+
+    const object = a.userMessage.startsWith(SMOKE_ONBOARD_PREFIX)
+      ? smokeTurnFixture(a.userMessage)
+      : (
+          await generateObject({
+            model: resolveModel(DEFAULT_MODEL),
+            schema: turnSchema,
+            system: skill.body,
+            prompt,
+            abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+            maxRetries: 1,
+          })
+        ).object;
+
+    const slots = mergeSlots(a.slots, object.slotUpdates);
+    const missing = missingSlots(slots);
+    return {
+      reply: object.reply,
+      slots,
+      missing,
+      nextSlot: missing[0] ?? null,
+      done: canComplete(slots),
+    };
   },
 });
 
