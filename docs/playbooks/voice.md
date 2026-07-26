@@ -1,6 +1,11 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-10 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
+> Last verified: 2026-07-26 (14-09 — **PHASE 14 CLOSED. THE FLAGSHIP FLOW IS OWNER-VERIFIED ON A
+> REAL CALL**: the agent discussed the uploaded report, a mid-call drill-in returned a grounded
+> answer, and BOTH outcome paths landed — a memo saved to the vault and a gap turned into a plan
+> that produced an email through the ordinary Approve gate. The §4 scans are all mutation-verified.
+> Left open by decision: the tool-declaration branch (Open Question 3) and retrieval latency —
+> see "Live verification — 14-09 Task 3" below. PRIOR: 14-10 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
 > PRE-FLIGHT** (the document picker, once informally called `14-07`, ships here as 14-10 — `14-07`
 > already names the entry-point + in-call-context work recorded below, so the picker could not reuse
 > that number). Owner-reported: "I uploaded the
@@ -1165,3 +1170,33 @@ voice persona, so these are human-verify rows in `14-VALIDATION.md` — never fa
   time.
 - Retrieval round-trip latency inside the cap is **unmeasured** in-repo; the live-verify step records
   it. If it is slow, the knob is a larger pre-load digest, not a cache.
+  **Still unmeasured after the 14-09 live-verify (2026-07-26).** The owner confirmed the drill-in
+  returns a grounded answer on a real call but did not time it, so there is no number to record —
+  and an invented one would be worse than none. It has never been observed as a *problem*, which is
+  weak evidence it is acceptable, not evidence it is fast. Measure it the first time someone reports
+  the call feeling slow, before reaching for the digest knob.
+
+### Live verification — 14-09 Task 3 (owner, 2026-07-26)
+
+Run ONCE on integrated `main`, per `PARALLELIZATION.md` Stage 3. **Owner-confirmed working:**
+
+- the agent discussed the uploaded report itself (the flagship opening, grounded in that document);
+- a mid-call **drill-in** returned a grounded answer — which is what proves the `search_document`
+  relay reached the model and was called;
+- **both outcome paths**: the memo saved as a markdown artifact in the vault, AND a gap turned into
+  a plan that produced an email through the ordinary Approve gate.
+
+That is SC1, SC2 and SC3 exercised against a real call, a real model and real duplex audio.
+
+**Not captured, deliberately left open:** which tool-declaration branch the API accepted
+(Open Question 3 — see the long note at `packages/voice/src/realtime.ts:107`; `toolsAtMint` is
+returned to the browser and never persisted, so it cannot be recovered after the session) and the
+retrieval latency above. Neither blocks the phase; both are one line of instrumentation away
+whenever the next session runs.
+
+**A trap this verification exposed, worth more than the checklist itself:** the first live attempt
+produced a *generic assistant* with no persona and no vault reach, which read exactly like a
+grounding failure. It was not. `pnpm start` serves a **frozen production build** — the running
+bundle had been compiled 4h14m BEFORE the first Phase-14 commit, so no picker, no `?doc=`, no
+`docId` at the mint, and therefore no document scope. **Rebuild (`pnpm build`) before any voice
+UAT, and check the build timestamp against `git log` before believing a UI-level symptom.**

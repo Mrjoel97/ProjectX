@@ -49,7 +49,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-07-25)
 - [x] **Phase 13: Proactive In-App Review** - Scheduled recurring in-app business review, using no OAuth mailbox token
  (completed 2026-07-25)
-- [ ] **Phase 14: Flagship Voice-Doc Workflow** - Upload a report -> discuss by voice -> grounded insights/patterns/gaps -> memo or gap-bridging plan
+- [x] **Phase 14: Flagship Voice-Doc Workflow** - Upload a report -> discuss by voice -> grounded insights/patterns/gaps -> memo or gap-bridging plan (9/9 plans; owner live human-verify APPROVED 2026-07-26 — real call, grounded drill-in, and BOTH outcome paths: memo saved to the vault + a gap turned into a plan that produced an email through the Approve gate. SC4 enforced by seven mutation-verified static scans. Open by decision: the tool-declaration branch (Open Question 3, unrecoverable post-session) and retrieval latency)
 
 **S2 - Breadth of Action**
 - [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)

@@ -21,11 +21,45 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (**ALL 7 PLANS COMPLETE**, Waves 0-6; ready for verification)
+**Current focus:** Phases 14, 15 and 15.1 are CLOSED and merged to `main`. Next: `/gsd:verify-work` on Phase 15.1, then Phase 16 (Research Sub-Agent & Web Research).
 
 ## Current Position
 
-Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **7 of 7 PLANS COMPLETE** (6 waves)
+**PHASE 14 CLOSED — 2026-07-26 (9/9 plans, owner live human-verify APPROVED).** The flagship
+voice-doc flow is verified on a REAL call: the agent discussed the uploaded report, a mid-call
+drill-in returned a grounded answer from that document (proving the `search_document` relay reached
+the model), and BOTH outcome paths landed — a memo saved to the vault AND a gap turned into a plan
+that produced an email through the ordinary Approve gate. SC1/SC2/SC3 exercised end to end.
+
+14-09 closed the SC4 half: the seven §4 static scans in `llmRedaction.test.ts` were shipped in
+`0b6a1e9` labelled *"(pre-mutation-verification)"* — written but never proven able to fail — and are
+now all mutation-verified (`f43bcba`), with the ledger in the test header. **The trap worth
+remembering: in `docReviewSchema`, `properties` keys are indented 10 spaces and `required` 8, so a
+literal-anchor mutation misses silently and reports a FALSE PASS.** Anchor on a regex.
+
+**DELIBERATELY LEFT OPEN (do not fabricate either):** Open Question 3 — which tool-declaration branch
+the API accepts — is **unrecoverable after the fact** (`toolsAtMint` is returned to the browser at
+`voiceToken.ts:174-191` and never persisted; both branches are invisible in the UI). One line of
+instrumentation settles it on any future session; `realtime.ts:107` names both routes. Retrieval
+latency likewise unmeasured. Neither blocks anything.
+
+**ENVIRONMENT — two traps that cost hours, both now recorded in `docs/playbooks/voice.md`:**
+1. `pnpm start` serves a **FROZEN production build**. A live session read as a total grounding
+   failure (a generic assistant: *"I can't access any knowledge vault"*) purely because the running
+   bundle was compiled **4h14m BEFORE the first Phase-14 commit** — no picker, no `?doc=`, no
+   `docId` at the mint, so no document scope. **Rebuild before any voice UAT and check the build
+   timestamp against `git log` before believing a UI symptom.**
+2. The local deployment's `packages/backend/.convex/local/default/config.json` had been deleted; the
+   backend survived only because the running process held it in memory, so the break was invisible
+   until a restart. Rebuilt from `.env.local` — and note `CONVEX_DEPLOYMENT`'s trailing
+   `# team: … project: …` is a **dotenv COMMENT**, not part of the deployment name.
+   `instanceSecret` legitimately falls back to the shipped public constant, so the file is
+   reconstructible without inventing crypto.
+
+**A LIVE `CONVEX_DEPLOYMENT` NOW EXISTS AGAIN** (local, `:3210`, functions pushed, skills seeded,
+`document-analyst` active v1) — the "offline gates only" note below is SUPERSEDED.
+
+PRIOR — Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **7 of 7 PLANS COMPLETE** (6 waves)
 Current Plan: 7 (done)
 Total Plans in Phase: 7
 Plan: 15.1-07 COMPLETE (Wave 6 — both surfaces: the conversation and the facts).

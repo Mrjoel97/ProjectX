@@ -104,13 +104,25 @@ export const REALTIME_CLIENT_EVENTS = {
 
 // ─── Tool calling (Phase 14, DOCV-01) ────────────────────────────────────────────────────────
 //
-// TOOL DECLARATION BRANCH — NOT YET LIVE-VERIFIED (as of 2026-07-25).
+// TOOL DECLARATION BRANCH — the tool path is verified; WHICH branch carries it is still open.
 // The TypeScript client_secrets reference lists `tools`/`tool_choice` on
 // RealtimeSessionCreateRequest; the REST reference page for the same endpoint does not.
 // voiceToken.ts has been wrong about this body TWICE. mintClientSecret implements mint-time
 // FIRST and falls back to a session.update over the data channel on a 400 (plan 14-04).
-// >>> Record the branch the API actually accepted, WITH A DATE, on the line below at live-verify.
-// LIVE-VERIFIED ____-__-__: <mint-time | session.update>
+//
+// LIVE-VERIFIED 2026-07-26 (14-09 Task 3, owner): the retrieval tool REACHED THE MODEL and was
+// called on a real call — a mid-call drill-in returned a grounded answer from the session's own
+// document. So one of the two branches works end to end; both are exercised by that result.
+//
+// OPEN QUESTION 3 REMAINS OPEN — the branch itself was NOT captured, and it is unrecoverable
+// after the fact: `toolsAtMint` is RETURNED to the browser (voiceToken.ts:174-191) and never
+// persisted — no audit row, no log line — so nothing on the server records which path fired, and
+// both are invisible in the UI by construction. Do NOT guess it; a wrong value here is worse than
+// a blank one, because voiceToken.ts has already been wrong about this body twice.
+// To settle it, do EITHER on the next session:
+//   - read the `toolsAtMint` flag the relay receives (useVoiceSession, 14-06), or
+//   - log it server-side at voiceToken.ts:174 — one line, refs-only (a boolean, §4-legal).
+// Then replace this block with: LIVE-VERIFIED <date>: <mint-time | session.update>.
 
 /** Item shape inside response.done's `response.output[]` when the model calls a tool.
  *  ponytail: pinned 2026-07-25 from developers.openai.com/api/docs/guides/realtime-conversations
