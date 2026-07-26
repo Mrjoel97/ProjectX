@@ -781,3 +781,181 @@ test("the external channel sends only the kind label + notificationMessage — n
     /\b(message|requestId|body|subject|recipient|draft|goal)\b/,
   );
 });
+
+// ── 14-09 (DOCV-01 / SC4): the voice-doc log plane carries refs, hashes and counts ONLY ───────────
+//
+// SC4 — "no report content leaks into audit/telemetry/step rows" — is NOT observable at runtime in a
+// passing system. It only becomes visible after it has already leaked, at which point the audit log
+// IS the PII honeypot CLAUDE.md §4 exists to prevent. So it is enforced statically, here.
+//
+// Phase 14 raised the stakes: 14-01 widened `evaluations.findings[]` with `citationExcerpt` so the
+// LOCKED "quoted passage where available" decision could reach the screen. That excerpt is VERBATIM
+// REPORT CONTENT. It is legal in the `evaluations` row and legal on screen; it is illegal in every
+// `payload:` object and every `agentSteps` row. It is the single most dangerous identifier in the
+// phase, so it is banned by name below, twice.
+//
+// Every scan here was mutation-verified (plant the forbidden value, confirm RED, revert). A scan
+// that cannot go red is theatre. Each also asserts its target is PRESENT, so a rename fails loudly
+// rather than passing vacuously.
+
+/** Content-plane identifiers that must never appear in a voice-doc log-plane payload.
+ *  `\bquery\b(?!Hash)` bans the raw query while allowing `queryHash`; `\btext\b` bans a bare `text:`
+ *  while allowing the `textInTok`/`textOutTok` count keys. */
+const VOICEDOC_FORBIDDEN =
+  /passages|chunks|\btext\b|\blabel\b|citationTitle|citationExcerpt|\bexcerpt\b|transcript|\bquery\b(?!Hash)/;
+
+test("voiceDoc.ts: EVERY payload object is free of report content (SC4)", () => {
+  // Comments stripped: the prose in this module legitimately NAMES these identifiers (it explains
+  // the very ban being enforced). Code may not.
+  const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
+  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+
+  // Presence first: a file-wide scan over zero payloads passes vacuously and proves nothing.
+  expect(payloads.length, "no voiceDoc payloads found - the scan is vacuous").toBe(2);
+  for (const p of payloads) {
+    expect(p, `voiceDoc payload leaks report content: ${p}`).not.toMatch(VOICEDOC_FORBIDDEN);
+  }
+});
+
+test("voicedoc.searched carries sessionId + queryHash + resultCount, never the query", () => {
+  const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
+  const m = src.match(/eventType:\s*["']voicedoc\.searched["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "voicedoc.searched audit not found").toBeTruthy();
+  const payload = m?.[1] ?? "";
+  // The HASH rides, the query does not - the same shape as gmail.ts's mailbox.searched.
+  expect(payload).toMatch(/queryHash/);
+  expect(payload).toMatch(/resultCount/);
+  expect(payload).not.toMatch(VOICEDOC_FORBIDDEN);
+});
+
+test("voicedoc.reviewed carries counts + a verdict, no finding label, citation or excerpt", () => {
+  const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
+  const m = src.match(/eventType:\s*["']voicedoc\.reviewed["'][\s\S]*?payload:\s*(\{[^}]*\})/);
+  expect(m, "voicedoc.reviewed audit not found").toBeTruthy();
+  const payload = m?.[1] ?? "";
+  expect(payload).toMatch(/findingCount/);
+  expect(payload).toMatch(/gapCount/);
+  expect(payload).toMatch(/verdict/);
+  // A finding LABEL and a citationExcerpt are the two things a reviewer would most plausibly add
+  // here "for debuggability". Both are report content. Both are banned.
+  expect(payload, `voicedoc.reviewed leaks report content: ${payload}`).not.toMatch(
+    VOICEDOC_FORBIDDEN,
+  );
+});
+
+test("voiceDoc.ts log-plane surface is PINNED: exactly 2 audit sites, no telemetry/DLQ/agentSteps", () => {
+  const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
+  // A COUNT, not a ">= 1": pinning it makes a third audit row a failing test rather than a
+  // silently-shipped leak. If you add a legitimate one, update this number DELIBERATELY.
+  const auditSites = [...src.matchAll(/internal\.audit\.log\b/g)].length;
+  expect(auditSites, "voiceDoc.ts audit call-site count changed - is the new payload SC4-safe?").toBe(2);
+  // The module writes to no other log-plane table at all.
+  expect(src).not.toMatch(/\.insert\(\s*["']telemetry["']/);
+  expect(src).not.toMatch(/\.insert\(\s*["']deadLetters["']/);
+  expect(src).not.toMatch(/agentSteps/);
+});
+
+test("docReviewSchema welds citations in code - the MODEL schema has no citation/verdict/route field", () => {
+  const src = readSource("voiceDoc.ts");
+  const start = src.indexOf("const docReviewSchema = jsonSchema<");
+  expect(start, "docReviewSchema not found - has the producer been renamed?").toBeGreaterThan(-1);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\n});");
+  const block = (end >= 0 ? rest.slice(0, end) : rest).replace(/\/\/[^\n]*/g, "");
+
+  // SC2 BY CONSTRUCTION: the model cannot omit or invent a citation it was never asked for. Each of
+  // these is welded by `shapeDocReview` in pure code, so its ABSENCE here is the guarantee.
+  for (const welded of [
+    "citationDocId",
+    "citationTitle",
+    "verdict",
+    "route",
+    "playbook",
+    "leverageRank",
+  ]) {
+    expect(
+      block,
+      `docReviewSchema lets the model author ${welded} - it must be welded in code`,
+    ).not.toMatch(new RegExp(`\\b${welded}\\b`));
+  }
+});
+
+test("docReviewSchema DOES declare excerpt - the one model-authored citation input", () => {
+  const src = readSource("voiceDoc.ts");
+  const start = src.indexOf("const docReviewSchema = jsonSchema<");
+  const rest = src.slice(start);
+  const end = rest.indexOf("\n});");
+  const block = (end >= 0 ? rest.slice(0, end) : rest).replace(/\/\/[^\n]*/g, "");
+
+  // A PRESENCE assertion, deliberately. `excerpt` is the ONE exception to the weld - only whoever
+  // read the passage can quote it - and it is half of 14-CONTEXT.md's locked citation decision
+  // ("document-level always, PLUS a quoted passage where available"). A future "tighten the schema"
+  // cleanup that deletes it would silently drop that half of a locked decision, and every other test
+  // here would still pass. This is the test that fails instead.
+  expect(
+    block,
+    "docReviewSchema no longer declares excerpt - half the locked citation decision is gone",
+  ).toMatch(/\bexcerpt\b/);
+});
+
+test("voiceDoc.ts jsonSchema blocks are STRICT-mode legal (every property also required)", () => {
+  // The same trap 03.7-05 hit live: OpenAI structured outputs run in STRICT mode, which requires
+  // every `properties` key to appear in `required`. A merely-optional field makes the API reject the
+  // SCHEMA, so the call throws on EVERY input - invisible to a mocked unit test and to the SMOKE
+  // path, which short-circuits before the call. `excerpt` is exactly such a field, which is why it is
+  // declared `type: ["string","null"]` AND required rather than optional.
+  const src = readSource("voiceDoc.ts");
+  const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
+  expect(schemas.length, "no jsonSchema in voiceDoc.ts - has the producer changed shape?").toBeGreaterThan(0);
+
+  for (const name of schemas) {
+    const start = src.indexOf(`const ${name} = jsonSchema<`);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\n});");
+    const block = rest.slice(0, end >= 0 ? end : undefined);
+    for (const m of block.matchAll(/properties:\s*\{/g)) {
+      const from = (m.index ?? 0) + m[0].length;
+      let depth = 1;
+      const keys: string[] = [];
+      let i = from;
+      let lineStart = i;
+      for (; i < block.length && depth > 0; i++) {
+        const c = block[i];
+        if (c === "{" || c === "[") depth++;
+        else if (c === "}" || c === "]") depth--;
+        else if (c === "\n") lineStart = i + 1;
+        if (depth === 1 && c === ":") {
+          const key = block.slice(lineStart, i).trim();
+          if (/^[a-zA-Z_]\w*$/.test(key)) keys.push(key);
+        }
+      }
+      const after = block.slice(i);
+      const req = after.match(/required:\s*\[([^\]]*)\]/);
+      expect(req, `${name}: a properties block has no required array`).toBeTruthy();
+      const required = (req?.[1] ?? "").match(/["'](\w+)["']/g)?.map((s) => s.slice(1, -1)) ?? [];
+      for (const k of keys) {
+        expect(
+          required,
+          `${name}: property "${k}" is not in required (STRICT mode rejects it)`,
+        ).toContain(k);
+      }
+    }
+  }
+});
+
+test("the voice-doc UI never turns a finding excerpt into a log field", () => {
+  // The excerpt's whole journey is server row -> screen. These three components are the only new
+  // places it is READ, so they are the only new places it could be re-logged on the way past.
+  // Neither a log-plane write nor a telemetry sink may appear in any of them.
+  const webDir = join(convexDir, "../../../apps/web/app/(app)/dashboard");
+  for (const rel of ["voice/PostCall.tsx", "voice/DocStrip.tsx", "workspace/cards.tsx"]) {
+    // Strip BLOCK comments as well as line comments: these files carry JSX `{/* … */}` prose that
+    // legitimately names the banned identifiers — it is the §4 reminder telling the next reader NOT
+    // to log an excerpt. Prose may name them; CODE may not. The file-wide idiom, applied to TSX.
+    const src = readFileSync(join(webDir, rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+    expect(src, `${rel} writes a log-plane row`).not.toMatch(/audit\.log\b/);
+    expect(src, `${rel} calls a telemetry sink`).not.toMatch(/\btelemetry\b/);
+  }
+});

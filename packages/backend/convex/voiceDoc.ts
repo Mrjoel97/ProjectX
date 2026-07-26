@@ -135,12 +135,19 @@ export const searchDocument = tenantAction({
       // This is the module's ONLY log-plane write: no `agentSteps` row (that table has no text
       // field by construction and `llmRedaction.test.ts` scans a closed allow-list), no `telemetry`,
       // no `deadLetters`.
+      // Derived OUTSIDE the payload literal, matching `gmail.ts:279`'s `mailbox.searched` exactly.
+      // Both values are §4-legal either way — a hash is not the query and a length is a count — but
+      // keeping the literal to bare refs/counts means the static scan in `llmRedaction.test.ts` needs
+      // NO exception for "content mentioned only as an argument to contentHash()". A scan with fewer
+      // carve-outs is a stronger scan: every exception is somewhere a real leak could hide.
+      const queryHash = await contentHash(query);
+      const resultCount = passages.length;
       await ctx.runMutation(internal.audit.log, {
         tenantId: ctx.tenantId,
         correlationId: String(sessionId),
         eventType: "voicedoc.searched",
         actor: "user",
-        payload: { sessionId, queryHash: await contentHash(query), resultCount: passages.length },
+        payload: { sessionId, queryHash, resultCount },
       });
 
       return { passages, found: passages.length > 0 };
