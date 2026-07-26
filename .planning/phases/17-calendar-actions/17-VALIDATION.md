@@ -58,7 +58,7 @@ Task IDs are assigned by the planner; this is the criterion→test contract the 
 | ACTN-02 arm | Adding the action type without an arm is a COMPILE error; arm switch exhaustive | typecheck | `pnpm typecheck` | ✅ mechanism exists | ⬜ pending |
 | ACTN-02 pure | Epoch↔RFC3339 conversion + base32hex event-id derivation | unit (pure) | `pnpm --filter @pikar/core exec vitest run src/calendar.test.ts` | ❌ W0 | ⬜ pending |
 | ACTN-02 tz | "in 2 hours" resolves off the trusted `nowMs`, tz-independent | unit (pure) | already covered | ✅ `emailIntent.test.ts:209` — REUSE, do not duplicate | ⬜ pending |
-| ACTN-02 trace | New `agentSteps.tool` literals insert without throwing; `VERB` has an entry for each | unit + key-parity scan | `pnpm --filter @pikar/backend exec vitest run convex/agentSteps.test.ts` | ⚠️ parity scan is new | ⬜ pending |
+| ACTN-02 trace | New `agentSteps.tool` literals insert without throwing; `VERB` has an entry for each | key-parity static scan | `pnpm --filter @pikar/backend exec vitest run convex/traceParity.test.ts` | ❌ W0 — `convex/traceParity.test.ts` (17-01 Task 1f). NOTE: it reads `cards.tsx` from OUTSIDE `packages/backend`, so it needs `// @vitest-environment node` — `import.meta.glob` cannot reach it | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -72,7 +72,9 @@ Task IDs are assigned by the planner; this is the criterion→test contract the 
 - [ ] A calendar POST-**target** scan (write target unreachable from `llm.ts`). **Gmail's "POST ⇒ write verb" scan does NOT carry over** — `freeBusy` is itself a POST, so this scan must whitelist by target name, never by HTTP method
 - [ ] A `sendUpdates` value scan, if attendees are in scope at all (see Pitfall 3 — `events.insert` with attendees makes Google send invitations outside the governed path)
 - [ ] **The offline calendar fixture seam** (the `inboxFixtures` analogue), checked BEFORE `freshAccessToken`. This is the load-bearing one: it is what keeps the offline tier large, and it must land early or most of the map above becomes live-only
-- [ ] `docs/playbooks/watch.json` registration for new paths under `cockpit.md` — the Stop hook blocks without it
+- [ ] `docs/playbooks/watch.json` registration for new paths under `cockpit.md` — the Stop hook blocks without it.
+      MUST include `packages/backend/convex/calendarComplete.ts` (the non-node retrier terminal, 17-01 decision Q8),
+      even though the file is not created until 17-02 — `watch.json` is frozen after the Wave-0 commit
 - [ ] **Stage-1 shared-union freeze items (on `main`, coordinated with Lane R per PARALLELIZATION.md):** `schema.ts` `agentSteps.tool` literals + staged-event fields; `cards.tsx` `VERB` entries; `actionType.ts` `ACTION_TYPES`/`Arm`/`ARMS`; `cockpit.ts` arm table + case
 - [ ] Framework install: **none** — Vitest + convex-test already present
 
