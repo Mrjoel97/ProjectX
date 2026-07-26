@@ -16,8 +16,8 @@
 // ownedDocsMeta — no embedding network, and a cross-tenant seed drops out exactly as namespace
 // scoping would exclude it). Durable ingest steps do NOT run synchronously in convex-test, so the
 // committed row sits at `status: "processing"` — the SMOKE retrieval seam reads its `text` regardless.
-import type { ProfileInput } from "@pikar/core";
-import { serializeProfile } from "@pikar/core";
+import type { ProfileInput, SlotName } from "@pikar/core";
+import { missingSlots, REQUIRED_SLOTS, serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { expect, test } from "vitest";
 // The components the commit → startIngest spine touches offline (voice.test.ts set): auditCounts
@@ -537,4 +537,191 @@ test("updateProfile fails closed when the tenant has no tier row at all", async 
   );
   expect(data.code).toBe("INCOMPLETE_FACTS");
   expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
+});
+
+// ── Phase 15.1 plan 06 — `converse`: the code owns the state machine, the model owns the words ───
+//
+// Everything here runs OFFLINE through the `SMOKE::onboard::` sentinel — there is no model in this
+// suite. Grammar (mirrors SMOKE_PROFILE_PREFIX; content-free, no PII):
+//     SMOKE::onboard::<slot>=<value>,<slot>=<value>|reply=<text>
+// Both halves are optional. Unknown keys and off-union enum values are dropped silently — the
+// sentinel stands in for a MODEL, so it must not be able to smuggle a value the real merge would
+// refuse.
+
+/** Everything `converse` returns. Plan 07's page is written against exactly this shape. */
+type Turn = {
+  reply: string;
+  slots: Record<string, unknown>;
+  missing: SlotName[];
+  nextSlot: SlotName | null;
+  done: boolean;
+};
+
+const converse = (
+  t: TestConvex<typeof schema>,
+  args: { slots?: Record<string, unknown>; userMessage: string },
+  tenantId = TENANT,
+): Promise<Turn> =>
+  asTenant(t, tenantId).action(api.onboarding.converse, {
+    slots: args.slots ?? {},
+    userMessage: args.userMessage,
+  }) as Promise<Turn>;
+
+/** A complete slot set — the five tier facts plus the Phase-11 narrative slot. */
+const ALL_SLOTS = { ...COMPLETE_FACTS, oneLineDescription: "A neighborhood coffee roaster." };
+
+/** Row counts on every plane `converse` must leave alone. */
+const planeCounts = (t: TestConvex<typeof schema>) =>
+  t.run(async (ctx) => ({
+    audit: (await ctx.db.query("audit").collect()).length,
+    telemetry: (await ctx.db.query("telemetry").collect()).length,
+    deadLetters: (await ctx.db.query("deadLetters").collect()).length,
+    vaultDocuments: (await ctx.db.query("vaultDocuments").collect()).length,
+    tenantProfiles: (await ctx.db.query("tenantProfiles").collect()).length,
+  }));
+
+test("SC#3c: converse fails closed when the onboarding-agent skill is unseeded (§5)", async () => {
+  const t = setup();
+
+  // The registry read happens BEFORE the SMOKE short-circuit, deliberately: otherwise the §5
+  // fail-closed load would be exercised only on the path that costs money, and every offline test
+  // in this file (and every dev smoke) would run a turn with no governed prompt behind it.
+  await expect(converse(t, { userMessage: "SMOKE::onboard::headcount=3" })).rejects.toThrow();
+
+  // NON-VACUITY: the SAME call with the skill seeded resolves, so the rejection above can only be
+  // about the missing registry row and not about some unrelated precondition.
+  await t.mutation(internal.skills.seedSkills, {});
+  await expect(
+    converse(t, { userMessage: "SMOKE::onboard::headcount=3" }),
+  ).resolves.toBeTruthy();
+});
+
+test("converse merges the turn's slots over what it was given and reports what is still missing", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+
+  const res = await converse(t, {
+    slots: { oneLineDescription: "A neighborhood coffee roaster." },
+    userMessage: "SMOKE::onboard::headcount=4,funding=bootstrapped|reply=Four of you, got it.",
+  });
+
+  // Everything passed IN survives, everything the turn learned is added.
+  expect(res.slots.oneLineDescription).toBe("A neighborhood coffee roaster.");
+  expect(res.slots.headcount).toBe(4);
+  expect(res.slots.funding).toBe("bootstrapped");
+  expect(res.reply).toBe("Four of you, got it.");
+
+  // `missing` is `missingSlots` over the MERGED set — one source of truth, not a second list.
+  expect(res.missing).toEqual(missingSlots(res.slots));
+  expect(res.missing).toEqual(["paidStaff", "revenueStage", "yearsOperating"]);
+  expect(res.done).toBe(false);
+});
+
+test("converse merges `headcount: 0` as an ANSWER, not as an absence (the truthiness trap)", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+
+  // A solo founder answering `0` has ANSWERED. A `||`-style merge (or a truthiness presence test)
+  // would drop the value and re-ask the determining question forever — design §6 uncompletable for
+  // exactly the tenant this phase is about.
+  const res = await converse(t, {
+    slots: { ...ALL_SLOTS, headcount: undefined, paidStaff: undefined },
+    userMessage: "SMOKE::onboard::headcount=0,paidStaff=0",
+  });
+  expect(res.slots.headcount).toBe(0);
+  expect(res.slots.paidStaff).toBe(0);
+  expect(res.missing).toEqual([]);
+  expect(res.done).toBe(true);
+});
+
+test("the CODE picks the next question, in REQUIRED_SLOTS order — never the model's order", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+
+  // (a) Nothing known: the pick is the FIRST member of REQUIRED_SLOTS, computed from the union
+  //     itself rather than written down here — a reordering of REQUIRED_SLOTS moves this test with
+  //     it instead of leaving a stale literal behind.
+  const first = await converse(t, { userMessage: "SMOKE::onboard::" });
+  expect(first.nextSlot).toBe(REQUIRED_SLOTS[0]);
+  expect(first.nextSlot).toBe(first.missing[0]);
+
+  // (b) The turn supplies a LATE slot. If the model's order won, the pick would follow what was
+  //     just filled; because the CODE owns it, the pick stays at the earliest still-missing slot.
+  const late = await converse(t, { userMessage: "SMOKE::onboard::yearsOperating=7" });
+  expect(late.slots.yearsOperating).toBe(7);
+  expect(late.nextSlot).toBe(REQUIRED_SLOTS[0]);
+
+  // (c) Fill the first slot and the pick MOVES to the second — the state machine advances.
+  const second = await converse(t, {
+    slots: { oneLineDescription: "A neighborhood coffee roaster." },
+    userMessage: "SMOKE::onboard::",
+  });
+  expect(second.nextSlot).toBe(REQUIRED_SLOTS[1]);
+  expect(second.nextSlot).not.toBe(first.nextSlot);
+
+  // (d) The pick is `missingSlots(...)[0]` at every step, and `null` once nothing is left.
+  for (const turn of [first, late, second]) {
+    expect(turn.nextSlot).toBe(missingSlots(turn.slots)[0]);
+  }
+  const complete = await converse(t, { slots: ALL_SLOTS, userMessage: "SMOKE::onboard::" });
+  expect(complete.nextSlot).toBeNull();
+});
+
+test("a model that CLAIMS the conversation is finished cannot make it finished", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+
+  // The whole anti-model-temperature property, as a test rather than a comment: `done` is
+  // `canComplete(slots)` and is never read off the turn. A prompt saying "always ask about
+  // headcount" is a model-temperature guarantee — this is a structural one.
+  const res = await converse(t, {
+    slots: { oneLineDescription: "A neighborhood coffee roaster.", headcount: 2 },
+    userMessage:
+      "SMOKE::onboard::|reply=Perfect, that's everything I need — your onboarding is complete!",
+  });
+  expect(res.reply).toContain("onboarding is complete");
+  expect(res.done).toBe(false);
+  expect(res.missing).toEqual(["paidStaff", "revenueStage", "funding", "yearsOperating"]);
+
+  // NON-VACUITY: `done` DOES go true — on the facts, not on the claim. Note this reply says the
+  // opposite of the one above, so the flag is demonstrably not being read from the text.
+  const finished = await converse(t, {
+    slots: ALL_SLOTS,
+    userMessage: "SMOKE::onboard::|reply=One more thing to check before we wrap up.",
+  });
+  expect(finished.done).toBe(true);
+  expect(finished.missing).toEqual([]);
+});
+
+test("converse admits nothing it would then report as missing (off-union values are DROPPED)", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+
+  // An enum value outside its closed union is never coerced and never stored — otherwise the
+  // returned `slots` would carry a value that `missingSlots` still counts as absent, and plan 07's
+  // page would render a filled field it can never complete on.
+  const res = await converse(t, {
+    slots: {},
+    userMessage: "SMOKE::onboard::revenueStage=enormous,funding=vibes,headcount=not-a-number",
+  });
+  expect(res.slots.revenueStage).toBeUndefined();
+  expect(res.slots.funding).toBeUndefined();
+  expect(res.slots.headcount).toBeUndefined();
+  expect(res.missing).toEqual([...REQUIRED_SLOTS]);
+});
+
+test("converse writes NOTHING — it is a read-shaped turn (§4, and the state stays the caller's)", async () => {
+  const t = setup();
+  await t.mutation(internal.skills.seedSkills, {});
+  const before = await planeCounts(t);
+
+  await converse(t, {
+    slots: { oneLineDescription: "A neighborhood coffee roaster." },
+    userMessage: "SMOKE::onboard::headcount=4,paidStaff=2|reply=Two on payroll then.",
+  });
+
+  // The facts land through `api.tenantProfile.saveFacts` and the narrative through
+  // `commitProfile`, both from the UI. A write here would re-open "who owns the state" AND put a
+  // conversational turn on the log plane, which §4 forbids.
+  expect(await planeCounts(t)).toEqual(before);
 });
