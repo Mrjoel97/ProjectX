@@ -13,7 +13,7 @@ import {
   missingSlots,
   type OnboardingSlots,
   PERSONAS,
-  type Persona,
+  type ProfileInput,
   REQUIRED_SLOTS,
   REVENUE_STAGES,
   sanitizeAgentName,
@@ -34,6 +34,19 @@ const complete: BusinessProfile = {
   targetCustomer: "Home coffee enthusiasts in North America.",
   primaryGoals: ["Grow subscriber base to 500", "Launch a wholesale line"],
   knownConstraints: ["One-person operation", "Limited roasting capacity"],
+};
+
+// The WRITE shape a caller may supply (Phase 15.1, design §9): `persona` is absent because the tier
+// is a DERIVED OUTPUT of the facts write, never an input to it. `complete` above is the SERIALIZATION
+// shape — it still carries the tier, because `serializeProfile` projects it into the markdown.
+const input: ProfileInput = {
+  name: complete.name,
+  oneLineDescription: complete.oneLineDescription,
+  stage: complete.stage,
+  offering: complete.offering,
+  targetCustomer: complete.targetCustomer,
+  primaryGoals: complete.primaryGoals,
+  knownConstraints: complete.knownConstraints,
 };
 
 describe("Persona enum (SC#1 — enterprise is not emittable)", () => {
@@ -66,25 +79,24 @@ describe("decideConfirm (SC#1 — persona is always confirmed, never assumed)", 
   });
 });
 
-describe("validateProfile", () => {
-  test("accepts a complete Lean-core profile", () => {
-    expect(validateProfile(complete)).toEqual({ ok: true });
+describe("validateProfile (a ProfileInput — no tier is supplied, so none is checked)", () => {
+  test("accepts a complete Lean-core profile INPUT (no persona key at all)", () => {
+    expect(validateProfile(input)).toEqual({ ok: true });
   });
 
   test("rejects an empty oneLineDescription (the one required field)", () => {
-    const r = validateProfile({ ...complete, oneLineDescription: "  " });
+    const r = validateProfile({ ...input, oneLineDescription: "  " });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors).toContain("oneLineDescription is required");
   });
 
-  test("SPARSE-START: an idea-stage profile (only description + persona) is valid", () => {
+  test("SPARSE-START: an idea-stage profile (only a description) is valid", () => {
     // Someone arriving with a vague idea has no name/stage/offering/customer yet — those fields
-    // are legitimately empty and enriched later. Only a one-line description + a persona are needed
-    // to get through the front-door gate (ONBD-02 covers "business/idea").
-    const idea: BusinessProfile = {
+    // are legitimately empty and enriched later. Only a one-line description is needed to get
+    // through the front-door gate (ONBD-02 covers "business/idea").
+    const idea: ProfileInput = {
       name: "",
       oneLineDescription: "An app that helps freelancers auto-draft client invoices.",
-      persona: "startup",
       stage: "",
       offering: "",
       targetCustomer: "",
@@ -94,14 +106,18 @@ describe("validateProfile", () => {
     expect(validateProfile(idea)).toEqual({ ok: true });
   });
 
-  test("rejects an invalid persona (enterprise)", () => {
-    const r = validateProfile({ ...complete, persona: "enterprise" as Persona });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.some((e) => e.includes("persona"))).toBe(true);
+  test("carries NO tier check — a stray persona key is neither read nor rejected here", () => {
+    // Phase 15.1 (defect 1b): nothing can supply a tier any more, so a set-membership check on a
+    // field that cannot be sent is an assertion that can never fail. The real guarantee is
+    // STRUCTURAL and lives one layer out — `onboarding.ts`'s `vProfile` has no `persona` field, so
+    // a caller that sends one is rejected by the Convex arg validator before this ever runs
+    // (SC#1b, pinned by `onboarding.test.ts` "refuses a caller-supplied tier").
+    const stray = { ...input, persona: "enterprise" } as unknown as ProfileInput;
+    expect(validateProfile(stray)).toEqual({ ok: true });
   });
 
   test("empty primaryGoals/knownConstraints arrays are valid (optional lists)", () => {
-    expect(validateProfile({ ...complete, primaryGoals: [], knownConstraints: [] })).toEqual({
+    expect(validateProfile({ ...input, primaryGoals: [], knownConstraints: [] })).toEqual({
       ok: true,
     });
   });
@@ -169,8 +185,21 @@ describe("deserializeProfile (inverse of serializeProfile — pre-fills the edit
     expect(deserializeProfile(serializeProfile(idea))).toEqual(idea);
   });
 
-  test("an unparseable persona falls back to solopreneur (never throws on stored text)", () => {
-    const md = serializeProfile(complete).replace("**Persona:** solopreneur", "**Persona:** ");
+  test("the projection round-trips an operator-granted enterprise tier", () => {
+    // Phase 15.1: the `- **Persona:**` line is the tenant's TIER projected into the markdown, and
+    // the table can hold `enterprise` (D6 — granted, never derived). `deserializeProfile` therefore
+    // reads it back with `isTier`, not `isPersona`; a granted tenant whose profile said
+    // "enterprise" used to round-trip to "solopreneur", which is defect 1d in miniature.
+    const granted: BusinessProfile = { ...complete, persona: "enterprise" };
+    expect(deserializeProfile(serializeProfile(granted)).persona).toBe("enterprise");
+  });
+
+  test("an unparseable tier falls back to solopreneur (never throws on stored text)", () => {
+    // Phase 15.1: this fallback is now a DISPLAY convenience only. The authoritative tier lives in
+    // the `tenantProfiles` table (plan 02); plan 04 removes the last authoritative consumer of this
+    // parse (`evaluations.ts`'s personaHint). Do NOT delete the fallback — `getProfile` still
+    // pre-fills an edit form from stored markdown and must not throw on a legacy/garbled line.
+    const md = serializeProfile(complete).replace("**Persona:** solopreneur", "**Persona:** wizard");
     expect(deserializeProfile(md).persona).toBe("solopreneur");
   });
 });
