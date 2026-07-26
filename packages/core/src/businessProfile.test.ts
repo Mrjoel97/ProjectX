@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   BEHAVIOR_PRESETS,
@@ -538,5 +539,68 @@ describe("sanitizeAgentName (design §7 — a user string that rides into a mode
 
   test("leaves an ordinary name byte-identical", () => {
     expect(sanitizeAgentName("Ada")).toBe("Ada");
+  });
+});
+
+// ── SC#1c — no tier control on either dashboard page ────────────────────────────────────────────
+//
+// The regression that stops the persona pills quietly returning in six months. It is a SOURCE SCAN
+// (the specialists.test.ts idiom) and it lives in @pikar/core on purpose: the backend vitest
+// environment is `edge-runtime` and has no `node:fs`, so a convex-side version of this test could
+// not read the pages at all.
+//
+// Design §11: the arg-validator test in onboarding.test.ts proves the CONTROL is gone; this one
+// proves the WIDGET is gone. Both are needed — a page can carry a widget whose write the server
+// rejects (a broken UI), and a server can accept a write no page offers (a latent hole).
+describe("no tier control", () => {
+  const PAGE_NAMES = ["profile", "onboarding"] as const;
+  const pages = PAGE_NAMES.map((p) => ({
+    name: p,
+    src: readFileSync(
+      new URL(`../../../apps/web/app/(app)/dashboard/${p}/page.tsx`, import.meta.url),
+      "utf8",
+    ),
+  }));
+
+  // THE most important assertion in this file. Without it a renamed or moved page makes every
+  // scan below pass over an empty (or wrong) string — vacuously green forever. `readFileSync`
+  // throws on a missing path, and the anchor catches the subtler case of reading the wrong file.
+  test.each(pages)("$name/page.tsx is really being scanned (non-vacuity)", ({ src }) => {
+    expect(src.length).toBeGreaterThan(500);
+    expect(src).toContain('"use client"');
+    expect(src).toContain("api.onboarding");
+  });
+
+  test.each(pages)("$name/page.tsx never assigns a persona/tier", ({ src }) => {
+    expect(src).not.toContain('set("persona"');
+    expect(src).not.toContain("set('persona'");
+    expect(src).not.toMatch(/setProfile\([^)]*persona/);
+  });
+
+  test.each(pages)("$name/page.tsx does not import PERSONAS from @pikar/core", ({ src }) => {
+    expect(src).not.toMatch(/import[^;]*\bPERSONAS\b[^;]*@pikar\/core/s);
+  });
+
+  test.each(pages)("$name/page.tsx has no tier literal on an interactive control", ({ src }) => {
+    // Deliberately simple and readable: any line carrying BOTH an onClick and a tier literal.
+    // A precise-but-unreadable regex rots faster than the thing it guards, and the pill markup
+    // this guards against always co-locates the two (`onClick={() => set("persona", p)}` sits
+    // inside a <button> whose body is the tier). Both the literal form and the `PERSONAS.map`
+    // form are caught, the latter by the import assertion above.
+    for (const line of src.split("\n")) {
+      if (!line.includes("onClick")) continue;
+      for (const tier of TIERS) {
+        expect(
+          line,
+          `a tier literal sits on an onClick in this line: ${line.trim()}`,
+        ).not.toContain(tier);
+      }
+    }
+  });
+
+  test("the profile page renders the tier read-only with its reason", () => {
+    const profileSrc = pages[0]?.src ?? "";
+    expect(profileSrc).toContain("TIER_REASON");
+    expect(profileSrc).toContain("api.tenantProfile.get");
   });
 });

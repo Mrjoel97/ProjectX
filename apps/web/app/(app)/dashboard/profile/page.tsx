@@ -1,19 +1,26 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BusinessProfile, PERSONAS, type Persona } from "@pikar/core";
+import { type BusinessProfile, TIER_REASON } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 
 // ONBD-02 dedicated profile page — the post-onboarding EDIT surface. Editability is a locked
-// decision: a user (especially an idea-stage one who onboarded sparse — only oneLineDescription +
-// persona) returns here to enrich name/offering/target-customer as the idea matures, and to correct
+// decision: a user (especially an idea-stage one who onboarded sparse — only oneLineDescription)
+// returns here to enrich name/offering/target-customer as the idea matures, and to correct
 // anything, WITHOUT re-onboarding. It loads the committed profile via api.onboarding.getProfile (the
 // vault doc parsed back to structured fields) and saves through api.onboarding.updateProfile, which
 // RE-EMBEDS the doc in place — the stale rag entry is replaced so grounding (Phase 12 eval / Phase 14
 // flagship) always reads the current profile. It reuses the onboarding review-card shape + BRAND §5
 // tokens (no new component library, §10). Sparse-start: only oneLineDescription is required to save;
 // name/stage/offering/target customer stay optional and never block Save.
+//
+// Phase 15.1 (design §9, defect 1b): the business TIER is READ-ONLY here. The persona pill block is
+// gone — not hidden, GONE: `updateProfile`'s arg validator has no field for a tier, so this page
+// could not send one even if a control returned. The tier is shown with the reason it was derived
+// (TIER_REASON), because a classification you cannot argue with must at least be legible. The FACTS
+// FORM that actually moves the tier (through `tenantProfile.saveFacts`) is plan 07's job; between
+// this plan and that one there is deliberately no way to change the tier from this page.
 
 const label: React.CSSProperties = {
   fontSize: "0.72rem",
@@ -45,6 +52,7 @@ const page: React.CSSProperties = {
 
 export default function ProfilePage() {
   const current = useQuery(api.onboarding.getProfile);
+  const tierRow = useQuery(api.tenantProfile.get);
   const update = useMutation(api.onboarding.updateProfile);
 
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -71,9 +79,18 @@ export default function ProfilePage() {
     setSaving(true);
     setError(null);
     try {
+      // Built field-by-field, deliberately NOT by spreading `profile`: the loaded object carries the
+      // read-only `persona` projection, and a spread would send it back as an argument. The arg
+      // validator would reject that (SC#1b), so the spread is not merely untidy — it would break
+      // Save. Listing the editable fields also means a future addition to BusinessProfile cannot
+      // leak into the write by accident.
       await update({
         profile: {
-          ...profile,
+          name: profile.name,
+          oneLineDescription: profile.oneLineDescription,
+          stage: profile.stage,
+          offering: profile.offering,
+          targetCustomer: profile.targetCustomer,
           primaryGoals: profile.primaryGoals.map((s) => s.trim()).filter(Boolean),
           knownConstraints: profile.knownConstraints.map((s) => s.trim()).filter(Boolean),
         },
@@ -101,7 +118,14 @@ export default function ProfilePage() {
       <div style={page}>
         <header style={{ display: "grid", gap: "0.5rem" }}>
           <span style={label}>Business profile</span>
-          <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+          <h1
+            style={{
+              fontSize: "clamp(1.5rem, 4vw, 2rem)",
+              fontWeight: 700,
+              color: "var(--ink)",
+              margin: 0,
+            }}
+          >
             No profile yet
           </h1>
         </header>
@@ -120,12 +144,19 @@ export default function ProfilePage() {
     <div style={page}>
       <header style={{ display: "grid", gap: "0.5rem" }}>
         <span style={label}>Business profile</span>
-        <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+        <h1
+          style={{
+            fontSize: "clamp(1.5rem, 4vw, 2rem)",
+            fontWeight: 700,
+            color: "var(--ink)",
+            margin: 0,
+          }}
+        >
           Your business profile
         </h1>
         <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-          Every agent turn reads this. Keep it current — saving updates what Pikar AI knows about your
-          business.
+          Every agent turn reads this. Keep it current — saving updates what Pikar AI knows about
+          your business.
         </p>
       </header>
 
@@ -140,35 +171,24 @@ export default function ProfilePage() {
           gap: "1rem",
         }}
       >
-        {/* Persona — always editable/confirmable (SC#1: enterprise is never offered) */}
-        <div style={{ display: "grid", gap: "0.5rem" }}>
-          <span style={label}>Persona</span>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {PERSONAS.map((p: Persona) => {
-              const active = profile.persona === p;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => set("persona", p)}
-                  style={{
-                    padding: "0.45rem 1rem",
-                    borderRadius: "999px",
-                    border: active ? "1px solid var(--teal-600)" : "1px solid var(--rule)",
-                    background: active ? "var(--teal-600)" : "transparent",
-                    color: active ? "#fff" : "var(--ink-soft)",
-                    fontWeight: 600,
-                    fontSize: "0.9rem",
-                    textTransform: "capitalize",
-                    cursor: "pointer",
-                  }}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
+        {/* Business tier — READ-ONLY (design §9). Derived from the facts you answered, never a
+            control. The reason is shown so the classification is legible, not arbitrary. */}
+        <div style={{ display: "grid", gap: "0.25rem" }}>
+          <span style={label}>Business tier</span>
+          <p
+            style={{
+              margin: 0,
+              color: "var(--ink)",
+              fontWeight: 600,
+              fontSize: "1rem",
+              textTransform: "capitalize",
+            }}
+          >
+            {tierRow ? tierRow.tier : "—"}
+          </p>
+          <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+            {tierRow ? TIER_REASON[tierRow.tier] : "Not set yet."}
+          </p>
         </div>
 
         <LabeledField label="Business name (optional)">
@@ -182,7 +202,11 @@ export default function ProfilePage() {
           />
         </LabeledField>
         <LabeledField label="Stage (optional)">
-          <input style={field} value={profile.stage} onChange={(e) => set("stage", e.target.value)} />
+          <input
+            style={field}
+            value={profile.stage}
+            onChange={(e) => set("stage", e.target.value)}
+          />
         </LabeledField>
         <LabeledField label="Offering (optional)">
           <textarea
@@ -244,7 +268,11 @@ export default function ProfilePage() {
             {saving ? "Saving…" : "Save changes"}
           </button>
           {saved && !saving && (
-            <span role="status" aria-live="polite" style={{ color: "var(--released)", fontWeight: 600, fontSize: "0.9rem" }}>
+            <span
+              role="status"
+              aria-live="polite"
+              style={{ color: "var(--released)", fontWeight: 600, fontSize: "0.9rem" }}
+            >
               Saved — grounding updated.
             </span>
           )}

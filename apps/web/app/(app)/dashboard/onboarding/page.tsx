@@ -1,9 +1,9 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BusinessProfile, PERSONAS, type Persona } from "@pikar/core";
-import type { FunctionArgs } from "convex/server";
+import type { ProfileInput } from "@pikar/core";
 import { useAction, useMutation, useQuery } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/icons";
@@ -17,10 +17,17 @@ import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/ico
 //   • pasted text  → the compose box text, straight through
 //   • uploaded file → vault.vaultUpload → poll listVaultDocs until the row's extracted `text` lands
 //   • spoken brief → MediaRecorder one-shot → uploaded as audio → SAME vault transcription/poll path
-// SC#1: the inferred persona is SURFACED for one-tap confirm/change (enterprise is not offered — only
-// the 3 emittable PERSONAS), never silently committed; commitProfile is the sole write. Resumable via
-// a lightweight localStorage draft (RESEARCH Open-Q2 — no new onboarding table): the edited profile
-// (incl. confirmed persona) survives a reload; it's cleared on commit.
+// SC#1: nothing is silently committed — the extracted draft is reviewed and edited first, and
+// commitProfile is the sole write. Resumable via a lightweight localStorage draft (RESEARCH Open-Q2
+// — no new onboarding table): the edited profile survives a reload; it's cleared on commit.
+//
+// Phase 15.1 (design §9, defect 1b): there is NO tier control on this page. The persona confirm/change
+// pill block is GONE — not hidden — and `commitProfile`'s arg validator has no field for a tier, so
+// this page could not send one if it returned. `commitProfile` now also REFUSES until the tier FACTS
+// exist (INCOMPLETE_ONBOARDING), which the conversational rewrite in plan 07 asks for. Between this
+// plan and that one this page is therefore non-functional at the final step. That is INTENTIONAL and
+// fail-closed: nothing ships mid-phase, and a placeholder facts form here would be the silent
+// fallback this phase exists to remove.
 //
 // ponytail: the "spoken brief" reuses the vault transcription rail (record → upload audio → transcribe
 // → text), not the Phase-6 live WebRTC session — onboarding needs a one-shot brief, not a live call.
@@ -78,7 +85,7 @@ export default function OnboardingPage() {
   const vaultUpload = useMutation(api.vault.vaultUpload);
 
   const [text, setText] = useState("");
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
+  const [profile, setProfile] = useState<ProfileInput | null>(null);
   const [busy, setBusy] = useState(false);
   const [waitMsg, setWaitMsg] = useState("");
   const [committing, setCommitting] = useState(false);
@@ -95,7 +102,7 @@ export default function OnboardingPage() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
       try {
-        setProfile(JSON.parse(raw) as BusinessProfile);
+        setProfile(JSON.parse(raw) as ProfileInput);
       } catch {
         localStorage.removeItem(DRAFT_KEY);
       }
@@ -156,7 +163,11 @@ export default function OnboardingPage() {
       const buf = await blob.arrayBuffer();
       const contentHash = await sha256(buf);
       const url = await generateUploadUrl();
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": mimeType }, body: blob });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": mimeType },
+        body: blob,
+      });
       if (!res.ok) throw new Error("upload failed");
       const { storageId } = (await res.json()) as { storageId: StorageId };
       const { vaultDocId } = await vaultUpload({
@@ -208,13 +219,15 @@ export default function OnboardingPage() {
     }
   }
 
-  function set<K extends keyof BusinessProfile>(key: K, value: BusinessProfile[K]) {
+  function set<K extends keyof ProfileInput>(key: K, value: ProfileInput[K]) {
     setProfile((p) => (p ? { ...p, [key]: value } : p));
   }
 
   // Sparse-start (idea-stage): only a one-line description is required to enter — name/stage/
-  // offering/target customer are optional and enriched later (persona is always set). Mirrors
-  // @pikar/core validateProfile so the button and the mutation agree.
+  // offering/target customer are optional and enriched later. Mirrors @pikar/core validateProfile so
+  // the button and the mutation agree. The FACT slots are a separate gate that lives in
+  // `commitProfile` (SC#3b) — deliberately not mirrored here, because a client-side mirror of a
+  // fail-closed server gate is exactly how a gate quietly stops being one.
   const requiredFilled = !!profile && profile.oneLineDescription.trim() !== "";
 
   async function onCommit() {
@@ -222,9 +235,17 @@ export default function OnboardingPage() {
     setCommitting(true);
     setError(null);
     try {
+      // Field-by-field, never a spread of `profile`. A `v.object` arg validator rejects an EXTRA key
+      // outright, and a localStorage draft written before this plan still carries `persona` — a
+      // spread would turn every such returning user's Confirm into a hard validation failure. This
+      // also means a future field cannot leak into the write by accident.
       await commit({
         profile: {
-          ...profile,
+          name: profile.name,
+          oneLineDescription: profile.oneLineDescription,
+          stage: profile.stage,
+          offering: profile.offering,
+          targetCustomer: profile.targetCustomer,
           primaryGoals: profile.primaryGoals.map((s) => s.trim()).filter(Boolean),
           knownConstraints: profile.knownConstraints.map((s) => s.trim()).filter(Boolean),
         },
@@ -238,10 +259,25 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div style={{ maxWidth: "44rem", margin: "0 auto", padding: "2rem 1.25rem", display: "grid", gap: "1.5rem" }}>
+    <div
+      style={{
+        maxWidth: "44rem",
+        margin: "0 auto",
+        padding: "2rem 1.25rem",
+        display: "grid",
+        gap: "1.5rem",
+      }}
+    >
       <header style={{ display: "grid", gap: "0.5rem" }}>
         <span style={label}>Welcome to Pikar AI</span>
-        <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+        <h1
+          style={{
+            fontSize: "clamp(1.5rem, 4vw, 2rem)",
+            fontWeight: 700,
+            color: "var(--ink)",
+            margin: 0,
+          }}
+        >
           Let&apos;s set up your business
         </h1>
       </header>
@@ -265,9 +301,9 @@ export default function OnboardingPage() {
           <BrainIcon size={15} />
         </span>
         <div style={agentBubble}>
-          Good to meet you, Executive. Tell me about your business — <strong>type it</strong>, upload a
-          document, or record a quick spoken brief. I&apos;ll read it and show you what I understood before
-          anything is saved.
+          Good to meet you, Executive. Tell me about your business — <strong>type it</strong>,
+          upload a document, or record a quick spoken brief. I&apos;ll read it and show you what I
+          understood before anything is saved.
         </div>
       </div>
 
@@ -280,7 +316,11 @@ export default function OnboardingPage() {
               aria-live="polite"
               style={{ ...agentBubble, display: "flex", alignItems: "center", gap: "0.6rem" }}
             >
-              <span className="btn-spinner" aria-hidden="true" style={{ borderTopColor: "var(--teal-600)" }} />
+              <span
+                className="btn-spinner"
+                aria-hidden="true"
+                style={{ borderTopColor: "var(--teal-600)" }}
+              />
               {waitMsg || "Working…"}
             </div>
           ) : (
@@ -350,7 +390,9 @@ export default function OnboardingPage() {
                   <MicIcon size={17} />
                 </button>
                 {recording && (
-                  <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording… tap to stop</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                    Recording… tap to stop
+                  </span>
                 )}
                 <span style={{ flex: 1 }} />
                 <button
@@ -386,7 +428,7 @@ export default function OnboardingPage() {
           )}
         </div>
       ) : (
-        /* ── Review gate: pre-filled, editable card + persona confirm ── */
+        /* ── Review gate: pre-filled, editable card (no tier control — design §9) ── */
         <div
           style={{
             background: "var(--card)",
@@ -405,42 +447,12 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          {/* Persona confirm — SC#1: surfaced for one-tap confirm/change, never silently assumed */}
-          <div style={{ display: "grid", gap: "0.5rem" }}>
-            <span style={label}>Persona</span>
-            <p style={{ margin: 0, color: "var(--ink)" }}>
-              Looks like you&apos;re a <strong>{profile.persona}</strong> — confirm or change:
-            </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {PERSONAS.map((p: Persona) => {
-                const active = profile.persona === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => set("persona", p)}
-                    style={{
-                      padding: "0.45rem 1rem",
-                      borderRadius: "999px",
-                      border: active ? "1px solid var(--teal-600)" : "1px solid var(--rule)",
-                      background: active ? "var(--teal-600)" : "transparent",
-                      color: active ? "#fff" : "var(--ink-soft)",
-                      fontWeight: 600,
-                      fontSize: "0.9rem",
-                      textTransform: "capitalize",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <LabeledField label="Business name (optional)">
-            <input style={field} value={profile.name} onChange={(e) => set("name", e.target.value)} />
+            <input
+              style={field}
+              value={profile.name}
+              onChange={(e) => set("name", e.target.value)}
+            />
           </LabeledField>
           <LabeledField label="One-line description">
             <input
@@ -450,7 +462,11 @@ export default function OnboardingPage() {
             />
           </LabeledField>
           <LabeledField label="Stage (optional)">
-            <input style={field} value={profile.stage} onChange={(e) => set("stage", e.target.value)} />
+            <input
+              style={field}
+              value={profile.stage}
+              onChange={(e) => set("stage", e.target.value)}
+            />
           </LabeledField>
           <LabeledField label="Offering (optional)">
             <textarea
