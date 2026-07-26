@@ -19,12 +19,71 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 5/9 plans, Lane C)
+**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 6/9 plans, Lane C)
 
 ## Current Position
 
-Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (5/9 plans, 9 waves) on `lane-c/voice-doc`
-Plan: 14-05 COMPLETE (the findings producer); next 14-06 (wave 6, the browser relay)
+Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (6/9 plans, 9 waves) on `lane-c/voice-doc`
+Plan: 14-06 COMPLETE (the browser relay); next 14-07 (wave 7, the vault entry point + in-call doc strip)
+
+**TEST BASELINE CHANGED — there is no longer any acceptable red.** The whole monorepo is **892/892,
+zero failures**: backend **526/526** (43/43 files), core 195, voice 57, vault 42, extraction 28, cost
+22, contracts 14, pii 8. The two failures every prior phase summary described as expected baseline
+("494/495", later "524/526") are FIXED, and neither was a product defect: (1) `audit.test.ts` was
+missing `t.registerComponent("auditCounts", …)` — `audit.log` maintains that aggregate, and eight
+sibling tests already had the line; (2) the recurring "flake" (`runCockpitAgent.test.ts > mock loop`,
+`voice.test.ts > storeBrief`) was vitest's default **5_000ms** `testTimeout`, not a bad test — both
+take ~3.4s isolated because every convex-test instance boots an in-memory backend, so under parallel
+load they crossed 5s and then passed alone. Now `testTimeout: 20_000` in
+`packages/backend/vitest.config.mts`. **A failing backend test is now a real regression.** Lesson
+worth keeping: once a genuine bug is named as "the documented pre-existing red", five phases report
+around it instead of at it.
+
+**KNOWN DEBT, deliberately NOT fixed in this lane:** backend `tsc --noEmit` has **49** errors, ALL in
+test files, **0 in shipped code** (bar: +0 new). ~15 are `Property 'glob' does not exist on type
+'ImportMeta'`, fixable by adding `"vite/client"` to `packages/backend/tsconfig.json`'s `types` — but
+that cascades, because every existing `// @ts-expect-error import.meta.glob` then becomes an unused-
+directive error, across ~20 test files owned by Lanes A and B. That is a post-merge job on `main`,
+not a mid-parallel-execution sweep.
+
+Status: Wave 6 done — **SC #1's drill-in loop is CLOSED end to end.** `/dashboard/voice?doc=<id>`
+mints doc-scoped (persona + digest + tool), threads `docRef` onto `startSession` so the SERVER owns
+what the session is about, and relays the model's `search_document` calls to
+`api.voiceDoc.searchDocument` over the existing `"oai-events"` channel. **OPEN QUESTION 4 SETTLED on
+`response.done`** — already live-verified in this repo and documented to carry the complete
+`function_call` item, so the relay pins **zero** new event names;
+`response.function_call_arguments.done` sits in exactly the MEDIUM-confidence class `realtime.ts`
+warns about. The relay sits AFTER `responseActiveRef.current = false` in the same case, and that
+ordering is what makes the trailing `response.create` legal rather than a silent 400 ("conversation
+already has an active response" — the failure that once swallowed the wrap-up nudge). **A
+`function_call_output` is ALWAYS sent, even on failure** (Pitfall 5) — a missing output leaves the
+model waiting and the user hearing silence for the rest of a capped 15 minutes. **Only the model's
+free-text `query` crosses the wire**; the document id is never sent, because `searchDocument` reads
+`docRef` off the server session row, so nothing the model says can widen scope or pick another
+document. **No `docId &&` guard on the relay loop** — a Phase-6 session declares no tools so
+`output[]` can never hold a `function_call` item, and a condition would silently disable a future
+tool. **Open Question 3's contingency is live:** when the mint reports `toolsAtMint: false` the
+browser declares the tool via `REALTIME_CLIENT_EVENTS.updateSession` on the channel's `open` event —
+event-driven, NOT a timeout, because `createDataChannel` returns before the channel opens and `send`
+silently drops a closed-channel write, so a naive immediate send would lose the declaration with no
+error anywhere. `page.tsx` is the SINGLE `?doc=` reader and threads `docId` as a prop to
+`useVoiceSession`, `<LiveSession>` (14-07's seam) and `<PostCall>` (14-08's seam) — **neither child
+may add a second reader.** Gates: voice **57/57**, web typecheck exit 0, **`pnpm --filter @pikar/web
+build` succeeds with `/dashboard/voice` still `ƒ (Dynamic)`**, monorepo 892/892, zero new npm deps,
+zero hardcoded Realtime literals in `apps/web`.
+
+**DEVIATION worth carrying (14-06):** the plan required `page.tsx` to contain `"Suspense"` AND to
+copy `workspace/page.tsx`'s idiom — but that idiom **deliberately avoids** `useSearchParams` and says
+so in its own comment ("avoids the useSearchParams Suspense boundary … the connect-gmail
+precedent"). Followed the real precedent (`new URLSearchParams(window.location.search)` in a mount
+effect), which **removes** the Pitfall-6 class instead of guarding it — a missing boundary either
+errors at prerender or silently deopts the whole page to CSR, and `typecheck` sees neither. Verified
+with the strict gate anyway (build passes, route stays Dynamic). The `contains: "Suspense"` artifact
+is unmet **by design**; every behavioural truth is met. **This is the FOURTH plan whose asserted
+interface was wrong** (14-03/14-04/14-05 on `internal.vault.getDoc`, now this) — the pattern is that
+`14-RESEARCH.md` and the plans state what a referenced file does without opening it.
+
+PRIOR (14-05): Wave 5 done
 Status: Wave 5 done — **SC #2 is now true and testable without a microphone.** `voiceDoc.reviewSession({sessionId, transcript}) -> {threadId, findingCount, gapCount, verdict}` persists a cited `evaluations` row on the synthetic `voice-doc:<sessionId>` thread, through the **unmodified** `insertEvaluation` — the schema-derived validator widened by 14-01 carried the new `document-review` literal on its own, so `evaluations.ts` stayed frozen for this plan. The model emits **labels only**; `shapeDocReview` (14-02, pure) welds `citationDocId`/`citationTitle`/`route`/`playbook`/rank and applies the honesty verdict in code, so a citation cannot be hallucinated and a gap cannot be self-routed. **`excerpt` is the ONE model-authored exception** — declared STRICT-legally in `docReviewSchema`, then whitespace-normalized substring-verified against `doc.text`, and on failure the EXCERPT is dropped, never the finding (the absent-excerpt path is asserted: `findings[2]` has no `citationExcerpt` key at all, so 14-08's renderer must treat a missing key as normal). **The honesty assertions are anti-vacuous** — `verdict === "healthy"` AND `findings.length > 0` AND `gaps.length === 0` pinned together at BOTH the return value and the persisted row, because `gapCount === 0` alone also passes on the thin-data `insufficient` verdict (the Phase-12 `28-healthy-no-gaps` lesson); the no-fabricated-gap counterpart pins `insufficient` + zero gaps. `reviewSession` is **idempotent on the thread** — an existing row is returned as-is rather than patched, so a post-call remount (refresh, resumed dropped call) shows ONE consolidated list. Gates: voiceDoc **19/19** (was 9), backend **524/526** (baseline held), backend `tsc --noEmit` **49** / 0 non-test (+0 new), web typecheck exit 0, `check-playbooks` exit 0, `evaluations.ts`/`llm.ts`/`deliverApprovedPlan.ts`/`run-eval-golden.mjs` ZERO diff.
 
 **SECURITY FIX carried in this plan (`5678f22`):** a background review flagged `test-seam-exposed-to-untrusted-input` and was right. `reviewSession` is a PUBLIC `tenantAction` whose `transcript` is client-supplied, and the producer branched on `transcript[0].text.startsWith("SMOKE::docreview::")` — so any authenticated tenant user could POST a crafted first turn and persist a **fabricated review** (canned gaps, real citations, no model call) straight into `actOnGap` → memo → the Approve gate. The seam was copied from `vaultLlm.ts` and matches it in SHAPE but **not in EXPOSURE**: `vaultLlm.extractGraph` is an `internalAction`, reachable only by server code. **Idioms carry invisible preconditions; that one did not travel.** Impact was bounded (tenant-scoped, no cross-tenant reach, no exfiltration, fixed fixture content) but it contradicted the very criterion the plan exists to satisfy — SC #2 promises honest gap reporting, and a production gap-forgery primitive would have made it untrue where it matters. Fix: `offlineSeamAvailable()` honours the sentinel ONLY when `OPENAI_API_KEY` is absent — inert in production, live in the keyless suite, **no test weakened** (all 12 SMOKE call sites still green) and **no new deployment config**, preserving the original per-request design goal. Mutation-verified at `voiceDoc.test.ts:613`. **Generalizable lesson: when reusing a seam, check whether what protected it travels with it.**
