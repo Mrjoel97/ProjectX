@@ -26,6 +26,9 @@ import { extractOfficeText } from "@pikar/vault/officeText";
 import { generateText } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
+// STATIC import — a dynamic import of this package breaks in the Convex bundle (Pitfall 9 below,
+// and llm.ts's working precedent). Do not convert this to `await import(...)`.
+import { PDFDocument } from "pdf-lib";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
@@ -52,8 +55,14 @@ if (typeof PromiseCtor.withResolvers !== "function") {
   };
 }
 
-// Per-call wall-clock ceiling (mirrors llm.ts / intake.ts CALL_TIMEOUT_MS).
-const CALL_TIMEOUT_MS = 45_000;
+// Per-call wall-clock ceiling for the HOSTED extraction call. Deliberately NOT intake.ts's 45s:
+// that number is tuned for small email attachments, but a vault upload runs to VAULT_FILE_CAP_BYTES
+// (100 MiB). Measured live on a 14.4 MB / 12-page scanned PDF (~19 MB base64 on the wire, plus OCR
+// of 12 full-page images): 45s was not survivable — the doc failed with
+// "extract_error: The operation was aborted due to timeout". 480s is the SAME ceiling
+// vaultTranscribe.ts already had to adopt for a 21 MB video, and stays under Convex's 10-minute
+// node-action limit.
+const CALL_TIMEOUT_MS = 480_000;
 
 // SMOKE:: offline seam — the intake.ts grammar verbatim: SMOKE::extract::<text> short-circuits
 // to <text> with NO model call and NO spend. PII_POISON:: routes the extracted output into
@@ -99,9 +108,17 @@ async function extractHosted(
  * Slice a PDF to its first VAULT_EXTRACT_PAGE_CAP pages with pdf-lib copyPages (Pitfall 8:
  * pdf-lib CANNOT extract text — fixtures + slicing only). Returns the original bytes untouched
  * when already under the cap. Exported for the offline page-cap test.
+ *
+ * Pitfall 9: pdf-lib is reached by the STATIC top-level import, NEVER a dynamic one.
+ * pdf-lib ships `main: cjs/index.js` with NO `exports` map, and Convex bundles node actions with
+ * esbuild `platform: node, format: "esm", splitting: true` — across a dynamic-import chunk
+ * boundary esbuild cannot synthesize a CJS module's named exports, so the namespace carries ONLY
+ * `default` and `{ PDFDocument }` destructures to undefined ("Cannot read properties of undefined
+ * (reading 'load')" — the live scanned-PDF failure). Node/vitest recover the names via
+ * cjs-module-lexer, so a dynamic import looks fine offline and dies only when deployed. unpdf may
+ * stay dynamic: it is ESM-only. Locked by a static scan in vaultExtract.test.ts.
  */
 export async function slicePdfToPageCap(bytes: Uint8Array): Promise<Uint8Array> {
-  const { PDFDocument } = await import("pdf-lib");
   const src = await PDFDocument.load(bytes);
   if (src.getPageCount() <= VAULT_EXTRACT_PAGE_CAP) return bytes;
   const out = await PDFDocument.create();
