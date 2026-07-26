@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   ".planning/config.json": {
-    "mtime": 1785007087.6372144,
-    "ast_hash": "4939b09ba2f535b0113f95732e993256",
+    "mtime": 1785071162.3260958,
+    "ast_hash": "cec90b975516d6936e81ded473874900",
     "semantic_hash": ""
   },
   "apps/web/app/layout.tsx": {
@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1785007248.5336342,
-    "ast_hash": "f99d9240c9511d754fff28705bbce379",
+    "mtime": 1785066346.5014596,
+    "ast_hash": "893b295ac3d0d0d664e2a6732f4eca97",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -135,8 +135,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.ts": {
-    "mtime": 1784997664.6131258,
-    "ast_hash": "729936932d4db217f618c32de613ed0c",
+    "mtime": 1785077734.7263317,
+    "ast_hash": "3017fffa97a4c4156f6f612d1f632921",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenant.test.ts": {
@@ -180,8 +180,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skill.ts": {
-    "mtime": 1784997664.7225232,
-    "ast_hash": "d27abb2a79aacd44b3a863c7ffc169fa",
+    "mtime": 1785077714.9500053,
+    "ast_hash": "6d3d87ef9cfe82ef9e6c644aaf8cc12d",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/executiveAgentClassifier.ts": {
@@ -250,18 +250,18 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1784997663.4688394,
-    "ast_hash": "ebaa94e1579e2390ce9c0523e86ee523",
+    "mtime": 1785018691.513318,
+    "ast_hash": "cdac805881866e2f4b057f6bfe9daa98",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1785005778.7466207,
-    "ast_hash": "aa4d0c3d512f25c3effded484a63f690",
+    "mtime": 1785081219.140234,
+    "ast_hash": "92bc0a7747e672b8b03e991cd6b9ec7c",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1785003587.9276206,
-    "ast_hash": "ab95a75a0451a7ded929859371d6e1a0",
+    "mtime": 1785081219.171479,
+    "ast_hash": "d97d0c43490ed843777e29401a40c880",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1025,8 +1025,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/llm.ts": {
-    "mtime": 1784997664.5658374,
-    "ast_hash": "585118c7a4b5cc495102de71c761938a",
+    "mtime": 1785009621.4256427,
+    "ast_hash": "de5e57a00aaf63c8a636ff2771fae303",
     "semantic_hash": ""
   },
   "packages/contracts/src/drafting.ts": {
@@ -1305,8 +1305,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/llmRedaction.test.ts": {
-    "mtime": 1784997664.5658374,
-    "ast_hash": "aefd4e708f4300a936336946e0bdee36",
+    "mtime": 1785015075.2917185,
+    "ast_hash": "21026361901943cf6cb485bc8325033b",
     "semantic_hash": ""
   },
   ".planning/phases/03-guardrails/03-04-SUMMARY.md": {
@@ -1505,8 +1505,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpit.ts": {
-    "mtime": 1784997664.5345893,
-    "ast_hash": "6b064ed3d1b07a977af02c829835f789",
+    "mtime": 1785010802.0346253,
+    "ast_hash": "49794c9f88206fc171223006633b7ad9",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpit.test.ts": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1785007727.1949768,
-    "ast_hash": "9f4af18628c084d19c6fd08156dcac3c",
+    "mtime": 1785066346.3126593,
+    "ast_hash": "e925d7f3766c442c3a87f89ca3a3c8a4",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1785007788.722955,
-    "ast_hash": "f79024f51abe64e7580d8765fe0d46e2",
+    "mtime": 1785076820.563702,
+    "ast_hash": "d76d009de14fdbd3dc54e3dc5dd9212b",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1784997664.3314593,
-    "ast_hash": "5cfe588965238ce39f171e07b61960cb",
+    "mtime": 1785077786.7529042,
+    "ast_hash": "d66a52262b8c4f4da244904028bd55cd",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -1790,8 +1790,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/runCockpitAgent.test.ts": {
-    "mtime": 1784997664.597088,
-    "ast_hash": "72273e25b347ab3b05425b2f74d004c0",
+    "mtime": 1785009525.2833254,
+    "ast_hash": "5ba3cd1869d7338813e57509dcbd3574",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/cockpitAgent.ts": {
@@ -2295,8 +2295,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/agent-runtime.md": {
-    "mtime": 1784997664.307807,
-    "ast_hash": "2b09ed7c8ab9b7dd9c11c10963b95040",
+    "mtime": 1785017584.7943668,
+    "ast_hash": "8766cca8e498c11c119ae5f10771449a",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx": {
@@ -2660,83 +2660,83 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/01-happy-single.json": {
-    "mtime": 1784997664.6443937,
+    "mtime": 1785017241.0153315,
     "ast_hash": "201f7ce13ed31e8ce82ed0a534ff08c9",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/02-happy-multi-individual.json": {
-    "mtime": 1784997664.6443937,
+    "mtime": 1785017241.0153315,
     "ast_hash": "f30cbfc59196050cccbc7ab871434a18",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/03-happy-group.json": {
-    "mtime": 1784997664.6443937,
+    "mtime": 1785017241.0153315,
     "ast_hash": "07fbc37652288562aca2cad05eacef2e",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/04-edit-remove-recipient.json": {
-    "mtime": 1784997664.6443937,
+    "mtime": 1785017241.0153315,
     "ast_hash": "1ad59fe8667d5617992908d5b15bbbb9",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/05-edit-make-formal.json": {
-    "mtime": 1784997664.6443937,
+    "mtime": 1785017241.0153315,
     "ast_hash": "c6a7dfdaae048c08a5a42d7afbf388f8",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/06-edit-change-subject.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "529d0d4d6459ce6d248a1336306026c4",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/07-bounce-invalid-address.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "d44c6a9e1737263cf97699cd0086f838",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/08-bounce-then-correct.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "724256a1615a49cb057109fa3fdc706a",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/09-resolve-degradation.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017232.239716,
     "ast_hash": "c708fe5282e6b5b16a2cca53a81e22b0",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/10-attach-document.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "50eecf5c6b5bf05e9e5335d401a6eb4c",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/11-attach-regenerate.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "f849cce36036783b6cd206b5f596735f",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/12-attach-remove.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "71ea56208f36c6aeae667a09b96cc36a",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/13-injection-probe.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0153315,
     "ast_hash": "6683ef2e17e10da7577f4cb85eb39476",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/14-injection-embedded.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "e577debbee8f1da0cb4f2bfe17f96369",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/15-no-send-time-default.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "e9fdfdb088fc6b2541e2b295695243e3",
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-eval-golden.mjs": {
-    "mtime": 1784997664.6912704,
-    "ast_hash": "b5545003915a5d896ca705b10cd60e26",
+    "mtime": 1785017217.1180413,
+    "ast_hash": "40aa48ee5cf6e7ebce2121ac718501b3",
     "semantic_hash": ""
   },
   ".planning/phases/03.6-agent-eval-gate/03.6-04-SUMMARY.md": {
@@ -2850,17 +2850,17 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/16-briefing-happy.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "0c120e69d0d22288f266c511b0abed66",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/17-briefing-injection-probe.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "5e1370407f93cafe3587f72f0cf5d7a2",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/18-briefing-then-action.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "d784b90e5d590d9623590bc0e1254c66",
     "semantic_hash": ""
   },
@@ -3195,7 +3195,7 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/19-stalled-resolution-recovery.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "9d55a59ba5c9a36496c91ba5ccd4a9fc",
     "semantic_hash": ""
   },
@@ -3215,12 +3215,12 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/20-reset-and-honesty.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "86b079577f6ff7a73c8bfd0e90b2c9a6",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/21-fragment-answer-absorbed.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "1445c2e27b672bc66c62c79a37910909",
     "semantic_hash": ""
   },
@@ -3300,12 +3300,12 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/23-reply-happy.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "c56725dfdc33d4e293c64d400bd84ef7",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/24-reply-injection.json": {
-    "mtime": 1784997664.6756623,
+    "mtime": 1785017241.0309618,
     "ast_hash": "766259bdb1a02edc37760f5fd4d8cddd",
     "semantic_hash": ""
   },
@@ -4025,12 +4025,12 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/25-vault-grounded.json": {
-    "mtime": 1784997664.6912704,
+    "mtime": 1785017241.0309618,
     "ast_hash": "e4749bb4950036645de815625cad2e8e",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/26-vault-empty.json": {
-    "mtime": 1784997664.6912704,
+    "mtime": 1785017232.239716,
     "ast_hash": "1502474d9d791c4d2cdc3bb5d7a10756",
     "semantic_hash": ""
   },
@@ -4085,28 +4085,28 @@
     "semantic_hash": ""
   },
   "docs/playbooks/onboarding.md": {
-    "mtime": 1784997664.3158202,
-    "ast_hash": "479f8278c884a482ed06d7502ac1e42a",
+    "mtime": 1785080235.6621346,
+    "ast_hash": "95bb0526b15e6d77ab88978537565e0b",
     "semantic_hash": ""
   },
   "packages/core/src/businessProfile.test.ts": {
-    "mtime": 1784997664.7537723,
-    "ast_hash": "1d11f0ef910c00e0c7cfc7e5fd02070e",
+    "mtime": 1785080032.2664647,
+    "ast_hash": "b844adc3caed2cef0312bb4df7e4943f",
     "semantic_hash": ""
   },
   "packages/core/src/businessProfile.ts": {
-    "mtime": 1784997664.7693913,
-    "ast_hash": "51898023b567f25bdc8c5e27260991ba",
+    "mtime": 1785069879.7193284,
+    "ast_hash": "fc4f9e13cbc47fc15c990b492b212d0b",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/businessProfile.ts": {
-    "mtime": 1784997664.7381449,
-    "ast_hash": "66f0102881a2901b3aff742f673467e6",
+    "mtime": 1785070014.6665235,
+    "ast_hash": "fe5b8b51b199ead042fff70c8367922a",
     "semantic_hash": ""
   },
   "packages/contracts/skills/business-profile.md": {
-    "mtime": 1784997664.7068987,
-    "ast_hash": "9a8b31d823c8482763933aa059458e1c",
+    "mtime": 1785069933.6008613,
+    "ast_hash": "286b12e0f16fb7e1f838d1e216e49a40",
     "semantic_hash": ""
   },
   ".planning/phases/11-persona-onboarding-business-profile/11-01-SUMMARY.md": {
@@ -4115,18 +4115,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/onboarding.test.ts": {
-    "mtime": 1784997664.5814612,
-    "ast_hash": "43a401e4352602327be2bf2d0e743d6b",
+    "mtime": 1785078428.5287414,
+    "ast_hash": "12c6d677d2a012e87b6c1a2325bfe68c",
     "semantic_hash": ""
   },
   "packages/backend/convex/onboarding.ts": {
-    "mtime": 1784997664.5814612,
-    "ast_hash": "d88c07e3da7358b67b11898471b03af3",
+    "mtime": 1785078419.0123837,
+    "ast_hash": "3a4effee596be8ce5f7381d4b8ec83b3",
     "semantic_hash": ""
   },
   "packages/backend/convex/profileRedaction.test.ts": {
-    "mtime": 1784997664.597088,
-    "ast_hash": "b98e121c92eb000fb6f102dea7ef2474",
+    "mtime": 1785070778.584801,
+    "ast_hash": "da526faa2f7652fad9fd471a8291ee83",
     "semantic_hash": ""
   },
   ".planning/phases/11-persona-onboarding-business-profile/11-02-SUMMARY.md": {
@@ -4135,8 +4135,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/onboarding/page.tsx": {
-    "mtime": 1784997664.0332146,
-    "ast_hash": "b832c739e23ad8566ee9be3cd74c1a52",
+    "mtime": 1785079615.1618311,
+    "ast_hash": "ac45aa997e5df09331fdec5dbe6082d7",
     "semantic_hash": ""
   },
   ".planning/phases/11-persona-onboarding-business-profile/11-03-SUMMARY.md": {
@@ -4145,8 +4145,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/page.tsx": {
-    "mtime": 1784997664.0488553,
-    "ast_hash": "72e7199fd6fe6150079c96bcbde818c1",
+    "mtime": 1785080083.371766,
+    "ast_hash": "8e94415808fd2e3c9f536184ac3c70a8",
     "semantic_hash": ""
   },
   ".planning/phases/11-persona-onboarding-business-profile/deferred-items.md": {
@@ -4270,53 +4270,53 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/leadEngine.ts": {
-    "mtime": 1784997664.7381449,
-    "ast_hash": "ecd1bdfa2a7ab0761562294711b29dd3",
+    "mtime": 1785016582.416558,
+    "ast_hash": "86a7fd301bec2d1fd6ab617aa9359b8c",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/moneyModelDesigner.ts": {
-    "mtime": 1784997664.7381449,
-    "ast_hash": "b70427227b3bacb9e2d0a007d0064774",
+    "mtime": 1785016582.416558,
+    "ast_hash": "8b4f1c93dac1000d8bdcc189270684d8",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/offerArchitect.ts": {
-    "mtime": 1784997664.7537723,
-    "ast_hash": "d7276b90062ad1a60c9f670b3b20d5eb",
+    "mtime": 1785016582.416558,
+    "ast_hash": "f3c4270a52678b7ac55fe255e0bfe1c6",
     "semantic_hash": ""
   },
   "packages/core/src/growth/diagnose.test.ts": {
-    "mtime": 1784997664.806692,
-    "ast_hash": "b216ab2d69eab334a5932e4fcfb5c80a",
+    "mtime": 1785009315.7215571,
+    "ast_hash": "39fdad29afbf66b451023fa3cfe01b43",
     "semantic_hash": ""
   },
   "packages/contracts/skills/lead-engine.md": {
-    "mtime": 1784997664.7068987,
-    "ast_hash": "e18abf0b37a5939a4ba8ace24194391a",
+    "mtime": 1785016568.3231916,
+    "ast_hash": "dd020300ed963c1deccb9710f9c0776e",
     "semantic_hash": ""
   },
   "packages/contracts/skills/money-model-designer.md": {
-    "mtime": 1784997664.7225232,
-    "ast_hash": "86576569d64c6e207a967e797185046b",
+    "mtime": 1785016551.5249836,
+    "ast_hash": "2f08d37bba755093ff27a5dee6a774a1",
     "semantic_hash": ""
   },
   "packages/contracts/skills/offer-architect.md": {
-    "mtime": 1784997664.7225232,
-    "ast_hash": "5d01d78f9f4d897c9618e76e1eece68d",
+    "mtime": 1785016532.8252058,
+    "ast_hash": "fd058c6af2a52e23b7ac70e2f6b819a8",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/skillBodies.test.ts": {
-    "mtime": 1784997664.7537723,
-    "ast_hash": "6f80aa7de188e58a8a8866a864ab9d00",
+    "mtime": 1785077749.9425366,
+    "ast_hash": "11cf8d0e28e9f220614057a0184844b2",
     "semantic_hash": ""
   },
   "packages/core/src/growth/diagnose.ts": {
-    "mtime": 1784997664.806692,
-    "ast_hash": "ad1a17b0653fce2e8f8756445de36975",
+    "mtime": 1785009214.306569,
+    "ast_hash": "4e4c8ac3e024756fce43d5db85f3dd39",
     "semantic_hash": ""
   },
   "docs/playbooks/growth-diagnostic.md": {
-    "mtime": 1785007815.7823348,
-    "ast_hash": "2a50b31d92e0f2c147dc05efe0101f68",
+    "mtime": 1785076353.6744015,
+    "ast_hash": "6899dc87da5156c63609ca0cfde02fb5",
     "semantic_hash": ""
   },
   ".planning/phases/12-business-evaluation-engine/12-01-SUMMARY.md": {
@@ -4335,18 +4335,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/evaluations.test.ts": {
-    "mtime": 1784997664.5345893,
-    "ast_hash": "4d9d1b2f01b924781dbf058b815dbd1e",
+    "mtime": 1785071946.8653111,
+    "ast_hash": "29f28a14e20d0321a9007d7d9b528a1d",
     "semantic_hash": ""
   },
   "packages/backend/convex/evaluations.ts": {
-    "mtime": 1784997664.5502098,
-    "ast_hash": "de392e24d2b8ca0765534141ce7a20b7",
+    "mtime": 1785075116.5158403,
+    "ast_hash": "803cdcfcbd86a2761f6c88fc6f9c5a21",
     "semantic_hash": ""
   },
   "docs/playbooks/business-evaluation.md": {
-    "mtime": 1784997664.3158202,
-    "ast_hash": "a0766687f68cad944a4550252dd73085",
+    "mtime": 1785075200.5803907,
+    "ast_hash": "3f3ee8d50b678a2cdd496a752b1da61f",
     "semantic_hash": ""
   },
   ".planning/phases/12-business-evaluation-engine/12-03-SUMMARY.md": {
@@ -4360,8 +4360,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/gapAction.test.ts": {
-    "mtime": 1784997664.5502098,
-    "ast_hash": "0118ec7f50f5156c77dd0ead3cbca4c2",
+    "mtime": 1785014623.5386035,
+    "ast_hash": "2313523c81a92005de104769c6b9afdb",
     "semantic_hash": ""
   },
   ".planning/phases/12-business-evaluation-engine/12-05-SUMMARY.md": {
@@ -4370,12 +4370,12 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/27-grounded-assessment.json": {
-    "mtime": 1784997664.6912704,
+    "mtime": 1785017241.046618,
     "ast_hash": "c47d91c630f74f86639ebc6c4c8a7b3c",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/28-healthy-no-gaps.json": {
-    "mtime": 1784997664.6912704,
+    "mtime": 1785017241.046618,
     "ast_hash": "2a57707c641661df280816ea1bcbec55",
     "semantic_hash": ""
   },
@@ -4515,43 +4515,253 @@
     "semantic_hash": ""
   },
   "packages/core/src/actionType.test.ts": {
-    "mtime": 1785007464.536355,
-    "ast_hash": "bce274620dad564fe3404a7fcfb6d7dc",
+    "mtime": 1785010620.1142564,
+    "ast_hash": "283472bb2b8e69cb15ef1867bc3b775f",
     "semantic_hash": ""
   },
   "packages/core/src/actionType.ts": {
-    "mtime": 1785007494.8488276,
-    "ast_hash": "79a0480b1ef6d3de9b7783c007286e32",
+    "mtime": 1785010902.4171197,
+    "ast_hash": "d92d741fb0a29de2cb9ad4b76c62bb5d",
     "semantic_hash": ""
   },
   "packages/core/src/specialists.test.ts": {
-    "mtime": 1785007460.920105,
-    "ast_hash": "13be5164a43b876f5149b8d58fc5a090",
+    "mtime": 1785076383.5773733,
+    "ast_hash": "f72743f6c657cb595f69164cc7192c91",
     "semantic_hash": ""
   },
   "packages/core/src/specialists.ts": {
-    "mtime": 1785007491.3479595,
-    "ast_hash": "3bfbe8c308b4e30aeb163b2ada043278",
+    "mtime": 1785076383.5617833,
+    "ast_hash": "383b5ef25de1b9dd9bd963cca05d44a3",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.test.ts": {
-    "mtime": 1785007594.9435518,
-    "ast_hash": "d3c04e1c524c5ccba0e81d9b8d7f7901",
+    "mtime": 1785076590.9048958,
+    "ast_hash": "834c33a6f785e2e98faac7ba835846eb",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.ts": {
-    "mtime": 1785007583.125196,
-    "ast_hash": "b294876ad32e54525f8b7b9f8411b199",
+    "mtime": 1785076774.7694395,
+    "ast_hash": "e02b2f6e661154d6b6e57143acac92e7",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatchGuard.test.ts": {
-    "mtime": 1785007688.4612029,
-    "ast_hash": "3036c9d4f5a4cb657a52eb8a4edc89d8",
+    "mtime": 1785010984.6978302,
+    "ast_hash": "ae2c71fb5cbca9d7e817092e680447a6",
     "semantic_hash": ""
   },
   ".planning/phases/15-sub-agent-dispatch-action-executor/deferred-items.md": {
-    "mtime": 1785008194.868122,
-    "ast_hash": "1a3c0c9bf629a477ac149caa788aaac2",
+    "mtime": 1785017647.6889606,
+    "ast_hash": "ac60aa8eebd6d96a3ec942a324ee534d",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-01-SUMMARY.md": {
+    "mtime": 1785008366.8737302,
+    "ast_hash": "fa0043be82207f81f36bc5fba7023d6d",
+    "semantic_hash": ""
+  },
+  "docs/decisions/007-sub-agent-capability-is-code-owned.md": {
+    "mtime": 1785009745.1839588,
+    "ast_hash": "4433b1c0782a9a6ea48907c5cdae44c0",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-02-SUMMARY.md": {
+    "mtime": 1785010089.5695314,
+    "ast_hash": "be8f95b6977e14120c46f9ea798444ff",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-05-SUMMARY.md": {
+    "mtime": 1785011367.1568139,
+    "ast_hash": "c4412cc9da4107e92ee522ff0802d20d",
+    "semantic_hash": ""
+  },
+  "docs/decisions/008-dispatch-state-travels-as-call-args.md": {
+    "mtime": 1785013241.2311244,
+    "ast_hash": "559e8f7871f2b5cbf65c6dc5eca278ea",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-03-SUMMARY.md": {
+    "mtime": 1785013783.774876,
+    "ast_hash": "50c4b87416988efeaf68a4e9744bb66c",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-04-SUMMARY.md": {
+    "mtime": 1785016066.1250863,
+    "ast_hash": "3f879abe41b265373111288fde956b4a",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/eval-cases/29-gap-dispatch-offer-architect.json": {
+    "mtime": 1785017087.384748,
+    "ast_hash": "e9052464dbc94f8ea71ebde914598b8a",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/eval-cases/30-gap-dispatch-money-model.json": {
+    "mtime": 1785017097.0907066,
+    "ast_hash": "68888f0b2478ae90bf9ce8c3f830d06b",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/eval-cases/31-gap-dispatch-lead-engine.json": {
+    "mtime": 1785017106.02853,
+    "ast_hash": "ed4be3b4cc0ad9724bdc9451f968dcb2",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-06-SUMMARY.md": {
+    "mtime": 1785017876.87544,
+    "ast_hash": "b84433d58d61582c4daa1bcce7aa99d1",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15-sub-agent-dispatch-action-executor/15-VERIFICATION.md": {
+    "mtime": 1785018662.6778011,
+    "ast_hash": "388d6a1d2320d64091c436c80a4c9703",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-RESEARCH.md": {
+    "mtime": 1785061409.9234858,
+    "ast_hash": "fae3527cc49d5b42836b587538f7e12c",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-CONTEXT.md": {
+    "mtime": 1785062359.4783673,
+    "ast_hash": "e686f2844222e9b868c4e44d04d79f61",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-VALIDATION.md": {
+    "mtime": 1785064044.2008593,
+    "ast_hash": "c359dd94d3d02ffa3c892fdcd8408d73",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-01-PLAN.md": {
+    "mtime": 1785064890.486506,
+    "ast_hash": "ec8b4cf4c4701b8c19b064c9ee9b4ece",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-02-PLAN.md": {
+    "mtime": 1785063354.3731372,
+    "ast_hash": "e42602071ded5e3ec9861fc9e51db3b8",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-03-PLAN.md": {
+    "mtime": 1785063561.3839056,
+    "ast_hash": "b8f0f2c1ded93d37ee696ff7c22fabb0",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-04-PLAN.md": {
+    "mtime": 1785063626.6585157,
+    "ast_hash": "9104092309c0d654d6c70314468c1757",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-05-PLAN.md": {
+    "mtime": 1785064989.5904646,
+    "ast_hash": "7d5de8a2c3fcc283a3c4324906b0af9b",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-06-PLAN.md": {
+    "mtime": 1785063857.2062669,
+    "ast_hash": "ca133618abf38f249cf3f9e64d6354ce",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-07-PLAN.md": {
+    "mtime": 1785063968.601001,
+    "ast_hash": "53cb8e1d923f6f4dcae4e02a88d4dcf8",
+    "semantic_hash": ""
+  },
+  "docs/decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md": {
+    "mtime": 1785076832.9390545,
+    "ast_hash": "3a6387768403970665bea0913e145b65",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-01-SUMMARY.md": {
+    "mtime": 1785067381.859158,
+    "ast_hash": "f2c2ce997c7c99ffcb0fd02269fcf952",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md": {
+    "mtime": 1785080127.7109084,
+    "ast_hash": "78750a04633b87a108310f480855d32f",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/tenantProfile.test.ts": {
+    "mtime": 1785069026.1306612,
+    "ast_hash": "1156c95319f34cd09422b40c5ded641f",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/tenantProfile.ts": {
+    "mtime": 1785069057.4933226,
+    "ast_hash": "9dd2118517655695655cd2eb89badff1",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-02-SUMMARY.md": {
+    "mtime": 1785069531.3759294,
+    "ast_hash": "6a1fc090639cf3cbae10a52c6df80474",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-03-SUMMARY.md": {
+    "mtime": 1785071643.7960677,
+    "ast_hash": "ebe5e57d36307af50483e3ee55b4eae6",
+    "semantic_hash": ""
+  },
+  "packages/contracts/skills/style-coaching.md": {
+    "mtime": 1785075948.8008757,
+    "ast_hash": "ceb63ee670cb52219df364f6cb9b1834",
+    "semantic_hash": ""
+  },
+  "packages/contracts/skills/style-concise.md": {
+    "mtime": 1785071998.2622943,
+    "ast_hash": "40596225d773417b265911e7c97ad1a6",
+    "semantic_hash": ""
+  },
+  "packages/contracts/skills/style-direct.md": {
+    "mtime": 1785071990.4802184,
+    "ast_hash": "5628a2a3022c4435bfa4c5c70e0153ed",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-04-SUMMARY.md": {
+    "mtime": 1785075611.1005342,
+    "ast_hash": "2a711c2eb2d12ddc9ba82054d2975d1e",
+    "semantic_hash": ""
+  },
+  "packages/contracts/src/skills/styleCoaching.ts": {
+    "mtime": 1785075846.3227167,
+    "ast_hash": "4506f8942eeb87014366ada0d035c1c9",
+    "semantic_hash": ""
+  },
+  "packages/contracts/src/skills/styleConcise.ts": {
+    "mtime": 1785075855.0473013,
+    "ast_hash": "0c535d7a6ef043f429d229dc774cfc42",
+    "semantic_hash": ""
+  },
+  "packages/contracts/src/skills/styleDirect.ts": {
+    "mtime": 1785075855.0473013,
+    "ast_hash": "c6b54f2021f45acc7dd0d51e6f1dbb09",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-05-SUMMARY.md": {
+    "mtime": 1785077319.7373722,
+    "ast_hash": "b8c1e5b474e8c586e4aa7bb943b11f5f",
+    "semantic_hash": ""
+  },
+  "packages/contracts/src/skills/onboardingAgent.ts": {
+    "mtime": 1785077686.6416879,
+    "ast_hash": "be7825f130d2edb12f33eb0a0565c161",
+    "semantic_hash": ""
+  },
+  "packages/contracts/skills/onboarding-agent.md": {
+    "mtime": 1785077816.603936,
+    "ast_hash": "15c02bebdc39cfe83133b47057c4ffad",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-06-SUMMARY.md": {
+    "mtime": 1785078898.3219905,
+    "ast_hash": "cf67f456c4cd71f56a4e492e193d07c6",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-07-SUMMARY.md": {
+    "mtime": 1785080618.900917,
+    "ast_hash": "450a8deef6497f116a6a897f44dbbfd0",
+    "semantic_hash": ""
+  },
+  ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/15.1-VERIFICATION.md": {
+    "mtime": 1785081134.3337522,
+    "ast_hash": "7b7afc7d9d1aadcaf0ba551ba6b851a7",
     "semantic_hash": ""
   }
 }
