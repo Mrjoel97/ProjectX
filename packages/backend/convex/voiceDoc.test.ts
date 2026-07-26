@@ -717,3 +717,57 @@ describe("document-review evaluations row", () => {
     expect(row?.findings[0]).not.toHaveProperty("citationExcerpt");
   });
 });
+
+// ── 14-07: docContext — the tiny read behind the in-call doc strip ────────────────────────────
+//
+// The strip needs three facts to name the report under discussion. It deliberately does NOT reuse
+// `listVaultDocs`, which `.collect()`s whole rows INCLUDING `text` — the voice page has no business
+// holding a book-sized blob to render a title. These tests pin the projection, so a future "just
+// return the row" simplification fails loudly instead of quietly shipping document text to a page.
+describe("voiceDoc.docContext (14-07 — the doc strip's read)", () => {
+  test("returns title, status and truncated for the caller's own document", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT, "Q3 Performance Report");
+
+    const ctx = await asTenant(t, TENANT).query(api.voiceDoc.docContext, { docId });
+
+    expect(ctx).not.toBeNull();
+    expect(ctx?.title).toBe("Q3 Performance Report");
+    expect(ctx?.status).toBe("ready");
+    expect(ctx?.truncated).toBe(false); // absent `extractionTruncated` reads as false, never undefined
+  });
+
+  test("reports a partial read when extraction was truncated", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    await t.run(async (dbCtx) => {
+      await dbCtx.db.patch(docId, { extractionTruncated: true });
+    });
+
+    const ctx = await asTenant(t, TENANT).query(api.voiceDoc.docContext, { docId });
+
+    expect(ctx?.truncated).toBe(true);
+  });
+
+  test("is fail-closed cross-tenant — null, and never the other tenant's title", async () => {
+    const t = newTest();
+    const bDoc = await seedReadyDoc(t, TENANT_B, OTHER_TEXT, "Tenant B logistics review");
+
+    const ctx = await asTenant(t, TENANT).query(api.voiceDoc.docContext, { docId: bDoc });
+
+    // Null, not a throw: a throw distinguishes "exists but yours it isn't" from "does not exist",
+    // which is an ownership oracle. One answer for both (BETA-05).
+    expect(ctx).toBeNull();
+    expect(JSON.stringify(ctx)).not.toContain("logistics");
+  });
+
+  test("carries NO text key — the strip cannot leak document content into the page", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+
+    const ctx = await asTenant(t, TENANT).query(api.voiceDoc.docContext, { docId });
+
+    expect(ctx).not.toHaveProperty("text");
+    expect(Object.keys(ctx ?? {}).sort()).toEqual(["status", "title", "truncated"]);
+  });
+});

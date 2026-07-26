@@ -41,7 +41,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-import { tenantAction } from "./lib/functions";
+import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
 /**
@@ -550,5 +550,35 @@ export const reviewSession = tenantAction({
     // The thread id travels back so the caller points `CardList` at it without re-deriving the
     // `voice-doc:<sessionId>` convention (a second derivation is a second thing that can drift).
     return { threadId, ...result };
+  },
+});
+
+/**
+ * The three facts the in-call doc strip needs to name the report under discussion (14-07).
+ *
+ * Fail-closed cross-tenant by returning `null` rather than throwing: a throw would distinguish
+ * "this document exists but is not yours" from "no such document", which is an ownership oracle.
+ * One answer covers both (BETA-05) — the same reason `searchDocument` returns an empty result
+ * instead of an error.
+ *
+ * ponytail: a PROJECTION, deliberately not a reuse of `vault.listVaultDocs`. That query
+ * `.collect()`s whole rows including `text`, so rendering a title through it would pull a
+ * book-sized blob onto a page that has no business holding document content — and the voice page
+ * is the last place that should (§4: the log plane and the content plane are separate, and this
+ * page already streams the real content to the model over the data channel). Three fields is the
+ * shortest correct read. If the strip ever needs a fourth, add the field here; do NOT widen this to
+ * return the row.
+ */
+export const docContext = tenantQuery({
+  args: { docId: v.id("vaultDocuments") },
+  handler: async (
+    ctx,
+    { docId },
+  ): Promise<{ title: string; status: string; truncated: boolean } | null> => {
+    const row = await ctx.db.get(docId);
+    if (!row || row.tenantId !== ctx.tenantId) return null;
+    // `extractionTruncated` is optional in the schema; normalise to a real boolean so the client
+    // never has to distinguish `false` from `undefined` to decide whether to show the badge.
+    return { title: row.title, status: row.status, truncated: row.extractionTruncated === true };
   },
 });
