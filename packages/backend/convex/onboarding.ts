@@ -10,11 +10,16 @@
 // type (the §96 mitigation) and the extractor uses `jsonSchema` (never zod), so this file stays clear
 // of the cliff while co-locating the query/mutation/action surface.
 //
-// SC#1 (persona is confirmed, never auto-committed): extractProfile RETURNS the structured object to
-// the caller ONLY — it inserts no doc and writes no audit. commitProfile is the SEPARATE, explicit
-// human-confirmed write. §4: no onboarding audit/telemetry/DLQ payload ever carries profile prose or
-// field values — refs/hashes/ids/counts/booleans ONLY. The profile `text` is vault CONTENT (kept on
-// the row + rag chunks), never a log.
+// SC#1 (nothing is auto-committed): extractProfile RETURNS the structured object to the caller ONLY
+// — it inserts no doc and writes no audit. commitProfile is the SEPARATE, explicit human-confirmed
+// write. §4: no onboarding audit/telemetry/DLQ payload ever carries profile prose or field values —
+// refs/hashes/ids/counts/enums ONLY. The profile `text` is vault CONTENT (kept on the row + rag
+// chunks), never a log.
+//
+// Phase 15.1: the TIER is not an input here at any layer — not on `vProfile`, not on `profileSchema`,
+// not on `validateProfile`. Both write paths READ it from `tenantProfiles` and splice it into the
+// serialized markdown (§4.2 — the markdown is a projection, the table is the record), and
+// `commitProfile` is the design §6 completion gate.
 
 import { openai } from "@ai-sdk/openai";
 import type { EntryId } from "@convex-dev/rag";
