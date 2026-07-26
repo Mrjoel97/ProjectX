@@ -117,6 +117,39 @@ cross-tenant isolation assertion for the stored findings.
 The retrieval date must be queryable, so the Phase-12 engine can cite it and later distinguish
 fresh from stale. A date mentioned inside generated markdown is not a freshness stamp.
 
+### D8 — OQ-2 RESOLVED (owner, 2026-07-27): probe before pinning the model (LOCKED)
+
+Ship `packages/backend/scripts/run-probe-websearch.mjs` as a **Wave-0 task**, and **gate writing
+the research model constant on its result.** ONE real call, ≈$0.01, answering three things that
+are otherwise guesses: does the model accept `openai.tools.webSearch`, do `sources` come back with
+real parseable URLs, and what are the actual per-call fee and search-context token volume.
+
+**Why this is worth a deployment round-trip for a cent.** OpenAI's own guide and pricing page
+contradict each other on whether `gpt-4o-mini` supports the non-preview `web_search` tool, and
+`gpt-4.1-nano` (the current `CHEAP_MODEL`) appears in neither. And the failure mode of guessing
+wrong is **silent**: an unpriced model makes `priceUsage` return `Err`, `recordModelSpend` returns
+`0`, and the run draws down **nothing** against the daily rail or the Phase-15 shared envelope.
+A research specialist that appears free is worse than one that errors — the governance rail this
+project is built on would be silently absent for exactly the phase that spends the most.
+
+Research gets its **own model constant and its own `PRICING` row**; do not reuse `DEFAULT_MODEL`
+or `CHEAP_MODEL` and do not assume either is priced for this path.
+
+### D9 — OQ-1 RESOLVED (owner, 2026-07-27): both return paths, and amend the guard (LOCKED)
+
+Support **both** the in-loop return (satisfying SC#1's "returns findings to the executive agent"
+literally) **and** the async memo terminal (satisfying SC#2's vault-stored findings). They answer
+different success criteria and neither alone covers both.
+
+**The non-optional half: amend the `dispatchGuard.test.ts:16-24` comment in the SAME change.**
+That comment argues against exactly the `ctx.runAction` shape the in-loop path needs. The
+objection is answerable — the Phase-15 **shared cost envelope is the substitute rail** the comment
+was protecting, and it did not exist when the comment was written — but an unamended comment
+leaves a documented rule that the code now violates, and the next reader will treat it as
+load-bearing. This is the D3 discipline applied to a second file: **when you relax a documented
+invariant, correct the document in the same commit.** Ship a shared-envelope test alongside,
+proving two research dispatches in ONE executive turn draw down ONE envelope.
+
 ### Claude's Discretion
 
 - The exact vault document `kind` for findings, and whether findings reuse the existing ingest
