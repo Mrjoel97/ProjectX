@@ -27,6 +27,7 @@ import {
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
   OFFER_ARCHITECT_SKILL,
+  ONBOARDING_AGENT_SKILL,
   REPLY_DRAFTER_SKILL,
   STYLE_COACHING_SKILL,
   STYLE_CONCISE_SKILL,
@@ -49,6 +50,7 @@ import { leadEngineSkillBody } from "@pikar/contracts/skills/leadEngine";
 import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
 import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
 import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
+import { onboardingAgentSkillBody } from "@pikar/contracts/skills/onboardingAgent";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
@@ -272,6 +274,12 @@ export const seedSkills = internalMutation({
       { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
       // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
       { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
+      // UNGATED (15.1-06, Q6): the conversational onboarding system prompt (design §6). Same
+      // rationale as `business-profile` above — an onboarding turn a human answers, not tool-state
+      // — and the guarantee that actually matters is CODE: `onboarding.converse` picks the next
+      // question from `missingSlots` and computes `done` from `canComplete`, so no body edit can
+      // make the conversation finish with a required slot empty. `converse` loads it FAIL-CLOSED.
+      { name: ONBOARDING_AGENT_SKILL, body: onboardingAgentSkillBody },
       // GATED (12-02, BEVL-01): the 4 evaluation-framework rubrics the engine loads to assess a
       // business, + the 3 specialist skills an approved gap-action names (execution deferred to
       // Phase 15+). Bootstrap seeds each v1 ACTIVE; a body edit publishes a candidate the eval

@@ -7,6 +7,7 @@ import { leadEngineSkillBody } from "./leadEngine";
 import { leanCanvasSkillBody } from "./leanCanvas";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
+import { onboardingAgentSkillBody } from "./onboardingAgent";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
 import { styleDirectSkillBody } from "./styleDirect";
@@ -33,6 +34,10 @@ const bodies: [string, string][] = [
   ["style-direct", styleDirectSkillBody],
   ["style-coaching", styleCoachingSkillBody],
   ["style-concise", styleConciseSkillBody],
+  // 15.1-06 (design §6): the UNGATED conversational onboarding system prompt. Same mirror — and
+  // the drift row matters most here, because `converse` fails CLOSED on an unseeded row: a stale
+  // derived constant seeds a stale prompt rather than a loud error.
+  ["onboarding-agent", onboardingAgentSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

@@ -85,6 +85,9 @@ export const MONEY_MODEL_DESIGNER_SKILL = "money-model-designer" as const;
 /** Registry name of the lead-engine specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
 export const LEAD_ENGINE_SKILL = "lead-engine" as const;
 
+/** Registry name of the conversational onboarding system prompt (ONBD-01 / 15.1, design §6). */
+export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
+
 /** Registry name of the `direct` behaviour-preset style overlay (15.1 / design §7). */
 export const STYLE_DIRECT_SKILL = "style-direct" as const;
 
@@ -114,6 +117,15 @@ export const STYLE_CONCISE_SKILL = "style-concise" as const;
  * OWN gated body does not already assert. Gating them would add an eval-corpus
  * obligation this phase has no budget for, on top of a Phase-15 gate that is
  * already unpaid.
+ *
+ * ALSO DELIBERATELY ABSENT (15.1, Q6 — same decision): `onboarding-agent`. It
+ * matches `business-profile` even more closely — also an onboarding skill, also
+ * producing something a human confirms rather than autonomous tool-state. And the
+ * property that actually matters about the onboarding turn is CODE, not prose:
+ * `converse` picks the next question from `missingSlots` and computes `done` from
+ * `canComplete`, so no body edit can make the conversation finish early. There is
+ * nothing left for an eval corpus to assert that the code does not already
+ * guarantee.
  */
 export const GATED_SKILLS: readonly string[] = [
   COCKPIT_AGENT_SKILL,
