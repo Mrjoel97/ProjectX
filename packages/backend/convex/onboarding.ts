@@ -22,8 +22,8 @@ import { BUSINESS_PROFILE_SKILL } from "@pikar/contracts/skill";
 import {
   type BusinessProfile,
   deserializeProfile,
-  isPersona,
-  type Persona,
+  missingSlots,
+  type ProfileInput,
   serializeProfile,
   validateProfile,
 } from "@pikar/core";
@@ -34,8 +34,8 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { contentHash } from "./lib/hash";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
@@ -48,12 +48,15 @@ const PROFILE_KIND = "business_profile";
 // vaultLlm.ts resolveModel — the @ai-sdk/openai provider wants the bare name + reads OPENAI_API_KEY).
 const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
-// The Convex arg validator mirroring the pure @pikar/core BusinessProfile. persona is the locked
-// union (enterprise is not emittable — SC#1). validateProfile re-checks at the write boundary.
+// The Convex arg validator mirroring the pure @pikar/core `ProfileInput` — the profile MINUS the
+// tier (Phase 15.1, design §9, defect 1b). There is deliberately NO `persona` field and there never
+// will be: the tier is DERIVED from asked facts (`tenantProfile.saveFacts`) and spliced into the
+// serialized doc by the write paths below. Because a Convex `v.object` rejects an EXTRA key, a
+// caller that sends a tier is refused here — the control is GONE, not hidden (SC#1b, pinned by
+// onboarding.test.ts "refuses a caller-supplied tier"). validateProfile re-checks the rest.
 const vProfile = v.object({
   name: v.string(),
   oneLineDescription: v.string(),
-  persona: v.union(v.literal("solopreneur"), v.literal("startup"), v.literal("sme")),
   stage: v.string(),
   offering: v.string(),
   targetCustomer: v.string(),
@@ -62,15 +65,17 @@ const vProfile = v.object({
 });
 
 // generateObject structured-output schema (jsonSchema, not zod — keeps this V8 adapter zod-free like
-// vaultLlm/documentSchema). STRICT mode: every property is also `required`. persona is enum-locked so
-// the model can never emit `enterprise` (SC#1 backstop; validateProfile is the trust-boundary gate).
-const profileSchema = jsonSchema<BusinessProfile>({
+// vaultLlm/documentSchema). STRICT mode: every property is also `required`.
+//
+// Defect 1a closed at the STRUCTURAL level: there is no `persona` property, so the model has nowhere
+// to put a guess even if a future skill-body edit reintroduced the instruction to make one. A
+// classification is ASKED (design §6) and DERIVED (`deriveTier`), never inferred from prose.
+const profileSchema = jsonSchema<ProfileInput>({
   type: "object",
   additionalProperties: false,
   required: [
     "name",
     "oneLineDescription",
-    "persona",
     "stage",
     "offering",
     "targetCustomer",
@@ -80,7 +85,6 @@ const profileSchema = jsonSchema<BusinessProfile>({
   properties: {
     name: { type: "string" },
     oneLineDescription: { type: "string" },
-    persona: { type: "string", enum: ["solopreneur", "startup", "sme"] },
     stage: { type: "string" },
     offering: { type: "string" },
     targetCustomer: { type: "string" },
@@ -91,17 +95,20 @@ const profileSchema = jsonSchema<BusinessProfile>({
 
 // ── Offline SMOKE seam (Pitfall 4, mirrors vaultLlm smokeGraphFixture) ────────
 // A convex-test / dev smoke drives extraction deterministically and offline (no OPENAI_API_KEY). The
-// sentinel carries no PII. Grammar: `SMOKE::profile::<persona>` (persona optional → solopreneur). The
-// fixture is a fully-populated best-fit profile so the confirm/commit E2E runs with no model call.
+// sentinel carries no PII. Grammar: `SMOKE::profile::<anything>`. The fixture is a fully-populated
+// profile so the review/commit E2E runs with no model call.
+//
+// Phase 15.1: the suffix was `<persona>` and selected the fixture's persona. Extraction emits no
+// classification any more, so the suffix is INERT — it is deliberately still ACCEPTED (the grammar
+// is unchanged) so every existing caller, fixture and dev smoke keeps working untouched; it simply
+// selects nothing. Do not "clean up" by rejecting it: that would be a breaking change to a seam
+// whose whole job is to stay boring.
 const SMOKE_PROFILE_PREFIX = "SMOKE::profile::";
 
-function smokeProfileFixture(intakeText: string): BusinessProfile {
-  const raw = intakeText.slice(SMOKE_PROFILE_PREFIX.length).trim();
-  const persona: Persona = isPersona(raw) ? raw : "solopreneur";
+function smokeProfileFixture(): ProfileInput {
   return {
     name: "Smoke Business",
     oneLineDescription: "A deterministic smoke-fixture business used offline.",
-    persona,
     stage: "early-revenue",
     offering: "A smoke offering.",
     targetCustomer: "Smoke customers.",
@@ -145,14 +152,15 @@ export const getProfile = tenantQuery({
 
 /**
  * ONBD-01 extraction. Loads the UNGATED business-profile skill (§5, fails closed unseeded) and runs
- * `generateObject` over the intake text, returning the Lean-core structured object (incl. a best-fit
- * persona) to the CALLER ONLY. SC#1: it NEVER auto-commits — no doc insert, no audit write — the
- * persona is a candidate a human confirms via commitProfile. A `SMOKE::profile::` sentinel short-
- * circuits to a deterministic fixture (no model call — the offline/test path).
+ * `generateObject` over the intake text, returning the Lean-core structured object to the CALLER
+ * ONLY. SC#1: it NEVER auto-commits — no doc insert, no audit write — the draft is reviewed by a
+ * human before `commitProfile` writes anything. It returns a `ProfileInput`: no tier, no persona,
+ * no classification of any kind (defect 1a). A `SMOKE::profile::` sentinel short-circuits to a
+ * deterministic fixture (no model call — the offline/test path).
  */
 export const extractProfile = tenantAction({
   args: { intakeText: v.string() },
-  handler: async (ctx, { intakeText }): Promise<BusinessProfile> => {
+  handler: async (ctx, { intakeText }): Promise<ProfileInput> => {
     // Load the extraction prompt FIRST (no hardcoded prompt — §5); fails closed unseeded, so the
     // load is exercised even on the offline path.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -160,7 +168,7 @@ export const extractProfile = tenantAction({
       { name: BUSINESS_PROFILE_SKILL },
     );
 
-    if (intakeText.startsWith(SMOKE_PROFILE_PREFIX)) return smokeProfileFixture(intakeText);
+    if (intakeText.startsWith(SMOKE_PROFILE_PREFIX)) return smokeProfileFixture();
 
     const { object } = await generateObject({
       model: resolveModel(DEFAULT_MODEL),
@@ -176,11 +184,12 @@ export const extractProfile = tenantAction({
 
 // ── Commit / edit — the persistBrief clone (SC#2/#3, ONBD-02) ─────────────────
 
-// Count populated Lean-core fields (the 6 required strings + the 2 lists when non-empty). A refs-only
+// Count populated Lean-core fields (the 5 supplied strings + the 2 lists when non-empty). A refs-only
 // audit signal (§4) — a NUMBER, never a field value — so the ops plane can see "a profile landed"
-// without the profile becoming a log.
-function populatedFieldCount(p: BusinessProfile): number {
-  const strings = [p.name, p.oneLineDescription, p.persona, p.stage, p.offering, p.targetCustomer];
+// without the profile becoming a log. Phase 15.1: `persona` left the count because it left the
+// INPUT — counting a field the caller cannot supply would report the same +1 on every write.
+function populatedFieldCount(p: ProfileInput): number {
+  const strings = [p.name, p.oneLineDescription, p.stage, p.offering, p.targetCustomer];
   return (
     strings.filter((s) => s.trim() !== "").length +
     (p.primaryGoals.length > 0 ? 1 : 0) +
@@ -239,6 +248,24 @@ async function writeProfileDoc(
   return vaultDocId;
 }
 
+/**
+ * The tenant's tier row — the RECORD (design §4.2). Both write paths read it here and splice
+ * `row.tier` into the serialized markdown, which is only ever a PROJECTION of it.
+ *
+ * A direct `ctx.db` read, deliberately NOT `ctx.runQuery(internal.tenantProfile.forTenant, …)`: this
+ * runs inside a mutation, so it is the SAME transaction either way and the query hop buys nothing.
+ * `.unique()` mirrors `tenantProfile.byTenant` — one row per tenant is THE invariant of that table,
+ * so a duplicate is LOUD rather than silently shadowed.
+ */
+const currentTierRow = (
+  ctx: QueryCtx | MutationCtx,
+  tenantId: string,
+): Promise<Doc<"tenantProfiles"> | null> =>
+  ctx.db
+    .query("tenantProfiles")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .unique();
+
 // The tenant's current committed profile doc (newest non-failed), or null. The edit target + the
 // re-commit guard.
 async function currentProfileDoc(
@@ -256,11 +283,26 @@ async function currentProfileDoc(
 }
 
 /**
- * ONBD-02 commit. The reviewed, human-confirmed profile becomes a `business_profile` vault doc and is
- * embedded via startIngest — retrievable through searchVault / vaultGroundHydrated (SC#2), tenant-
- * scoped so tenant A's profile never reaches tenant B (SC#3). Emits ONE insert-only audit (§3) whose
- * payload is refs/counts/booleans ONLY — {vaultDocId, fieldCount, personaConfirmed} — never a field
- * value (§4, SC#4). validateProfile is the trust-boundary gate (an invalid profile never persists).
+ * ONBD-02 commit — and the design §6 COMPLETION GATE.
+ *
+ * The reviewed profile becomes a `business_profile` vault doc and is embedded via startIngest —
+ * retrievable through searchVault / vaultGroundHydrated (SC#2), tenant-scoped so tenant A's profile
+ * never reaches tenant B (SC#3).
+ *
+ * **First-time onboarding cannot complete while a required fact slot is empty (SC#3b).** The
+ * guarantee lives HERE, in code, never in a prompt: "always ask about headcount" in a skill body is
+ * a model-temperature guarantee, which is precisely the defect (1a) this phase exists to close. A
+ * free-roaming conversation will sometimes get absorbed in the user's product idea and wrap up warm
+ * and useless. The refusal is also what makes the tier splice below TOTAL — past this line there is
+ * always a row, so the markdown can never project an `undefined` tier.
+ *
+ * `updateProfile` deliberately carries NO such gate — design §10 forbids forced re-onboarding of a
+ * legacy tenant (SC#6c).
+ *
+ * Emits ONE insert-only audit (§3) whose payload is refs/counts/enums ONLY —
+ * `{vaultDocId, fieldCount, tierSource}` — never a field value (§4, SC#4). The old
+ * `personaConfirmed: true` is DELETED rather than corrected: the audit table is append-only, so a
+ * historical row that claimed a confirmation cannot be repaired; the fix is to stop writing it.
  */
 export const commitProfile = tenantMutation({
   args: { profile: vProfile },
@@ -268,14 +310,31 @@ export const commitProfile = tenantMutation({
     const check = validateProfile(profile);
     if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
 
-    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, profile);
+    const row = await currentTierRow(ctx, ctx.tenantId);
+    const missing = missingSlots({
+      ...(row ?? {}),
+      oneLineDescription: profile.oneLineDescription,
+    });
+    // `!row` is redundant at runtime (a missing row leaves all five fact slots missing) and is
+    // there so the splice below type-checks without a non-null assertion. Both halves say the same
+    // thing: there is no completion without facts.
+    if (!row || missing.length > 0) {
+      throw new ConvexError({ code: "INCOMPLETE_ONBOARDING", missing });
+    }
+
+    // §4.2 — the markdown is a PROJECTION, the table is the record.
+    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, { ...profile, persona: row.tier });
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
       correlationId: crypto.randomUUID(),
       eventType: "onboarding.profile_committed",
       actor: "user",
-      payload: { vaultDocId, fieldCount: populatedFieldCount(profile), personaConfirmed: true },
+      payload: {
+        vaultDocId,
+        fieldCount: populatedFieldCount(profile),
+        tierSource: row.tierSource,
+      },
     });
     return { vaultDocId };
   },
@@ -284,8 +343,19 @@ export const commitProfile = tenantMutation({
 /**
  * ONBD-02 edit. Re-embeds the tenant's profile on change so grounding stays current: the prior rag
  * entry is replaced (writeProfileDoc), and searchVault / vaultGroundHydrated return the updated
- * content. Falls back to a fresh commit when no profile exists yet (edit-before-commit is a no-throw
- * first commit). Same refs/counts-only audit (§4, SC#4), tagged `reembed`.
+ * content. Falls back to a fresh commit when no profile doc exists yet (edit-before-commit is a
+ * no-throw first commit).
+ *
+ * **No slot gate here (SC#6c).** A pre-15.1 tenant has a `tierSource: "legacy"` row with no facts at
+ * all, and design §10 forbids forcing them back through onboarding — they must still be able to
+ * correct their own profile. The gate lives on `commitProfile`, which such a tenant never reaches.
+ *
+ * A MISSING tier row is still fatal (`INCOMPLETE_FACTS`): after the plan-02 backfill every tenant
+ * with a committed profile has one, so its absence means something is wrong — and defaulting to
+ * `"solopreneur"` here would be defect 1d in a new costume.
+ *
+ * Same refs/counts/enums-only audit (§4, SC#4), tagged `reembed`. `personaConfirmed` is gone: on an
+ * EDIT it was not merely redundant but FALSE — nothing was confirmed.
  */
 export const updateProfile = tenantMutation({
   args: { profile: vProfile },
@@ -293,8 +363,23 @@ export const updateProfile = tenantMutation({
     const check = validateProfile(profile);
     if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
 
+    const row = await currentTierRow(ctx, ctx.tenantId);
+    if (!row) {
+      // The same `missing` shape `commitProfile` reports, so one UI branch renders both.
+      throw new ConvexError({
+        code: "INCOMPLETE_FACTS",
+        missing: missingSlots({ oneLineDescription: profile.oneLineDescription }),
+      });
+    }
+
     const existing = await currentProfileDoc(ctx, ctx.tenantId);
-    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, profile, existing ?? undefined);
+    // §4.2 — the markdown follows the TABLE, on an edit exactly as on a commit.
+    const vaultDocId = await writeProfileDoc(
+      ctx,
+      ctx.tenantId,
+      { ...profile, persona: row.tier },
+      existing ?? undefined,
+    );
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -304,7 +389,7 @@ export const updateProfile = tenantMutation({
       payload: {
         vaultDocId,
         fieldCount: populatedFieldCount(profile),
-        personaConfirmed: true,
+        tierSource: row.tierSource,
         reembed: existing !== null,
       },
     });

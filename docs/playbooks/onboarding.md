@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 3 (plan 15.1-03): **THE SUBTRACTION.** The tier is no longer an INPUT at any layer. `vProfile` has no `persona` field (a Convex `v.object` rejects an EXTRA key, so a caller that sends a tier is REFUSED — the control is gone, not hidden: SC#1b); `profileSchema` has no `persona` property (the model has nowhere to put a guess — defect 1a, structurally); `validateProfile` takes a `ProfileInput` and its `isPersona` branch is DELETED; and both dashboard pages lost their persona pill block, the profile page rendering the tier READ-ONLY with `TIER_REASON`. `commitProfile` and `updateProfile` now READ `tenantProfiles` and splice `row.tier` into the serialized markdown (§4.2 — the markdown is a projection, the table is the record). `commitProfile` is the design §6 COMPLETION GATE: `INCOMPLETE_ONBOARDING` + a `missing` list while any fact slot is empty; `updateProfile` deliberately has NO slot gate (design §10 — no forced re-onboarding of a legacy tenant) but throws `INCOMPLETE_FACTS` when the tier ROW is absent entirely. Both audit payloads now carry `tierSource` and NO `personaConfirmed` — deleted, never corrected, because the audit is insert-only. Prior: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
@@ -178,26 +178,46 @@ cannot see:
 
 1. **Intake** — user pastes text / uploads a file / speaks a brief in `dashboard/onboarding/`.
 2. **Extract** — the onboarding adapter calls the LLM with `businessProfileSkillBody`; the model emits
-   the Lean-core fields INCLUDING an inferred persona (`solopreneur | startup | sme`).
-3. **Confirm (SC#1)** — `decideConfirm` returns `needsConfirm: true` for EVERY inference; the extracted
-   fields pre-fill a review card the user edits and explicitly confirms. No path auto-commits a persona.
-4. **Serialize + persist** — `serializeProfile` renders deterministic markdown; the commit mutation
-   stores it as a `business_profile` vault doc (persistBrief-style clone) which ingests to `ready`.
-5. **Ground** — thereafter `searchVault` surfaces the profile, making agent turns business-aware.
+   a `ProfileInput` — the Lean-core fields and **no classification of any kind**. `profileSchema` has
+   no `persona` property, so a guess is structurally impossible (defect 1a).
+3. **Confirm (SC#1)** — the extracted fields pre-fill a review card the user edits and explicitly
+   confirms. Nothing is persisted before that confirmation.
+4. **Derive the tier** — the FACTS are asked (`tenantProfile.saveFacts`) and `deriveTier` turns them
+   into the `tenantProfiles` row. This is the only way a tier comes to exist.
+5. **Serialize + persist** — `commitProfile` reads the tier row, refuses with `INCOMPLETE_ONBOARDING`
+   if any required slot is empty (design §6), then splices `row.tier` into the profile and
+   `serializeProfile` renders deterministic markdown; the mutation stores it as a `business_profile`
+   vault doc (persistBrief-style clone) which ingests to `ready`.
+6. **Ground** — thereafter `searchVault` surfaces the profile, making agent turns business-aware.
 
 ## Invariants — what must never break
 
-- **Sparse-start: only `oneLineDescription` + a valid persona are required to commit** — an idea-stage
+- **Sparse-start: only `oneLineDescription` is required of the PROFILE** — an idea-stage
   user (a vague idea, no business yet — ONBD-02 covers "business/idea") has no name/stage/offering/target
   customer, so those are OPTIONAL and enriched later on the profile page. `validateProfile`'s
   `REQUIRED_STRINGS` is exactly `["oneLineDescription"]`; the onboarding page's `requiredFilled` mirror and
   `serializeProfile`'s empty-name heading fallback must stay in lockstep with it. The front door admits an
   idea; it does not demand a finished business. Enforced by `businessProfile.test.ts` (sparse-start +
-  empty-name cases) and `onboarding.test.ts` (empty-description rejected).
-- **Persona is ALWAYS confirmed, never assumed (SC#1)** — `decideConfirm` returns `needsConfirm: true`
-  unconditionally; no branch yields an auto-committed persona. Enforced by `businessProfile.test.ts`.
+  empty-name cases) and `onboarding.test.ts` (empty-description rejected). The FIVE tier fact slots
+  are a separate, non-optional gate — see "the completion gate" below.
+- **No caller can supply a tier (SC#1b)** — `vProfile` has no `persona` field, so an extra key is a
+  hard Convex validation error; `ProfileInput` has none either, so nothing can construct one; and
+  `saveFacts` has no `tier` argument. Three layers, one property: the tier is an OUTPUT. Enforced by
+  `onboarding.test.ts` "SC#1b: updateProfile refuses a caller-supplied tier" (mutation-checked).
+- **Neither page carries a tier control (SC#1c)** — the profile page shows the tier read-only with
+  `TIER_REASON`; the onboarding page has no persona pills. Enforced by the source scan in
+  `businessProfile.test.ts` `describe("no tier control")`, which reads both `page.tsx` files off disk
+  and asserts a stable anchor FIRST so a rename fails loudly instead of passing vacuously.
+- **The completion gate is CODE, never prompt (SC#3b)** — `commitProfile` throws
+  `ConvexError({code: "INCOMPLETE_ONBOARDING", missing})` while any `REQUIRED_SLOTS` member is empty.
+  A skill body saying "always ask about headcount" is a model-temperature guarantee, which is the
+  defect this phase closes. `updateProfile` deliberately has NO slot gate (design §10, SC#6c) — a
+  legacy tenant must still be able to edit — but throws `INCOMPLETE_FACTS` if the tier ROW is missing
+  entirely, because a `"solopreneur"` fallback there would be defect 1d in a new costume.
 - **Enterprise is not an emittable persona** — the `Persona` union is exactly `solopreneur | startup | sme`;
-  the validator rejects `"enterprise"`. Enforced by `businessProfile.test.ts`.
+  `isPersona` and `decideConfirm` still reject `"enterprise"`. `BusinessProfile.persona` is widened to
+  `Tier` for the PROJECTION only (the table can hold a granted `enterprise`); widening the projection
+  does not widen derivation. Enforced by `businessProfile.test.ts`.
 - **Enterprise is never DERIVED (D6)** — `deriveTier`'s return type is `DerivedTier` (= `Persona`), so
   `enterprise` is structurally unreachable from the facts. Widening it breaks the `@ts-expect-error`
   bind in `businessProfile.test.ts` and the BUILD fails. `enterprise` is representable on the table
@@ -212,8 +232,14 @@ cannot see:
 - **§4 redaction boundary (SC#4)** — `audit` / `telemetry` / `deadLetters` payloads written during
   onboarding carry refs / hashes / ids / counts / booleans ONLY — never a profile field value or intake
   prose. The profile `text` is CONTENT (it lives on the vaultDocuments row + rag chunks), never a log.
-  `commitProfile` / `updateProfile` emit exactly one audit event each — payload `{vaultDocId, fieldCount,
-  personaConfirmed[, reembed]}`. Enforced by `profileRedaction.test.ts` (sentinel-in-every-field scan).
+  `commitProfile` / `updateProfile` emit exactly one audit event each — payload keys EXACTLY
+  `{fieldCount, tierSource, vaultDocId}` and `{fieldCount, reembed, tierSource, vaultDocId}`
+  respectively. `personaConfirmed: true` is GONE, not corrected: on an edit it was outright FALSE
+  (nothing was confirmed), and the audit table is insert-only (CLAUDE.md §3) so historical rows
+  cannot be repaired — the fix is to stop writing the field. SC#4b extends the scan to the tier
+  FACTS: no `agentName`, `revenueStage`, `funding` or numeric fact reaches a payload. Enforced by
+  `profileRedaction.test.ts` (sentinel-in-every-field scan + a numeric-leaf comparison over
+  `audit.payload`/`deadLetters.payload`) and by the exact key-set assertions in `onboarding.test.ts`.
 - **The extraction skill is UNGATED and SEPARATE from the gated cockpit-agent** — editing
   `business-profile.md` never touches the cockpit-agent body, and it activates v1 without an eval gate
   (its output is a vault document a human confirms, not autonomous tool-state — same rationale as
@@ -230,8 +256,10 @@ cannot see:
 - **Change the extraction prompt** — it is a NON-gated skill: edit the canonical
   `contracts/skills/business-profile.md`, regenerate the derived `businessProfileSkillBody` constant
   byte-identically, re-seed. `seedSkills` publishes-and-activates automatically. See `skill-registry.md`.
-- **Touch the commit/adapter path** — keep redaction BEFORE the write (SC#4) and keep `decideConfirm`
-  as the only persona-commit gate (SC#1). Re-run `profileRedaction.test.ts` + `onboarding.test.ts`.
+- **Touch the commit/adapter path** — keep redaction BEFORE the write (SC#4); keep the tier SPLICE
+  (`{...profile, persona: row.tier}`) on BOTH write paths, or the markdown silently emits
+  `- **Persona:** undefined`; and never add a tier argument to `vProfile`. Re-run
+  `profileRedaction.test.ts` + `onboarding.test.ts`.
 
 ## How to verify
 

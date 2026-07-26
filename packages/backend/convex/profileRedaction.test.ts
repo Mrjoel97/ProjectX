@@ -11,20 +11,26 @@ import type { ProfileInput } from "@pikar/core";
 import { serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
-import schema from "./schema";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { api } from "./_generated/api";
+import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_redaction";
 
@@ -100,7 +106,9 @@ async function logPlaneJson(t: TestConvex<typeof schema>): Promise<string> {
 }
 
 /**
- * Every numeric leaf of every PAYLOAD on the three log tables.
+ * Every numeric leaf of every `audit.payload` / `deadLetters.payload` — the two objects CLAUDE.md §4
+ * governs by name. (`telemetry` has no `payload` column at all; its structured fields are covered by
+ * the string sweep above, and it is structurally incapable of carrying a fact.)
  *
  * Payloads, not whole rows (the 15.1-02 refinement): a row carries `ts` / `_creationTime` — 13-digit
  * epoch millis — so a substring scan for a 2-3 digit needle fails a large fraction of runs for
@@ -111,9 +119,8 @@ async function logPlaneJson(t: TestConvex<typeof schema>): Promise<string> {
 async function payloadNumbers(t: TestConvex<typeof schema>): Promise<number[]> {
   const payloads = await t.run(async (ctx) => {
     const audit = await ctx.db.query("audit").collect();
-    const telemetry = await ctx.db.query("telemetry").collect();
     const deadLetters = await ctx.db.query("deadLetters").collect();
-    return [...audit, ...telemetry, ...deadLetters].map((r) => r.payload as unknown);
+    return [...audit, ...deadLetters].map((r) => r.payload as unknown);
   });
   const out: number[] = [];
   const walk = (v: unknown): void => {
@@ -153,7 +160,9 @@ test("no onboarding audit/telemetry/DLQ row carries profile prose or a field val
 
   // SC#4b: no NUMERIC tier fact reached a log payload either.
   const numbers = await payloadNumbers(t);
-  expect(numbers.length, "scanning an empty set of payloads would pass vacuously").toBeGreaterThan(0);
+  expect(numbers.length, "scanning an empty set of payloads would pass vacuously").toBeGreaterThan(
+    0,
+  );
   for (const fact of FACT_NUMBERS) {
     expect(numbers, `tier fact ${fact} leaked into a log payload`).not.toContain(fact);
   }

@@ -20,24 +20,30 @@ import type { ProfileInput } from "@pikar/core";
 import { serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
-import schema from "./schema";
 // The components the commit → startIngest spine touches offline (voice.test.ts set): auditCounts
 // (audit.log aggregate) + workflow/workpool (startIngest → ingestDoc). Relative specifiers because
 // the packages block the deep component path.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_onb";
 const FAKE_KEY = "sk-onboarding-test-key";
@@ -438,7 +444,13 @@ test("SC#3b: commitProfile cannot complete with an empty slot — the gate is CO
     asTenant(t, "tenant_noslots").mutation(api.onboarding.commitProfile, { profile: PROFILE }),
   );
   expect(none.code).toBe("INCOMPLETE_ONBOARDING");
-  expect(none.missing).toEqual(["headcount", "paidStaff", "revenueStage", "funding", "yearsOperating"]);
+  expect(none.missing).toEqual([
+    "headcount",
+    "paidStaff",
+    "revenueStage",
+    "funding",
+    "yearsOperating",
+  ]);
 
   // (b) A row with exactly ONE slot unanswered. `paidStaff` is the determining question (design
   //     §1a) and `0` is a legitimate ANSWER, so "missing" here means ABSENT, never falsy.
