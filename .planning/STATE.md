@@ -880,6 +880,10 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 15.2 inserted after Phase 15: Vault Universal Format Recognition & Extraction Fan-Out (URGENT, 2026-07-27). Origin: owner-reported "the vault has been reading this document for 10+ minutes". Diagnosed live off the deployment — a `.xlsm` sat at `pending_extraction` ~20h with 0 chars and NO `failureReason`, because `extractionKindFor` returns `null` for any MIME outside a three-entry allow-list and `null` schedules no extraction action. Two further defects confirmed off the same table: scanned PDFs extract a SUMMARY (2161 chars for a 12-slide deck — all pages ride one call), and a `ready` row still carries a stale `failureReason` from before its successful retry. Ruled out with measurements so it is not re-investigated: `@pikar/pii` `scanText` is NOT a bottleneck (400k chars of prose 8 ms; 112k of tab-joined spreadsheet rows 4 ms). Spec: `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md` (owner-approved, incl. the SheetJS-from-CDN dependency call). Runs as a THIRD concurrent lane alongside the live Phases 16 and 17 — needs a file-ownership contract in `.planning/PARALLELIZATION.md` before implementation starts, since Lane R (16) stores web research in the vault and `vault.ts` is a plausible overlap. Folders / 1.5 GB uploads / the 200 MB cap raise are deliberately Phase 2 of this line — the cap raise is unsafe until the fan-out bounds per-action memory.
+
 ### Decisions
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
