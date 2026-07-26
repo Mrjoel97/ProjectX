@@ -31,8 +31,9 @@ import { FileTextIcon, SearchIcon, XIcon } from "../vault/icons";
 // <DocStrip> documents.
 //
 // BRAND: tokens only, no component library (§10). §6: real <button>s never nested inside another
-// interactive element, a labelled search input, visible focus, and the selected state carries the
-// word "Selected" rather than colour alone.
+// interactive element, a labelled search input, visible focus, and the selected state is structurally
+// distinct (a chip with a clear control, never the toggle button) with explanatory hint text beneath it,
+// so nothing is encoded by colour alone.
 
 type DocIdArg = FunctionArgs<typeof api.voiceDoc.docContext>["docId"];
 
@@ -70,7 +71,7 @@ export function DocPicker({
     return (
       <div style={panelWrap}>
         <div style={chip}>
-          <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--ink-soft)" }}>
+          <span aria-hidden="true" style={leadingIcon}>
             <FileTextIcon size={16} />
           </span>
           <span style={chipTitle} title={selected?.title ?? undefined}>
@@ -144,7 +145,7 @@ export function DocPicker({
                         }}
                         style={rowBtn}
                       >
-                        <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--ink-soft)" }}>
+                        <span aria-hidden="true" style={leadingIcon}>
                           <FileTextIcon size={16} />
                         </span>
                         <span style={rowTitle} title={d.title}>
@@ -293,5 +294,10 @@ const rowTitle: React.CSSProperties = {
 
 const hintText: React.CSSProperties = {
   fontSize: "0.85rem",
+  color: "var(--ink-soft)",
+};
+
+const leadingIcon: React.CSSProperties = {
+  display: "inline-flex",
   color: "var(--ink-soft)",
 };
