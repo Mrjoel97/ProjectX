@@ -2,15 +2,30 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 3
+current_plan: 5
 status: executing
-stopped_at: Completed 15.1-03-PLAN.md (the subtraction — no caller-supplied tier, truthful audit, fail-closed completion gate)
-last_updated: "2026-07-26T13:14:26.694Z"
+stopped_at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
+last_updated: "2026-07-26T14:21:51.060Z"
 progress:
   total_phases: 38
   completed_phases: 22
   total_plans: 163
-  completed_plans: 155
+  completed_plans: 156
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_plan: 4
+status: executing
+stopped_at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
+last_updated: "2026-07-26T14:20:37.488Z"
+progress:
+  total_phases: 38
+  completed_phases: 22
+  total_plans: 163
+  completed_plans: 156
 ---
 
 ---
@@ -36,22 +51,78 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 1/7 plans; Wave 0 frozen)
+**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 4/7 plans; Waves 0-4 done)
 
 ## Current Position
 
-Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **1 of 7 PLANS COMPLETE** (6 waves)
-Current Plan: 3
+Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **4 of 7 PLANS COMPLETE** (6 waves)
+Current Plan: 5
 Total Plans in Phase: 7
-Plan: 15.1-01 COMPLETE (Wave 0 — the shared-seam freeze).
-Done: 15.1-01. Next: 15.1-02.
+Plan: 15.1-04 COMPLETE (Wave 4 — the read-side repoint; defect 1d closed on both sides).
+Done: 15.1-01, 15.1-02, 15.1-03, 15.1-04. Next: 15.1-05.
+
+**15.1-05 WAS HALTED MID-FLIGHT** by a session limit and will be re-run. It left three UNTRACKED
+files behind — `packages/contracts/skills/style-{direct,coaching,concise}.md`. Do not delete or
+stage them; that agent reclaims them. They are also the sole reason
+`node scripts/check-playbooks.mjs check` currently returns `block` (it names `skill-registry.md`
+only) — that block is NOT attributable to 15.1-04, whose two playbooks are both updated and unflagged.
 
 **EXECUTION MODE: Phase 15.1 runs SERIALLY on branch `lane-a/dispatch-core` in
 `.worktrees/lane-a-dispatch`.** No branch creation, no merges, no second session. There is NO live
 `CONVEX_DEPLOYMENT` here: `npx convex dev|codegen`, `pnpm eval:golden` and Playwright all fail.
 Offline gates only — `vitest`, `tsc --noEmit`, `check-playbooks.mjs`.
 
-Status (15.1-01): **The tier stopped being a model-temperature guess, and D6 became a compiler
+Status (15.1-04): **The evaluation engine picks its rubric from the `tenantProfiles` ROW, not from a
+string matched out of markdown — so a `business_profile` doc with a garbage `Persona` line can no
+longer silently reclassify a tenant, and a new tier literal is now a COMPILE error rather than a
+silent fall-through to `lean`.** This is the READ-side twin of 15.1-03's write-side subtraction;
+together they close defect 1d. `PERSONA_FRAMEWORK` became `TIER_FRAMEWORK`, bound
+`as const satisfies Record<Tier, Framework>` with `enterprise → swot` (operator-granted, D6, so an
+SME-shaped rubric is the honest default rather than a fourth rubric nobody wrote), and
+`runEvaluation` reads `internal.tenantProfile.forTenant({ tenantId })` ONCE beside the carry-forward
+read — the `vaultGroundHydrated` explicit-`tenantId` convention, because the action carries no live
+identity. **`personaHint` is DELETED** — it was the LAST authoritative reader of the markdown
+persona, which is exactly what makes design §4.2's claim true that `deserializeProfile`'s
+`"solopreneur"` fallback *"stops being a silent reclassification risk once nothing authoritative
+depends on it"*. The fallback itself is UNTOUCHED and deliberately retained as a display convenience
+(`getProfile` still pre-fills the profile page's edit form from stored markdown and must not throw on
+a garbled line); the `text.includes("- **Persona:**")` block also SURVIVES, with all four `fillVault`
+calls, because those are CONTENT fills (name/niche/avatar/offers) and the block is the profile-doc
+DETECTOR — only the AUTHORITY was removed, and a source comment now says the line "selects no
+behaviour" so a later edit does not re-create 1d. The trailing `?? "lean"` was **dropped, not kept
+for safety**: with an exhaustive `satisfies` bind indexed by a `Tier` narrowed through
+`?? "solopreneur"`, the lookup is total and the `??` would be a branch that can never be taken (the
+Phase-15 `armFor` lesson) — and the mutation-check proves the payoff, because deleting
+`enterprise: "swot"` now fails at BOTH the map (`TS2741`) and the INDEX SITE (`TS7053`); with the
+fallback still present the index would have compiled and silently produced `"lean"`, the same defect
+class one layer up. **Q3 is UNCHANGED and LOCKED**: `financialsPresent` still overrides with
+`growth-os` (financials mean a growth-os diagnosis is actually possible), the tier's perceivable
+effect lands on the specialist prompt / voice (ADR-009, plan 05) and NOT on the rubric, and this is
+now recorded verbatim as a source comment, a pinned test, and an invariant in BOTH playbooks — **a
+verifier must NOT read SC#5 as "the rubric must change" or "the offer set is filtered."** SC#2b is
+proven by driving ONE byte-identical malformed document (`- **Persona:** wizard`, which `isTier`
+rejects, with no financial figures) at TWO different table tiers and demanding TWO different
+frameworks (`sme→swot`, `startup→bmc`) — a single-tier test would pass whenever the old fallback
+happened to agree. Both were CONFIRMED RED first, returning `"lean"` — the defect itself, observed.
+The no-row default (`lean`) and the Q3 override are pinned as separate tests, and the `.replace()`-
+built fixture carries a non-vacuity guard so a serializer format drift fails loudly instead of making
+all four pass for the wrong reason. **Zero deviations** — every interface the plan named at a line
+number was exactly there, and 15.1-02's git-ignored `_generated/api.d.ts` hand-edit was still in
+place so `internal.tenantProfile.forTenant` resolved in types on the first try. Gates: the SC#2b set
+**5/5**, `evaluations` **23/23**, `evaluations`+`proactiveReview`+`gapAction` **36/36**, backend full
+**573/575** (the documented `audit.test.ts` red plus one flake — `gapAction.test.ts`, 5/5 in
+isolation), backend `tsc` at the EXACT **55**-error test-file baseline with ZERO in `evaluations.ts`,
+`apps/web` typecheck exit 0, turbo **8/10** baseline, `grep personaHint` empty, and `git diff` shows
+exactly the 4 owned files — `llm.ts` / `dispatch*` / `onboarding.ts` / `apps/web` /
+`packages/contracts` / `skills.ts` all absent. **NEW CARRY-FORWARD:** `biome check` reports a
+`format` error on `evaluations.ts` / `evaluations.test.ts`, and it is PRE-EXISTING, not this plan's —
+the worktree has `core.autocrlf=true` so git-checked-out files sit on disk as CRLF while biome wants
+LF; byte-untouched `dispatch.ts` fails identically and the pristine HEAD blob passes. Files a prior
+agent REWROTE (`tenantProfile.ts`, `onboarding.ts`) are LF and pass. Do not "fix" it — normalizing
+line endings is a whole-file diff for zero behaviour change, and commits are unaffected (git
+normalizes on write).
+
+PRIOR — Status (15.1-01): **The tier stopped being a model-temperature guess, and D6 became a compiler
 error rather than a review note.** Four shared seams landed in ONE commit-set so plans 02-07 FILL
 them rather than reshape them (the Phase-15 15-01 precedent). (1) THE RULE: `deriveTier` in
 `packages/core/src/businessProfile.ts` — `paidStaff === 0 && headcount <= 2` ⇒ solopreneur; else
@@ -443,6 +514,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.1 P01 | 31 min | 3 tasks | 7 files |
 | Phase 15.1 P02 | 25min | 3 tasks | 3 files |
 | Phase 15.1 P03 | 47min | 3 tasks | 11 files |
+| Phase 15.1 P04 | 55min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -522,6 +594,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.1]: commitProfile is the design 6 completion gate (INCOMPLETE_ONBOARDING + missing[]); updateProfile deliberately has NO slot gate (design 10, no forced re-onboarding) but fails closed on a MISSING tier row with INCOMPLETE_FACTS
 - [Phase 15.1]: personaConfirmed is DELETED from both audit payloads, not corrected — the audit is insert-only so a false historical row cannot be repaired; payload key sets are now exactly {fieldCount,tierSource,vaultDocId} and {fieldCount,reembed,tierSource,vaultDocId}
 - [Phase 15.1]: BusinessProfile.persona widened Persona->Tier for the PROJECTION only (the markdown LABEL stays '- **Persona:**' because evaluations.ts detects the doc by it); ProfileInput = Omit<BusinessProfile,'persona'> is the persona-free WRITE shape
+- [Phase 15.1]: 15.1-04: the framework auto-pick reads tenantProfiles.tier via internal.tenantProfile.forTenant; personaHint deleted — the last authoritative reader of the markdown persona is gone, closing defect 1d on the read side
+- [Phase 15.1]: 15.1-04: TIER_FRAMEWORK is bound 'as const satisfies Record<Tier, Framework>' with NO trailing ?? fallback — a new tier is a compile error at both the map (TS2741) and the index site (TS7053); enterprise maps to swot
+- [Phase 15.1]: 15.1-04: Q3 LOCKED — financialsPresent still overrides the tier with growth-os; the tier's perceivable effect is the specialist prompt (ADR-009), never the rubric. SC#5 must not be read as 'the rubric must change'
+- [Phase 15.1]: 15.1-04: deserializeProfile's 'solopreneur' fallback and the '- **Persona:**' parse block are BOTH deliberately retained — the block is the profile-doc detector and its four fillVault calls are content; only the authority was removed
 
 ### Pending Todos
 
@@ -553,6 +629,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T13:14:13.254Z
-Stopped at: Completed 15.1-03-PLAN.md (the subtraction — no caller-supplied tier, truthful audit, fail-closed completion gate)
+Last session: 2026-07-26T14:20:37.464Z
+Stopped at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
 Resume file: None
