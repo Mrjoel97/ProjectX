@@ -19,7 +19,7 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import type { DispatchResult } from "./dispatch";
+import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
 import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
@@ -782,6 +782,120 @@ describe("landSpecialistResult — every outcome leaves the plan row approvable 
     const plan = await readPlan(t, planId);
     expect(plan?.status, "a cross-tenant landing moved the plan row").toBe("collecting");
     expect(plan?.body).toBe("");
+  });
+});
+
+// ── 15.1-05: the tier rides into the specialist's PROMPT (SC#5a, ADR-009) ─────────────────────
+//
+// ADR-009 is the scope fence: this is PROMPT-SHAPING. The offer SET is unchanged, `diagnose()` is
+// not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter, and `llm.ts` is byte-unchanged.
+// Everything below asserts the STRING a dispatched specialist is handed.
+//
+// Driven through `t.run`, whose ctx DOES expose `runQuery` (probed before writing this), so
+// `buildSpecialistPrompt` runs against the REAL internal queries — `tenantProfile.forTenant` and
+// `skills.getActiveSkill` — rather than a hand-built stub that could drift from them. Deliberately
+// NOT driven through `__runSpecialistWithScript`: the mock model swallows the prompt, so the
+// assertion would be about nothing.
+describe("tier in agent context — the specialist prompt carries it", () => {
+  const STYLE_SENTINEL = "XYZZY-STYLE-OVERLAY-SENTINEL";
+
+  const promptFor = (t: T) =>
+    t.run(async (ctx) =>
+      buildSpecialistPrompt(ctx as never, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        gapIndex: 0,
+        route: "offer-architect",
+      }),
+    );
+
+  /** Seed the tier row AFTER the evaluation exists, so the 15.1-04 rubric pick is untouched and
+   *  this suite characterizes the PROMPT only. `forTenant` reads the raw tenantId it is handed. */
+  const seedTier = (
+    t: T,
+    row: { tier: string; agentName?: string; behaviorPreset?: string },
+  ) =>
+    t.run((ctx) =>
+      ctx.db.insert("tenantProfiles", {
+        tenantId: TENANT,
+        tierSource: "derived",
+        derivedAt: Date.now(),
+        ...row,
+      } as never),
+    );
+
+  /** Overwrite a SEEDED active style row's body with a sentinel, so the assertion does not depend
+   *  on the overlay's prose (a future body edit must not turn this suite red). */
+  const setStyleBody = (t: T, name: string, body: string) =>
+    t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+        .unique();
+      if (row) await ctx.db.patch(row._id, { body });
+    });
+
+  /** Leave a preset with NO active row — the fail-open fixture. */
+  const archiveStyle = (t: T, name: string) =>
+    t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+        .unique();
+      if (row) await ctx.db.patch(row._id, { status: "archived" });
+    });
+
+  test("tier, sanitized agent name and the registry style directive all reach the prompt", async () => {
+    const { t } = await setupDispatched();
+    await seedTier(t, { tier: "solopreneur", agentName: "Ada", behaviorPreset: "direct" });
+    await setStyleBody(t, "style-direct", STYLE_SENTINEL);
+
+    const out = await promptFor(t);
+    expect(out).toContain("solopreneur");
+    expect(out).toContain("Ada");
+    expect(out).toContain(STYLE_SENTINEL);
+    // ADDITIVE, not a replacement: the 15-03 evaluation snapshot is still all there.
+    expect(out).toContain("Framework:");
+    expect(out).toContain("Binding constraint:");
+  });
+
+  // The SC#5a wiring analogue of the core-side distinctness test. Inequality, not "contains sme":
+  // the claim is that two tenants get materially different prompts off the SAME diagnosis.
+  test("two tiers, same evaluation → two DIFFERENT prompts", async () => {
+    const a = await setupDispatched();
+    await seedTier(a.t, { tier: "solopreneur" });
+    const solo = await promptFor(a.t);
+
+    const b = await setupDispatched();
+    await seedTier(b.t, { tier: "sme" });
+    const sme = await promptFor(b.t);
+
+    expect(solo).not.toBe(sme);
+    expect(solo).toContain("solopreneur");
+    expect(sme).toContain("sme");
+  });
+
+  // A style overlay is an ADDITIVE layer on the USER-turn prompt. §5's fail-CLOSED rule guards the
+  // SYSTEM prompt (the specialist body, loaded in runSpecialistTurn) — losing an overlay degrades
+  // voice, not governance, so it must never cost the user their dispatch.
+  test("FAIL-OPEN: an unseeded style row still produces a prompt, just without the directive", async () => {
+    const { t } = await setupDispatched();
+    await seedTier(t, { tier: "sme", behaviorPreset: "coaching" });
+    await archiveStyle(t, "style-coaching");
+
+    const out = await promptFor(t);
+    expect(out).toContain("sme"); // the tier line survives the missing overlay
+    expect(out).toContain("Binding constraint:"); // …and so does the snapshot
+    expect(out).not.toContain(STYLE_SENTINEL);
+  });
+
+  // A missing row must not become a silent classification — the defect class this phase closes.
+  test("no tenantProfiles row at all → a prompt with NO tier claim", async () => {
+    const { t } = await setupDispatched();
+    const out = await promptFor(t);
+    expect(out).not.toContain("Business tier:");
+    expect(out).not.toContain("undefined");
+    expect(out).toContain("Binding constraint:"); // non-vacuity: a real prompt was still built
   });
 });
 

@@ -1,6 +1,7 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
+> Last verified: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
+> Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
 > Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
 > Lane A (dispatch core)" below. `convex/dispatch.ts` is now real: the guard order
 > (resolve → depth → cycle → envelope → run), four CONVERSATIONAL refusals that never DLQ, one
@@ -535,6 +536,37 @@ so a guard cannot be true in tests and absent in production.
   contract; dressing an unexpected exception as one of the four would hide a real bug from the only
   place it surfaces in production — the scheduled function's own failure state. (The §5 skill loader
   fails closed by throwing, so this path is reachable, not theoretical.)
+
+### Phase 15.1 — the tier in the specialist prompt (15.1-05, ADR-009)
+
+`buildSpecialistPrompt` (`convex/dispatch.ts`) is the ONE place the tenant's tier reaches a model.
+It is exported solely so `dispatch.test.ts` can assert what it builds; production still calls it
+from exactly one place (`governedDispatch`).
+
+- **What the prompt now carries**, prepended above the existing evaluation snapshot and `TASK_LINE`:
+  the sanitized agent name, a `Business tier: <tier> — <structural consequence>` FACT line, and the
+  behaviour-preset style directive body. Every line is omitted when its input is absent, and when
+  nothing is known the briefing is `""` and the prompt is exactly what it was before. The change is
+  **additive** — `Framework:` / `Binding constraint:` / `Grounded findings:` are untouched, asserted.
+- **Both return paths carry it**, including the `if (!evaluation)` early return: a tenant with no
+  evaluation snapshot still has a tier.
+- **The style-directive read FAILS OPEN** (`try`/`catch`, directive left `undefined`). §5's
+  fail-CLOSED rule guards the SYSTEM prompt — the specialist's own body, loaded in
+  `runSpecialistTurn`, which still throws `NO_ACTIVE_SKILL`. This is an ADDITIVE overlay on the
+  user-turn prompt: losing it degrades VOICE, not governance, and an unseeded style row must never
+  cost a tenant their dispatch. Mutation-checked: making the `catch` rethrow turns exactly the
+  FAIL-OPEN test red. **Do not "harden" this into a fail-closed read.**
+- **The tier travels as CALLER-assembled prompt context, never as a read inside the loop.**
+  `llm.ts` is byte-unchanged by this plan and `git diff --exit-code packages/backend/convex/llm.ts`
+  is a hard gate on it. The router is not forked; `resolveSpecialist` and `SPECIALISTS` are untouched.
+- **ADR-009 fence for a future reader/verifier:** this is prompt-shaping. SC#5 must NOT be read as
+  "the offer set is filtered" or "the rubric pick changes". `diagnose()` emits ONE prescription, so
+  there is no candidate set to filter, and `financialsPresent` still overrides the framework pick
+  (Q3). Nothing about `evaluations.gaps.length` or `Prescription.route` moves.
+- **Where the pieces live:** `tierBriefing` + `PRESET_SKILL` are pure and code-owned in
+  `packages/core/src/specialists.ts` (the FACTS — the `TASK_LINE` class); the style directive BODY is
+  a versioned registry row (`style-direct` / `style-coaching` / `style-concise`, UNGATED). That split
+  is ADR-007's, restated: what the agent is TOLD is DB-editable, what is structurally TRUE is not.
 
 ### Phase 15 — Lane B (generalized executor)
 

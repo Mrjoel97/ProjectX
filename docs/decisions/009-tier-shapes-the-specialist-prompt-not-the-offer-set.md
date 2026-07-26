@@ -76,6 +76,17 @@ SET is unchanged and the dispatch router is not forked.**
 - **The perceivable half ships; the structural half does not.** Design §8.2's sentence remains
   unimplemented on purpose. This ADR is what stops a later verifier or planner reading that
   sentence as a regression or an oversight.
+- **Implementation note (2026-07-26, plan 15.1-05 — shipped as described).** Recorded per CLAUDE.md
+  §9: an ADR may be EXTENDED with an implementation note; the decision above is not being
+  re-decided. `convex/dispatch.ts` `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant`
+  and prepends `tierBriefing({tier, agentName, styleDirective})` (pure, in
+  `packages/core/src/specialists.ts`) on BOTH return paths. The FACT lines are code-owned; the
+  behaviour-preset style directive is a versioned registry row resolved through `PRESET_SKILL`
+  (`style-direct` / `style-coaching` / `style-concise`, all UNGATED) and read FAIL-OPEN — an
+  unseeded overlay costs voice, never a dispatch, while the specialist BODY loader in
+  `runSpecialistTurn` still fails CLOSED. As this decision requires: `SPECIALISTS` gained no filter
+  layer and no per-tier grant, the router was not forked, `diagnose()` was not widened, and
+  `llm.ts` is byte-unchanged (enforced by `git diff --exit-code` in the plan's verification).
 
 ## Deferred — and the supersession path
 

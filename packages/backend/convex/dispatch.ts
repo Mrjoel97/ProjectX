@@ -14,7 +14,14 @@
 // Nothing here is a second mechanism: the loop is llm.runSpecialistTurn, the budget rail is
 // guardrails.dailySpendCents, the lineage is the insert-only audit table's by_correlation index,
 // and the progress indicator is the CKPT-05 agentSteps trace.
-import { resolveSpecialist, SPECIALIST_ROUTES, SPECIALISTS, wouldCycle } from "@pikar/core";
+import {
+  PRESET_SKILL,
+  resolveSpecialist,
+  SPECIALIST_ROUTES,
+  SPECIALISTS,
+  tierBriefing,
+  wouldCycle,
+} from "@pikar/core";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -144,15 +151,47 @@ type SpecialistRunner = (a: {
 
 type Ctx = GenericActionCtx<DataModel>;
 
-async function buildSpecialistPrompt(
+/**
+ * Exported ONLY so `dispatch.test.ts` can assert the tier briefing it assembles (SC#5a) — driving
+ * it through `__runSpecialistWithScript` would not work, because the mock model swallows the prompt
+ * and the assertion would be about nothing. In production this is still called from exactly ONE
+ * place: `governedDispatch`, below.
+ */
+export async function buildSpecialistPrompt(
   ctx: Ctx,
   a: { tenantId: string; threadId: string; gapIndex: number; route: string },
 ): Promise<string> {
+  // The tier reaches the loop as prompt context assembled by the CALLER (ADR-009) — never as a read
+  // inside `runSpecialistTurn`. `llm.ts` is byte-unchanged by this plan, deliberately.
+  const tp = await ctx.runQuery(internal.tenantProfile.forTenant, { tenantId: a.tenantId });
+  let styleDirective: string | undefined;
+  if (tp?.behaviorPreset) {
+    try {
+      styleDirective = (
+        await ctx.runQuery(internal.skills.getActiveSkill, {
+          name: PRESET_SKILL[tp.behaviorPreset],
+        })
+      ).body;
+    } catch {
+      // Fail OPEN, on purpose. §5's fail-CLOSED rule guards the SYSTEM prompt — the specialist's
+      // own body, loaded in runSpecialistTurn, which still throws NO_ACTIVE_SKILL and must keep
+      // doing so. This is an ADDITIVE overlay on the user-turn prompt: losing it degrades VOICE,
+      // not governance, and a tenant must not lose their dispatch because a style row is unseeded.
+    }
+  }
+  const briefing = tierBriefing({
+    tier: tp?.tier,
+    agentName: tp?.agentName,
+    styleDirective,
+  });
+  /** Both return paths carry the briefing: a tenant with no evaluation snapshot still has a tier. */
+  const withBriefing = (rest: string): string => (briefing ? `${briefing}\n\n${rest}` : rest);
+
   const evaluation = await ctx.runQuery(internal.evaluations.lastForThread, {
     tenantId: a.tenantId,
     threadId: a.threadId,
   });
-  if (!evaluation) return `${NO_SNAPSHOT}\n\n${TASK_LINE}`;
+  if (!evaluation) return withBriefing(`${NO_SNAPSHOT}\n\n${TASK_LINE}`);
 
   // The gap this dispatch is FOR: by index (what the user tapped), falling back to the first gap
   // routed at this specialist — a re-ranked evaluation must not silently brief the wrong gap.
@@ -168,7 +207,7 @@ async function buildSpecialistPrompt(
     .slice(0, MAX_FINDINGS)
     .map((f) => `- ${cap(f.label)} [${f.citationTitle}; ${f.confidence} confidence]`);
   if (findings.length > 0) lines.push("Grounded findings:", ...findings);
-  return `${lines.join("\n")}\n\n${TASK_LINE}`;
+  return withBriefing(`${lines.join("\n")}\n\n${TASK_LINE}`);
 }
 
 /**
