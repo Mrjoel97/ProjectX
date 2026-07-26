@@ -55,6 +55,11 @@ export default function VoicePage() {
           onStart={() => void voice.start()}
           starting={voice.status === "connecting"}
           error={voice.error}
+          // The SAME docId `?doc=` writes: arriving from the vault pre-selects the picker, and an
+          // in-session pick fills it when the route carried none. `useVoiceSession` reads docId
+          // inside start(), so a choice made before Start is picked up with no hook change.
+          docId={docId}
+          onPickDoc={setDocId}
         />
       )}
 
