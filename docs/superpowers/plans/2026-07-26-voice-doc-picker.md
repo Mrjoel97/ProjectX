@@ -17,7 +17,7 @@
 - **Never use `vault.listVaultDocs` from the voice route** — it `.collect()`s whole rows including book-sized `text`; `schema.ts` notes a 16 MiB / 32k-doc read cap.
 - **CLAUDE.md §10 / BRAND** — `globals.css` CSS variables only, never a hardcoded hex a token covers. No component library. No new icon SVGs: reuse `PaperclipIcon` from `apps/web/app/(auth)/icons.tsx` and `SearchIcon` / `XIcon` / `FileTextIcon` from `apps/web/app/(app)/dashboard/vault/icons.tsx`.
 - **BRAND §6 (requirements, not suggestions)** — `--teal-600` is ~2.9:1 on white: button fills with white text only, never small teal body text. Real `<button>` elements, never nested inside another interactive element. Labelled inputs. Visible focus. Never encode meaning in colour alone.
-- **CLAUDE.md §9 + Stop hook** — `docs/playbooks/voice.md` watches `packages/voice/`, `packages/backend/convex/voiceDoc.ts`, `packages/backend/convex/voiceDoc.test.ts`, and `apps/web/app/(app)/dashboard/voice/`. **Every task below touches a watched path.** If you end a turn before Task 4, the Stop hook will block; either run through Task 4 in the same turn or make the Task 4 playbook edit early.
+- **CLAUDE.md §9 + Stop/SubagentStop hook** — `docs/playbooks/voice.md` watches `packages/voice/`, `packages/backend/convex/voiceDoc.ts`, `packages/backend/convex/voiceDoc.test.ts`, and `apps/web/app/(app)/dashboard/voice/`. **Every task below touches a watched path.** `scripts/check-playbooks.mjs` runs on `Stop` AND `SubagentStop`, and blesses a playbook only when it appears in the diff **cumulative since session start**. Task 1 therefore writes the `voice.md` entry alongside the code (owner ruling, 2026-07-26); once it is touched, every later task's stop re-blesses instead of blocking. Task 4 bumps that same entry with the real verification results.
 - **Windows/vitest note** — convex-test files can false-red on parallel-fork teardown. Run with `--maxWorkers=1`. `convex/_generated/` must exist (`npx convex codegen`) or every convex-test in the file errors with "Could not find the `_generated` directory".
 - **Do not** add mid-call attach, upload-from-disk, or any change to retrieval/grounding/`docScopedPassages`.
 
@@ -30,6 +30,7 @@
 - Modify: `packages/voice/src/index.ts` (add to the existing `from "./docSession"` value export list)
 - Modify: `packages/backend/convex/voiceDoc.ts` (add after `docContext`, which ends ~line 591)
 - Test: `packages/backend/convex/voiceDoc.test.ts` (append a new `describe` at end of file)
+- Modify: `docs/playbooks/voice.md` (the §9 entry — see Step 5a; this MUST land in this task's commit)
 
 **Interfaces:**
 - Consumes: `tenantQuery` from `./lib/functions`; `Id` from `./_generated/dataModel`; the `by_tenant` index on `vaultDocuments`.
@@ -247,11 +248,23 @@ pnpm --filter @pikar/voice typecheck
 
 Expected: the voiceDoc suite green apart from any failure that was ALREADY red before this task (record the baseline first if unsure); `@pikar/voice` green and typecheck clean.
 
+- [ ] **Step 5a: Write the playbook entry (§9 — REQUIRED IN THIS COMMIT)**
+
+`docs/playbooks/voice.md` watches every path this task touches, and `scripts/check-playbooks.mjs`
+runs on `SubagentStop`. Writing this entry now also unblocks Tasks 2–4 (the hook blesses a playbook
+that appears in the cumulative since-session-start diff). Task 4 will bump it with real results.
+
+Prepend to the `> Last verified:` line in `docs/playbooks/voice.md`, bumping its counter and
+demoting the previous entry to `Prior:` exactly as that file's existing entries do:
+
+> **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM PRE-FLIGHT (14-07).** Owner-reported: "I uploaded the document in the knowledge vault but the agent still cannot access it — it's asking me to upload the document in that voice session." ROOT CAUSE: a session only becomes doc-scoped when `startSession` receives a `docRef`, and the ONLY way to supply one was arriving from the vault at `/dashboard/voice?doc=<id>`. Started from the voice page, `docScopedPassages` returns `[]` **before it searches anything** (`!session.docRef` is in its first guard), so the agent had no vault reach and honestly asked for the document. Retrieval was NOT at fault — `vaultGroundHydrated` was run live against the owner's tenant and returned the document as the TOP hit, and no row in `voiceSessions` carried a `docRef`. FIX: `voiceDoc.pickableDocs` (tenantQuery — this tenant's READY documents newest-first as id + title, plus a `processingCount`, scanning `PICKER_DOC_SCAN_CAP` = 50 newest rows in the `vault.profileSeedDocs` shape) plus a `DocPicker` pre-flight panel (paperclip → searchable list → chip). **The trust boundary did NOT move:** `voice.startSession` and `voiceToken.mintClientSecret` each still re-validate ownership and `status: "ready"`, so the picker is the courtesy `startSession`'s own comment always said it would be. READY-ONLY BY CONSTRUCTION — offering a row the server rejects would be a lie; non-ready rows are counted, not listed, so a just-uploaded file does not appear to vanish. Deliberately NOT `vault.listVaultDocs` (whole rows including book-sized `text`, against schema.ts's 16 MiB read cap) — the `docContext` rule. `useVoiceSession` is UNCHANGED: `docId` is read inside `start()` and is already in that callback's dependency array. Ceilings (`ponytail:` in source): PRE-FLIGHT ONLY — no mid-call attach or swap, because `docRef` is written at row-insert and re-validated at token mint, so a swap means patching a live session and re-instructing the model mid-stream; and the list is a newest-50 scan with a client-side title filter, so a vault whose ready docs fall outside that window needs pagination or a title search index (a schema change). **This does NOT improve grounding quality** — an attached document still carries whatever text extraction produced, and the scanned-PDF summary defect remains open in `vault.md` "Known gaps". Spec: `docs/superpowers/specs/2026-07-26-voice-doc-picker-design.md`.
+
 - [ ] **Step 6: Commit**
 
 ```bash
 git add packages/voice/src/docSession.ts packages/voice/src/index.ts \
-        packages/backend/convex/voiceDoc.ts packages/backend/convex/voiceDoc.test.ts
+        packages/backend/convex/voiceDoc.ts packages/backend/convex/voiceDoc.test.ts \
+        docs/playbooks/voice.md
 git commit -m "feat(14-07): pickableDocs — the pre-flight picker's ready-doc read"
 ```
 
@@ -695,16 +708,21 @@ git commit -m "feat(14-07): wire the document picker into voice pre-flight"
 
 ---
 
-### Task 4: Playbook + full verification sweep
+### Task 4: Verification sweep + playbook verified-line bump
 
 **Files:**
-- Modify: `docs/playbooks/voice.md` (prepend a new `Last verified` entry, per this repo's append-a-prior-entry convention)
+- Modify: `docs/playbooks/voice.md` (bump the entry Task 1 wrote with the REAL verification results)
 
-- [ ] **Step 1: Update the playbook**
+- [ ] **Step 1: Bump the playbook entry with real results**
 
-Prepend to the `> Last verified:` line in `docs/playbooks/voice.md`, bumping its counter and demoting the previous entry to `Prior:` exactly as the file's existing entries do. Content:
+Task 1 already wrote the 14-07 entry. Do NOT write a second entry. Append the actual verification
+evidence to the END of that entry's prose, in this file's established style — real numbers from
+Step 2, not predictions. Example shape (replace every number with what you actually observed):
 
-> **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM PRE-FLIGHT (14-07).** Owner-reported: "I uploaded the document in the knowledge vault but the agent still cannot access it — it's asking me to upload the document in that voice session." ROOT CAUSE: a session only becomes doc-scoped when `startSession` receives a `docRef`, and the ONLY way to supply one was arriving from the vault at `/dashboard/voice?doc=<id>`. Started from the voice page, `docScopedPassages` returns `[]` **before it searches anything** (`!session.docRef` is in its first guard), so the agent had no vault reach and honestly asked for the document. Retrieval was NOT at fault — `vaultGroundHydrated` was run live against the owner's tenant and returned the document as the TOP hit; and no row in `voiceSessions` carried a `docRef`. FIX: `voiceDoc.pickableDocs` (tenantQuery — this tenant's READY documents newest-first as id + title, plus a `processingCount`, scanning `PICKER_DOC_SCAN_CAP` = 50 newest rows in the `vault.profileSeedDocs` shape) plus a new `DocPicker` pre-flight panel (paperclip → searchable list → chip). **The trust boundary did NOT move:** `voice.startSession` and `voiceToken.mintClientSecret` each still re-validate ownership and `status: "ready"`, so the picker is the courtesy `startSession`'s own comment always said it would be. READY-ONLY BY CONSTRUCTION — offering a row the server rejects would be a lie; non-ready rows are counted, not listed, so a just-uploaded file does not appear to vanish. Deliberately NOT `vault.listVaultDocs` (whole rows including book-sized `text`, against schema.ts's 16 MiB read cap) — the `docContext` rule. `useVoiceSession` is UNCHANGED: `docId` is read inside `start()` and is already in that callback's dependency array. Ceilings (`ponytail:` in source): PRE-FLIGHT ONLY — no mid-call attach or swap, because `docRef` is written at row-insert and re-validated at token mint, so a swap means patching a live session and re-instructing the model mid-stream; and the list is a newest-50 scan with a client-side title filter, so a vault whose ready docs fall outside that window needs pagination or a title search index (a schema change). **This does NOT improve grounding quality** — an attached document still carries whatever text extraction produced, and the scanned-PDF summary defect remains open in `vault.md` "Known gaps". Spec: `docs/superpowers/specs/2026-07-26-voice-doc-picker-design.md`.
+> Verified: `voiceDoc.test.ts` N/N green (5 new `pickableDocs` cases: ready-only projection, non-ready counted not listed, `failed` neither, empty-text row refused, cross-tenant empty); `@pikar/voice` N/N green + typecheck clean; web typecheck clean; `check-playbooks` green.
+
+If any suite is red, say so plainly in the entry and in your report — a playbook line claiming green
+against a red suite is worse than no line at all.
 
 - [ ] **Step 2: Full verification sweep**
 
@@ -730,7 +748,7 @@ node scripts/extract-convex-edges.mjs
 
 ```bash
 git add docs/playbooks/voice.md graphify-out
-git commit -m "docs(14-07): record the pre-flight document picker in the voice playbook"
+git commit -m "docs(14-07): bump the voice playbook with the picker's verification results"
 ```
 
 ---
@@ -755,7 +773,7 @@ git commit -m "docs(14-07): record the pre-flight document picker in the voice p
 | Accessibility (§6) | Task 2 Step 1, Task 3 Step 5 |
 | Trust boundary unchanged | No task modifies `startSession` or `mintClientSecret` |
 | Tests: ready-only, processingCount, cross-tenant | Task 1 Step 1 (5 tests) |
-| Playbook updated (§9) | Task 4 |
+| Playbook updated (§9) | Task 1 (writes the entry — also unblocks the SubagentStop hook) + Task 4 (bumps it with real results) |
 
 No gaps.
 
