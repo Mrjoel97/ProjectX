@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 7
+current_plan: 7 (done)
 status: executing
 stopped_at: Completed 15.1-07-PLAN.md (both surfaces — the conversation and the facts; phase 15.1 complete)
-last_updated: "2026-07-26T15:44:14.265Z"
+last_updated: "2026-07-26T15:53:39.177Z"
 progress:
   total_phases: 38
   completed_phases: 23
