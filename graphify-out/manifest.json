@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1785058405.6069498,
-    "ast_hash": "c62a93e2eb10be596376fcc7dece7072",
+    "mtime": 1785061531.737738,
+    "ast_hash": "f96aace7498ba52458d03e636f7f279a",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1785058459.652052,
-    "ast_hash": "f90812868446c9c4677764398fc726a8",
+    "mtime": 1785061514.5825858,
+    "ast_hash": "efb74dc5a7fa32faf2ca961e064371b3",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -2335,8 +2335,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/DocGrid.tsx": {
-    "mtime": 1784997670.7771273,
-    "ast_hash": "5031a58497e5e35ec35c3c15bec0f18b",
+    "mtime": 1785062023.9698353,
+    "ast_hash": "0b539b11278bd4ea8a53d10c0e42f520",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/Dropzone.tsx": {
@@ -2345,8 +2345,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/PreviewModal.tsx": {
-    "mtime": 1784997670.7771273,
-    "ast_hash": "43f24bdeb49519934da5d2ed0db98eeb",
+    "mtime": 1785062084.4836287,
+    "ast_hash": "299168851743ae31d7d39a68379fd522",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/VaultStats.tsx": {
@@ -2585,8 +2585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vault.md": {
-    "mtime": 1784997671.1239116,
-    "ast_hash": "a8d437bee8c62214bb37fa681a464bb8",
+    "mtime": 1785062355.2719402,
+    "ast_hash": "aa89f5435743dc7e1982c0b587ed7d25",
     "semantic_hash": ""
   },
   "packages/contracts/skills/graph-extractor.md": {
@@ -3435,8 +3435,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/voice.md": {
-    "mtime": 1785060924.810773,
-    "ast_hash": "0db17a98fd6e671ba93e393cd394ec85",
+    "mtime": 1785062393.7459767,
+    "ast_hash": "d129f7f4883147d44c73e495a918d87d",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/voiceSession.ts": {
@@ -3565,8 +3565,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/voice/LiveSession.tsx": {
-    "mtime": 1785060714.5533965,
-    "ast_hash": "99203ee0900ab43f01964a8607c83146",
+    "mtime": 1785062190.8295107,
+    "ast_hash": "2e482781b8358301139c4faf3af8b3de",
     "semantic_hash": ""
   },
   ".planning/phases/06-live-voice-sessions/06-06-SUMMARY.md": {
@@ -4475,8 +4475,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/14-flagship-voice-doc-workflow/14-RESEARCH.md": {
-    "mtime": 1785004542.5706265,
-    "ast_hash": "eb7734afb790cfe5fce28ef62c5f6cc9",
+    "mtime": 1785061738.0391033,
+    "ast_hash": "bbf90b10a7a2f294acb654c5be84b058",
     "semantic_hash": ""
   },
   ".planning/phases/14-flagship-voice-doc-workflow/14-VALIDATION.md": {
@@ -4545,13 +4545,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/voiceDoc.test.ts": {
-    "mtime": 1785056783.130993,
-    "ast_hash": "a53a079913f49e675876b3db040fac4c",
+    "mtime": 1785061869.9726067,
+    "ast_hash": "b6a955b0aca808d97a031249af8461ff",
     "semantic_hash": ""
   },
   "packages/backend/convex/voiceDoc.ts": {
-    "mtime": 1785056751.498963,
-    "ast_hash": "40f90e9e3a883b4de7862cfdb948917b",
+    "mtime": 1785061905.8677917,
+    "ast_hash": "d82900c3e4e9340c3b5056e7880ade7b",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/documentAnalyst.ts": {
@@ -4587,6 +4587,16 @@
   ".planning/phases/14-flagship-voice-doc-workflow/14-05-SUMMARY.md": {
     "mtime": 1785058385.693108,
     "ast_hash": "96266b1f8512529298a70a22286d5c84",
+    "semantic_hash": ""
+  },
+  ".planning/phases/14-flagship-voice-doc-workflow/14-06-SUMMARY.md": {
+    "mtime": 1785061479.0892875,
+    "ast_hash": "375bd47e87e2ff78d502e238a17a6495",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/voice/DocStrip.tsx": {
+    "mtime": 1785062171.7665267,
+    "ast_hash": "9bf6ec884f178045043c48ceadabd13d",
     "semantic_hash": ""
   }
 }

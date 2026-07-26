@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 6/9 plans, Lane C)
+**Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 7/9 plans, Lane C)
 
 ## Current Position
 
-Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (6/9 plans, 9 waves) on `lane-c/voice-doc`
-Plan: 14-06 COMPLETE (the browser relay); next 14-07 (wave 7, the vault entry point + in-call doc strip)
+Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (7/9 plans, 9 waves) on `lane-c/voice-doc`
+Plan: 14-07 COMPLETE (the vault entry point + in-call doc strip); next 14-08 (wave 8, the post-call outcome)
 
 **TEST BASELINE CHANGED — there is no longer any acceptable red.** The whole monorepo is **892/892,
 zero failures**: backend **526/526** (43/43 files), core 195, voice 57, vault 42, extraction 28, cost
@@ -46,7 +46,40 @@ that cascades, because every existing `// @ts-expect-error import.meta.glob` the
 directive error, across ~20 test files owned by Lanes A and B. That is a post-merge job on `main`,
 not a mid-parallel-execution sweep.
 
-Status: Wave 6 done — **SC #1's drill-in loop is CLOSED end to end.** `/dashboard/voice?doc=<id>`
+Status: Wave 7 done — **the flow has a FRONT DOOR and the call has CONTEXT.** A `ready` vault document
+offers "Discuss by voice" (in the `DocGrid` card AND the `PreviewModal` footer) linking to
+`/dashboard/voice?doc=<id>`. **The status gate is the phase's first honesty moment:**
+`processing`/`extracting`/`pending_extraction` render a REAL `disabled` button ("Reading…"), never a
+`Link` with `pointer-events:none` — a screen reader must not announce an actionable control that does
+nothing; `failed` offers **no voice action at all**, and `PreviewModal`'s explainer now says why in the
+user's terms plus what to do next. Rationale: never open a grounded conversation the agent cannot
+ground, and never burn capped 15-minute time on a document still being read. **THE GATE IS
+SUBSCRIPTION-DRIVEN — do not add a poll:** `listVaultDocs` is a live query returning whole rows, so the
+control re-renders enabled the instant extraction flips the status. The control is a **SIBLING** of the
+card `<button>` (nested interactive elements are invalid HTML and break keyboard order), reusing the
+failed-card Retry's absolute positioning, and a shared `discussPillStyle()` keeps both variants in the
+identical spot so nothing moves under the user. **NEW: `voiceDoc.docContext`** — a tenant-scoped
+`{title, status, truncated}` projection, `null` cross-tenant (fail-closed by null, not throw: a throw
+distinguishes "exists but not yours" from "no such document", an ownership oracle). Deliberately NOT a
+`listVaultDocs` reuse — that `.collect()`s whole rows including `text`, and the voice page must not
+pull a book-sized blob to render a title; a test pins the key set to exactly `[status,title,truncated]`
+and asserts no `text` key so a "just return the row" simplification fails loudly. **`DocStrip`** names
+the report during the call and badges a partial read; it renders nothing for BOTH `undefined` (loading)
+and `null` (not yours) and distinguishes them nowhere. It links to `/dashboard/vault` rather than
+hoisting `PreviewModal` — that modal owns download/delete/retry, and a destructive action one mis-tap
+from a live call is the wrong trade. **No live insights panel** (explicitly deferred). BRAND §6
+honoured: the badge is `--ink-soft` on a ruled chip, not small teal text, and carries the literal word
+"partial" so meaning is never colour-only. Phase-6 layout otherwise untouched, text fallback included.
+Gates: voiceDoc **23/23**, monorepo **896/896 zero failures** (backend **530/530**), web typecheck exit
+0, web build compiles with both routes still `ƒ (Dynamic)`.
+
+**OUT-OF-SCOPE FIX (14-07):** `packages/backend/.convex/` — which holds
+`convex_local_backend.sqlite3` + `convex_local_storage/`, i.e. REAL tenant rows (vault documents, audit
+entries, PII) — was untracked but **UNIGNORED** in both worktrees. Never committed, but one
+`git add -A` would have committed the whole dev database. `**/.convex/` is now in `.gitignore` with the
+reason inline. Surfaced by junctioning the local deployment into this worktree.
+
+PRIOR (14-06): Wave 6 done — **SC #1's drill-in loop is CLOSED end to end.** `/dashboard/voice?doc=<id>`
 mints doc-scoped (persona + digest + tool), threads `docRef` onto `startSession` so the SERVER owns
 what the session is about, and relays the model's `search_document` calls to
 `api.voiceDoc.searchDocument` over the existing `"oai-events"` channel. **OPEN QUESTION 4 SETTLED on
