@@ -1,6 +1,11 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-04 — the doc-grounded MINT: `mintClientSecret({docId?})` bakes the
+> Last verified: 2026-07-26 (14-05 — the REVIEW producer: `voiceDoc.reviewSession` turns a finished
+> discussion into ONE cited `evaluations` row on the synthetic `voice-doc:<sessionId>` thread, with
+> the citations, the gap routing and the honesty verdict welded in code and the model's quoted
+> passage substring-verified against the report). See "The review producer (14-05)" below.
+>
+> Prior: 2026-07-26 (14-04 — the doc-grounded MINT: `mintClientSecret({docId?})` bakes the
 > `document-analyst` persona plus a fenced digest of that report into the ephemeral session and
 > declares the one read-only retrieval tool, with a pre-written `session.update` fallback). The
 > unscoped Phase-6 mint body is pinned byte-unchanged. See "The doc-grounded mint (14-04)" below.
@@ -596,6 +601,98 @@ the fake key.
 Verify with `pnpm --filter @pikar/backend test voiceToken` (12 tests: persona, digest, flat tool
 shape, the 400 fallback, the 500 throw, both refusals, fail-closed, and the unscoped Phase-6 body
 pinned to no-`tools`-key).
+
+### The review producer (14-05) — `voiceDoc.reviewSession` / `voiceDoc.reviewDocument`
+
+This is where a finished discussion becomes a durable artifact. `reviewSession({sessionId,
+transcript})` is the tenant-scoped entry the post-call screen calls; it validates ownership
+(fail-closed, `voicedoc: session not found`) and delegates to the `internalAction`
+`reviewDocument({tenantId, sessionId, transcript})`, which carries an EXPLICIT `tenantId` so it is
+also callable from a context with no live identity. One shared implementation, the Phase-12
+`applyScorecardAnswer` precedent — the write path cannot drift between callers.
+
+**The findings row is an `evaluations` row — the existing table, unchanged.** `framework:
+"document-review"` (14-01's one union widening) is what makes the whole downstream surface
+inherited rather than rebuilt: per-finding citations, the affirmative healthy banner,
+leverage-ranked gaps, "Act on this" → a proposed memo plan → the single Approve gate, and the
+two-tenant isolation test all already exist and already work on this row. The row lands through the
+UNMODIFIED `internal.evaluations.insertEvaluation`, whose arg validator is derived from
+`schema.tables.evaluations.validator.fields` — **`evaluations.ts` gets zero edits, ever, for this
+flow.** `scorecard: {}` and `userProvided: []` are passed because a document review has no Growth-OS
+Scorecard and no user-provided figures; `delta` stays absent (that is the Phase-13 weekly-review
+concept). The thread is the synthetic `voice-doc:<sessionId>` id documented above.
+
+**STANDING TRAP — never route a document review through `runEvaluation`.** 14-01 pinned that
+engine's `framework` arg to the four business frameworks, and `FRAMEWORK_SKILL` is a hand-written
+`Record<Framework, …>` with no document-review entry, so an unmapped literal yields `undefined` and
+`getActiveSkill(undefined)` throws mid-run. `voiceDoc.ts` deliberately names no entry point of that
+engine at all, which makes the rule greppable: `grep -n "runEvaluation" convex/voiceDoc.ts` must
+return nothing.
+
+**The verdict rule is an INVARIANT, not a prompt** (`shapeDocReview`, 14-02):
+
+- zero grounded findings ⇒ `verdict: "insufficient"` **and** `gaps` FORCE-CLEARED — a report the
+  agent could not ground can never produce a fabricated gap, no matter what the model returned;
+- findings and zero gaps ⇒ `verdict: "healthy"` — an affirmative "it holds up", not an empty result;
+- otherwise ⇒ `verdict: "gaps"`.
+
+**Any future assertion about this MUST use the anti-vacuous pairing** (the Phase-12
+`28-healthy-no-gaps` lesson): `gaps.length === 0` alone ALSO passes on the thin-data `insufficient`
+verdict, so a healthy assertion must pin `verdict === "healthy"` **and** `findings.length > 0`
+**and** `gaps.length === 0` in the same test, and the no-fabricated-gap assertion must pin
+`verdict === "insufficient"` **and** `gaps.length === 0` against a fixture that DOES offer gaps.
+Both are in `voiceDoc.test.ts`, and the no-fabricated-gap one was mutation-verified (removing the
+force-clear turns it red).
+
+**Citations, route, playbook and rank are WELDED IN CODE.** The `jsonSchema` handed to
+`generateObject` has no `citationDocId`, `citationTitle`, `verdict`, `route`, `playbook` or
+`leverageRank` key — the model has nothing to omit or invent, which is what makes "every finding
+cites the report" structural rather than prompted. The schema's type parameter is `RawDocReview`
+(the pure 14-02 type), so a citation field cannot be added here without changing the domain type.
+It is STRICT-mode legal: every key in each `properties` object also appears in that object's
+`required` array (`required` is written AFTER `properties` so `llmRedaction.test.ts`'s scan pairs
+them non-vacuously) and `additionalProperties: false` everywhere.
+
+**`excerpt` is the ONE deliberate exception, and it is verified.** Only the model knows which
+sentence it was talking about, so the quote TEXT — and only the quote text — comes from the model,
+declared nullable-and-required (`type: ["string","null"]`, listed in `required`). Before shaping,
+`withVerifiedExcerpts` whitespace-normalizes and lowercases both the excerpt and `doc.text` and
+keeps the excerpt only when the document really contains it. **It drops the EXCERPT, never the
+finding** — the doc-level citation floor still holds and an absent excerpt is a valid, non-degraded
+state. `ponytail:` accepted ceiling — a substring test cannot tell that a genuine quote came from a
+different part of the same document than the finding is about, and it rejects a legitimate quote
+whose whitespace or hyphenation the extractor mangled; the upgrade path is a locator (chunk id +
+offset) from `searchDocument`, which needs the chunk-level filter Open Question 2 tracks.
+
+**§4 — the excerpt is report content and is BANNED from the log plane.** `voiceDoc.ts` has exactly
+TWO `audit.log` call sites and no other log-plane write: `voicedoc.searched`
+(`{sessionId, queryHash, resultCount}`) and `voicedoc.reviewed`
+(`{sessionId, findingCount, gapCount, verdict}`) — refs, counts and a closed enum. No finding
+label, no `citationExcerpt`, no passage, no transcript turn, not even the document title. No
+`agentSteps`, no `telemetry`, no `deadLetters`. `reviewDocument` itself returns
+`{findingCount, gapCount, verdict}` and nothing else, so prose cannot escape through the return
+value either. 14-09 pins all of this with a mutation-verified static scan over this file.
+
+**Idempotence is a READ-GUARD, not a patch.** `evaluations` is append-only, so `reviewSession`
+reads `internal.evaluations.lastForThread` first and returns the existing row's counts when one
+exists. The post-call screen re-mounts (a refresh, a dropped call resumed) and the user must see ONE
+consolidated list, not three. `reviewSession` also returns `threadId` so the caller points
+`CardList` at it without re-deriving the thread convention.
+
+**Persona and offline seam.** The `document-analyst` body loads from the registry as the
+`generateObject` `system` prompt (§5, fail-closed); the review prompt is the speaker-labelled
+transcript plus the SAME `buildDocDigest(...)` block the agent saw at the mint, so the review reads
+exactly what was discussed and inherits the fence and the cap. A first transcript turn beginning
+`SMOKE::docreview::<healthy|gaps|empty>` returns a deterministic fixture with **no model call**,
+which is what lets the entire retrieval → findings → row → `actOnGap` path run offline with no
+`OPENAI_API_KEY`. The `gaps` fixture deliberately carries three findings — one whose excerpt is
+lifted verbatim out of the seeded document, one with `excerpt: null`, one whose excerpt is nowhere
+in the document — so all three excerpt states are covered offline. A live call's priced usage is
+charged through `internal.guardrails.recordSpend` (the `intake.ts` idiom), so a review cannot spend
+off-budget.
+
+Verify with `pnpm --filter @pikar/backend test voiceDoc` (18 tests) and
+`node scripts/check-playbooks.mjs check`.
 
 ### Gap routing is code-owned
 
