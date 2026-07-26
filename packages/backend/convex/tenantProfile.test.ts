@@ -200,3 +200,156 @@ describe("tenantProfile.saveFacts / get / forTenant (SC#2a)", () => {
     expect(row?.headcount).toBe(2);
   });
 });
+
+// ── Task 2: the tier-change event (SC#5c) and the operator-only enterprise grant (D6) ───────────
+
+/** Seed a tier row DIRECTLY (never through saveFacts, which would emit its own change event). */
+const seedRow = (
+  t: TestConvex<typeof schema>,
+  tenantId: string,
+  patch: Partial<Doc<"tenantProfiles">> = {},
+) =>
+  t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      ...SOLO_FACTS,
+      tier: "solopreneur",
+      tierSource: "derived",
+      derivedAt: 1_700_000_000_000,
+      ...patch,
+    }),
+  );
+
+const tierChangedRows = (t: TestConvex<typeof schema>) =>
+  t.run(async (ctx) =>
+    (await ctx.db.query("audit").collect()).filter((r) => r.eventType === "tenant.tier_changed"),
+  );
+
+/**
+ * The §4 scan surface is the audit PAYLOADS, deliberately not the whole rows: `ts` / `_creationTime`
+ * are 13-digit epoch millis that contain an arbitrary two-digit needle a large fraction of the time,
+ * so scanning the whole row would be a coin-flip flake AND a weaker assertion (a real leak drowned
+ * in timestamp noise). The payload is where CLAUDE.md §4 actually lives.
+ */
+const auditPayloadJson = (t: TestConvex<typeof schema>): Promise<string> =>
+  t.run(async (ctx) =>
+    JSON.stringify((await ctx.db.query("audit").collect()).map((r) => r.payload)),
+  );
+
+describe("the tier change event (SC#5c)", () => {
+  test("a tier change event is written exactly once, with four enum/count keys and nothing else", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { ...SME_FACTS });
+
+    const rows = await tierChangedRows(t);
+    expect(rows).toHaveLength(1);
+    const payload = rows[0]?.payload as Record<string, unknown>;
+    // The KEY SET, sorted — not `toHaveProperty`, which passes for any superset, and the superset
+    // is exactly the leak.
+    expect(Object.keys(payload).sort()).toEqual(["factsChanged", "from", "tierSource", "to"]);
+    expect(payload.from).toBe("solopreneur");
+    expect(payload.to).toBe("sme");
+    expect(payload.tierSource).toBe("derived");
+    expect(rows[0]?.tenantId).toBe(TENANT_A);
+    expect(rows[0]?.actor).toBe("user");
+  });
+
+  test("no fact VALUE reaches the audit payload (CLAUDE.md §4)", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+
+    // Distinctive values no enum, tier or count can coincide with.
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, {
+      ...SME_FACTS,
+      headcount: 137,
+      yearsOperating: 41,
+    });
+
+    const payloads = await auditPayloadJson(t);
+    expect(payloads).toContain("tier"); // non-vacuity: we ARE scanning a populated payload
+    expect(payloads).not.toContain("137");
+    expect(payloads).not.toContain("41");
+
+    // `factsChanged` is a COUNT (the `populatedFieldCount` precedent), never a value.
+    const payload = (await tierChangedRows(t))[0]?.payload as Record<string, unknown>;
+    expect(typeof payload.factsChanged).toBe("number");
+    expect(payload.factsChanged as number).toBeLessThanOrEqual(5);
+  });
+
+  test("no event when the tier does NOT move", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { ...SME_FACTS });
+    expect(await tierChangedRows(t)).toHaveLength(1);
+
+    // Same facts again — derivedAt may be refreshed; the EVENT is for a CHANGE.
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { ...SME_FACTS });
+    expect(await tierChangedRows(t)).toHaveLength(1);
+    expect((await rowFor(t, TENANT_A))?.tier).toBe("sme");
+  });
+
+  test("the first derivation over a legacy row is a change and IS logged", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A, { tierSource: "legacy", tier: "solopreneur" });
+
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { ...SME_FACTS });
+
+    const rows = await tierChangedRows(t);
+    expect(rows).toHaveLength(1);
+    expect((rows[0]?.payload as Record<string, unknown>).from).toBe("solopreneur");
+    expect((await rowFor(t, TENANT_A))?.tierSource).toBe("derived");
+  });
+});
+
+describe("grantEnterprise (D6, operator-only)", () => {
+  test("the grant writes enterprise/admin and logs one tier change", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+
+    const res = await t.mutation(internal.tenantProfile.grantEnterprise, { tenantId: TENANT_A });
+    expect(res).toMatchObject({ tier: "enterprise", tierSource: "admin", changed: true });
+
+    const row = await rowFor(t, TENANT_A);
+    expect(row?.tier).toBe("enterprise");
+    expect(row?.tierSource).toBe("admin");
+
+    const rows = await tierChangedRows(t);
+    expect(rows).toHaveLength(1);
+    const payload = rows[0]?.payload as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(["factsChanged", "from", "tierSource", "to"]);
+    expect(payload.to).toBe("enterprise");
+    expect(payload.tierSource).toBe("admin");
+  });
+
+  test("a granted enterprise SURVIVES a later facts edit, and logs nothing", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+    await t.mutation(internal.tenantProfile.grantEnterprise, { tenantId: TENANT_A });
+    expect(await tierChangedRows(t)).toHaveLength(1);
+
+    // Solopreneur-shaped facts: a naive re-derivation would downgrade the operator grant.
+    const res = await asTenant(t).mutation(api.tenantProfile.saveFacts, { ...SOLO_FACTS });
+    expect(res).toMatchObject({ tier: "enterprise", tierSource: "admin", changed: false });
+
+    const row = await rowFor(t, TENANT_A);
+    expect(row?.tier).toBe("enterprise");
+    expect(row?.tierSource).toBe("admin");
+    expect(row?.headcount).toBe(SOLO_FACTS.headcount); // the FACTS did land
+    expect(await tierChangedRows(t)).toHaveLength(1); // …and NO new event
+  });
+
+  test("the grant upserts a tenant that has no row at all", async () => {
+    const t = setup();
+    const res = await t.mutation(internal.tenantProfile.grantEnterprise, { tenantId: TENANT_B });
+    expect(res.changed).toBe(true);
+
+    const row = await rowFor(t, TENANT_B);
+    expect(row?.tier).toBe("enterprise");
+    expect(row?.tierSource).toBe("admin");
+    expect(row?.headcount).toBeUndefined();
+    expect((await tierChangedRows(t))[0]?.payload).toMatchObject({ from: null });
+  });
+});
