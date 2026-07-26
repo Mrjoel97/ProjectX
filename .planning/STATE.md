@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.1
-current_plan: 0
-status: phase_complete
-stopped_at: Phase 15 COMPLETE and VERIFIED (5/5 must-haves) — eval gate UNPAID, no deployment in this worktree
-last_updated: "2026-07-25T22:31:36.790Z"
+current_plan: 1
+status: in_progress
+stopped_at: Completed 15.1-01-PLAN.md (Wave 0 freeze — tier rule + tenantProfiles + ADR-009)
+last_updated: "2026-07-26T12:05:22.305Z"
 progress:
   total_phases: 38
   completed_phases: 22
-  total_plans: 156
-  completed_plans: 152
+  total_plans: 163
+  completed_plans: 153
 ---
 
 # Project State
@@ -21,17 +21,67 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15 — Sub-Agent Dispatch + Action Executor (COMPLETE, 6/6 plans — ready for verification; ONE unpaid eval gate carried forward)
+**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 1/7 plans; Wave 0 frozen)
 
 ## Current Position
 
-Phase: 15 of 25 (Sub-Agent Dispatch + Action Executor) — **ALL 6 PLANS COMPLETE** (5 waves)
-Current Plan: 6 (last)
-Total Plans in Phase: 6
-Plan: 15-06 COMPLETE (Wave 5 — runnable specialist bodies + a multi-pin eval gate).
-Done: 15-01, 15-02, 15-03, 15-04, 15-05, 15-06. Next: phase verification.
+Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **1 of 7 PLANS COMPLETE** (6 waves)
+Current Plan: 1
+Total Plans in Phase: 7
+Plan: 15.1-01 COMPLETE (Wave 0 — the shared-seam freeze).
+Done: 15.1-01. Next: 15.1-02.
 
-**EXECUTION MODE (owner decision, 2026-07-25): Phase 15 runs SERIALLY**, all 6 plans, in
+**EXECUTION MODE: Phase 15.1 runs SERIALLY on branch `lane-a/dispatch-core` in
+`.worktrees/lane-a-dispatch`.** No branch creation, no merges, no second session. There is NO live
+`CONVEX_DEPLOYMENT` here: `npx convex dev|codegen`, `pnpm eval:golden` and Playwright all fail.
+Offline gates only — `vitest`, `tsc --noEmit`, `check-playbooks.mjs`.
+
+Status (15.1-01): **The tier stopped being a model-temperature guess, and D6 became a compiler
+error rather than a review note.** Four shared seams landed in ONE commit-set so plans 02-07 FILL
+them rather than reshape them (the Phase-15 15-01 precedent). (1) THE RULE: `deriveTier` in
+`packages/core/src/businessProfile.ts` — `paidStaff === 0 && headcount <= 2` ⇒ solopreneur; else
+not(`steady-revenue` AND `bootstrapped`) ⇒ startup; else sme. Total by construction over CLOSED
+unions (`REVENUE_STAGES`/`FUNDING_STATES`, owner Q7 — a free string here reintroduces the
+string-matching defect class the phase exists to close), proven at runtime by a 135-case
+cross-product sweep that is NON-VACUOUS because it enumerates from the exported unions. Branch ORDER
+is load-bearing (solo test FIRST, so a pre-revenue one-person business is a solopreneur, not a
+startup) and has its own boundary row. `yearsOperating` is CAPTURED but deliberately unused, pinned
+by a test so nobody "fixes" the omission. Thresholds are a PRODUCT call retuned via the test's
+boundary table, NEVER a config row — a DB-tunable threshold makes the tier DB-writable by proxy,
+which D2 forbids. (2) **D6 IS A TYPE**: `DerivedTier` (= `Persona`, 3 members) vs `TIERS` (4,
+`enterprise` included); the `@ts-expect-error` bind was MUTATION-CHECKED (marker removed ⇒
+`TS2322: Type '"enterprise"' is not assignable to '"sme"|"solopreneur"|"startup"'`; restored ⇒ exit
+0), and so was the boundary (`<= 2` → `< 2` ⇒ 2 rows RED, restored ⇒ 254/254). (3) THE SLOT GATE:
+`REQUIRED_SLOTS`/`missingSlots`/`canComplete` test numbers for FINITENESS, never truthiness — `0` is
+an ANSWER, and a `!value` check would make the design §6 conversation uncompletable for exactly the
+solo founder the phase is about; an off-union enum value is MISSING, never admitted.
+`sanitizeAgentName` (40-cap, `\p{C}` strip incl. Cf bidi/zero-width, collapse, trim AFTER the slice)
+is the trust boundary for a name that rides into a model prompt in 15.1-05. (4) THE TABLE:
+`tenantProfiles` + `by_tenant` in `schema.ts` — facts ALL optional and NEVER narrowed (a `legacy`
+backfill row has none and design §10 forbids forced re-onboarding, so the "narrow" half of
+widen-migrate-narrow is deliberately never taken; completeness lives at the WRITE boundary), while
+`tier`/`tierSource`/`derivedAt` are REQUIRED so a half-written row cannot become a silent
+"solopreneur". `Doc<"tenantProfiles">` resolves with NO codegen (non-vacuity confirmed by a rename
+probe ⇒ TS2344). `watch.json` pre-registers `convex/tenantProfile.ts` + its test BEFORE plan 02
+creates them, so the Stop hook cannot block that plan. **ADR-009** pins the Q2 deferral: `diagnose()`
+returns at the first failing gate and emits ONE prescription (`diagnose.ts:32-179`), so
+`leverageRank([prescription])` (`evaluations.ts:324-325`) sorts a single-element array — a tier
+filter over a set of one can only REJECT, and a rejected route lands on the deterministic `buildMemo`
+fallback (`evaluations.ts:685-692`), a downgrade wearing tailoring's clothes. **A verifier must NOT
+read SC#5 as "the offer set is filtered" or "the rubric pick changes"**; Q3 stands
+(`financialsPresent`, `evaluations.ts:286-295`, correctly keeps overriding the framework pick).
+Deviations: 1 auto-fixed (Rule 2 — `businessProfile.test.ts` added to `watch.json`, since it now
+carries the D6 bind and the boundary table and was otherwise unprotected). Gates: @pikar/core
+**254/254** + `tsc` exit 0 with the `@ts-expect-error` in place, `convex/tenant.test.ts` 4/4, backend
+`tsc` at the EXACT **55**-error test-file baseline with ZERO in `schema.ts`, `check-playbooks` exit 0,
+turbo **8/10** baseline, and `git diff` proves `onboarding.ts` / `evaluations.ts` / `llm.ts` /
+`dispatch.ts` / `apps/web` are ALL untouched — this plan is a freeze, not an edit. **NEW CARRY-
+FORWARD:** the backend FULL suite is FLAKY here (6-7 failures, a different set each run, all
+`Component "<rateLimiter|auditCounts>" is not registered`); every file passes in ISOLATION and the
+sole genuine red remains the documented `audit.test.ts` `auditCounts` row. Logged to
+`.planning/phases/15.1-.../deferred-items.md` — do not read a noisy full-suite number as a regression.
+
+PRIOR — **EXECUTION MODE (owner decision, 2026-07-25): Phase 15 ran SERIALLY**, all 6 plans, in
 `.worktrees/lane-a-dispatch` on branch `lane-a/dispatch-core`. No Lane B session, no concurrent
 Phase-15 lane, no merges to `main` mid-phase. `PARALLELIZATION.md`'s Phase-15 lane table was
 finalized anyway and is retained as the FILE-OWNERSHIP CONTRACT (which plan may touch which file)
@@ -351,6 +401,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 10 | 01 | 5 min | 2 | 3 |
 | 10 | 02 | 20 min | 3 | 7 |
 | 10 | 03 | 12 min | 2 | 2 |
+| 15.1 | 01 | 31 min | 3 | 7 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -374,6 +425,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15 P03 | 35 min | 3 tasks | 5 files |
 | Phase 15 P04 | 35 min | 3 tasks | 8 files |
 | Phase 15 P06 | 45 min | 3 tasks | 14 files |
+| Phase 15.1 P01 | 31 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -442,6 +494,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15]: 15-06: citesVaultDoc probes the seeded corpus NEEDLE (evalgrd), not a vault title root — a title root is echoed straight out of the fixture's own turns, so the assertion would pass without searchVault ever running; validateFixture forbids any turn from containing the needle
 - [Phase 15]: 15-06: SKILL_NAMES is DERIVED from GATED_SKILLS (read off skill.ts) and --skill is MULTI-pin with one evidence row per pin — a newly gated skill is pinnable the day it is gated, and one run certifies a whole family
 - [Phase 15]: 15-06: the specialist-body EVAL GATE is UNPAID (no CONVEX_DEPLOYMENT in this worktree) — SHIP DARK per CONTEXT: candidates park, active v1 bodies stay live, nothing faked or hand-activated
+- [Phase 15.1]: Tier thresholds LOCKED (paidStaff===0 && headcount<=2 => solopreneur; else not(steady-revenue AND bootstrapped) => startup; else sme) — retuned via the test boundary table, NEVER a config row (D2)
+- [Phase 15.1]: D6 is expressed as a TYPE: deriveTier returns DerivedTier (3 members), enterprise lives only on the table — mutation-checked @ts-expect-error bind
+- [Phase 15.1]: tenantProfiles facts are ALL optional and never narrowed (the design §10 legacy backfill row must stay representable); tier/tierSource/derivedAt REQUIRED
+- [Phase 15.1]: ADR-009: tier shapes the specialist PROMPT, not the offer set — diagnose() emits ONE prescription, so SC#5 must not be read as offer-set filtering or a rubric change
 
 ### Pending Todos
 
@@ -473,6 +529,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-25T22:18:07.890Z
-Stopped at: Completed 15-06-PLAN.md (eval gate UNPAID — no deployment)
+Last session: 2026-07-26T12:05:22.263Z
+Stopped at: Completed 15.1-01-PLAN.md
 Resume file: None
