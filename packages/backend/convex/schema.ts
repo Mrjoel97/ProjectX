@@ -1,7 +1,7 @@
 import { authTables } from "@convex-dev/auth/server";
+import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
 
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
@@ -657,11 +657,7 @@ export default defineSchema({
     // No "wrapping" status: the T-2min wrap-up is a client-side agent instruction, not
     // a server state. "active" only once callId is set (Pitfall 1); the watchdog ends
     // a dropped session as "ended_abnormal" (still briefs), a user/graceful close as "ended_clean".
-    status: v.union(
-      v.literal("active"),
-      v.literal("ended_clean"),
-      v.literal("ended_abnormal"),
-    ),
+    status: v.union(v.literal("active"), v.literal("ended_clean"), v.literal("ended_abnormal")),
     callId: v.optional(v.string()), // realtime provider call/session id — null until the WebRTC handshake relays it
     startedAt: v.number(),
     endsAt: v.number(), // wall-clock hard cap (capEndsAt from @pikar/voice) — the watchdog's fire time
@@ -715,4 +711,61 @@ export default defineSchema({
     lastRunAt: v.optional(v.number()), // cooldown anchor, set by the CI job / dry-run
     updatedAt: v.number(),
   }),
+
+  // ── Phase-15.1 tier control plane (design §4.1) ────────────────────────────
+  //
+  // The CONTROL PLANE for a tenant's business shape. The narrative profile stays a
+  // `business_profile` vault doc (ONBD-02, content plane — it needs embedding and RAG retrieval);
+  // this table is the RECORD for the tier and the markdown persona line becomes a PROJECTION of it
+  // (§4.2). Before this table the tier lived ONLY as the string `- **Persona:** solopreneur` inside
+  // a markdown blob, recovered by string-matching — unindexable, unauditable, and silently
+  // reclassifying a tenant as a solopreneur on any malformed doc (design §1d).
+  //
+  // A new TABLE is the only option, not a choice: there is no `tenants` table to add a column to
+  // (tenancy is a `tenantId: string` column on every row). ONE ROW PER TENANT, read through
+  // by_tenant. New table ⇒ no migration (prior-phase discipline).
+  tenantProfiles: defineTable({
+    tenantId: v.string(),
+    // Tier facts (@pikar/core `TierFacts`). ALL optional: a `legacy` backfill row has none by
+    // definition and design §10 forbids forced re-onboarding, so the "narrow" half of
+    // widen-migrate-narrow is deliberately NEVER taken. Completeness is enforced at the WRITE
+    // boundary (`missingSlots`/`canComplete`), not by the schema — the schema must keep admitting
+    // the incomplete legacy row it was created to hold.
+    headcount: v.optional(v.number()),
+    paidStaff: v.optional(v.number()),
+    // Closed literal unions, mirroring @pikar/core REVENUE_STAGES / FUNDING_STATES (owner Q7). A
+    // v.string() here would reintroduce the string-matching defect class this phase closes.
+    revenueStage: v.optional(
+      v.union(v.literal("pre-revenue"), v.literal("early-revenue"), v.literal("steady-revenue")),
+    ),
+    funding: v.optional(
+      v.union(v.literal("bootstrapped"), v.literal("seeking"), v.literal("funded")),
+    ),
+    yearsOperating: v.optional(v.number()),
+    // Derived (SC#2). `enterprise` is REPRESENTABLE here and NEVER returned by deriveTier (D6):
+    // the derivation function's return type (`DerivedTier`, three members) is what makes D6 a type
+    // error rather than a review note. The fourth literal exists for the operator grant (Q4).
+    tier: v.union(
+      v.literal("solopreneur"),
+      v.literal("startup"),
+      v.literal("sme"),
+      v.literal("enterprise"),
+    ),
+    // REQUIRED, together with `tier` and `derivedAt`: a row cannot exist without a tier and a
+    // provenance for it. That is what stops a half-written row from becoming a silent
+    // "solopreneur" — the exact failure the markdown fallback used to produce.
+    tierSource: v.union(
+      v.literal("derived"),
+      v.literal("confirmed"),
+      v.literal("admin"),
+      v.literal("legacy"),
+    ),
+    derivedAt: v.number(), // a rule retune is a visible re-derivation EVENT, not a silent reclass
+    // Agent identity (D4). agentName is sanitized at the WRITE boundary (`sanitizeAgentName`) —
+    // it rides into a model system prompt, so it is a trust boundary, not a cosmetic field.
+    agentName: v.optional(v.string()),
+    behaviorPreset: v.optional(
+      v.union(v.literal("direct"), v.literal("coaching"), v.literal("concise")),
+    ),
+  }).index("by_tenant", ["tenantId"]),
 });

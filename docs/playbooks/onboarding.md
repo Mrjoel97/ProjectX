@@ -53,6 +53,48 @@ TS in `businessProfile.ts`, unit-tested in `businessProfile.test.ts`:
   after the cap. This string rides into a model system prompt in plan 15.1-05, so it is a trust
   boundary: no newline means a name cannot open a fake instruction block.
 
+### Tier control plane — `tenantProfiles` (Phase 15.1, design §4.1)
+
+`packages/backend/convex/schema.ts` → `tenantProfiles`, indexed `by_tenant`. **One row per tenant.**
+A new table, not a column: there is no `tenants` table (tenancy is a `tenantId: string` column on
+every row), so this was the only option. Adapter: `packages/backend/convex/tenantProfile.ts` (plan
+15.1-02 — its watched paths are already registered here so the Stop hook protects it from day one).
+
+- **Record vs projection (§4.2)** — this table is the RECORD for `tier`. The `- **Persona:** x` line
+  in the `business_profile` vault doc stays (grounding retrieval must still see "this is a
+  solopreneur" in context) but it is a PROJECTION; `deserializeProfile`'s
+  `isPersona(x) ? x : "solopreneur"` fallback becomes a display convenience once nothing
+  authoritative reads it (plan 15.1-03).
+- **Facts are all optional; tier / tierSource / derivedAt are REQUIRED.** A `legacy` backfill row has
+  no facts by definition and design §10 forbids forced re-onboarding, so the schema deliberately
+  never narrows. A row cannot exist without a tier and a provenance for it — that is what stops a
+  half-written row from becoming a silent "solopreneur". Completeness lives at the WRITE boundary
+  (`missingSlots`), never in the schema.
+- **`tierSource` semantics** — `derived` (deriveTier over complete facts) · `confirmed` (the user
+  acknowledged the derivation in the design §6 closing beat) · `admin` (operator grant; the ONLY
+  route to `enterprise`) · `legacy` (design §10 backfill, tier recovered from markdown, facts empty).
+  It is design §4.1's one-field hedge for a later business-shape-vs-billing split — **not** an
+  abstraction for a second tier concept. Do not build one until billing exists.
+
+Three decisions this phase locked that have no other home:
+
+- **Q3 — `financialsPresent` keeps overriding the framework pick, and that is CORRECT.**
+  `evaluations.ts:291-295` gives any financially-grounded tenant `growth-os` regardless of tier;
+  financials mean a growth-os diagnosis is actually possible. The tier's effect lands on voice,
+  framing and the specialist prompt instead, which is **unconditional**. A verifier must NOT read
+  SC#5 as "the rubric pick must change" — see [ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md).
+- **Q4 — `enterprise` is granted by an OPERATOR, not by any tenant-callable function.** A grant is an
+  `internalMutation` with **no public API surface** (the `actOnGapInternal` precedent), invoked via
+  `npx convex run`, writing `tierSource: "admin"`. There is no `tenantMutation`, no UI and no route,
+  because `requireOwner`/**GOVN-01 is Phase 22 and is NOT closed by this phase**. Do not add a fourth
+  tenant-callable pseudo-admin function — that deepens the Phase-22 blocker. D6 holds regardless of
+  who can call the grant, because `deriveTier`'s return type structurally excludes `enterprise`.
+- **Q6 — `onboarding-agent` and the behavior-preset style directives are UNGATED**, matching
+  `business-profile` (the nearest precedent: also an onboarding skill, also ungated, also producing
+  something a human confirms rather than autonomous tool-state). Gating would add an eval-corpus
+  obligation this phase has no budget for, and Phase 15's eval gate is already unpaid. Do NOT add
+  them to `GATED_SKILLS`.
+
 Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/skills/business-profile.md` — canonical extraction prompt body
 - `packages/contracts/src/skills/businessProfile.ts` — derived `businessProfileSkillBody` constant

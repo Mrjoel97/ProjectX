@@ -13,7 +13,10 @@
   ],
   "onboarding.md": [
     "packages/core/src/businessProfile.ts",
+    "packages/core/src/businessProfile.test.ts",
     "packages/backend/convex/onboarding.ts",
+    "packages/backend/convex/tenantProfile.ts",
+    "packages/backend/convex/tenantProfile.test.ts",
     "apps/web/app/(app)/dashboard/onboarding/",
     "apps/web/app/(app)/dashboard/profile/"
   ],
