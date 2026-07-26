@@ -603,7 +603,16 @@ Plans:
   6. `markReady` clears `failureReason`/`extractionTruncated`, so a successful retry stops reporting a stale error; and `extractGraph` caps its prompt (today it is the one uncapped model call in the repo).
   7. **LIVE GATE:** the owner's stuck `.xlsm` reaches `ready` with non-zero `textChars` on the real deployment via `vaultSweep:runSweep`. Offline green does NOT close this phase (Pitfall-1 class — only the deployed run proves it).
 **Non-goal**: folders, 1–1.5 GB folder upload, the 200 MB per-file cap raise, document-identity classification and folder-level synthesis are **Phase 2 of this line of work** — the cap raise is unsafe until the fan-out bounds per-action memory (the playbook already flags large-doc extraction memory/time at the CURRENT 100 MiB cap).
-**Plans**: TBD (run `/gsd:plan-phase 15.2`)
+**Plans**: 7 plans in 7 waves (serial — `vaultExtract.ts` is the spine of four of them, and `execute-phase` serialises on `wave`, not on intra-wave `depends_on`)
+
+Plans:
+- [ ] 15.2-01-PLAN.md — Lane V contract + magic-byte `sniff.ts` + the never-null scheduling decision [SC#1, SC#4] (Wave 1)
+- [ ] 15.2-02-PLAN.md — Format coverage in the pure layer: ZIP-entry dispatch (XLSM/DOCM/PPTM/ODF/EPUB) + RTF/markup/OLE2 DOC-PPT, no new dependency [SC#2, SC#3] (Wave 2)
+- [ ] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
+- [ ] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
+- [ ] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5)
+- [ ] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6)
+- [ ] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7)
 
 ### Phase 16: Research Sub-Agent & Web Research
 **Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
