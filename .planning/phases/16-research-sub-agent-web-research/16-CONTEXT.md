@@ -173,8 +173,22 @@ STEP ceilings, not the clock.
 
 **The decision: research runs on the ASYNC MEMO TERMINAL.** It dispatches as a scheduled background
 run and lands as a memo plan card, the way the Growth OS specialists already do through
-`dispatchAndLand`. No 45-second envelope, so D10's multi-angle depth becomes affordable instead of
-a timeout risk.
+`dispatchAndLand`.
+
+> **CORRECTION (2026-07-27, same day).** An earlier draft of this entry said async means "no
+> 45-second envelope". **That was WRONG and is retracted.** `runSpecialistTurn` calls
+> `runAgentLoop` (`llm.ts:1834`), and its own docstring says so explicitly: *"everything else —
+> `stepCountIs(8)`, **`AbortSignal.timeout`**, `recordModelSpend`, the fallback retry, the CKPT-05
+> emitters — is the same machinery `runCockpitAgent` gets."* **The 45s abort applies to the
+> specialist loop whether it runs in-loop or in a scheduled background action.** Moving work off
+> the request path changes WHO WAITS, not how long the work is permitted to take — the timeout is a
+> property of the `generateText` call, not of the caller. Do not repeat the retracted claim.
+>
+> Async is still the right call, but for three reasons rather than four: the user no longer waits, a
+> research timeout no longer kills the EXECUTIVE turn (it fails in the background where D11's
+> wall-clock row catches it as a governed outcome), and research no longer competes with the
+> executive's own 8-step budget. The wall-clock constraint on the research loop itself is closed
+> separately, by **D12** below.
 
 **This is REUSE, not new construction (CLAUDE.md §8 rung 2).** The scheduled dispatch, the memo
 terminal, the live `agentSteps` trace and the plan card all already ship. The executive answers
@@ -189,6 +203,32 @@ inside the same conversational turn. SC#1's "returns findings to the executive a
 obligation to amend the `dispatchGuard.test.ts:16-24` comment may no longer apply — if no
 `ctx.runAction` in-loop path ships, the comment stays TRUE and must be left alone. Re-derive that;
 do not amend a comment the code no longer contradicts.
+
+### D12 — the research route gets its OWN wall-clock budget (owner, 2026-07-27) (LOCKED)
+
+Closes the gap D9-REVISED's correction opened. Without this, D10 is undeliverable: a multi-angle run
+cannot decompose, issue 3-5 hosted searches, cross-check and synthesise inside 45 seconds, and the
+D11 wall-clock marker would stop being a rare safety net and become the ROUTINE outcome.
+
+**Add a research-specific timeout (e.g. `RESEARCH_CALL_TIMEOUT_MS`, order of 180-240s) applied ONLY
+on the research route. `CALL_TIMEOUT_MS = 45_000` stays exactly as it is for every other path.**
+Convex actions allow up to 10 minutes, and the run is in the background, so nobody is watching a
+spinner.
+
+**This is a deliberate exception in a place the codebase has kept uniform, so it carries two
+obligations:**
+
+1. A comment at the override naming WHY research is the exception — hosted `web_search` is
+   provider-executed and reads pages server-side, so its per-step latency is unlike every other
+   tool in the system — and stating that the 45s default is unchanged elsewhere.
+2. **A test that the default is still 45s on a non-research path.** Otherwise a later refactor
+   quietly promotes the research budget to the global one and the executive turn's wall-clock
+   guarantee is gone with nothing failing.
+
+**D11's wall-clock row still applies and is NOT made redundant by this.** A larger budget makes a
+timeout rarer; it does not make it a governed outcome. A research run that exhausts even the
+extended clock must still return partial findings MARKED incomplete rather than throwing. Raising a
+limit and defining the behaviour at the limit are different fixes — ship both.
 
 ### D10 — "SOPHISTICATED": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED)
 
