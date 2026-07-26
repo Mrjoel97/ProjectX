@@ -422,6 +422,101 @@ describe("fillVault treats an empty array as unset (offer gate is reachable)", (
   });
 });
 
+// ── 15.1-04 (SC#2b): the rubric comes from the tenantProfiles ROW, not from the markdown ────────
+//
+// design §4.2: the `- **Persona:**` line in a `business_profile` doc is a PROJECTION of
+// `tenantProfiles.tier`. `deserializeProfile` still falls back to `"solopreneur"` on a garbled line,
+// and that fallback is only harmless because NOTHING authoritative reads it any more. These tests
+// are what keep it harmless: they drive the engine over one identical malformed document and prove
+// the framework follows the TABLE.
+
+/**
+ * Seed the tier row DIRECTLY (never through `saveFacts`). This suite is about which tier the engine
+ * READS, not how it was derived — and design §10's `legacy` row legitimately carries no facts at all.
+ */
+async function seedTier(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  tier: "solopreneur" | "startup" | "sme" | "enterprise",
+): Promise<void> {
+  await t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier,
+      tierSource: "derived",
+      derivedAt: Date.now(),
+    }),
+  );
+}
+
+/**
+ * The SC#2b fixture: a profile doc whose Persona line is GARBAGE (`isTier` rejects "wizard") and
+ * which states NO financial figure, so nothing but the tier can decide the rubric. Before this plan
+ * `deserializeProfile` fell back to `"solopreneur"` and the engine picked `"lean"` from it.
+ */
+const MALFORMED_PERSONA_DOC = profileDocText(false).replace(
+  "- **Persona:** solopreneur",
+  "- **Persona:** wizard",
+);
+/** Same document, plus the labeled figures that trip `financialsPresent` (the Q3 override fixture). */
+const MALFORMED_WITH_FINANCIALS = `${MALFORMED_PERSONA_DOC}\n\nCAC: $150\nLTGP: $4500\n30-day cash: $200\n`;
+
+/** Run the engine over `text` and return the persisted row's framework, asserting nothing queued. */
+async function frameworkFor(t: ReturnType<typeof convexTest>, text: string): Promise<string> {
+  await t.mutation(internal.skills.seedSkills, {});
+  const docId = await seedDoc(t, TENANT, text);
+  await t.action(internal.evaluations.runEvaluation, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    query: `SMOKE::${docId}`,
+  });
+  // A read-only evaluation must queue NOTHING. A leftover production job would make this file
+  // depend on whether OPENAI_API_KEY is set (the 15-04 lesson) — assert, then clear.
+  const queued = await readScheduled(t);
+  await cancelQueued(t);
+  expect(queued).toHaveLength(0);
+  const row = await t
+    .withIdentity({ subject: TENANT })
+    .query(api.evaluations.byThread, { threadId: THREAD });
+  return row?.framework as string;
+}
+
+describe("the framework auto-pick reads the tier table (SC#2b)", () => {
+  // Non-vacuity: if `serializeProfile` ever stops emitting `- **Persona:** solopreneur`, the
+  // `.replace()` above silently no-ops and every test below would pass for the wrong reason.
+  test("the fixture really is malformed", () => {
+    expect(MALFORMED_PERSONA_DOC).toContain("- **Persona:** wizard");
+    expect(MALFORMED_PERSONA_DOC).not.toContain("solopreneur");
+  });
+
+  test("a malformed profile does not reclassify the tenant — tier `sme` still picks swot", async () => {
+    const t = newTest();
+    await seedTier(t, TENANT, "sme");
+    expect(await frameworkFor(t, MALFORMED_PERSONA_DOC)).toBe("swot");
+  });
+
+  test("the TABLE moves the pick: the same markdown at tier `startup` picks bmc", async () => {
+    const t = newTest();
+    await seedTier(t, TENANT, "startup");
+    // Two tiers, two frameworks, one identical document — the table is the authority, and this is
+    // not the fallback happening to agree.
+    expect(await frameworkFor(t, MALFORMED_PERSONA_DOC)).toBe("bmc");
+  });
+
+  test("no tier row at all → the honest `solopreneur` default (lean)", async () => {
+    const t = newTest();
+    expect(await frameworkFor(t, MALFORMED_PERSONA_DOC)).toBe("lean");
+  });
+
+  test("Q3 holds: financials present still override the tier with growth-os", async () => {
+    const t = newTest();
+    await seedTier(t, TENANT, "sme");
+    // Intended behaviour, not a bug: financials mean a growth-os diagnosis is POSSIBLE. The tier's
+    // perceivable effect lands on the specialist prompt (ADR-009), never on the rubric.
+    expect(await frameworkFor(t, MALFORMED_WITH_FINANCIALS)).toBe("growth-os");
+  });
+});
+
 // ── 15-04 (DISP-01): "Act on this" RUNS the specialist ────────────────────────────────────────
 //
 // Lane A's assertions live HERE. `gapAction.test.ts` is the 12-05 characterization file; it is run
