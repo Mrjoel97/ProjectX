@@ -1,8 +1,8 @@
 ---
 phase: 16
 slug: research-sub-agent-web-research
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-27
 ---
@@ -104,4 +104,4 @@ Task IDs are assigned by the planner; this is the criterion→test contract the 
 - [ ] Feedback latency < 40s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** plan-set 16-01..16-09 written 2026-07-27. Every task carries an <automated> verify or an explicit Wave-0 (16-01) dependency; Wave-0 gaps are owned by 16-01 (unions/signatures/watch.json), 16-02 (probe), 16-07 (research.test.ts) and 16-09 (harness observables).
