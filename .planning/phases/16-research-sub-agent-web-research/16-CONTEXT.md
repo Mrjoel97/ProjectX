@@ -150,6 +150,46 @@ load-bearing. This is the D3 discipline applied to a second file: **when you rel
 invariant, correct the document in the same commit.** Ship a shared-envelope test alongside,
 proving two research dispatches in ONE executive turn draw down ONE envelope.
 
+### D9-REVISED — SUPERSEDES D9 (owner, 2026-07-27, after a wall-clock finding) (LOCKED)
+
+**D9 above is SUPERSEDED. Read this instead.** D9 asked for both return paths and the plans
+collapsed to an in-loop-only path; settling that deviation surfaced a fact that changes the
+decision rather than confirming either side.
+
+**The finding.** `llm.ts:1726-1727` — `stopWhen: stepCountIs(8)` and
+`abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS)` (45_000) are arguments to the SAME
+`generateText` call. In `ai@7` one `generateText` **is** the entire multi-step agentic loop, so the
+45-second abort covers **every step together**, not one model round-trip. (The constant's comment
+says "per-call wall-clock ceiling" — accurate when a "call" meant one round-trip, misleading now.)
+
+**Why that is fatal to in-loop research.** Hosted `web_search` is the slowest operation in the
+system — OpenAI runs the search AND reads the pages server-side. Decompose → 3-5 varied searches →
+cross-check → synthesise, all inside 45 seconds, is not a safe bet. **D10 makes it worse by
+construction:** "search several angles" is exactly the instruction that adds wall-clock. And the
+failure is a THROW, not a graceful stop — `AbortSignal` fires → `isTimeoutError` →
+`throw ConvexError({kind:"agent_timeout"})` (`llm.ts:1789`) — so the whole executive turn dies and
+**every partial finding is discarded**. The `incomplete` marker never fires; it covers the COST and
+STEP ceilings, not the clock.
+
+**The decision: research runs on the ASYNC MEMO TERMINAL.** It dispatches as a scheduled background
+run and lands as a memo plan card, the way the Growth OS specialists already do through
+`dispatchAndLand`. No 45-second envelope, so D10's multi-angle depth becomes affordable instead of
+a timeout risk.
+
+**This is REUSE, not new construction (CLAUDE.md §8 rung 2).** The scheduled dispatch, the memo
+terminal, the live `agentSteps` trace and the plan card all already ship. The executive answers
+immediately ("researching that now"), the trace streams while it works, and the findings arrive as
+an approvable card.
+
+**The accepted cost, stated plainly so no one rediscovers it as a defect:** findings do NOT return
+inside the same conversational turn. SC#1's "returns findings to the executive agent" is satisfied
+**via the plan**, not inline. A verifier must not read SC#1 as requiring an in-conversation return.
+
+**Consequence for the plans:** 16-06 (in-loop return) and 16-07 (terminal) both change. The D9
+obligation to amend the `dispatchGuard.test.ts:16-24` comment may no longer apply — if no
+`ctx.runAction` in-loop path ships, the comment stays TRUE and must be left alone. Re-derive that;
+do not amend a comment the code no longer contradicts.
+
 ### D10 — "SOPHISTICATED": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED)
 
 **Owner requirement, stated directly: "the research tool has to be sophisticated and highly
