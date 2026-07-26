@@ -1,19 +1,27 @@
 // The onboarding / business-profile adapter (onboarding.ts, ONBD-01/02), convex-test.
 //
-// Task 1: `status` first-run gate + `extractProfile` (persona inference, NEVER auto-commits — SC#1).
+// Task 1: `status` first-run gate + `extractProfile` (structured extraction, NEVER auto-commits — SC#1).
 // Task 2: `commitProfile` / `updateProfile` — the persistBrief clone drives commit → ingest → retrieve
 //   via the offline SMOKE:: seam (SC#2), a foreign tenant gets nothing (SC#3), and an edit re-embeds.
+// Phase 15.1 plan 03: the tier is no longer an INPUT anywhere. The four properties pinned here are
+//   SC#1b (the arg validator REFUSES a caller-supplied tier — the control is gone, not hidden),
+//   SC#4 (both audit payloads carry an EXACT key set with `tierSource` and no `personaConfirmed`),
+//   SC#3b (`commitProfile` fails closed while a required fact slot is empty), and
+//   SC#6c (a legacy tenant still reads `needsOnboarding: false` and can still EDIT).
+//   Plus the §4.2 projection guard: the markdown's `- **Persona:**` line always equals the TABLE's
+//   tier — a diff that touched `vProfile` but not `writeProfileDoc` would emit `undefined` here.
 //
 // Everything runs OFFLINE: `extractProfile` short-circuits on `SMOKE::profile::`, and retrieval uses
 // vaultGroundHydrated's `SMOKE::<docId>` seam (reads the row text directly through the tenant-scoped
 // ownedDocsMeta — no embedding network, and a cross-tenant seed drops out exactly as namespace
 // scoping would exclude it). Durable ingest steps do NOT run synchronously in convex-test, so the
 // committed row sits at `status: "processing"` — the SMOKE retrieval seam reads its `text` regardless.
-import type { BusinessProfile } from "@pikar/core";
-import { convexTest } from "convex-test";
+import type { ProfileInput } from "@pikar/core";
+import { serializeProfile } from "@pikar/core";
+import { convexTest, type TestConvex } from "convex-test";
 import { expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
 // The components the commit → startIngest spine touches offline (voice.test.ts set): auditCounts
 // (audit.log aggregate) + workflow/workpool (startIngest → ingestDoc). Relative specifiers because
@@ -34,7 +42,10 @@ const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/s
 const TENANT = "tenant_onb";
 const FAKE_KEY = "sk-onboarding-test-key";
 
-function setup(): ReturnType<typeof convexTest> {
+// A TYPED instance is mandatory the moment a `t.run` body reads a USER index — an untyped
+// `ReturnType<typeof convexTest>` erases the schema generic and `withIndex("by_tenant", …)` resolves
+// against `SystemIndexes` (the 15-04 wall, re-hit by 15.1-02). Same reason it is used here.
+function setup(): TestConvex<typeof schema> {
   process.env.OPENAI_API_KEY = FAKE_KEY;
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
@@ -43,10 +54,64 @@ function setup(): ReturnType<typeof convexTest> {
   return t;
 }
 
-const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
+const asTenant = (t: TestConvex<typeof schema>, tenantId = TENANT) =>
   t.withIdentity({ subject: tenantId });
 
-const PERSONAS = ["solopreneur", "startup", "sme"];
+// ── The tier control plane (plan 02's table) — every commit path now requires a row ──────────────
+
+/** Everything a seeded `tenantProfiles` row must/may carry; `derivedAt` defaults to now. */
+type TierRowSeed = Omit<
+  Doc<"tenantProfiles">,
+  "_id" | "_creationTime" | "tenantId" | "derivedAt"
+> & { derivedAt?: number };
+
+/**
+ * Seed the tier row DIRECTLY (never through `saveFacts`) so a test can construct a row that
+ * `saveFacts` would refuse to write — an incomplete one, or the design §10 `legacy` row that has no
+ * facts at all. `saveFacts` is used only where the test is about the tier MOVING.
+ */
+const seedTierRow = (t: TestConvex<typeof schema>, tenantId: string, row: TierRowSeed) =>
+  t.run((ctx) => ctx.db.insert("tenantProfiles", { tenantId, derivedAt: Date.now(), ...row }));
+
+/** A complete fact set. `deriveTier` maps it to `sme` (paid staff, steady revenue, bootstrapped). */
+const COMPLETE_FACTS = {
+  headcount: 4,
+  paidStaff: 2,
+  revenueStage: "steady-revenue",
+  funding: "bootstrapped",
+  yearsOperating: 3,
+} as const;
+
+/** The ordinary starting state: a tenant who finished the facts conversation and derived to `sme`. */
+const seedDerivedSme = (t: TestConvex<typeof schema>, tenantId = TENANT) =>
+  seedTierRow(t, tenantId, { tier: "sme", tierSource: "derived", ...COMPLETE_FACTS });
+
+/**
+ * The `ConvexError` DATA of a rejected call. Asserting the `code` (not a message substring) is what
+ * makes the error contract readable by plan 07's UI — it renders `INCOMPLETE_ONBOARDING`'s `missing`
+ * list, so both halves are pinned here.
+ */
+async function rejectionData(p: Promise<unknown>): Promise<{ code?: string; missing?: string[] }> {
+  try {
+    await p;
+  } catch (e) {
+    return ((e as { data?: unknown }).data ?? {}) as { code?: string; missing?: string[] };
+  }
+  throw new Error("expected the call to reject, but it succeeded");
+}
+
+/** The sorted key array of every audit payload for one event type — a SET, not a superset. */
+const payloadKeys = (t: TestConvex<typeof schema>, eventType: string): Promise<string[][]> =>
+  t.run(async (ctx) => {
+    const rows = await ctx.db
+      .query("audit")
+      .filter((q) => q.eq(q.field("eventType"), eventType))
+      .collect();
+    return rows.map((r) => Object.keys((r.payload ?? {}) as object).sort());
+  });
+
+const textOf = (t: TestConvex<typeof schema>, id: Id<"vaultDocuments">) =>
+  t.run(async (ctx) => (await ctx.db.get(id))?.text ?? "");
 
 // ── Task 1: status gate + extractProfile (SC#1 no-auto-commit) ───────────────
 
@@ -115,7 +180,7 @@ test("status is tenant-scoped: another tenant's profile never satisfies this ten
   expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: true });
 });
 
-test("extractProfile returns a Lean-core object with an allowed persona and writes NO doc (SC#1)", async () => {
+test("extractProfile returns a Lean-core object and writes NO doc (SC#1)", async () => {
   const t = setup();
   await t.mutation(internal.skills.seedSkills, {}); // business-profile skill (fail-closed load)
 
@@ -123,8 +188,10 @@ test("extractProfile returns a Lean-core object with an allowed persona and writ
     intakeText: "SMOKE::profile::startup",
   });
 
-  expect(PERSONAS).toContain(profile.persona);
-  expect(profile.persona).toBe("startup"); // the sentinel's persona is honored
+  // Defect 1a, closed STRUCTURALLY: the extraction contract has no tier/persona field at all, so
+  // the model has nowhere to put a guess even if a future skill-body edit reintroduced the
+  // instruction to make one. The tier comes from ASKED facts (`tenantProfile.saveFacts`).
+  expect(profile).not.toHaveProperty("persona");
   expect(typeof profile.name).toBe("string");
   expect(Array.isArray(profile.primaryGoals)).toBe(true);
 
@@ -135,13 +202,14 @@ test("extractProfile returns a Lean-core object with an allowed persona and writ
   expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: true });
 });
 
-test("extractProfile persona defaults to a best-fit allowed value (never enterprise)", async () => {
+test("extractProfile emits no tier however the intake is shaped (the SMOKE suffix is inert)", async () => {
   const t = setup();
   await t.mutation(internal.skills.seedSkills, {});
   const profile = await asTenant(t).action(api.onboarding.extractProfile, {
-    intakeText: "SMOKE::profile::enterprise", // not an allowed persona → best-fit fallback
+    intakeText: "SMOKE::profile::enterprise", // the suffix no longer selects anything
   });
-  expect(PERSONAS).toContain(profile.persona);
+  expect(profile).not.toHaveProperty("persona");
+  expect(profile.oneLineDescription.length).toBeGreaterThan(0);
 });
 
 test("extractProfile fails closed when the business-profile skill is unseeded (§5)", async () => {
@@ -153,10 +221,9 @@ test("extractProfile fails closed when the business-profile skill is unseeded (�
 
 // ── Task 2: commitProfile / updateProfile — embed + retrieve + isolation + re-embed ──────────────
 
-const PROFILE: BusinessProfile = {
+const PROFILE: ProfileInput = {
   name: "Northwind Coffee",
   oneLineDescription: "A neighborhood specialty coffee roaster.",
-  persona: "sme",
   stage: "early-revenue",
   offering: "Single-origin roasted beans and a tasting bar.",
   targetCustomer: "Local cafes and home enthusiasts.",
@@ -165,7 +232,7 @@ const PROFILE: BusinessProfile = {
 };
 
 /** Drive a committed profile → SMOKE retrieval, returning what vaultGroundHydrated hydrates. */
-const hydrate = (t: ReturnType<typeof convexTest>, tenantId: string, docId: Id<"vaultDocuments">) =>
+const hydrate = (t: TestConvex<typeof schema>, tenantId: string, docId: Id<"vaultDocuments">) =>
   t.action(internal.vaultGround.vaultGroundHydrated, {
     tenantId,
     query: `SMOKE::${docId}`,
@@ -173,6 +240,7 @@ const hydrate = (t: ReturnType<typeof convexTest>, tenantId: string, docId: Id<"
 
 test("commitProfile embeds a business_profile doc that is retrievable via the SMOKE seam (SC#2)", async () => {
   const t = setup();
+  await seedDerivedSme(t);
   const { vaultDocId } = await asTenant(t).mutation(api.onboarding.commitProfile, {
     profile: PROFILE,
   });
@@ -184,7 +252,7 @@ test("commitProfile embeds a business_profile doc that is retrievable via the SM
   expect(doc?.mimeType).toBe("text/markdown");
   expect(doc?.status).toBe("processing"); // ingest workflow armed (durable steps run in vaultIngest's own tests)
   expect(doc?.text).toContain("Northwind Coffee");
-  expect(doc?.text).toContain("sme");
+  expect(doc?.text).toContain("- **Persona:** sme"); // spliced from the TABLE, not from the caller
 
   // The gate has flipped closed — a committed profile satisfies needsOnboarding.
   expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: false });
@@ -198,6 +266,7 @@ test("commitProfile embeds a business_profile doc that is retrievable via the SM
 
 test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)", async () => {
   const t = setup();
+  await seedDerivedSme(t, "tenant_a");
   const { vaultDocId } = await asTenant(t, "tenant_a").mutation(api.onboarding.commitProfile, {
     profile: PROFILE,
   });
@@ -214,10 +283,11 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
 
 test("updateProfile re-embeds IN PLACE: same doc id, new content retrievable, stale content gone", async () => {
   const t = setup();
+  await seedDerivedSme(t);
   const asA = asTenant(t);
   const { vaultDocId } = await asA.mutation(api.onboarding.commitProfile, { profile: PROFILE });
 
-  const edited: BusinessProfile = {
+  const edited: ProfileInput = {
     ...PROFILE,
     offering: "Cold-brew concentrate and a mobile espresso cart.",
   };
@@ -243,8 +313,9 @@ test("updateProfile re-embeds IN PLACE: same doc id, new content retrievable, st
   expect(profileDocs).toHaveLength(1);
 });
 
-test("updateProfile before any commit is a no-throw first commit", async () => {
+test("updateProfile before any commit is a no-throw first commit (once the facts exist)", async () => {
   const t = setup();
+  await seedDerivedSme(t);
   const { vaultDocId } = await asTenant(t).mutation(api.onboarding.updateProfile, {
     profile: PROFILE,
   });
@@ -253,25 +324,80 @@ test("updateProfile before any commit is a no-throw first commit", async () => {
   expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: false });
 });
 
-test("commitProfile writes ONE refs/counts-only audit row — no profile field values (§4, SC#4)", async () => {
+test("commitProfile rejects an invalid profile (empty required field) — nothing persists", async () => {
   const t = setup();
-  const { vaultDocId } = await asTenant(t).mutation(api.onboarding.commitProfile, {
-    profile: PROFILE,
+  await seedDerivedSme(t);
+  const data = await rejectionData(
+    asTenant(t).mutation(api.onboarding.commitProfile, {
+      // oneLineDescription is the one required text field (sparse-start); empty → rejected.
+      profile: { ...PROFILE, oneLineDescription: "   " },
+    }),
+  );
+  expect(data.code).toBe("INVALID_PROFILE");
+  const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+  expect(docs).toHaveLength(0);
+});
+
+// ── Phase 15.1 plan 03 — the tier is not an input, the audit tells the truth ─────────────────────
+
+test("SC#1b: updateProfile refuses a caller-supplied tier", async () => {
+  const t = setup();
+  await seedDerivedSme(t);
+  await asTenant(t).mutation(api.onboarding.commitProfile, { profile: PROFILE });
+
+  // NON-VACUITY: the same call WITHOUT the extra key succeeds, so the rejection below can only be
+  // about the tier and not about some unrelated precondition.
+  await expect(
+    asTenant(t).mutation(api.onboarding.updateProfile, { profile: PROFILE }),
+  ).resolves.toBeTruthy();
+
+  // The strongest available assertion that the control is GONE rather than hidden: an extra key
+  // against a Convex `v.object` validator is a hard validation error. Design §11 names this
+  // regression by name — the page-level source scan only proves the WIDGET is gone.
+  await expect(
+    asTenant(t).mutation(api.onboarding.updateProfile, {
+      profile: { ...PROFILE, persona: "enterprise" } as unknown as ProfileInput,
+    }),
+  ).rejects.toThrow();
+
+  // …and the same for the first-write path.
+  await expect(
+    asTenant(t, "tenant_supply").mutation(api.onboarding.commitProfile, {
+      profile: { ...PROFILE, persona: "sme" } as unknown as ProfileInput,
+    }),
+  ).rejects.toThrow();
+});
+
+test("SC#4: the audit row is truthful on commit AND on edit (exact key sets, no personaConfirmed)", async () => {
+  const t = setup();
+  await seedDerivedSme(t);
+  const asA = asTenant(t);
+  await asA.mutation(api.onboarding.commitProfile, { profile: PROFILE });
+  await asA.mutation(api.onboarding.updateProfile, {
+    profile: { ...PROFILE, offering: "Cold brew." },
   });
 
-  const rows = await t.run((ctx) =>
-    ctx.db
-      .query("audit")
-      .filter((q) => q.eq(q.field("eventType"), "onboarding.profile_committed"))
-      .collect(),
-  );
-  expect(rows).toHaveLength(1);
-  const payload = JSON.stringify(rows[0]?.payload);
-  // Refs/counts/booleans present…
-  expect(payload).toContain(vaultDocId);
-  expect(payload).toContain("fieldCount");
-  expect(payload).toContain("personaConfirmed");
-  // …but NO profile prose or field value (§4).
+  // An exact SET, deliberately — `not.toHaveProperty("personaConfirmed")` passes for any superset,
+  // so it would not notice a new field quietly joining the payload. `personaConfirmed` is DELETED,
+  // never corrected: the audit is insert-only (CLAUDE.md §3), so a false historical row cannot be
+  // repaired — the fix is to stop writing the false field.
+  expect(await payloadKeys(t, "onboarding.profile_committed")).toEqual([
+    ["fieldCount", "tierSource", "vaultDocId"],
+  ]);
+  expect(await payloadKeys(t, "onboarding.profile_updated")).toEqual([
+    ["fieldCount", "reembed", "tierSource", "vaultDocId"],
+  ]);
+
+  // `tierSource` carries the truth the old boolean pretended to: WHERE the tier came from.
+  const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+  const onboardingRows = rows.filter((x) => x.eventType.startsWith("onboarding.profile_"));
+  expect(onboardingRows).toHaveLength(2);
+  for (const r of onboardingRows) {
+    expect((r.payload as { tierSource: string }).tierSource).toBe("derived");
+  }
+
+  // …and neither payload carries a field VALUE (§4) — refs/counts/enums ONLY.
+  const payloadJson = JSON.stringify(onboardingRows.map((r) => r.payload));
   for (const sentinel of [
     PROFILE.name,
     PROFILE.oneLineDescription,
@@ -280,18 +406,123 @@ test("commitProfile writes ONE refs/counts-only audit row — no profile field v
     ...PROFILE.primaryGoals,
     ...PROFILE.knownConstraints,
   ]) {
-    expect(payload).not.toContain(sentinel);
+    expect(payloadJson).not.toContain(sentinel);
   }
 });
 
-test("commitProfile rejects an invalid profile (empty required field) — nothing persists", async () => {
+test("§4.2: the serialized markdown's tier ALWAYS follows the tenantProfiles table", async () => {
   const t = setup();
-  await expect(
-    asTenant(t).mutation(api.onboarding.commitProfile, {
-      // oneLineDescription is the one required text field (sparse-start); empty → rejected.
-      profile: { ...PROFILE, oneLineDescription: "   " },
+  await seedDerivedSme(t);
+  const asA = asTenant(t);
+  const { vaultDocId } = await asA.mutation(api.onboarding.commitProfile, { profile: PROFILE });
+  expect(await textOf(t, vaultDocId)).toContain("- **Persona:** sme");
+
+  // Move the tier through the ONLY writer that can move it, then edit the profile: the markdown
+  // must follow the TABLE. A diff that removed `persona` from `vProfile` but forgot the splice in
+  // `writeProfileDoc` would emit `- **Persona:** undefined` here and silently re-create defect 1d.
+  const moved = await asA.mutation(api.tenantProfile.saveFacts, { headcount: 1, paidStaff: 0 });
+  expect(moved.tier).toBe("solopreneur");
+
+  await asA.mutation(api.onboarding.updateProfile, { profile: PROFILE });
+  const text = await textOf(t, vaultDocId);
+  expect(text).toContain("- **Persona:** solopreneur");
+  expect(text).not.toContain("- **Persona:** sme");
+  expect(text).not.toContain("undefined");
+});
+
+test("SC#3b: commitProfile cannot complete with an empty slot — the gate is CODE, not prompt", async () => {
+  const t = setup();
+
+  // (a) No tenantProfiles row at all — every fact slot is missing.
+  const none = await rejectionData(
+    asTenant(t, "tenant_noslots").mutation(api.onboarding.commitProfile, { profile: PROFILE }),
+  );
+  expect(none.code).toBe("INCOMPLETE_ONBOARDING");
+  expect(none.missing).toEqual(["headcount", "paidStaff", "revenueStage", "funding", "yearsOperating"]);
+
+  // (b) A row with exactly ONE slot unanswered. `paidStaff` is the determining question (design
+  //     §1a) and `0` is a legitimate ANSWER, so "missing" here means ABSENT, never falsy.
+  await seedTierRow(t, "tenant_oneslot", {
+    tier: "sme",
+    tierSource: "derived",
+    ...COMPLETE_FACTS,
+    paidStaff: undefined,
+  });
+  const one = await rejectionData(
+    asTenant(t, "tenant_oneslot").mutation(api.onboarding.commitProfile, { profile: PROFILE }),
+  );
+  expect(one.code).toBe("INCOMPLETE_ONBOARDING");
+  expect(one.missing).toEqual(["paidStaff"]);
+
+  // Nothing persisted on either refusal — a refused completion is not a half-onboarded tenant.
+  expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
+
+  // (c) NON-VACUITY: a complete row commits fine, and `paidStaff: 0` is accepted as an answer.
+  await seedTierRow(t, "tenant_solo", {
+    tier: "solopreneur",
+    tierSource: "derived",
+    ...COMPLETE_FACTS,
+    headcount: 1,
+    paidStaff: 0,
+  });
+  const ok = await asTenant(t, "tenant_solo").mutation(api.onboarding.commitProfile, {
+    profile: PROFILE,
+  });
+  expect(await textOf(t, ok.vaultDocId)).toContain("- **Persona:** solopreneur");
+});
+
+test("SC#6c: a legacy tenant is never forced back through onboarding and can still edit", async () => {
+  const t = setup();
+  // The design §10 backfill row: a tier, `tierSource: "legacy"`, and NO facts whatsoever.
+  await seedTierRow(t, TENANT, { tier: "sme", tierSource: "legacy" });
+  await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Business profile",
+      kind: "business_profile",
+      category: "workspace-docs",
+      source: "agent",
+      mimeType: "text/markdown",
+      size: 1,
+      contentHash: "c-legacy",
+      text: serializeProfile({ ...PROFILE, persona: "sme" }),
+      status: "ready",
+      createdAt: Date.now(),
     }),
-  ).rejects.toThrow();
-  const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
-  expect(docs).toHaveLength(0);
+  );
+
+  // (a) The first-run gate stays closed — no forced re-onboarding.
+  expect(await asTenant(t).query(api.onboarding.status, {})).toEqual({ needsOnboarding: false });
+
+  // (b) The EDIT path carries no slot gate, so the legacy tenant can still change their profile…
+  const { vaultDocId } = await asTenant(t).mutation(api.onboarding.updateProfile, {
+    profile: { ...PROFILE, offering: "Now also a wholesale line." },
+  });
+  const text = await textOf(t, vaultDocId);
+  expect(text).toContain("Now also a wholesale line.");
+  expect(text).toContain("- **Persona:** sme"); // the legacy tier stands
+  expect((await payloadKeys(t, "onboarding.profile_updated"))[0]).toEqual([
+    "fieldCount",
+    "reembed",
+    "tierSource",
+    "vaultDocId",
+  ]);
+
+  // (c) …while `commitProfile` — the FIRST-TIME completion gate — would still refuse. The
+  //     asymmetry is deliberate: a legacy tenant never reaches it, because (a) holds.
+  const refused = await rejectionData(
+    asTenant(t).mutation(api.onboarding.commitProfile, { profile: PROFILE }),
+  );
+  expect(refused.code).toBe("INCOMPLETE_ONBOARDING");
+});
+
+test("updateProfile fails closed when the tenant has no tier row at all", async () => {
+  const t = setup();
+  // After the plan-02 backfill EVERY tenant with a committed profile has a row, so a missing one
+  // means something is wrong. A `"solopreneur"` fallback here would be defect 1d in a new costume.
+  const data = await rejectionData(
+    asTenant(t, "tenant_norow").mutation(api.onboarding.updateProfile, { profile: PROFILE }),
+  );
+  expect(data.code).toBe("INCOMPLETE_FACTS");
+  expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
 });
