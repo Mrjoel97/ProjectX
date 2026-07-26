@@ -9,7 +9,8 @@
 // Component registration mirrors profileRedaction.test.ts (auditCounts + workflow + workpool — the
 // audit insert feeds the aggregate) plus vaultSweep.test.ts's migrations registration, which the
 // backfill needs.
-import { deriveTier, sanitizeAgentName } from "@pikar/core";
+import type { BusinessProfile, Persona } from "@pikar/core";
+import { deriveTier, sanitizeAgentName, serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -352,5 +353,157 @@ describe("grantEnterprise (D6, operator-only)", () => {
     expect(row?.tierSource).toBe("admin");
     expect(row?.headcount).toBeUndefined();
     expect((await tierChangedRows(t))[0]?.payload).toMatchObject({ from: null });
+  });
+});
+
+// ── Task 3: the legacy backfill (SC#6a / SC#6b, design §10) ─────────────────────────────────────
+
+const TENANT_LEGACY_SOLO = "tenant_legacy_solo";
+const TENANT_LEGACY_SME = "tenant_legacy_sme";
+const TENANT_FAILED_DOC = "tenant_failed_doc";
+const TENANT_NON_PROFILE = "tenant_non_profile";
+const TENANT_TWO_DOCS = "tenant_two_docs";
+
+const profileFor = (persona: Persona): BusinessProfile => ({
+  name: "Northwind",
+  oneLineDescription: "A legacy tenant onboarded before the tier existed.",
+  persona,
+  stage: "operating",
+  offering: "Consulting",
+  targetCustomer: "SMBs",
+  primaryGoals: ["grow"],
+  knownConstraints: ["time"],
+});
+
+/** Seed a committed `business_profile` vault doc — the ONLY record a pre-15.1 tenant's tier has. */
+const seedProfileDoc = (
+  t: TestConvex<typeof schema>,
+  tenantId: string,
+  persona: Persona,
+  overrides: Record<string, unknown> = {},
+) =>
+  t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Business profile",
+      kind: "business_profile",
+      category: "my-business",
+      source: "onboarding",
+      mimeType: "text/markdown",
+      size: 1,
+      contentHash: `c-${tenantId}-${Math.random()}`,
+      text: serializeProfile(profileFor(persona)),
+      status: "ready",
+      createdAt: Date.now(),
+      ...overrides,
+    }),
+  );
+
+/** One synchronous batch — the documented one-off mode, the vaultSweep.test.ts invocation shape. */
+const runBackfill = (t: TestConvex<typeof schema>) =>
+  t.mutation(internal.tenantProfile.backfillLegacyTier, {
+    cursor: null,
+    batchSize: 100,
+    dryRun: false,
+    oneBatchOnly: true,
+  });
+
+/** Everything the backfill queued. convex-test flushes due scheduled work in the BACKGROUND, so a
+ *  test that leaves a production job queued has a hidden OPENAI_API_KEY dependency (15-04's race). */
+const queuedJobs = (t: TestConvex<typeof schema>) =>
+  t.run((ctx) =>
+    ctx.db.system
+      .query("_scheduled_functions")
+      .collect()
+      .then((jobs) => jobs.filter((j) => j.state.kind === "pending" || j.state.kind === "inProgress")),
+  );
+
+const cancelQueued = async (t: TestConvex<typeof schema>) => {
+  const jobs = await queuedJobs(t);
+  await t.run(async (ctx) => {
+    for (const j of jobs) await ctx.scheduler.cancel(j._id);
+  });
+  return jobs;
+};
+
+describe("the legacy backfill (SC#6a / SC#6b)", () => {
+  test("legacy backfill writes one legacy row per onboarded tenant and skips failed / non-profile docs", async () => {
+    const t = setup();
+    await seedProfileDoc(t, TENANT_LEGACY_SOLO, "solopreneur");
+    await seedProfileDoc(t, TENANT_LEGACY_SME, "sme");
+    await seedProfileDoc(t, TENANT_FAILED_DOC, "startup", { status: "failed" });
+    await seedProfileDoc(t, TENANT_NON_PROFILE, "startup", { kind: "upload" });
+
+    await runBackfill(t);
+
+    const rows = await allRows(t);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.tierSource).toBe("legacy");
+      expect(row.derivedAt).toBeGreaterThan(0);
+      // A legacy row has NO facts by definition (design §10 — no forced re-onboarding).
+      expect(row.headcount).toBeUndefined();
+      expect(row.paidStaff).toBeUndefined();
+      expect(row.revenueStage).toBeUndefined();
+      expect(row.funding).toBeUndefined();
+      expect(row.yearsOperating).toBeUndefined();
+    }
+    // The tier is recovered from that tenant's OWN markdown persona.
+    expect((await rowFor(t, TENANT_LEGACY_SOLO))?.tier).toBe("solopreneur");
+    expect((await rowFor(t, TENANT_LEGACY_SME))?.tier).toBe("sme");
+    expect(await rowFor(t, TENANT_FAILED_DOC)).toBeNull();
+    expect(await rowFor(t, TENANT_NON_PROFILE)).toBeNull();
+
+    // A backfill that queued production work would be a hidden OPENAI_API_KEY dependency.
+    expect(await cancelQueued(t)).toHaveLength(0);
+  });
+
+  test("backfill is idempotent: a second run adds nothing and keeps the same row ids", async () => {
+    const t = setup();
+    await seedProfileDoc(t, TENANT_LEGACY_SOLO, "solopreneur");
+    await seedProfileDoc(t, TENANT_LEGACY_SME, "sme");
+
+    await runBackfill(t);
+    const firstIds = (await allRows(t)).map((r) => r._id).sort();
+    expect(firstIds).toHaveLength(2);
+
+    await runBackfill(t);
+    const secondIds = (await allRows(t)).map((r) => r._id).sort();
+    expect(secondIds).toEqual(firstIds);
+
+    await cancelQueued(t);
+  });
+
+  test("backfill never reverts a real derivation to legacy", async () => {
+    const t = setup();
+    await seedProfileDoc(t, TENANT_LEGACY_SOLO, "solopreneur");
+    await runBackfill(t);
+    expect((await rowFor(t, TENANT_LEGACY_SOLO))?.tierSource).toBe("legacy");
+
+    // The tenant completes the facts — the row becomes authoritative.
+    await asTenant(t, TENANT_LEGACY_SOLO).mutation(api.tenantProfile.saveFacts, { ...SME_FACTS });
+    expect((await rowFor(t, TENANT_LEGACY_SOLO))?.tierSource).toBe("derived");
+
+    // A THIRD backfill run must leave that alone.
+    await runBackfill(t);
+    const row = await rowFor(t, TENANT_LEGACY_SOLO);
+    expect(row?.tierSource).toBe("derived");
+    expect(row?.tier).toBe("sme");
+    expect(await allRows(t)).toHaveLength(1);
+
+    await cancelQueued(t);
+  });
+
+  test("a tenant with TWO profile docs still ends with exactly ONE row", async () => {
+    const t = setup();
+    await seedProfileDoc(t, TENANT_TWO_DOCS, "startup");
+    await seedProfileDoc(t, TENANT_TWO_DOCS, "startup");
+
+    await runBackfill(t);
+
+    expect(await allRows(t)).toHaveLength(1);
+    expect((await rowFor(t, TENANT_TWO_DOCS))?.tier).toBe("startup");
+
+    await cancelQueued(t);
   });
 });
