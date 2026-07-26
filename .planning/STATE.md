@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 15.1-05-PLAN.md (the tier becomes perceivable — it rides into the specialist's prompt)
-last_updated: "2026-07-26T14:49:14.019Z"
+stopped_at: Completed 15.1-06-PLAN.md (onboarding ASKS the facts — converse, the code-owned state machine)
+last_updated: "2026-07-26T15:15:18.463Z"
 progress:
   total_phases: 38
   completed_phases: 22
   total_plans: 163
-  completed_plans: 157
+  completed_plans: 158
 ---
 
 ---
@@ -51,27 +51,72 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 5/7 plans; Waves 0-4 done)
+**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 6/7 plans; Waves 0-5 done)
 
 ## Current Position
 
-Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **5 of 7 PLANS COMPLETE** (6 waves)
-Current Plan: 6
+Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **6 of 7 PLANS COMPLETE** (6 waves)
+Current Plan: 7
 Total Plans in Phase: 7
-Plan: 15.1-05 COMPLETE (Wave 4 — the tier becomes perceivable in the specialist's prompt).
-Done: 15.1-01, 15.1-02, 15.1-03, 15.1-04, 15.1-05. Next: 15.1-06.
-
-**The 15.1-05 halt is RESOLVED.** The three previously-untracked
-`packages/contracts/skills/style-{direct,coaching,concise}.md` files were reclaimed and committed in
-`0c68a4e`, and `node scripts/check-playbooks.mjs check` is back to **exit 0** — the block it raised
-against `skill-registry.md` is cleared.
+Plan: 15.1-06 COMPLETE (Wave 5 — onboarding ASKS the determining facts; the code owns the state machine).
+Done: 15.1-01, 15.1-02, 15.1-03, 15.1-04, 15.1-05, 15.1-06. Next: 15.1-07 (the last plan — the UI).
 
 **EXECUTION MODE: Phase 15.1 runs SERIALLY on branch `lane-a/dispatch-core` in
 `.worktrees/lane-a-dispatch`.** No branch creation, no merges, no second session. There is NO live
 `CONVEX_DEPLOYMENT` here: `npx convex dev|codegen`, `pnpm eval:golden` and Playwright all fail.
 Offline gates only — `vitest`, `tsc --noEmit`, `check-playbooks.mjs`.
 
-Status (15.1-05): **The tier is now PERCEIVABLE: a dispatched specialist is told, as a FACT in every
+**DO NOT DEPLOY THIS BRANCH BEFORE PLAN 07.** `commitProfile` refuses until the tier facts exist
+(15.1-03) and nothing calls `converse` or `saveFacts` yet — first-time onboarding is intentionally
+non-functional at its final step until the UI lands. That is fail-closed by design.
+
+Status (15.1-06): **Onboarding stopped GUESSING the persona from prose and started ASKING — and the
+two properties that make that true live in CODE, where a model's temperature cannot reach them.**
+`onboarding.converse` is ONE `generateObject` turn returning
+`{reply, slots, missing, nextSlot, done}` — a `tenantAction`, STATELESS, writing NOTHING (no row, no
+audit, no telemetry, no dead letter; pinned by a before/after row-count assertion). **`nextSlot` is
+`missingSlots(slots)[0]` in `REQUIRED_SLOTS` order and `done` is `canComplete(slots)`, never read off
+the model** — a reply announcing "your onboarding is complete!" leaves `done: false` and `missing`
+non-empty, and the non-vacuity turn says the OPPOSITE ("one more thing to check") while going
+`done: true`, so the flag is demonstrably not being read from the text. The system prompt is the new
+UNGATED `onboarding-agent` registry row (Q6), shipped through the FULL 5-file mirror and loaded
+**FIRST, before the `SMOKE::onboard::` short-circuit** — the `extractProfile` ordering — so the §5
+fail-closed read is exercised on the offline path too (SC#3c). THE SPLIT that keeps §5 satisfied
+while the guarantee stays in code: the CODE supplies the slot NAME and its permitted shape
+(`SLOT_SHAPE`, one terse definition per slot, the two enums listing their literals per Q7); the BODY
+supplies the words, and deliberately does NOT enumerate the enums, so the closed union has exactly
+ONE home. **The merge's admission test IS the completion predicate** —
+`!missingSlots({[slot]: value}).includes(slot)`, reuse rather than a second copy of the presence
+rules — so "was it merged" and "does it still count as missing" cannot disagree; `headcount: 0`
+merges as an ANSWER and an off-union enum is DROPPED, never coerced. `turnSchema` is `jsonSchema`
+(never zod — this V8 module stays off the inference cliff), STRICT, encoding "not learned this turn"
+as an explicit `null` because strict mode requires every property in `required`. **Q1 HONOURED
+LITERALLY:** `llm.ts` and `schema.ts` are BYTE-UNCHANGED (`git diff --exit-code`, both hard gates),
+no new `agentSteps.tool` literal (the only occurrences are in the `ponytail:` comment explaining why
+one was not added), no `"use node"`. The ceiling comment names the REJECTED alternative and its three
+concrete blockers — `runAgentLoop` takes a mandatory `planId` and `plans.byThread` is `.unique()`;
+`toolNames` FILTERS `buildCockpitTools` and cannot ADD; a new tool name needs an `agentSteps.tool`
+literal or the trace insert throws inside an SDK callback the SDK SWALLOWS (blank activity card in
+prod, every test green) — plus the cost (no CKPT-05 activity trace, no shared cost rail) and the
+upgrade path. FOUR mutation-checks, every script CRLF-aware and exiting non-zero on `NO MATCH`, each
+confirming the mutated text was present before trusting the result: moving the SMOKE short-circuit
+above the skill load ⇒ **1 RED, exactly SC#3c**; `done` read off the reply ⇒ **2 RED**; `nextSlot`
+following the model's order ⇒ **1 RED**; a one-char `.md` edit ⇒ **1 RED**, exactly the drift row.
+**ZERO deviations** — every interface the plan named was where it said, and the `_generated/api.d.ts`
+hand-edit was NOT needed (`converse` is a new export on an EXISTING module; `api.d.ts` enumerates
+modules, not functions). **The one thing that nearly went wrong is the Wave-4 lesson repeating:** the
+first biome verification loop wrote its normalized copy to `/tmp`, which does not exist under Git
+Bash here, so both sides of the comparison were empty and all three files reported "CLEAN" — a check
+that could not fail. Re-run from the scratchpad with the byte count PRINTED, it found the one real
+diff (a pre-existing untouched `test.each` signature). Gates: contracts **17/17**, @pikar/core
+**277/277**, `onboarding`+`profileRedaction` **26/26**, those two plus `skills`+`tenantProfile`
+**87/87**, backend FULL **585/586** (sole red the documented `audit.test.ts` `auditCounts` row — the
+multi-file flake did NOT reproduce), backend `tsc` at the EXACT **55**-error test-file baseline with
+ZERO in any non-test file, `apps/web` typecheck exit 0, turbo **8/10**, `check-playbooks` exit 0, and
+`git diff --stat` shows exactly the 9 owned files — `dispatch.ts`, `evaluations.ts`,
+`tenantProfile.ts` and `apps/` all absent.
+
+PRIOR — Status (15.1-05): **The tier is now PERCEIVABLE: a dispatched specialist is told, as a FACT in every
 run, what shape of business it is advising — so a solopreneur's `money-model-designer` cannot propose
 hiring (design §8.1).** Three parts. (1) THE VOICE, registry-owned: three UNGATED skills
 `style-direct` / `style-coaching` / `style-concise`, one per `BEHAVIOR_PRESETS` member, shipped
@@ -568,6 +613,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.1 P03 | 47min | 3 tasks | 11 files |
 | Phase 15.1 P04 | 55min | 2 tasks | 4 files |
 | Phase 15.1 P05 | 16min | 3 tasks | 17 files |
+| Phase 15.1 P06 | 19min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -655,6 +701,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.1]: The three behaviour-preset style overlays are UNGATED (Q6), matching business-profile; the rationale lives as a comment on GATED_SKILLS, the place someone would 'fix' the omission
 - [Phase 15.1]: The style-directive read FAILS OPEN while the specialist BODY loader stays fail-CLOSED — an overlay is an additive user-turn layer, so losing it degrades voice, not governance
 - [Phase 15.1]: tierBriefing sanitizes agentName INTERNALLY, so there is exactly ONE place a user-authored string can reach a model prompt
+- [Phase 15.1]: 15.1-06: converse owns the state machine — nextSlot = missingSlots(slots)[0] in REQUIRED_SLOTS order and done = canComplete(slots); the model owns only the wording. Mutation-checked three ways.
+- [Phase 15.1]: 15.1-06: the merge's admission test IS missingSlots over a one-slot object — 'was it merged' and 'does it still count as missing' cannot disagree; 0 is an answer, off-union enums are dropped.
+- [Phase 15.1]: 15.1-06: Q1 honoured literally — converse does not ride runAgentLoop (mandatory planId, toolNames filters not adds, the swallowed agentSteps.tool insert). Ceiling: no activity trace, no shared cost rail. llm.ts and schema.ts byte-unchanged.
+- [Phase 15.1]: 15.1-06: onboarding-agent is UNGATED (Q6) — the property worth asserting is in the code, not the body, so an eval corpus would assert nothing new.
 
 ### Pending Todos
 
@@ -686,6 +736,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T14:49:03.783Z
-Stopped at: Completed 15.1-05-PLAN.md (the tier becomes perceivable — it rides into the specialist's prompt)
+Last session: 2026-07-26T15:15:18.434Z
+Stopped at: Completed 15.1-06-PLAN.md (onboarding ASKS the facts — converse, the code-owned state machine)
 Resume file: None
