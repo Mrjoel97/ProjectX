@@ -829,6 +829,18 @@ test("the external channel sends only the kind label + notificationMessage — n
 // Every scan here was mutation-verified (plant the forbidden value, confirm RED, revert). A scan
 // that cannot go red is theatre. Each also asserts its target is PRESENT, so a rename fails loudly
 // rather than passing vacuously.
+//
+// THE LEDGER (14-09, verified 2026-07-26 — re-runnable; each was confirmed RED, then reverted):
+//   M1  raw `query` added to the voicedoc.searched payload  -> "EVERY payload object" + "voicedoc.searched"
+//   M2  `citationExcerpt` added to the voicedoc.reviewed payload -> "EVERY payload object" + "voicedoc.reviewed"
+//   M3  a THIRD internal.audit.log call site added          -> "log-plane surface is PINNED"
+//   M4  `citationTitle` added to docReviewSchema (+required) -> "welds citations in code"
+//   M5  `excerpt` renamed to `quote` in docReviewSchema      -> "DOES declare excerpt"
+//   M6  `proofMetric` dropped from a required array          -> "STRICT-mode legal"
+//   M7  an `audit.log` write planted in PostCall.tsx         -> "never turns a finding excerpt into a log field"
+// M4/M5 are why the ledger exists: `properties` keys sit at 10 spaces and `required` at 8, so a
+// literal-anchor mutation silently misses and reports a false PASS. Anchor on a regex, not on
+// indentation, if you re-run these.
 
 /** Content-plane identifiers that must never appear in a voice-doc log-plane payload.
  *  `\bquery\b(?!Hash)` bans the raw query while allowing `queryHash`; `\btext\b` bans a bare `text:`
