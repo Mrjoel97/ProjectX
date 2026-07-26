@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BRIEF_HEADERS, planSeedFromBrief } from "./brief";
 import {
+  REALTIME_CLIENT_EVENTS,
   REALTIME_EVENTS,
   REALTIME_FUNCTION_CALL,
   SESSION_TOOL_KEYS,
@@ -99,6 +100,19 @@ describe("the search_document relay vocabulary", () => {
     expect(SESSION_TOOL_KEYS.tools).toBe("tools");
     expect(SESSION_TOOL_KEYS.toolChoice).toBe("tool_choice");
     expect(TOOL_CHOICE_AUTO).toBe("auto");
+  });
+
+  // The OUTBOUND half of the relay (14-06). `apps/web` has no unit runner — Playwright only — so
+  // these three strings are unreachable by any test that lives beside the code that sends them.
+  // Pinning them here is the ONLY place a silent rename fails loudly instead of leaving the model
+  // waiting on a function_call_output that never arrives.
+  it("pins the outbound relay + session.update client events", () => {
+    expect(REALTIME_CLIENT_EVENTS.createItem).toBe("conversation.item.create");
+    expect(REALTIME_CLIENT_EVENTS.createResponse).toBe("response.create");
+    // Open Question 3's contingency: declared over the channel when the mint refused mint-time tools.
+    expect(REALTIME_CLIENT_EVENTS.updateSession).toBe("session.update");
+    expect(REALTIME_FUNCTION_CALL.callIdField).toBe("call_id");
+    expect(REALTIME_FUNCTION_CALL.argumentsField).toBe("arguments");
   });
 });
 

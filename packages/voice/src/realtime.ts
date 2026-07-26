@@ -95,6 +95,11 @@ export const REALTIME_EVENTS = {
 export const REALTIME_CLIENT_EVENTS = {
   createItem: "conversation.item.create",
   createResponse: "response.create",
+  /** Re-declare session config after the channel opens. Used for ONE thing: Open Question 3's
+   *  contingency — when the mint refused a mint-time `tools` array (400), the browser declares the
+   *  retrieval tool here instead. This is the ONLY branch the guides actually exemplify for tools,
+   *  which is why it is the fallback rather than the primary. */
+  updateSession: "session.update",
 } as const;
 
 // ─── Tool calling (Phase 14, DOCV-01) ────────────────────────────────────────────────────────
