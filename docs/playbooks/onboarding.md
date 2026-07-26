@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` (see "The `saveFacts` contract" below). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
@@ -75,6 +75,40 @@ every row), so this was the only option. Adapter: `packages/backend/convex/tenan
   route to `enterprise`) · `legacy` (design §10 backfill, tier recovered from markdown, facts empty).
   It is design §4.1's one-field hedge for a later business-shape-vs-billing split — **not** an
   abstraction for a second tier concept. Do not build one until billing exists.
+
+#### The `saveFacts` contract (plan 15.1-02) — `convex/tenantProfile.ts`
+
+The module is a §1 THIN adapter: `deriveTier` / `missingSlots` / `sanitizeAgentName` are all
+`@pikar/core`; this file only reads and writes the row. DEFAULT (V8) runtime — do NOT add
+`"use node"` (`llm.ts` is the one node module; a second re-triggers the `internal`-graph
+circular-inference cliff). Every handler carries an explicit `Promise<…>` return type.
+
+- **`forTenant(tenantId)`** — `internalQuery`, the identity-less read for `internalAction` callers
+  (`evaluations.runEvaluation`, `dispatch.runSpecialist`). `.unique()`, never `.first()`: one row
+  per tenant is the table's invariant and a duplicate must be LOUD.
+- **`get()`** — `tenantQuery`, the UI read. Returns the row AS-IS; the page composes
+  `TIER_REASON[row.tier]` and `missingSlots(row)` itself.
+- **`saveFacts({headcount?, paidStaff?, revenueStage?, funding?, yearsOperating?, agentName?,
+  behaviorPreset?})` → `{ tier, tierSource, changed }`** — `tenantMutation`. Arg validators are
+  derived from `schema.tables.tenantProfiles.validator.fields`, so they cannot drift from the table.
+
+**There is NO `tier` argument and there never will be.** The tier is a derived OUTPUT of the facts
+write, never an input to it. Three behaviours the callers depend on:
+
+1. **Incomplete facts on a tenant with NO row FAIL CLOSED** — `ConvexError { code:
+   "INCOMPLETE_FACTS", missing }`. A row cannot exist without a tier; inventing one is the
+   silent-solopreneur reclassification this phase exists to kill.
+2. **Incomplete facts on a tenant that HAS a row patch the facts only** — `tier` / `tierSource` /
+   `derivedAt` are untouched. The legacy tier STANDS until the user completes the facts (design §10,
+   no forced re-onboarding).
+3. **`tierSource: "admin"` is STICKY** — a granted enterprise survives a later tenant facts edit
+   (D6). The facts land; the tier and its source do not move.
+
+Merging is `??` (nullish), never `||` — `headcount: 0` is an ANSWER, and the whole 15.1-01 slot gate
+exists because a truthiness test re-asks a solo founder forever. Five two-directional compile-time
+binds at the top of the file tie the schema's literal unions to the `@pikar/core` unions
+(`tier`, `tierSource`, `revenueStage`, `funding`, `behaviorPreset`), so widening one side without
+the other is a COMPILE error (the `_stepTools` mechanism, `dispatch.ts:131`).
 
 Three decisions this phase locked that have no other home:
 

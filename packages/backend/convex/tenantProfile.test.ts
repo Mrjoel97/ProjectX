@@ -10,7 +10,7 @@
 // audit insert feeds the aggregate) plus vaultSweep.test.ts's migrations registration, which the
 // backfill needs.
 import { deriveTier, sanitizeAgentName } from "@pikar/core";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
@@ -42,7 +42,7 @@ const migrationsModules = import.meta.glob(
 const TENANT_A = "tenant_tier_a";
 const TENANT_B = "tenant_tier_b";
 
-function setup(): ReturnType<typeof convexTest> {
+function setup(): TestConvex<typeof schema> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
@@ -51,12 +51,12 @@ function setup(): ReturnType<typeof convexTest> {
   return t;
 }
 
-const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT_A) =>
+const asTenant = (t: TestConvex<typeof schema>, tenantId = TENANT_A) =>
   t.withIdentity({ subject: tenantId });
 
 /** Read the tenant's row straight off the index (never through the function under test). */
 const rowFor = (
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   tenantId: string,
 ): Promise<Doc<"tenantProfiles"> | null> =>
   t.run((ctx) =>
@@ -67,7 +67,7 @@ const rowFor = (
   );
 
 /** Every tenantProfiles row in the DB (the one-row-per-tenant invariant is asserted on this). */
-const allRows = (t: ReturnType<typeof convexTest>): Promise<Doc<"tenantProfiles">[]> =>
+const allRows = (t: TestConvex<typeof schema>): Promise<Doc<"tenantProfiles">[]> =>
   t.run((ctx) => ctx.db.query("tenantProfiles").collect());
 
 // Complete fact sets, one per derivable tier. Full literals (no spread-over-a-base helper) so a
