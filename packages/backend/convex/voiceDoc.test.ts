@@ -75,6 +75,30 @@ function seedReadyDoc(
   );
 }
 
+/** Seed a vault row in a NON-ready lifecycle state — the picker must not offer these. */
+function seedDocWithStatus(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  status: "pending_extraction" | "extracting" | "processing" | "failed",
+  title: string,
+): Promise<Id<"vaultDocuments">> {
+  return t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title,
+      kind: "upload",
+      category: "my-uploads",
+      source: "upload",
+      mimeType: "application/pdf",
+      size: 1024,
+      contentHash: `hash_${Math.random().toString(36).slice(2)}`,
+      text: "",
+      status,
+      createdAt: Date.now(),
+    }),
+  );
+}
+
 const asTenant = (t: ReturnType<typeof convexTest>, subject: string) => t.withIdentity({ subject });
 
 /**
@@ -769,5 +793,82 @@ describe("voiceDoc.docContext (14-07 — the doc strip's read)", () => {
 
     expect(ctx).not.toHaveProperty("text");
     expect(Object.keys(ctx ?? {}).sort()).toEqual(["status", "title", "truncated"]);
+  });
+});
+
+// ── 14-07: pickableDocs — the pre-flight picker's list ────────────────────────────────────────
+//
+// The picker may only offer what `voice.startSession` will ACCEPT (ready + non-empty text);
+// offering a row the server refuses would be a lie. Non-ready rows are not listed but ARE counted,
+// so a just-uploaded document does not appear to have vanished — the confusion that motivated this
+// feature. Like docContext, this pins the PROJECTION: a future "just return the row" simplification
+// must fail loudly rather than quietly ship document text to the voice page.
+describe("voiceDoc.pickableDocs (14-07 — the pre-flight picker's read)", () => {
+  test("lists only READY documents with text, newest first, as id + title", async () => {
+    const t = newTest();
+    await seedReadyDoc(t, TENANT, REPORT_TEXT, "Older Report");
+    await seedReadyDoc(t, TENANT, REPORT_TEXT, "Newer Report");
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs.map((d) => d.title)).toEqual(["Newer Report", "Older Report"]);
+    // The projection is exactly two keys — no `text`, no `status`, no `size`.
+    expect(Object.keys(res.docs[0] ?? {}).sort()).toEqual(["docId", "title"]);
+  });
+
+  test("excludes non-ready documents from docs but counts them as processing", async () => {
+    const t = newTest();
+    await seedReadyDoc(t, TENANT, REPORT_TEXT, "Ready Report");
+    await seedDocWithStatus(t, TENANT, "pending_extraction", "Queued Deck");
+    await seedDocWithStatus(t, TENANT, "extracting", "Reading Deck");
+    await seedDocWithStatus(t, TENANT, "processing", "Embedding Deck");
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs.map((d) => d.title)).toEqual(["Ready Report"]);
+    expect(res.processingCount).toBe(3);
+  });
+
+  test("a failed document is neither listed nor counted as processing", async () => {
+    const t = newTest();
+    await seedDocWithStatus(t, TENANT, "failed", "Broken Scan");
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs).toEqual([]);
+    expect(res.processingCount).toBe(0);
+  });
+
+  test("a READY row with empty text is not offered — startSession would reject it", async () => {
+    const t = newTest();
+    await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Empty Ready Doc",
+        kind: "upload",
+        category: "business",
+        source: "seam",
+        mimeType: "text/markdown",
+        size: 0,
+        contentHash: "hash_empty_ready",
+        text: "   ",
+        status: "ready" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs).toEqual([]);
+  });
+
+  test("another tenant's documents never appear (BETA-05)", async () => {
+    const t = newTest();
+    await seedReadyDoc(t, TENANT_B, REPORT_TEXT, "Tenant B Report");
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs).toEqual([]);
+    expect(res.processingCount).toBe(0);
   });
 });

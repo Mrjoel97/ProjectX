@@ -1,7 +1,34 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-09 — SC4 proven statically by EIGHT mutation-verified scans, and
-> this playbook consolidated into one coherent Phase-14 record: see "Voice-doc: the consolidated
+> Last verified: 2026-07-26 (14-07 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
+> PRE-FLIGHT (14-07).** Owner-reported: "I uploaded the document in the knowledge vault but the
+> agent still cannot access it — it's asking me to upload the document in that voice session."
+> ROOT CAUSE: a session only becomes doc-scoped when `startSession` receives a `docRef`, and the
+> ONLY way to supply one was arriving from the vault at `/dashboard/voice?doc=<id>`. Started from
+> the voice page, `docScopedPassages` returns `[]` **before it searches anything**
+> (`!session.docRef` is in its first guard), so the agent had no vault reach and honestly asked for
+> the document. Retrieval was NOT at fault — `vaultGroundHydrated` was run live against the owner's
+> tenant and returned the document as the TOP hit, and no row in `voiceSessions` carried a `docRef`.
+> FIX: `voiceDoc.pickableDocs` (tenantQuery — this tenant's READY documents newest-first as id +
+> title, plus a `processingCount`, scanning `PICKER_DOC_SCAN_CAP` = 50 newest rows in the
+> `vault.profileSeedDocs` shape) plus a `DocPicker` pre-flight panel (paperclip → searchable list →
+> chip). **The trust boundary did NOT move:** `voice.startSession` and
+> `voiceToken.mintClientSecret` each still re-validate ownership and `status: "ready"`, so the
+> picker is the courtesy `startSession`'s own comment always said it would be. READY-ONLY BY
+> CONSTRUCTION — offering a row the server rejects would be a lie; non-ready rows are counted, not
+> listed, so a just-uploaded file does not appear to vanish. Deliberately NOT `vault.listVaultDocs`
+> (whole rows including book-sized `text`, against schema.ts's 16 MiB read cap) — the `docContext`
+> rule. `useVoiceSession` is UNCHANGED: `docId` is read inside `start()` and is already in that
+> callback's dependency array. Ceilings (`ponytail:` in source): PRE-FLIGHT ONLY — no mid-call
+> attach or swap, because `docRef` is written at row-insert and re-validated at token mint, so a
+> swap means patching a live session and re-instructing the model mid-stream; and the list is a
+> newest-50 scan with a client-side title filter, so a vault whose ready docs fall outside that
+> window needs pagination or a title search index (a schema change). **This does NOT improve
+> grounding quality** — an attached document still carries whatever text extraction produced, and
+> the scanned-PDF summary defect remains open in `vault.md` "Known gaps". Spec:
+> `docs/superpowers/specs/2026-07-26-voice-doc-picker-design.md`).
+> Prior: 14-09 — SC4 proven statically by EIGHT mutation-verified scans, and this playbook
+> consolidated into one coherent Phase-14 record: see "Voice-doc: the consolidated
 > Phase-14 record" at the end. The live-verify half is still OPEN — the `LIVE-VERIFIED` line in
 > `packages/voice/src/realtime.ts` is deliberately blank until the owner runs a real call).
 > Prior: 14-08 — the POST-CALL OUTCOME: the review runs once, the cited findings

@@ -30,6 +30,11 @@ export const RETRIEVAL_MAX_PASSAGES = 3;
  *  RETRIEVAL_CHAR_CAP: a hard cap, not a target — an excerpt is a quote, not a second digest. */
 export const EXCERPT_CHAR_CAP = 300;
 
+/** Newest `vaultDocuments` rows scanned for the pre-flight picker. A bound on the READ (schema.ts
+ *  notes a 16 MiB / 32k-doc cap), not a target — the picker lists only the READY subset of these.
+ *  One more than `vault.profileSeedDocs`' 40, which uses the same newest-first scan shape. */
+export const PICKER_DOC_SCAN_CAP = 50;
+
 /** Realtime tool shape is FLAT — {type,name,description,parameters} — NOT the Chat-Completions
  *  {type,function:{...}} nesting. This is the ONE place the literal lives (CLAUDE.md §1). */
 export const SEARCH_DOCUMENT_TOOL = {

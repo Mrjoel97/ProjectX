@@ -29,6 +29,7 @@ import {
   DOC_REVIEW_FRAMEWORK,
   DOC_REVIEW_SECTIONS,
   isEnded,
+  PICKER_DOC_SCAN_CAP,
   type RawDocReview,
   RETRIEVAL_CHAR_CAP,
   RETRIEVAL_MAX_PASSAGES,
@@ -587,5 +588,58 @@ export const docContext = tenantQuery({
     // `extractionTruncated` is optional in the schema; normalise to a real boolean so the client
     // never has to distinguish `false` from `undefined` to decide whether to show the badge.
     return { title: row.title, status: row.status, truncated: row.extractionTruncated === true };
+  },
+});
+
+/** Lifecycle states that mean "this document is on its way but not discussable yet". `failed` is
+ *  deliberately absent: a failed document is not coming, and counting it as pending would be a lie. */
+const DOC_IN_PROGRESS: ReadonlySet<string> = new Set([
+  "pending_extraction",
+  "extracting",
+  "processing",
+]);
+
+/**
+ * The pre-flight picker's list (14-07): this tenant's READY documents newest-first as id + title,
+ * plus a count of the ones still being read.
+ *
+ * WHY IT EXISTS: a session only becomes doc-scoped when `startSession` receives a `docRef`, and
+ * before the picker the ONLY way to get one was arriving from the vault with `?doc=`. A session
+ * started from the voice page left `docScopedPassages` returning `[]` before it searched anything,
+ * so the agent had no vault reach and asked the user to supply the document.
+ *
+ * READY-ONLY BY CONSTRUCTION: `voice.startSession` rejects anything that is not `status: "ready"`
+ * with non-empty text, so offering any other row would be offering a click the server refuses.
+ * This is a COURTESY, NOT A GATE — `startSession` and `voiceToken.mintClientSecret` each re-validate
+ * ownership and readiness, and nothing the browser sends here is trusted.
+ *
+ * Deliberately NOT `vault.listVaultDocs`, which `.collect()`s whole rows INCLUDING `text` — the
+ * voice page must never pull book-sized blobs to render a list of titles (the `docContext` rule).
+ *
+ * ponytail: newest-`PICKER_DOC_SCAN_CAP` scan plus a client-side title filter. A vault whose ready
+ * documents fall outside that window needs pagination or a real title search index (a schema
+ * change) — not built, and not needed at single-owner scale.
+ */
+export const pickableDocs = tenantQuery({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    docs: { docId: Id<"vaultDocuments">; title: string }[];
+    processingCount: number;
+  }> => {
+    const rows = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .take(PICKER_DOC_SCAN_CAP);
+
+    const docs: { docId: Id<"vaultDocuments">; title: string }[] = [];
+    let processingCount = 0;
+    for (const row of rows) {
+      if (row.status === "ready" && row.text?.trim()) docs.push({ docId: row._id, title: row.title });
+      else if (DOC_IN_PROGRESS.has(row.status)) processingCount += 1;
+    }
+    return { docs, processingCount };
   },
 });
