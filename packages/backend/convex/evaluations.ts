@@ -272,6 +272,12 @@ export const runEvaluation = internalAction({
           }
         };
 
+        // A `business_profile` DETECTOR, and nothing more. The `- **Persona:**` line is a
+        // PROJECTION of `tenantProfiles.tier` (design §4.2) and SELECTS NO BEHAVIOUR: this block
+        // fills CONTENT fields only (name / niche / avatar / offers). `deserializeProfile` still
+        // falls back to `"solopreneur"` on a garbled line, and that is harmless precisely because
+        // nothing authoritative reads it — reading a tier back out of here re-creates defect 1d.
+        // The tier is read ONCE, from its table, at the top of this handler.
         if (text.includes("- **Persona:**")) {
           const p = deserializeProfile(text);
           fillVault("businessName", p.name);
