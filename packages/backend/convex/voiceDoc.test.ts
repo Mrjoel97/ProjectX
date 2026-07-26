@@ -862,6 +862,29 @@ describe("voiceDoc.pickableDocs (14-07 — the pre-flight picker's read)", () =>
     expect(res.docs).toEqual([]);
   });
 
+  test("a READY row with no text field at all is not offered or counted", async () => {
+    const t = newTest();
+    await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Textless Ready Doc",
+        kind: "upload",
+        category: "business",
+        source: "seam",
+        mimeType: "text/markdown",
+        size: 0,
+        contentHash: "hash_textless_ready",
+        status: "ready" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await asTenant(t, TENANT).query(api.voiceDoc.pickableDocs, {});
+
+    expect(res.docs).toEqual([]);
+    expect(res.processingCount).toBe(0);
+  });
+
   test("another tenant's documents never appear (BETA-05)", async () => {
     const t = newTest();
     await seedReadyDoc(t, TENANT_B, REPORT_TEXT, "Tenant B Report");

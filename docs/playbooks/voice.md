@@ -1,8 +1,9 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-07 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
-> PRE-FLIGHT (14-07).** Owner-reported: "I uploaded the document in the knowledge vault but the
-> agent still cannot access it — it's asking me to upload the document in that voice session."
+> Last verified: 2026-07-26 (14-10 — **A VOICE SESSION CAN NOW ATTACH A VAULT DOCUMENT FROM
+> PRE-FLIGHT (14-10 — the document picker `14-07` deferred).** Owner-reported: "I uploaded the
+> document in the knowledge vault but the agent still cannot access it — it's asking me to upload
+> the document in that voice session."
 > ROOT CAUSE: a session only becomes doc-scoped when `startSession` receives a `docRef`, and the
 > ONLY way to supply one was arriving from the vault at `/dashboard/voice?doc=<id>`. Started from
 > the voice page, `docScopedPassages` returns `[]` **before it searches anything**
