@@ -76,12 +76,34 @@ grant and therefore **code-owned, never DB-writable** (ADR-007). A registry row 
 its own tools is a privilege-escalation path. Do not grant `evaluateBusiness` — the comment there
 explains why it is a write and a re-entrancy hazard wearing a read's clothes.
 
-### D5 — Retrieved page text is UNTRUSTED DATA (SC#2)
+### D5 — CORRECTED 2026-07-27 by research. Read this whole entry; the original is wrong.
 
-Quarantine retrieved text the way the vault-grounding path already fences chunk text into the
-loop (the `searchVault` / SC2-fence precedent in `llm.ts`). Retrieved content is data the model
-reads, never instructions it obeys. Reuse the shipped fencing pattern rather than inventing a
-second one.
+**As originally written, D5 said:** quarantine retrieved page text the way `searchVault` fences
+vault chunks into the loop, reusing the shipped SC2-fence pattern.
+
+**That is not achievable, and a plan claiming it would ship a false property.**
+`openai.tools.webSearch()` is a **provider-executed** tool: OpenAI performs the search AND reads
+the pages server-side. The retrieved page text **never traverses our process**, so there is no
+point at which our code could wrap it in a fence. Writing a "retrieved text is fenced" assertion
+would produce a test that passes because the text is absent, not because it is contained — the
+worst kind of green.
+
+**What IS achievable, and what SC#2 must therefore be read as:**
+
+1. **The capability grant is the containment** (this is the real defense, and it is stronger than
+   fencing). The research specialist holds NO send/write/plan-mutation tool, so an instruction
+   injected into a fetched page reaches an agent structurally incapable of acting on it. Prove it
+   with a *positive* test: script an injected write-tool call during a research turn and assert
+   the plan row does not move and no step is emitted.
+2. **Fence the specialist's OUTPUT** where it re-enters the executive loop — that boundary IS ours.
+   A labelled `<research_findings …>` fence around the returned prose.
+3. **SSRF is structurally absent, and that is assertable.** Static scan: zero `fetch(` /
+   `node:http` / `undici` / `axios` / `.request(` in the research code paths, plus a non-vacuity
+   assertion that exactly one `openai.tools.webSearch(` declaration exists (otherwise the scan
+   passes trivially on a file that does nothing).
+
+The D1 instruction "this must be ASSERTED, not merely asserted-in-prose" stands and now has a
+concrete shape. **Do not restore the original wording.**
 
 ### D6 — §4 applies to findings and lineage alike (SC#3)
 
