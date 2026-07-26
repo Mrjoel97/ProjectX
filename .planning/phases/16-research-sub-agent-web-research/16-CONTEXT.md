@@ -150,6 +150,68 @@ load-bearing. This is the D3 discipline applied to a second file: **when you rel
 invariant, correct the document in the same commit.** Ship a shared-envelope test alongside,
 proving two research dispatches in ONE executive turn draw down ONE envelope.
 
+### D10 — "SOPHISTICATED": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED)
+
+**Owner requirement, stated directly: "the research tool has to be sophisticated and highly
+reliable."** This is an EXPLICIT request, so CLAUDE.md §8's lazy ladder does not apply to it —
+§8 itself exempts "anything explicitly requested". Do not minimise this away; do not ship a
+one-shot search and call it research.
+
+**Sophistication lives in the SPECIALIST LOOP and its §5 skill body — not in new infrastructure.**
+The hosted tool can be called repeatedly inside the governed loop, so depth costs prompt design
+and step budget, not a new subsystem. A research run must:
+
+1. **Decompose** the question into sub-questions rather than issuing one query.
+2. **Search several angles** — multiple `webSearch` calls, deliberately varied, not one rephrase.
+3. **Cross-check** claims across sources; a claim carried by one source is marked as such.
+4. **Flag contradictions** explicitly when sources disagree — surfacing the disagreement is the
+   correct output, not silently picking one.
+5. **Cite per claim**, each with its retrieval freshness — not one bibliography at the end.
+6. **Return "insufficient evidence"** as a first-class outcome. A research agent that confabulates
+   when search comes back empty is worse than no research agent, because Phase 12 will cite it.
+
+**The irreducible limit, and it must be recorded in the findings document itself:** hosted search
+is provider-executed, so we cannot pin or choose sources, cannot control extraction fidelity, and
+cannot see what was discarded. Downstream consumers (SC#4, the Phase-12 engine) must not treat a
+finding as source-audited. State this in the stored doc; do not let it be inferred.
+
+**Two constraints the planner must solve rather than discover:**
+
+- **Step budget.** The loop runs `stopWhen: stepCountIs(8)`. Decompose → N searches → synthesise
+  may not fit in 8 steps. Determine the real budget and raise it *for this route deliberately*, or
+  design within it — but do not let a multi-search design silently truncate at step 8 and return a
+  confident partial answer. A truncated research run must be MARKED, using the existing
+  cost-ceiling `incomplete` marker precedent (`specialistMemoBody`).
+- **Cost.** Several search calls per run multiplies the per-call fee, all of it drawn against the
+  ONE Phase-15 shared root envelope. This makes D8's probe *more* load-bearing, not less — the
+  fee has to be real before the envelope arithmetic means anything.
+
+### D11 — "HIGHLY RELIABLE": a degradation contract, proven two ways (owner, 2026-07-27) (LOCKED)
+
+Reliability here is not "it usually works" — it is **every failure mode having a defined, governed
+outcome**, and that outcome being tested. Enumerate and specify at least:
+
+| Failure mode | Required behaviour |
+|---|---|
+| Search call errors | Governed, retried where sensible, never an unhandled throw into the loop |
+| Zero results | "Insufficient evidence" verdict — never a confident answer from model memory |
+| Sources contradict | Contradiction surfaced in the findings, not silently resolved |
+| Cost ceiling hit mid-run | Partial findings returned and MARKED incomplete (the `specialistMemoBody` precedent) |
+| Step budget exhausted | Same — marked, never a silent truncation presented as complete |
+
+**Proven two ways, both required:**
+
+1. **Offline, deterministically** — scripted `MockLanguageModelV4` responses for each failure mode
+   above, asserting the governed outcome. No deployment, no network, $0.
+2. **`pnpm eval:golden` (the Phase-3.6 EVAL_GATE)** with golden fixtures, proving the §5 skill body
+   *actually behaves* this way with a real model — specifically that it honours the
+   untrusted-data instruction and returns "insufficient evidence" rather than confabulating.
+   A skill-body change without an eval-gate run is not shippable in this repo, and this body's
+   whole value is behavioural.
+
+The deterministic half proves the CODE degrades correctly; the eval gate proves the PROMPT does.
+Neither substitutes for the other — that split is the point.
+
 ### Claude's Discretion
 
 - The exact vault document `kind` for findings, and whether findings reuse the existing ingest
