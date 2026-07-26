@@ -36,7 +36,9 @@ function speakerLabel(s: Speaker | null): string {
   return "";
 }
 
-export function LiveSession({ session }: { session: VoiceSession }) {
+// `docId` is threaded from page.tsx (the single `?doc=` reader). Absent ⇒ a Phase-6 general session,
+// rendered exactly as before. Plan 14-07 hangs the in-call <DocStrip> off this prop.
+export function LiveSession({ session, docId }: { session: VoiceSession; docId?: string }) {
   const { status, transcript, speaking, remainingMs, nearingCap, end, sendText, reconnect } =
     session;
   const [confirming, setConfirming] = useState(false);

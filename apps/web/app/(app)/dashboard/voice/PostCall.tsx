@@ -31,7 +31,9 @@ function today(): string {
 
 type Phase = "review" | "saving" | "saved" | "handoff";
 
-export function PostCall({ session }: { session: VoiceSession }) {
+// `docId` is threaded from page.tsx (the single `?doc=` reader). Absent ⇒ the Phase-6 brief flow,
+// unchanged. Plan 14-08 branches the review outcome (memo vs gap-bridging plan) off this prop.
+export function PostCall({ session, docId }: { session: VoiceSession; docId?: string }) {
   const { sessionId, transcript } = session;
   const router = useRouter();
   const endSessionClean = useMutation(api.voice.endSessionClean);

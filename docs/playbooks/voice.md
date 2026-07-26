@@ -1,9 +1,12 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-05 — the REVIEW producer: `voiceDoc.reviewSession` turns a finished
-> discussion into ONE cited `evaluations` row on the synthetic `voice-doc:<sessionId>` thread, with
-> the citations, the gap routing and the honesty verdict welded in code and the model's quoted
-> passage substring-verified against the report). See "The review producer (14-05)" below.
+> Last verified: 2026-07-26 (14-06 — the BROWSER RELAY: `/dashboard/voice?doc=<id>` opens a
+> doc-scoped session and the model's `search_document` calls are answered from Convex over the
+> existing `"oai-events"` channel, triggered off `response.done` with no new pinned event name).
+> Prior: 14-05 — the REVIEW producer: `voiceDoc.reviewSession` turns a finished discussion into ONE
+> cited `evaluations` row on the synthetic `voice-doc:<sessionId>` thread, with the citations, the gap
+> routing and the honesty verdict welded in code and the model's quoted passage substring-verified
+> against the report. See "The browser relay (14-06)" and "The review producer (14-05)" below.
 >
 > Prior: 2026-07-26 (14-04 — the doc-grounded MINT: `mintClientSecret({docId?})` bakes the
 > `document-analyst` persona plus a fenced digest of that report into the ephemeral session and
@@ -718,3 +721,70 @@ Verify with `pnpm --filter @pikar/voice test`, `pnpm --filter @pikar/backend tes
 exercised. Keep the seeded excerpt in sync with the seeded text or the fixture stops representing a
 legal row. The live drill-in, the spoken "no gaps" and the real memo-vs-plan choice are
 **manual-only** (14-VALIDATION.md).
+
+### The browser relay (14-06) — `useVoiceSession(docId?)` and `?doc=`
+
+**Entry contract.** `/dashboard/voice?doc=<vaultDocId>` opens a session about ONE report. No `?doc=`
+⇒ the Phase-6 general session, byte-identical: no new branch, no new event, no extra send.
+
+**One param reader, by design.** `page.tsx` reads `?doc=` ONCE and threads it as a prop to
+`useVoiceSession`, `<LiveSession>` and `<PostCall>`. Neither child may re-read it — a second reader
+is a second place to get the trust story wrong, and (if it used `useSearchParams`) a second Suspense
+boundary to forget.
+
+**`window.location.search`, NOT `useSearchParams` — deliberate.** This follows the established repo
+idiom (`workspace/page.tsx`'s `?thread=` handoff, and connect-gmail before it). Next.js's App Router
+requires a `<Suspense>` boundary around `useSearchParams`, and without one the page either errors at
+prerender or SILENTLY deopts to client-side rendering — a failure `tsc`/`typecheck` cannot see at
+all. Reading in a mount effect removes that failure class instead of guarding against it. Safe here
+because `?doc=` is only needed when the user presses Start, many frames after mount. Plan 14-06's
+own artifact list asked for `Suspense`; that was written against an assumption about
+`workspace/page.tsx` that the file does not match. **If you ever switch to `useSearchParams`, you
+must add the boundary AND re-run `pnpm --filter @pikar/web build`** — `/dashboard/voice` should stay
+`ƒ (Dynamic)` in the build output.
+
+**The retrieval relay triggers off `response.done`.** Not
+`response.function_call_arguments.done`. Two reasons, both about confidence rather than elegance:
+`response.done` is already live-verified in this repo, and the OpenAI guides state it carries the
+complete `function_call` item. The `.delta`/`.done` argument-streaming events sit in exactly the
+MEDIUM-confidence class `packages/voice/src/realtime.ts` warns about, and their field list was never
+verified. Adding zero new pinned event names was the point.
+
+**Placement inside the case matters.** The relay runs AFTER `responseActiveRef.current = false`.
+That is what makes the trailing `response.create` legal — sent mid-response it silently 400s
+("conversation already has an active response"), the exact failure that once swallowed the T-2min
+wrap-up nudge.
+
+**ALWAYS send a `function_call_output`, even on failure.** A tool call with no output leaves the
+model waiting and the user hearing silence for the remainder of a capped 15 minutes. The failure
+payload is an honest `{passages: [], found: false, error: "unavailable"}`. Never let a relay throw
+into the void.
+
+**Only the query crosses.** The document id is never sent from the browser.
+`voiceDoc.searchDocument` reads `docRef` off the server session row, so nothing the model says can
+widen the scope or select a different document. The `?doc=` string itself is untrusted and is
+re-validated (ownership + `status: "ready"`) by BOTH `mintClientSecret` and `startSession`.
+
+**No `docId &&` guard on the relay loop.** A Phase-6 session declares no tools, so
+`response.output[]` can never hold a `function_call` item — the loop is already a no-op there. A
+condition would instead silently disable any tool added later.
+
+**Open Question 3's contingency is live.** When `mintClientSecret` reports `toolsAtMint: false` (it
+re-POSTed without the tool array after a 400), the browser declares the tool over the data channel
+via `REALTIME_CLIENT_EVENTS.updateSession`. It is attached to the channel's `open` event, NOT sent
+immediately and NOT on a timeout: `createDataChannel` returns before the channel opens, and `send`
+silently drops a closed-channel write, so a naive immediate send would lose the declaration with no
+error anywhere. Which branch the API actually accepts gets recorded, with a date, on the
+`LIVE-VERIFIED` line in `packages/voice/src/realtime.ts` during 14-09's live verify.
+
+**No Realtime literal lives in `apps/web`.** Every event name, tool shape and session key resolves
+through `@pikar/voice`. `apps/web` has NO unit runner (Playwright only), so a rename there is
+uncatchable locally — `packages/voice/src/docSession.test.ts` pins the outbound vocabulary
+(`conversation.item.create`, `response.create`, `session.update`, `call_id`, `arguments`) precisely
+because that is the only place a test can see it.
+
+**How to verify.** `pnpm --filter @pikar/web typecheck` (fast signal) then
+`pnpm --filter @pikar/web build` (the real gate — see the Pitfall-6 note above), plus
+`pnpm --filter @pikar/voice test` for the pinned vocabulary. The relay's REAL proof is the
+human-verify row in 14-09: a live call where the user asks something the digest cannot answer and
+the agent comes back grounded. There is deliberately no faked automated proof of a tool round trip.
