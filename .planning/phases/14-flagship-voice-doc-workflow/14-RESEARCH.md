@@ -106,6 +106,21 @@ Three constraints will bite if not planned around. **(a)** `apps/web/.../cards.t
 
 Legend: ✅ EXISTS AND WORKS · ⚠️ EXISTS BUT PARTIAL · ❌ DOES NOT EXIST YET
 
+> **READ THIS BEFORE TRUSTING A ROW BELOW — added 2026-07-26 after execution.**
+>
+> Two rows in this inventory described a signature that the code does not have, and because the
+> planner trusted them, the same wrong premise reached **four** plans and cost each one a detour:
+> `internal.vault.getDoc`'s return shape (14-03, 14-04, 14-05) and `evaluations.ts`'s "zero edits"
+> claim (14-01). A fifth plan (14-06) asserted that `workspace/page.tsx` used `useSearchParams` +
+> `<Suspense>` when it deliberately does the opposite. Both corrected rows are now marked ⚠️ with the
+> real signature and what shipped instead.
+>
+> **The generalizable lesson: a research error does not cost you once — it costs you once per plan
+> that inherits it.** Rows here that quote a *file path and line* were read; rows that describe
+> *behaviour* ("fail-closed", "returns X", "needs no edits") were sometimes inferred from a name or a
+> neighbouring call site. When a plan hands you an interface, open it before building on it — and if
+> it is wrong, fix THIS file too, not just your own plan, or the next planner re-inherits it.
+
 ### A. Report ingestion / extraction (Phases 3.8 / 5) — consume, do not extend
 
 | Status | Thing | Exact location / signature |
@@ -113,7 +128,7 @@ Legend: ✅ EXISTS AND WORKS · ⚠️ EXISTS BUT PARTIAL · ❌ DOES NOT EXIST 
 | ✅ | Upload → store → extract → embed → `ready` pipeline | `packages/backend/convex/vaultIngest.ts` (`startIngest(ctx, {vaultDocId, tenantId, correlationId})`), `vault.ts`, `vaultExtract.ts`, `vaultTranscribe.ts` |
 | ✅ | `vaultDocuments` schema | `schema.ts:586-614`. Fields: `tenantId, title, kind, category, source, mimeType, size, contentHash, storageId?, text?, ragEntryId?, status, failureReason?, extractionTruncated?, createdAt`. `status` union: `processing | ready | failed | pending_extraction | extracting`. Indexes: `by_tenant`, `by_tenant_contentHash`, `by_kind` |
 | ✅ | Browse query the vault page already subscribes to | `vault.ts:230 listVaultDocs` (`tenantQuery`, optional `category`) — returns **whole rows including `status` and `extractionTruncated`**. The "enable when ready" gating is free from this existing subscription; **no new query needed** |
-| ✅ | Tenant-scoped doc reads for server code | `vault.ts:380 getDoc` (`internalQuery {vaultDocId, tenantId}` → fail-closed), `vault.ts:398 ownedDocsMeta` (`{tenantId, docIds[]}` → `{_id,title}[]`) |
+| ⚠️ | Tenant-scoped doc reads for server code | `vault.ts:380 getDoc` (`internalQuery {vaultDocId, tenantId}`), `vault.ts:398 ownedDocsMeta` (`{tenantId, docIds[]}` → `{_id,title}[]`). **CORRECTED 2026-07-26 — this row was WRONG as originally written, and the error propagated into plans 14-03, 14-04 and 14-05, costing each of them a detour.** `getDoc` returns `{text, contentHash, title}` ONLY: **no `status`**, so it cannot answer a readiness check, and **no `extractionTruncated`**, so it cannot feed `buildDocDigest`'s truncation disclosure. It is also **not fail-closed** — it **THROWS** `vault: doc not found` on a cross-tenant id rather than reading as missing, which turns a fail-closed guard into an oracle. `getDocForExtraction` has `status` but no `text`, and two round-trips still miss `truncated`. **What shipped instead:** `startSession` uses `voice.ts`'s own local `ctx.db.get` + `tenantId` compare idiom (14-03), and `voiceToken.docForMint` is the `{title, text, status, extractionTruncated}` read that both the mint and the review producer reuse (14-04, 14-05) |
 | ✅ | Vault UI | `apps/web/app/(app)/dashboard/vault/`: `page.tsx`, `DocGrid.tsx` (exports `DocGrid`, `fmtSize`; has `StatusChip`, per-doc status badges, failed-doc explainer), `PreviewModal.tsx`, `CategoryTabs.tsx`, `Dropzone.tsx`, `VaultStats.tsx`, `icons.tsx` |
 
 ### B. Live voice sessions (Phase 6) — Lane C owns these files
@@ -140,7 +155,7 @@ Legend: ✅ EXISTS AND WORKS · ⚠️ EXISTS BUT PARTIAL · ❌ DOES NOT EXIST 
 | ✅ | Hybrid retrieval + graph expand + fuse | `convex/vaultGround.ts`: `runVaultGround(ctx, tenantId, query)` (private), `vaultGround` (`tenantAction {query}` → `{docIds, context}`), `vaultGroundHydrated` (`internalAction {tenantId, query}` → `{docIds, titles, chunks}`). Caps: `PER_DOC_CHAR_CAP=1500`, `TOTAL_CHAR_CAP=8000`. **`SMOKE::<docId,docId>` sentinel bypasses embeddings** and resolves seeds through tenant-scoped `ownedDocsMeta` |
 | ✅ | Chunk-precise hydration | `vaultGroundHydrated` returns the *matched passage* per doc (`matchedByDoc`), falling back to a doc-text slice only for graph neighbours / SMOKE. This is what makes a quoted passage available for a citation |
 | ✅ | `evaluations` schema — already the exact shape SC #2 needs | `schema.ts:324-381`. `framework: v.union("swot","lean","bmc","growth-os")` (**closed — Wave 0 widens it**); `findings[]{label, section, citationDocId?, citationTitle, confidence(high|medium|low), source(vault|user-provided)}`; `gaps[]{label, leverageRank, route, playbook, citationDocId?, reason?, proofMetric?}`; `notEnoughData[]{section, needs}`; `scorecard: v.any()`; `userProvided: string[]`; `verdict: gaps|healthy|insufficient`; `delta?`; indexes `by_tenant`, `by_tenant_thread` |
-| ✅ | The write surface, **schema-derived** | `evaluations.ts:135 insertEvaluation` — `internalMutation` whose args are `schema.tables.evaluations.validator.fields`. **Widening the schema union automatically widens this validator — zero edits to `evaluations.ts`** |
+| ⚠️ | The write surface, **schema-derived** | `evaluations.ts:135 insertEvaluation` — `internalMutation` whose args are `schema.tables.evaluations.validator.fields`. Widening the schema union does widen THIS validator for free. **CORRECTED 2026-07-26 — the "zero edits to `evaluations.ts`" half was WRONG.** `const evalFields = schema.tables.evaluations.validator.fields` feeds **TWO** signatures: `insertEvaluation` (`:139`, which should widen) **and `runEvaluation` (`:161`, which must not)**. `runEvaluation`'s handler assigns that arg to a **local** `Framework` union at `:44` that the schema does not drive, so widening produced one new `TS2322` at `:291`. **What shipped:** `runEvaluation`'s validator is now explicitly pinned to the four business frameworks with a do-not-simplify comment (user-approved 2026-07-26, recorded as the ONE authorized `evaluations.ts` exception in `PARALLELIZATION.md`), which is *stronger* than planned — a doc-review row is refused at the validator boundary, not merely at the `FRAMEWORK_SKILL` lookup. `proactiveReview.ts:79` also carried a persisted framework into the narrowed arg and now falls back to auto-pick |
 | ✅ | The read | `evaluations.ts:666 byThread` (`tenantQuery {threadId}` → latest row), `evaluations.ts:124 lastForThread` (internal) |
 | ✅ | Gap → proposed PLAN → Approve | `evaluations.ts:582 actOnGap` (`tenantMutation {threadId, gapIndex}` → `{ok:true,planId} | {ok:false, reason:"gap_not_found"|"plan_busy"}`). Recycles the thread's single `plans` row (`plans.byThread` is `.unique()`), or inserts one when absent. Sets `kind:"memo"`, `status:"proposed"` |
 | ✅ | Memo terminal at Approve | `evaluations.ts:639 persistNextStepMemo` — called from `cockpit.executePlan` before the mailbox pre-check; persists a `next_step_memo` vault doc, seeds ZERO `requests` rows, `deliverApprovedPlan.ts` byte-unchanged |
