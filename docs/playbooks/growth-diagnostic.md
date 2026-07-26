@@ -9,7 +9,11 @@
 > Previously verified: 2026-07-24 against 12-01 (Python→TS port of the Growth OS diagnostic spine)
 > Build history: `.planning/phases/12-business-evaluation-engine/`,
 > `.planning/phases/15-sub-agent-dispatch-action-executor/` · Related ADRs: ADR-007 (sub-agent
-> capability is code-owned; the sub-agent prompt is registry-owned)
+> capability is code-owned; the sub-agent prompt is registry-owned),
+> [ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) — `diagnose()`
+> emits exactly ONE prescription, so business tier shapes the specialist PROMPT and **does not filter
+> an offer set**. Widening `diagnose()` to emit secondary candidates is DEFERRED and would supersede
+> that ADR; until then, do not read the tier design doc's §8.2 as unimplemented here.
 
 ## Purpose
 
