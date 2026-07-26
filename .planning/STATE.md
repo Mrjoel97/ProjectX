@@ -2,9 +2,24 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_plan: 2
+status: executing
+stopped_at: Completed 15.1-02-PLAN.md (the tier's home — tenantProfile.ts, the tier_changed event, the legacy backfill)
+last_updated: "2026-07-26T12:39:35.751Z"
+progress:
+  total_phases: 38
+  completed_phases: 22
+  total_plans: 163
+  completed_plans: 154
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 15.1
 current_plan: 1
-status: in_progress
+status: Ready to execute
 stopped_at: Completed 15.1-01-PLAN.md (Wave 0 freeze — tier rule + tenantProfiles + ADR-009)
 last_updated: "2026-07-26T12:05:22.305Z"
 progress:
@@ -26,7 +41,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 ## Current Position
 
 Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **1 of 7 PLANS COMPLETE** (6 waves)
-Current Plan: 1
+Current Plan: 2
 Total Plans in Phase: 7
 Plan: 15.1-01 COMPLETE (Wave 0 — the shared-seam freeze).
 Done: 15.1-01. Next: 15.1-02.
@@ -426,6 +441,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15 P04 | 35 min | 3 tasks | 8 files |
 | Phase 15 P06 | 45 min | 3 tasks | 14 files |
 | Phase 15.1 P01 | 31 min | 3 tasks | 7 files |
+| Phase 15.1 P02 | 25min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -498,6 +514,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.1]: D6 is expressed as a TYPE: deriveTier returns DerivedTier (3 members), enterprise lives only on the table — mutation-checked @ts-expect-error bind
 - [Phase 15.1]: tenantProfiles facts are ALL optional and never narrowed (the design §10 legacy backfill row must stay representable); tier/tierSource/derivedAt REQUIRED
 - [Phase 15.1]: ADR-009: tier shapes the specialist PROMPT, not the offer set — diagnose() emits ONE prescription, so SC#5 must not be read as offer-set filtering or a rubric change
+- [Phase 15.1]: saveFacts has NO tier argument and never will: the tier is a derived OUTPUT of the facts write. Its return is {tier, tierSource, changed} — enums plus a flag, safe to return and to log.
+- [Phase 15.1]: tierSource 'admin' stickiness lives in saveFacts, not grantEnterprise — saveFacts is the only function that could undo an operator grant, so the guard sits at that one site.
+- [Phase 15.1]: tenant.tier_changed payload is exactly {from,to,tierSource,factsChanged} on the existing insert-only internal.audit.log — no tierHistory table, and factsChanged is a COUNT (0..5), never a fact value.
+- [Phase 15.1]: derivedAt is refreshed on an unchanged re-derivation (it records when the RULE last ran); the audit EVENT records when the answer moved. Two questions, two mechanisms.
 
 ### Pending Todos
 
@@ -529,6 +549,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T12:05:22.263Z
-Stopped at: Completed 15.1-01-PLAN.md
+Last session: 2026-07-26T12:39:35.734Z
+Stopped at: Completed 15.1-02-PLAN.md (the tier's home — tenantProfile.ts, the tier_changed event, the legacy backfill)
 Resume file: None
