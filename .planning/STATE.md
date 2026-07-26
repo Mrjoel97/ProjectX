@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
-last_updated: "2026-07-26T14:21:51.060Z"
+stopped_at: Completed 15.1-05-PLAN.md (the tier becomes perceivable — it rides into the specialist's prompt)
+last_updated: "2026-07-26T14:49:14.019Z"
 progress:
   total_phases: 38
   completed_phases: 22
   total_plans: 163
-  completed_plans: 156
+  completed_plans: 157
 ---
 
 ---
@@ -51,26 +51,78 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 4/7 plans; Waves 0-4 done)
+**Current focus:** Phase 15.1 — Fact-Derived Tier & Conversational Onboarding (IN PROGRESS, 5/7 plans; Waves 0-4 done)
 
 ## Current Position
 
-Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **4 of 7 PLANS COMPLETE** (6 waves)
-Current Plan: 5
+Phase: 15.1 (Fact-Derived Tier & Conversational Onboarding) — **5 of 7 PLANS COMPLETE** (6 waves)
+Current Plan: 6
 Total Plans in Phase: 7
-Plan: 15.1-04 COMPLETE (Wave 4 — the read-side repoint; defect 1d closed on both sides).
-Done: 15.1-01, 15.1-02, 15.1-03, 15.1-04. Next: 15.1-05.
+Plan: 15.1-05 COMPLETE (Wave 4 — the tier becomes perceivable in the specialist's prompt).
+Done: 15.1-01, 15.1-02, 15.1-03, 15.1-04, 15.1-05. Next: 15.1-06.
 
-**15.1-05 WAS HALTED MID-FLIGHT** by a session limit and will be re-run. It left three UNTRACKED
-files behind — `packages/contracts/skills/style-{direct,coaching,concise}.md`. Do not delete or
-stage them; that agent reclaims them. They are also the sole reason
-`node scripts/check-playbooks.mjs check` currently returns `block` (it names `skill-registry.md`
-only) — that block is NOT attributable to 15.1-04, whose two playbooks are both updated and unflagged.
+**The 15.1-05 halt is RESOLVED.** The three previously-untracked
+`packages/contracts/skills/style-{direct,coaching,concise}.md` files were reclaimed and committed in
+`0c68a4e`, and `node scripts/check-playbooks.mjs check` is back to **exit 0** — the block it raised
+against `skill-registry.md` is cleared.
 
 **EXECUTION MODE: Phase 15.1 runs SERIALLY on branch `lane-a/dispatch-core` in
 `.worktrees/lane-a-dispatch`.** No branch creation, no merges, no second session. There is NO live
 `CONVEX_DEPLOYMENT` here: `npx convex dev|codegen`, `pnpm eval:golden` and Playwright all fail.
 Offline gates only — `vitest`, `tsc --noEmit`, `check-playbooks.mjs`.
+
+Status (15.1-05): **The tier is now PERCEIVABLE: a dispatched specialist is told, as a FACT in every
+run, what shape of business it is advising — so a solopreneur's `money-model-designer` cannot propose
+hiring (design §8.1).** Three parts. (1) THE VOICE, registry-owned: three UNGATED skills
+`style-direct` / `style-coaching` / `style-concise`, one per `BEHAVIOR_PRESETS` member, shipped
+through the FULL 5-file mirror (`.md` → derived `.ts` → `skill.ts` constant → `seedSkills` row →
+`skillBodies.test.ts` drift row). The preset is a CLOSED ENUM mapping to a versioned row,
+deliberately NOT a free-text box — user text injected into every future system prompt is a standing
+prompt-injection surface and smuggles unversioned prompt content into every call (§5). Each body
+STATES that it is a style overlay that never changes what the agent may do, claim, or ground and that
+the agent's own instructions win on conflict (a directive that could widen capability would be
+privilege escalation through a DB row, ADR-007's reasoning); no tool names, no capability language,
+and NO tier language — presets and tiers are ORTHOGONAL, so there are three overlays, not nine
+cross-product variants. UNGATED is Q6, LOCKED, matching `business-profile`, and the rationale sits as
+a comment ON `GATED_SKILLS` because that is where someone would "fix" it. (2) THE FACTS,
+code-owned: `tierBriefing({tier?, agentName?, styleDirective?})` in `packages/core/src/specialists.ts`
+— pure, Convex-free, emitting `Agent name: <sanitized>` / `Business tier: <tier> — <structural
+consequence>` / the directive body, each line OMITTED when its input is absent and `""` when nothing
+is known. `TIER_FACT` is a `satisfies Record<Tier, string>` TABLE, never a switch/ternary (the
+`armFor` lesson). An ABSENT tier yields NO tier claim — never an invented `solopreneur`, which is the
+exact defect class this phase exists to close. `agentName` is sanitized INSIDE the function, so there
+is exactly ONE place a user-authored string reaches a prompt. The code-owned/registry-owned split is
+ADR-007's restated: the FACTS are the `TASK_LINE` class (driver-plane, not a skill), the VOICE is the
+registry row. (3) THE WIRING: `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` +
+`PRESET_SKILL[preset]` and PREPENDS the briefing on BOTH return paths — a tenant with no evaluation
+snapshot still has a tier. The style read FAILS OPEN (an unseeded overlay costs voice, never a
+dispatch) while the specialist BODY loader in `runSpecialistTurn` stays fail-CLOSED; mutation-checked
+by making the `catch` rethrow. **THE HEADLINE LESSON — a mutation-check that does NOT go red is a
+finding about the TEST.** The plan's own SC#5b assertion (`Set` over `TIERS.map(tierBriefing)`) stayed
+**34/34 GREEN** with `startup`'s clause copied byte-for-byte from `solopreneur`'s, because the block
+interpolates the tier NAME, so any two briefings differ by the label alone regardless of substance —
+it proved only what the neighbouring test already proved and would have passed forever if every tier
+got identical advice. Fixed by MASKING the discriminator (`.replaceAll(t, "<TIER>")`) before
+comparing; the corrected form goes RED on that mutation and the observed vacuity is recorded in the
+test comment. Two further auto-fixes: my insertion stranded `specialistMemoBody`'s jsdoc above
+`PRESET_SKILL` (moved back), and two mutation scripts silently NO-OP'd because `dispatch.ts` is CRLF
+in this worktree (`core.autocrlf=true`, 460 CRLF / 0 bare LF) and a `\n`-spanning pattern matches
+nothing — now CRLF-aware with a loud `NO MATCH` + `exit 1`, because a mutation that never applied
+reports a guard as proven when nothing was tested. **ADR-009 HELD, and it stays LOCKED:** `llm.ts` is
+BYTE-UNCHANGED (`git diff --exit-code`, a hard gate), the router is not forked, `SPECIALISTS` gained
+no filter layer and no per-tier grant, `diagnose()` was not widened, and `financialsPresent` still
+picks the rubric (Q3). **A verifier must NOT read SC#5 as "the offer set is filtered" or "the rubric
+pick changes"** — nothing about `evaluations.gaps.length`, `Prescription.route` or `PERSONA_FRAMEWORK`
+moves. ADR-009 gains an implementation NOTE (permitted extension, §9); it is not re-decided.
+`buildSpecialistPrompt` is exported ONLY for the test — driven through `t.run`, whose ctx DOES expose
+`runQuery` (probed first), so the REAL internal queries run rather than the plan's fallback stub,
+which would have been a second implementation free to drift. Gates: contracts **16/16**, @pikar/core
+**277/277** + `tsc` exit 0, `skills.test.ts` **42/42** with three more seed rows,
+dispatch+dispatchGuard+gapAction **45/45**, backend FULL **577/579** (the documented `audit.test.ts`
+red + `voice.test.ts`, the latter 8/8 GREEN in isolation = the documented flake), backend `tsc` at the
+EXACT **55**-error test-file baseline with ZERO in any non-test file, `apps/web` typecheck exit 0,
+turbo **8/10**, `check-playbooks` exit 0, and `git status` proves `diagnose.ts`, `evaluations.ts`, the
+three specialist bodies and `apps/` are ALL untouched.
 
 Status (15.1-04): **The evaluation engine picks its rubric from the `tenantProfiles` ROW, not from a
 string matched out of markdown — so a `business_profile` doc with a garbage `Persona` line can no
@@ -515,6 +567,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.1 P02 | 25min | 3 tasks | 3 files |
 | Phase 15.1 P03 | 47min | 3 tasks | 11 files |
 | Phase 15.1 P04 | 55min | 2 tasks | 4 files |
+| Phase 15.1 P05 | 16min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -598,6 +651,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.1]: 15.1-04: TIER_FRAMEWORK is bound 'as const satisfies Record<Tier, Framework>' with NO trailing ?? fallback — a new tier is a compile error at both the map (TS2741) and the index site (TS7053); enterprise maps to swot
 - [Phase 15.1]: 15.1-04: Q3 LOCKED — financialsPresent still overrides the tier with growth-os; the tier's perceivable effect is the specialist prompt (ADR-009), never the rubric. SC#5 must not be read as 'the rubric must change'
 - [Phase 15.1]: 15.1-04: deserializeProfile's 'solopreneur' fallback and the '- **Persona:**' parse block are BOTH deliberately retained — the block is the profile-doc detector and its four fillVault calls are content; only the authority was removed
+- [Phase 15.1]: SC#5b's distinctness assertion MASKS the tier literal before comparing — the plan's literal form was VACUOUS (mutation-checked: 34/34 green with two tiers sharing a clause word-for-word)
+- [Phase 15.1]: The three behaviour-preset style overlays are UNGATED (Q6), matching business-profile; the rationale lives as a comment on GATED_SKILLS, the place someone would 'fix' the omission
+- [Phase 15.1]: The style-directive read FAILS OPEN while the specialist BODY loader stays fail-CLOSED — an overlay is an additive user-turn layer, so losing it degrades voice, not governance
+- [Phase 15.1]: tierBriefing sanitizes agentName INTERNALLY, so there is exactly ONE place a user-authored string can reach a model prompt
 
 ### Pending Todos
 
@@ -629,6 +686,6 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T14:20:37.464Z
-Stopped at: Completed 15.1-04-PLAN.md (the rubric follows the tenantProfiles row — defect 1d closed on the read side)
+Last session: 2026-07-26T14:49:03.783Z
+Stopped at: Completed 15.1-05-PLAN.md (the tier becomes perceivable — it rides into the specialist's prompt)
 Resume file: None
