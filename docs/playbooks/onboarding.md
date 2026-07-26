@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-26 — Phase 15.1 Wave 4 (plan 15.1-04): **the LAST authoritative reader of the markdown persona is gone.** `evaluations.ts`'s `personaHint` is deleted and its framework auto-pick now indexes `TIER_FRAMEWORK` (bound `satisfies Record<Tier, Framework>`, `enterprise` → `swot`) with `tenantProfiles.tier`, read via `internal.tenantProfile.forTenant`. That closes defect 1d on the READ side: a `business_profile` doc with a garbage `- **Persona:**` line can no longer silently reclassify a tenant (SC#2b, proven with TWO different table tiers over ONE identical malformed document). `deserializeProfile`'s `"solopreneur"` fallback is **deliberately retained** as a display convenience for the profile page's edit-form loader — see "Record vs projection" below. Q3 is unchanged: `financialsPresent` still overrides with `growth-os`, and the tier's perceivable effect lands on the specialist prompt ([ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md)), never on the rubric. Prior: 2026-07-26 — Phase 15.1 Wave 3 (plan 15.1-03): **THE SUBTRACTION.** The tier is no longer an INPUT at any layer. `vProfile` has no `persona` field (a Convex `v.object` rejects an EXTRA key, so a caller that sends a tier is REFUSED — the control is gone, not hidden: SC#1b); `profileSchema` has no `persona` property (the model has nowhere to put a guess — defect 1a, structurally); `validateProfile` takes a `ProfileInput` and its `isPersona` branch is DELETED; and both dashboard pages lost their persona pill block, the profile page rendering the tier READ-ONLY with `TIER_REASON`. `commitProfile` and `updateProfile` now READ `tenantProfiles` and splice `row.tier` into the serialized markdown (§4.2 — the markdown is a projection, the table is the record). `commitProfile` is the design §6 COMPLETION GATE: `INCOMPLETE_ONBOARDING` + a `missing` list while any fact slot is empty; `updateProfile` deliberately has NO slot gate (design §10 — no forced re-onboarding of a legacy tenant) but throws `INCOMPLETE_FACTS` when the tier ROW is absent entirely. Both audit payloads now carry `tierSource` and NO `personaConfirmed` — deleted, never corrected, because the audit is insert-only. The `onboarding.ts` module header restates this contract, so a reader who opens the adapter before this playbook still meets it. Prior: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
+> Last verified: 2026-07-26 — Phase 15.1 Wave 5 (plan 15.1-06): **onboarding stopped guessing the persona from prose and started ASKING.** `onboarding.converse` is one `generateObject` turn returning `{reply, slots, missing, nextSlot, done}` — stateless, writes nothing, and **the CODE owns the state machine while the model owns only the wording**. Its system prompt is the new UNGATED `onboarding-agent` registry row (Q6), loaded FAIL-CLOSED and FIRST, before the offline `SMOKE::onboard::` short-circuit, so SC#3c is exercised on the offline path too. See "The conversational turn" below for the full contract, the Q1 decision and its ceiling, and the SMOKE grammar. Prior: 2026-07-26 — Phase 15.1 Wave 4 (plan 15.1-04): **the LAST authoritative reader of the markdown persona is gone.** `evaluations.ts`'s `personaHint` is deleted and its framework auto-pick now indexes `TIER_FRAMEWORK` (bound `satisfies Record<Tier, Framework>`, `enterprise` → `swot`) with `tenantProfiles.tier`, read via `internal.tenantProfile.forTenant`. That closes defect 1d on the READ side: a `business_profile` doc with a garbage `- **Persona:**` line can no longer silently reclassify a tenant (SC#2b, proven with TWO different table tiers over ONE identical malformed document). `deserializeProfile`'s `"solopreneur"` fallback is **deliberately retained** as a display convenience for the profile page's edit-form loader — see "Record vs projection" below. Q3 is unchanged: `financialsPresent` still overrides with `growth-os`, and the tier's perceivable effect lands on the specialist prompt ([ADR-009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md)), never on the rubric. Prior: 2026-07-26 — Phase 15.1 Wave 3 (plan 15.1-03): **THE SUBTRACTION.** The tier is no longer an INPUT at any layer. `vProfile` has no `persona` field (a Convex `v.object` rejects an EXTRA key, so a caller that sends a tier is REFUSED — the control is gone, not hidden: SC#1b); `profileSchema` has no `persona` property (the model has nowhere to put a guess — defect 1a, structurally); `validateProfile` takes a `ProfileInput` and its `isPersona` branch is DELETED; and both dashboard pages lost their persona pill block, the profile page rendering the tier READ-ONLY with `TIER_REASON`. `commitProfile` and `updateProfile` now READ `tenantProfiles` and splice `row.tier` into the serialized markdown (§4.2 — the markdown is a projection, the table is the record). `commitProfile` is the design §6 COMPLETION GATE: `INCOMPLETE_ONBOARDING` + a `missing` list while any fact slot is empty; `updateProfile` deliberately has NO slot gate (design §10 — no forced re-onboarding of a legacy tenant) but throws `INCOMPLETE_FACTS` when the tier ROW is absent entirely. Both audit payloads now carry `tierSource` and NO `personaConfirmed` — deleted, never corrected, because the audit is insert-only. The `onboarding.ts` module header restates this contract, so a reader who opens the adapter before this playbook still meets it. Prior: 2026-07-26 — Phase 15.1 Wave 2 (plan 15.1-02): the tier got a home. `packages/backend/convex/tenantProfile.ts` is LIVE — `forTenant` / `get` / `saveFacts` / `grantEnterprise` / `backfillLegacyTier` + `runBackfillLegacyTier` (see "The `saveFacts` contract" below and the operator lines under Operational notes). Prior: 2026-07-26 — Phase 15.1 Wave 0 (plan 15.1-01): the tier stopped being a guess. `businessProfile.ts` gained the fact-derived tier surface (`TierFacts`/`deriveTier`/`TIER_REASON`, the closed `REVENUE_STAGES`/`FUNDING_STATES`/`TIERS`/`TIER_SOURCES`/`BEHAVIOR_PRESETS` unions, the `REQUIRED_SLOTS` completion gate, `sanitizeAgentName`) — see "Tier derivation" below. Nothing on the Phase-11 write path changed yet: `decideConfirm`, `validateProfile`, `serializeProfile`, `deserializeProfile` and the `persona` argument are all byte-identical (plan 15.1-03 owns that surgery). Prior: 2026-07-25 — upload `accept` now lists EXTENSIONS alongside the MIME types (`.txt,.md,.markdown,.csv`). Chrome resolves an `accept` MIME type to extensions through the OS registry, and Windows has no entry for `text/markdown`, so the MIME-only list rendered `.md` files invisible in the picker — the folder simply looked empty, with no error to explain it. Prior: 2026-07-24 against 11-04 (editable profile page + re-embed on save; getProfile/deserializeProfile edit-form loader)
 > Build history: `.planning/phases/11-persona-onboarding-business-profile/`, `.planning/phases/15.1-fact-derived-tier-conversational-onboarding/` · Related ADRs: [003](../decisions/003-skill-registry-for-prompts.md), [009](../decisions/009-tier-shapes-the-specialist-prompt-not-the-offer-set.md) (tier shapes the specialist PROMPT, not the offer set)
 
 ## Purpose
@@ -139,19 +139,119 @@ Three decisions this phase locked that have no other home:
   obligation this phase has no budget for, and Phase 15's eval gate is already unpaid. Do NOT add
   them to `GATED_SKILLS`.
 
+#### The conversational turn (plan 15.1-06, design §6) — `convex/onboarding.ts` `converse`
+
+**The invariant, stated as an invariant: the completion guarantee is CODE, never the prompt.**
+`nextSlot` is `missingSlots(slots)[0]` and `done` is `canComplete(slots)`; the refusal that makes
+the guarantee bite is `commitProfile`'s `INCOMPLETE_ONBOARDING`. **A future edit that moves any of
+that into the `onboarding-agent` skill body is a regression to defect 1a even though every test
+would still pass** — a body saying "always ask about headcount" is a model-temperature guarantee,
+and a model that announces the conversation is finished would then have finished it. If you find
+yourself writing a rule about WHICH question comes next, or about WHEN the conversation may end,
+it belongs in code. The body owns wording; nothing else.
+
+**The turn contract** — `tenantAction`, one `generateObject` call, no tools:
+
+```ts
+converse({
+  slots: { oneLineDescription?, headcount?, paidStaff?, revenueStage?, funding?, yearsOperating? },
+  userMessage: string,
+  history?: { role: string; text: string }[],   // bounded to the last 10 entries in the prompt
+}) : Promise<{
+  reply: string;            // what the user reads
+  slots: OnboardingSlots;   // provided-over-stored merge of what the turn learned
+  missing: SlotName[];      // missingSlots(slots), in REQUIRED_SLOTS order
+  nextSlot: SlotName | null;// missing[0] — null once nothing is left
+  done: boolean;            // canComplete(slots) — NEVER read off the model
+}>
+```
+
+- **Stateless. It writes NOTHING** — no row, no audit, no telemetry, no dead letter (pinned by a
+  row-count assertion in `onboarding.test.ts`). The CALLER owns the transcript and the draft; the
+  finished facts land through `api.tenantProfile.saveFacts` (the only tier writer) and the narrative
+  through `commitProfile`. Do not add a write here: it re-opens "who owns the state" and puts
+  conversational prose on the log plane, which §4 forbids.
+- **The code supplies the slot NAME and its permitted shape; never question text.** `SLOT_SHAPE`
+  in `onboarding.ts` carries one terse line per slot (the two enums list their literals, Q7); the
+  prompt line is `Next fact to obtain: <slot> (<shape>)`. When nothing is left the instruction
+  becomes the closing beat and the BODY defines what a closing beat is.
+- **The merge admission test is `missingSlots` over a one-slot object**, deliberately not a second
+  copy of the presence rules — so "was it merged" and "does it still count as missing" are the same
+  question. `headcount: 0` is an ANSWER; an off-union enum is DROPPED, never coerced.
+- **The registry read is FIRST and FAIL-CLOSED** (`internal.skills.getActiveSkill`,
+  `ONBOARDING_AGENT_SKILL`) — before the SMOKE short-circuit, the `extractProfile` ordering. An
+  unseeded deployment gets `NO_ACTIVE_SKILL`, not an ungoverned turn. Contrast `dispatch.ts`'s style
+  overlay, which is deliberately fail-OPEN: that one is a voice overlay, this one is the whole
+  system prompt.
+
+**Q1 (LOCKED) — why this is NOT `runAgentLoop`, and what it costs.** The onboarding turn deliberately
+does not ride the cockpit tool-loop, despite design §6's "reuse the Phase 3.2.1 tool-loop" note (the
+design doc asked for that to be *confirmed during planning*; it was not confirmable):
+
+- `runAgentLoop` takes a **mandatory `planId: Id<"plans">`**, and `plans.byThread` is `.unique()` —
+  minting a synthetic plan row breaks every workspace reader.
+- its `toolNames` argument **FILTERS** `buildCockpitTools`; it cannot ADD a tool.
+- a new tool name also needs a new `agentSteps.tool` literal, or the trace insert throws **inside an
+  SDK callback the SDK SWALLOWS** — a blank activity card in production with every test green, on
+  the repo's hottest file, for a phase whose real job is the write path.
+
+**The ceiling** (named in a `ponytail:` comment on `converse`): this turn has **no CKPT-05 activity
+trace and no shared per-tree cost rail**, and it has no tools at all. **Upgrade path:** generalize
+`runAgentLoop` with an optional `planId`, a merged extra-tools record, and the matching
+`agentSteps.tool` literal — then move this handler onto it. Until then: **zero `llm.ts` edits, zero
+`schema.ts` change, no new `agentSteps.tool` literal** (all three are hard `git diff --exit-code`
+gates on this plan). And do NOT add `"use node"` to `onboarding.ts` — `llm.ts` is the one node
+module and a second re-triggers the TS circular-inference cliff; `generateObject` runs fine in V8.
+
+**Q6 (LOCKED): `onboarding-agent` is UNGATED**, matching `business-profile`. Do not add it to
+`GATED_SKILLS` — see the rationale comment on that array and `skill-registry.md`.
+
+**How to verify it offline — the `SMOKE::onboard::` grammar.** Verbatim:
+
+```
+SMOKE::onboard::<slot>=<value>,<slot>=<value>|reply=<text>
+```
+
+Both halves are optional (`SMOKE::onboard::` alone is a turn that learns nothing and replies with
+`""`). Unknown slot names are dropped silently and off-union values are refused at the merge — the
+sentinel stands in for a MODEL, so it must not be able to smuggle a value the real path would
+refuse. It is content-free and PII-free, exactly like `SMOKE::profile::`. Worked example:
+
+```ts
+await asTenant(t).action(api.onboarding.converse, {
+  slots: { oneLineDescription: "A neighborhood coffee roaster." },
+  userMessage: "SMOKE::onboard::headcount=4,funding=bootstrapped|reply=Four of you, got it.",
+});
+// → { reply: "Four of you, got it.",
+//     slots: { oneLineDescription: "…", headcount: 4, funding: "bootstrapped" },
+//     missing: ["paidStaff", "revenueStage", "yearsOperating"],
+//     nextSlot: "paidStaff", done: false }
+```
+
+**Deferred to a live deployment** (`15.1-VALIDATION.md` Manual-Only row 2): a real conversational
+turn needs a seeded `onboarding-agent` row and a real model call, and this worktree has no
+`CONVEX_DEPLOYMENT`. On a deployment that has one: `pnpm dev` (it seeds — **`npx convex dev` ALONE
+does not**), walk the onboarding flow, and confirm both halves — the fact slots are actually ASKED
+(headcount and paid staff are questions, not inferences), and an empty required slot blocks
+completion however warmly the agent wraps up.
+
 Skill registry (extraction prompt, §5 — see `skill-registry.md`):
 - `packages/contracts/skills/business-profile.md` — canonical extraction prompt body
 - `packages/contracts/src/skills/businessProfile.ts` — derived `businessProfileSkillBody` constant
-- `packages/contracts/src/skill.ts` — `BUSINESS_PROFILE_SKILL` name const (UNGATED — absent from `GATED_SKILLS`)
-- `packages/backend/convex/skills.ts` — `seedSkills[]` row that boots it v1/active
+- `packages/contracts/skills/onboarding-agent.md` — canonical CONVERSATION prompt body (15.1-06)
+- `packages/contracts/src/skills/onboardingAgent.ts` — derived `onboardingAgentSkillBody` constant
+- `packages/contracts/src/skill.ts` — `BUSINESS_PROFILE_SKILL` + `ONBOARDING_AGENT_SKILL` name
+  consts (both UNGATED — absent from `GATED_SKILLS`, Q6)
+- `packages/backend/convex/skills.ts` — `seedSkills[]` rows that boot them v1/active
 
 Backend adapter (Wave 2 — LIVE) + frontend (Wave 3 gate+onboarding LIVE; profile page Wave 4):
 - `packages/backend/convex/onboarding.ts` — thin adapter (§1): `status` (tenantQuery, first-run gate),
   `getProfile` (tenantQuery — the committed profile parsed back to structured fields via
   `deserializeProfile`, or null; the profile page's edit-form loader), `extractProfile` (tenantAction,
-  returns the object — NEVER auto-commits, SC#1), `commitProfile` + `updateProfile` (tenantMutation,
-  persistBrief clone → `startIngest`; updateProfile re-embeds in place). Checks: `onboarding.test.ts`
-  (SC#1/#2/#3) + `profileRedaction.test.ts` (SC#4).
+  returns the object — NEVER auto-commits, SC#1), `converse` (tenantAction, ONE conversational turn
+  — stateless, writes nothing; see "The conversational turn" above), `commitProfile` +
+  `updateProfile` (tenantMutation, persistBrief clone → `startIngest`; updateProfile re-embeds in
+  place). Checks: `onboarding.test.ts` (SC#1/#2/#3/#3b/#3c) + `profileRedaction.test.ts` (SC#4).
 - `apps/web/app/(app)/layout.tsx` — the first-run GATE (Wave 3, LIVE): inside `<Authenticated>` Shell,
   `useQuery(api.onboarding.status)` → `router.replace("/dashboard/onboarding")` for `needsOnboarding`
   tenants; the shell loader holds while the status query resolves. NOT in `middleware.ts` (invariant below).
@@ -190,15 +290,22 @@ cannot see:
 2. **Extract** — the onboarding adapter calls the LLM with `businessProfileSkillBody`; the model emits
    a `ProfileInput` — the Lean-core fields and **no classification of any kind**. `profileSchema` has
    no `persona` property, so a guess is structurally impossible (defect 1a).
-3. **Confirm (SC#1)** — the extracted fields pre-fill a review card the user edits and explicitly
-   confirms. Nothing is persisted before that confirmation.
-4. **Derive the tier** — the FACTS are asked (`tenantProfile.saveFacts`) and `deriveTier` turns them
-   into the `tenantProfiles` row. This is the only way a tier comes to exist.
-5. **Serialize + persist** — `commitProfile` reads the tier row, refuses with `INCOMPLETE_ONBOARDING`
+3. **Converse (design §6)** — the determining facts are ASKED, one per turn, through
+   `onboarding.converse`. Each turn is one `generateObject` call under the `onboarding-agent`
+   registry prompt; the CALLER holds `slots` + the transcript and passes them back in. The code
+   picks `nextSlot` from `missingSlots` in `REQUIRED_SLOTS` order and computes `done` from
+   `canComplete` — the model never decides either. `done` releases the closing beat, in which the
+   agent makes the tailoring legible and asks the user to confirm it.
+4. **Confirm (SC#1)** — the extracted narrative fields pre-fill a review card the user edits and
+   explicitly confirms. Nothing is persisted before that confirmation.
+5. **Derive the tier** — the collected FACTS are written through `tenantProfile.saveFacts` (which
+   has no `tier` argument) and `deriveTier` turns them into the `tenantProfiles` row. This is the
+   only way a tier comes to exist. `converse` itself writes nothing.
+6. **Serialize + persist** — `commitProfile` reads the tier row, refuses with `INCOMPLETE_ONBOARDING`
    if any required slot is empty (design §6), then splices `row.tier` into the profile and
    `serializeProfile` renders deterministic markdown; the mutation stores it as a `business_profile`
    vault doc (persistBrief-style clone) which ingests to `ready`.
-6. **Ground** — thereafter `searchVault` surfaces the profile, making agent turns business-aware.
+7. **Ground** — thereafter `searchVault` surfaces the profile, making agent turns business-aware.
 
 ## Invariants — what must never break
 
@@ -224,6 +331,18 @@ cannot see:
   defect this phase closes. `updateProfile` deliberately has NO slot gate (design §10, SC#6c) — a
   legacy tenant must still be able to edit — but throws `INCOMPLETE_FACTS` if the tier ROW is missing
   entirely, because a `"solopreneur"` fallback there would be defect 1d in a new costume.
+- **The conversation's next question and its `done` flag are CODE too (SC#3c)** — `converse` returns
+  `nextSlot = missingSlots(slots)[0]` and `done = canComplete(slots)`. Moving either into the
+  `onboarding-agent` body is a regression to defect 1a that no existing test would catch, because
+  the tests drive the offline sentinel and a prompt regression is invisible to them. Enforced by
+  `onboarding.test.ts` "the CODE picks the next question…" and "a model that CLAIMS the conversation
+  is finished cannot make it finished" (both mutation-checked).
+- **`converse` is stateless and writes nothing** — no row on any table, no audit, no telemetry, no
+  dead letter. Pinned by a before/after row-count assertion. A write here would put conversational
+  prose on the log plane (§4) and take state ownership away from the caller.
+- **The onboarding-agent registry read is FAIL-CLOSED and comes FIRST** — before the
+  `SMOKE::onboard::` short-circuit, so an unseeded deployment cannot run an ungoverned turn even
+  offline (SC#3c, mutation-checked by moving the short-circuit above the load).
 - **Enterprise is not an emittable persona** — the `Persona` union is exactly `solopreneur | startup | sme`;
   `isPersona` and `decideConfirm` still reject `"enterprise"`. `BusinessProfile.persona` is widened to
   `Tier` for the PROJECTION only (the table can hold a granted `enterprise`); widening the projection
@@ -276,7 +395,11 @@ cannot see:
 - `pnpm --filter @pikar/core test -- businessProfile` — pure schema + always-confirm decision + serializer
   roundtrip + enterprise-not-emittable (SC#1). ~5s, no deployment needed.
 - `pnpm --filter @pikar/backend test -- onboarding` — status gate + extract-no-auto-commit (SC#1) +
-  commit→ingest→retrieve + tenant isolation + re-embed (SC#2/#3), convex-test. LIVE.
+  commit→ingest→retrieve + tenant isolation + re-embed (SC#2/#3) + the `converse` turn (SC#3c
+  fail-closed, the code-owned next question, the model-cannot-declare-done property, the
+  writes-nothing assertion), convex-test, all offline through the two SMOKE seams. LIVE.
+- `pnpm --filter @pikar/contracts exec vitest run` — the `.md` ↔ derived `.ts` no-drift row for
+  `onboarding-agent` (a stale derived constant seeds a stale prompt rather than failing loudly).
 - `pnpm --filter @pikar/backend test -- profileRedaction` — §4 audit/telemetry/DLQ scan (SC#4). LIVE.
 - `pnpm --filter @pikar/backend test -- tenantProfile` — the tier control plane: SC#2a round-trip +
   tenant isolation, the `tenant.tier_changed` payload key set (SC#5c), the `grantEnterprise` grant
