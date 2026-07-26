@@ -1,8 +1,8 @@
 ---
 phase: 17
 slug: calendar-actions
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-27
 ---
@@ -101,4 +101,4 @@ Task IDs are assigned by the planner; this is the criterion→test contract the 
 - [ ] Feedback latency < 30s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** accepted by the planner 2026-07-27 — every task in 17-01..17-04 carries an `<automated>` verify; the Wave-0 MISSING rows are created by 17-01 (pure-core + trace parity) and 17-02 (the fixture seam, checked BEFORE `freshAccessToken`, and `convex/calendar.test.ts`). The five Manual-Only rows are OWNER-CONSENT-GATED and are carried in 17-02 (M1-M3) and 17-04 (M1-M5) as owner checklists, never as executor tasks.
