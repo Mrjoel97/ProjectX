@@ -3,6 +3,9 @@
 //
 // Wave 0 (15-01) shipped the TYPES and the fail-closed lookup with the registry deliberately
 // EMPTY. 15-02 fills it: a specialist is now a resolvable (skill body, tool-set) pair.
+// 15.1-05 adds the per-tenant PROMPT BLOCK (`tierBriefing`) the dispatcher prepends — ADR-009.
+
+import { type BehaviorPreset, sanitizeAgentName, type Tier } from "./businessProfile";
 
 /** The closed set of dispatchable specialist routes — exactly the routes `diagnose()` emits. */
 export const SPECIALIST_ROUTES = [
@@ -79,7 +82,7 @@ export type ResolvedSpecialist =
  * Returns a discriminated result and NEVER throws — a governed stop returns, only bugs throw.
  */
 export function resolveSpecialist(route: string): ResolvedSpecialist {
-  if (!Object.prototype.hasOwnProperty.call(SPECIALISTS, route)) {
+  if (!Object.hasOwn(SPECIALISTS, route)) {
     return { ok: false, reason: "unknown_route" };
   }
   const known = route as SpecialistRoute;
@@ -96,6 +99,86 @@ export function resolveSpecialist(route: string): ResolvedSpecialist {
  */
 export function wouldCycle(ancestry: readonly string[], route: string): boolean {
   return ancestry.includes(route);
+}
+
+/**
+ * Which §5 registry row carries each behaviour preset's style directive (design §7).
+ *
+ * Inlined for the same reason the specialist skill names above are: @pikar/contracts is NOT a
+ * dependency of @pikar/core, and adding one to carry three strings would invert nothing but the
+ * dependency graph. `specialists.test.ts` reads `contracts/src/skill.ts` off disk and asserts these
+ * copies equal the `STYLE_*_SKILL` constants, so a rename on either side fails a test.
+ */
+export const PRESET_SKILL = {
+  direct: "style-direct",
+  coaching: "style-coaching",
+  concise: "style-concise",
+} as const satisfies Record<BehaviorPreset, string>;
+
+/**
+ * What each tier MEANS, as a structural constraint on the advice — not a description of the user.
+ *
+ * A `satisfies Record<Tier, string>` TABLE, deliberately NOT a switch or a ternary: a ternary is
+ * total by construction, so adding a tier literal would silently inherit the else-branch's clause
+ * and the distinctness test would be vacuous forever (the Phase-15 `armFor` lesson, actionType.ts;
+ * the same reasoning that shapes TIER_REASON in businessProfile.ts). A new tier without a clause is
+ * a COMPILE error here.
+ */
+const TIER_FACT = {
+  solopreneur:
+    "one person, no paid staff — there is nobody to delegate to, so every step must be" +
+    " executable by the owner alone",
+  startup:
+    "a small team still finding repeatable revenue, or building on outside funding — steps" +
+    " must be cheap to reverse and fast to test",
+  sme:
+    "an established business with steady revenue and paid staff — there is a team to assign" +
+    " work to and an existing process to change",
+  enterprise:
+    "operating at granted enterprise scale — assume multiple teams, established process, and" +
+    " internal approval steps between a decision and its execution",
+} as const satisfies Record<Tier, string>;
+
+/**
+ * The per-tenant block `convex/dispatch.ts` PREPENDS to a dispatched specialist's prompt (SC#5,
+ * ADR-009). Deterministic string assembly: no model call, no I/O, no Convex.
+ *
+ * Shape — every line is omitted when its input is absent, so a sparse tenant yields a short block
+ * and a tenant with nothing known yields `""` (the caller skips it entirely):
+ *
+ *     Agent name: <sanitized>
+ *     Business tier: <tier> — <structural consequence>
+ *
+ *     <styleDirective body>
+ *
+ * **Why this is CODE-owned and not a registry row (§5) — this is not a violation.** These are FACTS
+ * about the tenant plus the structural consequence of those facts, exactly the class `TASK_LINE`
+ * already occupies in `dispatch.ts` ("driver-plane synthetic string, not a skill"). The part that is
+ * genuinely prompt CONTENT — the VOICE — is `styleDirective`, and that IS a versioned registry row
+ * (`PRESET_SKILL` above). Same split as ADR-007: what the agent is TOLD is DB-editable and
+ * eval-reviewable; what is structurally TRUE about the tenant is not.
+ *
+ * `agentName` is sanitized HERE rather than at the call site, so there is exactly ONE place a
+ * user-authored string can reach a model prompt. Do not sanitize it again upstream and do not skip
+ * it here on the assumption that someone else did.
+ *
+ * An ABSENT tier produces NO tier claim — never an invented "solopreneur". A missing profile row
+ * must not become a silent classification; that defect class is what this phase exists to close.
+ */
+export function tierBriefing(a: {
+  tier?: Tier;
+  agentName?: string;
+  styleDirective?: string;
+}): string {
+  const lines: string[] = [];
+  const name = a.agentName === undefined ? "" : sanitizeAgentName(a.agentName);
+  if (name !== "") lines.push(`Agent name: ${name}`);
+  if (a.tier !== undefined) lines.push(`Business tier: ${a.tier} — ${TIER_FACT[a.tier]}`);
+
+  const directive = a.styleDirective?.trim();
+  const facts = lines.join("\n");
+  if (!directive) return facts;
+  return facts === "" ? directive : `${facts}\n\n${directive}`;
 }
 
 /**

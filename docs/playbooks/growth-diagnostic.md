@@ -1,6 +1,25 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-25 against 15-02 (Phase 15 Wave 1) — the three specialists are REGISTERED
+> Last verified: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
+> `tierBriefing({tier?, agentName?, styleDirective?})` and `PRESET_SKILL`. **No diagnostic math, gate
+> order, route literal, or `SPECIALISTS` entry changed** — this is additive and lives beside the
+> registry, not inside it. The CODE-owned / REGISTRY-owned split is the thing to preserve: the FACT
+> lines (the tenant's tier and the structural consequence of it, e.g. solopreneur ⇒ *"nobody to
+> delegate to"*) are code-owned data in `TIER_FACT`, exactly the class `TASK_LINE` already occupies in
+> `dispatch.ts` (*"driver-plane synthetic string, not a skill"*); the VOICE — the behaviour-preset
+> style directive — is a VERSIONED REGISTRY ROW resolved through `PRESET_SKILL`. Same split and same
+> reasoning as ADR-007 (bodies registry-owned, structure code-owned): what the agent is TOLD is
+> DB-editable and eval-reviewable, what is structurally TRUE about the tenant is not. `TIER_FACT` is a
+> `satisfies Record<Tier, string>` TABLE, never a switch/ternary — a ternary is total by construction,
+> so a new tier would silently inherit the else-branch and the distinctness test would be vacuous
+> forever (the `armFor` lesson). An ABSENT tier produces NO tier claim, never an invented
+> `solopreneur` — a missing profile row must not become a silent classification. `agentName` is passed
+> through `sanitizeAgentName` INSIDE `tierBriefing`, so there is exactly ONE place a user-authored
+> string can reach a model prompt. **Testing note worth keeping:** the SC#5b distinctness assertion
+> MASKS the tier literal before comparing blocks — the block interpolates the tier name, so comparing
+> raw blocks passes even when two tiers share a clause word-for-word (observed: 34/34 GREEN under that
+> mutation). Masking the name is what makes the assertion about substance; the corrected form goes RED.
+> Previously verified: 2026-07-25 against 15-02 (Phase 15 Wave 1) — the three specialists are REGISTERED
 > and `Prescription.route` is now closed to `SpecialistRoute | ""`. No diagnostic math, gate order,
 > or route literal changed. See "Consumer side — specialist dispatch" below.
 > Previously verified: 2026-07-25 against 15-01 (Phase 15 Wave-0 freeze) — `packages/core/src/specialists.ts`
@@ -64,6 +83,30 @@ Consumer side — specialist dispatch (`packages/core/src/specialists.ts`, + `sp
   `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` (`packages/contracts/src/skill.ts`) because
   `@pikar/contracts` is not a dependency of `@pikar/core`. `specialists.test.ts` reads that file off
   disk and asserts the copies match, so a rename on either side fails a test.
+- **`tierBriefing({tier?, agentName?, styleDirective?}) → string`** (15.1-05, ADR-009) — the per-tenant
+  block `convex/dispatch.ts` PREPENDS to a dispatched specialist's prompt. Pure, deterministic, no I/O.
+  Shape, each line omitted when its input is absent (all absent ⇒ `""`, and the caller skips it):
+
+  ```
+  Agent name: <sanitized>
+  Business tier: <tier> — <structural consequence>
+
+  <styleDirective body>
+  ```
+
+  Three properties a future change must keep: (a) `TIER_FACT` is a `satisfies Record<Tier, string>`
+  TABLE so a new tier is a COMPILE error, not a silent else-branch; (b) an absent tier yields NO tier
+  claim rather than an invented `solopreneur`; (c) `agentName` is sanitized INSIDE the function, so
+  there is exactly ONE place a user-authored string reaches a prompt — do not add a second at a call
+  site, and do not remove this one on the assumption a call site did it.
+- **`PRESET_SKILL`** (15.1-05) — `satisfies Record<BehaviorPreset, string>`, mapping each behaviour
+  preset to its registry row name (`style-direct` / `style-coaching` / `style-concise`). INLINED for
+  the same reason the `skillName` values are, and guarded by the SAME on-disk scan against the
+  `STYLE_*_SKILL` constants. The directive BODY is registry-owned (§5); only the NAME is code-owned.
+- **ADR-009 fence:** `tierBriefing` is prompt-shaping. It is NOT an offer-set filter and NOT a change
+  to the rubric pick — `diagnose()` still emits exactly ONE prescription, `SPECIALISTS` gained no
+  filter layer and no per-tier grant, and `financialsPresent` still overrides the framework pick (Q3).
+  A verifier must not read SC#5 as "the offer set is filtered".
 - It mirrors `parseRouting` (`packages/contracts/src/routing.ts`) exactly: a discriminated result,
   NEVER a throw, and deliberately **no default specialist** — "a route the system cannot validate is
   a route it must not take". This is the same guarantee as the diagnostic's own conservatism, one
