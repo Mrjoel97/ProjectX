@@ -3,8 +3,11 @@ import {
   BLUEPRINT_FIELDS,
   type BlueprintEntry,
   type BlueprintField,
+  type BusinessBlueprint,
+  deserializeBlueprint,
   FIELD_SPEC,
   probesFor,
+  serializeBlueprint,
   statedFromProfile,
 } from "./blueprint";
 import type { BusinessProfile } from "./businessProfile";
@@ -23,6 +26,12 @@ const profile = (over: Partial<BusinessProfile> = {}): BusinessProfile => ({
 });
 
 const entry = (value: string): BlueprintEntry => ({ values: [value], origin: "stated" });
+
+/** A whole blueprint: every field `null` unless the case supplies one. */
+const blueprint = (over: Partial<Record<BlueprintField, BlueprintEntry>> = {}): BusinessBlueprint =>
+  Object.fromEntries(
+    BLUEPRINT_FIELDS.map((f) => [f, over[f] ?? null])
+  ) as unknown as BusinessBlueprint;
 
 describe("the closed field set and its totality table", () => {
   it("FIELD_SPEC covers every blueprint field and nothing else (item 6, runtime half)", () => {
@@ -137,5 +146,79 @@ describe("probesFor — cost scales with BLANKS (item 14)", () => {
     expect(fields).not.toContain("tier");
     expect(fields).not.toContain("entities");
     expect(fields).toHaveLength(BLUEPRINT_FIELDS.filter((f) => FIELD_SPEC[f].derivable).length);
+  });
+});
+
+// ── The deterministic serializer pair (the STORED blueprint markdown) ──────────────────────────
+
+/** Every field populated, both origins, scalar and list, a source title carrying punctuation. */
+const FULL = blueprint({
+  name: { values: ["Acme Ltd"], origin: "stated" },
+  oneLineDescription: { values: ["We roast single-origin coffee."], origin: "stated" },
+  stage: { values: ["pre-launch idea"], origin: "stated" },
+  tier: { values: ["solopreneur"], origin: "stated" },
+  offering: {
+    values: ["Single-origin beans, roasted to order"],
+    origin: "derived",
+    source: "Pricing & margins] — Q3 (final).pdf",
+  },
+  targetCustomer: { values: ["Independent cafés"], origin: "derived", source: "Deck.pptx" },
+  revenueModel: { values: ["Wholesale + subscription"], origin: "derived", source: "Deck.pptx" },
+  bindingConstraint: { values: ["Roasting capacity"], origin: "derived", source: "Ops notes.docx" },
+  primaryGoals: { values: ["Reach £10k MRR", "Open a second roastery"], origin: "stated" },
+  knownConstraints: { values: ["One person, no staff"], origin: "stated" },
+  entities: { values: ["Acme", "Bean Co"], origin: "derived", source: "entity graph" },
+});
+
+describe("serializeBlueprint / deserializeBlueprint", () => {
+  it("round-trips a FULL blueprint, including a source title containing punctuation (item 1)", () => {
+    expect(deserializeBlueprint(serializeBlueprint(FULL))).toEqual(FULL);
+  });
+
+  it("round-trips a SPARSE blueprint — the sparse-start common case (item 1)", () => {
+    const sparse = blueprint({
+      oneLineDescription: { values: ["An idea for a coffee subscription."], origin: "stated" },
+    });
+    expect(deserializeBlueprint(serializeBlueprint(sparse))).toEqual(sparse);
+  });
+
+  it("round-trips an EMPTY blueprint (every field null)", () => {
+    const empty = blueprint();
+    expect(deserializeBlueprint(serializeBlueprint(empty))).toEqual(empty);
+  });
+
+  it("NEVER emits `- **Persona:**` — the profile-detector collision (item 7)", () => {
+    // `evaluations.ts` and `vault.profileSeedDocs` both use that EXACT string to detect a
+    // business-profile doc; a blueprint carrying it is misread as one by BOTH.
+    for (const b of [FULL, blueprint(), blueprint({ tier: entry("solopreneur") })]) {
+      expect(serializeBlueprint(b)).not.toContain("- **Persona:**");
+      expect(serializeBlueprint(b)).not.toContain("**");
+    }
+  });
+
+  it("is byte-deterministic and carries no date and no document count (item 8)", () => {
+    // The staleness count and the confirmation date are computed at READ time in the spine.
+    // Either one inside the stored text breaks the diff and the `contentHash` dedup.
+    expect(serializeBlueprint(FULL)).toBe(serializeBlueprint(FULL));
+    expect(serializeBlueprint(FULL)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(serializeBlueprint(FULL)).not.toContain("documents added");
+  });
+
+  it("marks stated vs derived per field, and keeps the plain `- Label:` scalar shape", () => {
+    const md = serializeBlueprint(FULL);
+    expect(md).toContain("- Stage: pre-launch idea [stated]");
+    expect(md).toContain("- Target customer: Independent cafés [source: Deck.pptx]");
+    expect(md).toContain("- Acme [source: entity graph]");
+  });
+
+  it("degrades a foreign / unparseable blob to an all-null blueprint rather than throwing", () => {
+    // A deleted-and-replaced vault doc must degrade to "no blueprint", never crash a grounding call.
+    for (const junk of ["", "not markdown at all", "# Business profile\n\n- **Persona:** sme\n"]) {
+      expect(deserializeBlueprint(junk)).toEqual(blueprint());
+    }
+  });
+
+  it("deserialize is TOTAL — it fills all eleven fields whatever it is handed", () => {
+    expect(Object.keys(deserializeBlueprint("garbage")).sort()).toEqual([...BLUEPRINT_FIELDS].sort());
   });
 });
