@@ -5,6 +5,7 @@ import { useConvex, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { fmtSize, type VaultDoc } from "./DocGrid";
+import { failureCopy } from "./failureCopy";
 import { DownloadIcon, TrashIcon, XIcon } from "./icons";
 
 // The in-place preview modal (VALT-04, surfaces VALT-02 in the UI). Opening a doc renders it here —
@@ -340,21 +341,26 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   background: "#fef2f2",
                 }}
               >
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
-                  Extraction failed
+                {/* The reason CODE is refs-only (§4) and is never shown — it rides in `title=` as a
+                    debugging affordance only. What the user reads is failureCopy's title + remedy;
+                    the previous hardcoded "scanned or image-only PDFs" sentence was DELETED because
+                    it is wrong for most reason codes (a legacy .xls is not an image-only PDF). */}
+                <p
+                  style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}
+                  title={doc.failureReason}
+                >
+                  {failureCopy(doc.failureReason).title}
                 </p>
-                {doc.failureReason && (
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
-                    Reason: {doc.failureReason.replace(/_/g, " ")}
-                  </p>
-                )}
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+                  {failureCopy(doc.failureReason).remedy}
+                </p>
                 {/* DOCV-01's first honesty moment, in the user's terms. A failed document offers NO
                     voice action anywhere — we will not open a grounded conversation the agent has
                     nothing to ground in, and a silent degradation to "chat about it anyway" would be
-                    worse than the refusal. Says what to do next instead of only what went wrong. */}
+                    worse than the refusal. Unrelated to WHICH reason failed, so it survives the
+                    copy rewrite verbatim. */}
                 <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
-                  We couldn&apos;t read this file, so it can&apos;t be discussed by voice yet. Scanned
-                  or image-only PDFs are the usual cause — try a text-based version, then retry.
+                  It can&apos;t be discussed by voice until it reads successfully.
                 </p>
                 <button
                   type="button"

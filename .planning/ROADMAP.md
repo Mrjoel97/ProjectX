@@ -609,8 +609,8 @@ Plans:
 Plans:
 - [x] 15.2-01-PLAN.md — Lane V contract + magic-byte `sniff.ts` + the never-null scheduling decision [SC#1, SC#4] (Wave 1)
 - [x] 15.2-02-PLAN.md — Format coverage in the pure layer: ZIP-entry dispatch (XLSM/DOCM/PPTM/ODF/EPUB) + RTF/markup/OLE2 DOC-PPT, no new dependency [SC#2, SC#3] (Wave 2)
-- [ ] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
-- [ ] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
+- [x] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
+- [x] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
 - [ ] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5)
 - [ ] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6)
 - [ ] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7)
@@ -655,20 +655,46 @@ Plans:
 **Goal:** Every agent surface carries a standing, cited description of the business instead of
 reaching it only through query-scoped retrieval. One blueprint artifact = the user's typed profile
 (authoritative, never overwritten) + document-derived fields where they left blanks (cited) + the
-top graph entities. Draft -> user confirms -> live; prepended in `vaultGroundHydrated` so all five
-callers (cockpit, onboarding, evaluations, voiceDoc, tenantProfile) inherit it from one seam.
+top graph entities. Draft -> user confirms -> live.
+
+**Delivered through TWO SEAMS** (owner decision 2026-07-27, REPLACING the original "prepended in
+`vaultGroundHydrated` so all five callers inherit it from one seam" plan, which research disproved):
+- **Seam 1 — the cockpit turn prompt.** The blueprint is prepended to the `prompt` passed into
+  `runAgentLoop`, so it is present on EVERY turn regardless of tool use. Prepending it inside
+  `vaultGroundHydrated` would have reached the cockpit only on turns that happened to call
+  `searchVault` — and would have made `llm.ts:1364`'s honest "nothing in your vault" answer
+  structurally unreachable (HIGH severity), inflated every `vault.searched` count, and put a
+  blueprint chip on every search.
+- **Seam 2 — a separate `spine` field** on `vaultGroundHydrated`'s return, ALONGSIDE the parallel
+  arrays and never inside them, consumed explicitly by `evaluations.ts` and `voiceDoc.ts`. There
+  are **THREE** real callers of that function, not five: `onboarding.ts` and `tenantProfile.ts`
+  mention it in comments only.
+
+Also amended 2026-07-27: the blueprint is **NOT embedded and NOT graph-extracted**; the
+`business-blueprint` skill is **UNGATED**; Stage-2 drift is **USER-TRIGGERED** (detection is
+automatic and free, the rebuild is one click — no automatic trigger until a bulk-ingest completion
+event exists); `stage` is `BusinessProfile.stage`, never `tenantProfiles.revenueStage`.
 
 **Source:** `docs/superpowers/specs/2026-07-27-business-blueprint-design.md` (PRD express path).
 Locked owner decisions D1-D5 in spec §2.1.
 
-**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every grounding call + staleness + drift diff)
+**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every cockpit turn + the explicit `spine` field + staleness + drift diff)
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 2/7 plans executed
+**Plans:** 4/7 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 17.1 to break down)
+- [ ] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
+- [ ] 17.1-02-PLAN.md — Substrate: migration-free `tenantProfiles` widening + 2 indexes; the UNGATED `business-blueprint` skill row (Wave 1)
+- [ ] 17.1-03-PLAN.md — Precedence as code: citation trust boundary, `mergeBlueprint` + the two-kind diff, `renderSpine` (Wave 2)
+- [ ] 17.1-04-PLAN.md — Backend read plane: `liveForTenant`, `topEntities`, Stage-1 drift, `spineForTenant` (Wave 3)
+- [ ] 17.1-05-PLAN.md — Synthesis: probes -> grounding -> ONE governed model call -> draft write that refuses without a tier row (Wave 4)
+- [ ] 17.1-06-PLAN.md — SEAM 1: the cockpit turn prompt, proven on a turn that calls no tools (Wave 4)
+- [ ] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 5)
+- [ ] 17.1-08-PLAN.md — The confirm gate: `confirmBlueprint`, one never-ingested blueprint document, refs-only audit, four-state query (Wave 6)
+- [ ] 17.1-09-PLAN.md — The confirm surface: `BlueprintPanel` + `BlueprintDiff` (additions grouped ON, contradictions ticked OFF), brand-token styled (Wave 7)
+- [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 8, has a blocking checkpoint)
 
 ### Phase 18: Document & Content Creation
 **Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
@@ -785,7 +811,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
-| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 2/7 | In Progress|  |
+| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 4/7 | In Progress|  |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
