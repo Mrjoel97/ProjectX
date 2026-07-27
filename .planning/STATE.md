@@ -93,6 +93,22 @@ progress:
   completed_plans: 176
 ---
 
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 17.1
+current_plan: 4
+status: in_progress
+stopped_at: "Completed 17.1-03-PLAN.md (Wave 2 — precedence as code, the citation trust boundary, the spine renderer). THIS BLOCK DESCRIBES LANE 17.1 ONLY; the blocks above describe Lanes V/R/K and are HAND-EDITED. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — it was deliberately NOT run. `roadmap update-plan-progress 17.1` moved the count to 3/10 but BLANKED the Notes and Updated columns and did NOT tick the 17.1-03 checkbox; all three hand-repaired (memory: `gsd-tools-commit-workaround`). @pikar/core 355/355 (was 327), blueprint file 48 tests (was 20), typecheck exit 0. THREE mutation-checks, each confirmed applied and each reverted green. `check-playbooks` blocks entirely on FOREIGN lanes and was deliberately not satisfied; `onboarding.md` is NOT in the stale list. BLPR-01 and BLPR-02 left PENDING on purpose. Next: 17.1-04 (Wave 3 — the backend read plane)."
+last_updated: "2026-07-27T18:05:00.000Z"
+progress:
+  total_phases: 40
+  completed_phases: 24
+  total_plans: 179
+  completed_plans: 177
+---
+
 # Project State
 
 ## Project Reference
@@ -104,7 +120,66 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 1 of 8) — 17.1-01 COMPLETE: the pure blueprint core.**
+**PHASE 17.1 — Business Blueprint (Wave 2 of 8) — 17.1-03 COMPLETE: the three functions that carry
+this phase's guarantees.** All pure `@pikar/core` (§1), 20 → **48** tests in `blueprint.test.ts`,
+full core suite **355/355**, typecheck exit 0, ~21 min, ZERO model calls. **(1) D5 IS NOW
+STRUCTURAL.** `mergeBlueprint` has **no branch that assigns a derived entry over a stated one** —
+that absence IS the guarantee (the `businessProfile.ts:78` idiom), and the proof is a **LOOP over
+`BLUEPRINT_FIELDS`**, not the one hand-picked `targetCustomer` case the owner asked for (that is
+there too), so it survives someone adding a twelfth field. **Mutation-verified: `out[field] =
+candidate ?? typed` ⇒ 3 RED; reverted ⇒ green.** A contradicting candidate raises a `contradiction`
+ROW and changes nothing. **Only TWO diff kinds, and the split falls out of D5 rather than UI taste:**
+`addition` (blank→value) is non-destructive BY CONSTRUCTION ⇒ one Accept, defaulted ON;
+`contradiction` (typed ≠ derived) is the only destructive case ⇒ per-item, defaulted OFF, carrying
+both values + the derived source so the surface never re-derives the distinction. **A CHANGED
+derived value stays an `addition`** — a contradiction is only ever raised against content the USER
+typed, and a changed inference replaces a *system* inference. **An identical rebuild yields an EMPTY
+diff** (the whole Stage-2 drift contract), made true by merge rule 3: when neither stated nor derived
+has the field, `live` is carried FORWARD, so a probe pass that comes back empty cannot blank a field
+the blueprint already had. **(2) THE CITATION TRUST BOUNDARY.** `validateCandidates` drops a claim
+whose `sourceIndex` is out of range, the strict-schema `-1` sentinel, or a non-integer — all in the
+SAME branch as CONTEXT requires — **DROPPED, never kept uncited**; and drops one naming an unknown
+field or a `derivable:false` one, so **a model cannot rename the business, reclassify the tier or
+write the entity graph**. Narrowing is a membership test against `BLUEPRINT_FIELDS`, **never a
+cast**, and `field` is typed `string` on the way in because it is untrusted. **Drops are REPORTED**
+(`{field, reason}`) — VALIDATION L2 calls 0 drops and 8 drops both signals and neither is observable
+if the gate swallows them. **THE PLAN'S LITERAL SECOND MUTATION IS BEHAVIOUR-PRESERVING HERE AND
+THAT IS RECORDED, NOT PAPERED OVER:** widening the range test to `i < sources.length + 1` left the
+suite GREEN, because `sources[i]` yields `undefined` for every bad index anyway — **both gates are
+deliberate belt-and-braces and the source now says so**, and the check was re-run against the actual
+DEFECT SHAPE (`sources[i] ?? {title:"unknown"}`, i.e. keep the claim and invent the citation) ⇒
+**3 RED**, exactly the item-3 drop tests. **(3) THE SPINE.** `renderSpine` is the ONE renderer both
+seams inject (cockpit turn prompt + `vaultGroundHydrated`'s separate `spine` field), budgeted
+OUTSIDE `TOTAL_CHAR_CAP`, `[stated]` vs `[source: <title>]` with a stated fact **never** cited, a
+staleness line iff `unincorporatedCount > 0`, plain `- <Label>: ` labels so the `- **Persona:**`
+detector cannot fire on it either, and an all-null blueprint renders `- (nothing confirmed about
+this business yet)` rather than throwing (a grounding call must not crash on a sparse-start tenant).
+**THE SIZE GUARANTEE BECAME ARITHMETIC, VIA THE ONE REAL DEVIATION:** 17.1-01's `cap` was a VALUE
+budget summing to 2280, which **cannot** close under `SPINE_CHAR_CAP = 2500` once eleven labels
+(126), the `- `/`: ` scaffolding (55), eleven `[source: …]` markers and the block's own fence + intro
++ staleness line (~325) are counted — the pathological render lands ~2765 and **the tripwire would
+have fired on a legitimate max-size blueprint.** `cap` is now the budget of the **WHOLE RENDERED
+LINE**, so `line.length ≤ cap` is guaranteed per field and the total is `sum(cap) + framing`, both
+constants; caps retuned to sum **1960** and the worst case **MEASURED at 2294 of 2500** (every field
+10k chars + a 70-char source title). `tier` had to rise 20 → 60 because `- Tier: solopreneur
+[stated]` is 28 chars — itself evidence the value-level reading was wrong. **Legitimate because
+CONTEXT assigns "per-field char-cap constants" to Claude's discretion and `cap` has NO consumer
+outside `renderSpine`** (verified: `FIELD_SPEC` appears in exactly two source files). `SPINE_CHAR_CAP`
+was NOT weakened — still exactly 2500. **The hard total assertion has been SEEN TO FIRE:** `offering`
+240 → 1000 ⇒ `renderSpine` throws `blueprint spine is 3052 chars, over SPINE_CHAR_CAP (2500)`, 3 RED;
+reverted ⇒ 48/48. **`check-playbooks` BLOCKS, entirely on FOREIGN work** — `growth-diagnostic.md`
+(`packages/core/src/specialists.ts`) and `cockpit.md` (untracked `packages/backend/convex/
+research.ts`, Lane R's). **Deliberately NOT satisfied:** bumping either would claim verification of a
+diff this plan never read. This plan's own obligation IS discharged — `onboarding.md` is not in the
+stale list, verified after every task. **BLPR-01 AND BLPR-02 LEFT PENDING ON PURPOSE:** BLPR-01's
+text covers the confirm gate (17.1-08) and BLPR-02's covers the seams (17.1-06/-07); flipping either
+after plan 3 of 10 is a false signal. **A HARNESS DETAIL WORTH KNOWING: a TDD RED that fails at
+COLLECTION prints `Tests no tests`, not a count** — task 3's test file calls `renderSpine` in a
+`describe` body, so before the export existed vitest could not collect the file at all. **STILL OWED
+BY 17.1-07: the preflight re-read of `vaultGround.ts`/`vault.ts`/`schema.ts`** (inherited from
+17.1-01; this plan touches none of them). Next: 17.1-04 (Wave 3 — the backend read plane).
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 1 of 8) — 17.1-01 COMPLETE: the pure blueprint core.**
 `packages/core/src/blueprint.ts` is live — Convex-free, portable (§1), 20 tests, and the type
 contract every later 17.1 plan is written against. **The one thing worth carrying forward is that
 BOTH of its guarantees are structural, and both were mutation-checked rather than asserted.**
