@@ -225,9 +225,9 @@ export const SEND_TIME_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
  * (strictly beyond now+horizon), else resolved. One helper so the three resolve sites share the
  * SAME two bounds — a bound can never drift between branches.
  */
-function classify(epochMs: number, nowMs: number): SendTimeParse {
+function classify(epochMs: number, nowMs: number, horizonMs: number): SendTimeParse {
   if (epochMs <= nowMs + SEND_TIME_EPSILON_MS) return { kind: "past" };
-  if (epochMs > nowMs + SEND_TIME_HORIZON_MS) return { kind: "tooFar" };
+  if (epochMs > nowMs + horizonMs) return { kind: "tooFar" };
   return { kind: "resolved", epochMs };
 }
 
@@ -299,7 +299,19 @@ function zonedWallClockToEpoch(
  *   - anything unrecognized / no time                                  → none (immediate send)
  * PURE — no Date.now / no `new Date()` without an explicit ms. Bound 3 (locked): never guess a day.
  */
-export function parseSendTime(text: string, nowMs: number, ianaTz: string): SendTimeParse {
+// 17-01 (ACTN-02): `horizonMs` is a 4th parameter DEFAULTING to the existing constant, so every
+// existing caller and every existing case is byte-unchanged. It exists because the 7-day bound is
+// a GMAIL-TOKEN-LIFETIME constraint on DEFERRED SEND — a schedule past it finds a dead token at
+// fire time (:217-221). A calendar event is created at APPROVE time, not at event time, so that
+// bound is simply FALSE for the calendar path: reusing this unchanged would refuse "the board
+// meeting next month" with a reason that does not apply. Threaded through every classify() call
+// site so a bound can never drift between branches — the stated reason classify() exists (:224-227).
+export function parseSendTime(
+  text: string,
+  nowMs: number,
+  ianaTz: string,
+  horizonMs: number = SEND_TIME_HORIZON_MS,
+): SendTimeParse {
   const t = text.trim().toLowerCase();
   if (!t) return { kind: "none" };
 
@@ -309,7 +321,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
     const n = Number(rel[1]);
     const ms = /^h/.test(rel[2] ?? "") ? n * 3_600_000 : n * 60_000;
     const epochMs = nowMs + ms;
-    return classify(epochMs, nowMs);
+    return classify(epochMs, nowMs, horizonMs);
   }
 
   // Day anchor.
@@ -365,7 +377,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
       mi,
       ianaTz,
     );
-    return classify(epochMs, nowMs);
+    return classify(epochMs, nowMs, horizonMs);
   }
 
   // No day anchor.
@@ -386,7 +398,7 @@ export function parseSendTime(text: string, nowMs: number, ianaTz: string): Send
         ianaTz,
       );
     }
-    return classify(epochMs, nowMs);
+    return classify(epochMs, nowMs, horizonMs);
   }
 
   if (bare) return { kind: "ambiguous" }; // "at 4" — hour with no meridiem, no day

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 16
+current_phase: 17
 current_plan: 1
 status: in_progress
-stopped_at: "16-01 COMPLETE + committed on lane-r (4d32ce1) — the Lane-R freeze half. NOT YET MERGED to main: a Lane V session is LIVE on main (Phase 15.2, committing as of 2026-07-27 04:14). Merging is a coordination event. Next: merge lane-r to main when Lane V is quiet, announce to Lane K, then Lane K merges main down and runs 17-01."
+stopped_at: "17-01 COMPLETE (468cbd6) — the Lane-K freeze half, on a base already carrying Lane R 16-01. Stage-1 freeze is now DONE on both sides. Next: 17-02, which is the FIRST plan needing a real Convex deployment (new convex modules force api.d.ts regen) AND owner-granted Google OAuth consent for the widened scope. CARRY-FORWARD for 17-03: parseSendTime has no month-name grammar — see 17-01-SUMMARY."
 last_updated: "2026-07-27T04:15:00.000Z"
 progress:
   total_phases: 38

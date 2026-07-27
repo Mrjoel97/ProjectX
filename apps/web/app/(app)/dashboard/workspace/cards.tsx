@@ -273,6 +273,38 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     );
   }
 
+  // CALENDAR plan (17-01, ACTN-02): same single Approve gate, a different promise. Approving
+  // creates ONE event on the user's Google Calendar; nothing is emailed and no attendee is
+  // invited. Same reason the memo branch exists — everything below is email chrome (recipients,
+  // mode, a send-time picker, "Send to N recipients") and every word of it is a lie on an event.
+  // Reuses formatAbsolute (the picker's own formatter) and the approve()/busy handler verbatim.
+  if (plan.kind === "calendar_event") {
+    const startMs = plan.eventStartMs;
+    const durationMs = plan.eventDurationMs;
+    return (
+      <div style={box} data-testid="calendar-plan-card">
+        <div style={label}>CALENDAR EVENT</div>
+        <div style={{ margin: "0.5rem 0" }}>
+          <strong>{plan.eventTitle || "—"}</strong>
+        </div>
+        {/* A partially-staged row may carry none of these — render a dash, never NaN. */}
+        <div style={dim}>When: {startMs ? formatAbsolute(startMs) : "—"}</div>
+        <div style={dim}>Duration: {durationMs ? `${Math.round(durationMs / 60000)} min` : "—"}</div>
+        <p style={{ ...dim, margin: "0.75rem 0" }}>
+          Approving adds this to your Google Calendar. No one is invited and nothing is emailed.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+        >
+          {busy ? "Adding…" : "Approve & add to calendar"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={box}>
       <div style={label}>PLAN</div>
@@ -1130,6 +1162,15 @@ const VERB: Record<string, [running: string, done: string]> = {
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
   dispatchResearch: ["Researching…", "Research finished"],
+  checkAvailability: ["Checking your calendar…", "Checked your calendar"],
+  proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
+  // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts
+  // `replyToMessage: tool({`) has been in the agentSteps.tool union with no VERB entry since it
+  // shipped, so every inbox-reply trace row rendered the generic "Working…"/"Done" FALLBACK.
+  // Fixed here because 17-01 is the only Phase-17 plan permitted to touch this file, and because
+  // traceParity.test.ts asserts set equality BOTH ways — leaving the gap would make that new test
+  // RED on arrival inside a freeze commit no later plan may reopen.
+  replyToMessage: ["Drafting the reply…", "Drafted the reply"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

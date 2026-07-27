@@ -644,7 +644,11 @@ Plans:
   1. The agent reads calendar availability in-loop (like `listInbox`) and proposes a calendar event; the event is created only after the human Approve gate fires the generalized executor - never inside a tool call.
   2. Calendar actions reuse the shipped OAuth-refresh/adapter pattern and log refs/ids/counts only to audit.
   3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
-**Plans**: TBD
+**Plans**: 4 plans in 4 waves (serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
+- [ ] 17-01-PLAN.md — Stage-1 shared-union freeze (agentSteps literals, widened `plans.kind`, staged-event fields, `calendarFixtures`, VERB, watch.json) + the three arm-table compile sites + the pure `@pikar/core` calendar domain
+- [ ] 17-02-PLAN.md — the Google Calendar adapter: the offline fixture seam, the widened one-URL Google grant, `freeBusy` read, `events.insert` write, and the single retrier-`onComplete` terminal handler
+- [ ] 17-03-PLAN.md — the two in-loop tools in `llm.ts`: `checkAvailability` (read) and `proposeCalendarEvent` (stages onto the plan, never creates)
+- [ ] 17-04-PLAN.md — the real `externalAction` arm behind the Approve gate, the enforcement scans (write unreachable from `llm.ts`, POST targets by NAME, no attendees/`sendUpdates`), and the SC#3 two-tenant isolation assertion
 
 ### Phase 17.1: Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED)
 
