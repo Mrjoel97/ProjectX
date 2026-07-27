@@ -75,6 +75,37 @@ Both of these predate this contract and are recorded so they are not silently lo
    `gaps[].proofMetricPath` field, and the weekly-cron hardening (`runWeekly`'s unbounded
    `.collect()` dies as a cliff near ~3,000 tenants).
 
+## Phase 15.2 — vault format recognition (Lane V, added 2026-07-27)
+
+Phases 16 (Lane R) and 17 (Lane K) are LIVE. Phase 15.2 runs as an explicitly contracted **third
+lane**. This contract is written BEFORE any code lands, per 15.2-CONTEXT `<coordination>`.
+
+| | Files |
+|---|---|
+| **Lane V owns (edit freely)** | `packages/vault/src/*`, `packages/backend/convex/vaultExtract.ts`, `packages/backend/convex/vaultSweep.ts`, `packages/backend/convex/vaultLlm.ts`, `apps/web/app/(app)/dashboard/vault/*` |
+| **Lane V must NOT touch** | `convex/schema.ts` (this phase needs NO schema change and NO migration — a locked decision), `convex/llm.ts`, `convex/cockpit.ts`, `apps/web/.../workspace/cards.tsx`, `packages/core/src/actionType.ts`, `packages/core/src/specialists.ts`, `convex/skills.ts` (this phase adds NO skill row — §5 is satisfied by REUSING `attachment-extractor`) |
+| **Shared risk (ONE file)** | `packages/backend/convex/vault.ts` |
+
+**`packages/backend/convex/vault.ts` is the one shared-risk file** (RESEARCH §10 rates it MEDIUM:
+Lane R stores web research in the vault). Lane V's edit is confined to the `vaultUpload` scheduling
+block (`:162-176`) plus `markReady` (`:416-421`). Any Lane R edit elsewhere in that file merges
+cleanly; a collision **inside those two blocks is a coordination event, not a resolution** — stop and
+talk, do not merge-resolve by hand.
+
+**Why there is NO Wave-0 union freeze here** (RESEARCH §10): 16∥17 needed one because both lanes add
+literals to the same closed unions and to `convex/schema.ts`. Phase 15.2 touches **no closed union**
+and needs **no `schema.ts` edit** — so the freeze is not applicable, not forgotten. A later reader
+must not "restore" a missing Stage-1 commit for this lane; there is none to restore.
+
+**`docs/playbooks/vault.md` is an append-only shared singleton this phase** (the Phase-3.8 rule):
+each plan writes ONLY inside its own `### Phase 15.2 — 15.2-0N` subsection under one `## Phase 15.2`
+container, and bumps `Last verified`. On merge conflict, **keep both**.
+
+Lane V also appends to the shared singletons `.planning/STATE.md` + `.planning/ROADMAP.md` (phase-15.2
+rows) under the same append-only / keep-both discipline — see
+[The three shared singletons](#the-three-shared-singletons--append-only-discipline) below; the full
+list is not restated here.
+
 ## Phases 14 + 15 — voice-doc flagship ∥ dispatch framework (set up 2026-07-25)
 
 Approved shape: **plan-parallel, then execute-laned.** Four stages, each removing a different
