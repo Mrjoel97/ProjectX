@@ -26,7 +26,7 @@ created: 2026-07-27
 | **Full suite** | `pnpm test` + `pnpm typecheck` + `node scripts/check-playbooks.mjs` |
 | **Live probe (OQ-2)** | `node packages/backend/scripts/run-probe-websearch.mjs` — needs a deployment + `OPENAI_API_KEY`, ≈ $0.01, ONE call |
 | **Eval gate** | `pnpm eval:golden` — mandatory for the new §5 skill body (Phase-3.6 `EVAL_GATE`) |
-| **Known pre-existing red** | `convex/audit.test.ts` (`auditCounts` unregistered) — documented since Phase 2, NOT a regression. Do not chase it. |
+| **Known pre-existing red** | **NONE — CORRECTED 2026-07-27.** `16-RESEARCH.md` and several PLANs still call `convex/audit.test.ts` a documented pre-existing red. **It is GREEN** — verified by running it this session (1/1 pass); the 2026-07-26 handoff already recorded the backend suite at 643/643 with `auditCounts` fixed. **Treat ANY red in `audit.test.ts` as a REAL regression.** This stale claim is the dangerous kind — it instructs an executor to ignore exactly the failure they would be causing. |
 
 ---
 
