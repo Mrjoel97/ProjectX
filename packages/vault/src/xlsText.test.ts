@@ -163,6 +163,11 @@ describe("xlsText", () => {
 
 describe("xlsText source contract", () => {
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "xlsText.ts"), "utf8");
+  // Scan CODE, not prose: xlsText.ts's header deliberately spells out the banned
+  // `await import("xlsx")` form so the next reader knows exactly what is forbidden, and a naive
+  // scan matches that comment and goes red on a correct file. (vaultExtract.ts's pdf-lib scan
+  // dodges this only because its comment happens not to quote the syntax.)
+  const code = src.replace(/^\s*\/\/.*$/gm, "");
 
   test("SheetJS is a STATIC import — Pitfall 9 (pdf-lib) is a GENERAL rule, not a pdf-lib quirk", () => {
     // Convex bundles node actions with esbuild `platform: "node", format: "esm", splitting: true`.
@@ -178,10 +183,10 @@ describe("xlsText source contract", () => {
     // future version bump could drop the ESM build without any test noticing.
     //
     // THIS SCAN IS THE LOCK. The next person to see a ~1 MB dependency will want to lazy-load it.
-    expect(src, "SheetJS must NOT be dynamically imported").not.toMatch(
+    expect(code, "SheetJS must NOT be dynamically imported").not.toMatch(
       /import\(\s*["']xlsx["']\s*\)/,
     );
-    expect(src, "SheetJS must be a STATIC top-level import").toMatch(
+    expect(code, "SheetJS must be a STATIC top-level import").toMatch(
       /^import\s*\{[^}]*\bread\b[^}]*\}\s*from\s*["']xlsx["'];?$/m,
     );
   });

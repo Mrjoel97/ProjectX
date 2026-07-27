@@ -20,7 +20,10 @@ export {
 export type { FusionResult, VectorHit } from "./fusion";
 export { fuse } from "./fusion";
 // NOTE: ./officeText is deliberately NOT re-exported here (V8-bundle hygiene — import it via
-// the subpath `@pikar/vault/officeText` from "use node" modules only).
+// the subpath `@pikar/vault/officeText` from "use node" modules only). The SAME RULE, and for a
+// much bigger number, applies to ./xlsText: SheetJS is ~1 MB and must enter ONLY the one node
+// action that parses legacy workbooks, so import it via `@pikar/vault/xlsText`. Adding either of
+// them here drags the dependency into every module that touches this barrel.
 export { normalizeName } from "./normalize";
 // rawText.ts is dep-free (no fflate, no node:*) and therefore barrel-safe, same rule as sniff.ts.
 // `oleText` is what makes SC#3's legacy DOC/PPT half true with ZERO new dependencies — which is
