@@ -23,24 +23,42 @@ CURRENT CONTRACT section is the 16 ∥ 17 lane definition — read it before tou
 Both merged `main` at `880b061` and carry the `llm.ts` memo-context fix. **Neither has run
 `pnpm install` or `npx convex dev`** — every verify command in every plan needs that first.
 
-## THE GATE — do not execute either lane before this
+## ~~THE GATE~~ — CLEARED 2026-07-27. Stage 1 is COMPLETE on both sides.
 
-`16-01` and `17-01` both edit the same closed unions: `schema.ts` (`agentSteps.tool`, staged-event
-fields, `vaultDocuments.retrievedAt`, `plans.by_calendar_run`), `cards.tsx` (`VERB`),
-`actionType.ts` (`ACTION_TYPES`/`Arm`/`ARMS`), `cockpit.ts` (arm table), `plans.ts`, `watch.json`.
-Per the contract these land as **ONE Stage-1 freeze commit on `main`** before either lane builds.
-Skipping it turns a textual conflict inside restructured files into a re-derivation — the exact
-failure the contract exists to prevent.
+The freeze was **absorbed into the lanes and serialized through `main`**, not landed as one joint
+commit — resolved in `22c7bb0`, recorded in `.planning/PARALLELIZATION.md`. The property that
+matters is **serialization, not single-commit-ness**. Do not go looking for a joint freeze commit;
+there is none to restore.
 
-**`schema.ts` freezes in that commit**, so anything schema-shaped must be decided BEFORE it.
+| Step | Commit | Result |
+|---|---|---|
+| Lane R `16-01` | `4d32ce1` → merged `7386744` | `dispatchResearch` literal, `vaultDocuments.retrievedAt`, VERB entry, watch paths, the three `llm.ts` signature widenings |
+| Lane K `17-01` | `468cbd6` → merged `0da5041` | `calendar_event` + the `externalAction` arm, two trace literals, staged-event `plans` fields + `by_calendar_run`, `calendarFixtures`, the calendar plan card, pure `@pikar/core` calendar module |
 
-## OPEN — an owner decision that must land before the freeze
+Lane R went first so its `llm.ts` **signature** widenings landed before `17-03` adds a tool key
+inside that shape. Lane K's down-merge and its merge to `main` both had **zero conflicts** — the
+freeze working as designed. Both lanes may now run their remaining waves **in parallel**.
 
-**`stageResearchPlan` refuses while a `proposed` email draft is on the card.** The alternative is
-`resetPlan`, which `applyActOnGap` does — but only because a USER tapped a control. Here the MODEL
-decides, so a research question would silently destroy a half-composed email. Refusal was chosen.
-Consequence: "research this" can fail with *"finish or discard your draft first."*
-The proper fix is >1 plan row per thread — **a schema change, therefore frozen after `16-01`.**
+**The one file still shared after the freeze is `convex/llm.ts`** (16-05, 16-06 ∥ 17-03).
+Whichever lane reaches its `llm.ts` wave second merges `main` down FIRST and re-runs `tsc`.
+
+## RESOLVED — the owner decision that gated the freeze
+
+**`stageResearchPlan` REFUSES while a `proposed` email draft is on the card** (owner, 2026-07-27).
+The alternative is `resetPlan`, which `applyActOnGap` does — but only because a USER tapped a
+control. Here the MODEL decides, so a research question would silently destroy a half-composed
+email. Consequence, accepted: "research this" can fail with *"finish or discard your draft first."*
+`plans.byThread` **stays `.unique()`** — no multi-row schema change, so the one-root-envelope
+invariant `16-06`/`16-07` are planned against holds. The >1-plan-row fix is a later phase's work.
+
+## ⚠ NEW — the typecheck baseline is not clean, and `pnpm typecheck` lies
+
+`turbo`'s `typecheck` task declares no `inputs`, so its cache restores a **stale pass without
+running `tsc`**. Always pass `--force`. Forced, `@pikar/backend` has **52 errors** — all in
+`*.test.ts`, **zero in production source**, all Phase-1 vintage (`tsconfig.json` sets
+`"types": ["node"]`, starving test files of ambient types, while `include` sweeps them in).
+**Check the DELTA, not an absolute-clean gate**, which no plan in either phase can meet as written.
+Full analysis in `PARALLELIZATION.md` (`0d85975`).
 
 ## Phase 16 — what is owed
 
