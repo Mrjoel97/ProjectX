@@ -551,6 +551,176 @@ describe("rail dispatch — content decides, and every refusal is TERMINAL (SC#1
   }, 20000);
 });
 
+// ── Phase 15.2 (15.2-06): fanOutPages — the per-page fan-out orchestration ────
+// The hosted CALL is not provable offline; the ORCHESTRATION is, and that is the whole reason
+// fanOutPages is exported (the slicePdfToPageCap precedent). A stub `run` reaches zero model
+// calls, so batch width, PAGE ORDER, per-page isolation and the wall-clock deadline are all
+// observable for free. These tests prove SHAPE. They do NOT — and cannot — prove that the model
+// transcribed rather than digested; that is the live checkpoint's job.
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+describe("fanOutPages — bounded, ordered, isolated, deadline-bounded (SC#5 shape)", () => {
+  // Real (tiny) timers: the per-page bound is a real Promise.race against setTimeout, and the
+  // deadline reads a real Date.now(). The file-level fake timers would freeze both.
+  beforeEach(() => vi.useRealTimers());
+  const load = () => import("./vaultExtract");
+  const far = () => Date.now() + 10_000;
+
+  test("page ORDER is by index, never completion order — pages resolving in REVERSE still ascend", async () => {
+    const { fanOutPages } = await load();
+
+    const out = await fanOutPages(
+      7,
+      async (i) => {
+        await sleep((7 - i) * 5); // page 6 finishes first, page 0 last — inside AND across batches
+        return `p${i}`;
+      },
+      { batchSize: 3, pageTimeoutMs: 2_000, deadlineAt: far() },
+    );
+
+    // Asserted LITERALLY: `Page N` matches the house `Sheet N` / `Slide N` convention.
+    expect(out.text).toBe(
+      "Page 1\np0\n\nPage 2\np1\n\nPage 3\np2\n\nPage 4\np3\n\nPage 5\np4\n\nPage 6\np5\n\nPage 7\np6",
+    );
+    expect(out.okPages).toBe(7);
+    expect(out.truncated).toBe(false);
+  });
+
+  test("concurrency is BOUNDED by batchSize and batches are SEQUENTIAL — 7 pages, 3 batches", async () => {
+    const { fanOutPages } = await load();
+    const calls: number[] = [];
+    const events: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const out = await fanOutPages(
+      7,
+      async (i) => {
+        calls.push(i);
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        events.push(`in${i}`);
+        await sleep(10);
+        inFlight--;
+        events.push(`out${i}`);
+        return `p${i}`;
+      },
+      { batchSize: 3, pageTimeoutMs: 2_000, deadlineAt: far() },
+    );
+
+    expect(calls).toHaveLength(7); // exactly pageCount calls — no page run twice, none skipped
+    expect(maxInFlight).toBe(3); // the batch width is the concurrency AND the OCC-contention width
+    // Batch k+1 starts only after batch k has FULLY settled.
+    for (const done of ["out0", "out1", "out2"]) {
+      expect(events.indexOf("in3")).toBeGreaterThan(events.indexOf(done));
+    }
+    for (const done of ["out3", "out4", "out5"]) {
+      expect(events.indexOf("in6")).toBeGreaterThan(events.indexOf(done));
+    }
+    expect(out.okPages).toBe(7);
+  });
+
+  test("a page that REJECTS is isolated to its own marker — the other six still land", async () => {
+    const { fanOutPages } = await load();
+
+    const out = await fanOutPages(
+      7,
+      async (i) => {
+        if (i === 2) throw new Error("boom: parser exploded");
+        return `p${i}`;
+      },
+      { batchSize: 3, pageTimeoutMs: 2_000, deadlineAt: far() },
+    );
+
+    expect(out.okPages).toBe(6);
+    expect(out.text).toContain("Page 3\n[unreadable]");
+    expect(out.text).toContain("Page 4\np3"); // the rest of its own batch's successor batch landed
+    expect(out.text).toContain("Page 2\np1");
+    // §4: the marker is a MARKER. No SDK/parser string, no document content, nothing PII-bearing.
+    expect(out.text).not.toContain("boom");
+    expect(out.text).not.toContain("parser exploded");
+  });
+
+  test("a page that NEVER settles is timed out without stalling its batch", async () => {
+    const { fanOutPages } = await load();
+
+    const out = await fanOutPages(
+      3,
+      (i) => (i === 1 ? new Promise<string>(() => {}) : Promise.resolve(`p${i}`)),
+      { batchSize: 3, pageTimeoutMs: 30, deadlineAt: far() },
+    );
+
+    expect(out.text).toBe("Page 1\np0\n\nPage 2\n[unreadable]\n\nPage 3\np2");
+    expect(out.okPages).toBe(2);
+  });
+
+  test("a deadline already in the PAST runs nothing and reports truncated", async () => {
+    const { fanOutPages } = await load();
+    const calls: number[] = [];
+
+    const out = await fanOutPages(7, async (i) => { calls.push(i); return `p${i}`; }, {
+      batchSize: 3,
+      pageTimeoutMs: 2_000,
+      deadlineAt: Date.now() - 1,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(out.truncated).toBe(true);
+    expect(out.okPages).toBe(0);
+  });
+
+  test("a deadline expiring mid-run stops the fan-out after the batch in flight", async () => {
+    const { fanOutPages } = await load();
+    const calls: number[] = [];
+
+    const out = await fanOutPages(
+      9,
+      async (i) => {
+        calls.push(i);
+        await sleep(25);
+        return `p${i}`;
+      },
+      { batchSize: 3, pageTimeoutMs: 2_000, deadlineAt: Date.now() + 10 },
+    );
+
+    expect(calls).toEqual([0, 1, 2]); // batch 0 was already past the check; batch 1 never started
+    expect(out.truncated).toBe(true);
+    expect(out.okPages).toBe(3);
+    expect(out.text).toContain("Page 4\n[unreadable]");
+  });
+
+  test("ZERO successful pages is REPORTED (okPages 0), not hidden behind a document of markers", async () => {
+    const { fanOutPages } = await load();
+
+    const out = await fanOutPages(4, async () => { throw new Error("nope"); }, {
+      batchSize: 2,
+      pageTimeoutMs: 2_000,
+      deadlineAt: far(),
+    });
+
+    // The text is non-empty (all markers) — which is exactly why the CALLER must judge okPages.
+    // A document of markers passing `empty_extraction` is the false-ready this phase exists to
+    // delete, so the signal has to be a count, not a truthiness check on the string.
+    expect(out.okPages).toBe(0);
+    expect(out.text.length).toBeGreaterThan(0);
+    expect(out.truncated).toBe(false);
+  });
+
+  test("the same stub twice gives the same output string (deterministic reassembly)", async () => {
+    const { fanOutPages } = await load();
+    const stub = async (i: number) => {
+      await sleep((5 - (i % 5)) * 3);
+      return `p${i}`;
+    };
+    const opts = { batchSize: 3, pageTimeoutMs: 2_000, deadlineAt: far() };
+
+    const a = await fanOutPages(7, stub, opts);
+    const b = await fanOutPages(7, stub, opts);
+    expect(a.text).toBe(b.text);
+  });
+});
+
 describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern)", () => {
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "vaultExtract.ts"), "utf8");
 
