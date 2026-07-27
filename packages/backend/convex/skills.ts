@@ -21,6 +21,7 @@ import {
   INBOX_DIGEST_SKILL,
   isGatedSkill,
   LEAD_ENGINE_SKILL,
+  RESEARCH_SPECIALIST_SKILL,
   LEAN_CANVAS_SKILL,
   DOCUMENT_ANALYST_SKILL,
   type LoadedSkill,
@@ -49,6 +50,7 @@ import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor"
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { leadEngineSkillBody } from "@pikar/contracts/skills/leadEngine";
+import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
 import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
 import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
@@ -298,6 +300,8 @@ export const seedSkills = internalMutation({
       { name: OFFER_ARCHITECT_SKILL, body: offerArchitectSkillBody },
       { name: MONEY_MODEL_DESIGNER_SKILL, body: moneyModelDesignerSkillBody },
       { name: LEAD_ENGINE_SKILL, body: leadEngineSkillBody },
+      // Phase 16 (DISP-02/ACTN-03). APPEND-ONLY — do not reorder or touch the rows above.
+      { name: RESEARCH_SPECIALIST_SKILL, body: researchSpecialistSkillBody },
       // UNGATED (15.1-05, Q6): the three behaviour-preset style overlays (design §7). They change
       // HOW a specialist speaks, never what it may do or claim — the capability grant stays
       // code-owned (ADR-007) — so they match `business-profile`, not the gated rubrics above.

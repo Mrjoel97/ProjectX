@@ -5,6 +5,7 @@ import { bmcSkillBody } from "./bmc";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
+import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { leanCanvasSkillBody } from "./leanCanvas";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
@@ -29,6 +30,8 @@ const bodies: [string, string][] = [
   ["offer-architect", offerArchitectSkillBody],
   ["money-model-designer", moneyModelDesignerSkillBody],
   ["lead-engine", leadEngineSkillBody],
+  // Phase 16 (DISP-02/ACTN-03): the research specialist body.
+  ["research-specialist", researchSpecialistSkillBody],
   // 15.1-05 (design §7): the three UNGATED behaviour-preset style overlays. Same mirror, same
   // reason — the `.md` is what a human edits, the `.ts` is what the Convex runtime ships, and a
   // half-applied mirror would silently seed a stale overlay.
