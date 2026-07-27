@@ -1,6 +1,7 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-26 — 15.1-04 (ONBD-02, SC#2b): **the rubric is picked from the `tenantProfiles` ROW, not from a string matched out of markdown.** `PERSONA_FRAMEWORK` became `TIER_FRAMEWORK`, bound `as const satisfies Record<Tier, Framework>` (`enterprise` → `swot`, the honest SME-shaped default for an operator grant, D6), and `runEvaluation` reads `internal.tenantProfile.forTenant({ tenantId })` ONCE beside the carry-forward read. **`personaHint` is deleted** — it was the LAST authoritative reader of the markdown persona, which is what makes design §4.2's claim true that `deserializeProfile`'s `"solopreneur"` fallback "stops being a silent reclassification risk once nothing authoritative depends on it". The `text.includes("- **Persona:**")` block SURVIVES as a profile detector and keeps its four CONTENT `fillVault` calls; only the AUTHORITY was removed. The trailing `?? "lean"` was dropped deliberately (the lookup is total, so it was an assertion that could never fail — the Phase-15 `armFor` lesson). **Q3 is unchanged and LOCKED:** `financialsPresent` still overrides with `growth-os`; the tier's perceivable effect lands on the specialist prompt (ADR-009), not on the rubric. New tests confirmed RED first — both authority cases returned `"lean"` against the old code. `evaluations.test.ts` 23/23, `proactiveReview.test.ts` 8/8, `gapAction.test.ts` 5/5.
+> Last verified: 2026-07-27 — 16-06 (DISP-02), documented by the 15.2 lane, NOT by its author. **`landSpecialistResult` gained an optional `fallbackBody`, and 16-06 added a SECOND stager.** Read the caveat in **"A second stager, and a memo that stops lying"** below before trusting this line: the code it describes was UNCOMMITTED in the shared working tree when this was written, so this documents a diff that was read in full but whose final committed form the 15.2 lane did not control. The §9 hook blocked on it and the honest resolution was to describe the change rather than stamp the file — the "if it doesn't affect content, bump only Last verified" escape hatch does NOT apply here, because the change alters a memo a user reads.
+> Prior: 2026-07-26 — 15.1-04 (ONBD-02, SC#2b): **the rubric is picked from the `tenantProfiles` ROW, not from a string matched out of markdown.** `PERSONA_FRAMEWORK` became `TIER_FRAMEWORK`, bound `as const satisfies Record<Tier, Framework>` (`enterprise` → `swot`, the honest SME-shaped default for an operator grant, D6), and `runEvaluation` reads `internal.tenantProfile.forTenant({ tenantId })` ONCE beside the carry-forward read. **`personaHint` is deleted** — it was the LAST authoritative reader of the markdown persona, which is what makes design §4.2's claim true that `deserializeProfile`'s `"solopreneur"` fallback "stops being a silent reclassification risk once nothing authoritative depends on it". The `text.includes("- **Persona:**")` block SURVIVES as a profile detector and keeps its four CONTENT `fillVault` calls; only the AUTHORITY was removed. The trailing `?? "lean"` was dropped deliberately (the lookup is total, so it was an assertion that could never fail — the Phase-15 `armFor` lesson). **Q3 is unchanged and LOCKED:** `financialsPresent` still overrides with `growth-os`; the tier's perceivable effect lands on the specialist prompt (ADR-009), not on the rubric. New tests confirmed RED first — both authority cases returned `"lean"` against the old code. `evaluations.test.ts` 23/23, `proactiveReview.test.ts` 8/8, `gapAction.test.ts` 5/5.
 > Prior: 2026-07-26 — 15-06 (DISP-01): **`actOnGap` now has an identity-less twin.** Its handler was extracted verbatim into a shared `applyActOnGap(ctx, tenantId, threadId, gapIndex)` behind TWO surfaces: the unchanged auth-scoped `actOnGap` (the UI path) and the new `internal.evaluations.actOnGapInternal`, which takes an explicit `tenantId`. Same shape and same reason as `applyScorecardAnswer` / `recordScorecardAnswerInternal` (12-04): `npx convex run` carries NO auth identity, so the golden-eval harness could not otherwise reach the tenant-scoped mutation. It exists so an eval fixture drives the REAL user path — gap → tap → `collecting` → scheduled `internal.dispatch.runSpecialist` → `landSpecialistResult` → `proposed` — rather than a re-implemented imitation of it; because both surfaces share one implementation, the two-terminal choice, the plan recycle and the scheduled dispatch cannot be true in one and absent in the other. ZERO behaviour change: the returned union is unchanged (now the named `ActOnGapResult`, explicit per Convex guidelines §96 so the generated API does not collapse for `apps/web`), and the whole 18-test `evaluations.test.ts` + 5-test `gapAction.test.ts` + 31-test `dispatch.test.ts` set is green unchanged — that is the proof, not a claim. **If you add a guard to the tap, add it to `applyActOnGap`, never to a wrapper.**
 > Last verified: 2026-07-26 — 15-04 (DISP-01): **"Act on this" RUNS the specialist.** `actOnGap` stays a `tenantMutation` and now has TWO terminals — a gap routed at a REGISTERED specialist stages `status: "collecting"` with NO body and schedules `internal.dispatch.runSpecialist`; a gap with no registered specialist keeps the 12-05 memo at `proposed` and schedules nothing. The `collecting` staging IS the Approve-race mitigation (a template must never be approvable under a specialist attribution header) and must not be "simplified" back. `landSpecialistResult` is the only writer of the dispatched body and no-ops on any row that is not still `collecting`/`kind: "memo"` under the same tenant; `buildMemo` is now the FALLBACK and its wording branches on `fallbackReason`. See the **"Act on this" now RUNS the specialist** section below. `evaluations.test.ts` 18/18, `gapAction.test.ts` 5/5.
 > Last verified: 2026-07-25 (5) — 14-01 (Phase-14 Wave-0 freeze, Lane C): the `evaluations` TABLE is now shared with the voice-doc flow, but this ENGINE is not. `evaluations.framework` gained a fifth literal `"document-review"`, `findings[]` gained an optional `citationExcerpt`, and a doc-review row is written STRAIGHT through `insertEvaluation` by `voiceDoc.ts` — it never enters `runEvaluation`, has no rubric skill and no `diagnose()` path. **The load-bearing consequence: `runEvaluation`'s `framework` arg is now explicitly PINNED to the four business frameworks instead of being derived from `evalFields`.** See the new **"Sharing the evaluations table with voice-doc (Phase 14)"** section below. Zero behavior change for every existing business-evaluation caller; `evaluations.test.ts` and `proactiveReview.test.ts` unchanged and green, backend 497/498 (sole red the pre-existing `audit.test.ts auditCounts`).
@@ -316,6 +317,59 @@ as inside the dispatcher.
   CODE mapped through the code-owned `FALLBACK_SENTENCE`; the code itself never reaches the user.
 - **The attribution line and the cost-ceiling marker ride the plan BODY** (`specialistMemoBody`,
   `@pikar/core`), never a new `plans.status` literal — see the cockpit playbook.
+
+## A second stager, and a memo that stops lying (16-06, DISP-02)
+
+> **Provenance caveat — read this first.** This section was written by the **15.2 lane**, not by
+> 16-06's author, while the change sat UNCOMMITTED in the shared working tree (see
+> [lanes share one tree]: concurrent GSD lanes commit into one checkout). The §9 Stop hook blocks
+> on another lane's uncommitted diff and offers a one-line "bump `Last verified`" escape; that
+> escape is only legitimate when the change does not affect playbook content, and this one does —
+> it changes a memo a user reads. So the diff was read in full and described here instead.
+> **Verify against the committed code before relying on it**, and if 16-06's author changes shape
+> before committing, this section is theirs to correct.
+
+**`landSpecialistResult` gained an optional `fallbackBody`.** The no-evaluation-row branch used to
+fall through to `LOST_CONTEXT_MEMO` unconditionally:
+
+```ts
+body = row && gap ? buildMemo(...) : (a.fallbackBody ?? LOST_CONTEXT_MEMO);
+```
+
+The reason is the same honesty rule that governs `buildMemo`'s wording (above): `LOST_CONTEXT_MEMO`
+says *"the evaluation it was based on is no longer on file"*, and **that sentence is FALSE for a
+research run** — a research run was never based on an evaluation, so there is nothing to have lost.
+The gap path (`runSpecialist`) passes nothing and stays byte-identical; only the research dispatch
+supplies a body. Same invariant as `FALLBACK_SENTENCE`: an approved memo may not tell the user
+something untrue.
+
+**`plans.stageResearchPlan` is a deliberate near-copy of `applyActOnGap`'s staging block.** Same
+`insertPlan`/`resetPlan`/`patchPlan` spine and the same `collecting` handoff, with a NARROWER
+recycle rule:
+
+| row | `applyActOnGap` | `stageResearchPlan` |
+|---|---|---|
+| `collecting` + `kind: "memo"` | recycles it | **refuses** — `research_in_flight` |
+| carries user draft content (recipients/subject/body/bodyIntent/attachments) | may reset (the USER tapped) | **refuses** — `draft_in_progress` |
+| empty `collecting` row (fresh thread) | recycles | recycles |
+| past `proposed` (approved → done) | never | never |
+
+Two things in that table are load-bearing. **`kind === "memo"` is not decoration:** `cockpit.ts`
+inserts every thread's plan row at `collecting` on the first turn and it stays there for the whole
+composition, so a bare `status === "collecting"` refusal would refuse research on essentially every
+live conversation. A `collecting` row is only "owned by a dispatch" when a dispatch staged it, and
+`kind: "memo"` is what records that. And the `draft_in_progress` refusal exists because **`actOnGap`
+resets on a USER tap while this stager is driven by the MODEL** — destroying a half-composed email
+because someone asked a research question is not a trade the user agreed to.
+
+The persisted `research_in_flight` interlock is also what makes a per-turn envelope closure
+unnecessary: one run per thread, one freshly derived root envelope, holding across turns, requests,
+and a fallback retry that rebuilds the tool record.
+
+**The two stagers are NOT shared on purpose.** The rules disagree, so a shared helper would need the
+rule as a parameter — a knob for two callers that disagree is the abstraction CLAUDE.md §8 forbids.
+They are cross-referenced in both directions instead. **Change one and decide CONSCIOUSLY whether
+the other moves.**
 
 ### How to verify
 
