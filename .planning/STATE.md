@@ -77,6 +77,22 @@ progress:
   completed_plans: 176
 ---
 
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 17.1
+current_plan: 3
+status: in_progress
+stopped_at: "Completed 17.1-02-PLAN.md (Wave 1 — the substrate). THIS BLOCK DESCRIBES LANE 17.1 ONLY; the blocks above describe Lanes V/R/K and are HAND-EDITED. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — do not trust the tool on this file. `roadmap update-plan-progress 17.1` was run and DID move the count to 2/10, but it BLANKED the table's Notes and Updated columns and did NOT tick the 17.1-02 checkbox; both were hand-repaired (memory: `gsd-tools-commit-workaround`). LANDED: 5 optional `tenantProfiles` fields (blueprintDraft / blueprintDraftAt / blueprintSourceDocIds / blueprintDocId / blueprintConfirmedAt) with NO migration entry and no existing field, index or validator touched; `graphNodes.by_tenant_degree`; `vaultDocuments.by_tenant_status` (a DECLARED second index beyond CONTEXT's `One new index`, stated in the schema comment so it never reads as silent drift). And `business-blueprint` through the FULL 5-file registry mirror, UNGATED. THE UNGATING IS THE LOAD-BEARING DECISION AND IT IS NOW ASSERTED, NOT IMPLIED: `isGatedSkill(\"business-blueprint\") === false` is a test, so a future `tidy up the gate list` edit fails loudly instead of deadlocking the skill at v1 (run-eval-golden.mjs hard-validates --skill against a closed name list it cannot extend to the synthesis path). Drift row MUTATION-VERIFIED: one-char `.md` edit ⇒ exactly 1 red, revert ⇒ 21/21. Gates: contracts 21/21, backend 47/47 files / 710/710 tests FULLY GREEN (the plan's documented `audit.test.ts` baseline red did not appear — recorded as an observation, not a claim it is fixed), backend tsc ZERO non-test errors, check-playbooks empty. ZERO deviations, ZERO auto-fixes. TRAP LEARNED THE HARD WAY: a backend suite backgrounded ACROSS my own edits went red on 6 `intake.test.ts` tests — vitest transforming a module graph that was changing underneath it — which looks exactly like a real regression; re-run undisturbed it was green. Do not background a long suite and then edit files it imports. STILL OPEN FOR THE NEXT PLANS: the row is seeded in CODE but has NEVER been seeded on a deployment (plain `npx convex dev` does not seed; `pnpm dev`/`npm run seed` does, and it will land v1 ACTIVE via the rows.length===0 bootstrap path); and the REQUIRED-FIELD TRAP is untouched and armed — `tier`/`tierSource`/`derivedAt` stay REQUIRED on `tenantProfiles`, so plan 05's draft writer MUST REFUSE for a tenant with no profile row (the `saveFacts` precedent, tenantProfile.ts:194) rather than invent a tier. Next: 17.1-03 (Wave 2 — precedence as code)."
+last_updated: "2026-07-27T20:45:00.000Z"
+progress:
+  total_phases: 40
+  completed_phases: 24
+  total_plans: 179
+  completed_plans: 176
+---
+
 # Project State
 
 ## Project Reference
