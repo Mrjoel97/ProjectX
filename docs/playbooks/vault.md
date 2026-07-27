@@ -11,10 +11,15 @@
 > action) and gates on `sniffContainer` first, because SheetJS's `read()` otherwise falls back to a
 > DSV guesser and turns **64 bytes of noise into a one-cell sheet of mojibake** that would clear
 > `empty_extraction`. Its success signal is **`okSheets`, a COUNT** — so it is deliberately NOT a
-> third instance of the `Slide N`/`Sheet N` false-ready family. **THE LIVE `.xls` ROUND TRIP WAS
-> PENDING THE OWNER'S CHECKPOINT when this line was written** — the deployed module was proven to
-> LOAD with SheetJS in it (throwaway-tenant probe, $0), which is not the same as proving a real
-> workbook extracts. See `### Phase 15.2 — 15.2-07` at the END of this file. PRIOR (20) —
+> third instance of the `Slide N`/`Sheet N` false-ready family. **LIVE: a real legacy `.xls`
+> reached `ready` with its numbers visible — OWNER APPROVED, SC#3's XLS half CLOSED** (evidence
+> level: the owner's direct confirmation of the checkpoint criterion — `ready`, numbers present,
+> not headings-only; **no figures were transcribed back or diffed against Excel**). **The
+> date-serial ceiling is NOT closed by that approval** — a SheetJS-written `.xls` yields the serial
+> `46067`, and a real Excel-authored file with a format record remains **unobserved**. The
+> generalised Pitfall-9 rule now lives in `## Invariants` and the dependency-selection note in
+> `## Dependencies & blast radius`, not only in the phase narrative. See
+> `### Phase 15.2 — 15.2-07` at the END of this file. PRIOR (20) —
 > **SCANNED PDFs ARE NOW TRANSCRIBED, NOT SUMMARISED.** The hosted
 > branch sends **ONE PAGE PER CALL** (`fanOutPages`, 6 in flight, page-ordered reassembly, 60 s per
 > page, 7-min budget) reusing `attachment-extractor` **unchanged** — §5 satisfied by REUSE: the
@@ -86,6 +91,8 @@ Run `graphify query "vault"` for the current subgraph. Couplings graphify cannot
 - `@convex-dev/workflow@0.4.4` (pinned, §6) — durable `store → embed → extract → ready` ingest.
 - `convex/lib/functions.ts` tenant wrappers (§2), `convex/lib/hash.ts` `contentHash` dedup, `convex/guardrails.ts` + `@convex-dev/rate-limiter` + `packages/cost` (governance), `packages/pii` `scanText` (redaction).
 - The `graph-extractor` registry skill (§5) — versioned skill row, no hardcoded prompt.
+- `xlsx` (SheetJS) **pinned to the vendor CDN tarball** `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`, EXACT, no caret (§6). **NOT npm `xlsx@0.18.5`** — the last registry publish carries CVE-2023-30533 (prototype pollution) and CVE-2024-22363 (ReDoS), and this code parses untrusted uploads. Subpath-only (`@pikar/vault/xlsText`) so ~1 MB enters ONE node action. Also a DEV-only dep of `@pikar/backend` for test fixtures; nothing in production imports it from there.
+- **Adding a dependency to a node action?** Check its `package.json` for an `exports` map + a real ESM build FIRST — see the STATIC-import invariant below. That one fact predicts whether it will silently break in the deployed bundle while every test stays green.
 
 ## Data flow
 
@@ -517,6 +524,7 @@ Verify with `pnpm --filter @pikar/vault test`,
 - **Cross-doc dedup** — same entity across docs upserts to ONE node on `(tenantId, type, normalizedName)` via `normalizeName`, so the graph actually connects documents.
 - **Hop cap = 2 (`GRAPH_HOP_CAP`)** — `bfsNeighbors` never expands past the cap; enforced by `traversal.test.ts`.
 - **Pinned `rag`/`workflow` versions must not be bumped (§6)** — pre-1.0 API churn.
+- **Every package reached from a `"use node"` action is a STATIC top-level import (Pitfall 9, generalised 2026-07-27).** Never `await import(...)`. Convex bundles node actions with esbuild `platform:"node", format:"esm", splitting:true`, and across a **dynamic-import chunk boundary** esbuild cannot synthesise a CJS module's named exports — the namespace carries only `default`. **THE DISCRIMINATOR IS THE PACKAGE MANIFEST, NOT THE IMPORT FORM:** a package with **no `exports` map and no real ESM build** collapses (`pdf-lib` → 1 key, `PDFDocument` undefined, live defect 2026-07-26); one shipping `"exports": { ".": { "import": "./x.mjs" } }` survives both forms (`unpdf`; `xlsx` 0.20.3 → 19 named exports either way, measured). **So: before adding ANY dependency to a node action, read its `package.json` for an `exports` map + ESM build — that single fact predicts the failure.** **A GREEN OFFLINE SUITE IS NOT EVIDENCE** — Node and vitest recover CJS named exports via `cjs-module-lexer`, so the broken production path is invisible in the suite (proven on demand: making the SheetJS import dynamic turns the scan red while **all 10 behaviour tests stay green**). Verify by rebuilding a probe with Convex's own flags from `convex/dist/esm/bundler/debugBundle.js` **and include a known-collapsing control**, or by a deployed run. Enforced by two static scans: `pdf-lib` in `vaultExtract.test.ts`, SheetJS in `xlsText.test.ts`.
 - **An ingest run can NEVER strand a doc at `processing`.** `ingestDoc` writes a terminal status only on success (`markReady`) or a governed stop (`markFailed`); a DEAD run (step retries exhausted, backend interruption) writes neither. So every ingest MUST start via `vaultIngest.startIngest`, which attaches `onComplete: onIngestComplete` — a failed/canceled run flips a still-`processing` doc to `failed` (idempotent; success + already-terminal untouched). A bare `workflow.start(ingestDoc)` is the bug (five sites once did it → infinite "processing" spinners). Enforced by: the 4 `onIngestComplete` cases in `vault.test.ts`; recover any historical strands with `retryStuckIngests`.
 
 ## How to change safely
@@ -863,11 +871,20 @@ Two properties of the new hosted path to carry forward:
 
 ### Phase 15.2 — 15.2-07 (legacy XLS / SheetJS)
 
-**SPIKE RESULT: GO.** SheetJS survives a bundle built with Convex's exact esbuild flags, and the
-`.xls` rail now runs the real parser instead of 15.2-03's honest refusal. **The live half — a real
-legacy `.xls` reaching `ready` with its NUMBERS visible — is PENDING the owner's checkpoint at the
-time this block was written** (the 15.2-05/06 precedent: record before the gate, because a
-verification living only in a chat transcript did not happen).
+**SPIKE RESULT: GO — and the live round trip is CLOSED.** SheetJS survives a bundle built with
+Convex's exact esbuild flags, the `.xls` rail now runs the real parser instead of 15.2-03's honest
+refusal, and **a real legacy `.xls` uploaded to the deployment reached `ready` with its numbers
+visible. OWNER VERDICT: APPROVED. SC#3's XLS half is CLOSED.**
+
+**Exactly what that verdict rests on, stated so nobody reads it as broader than it is:** the owner
+confirmed the checkpoint's stated criterion directly — the file reached `ready` and the preview
+showed **numbers, not headings-only**. **No individual figures were transcribed back to me and no
+cell values were diffed against Excel**, and no failure reason was reported. The claim this
+supports is "the round trip works and did not degrade to header recovery" — not "every value was
+verified correct".
+
+(The rest of this block was written BEFORE the blocking checkpoint, marked PENDING, on the
+15.2-05/06 precedent: a verification living only in a chat transcript did not happen.)
 
 #### The pinned dependency, and why NOT npm
 
@@ -991,10 +1008,16 @@ Deployment `local-joel_feruzi-pikar_ai_50c69-1`, 2026-07-27.
   `storageId`). **A bundle that could not carry SheetJS would have failed at module load**, which is
   the failure mode a static top-level import has. Row purged afterwards; **$0**, no model call, no
   owner data touched.
-- **NOT PROVEN by any of the above: that a real legacy `.xls` extracts with its numbers on the
-  deployment.** That is the owner's checkpoint, and it is the only thing that closes SC#3's XLS
-  half. The offline suite proves the parser; the probe proves the import; **neither proves the
-  round trip.**
+- **THE ROUND TRIP: PROVEN.** A real legacy `.xls` uploaded to `/dashboard/vault` reached `ready`
+  with its **numbers** present in the preview — **owner-APPROVED**. The offline suite proved the
+  parser and the probe proved the import; **only this upload proved the two compose.** Evidence
+  level: the owner's direct confirmation against the checkpoint criterion (reached `ready`, numbers
+  present, not headings-only). **No figures were transcribed back and nothing was diffed against
+  Excel** — so "the numbers are there" is proven; "every number is correct" is not claimed.
+- **STILL NOT OBSERVED: a real Excel-AUTHORED `.xls` containing DATE cells.** See the date-serial
+  ceiling above — the owner's approval does not close it, because the uploaded file is not known to
+  have contained dates and the serial behaviour was only ever measured on a SheetJS-written
+  fixture.
 
 #### Gates
 
