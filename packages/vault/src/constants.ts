@@ -18,3 +18,24 @@ export const GRAPH_HOP_CAP = 2;
  * honest attempt — so it can never kill live work.
  */
 export const EXTRACTION_WATCHDOG_MS = 15 * 60_000;
+
+/**
+ * Chars of document text sent to the graph extractor. ~120k chars ≈ 30k tokens, well inside the
+ * 128k window even for token-dense content (tab-joined spreadsheet rows tokenize far worse than
+ * prose) and leaving room for the schema + system prompt. Before this cap, extractGraph was the
+ * ONE uncapped model call in the repo: VAULT_EXTRACT_CHAR_CAP lets 400k chars be STORED, and all
+ * of it was SENT. That relationship (graph cap strictly below extraction cap) is asserted in
+ * constants.test.ts — invert it and this constant is dead code.
+ *
+ * ponytail: a HEAD SLICE, not chunk-wise fan-out — entities that appear only in the tail of a very
+ * long document are missed, and nothing persists a "graph truncated" flag (no schema change this
+ * phase). Deliberate: a 254k-char row is observed working today, so this is a guard against the
+ * cliff, not a recall improvement. Upgrade path: chunk-wise extraction with node/edge union across
+ * chunks, deferred until entity recall is observed to suffer.
+ */
+export const GRAPH_EXTRACT_CHAR_CAP = 120_000;
+
+/** Head-slice a graph-extraction prompt to GRAPH_EXTRACT_CHAR_CAP. */
+export function capGraphText(text: string): string {
+  return text.length > GRAPH_EXTRACT_CHAR_CAP ? text.slice(0, GRAPH_EXTRACT_CHAR_CAP) : text;
+}

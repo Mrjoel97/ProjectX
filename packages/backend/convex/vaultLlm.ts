@@ -18,6 +18,7 @@ import { openai } from "@ai-sdk/openai";
 import { GRAPH_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
+import { capGraphText } from "@pikar/vault";
 import { generateObject, jsonSchema, type LanguageModel } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -127,13 +128,18 @@ export const extractGraph = internalAction({
     const safeText = scan.value.safeText;
 
     // Offline deterministic path (Pitfall 4): a SMOKE:: sentinel returns a fixed graph, NO model call.
+    // Stays ABOVE the cap so the offline fixture path is unaffected by it.
     if (safeText.startsWith(SMOKE_GRAPH_PREFIX)) return smokeGraphFixture(safeText);
 
+    // REDACT-THEN-CAP, never cap-then-redact: the scan above must see the WHOLE document, or PII
+    // living in the tail escapes both the scan and its audit counts. The cap only bounds what is
+    // SENT (VAULT_EXTRACT_CHAR_CAP lets 400k chars be stored) — see GRAPH_EXTRACT_CHAR_CAP for the
+    // head-slice ceiling and its upgrade path.
     const { object, usage } = await generateObject({
       model: resolveModel(DEFAULT_MODEL),
       schema: graphSchema,
       system: skill.body,
-      prompt: safeText,
+      prompt: capGraphText(safeText),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       maxRetries: 1,
     });
