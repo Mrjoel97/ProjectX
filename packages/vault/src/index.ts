@@ -1,6 +1,11 @@
 export type { VaultCategory, VaultSource } from "./categories";
 export { categoryFor, isSearchable, VAULT_CATEGORIES } from "./categories";
-export { GRAPH_HOP_CAP, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "./constants";
+export {
+  EXTRACTION_WATCHDOG_MS,
+  GRAPH_HOP_CAP,
+  VAULT_FILE_CAP_BYTES,
+  VAULT_VIDEO_CAP_BYTES,
+} from "./constants";
 export type { ExtractionKind, SchedulingRail } from "./extractKind";
 export {
   extractionKindFor,
