@@ -9,9 +9,15 @@
 ## 1. Problem
 
 Every agent surface in Pikar reaches the user's business through exactly one function:
-`vaultGroundHydrated` (`packages/backend/convex/vaultGround.ts:126`). Its callers are the cockpit
-tool loop (`llm.ts`), onboarding (`onboarding.ts`), the evaluation engine (`evaluations.ts`), the
-voice-doc flow (`voiceDoc.ts`), and `tenantProfile.ts`.
+`vaultGroundHydrated` (`packages/backend/convex/vaultGround.ts:126`). It has **three** real callers:
+the cockpit `searchVault` tool (`llm.ts:1347`), the evaluation engine (`evaluations.ts:235`), and
+the voice-doc flow (`voiceDoc.ts:75`).
+
+> **Amended 2026-07-27 after Phase 17.1 research.** This section originally listed *five* callers,
+> adding `onboarding.ts` and `tenantProfile.ts`. Those two only mention the function in comments
+> (`onboarding.ts:5,451,539,595`; `tenantProfile.ts:14,127`) — they are not callers. The original
+> count came from grep hits rather than call sites. See §3.3, which was rewritten for the same
+> reason, and the amendment log in §13.
 
 That function is a **per-query RAG search**, capped at `TOTAL_CHAR_CAP = 8000` chars
 (`vaultGround.ts:30`). It answers *"which passages mention X"*. It never answers *"what IS this
@@ -77,8 +83,27 @@ vault documents ────┘   (one model call)     │
 
 A `vaultDocuments` row with `kind: "business_blueprint"`. This is the precedent the profile doc set
 (`onboarding.ts:486` — *"NEW free-string kind — ZERO schema migration"*). It inherits tenant
-scoping, embedding, delete-cascade, PII redaction, the audit trail, and the `by_kind` index at no
-cost.
+scoping, delete-cascade, PII redaction, the audit trail, and the `by_kind` index at no cost.
+
+**It is NOT embedded, and NOT graph-extracted** (amended 2026-07-27 — the original text listed
+embedding as a benefit). The spine is prepended unconditionally, so the blueprint never needs to be
+*retrievable* to reach an agent. Embedding it would create two real defects and buy nothing:
+
+- **Double entry** — RAG could return the blueprint as a hit *and* the seam adds it, so it appears
+  twice in one context.
+- **Graph feedback loop** — its own entities would flow back into `graphNodes`, inflating the exact
+  `degree` ranking the next rebuild reads to choose entities. The blueprint would progressively
+  re-derive itself from itself.
+
+Excluding it also saves the embedding spend. `serializeBlueprint` must additionally **never emit the
+literal `- **Persona:**` line** — `evaluations.ts:291` and `vault.profileSeedDocs`
+(`vault.ts:484`) both use that exact string as a *business-profile detector*, and a blueprint
+carrying it would be misread as a profile doc by both.
+
+**Locate it by id, not by scan.** `tenantProfiles` carries a `blueprintDocId` so the seam reads one
+indexed row. The obvious `currentProfileDoc` clone (`onboarding.ts:521-533`) `.collect()`s
+`vaultDocuments` *including the `text` blob* — acceptable on a profile save, unacceptable on a hot
+path that now runs on every grounding call.
 
 Content is deterministic markdown from a new pure module `packages/core/src/blueprint.ts`
 (`serializeBlueprint` / `deserializeBlueprint`), mirroring the `serializeProfile` /
@@ -95,7 +120,8 @@ become unbounded.
 |---|---|---|
 | `name` | profile | no — never inferred, the user names their own business |
 | `oneLineDescription` | profile | yes |
-| `stage`, `tier` | `tenantProfiles` (derived facts) | no — `deriveTier` owns these already |
+| `stage` | **`BusinessProfile.stage`** — the typed free string, the user's own words | no |
+| `tier` | `tenantProfiles.tier` | no — `deriveTier` owns it already |
 | `offering` | profile → docs | yes |
 | `targetCustomer` | profile → docs | yes |
 | `revenueModel` | docs only (new) | yes |
@@ -103,6 +129,14 @@ become unbounded.
 | `primaryGoals[]` | profile → docs | yes |
 | `knownConstraints[]` | profile → docs | yes |
 | `entities[]` | `graphNodes` by degree | no — DB read, never a model call |
+
+**`stage` is NOT `revenueStage`** (amended 2026-07-27 — the original spec was ambiguous and its
+example rendered a `revenueStage` literal). These are two different fields with confusingly similar
+names: `BusinessProfile.stage` is a free string in the user's own words
+(`businessProfile.ts:46-47`), while `tenantProfiles.revenueStage` is a closed union
+(`schema.ts:758-760`). The blueprint uses **`stage`**, because D5 makes typed content authoritative
+and `tier` already carries the derived shape. Reading the wrong one is a silent correctness bug no
+test would catch, so the choice is stated here rather than left to the implementer.
 
 `revenueModel` and `bindingConstraint` are the only two fields that do not exist on
 `BusinessProfile` today. They are added to the blueprint type, **not** to `BusinessProfile` — that
@@ -126,26 +160,71 @@ blueprintDraftAt: v.optional(v.number()),
 // Bookkeeping for the LIVE blueprint (the doc itself lives in vaultDocuments; this is the
 // Stage-1 drift comparison set, kept here so the check is one indexed row read, not a scan).
 blueprintSourceDocIds: v.optional(v.array(v.string())),
+blueprintDocId:        v.optional(v.string()),   // hot-path lookup — never scan vaultDocuments
 ```
+
+**Required-field trap.** `tier`, `tierSource` and `derivedAt` are REQUIRED on this table
+(`schema.ts:768-783`), so a draft writer cannot *insert* a row for a tenant that has none without
+inventing a tier — which is precisely the silent-reclassification defect §4.2 of the tier design
+exists to kill. The writer must **refuse** for a tenant with no profile row, exactly as `saveFacts`
+does (`tenantProfile.ts:194`), never patch-or-create.
 
 Optional fields on an existing table ⇒ no migration. Structurally keeps the draft out of every
 retrieval path.
 
 *Considered and rejected:* a `blueprintDrafts` table — a whole table for one optional blob.
 
-### 3.3 The injection seam is one function
+### 3.3 The injection seam — TWO seams, not one (rewritten 2026-07-27)
 
-All five agent surfaces call `vaultGroundHydrated`. The live blueprint is prepended there as the
-first entry — real `docId`, title `"Business blueprint"`, full text — so every caller renders it
-through machinery that already exists.
+The original design prepended the blueprint as entry 0 of `vaultGroundHydrated`'s return and claimed
+"one edit, every agent inherits it". **Research disproved that**, twice over:
 
-**No per-caller wiring.** One edit; no surface can drift out of sync with another.
+**It breaks the most important caller.** `llm.ts`'s `searchVault` tool reads the returned parallel
+arrays directly, and a prepended entry 0 causes three distinct defects:
+
+| # | Code | Breakage |
+|---|---|---|
+| A | `if (docIds.length === 0) return noMatch;` (`llm.ts:1364`) | Becomes **unreachable**. The agent permanently loses its honest *"nothing in your vault"* answer. |
+| B | `resultCount: docIds.length` (`llm.ts:1360`) | Every `vault.searched` audit count inflated by one. |
+| C | `vaultSources.insert` (`llm.ts:1367-1374`) | A "Business blueprint" source chip on **every** search. |
+
+**And it would not deliver the requirement anyway.** The spine would only reach the cockpit agent on
+turns where it happens to call `searchVault`. A turn like *"draft an email to Bob"* never calls that
+tool — so the agent still would not know what the business is. `searchVault` is a **search tool**;
+the blueprint is not a search result. Conflating them is the root cause of all three defects above,
+not three separate bugs to patch.
+
+So there are two seams, by layer:
+
+**Seam 1 — the cockpit gets it in the turn prompt.** The blueprint is prepended as a labelled
+context block to the `prompt` passed into `runAgentLoop`. Present on **every** turn regardless of
+which tools fire — which is what "standing" actually means. `vaultGroundHydrated` keeps its current
+semantics, so defects A/B/C never arise rather than needing patches.
+
+**Not the system prompt:** `system: skill.body` verbatim at every call site (`llm.ts:1837` and 17
+others). The system string comes from the registry (CLAUDE.md §5); tenant context belongs in the
+turn, not spliced into a versioned skill body across 18 call sites.
+
+**Seam 2 — a separate `spine` field for the grounding-driven callers.** `vaultGroundHydrated` gains
+a fourth return field, **alongside** the parallel arrays and never inside them:
+
+```ts
+{ docIds, titles, chunks, spine }   // spine: string | null
+```
+
+`evaluations.ts` and `voiceDoc.ts` consume it explicitly. This matters for `voiceDoc.ts` in
+particular: its `if (docIds[i] !== docRef) continue;` (`voiceDoc.ts:99`) would have silently
+discarded a prepended entry 0, so the spine would never have reached the model there at all.
+
+*Note:* `vaultGround.test.ts:179` asserts full-object equality
+(`expect(out).toEqual({ docIds: [], titles: [], chunks: [] })`) and must be updated for the added
+field.
 
 The spine is budgeted **outside** `TOTAL_CHAR_CAP`, which stays at 8000 for retrieval results. The
 spine is not a search result and must not compete with them for that budget.
 
-**A tenant with no blueprint gets today's behavior byte for byte.** No regression surface for
-existing tenants.
+**A tenant with no blueprint gets today's behavior byte for byte** — `spine` is `null`, the turn
+prompt gains nothing. No regression surface for existing tenants.
 
 ## 4. Precedence — typing wins (D5)
 
@@ -222,6 +301,12 @@ input tokens, then **one** model call producing all fields at once. Not one call
 
 - Prompt is a `business-blueprint` row in the **skill registry**, not source (CLAUDE.md §5).
 - Missing / unpublished skill → **fail closed** with `NO_ACTIVE_SKILL` (existing precedent).
+- **UNGATED** (owner decision 2026-07-27, amending §11's original "through the eval gate"). Two
+  reasons. Mechanical: `run-eval-golden.mjs` hard-validates `--skill` against a closed name list
+  (`skill.ts:68-72`), so gating a skill the golden runner cannot drive **deadlocks it at v1** on its
+  first body edit — the documented reason `document-analyst` was left ungated. Principled: the
+  existing rationale for ungating `business-profile` (`skills.ts:282`) applies verbatim — its output
+  is a vault doc a human confirms, not tool-state. **D2's confirm gate IS that human check.**
 - `guardrails.preCall` gates spend before; `priceUsage` → `recordSpend` records after.
 - Input is capped: probe results are already bounded at 8000 chars each, and the assembled prompt
   is capped before the call.
@@ -254,15 +339,19 @@ since your blueprint was built."*
 **Stage 2 — the actual check.** Rebuild the draft, diff against live. Fields identical ⇒ discard
 silently, say nothing. Fields differ ⇒ that is the update proposal, with the diff already computed.
 
-**Stage 2 fires automatically on folder/bulk-ingest completion** — one bulk event, natural debounce,
-and the moment "here is my business" actually happened. It does **not** fire per single-document
-upload: a 50-file folder would otherwise trigger 50 model calls. The trickle case is served by the
-Stage-1 banner's one-click rebuild.
+**Stage 2 is USER-TRIGGERED this phase** (amended 2026-07-27, owner-confirmed). The original text
+said it fires automatically on folder/bulk-ingest completion. **No such event exists** —
+`vaultIngest.onIngestComplete` is per-document (`vault.md:39`), and a 50-file folder would therefore
+trigger 50 model calls. Building a debounced bulk-completion event means editing `vaultIngest.ts`,
+which is exactly the file 15.2's lane is restructuring.
 
-> D3 was stated as "auto-detect drift, propose an update". This is the cheaper faithful reading:
-> automatic on the event that matters, one click otherwise, rather than a cron burning spend on a
-> timer. Adding a timer later is a cron entry over the same action — the weekly evaluation cron is
-> precedent for that shape.
+So this phase ships: the **always-on Stage-1 banner** plus a **one-click rebuild**. Automatic
+triggering is deferred to when folder ingest lands (15.2's "Phase 2"), which is the natural
+"here is my business" event to attach to.
+
+> This is scoped honestly rather than half-built: detection is automatic and free, the *spend* is
+> one click. Adding the automatic trigger later attaches to the same action with no rework. A cron
+> variant remains available — the weekly evaluation cron is precedent for that shape.
 
 ## 7. The confirm surface (`/dashboard/profile`)
 
@@ -379,8 +468,25 @@ by reading the agent's cited sources, not by asserting it should be there.
   `Last verified` bumped (CLAUDE.md §9).
 - `packages/core/src/blueprint.ts` needs no new `watch.json` entry — the `packages/core/` prefix
   covers it.
-- `business-blueprint` skill row seeded and published through the eval gate (CLAUDE.md §5).
+- `business-blueprint` skill row seeded and published **ungated** (§5.3 — the eval-gate requirement
+  originally stated here was amended 2026-07-27; gating it would deadlock the skill at v1).
 - The live gate run and its result recorded in the playbook.
+
+## 13. Amendment log
+
+All amendments 2026-07-27, from Phase 17.1 research (`17.1-RESEARCH.md`) plus owner decisions. The
+sections themselves are corrected in place; this is the index.
+
+| § | Was | Now | Why |
+|---|---|---|---|
+| 1 | Five `vaultGroundHydrated` callers | **Three** | `onboarding.ts` / `tenantProfile.ts` mention it in comments only. Original count came from grep hits, not call sites. |
+| 3.1 | Blueprint is embedded | **Not embedded, not graph-extracted** | Avoids duplicate entry-0 and a graph feedback loop where the blueprint re-derives itself from its own entities. |
+| 3.1 | — | `blueprintDocId` added | Hot-path lookup; a `.collect()` over `vaultDocuments` would now run on every grounding call. |
+| 3.2 | — | Required-field trap documented | `tier`/`tierSource`/`derivedAt` are required; the draft writer must refuse, never invent a tier. |
+| 3.3 | One seam, prepend entry 0 | **Two seams** — turn prompt for the cockpit, `spine` field for the others | The single seam broke `llm.ts` three ways *and* would not have delivered standing context there at all. |
+| 3.3 field set | `stage` from `tenantProfiles` | `stage` = the typed `BusinessProfile.stage` | `stage` and `revenueStage` are different fields; the ambiguity was a silent-bug risk. |
+| 5.3 | Eval-gated skill | **Ungated** | Golden runner hard-validates skill names; gating deadlocks it at v1. Matches `business-profile`'s existing rationale. |
+| 6 | Stage 2 auto-fires on bulk ingest | **User-triggered this phase** | No bulk-completion event exists; building one collides with 15.2's lane. |
 
 ## 12. Parallel-lane constraint
 
