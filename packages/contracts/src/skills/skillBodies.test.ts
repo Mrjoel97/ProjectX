@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { BUSINESS_BLUEPRINT_SKILL, isGatedSkill } from "../skill";
 import { bmcSkillBody } from "./bmc";
+import { businessBlueprintSkillBody } from "./businessBlueprint";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
@@ -44,11 +46,25 @@ const bodies: [string, string][] = [
   ["onboarding-agent", onboardingAgentSkillBody],
   // Phase 14 (DOCV-01) — the voice-doc persona rides the same drift guard.
   ["document-analyst", documentAnalystSkillBody],
+  // Phase 17.1 (BLPR-01): the UNGATED corpus-synthesis prompt. Same mirror — and the drift row
+  // matters here because the synthesis action loads it FAIL-CLOSED: a stale derived constant seeds
+  // a stale prompt rather than a loud error.
+  ["business-blueprint", businessBlueprintSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {
   test.each(bodies)("%s.md === its derived constant (byte-identical, LF-normalized)", (base, body) => {
     const mdPath = fileURLToPath(new URL(`../../skills/${base}.md`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
+  });
+});
+
+// Phase 17.1 (BLPR-01). This is not a style preference — gating `business-blueprint` DEADLOCKS it
+// at v1, because run-eval-golden.mjs hard-validates `--skill` against a closed name list and cannot
+// drive the synthesis path, so no runner could ever clear the gate on a body edit. A future "tidy
+// up the gate list" edit must fail HERE rather than in production.
+describe("business-blueprint gating (17.1-02)", () => {
+  test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
+    expect(isGatedSkill(BUSINESS_BLUEPRINT_SKILL)).toBe(false);
   });
 });
