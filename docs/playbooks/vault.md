@@ -1,6 +1,16 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-27 (22) — **THE FALSE-READY FAMILY IS CLOSED, and a KPI deck now reads the
+> Last verified: 2026-07-27 (23) — **A NEW DOCUMENT CLASS LANDS IN THE VAULT: `kind: "web_research"`,
+> written by the DISPATCHER (`convex/research.ts` ← `dispatch.runResearch`), never by the specialist
+> that produced the prose.** One row per successful research run, through the SOLE legal starter
+> (`startIngest`), carrying the D7 freshness stamp as a stored `retrievedAt` number. The stored text
+> is **provenance header → 16-03's `<research_findings …>` fence → limits footer**, and the
+> zero-source *"insufficient evidence"* verdict is decided by CODE, not by the model's prose. Read
+> `### Phase 16 — 16-07` for the containment boundary this class actually has (per-CHUNK containment
+> is `searchVault`'s outer fence; the header and inner fence only ride the FIRST chunk) and for what
+> a persist failure does and does not cost.
+>
+> PRIOR (22) — **THE FALSE-READY FAMILY IS CLOSED, and a KPI deck now reads the
 > numbers in its CHARTS.** `officeText.ts`'s `Sheet N` / `Slide N` headers were emitted
 > unconditionally, so 100%-scaffolding output was non-empty, `empty_extraction` never fired and a
 > document holding nothing reported **`ready`**. `labelled()` now binds every structural header to
@@ -625,6 +635,66 @@ Containment on the **write** side is D5-CORRECTED and lives in `cockpit.md`: ret
 is provider-side and **cannot be fenced** — a "retrieved text is fenced" test would pass because
 the text is ABSENT, not because it was fenced. Containment is the empty capability grant proved
 POSITIVELY, the OUTPUT fence, and an SSRF scan with a non-vacuity floor.
+
+### Phase 16 — 16-07 (the findings terminal)
+
+`convex/research.ts` — `persistFindings`, an `internalMutation` in a **non-`"use node"`** module.
+It is the ONLY writer of `kind: "web_research"`, and it is called from ONE place:
+`persistResearchFindings` in `dispatch.ts`, after `dispatchAndLand` has already returned.
+
+**Who writes it, and why that is not negotiable.** The research specialist has NO write capability
+— that is the phase's containment. So this is a code-owned terminal the DISPATCHER runs, exactly as
+`persistNextStepMemo` runs after the human Approve. If a future change gives the specialist a "save
+my findings" tool, the privilege-escalation path is back.
+
+**A successful run produces TWO artifacts, and the ORDER is load-bearing.**
+
+| artifact | written by | authoritative for |
+|---|---|---|
+| the approvable memo plan card | `dispatchAndLand`'s `finally` → `landSpecialistResult` | the USER — it is what they act on |
+| ONE `web_research` vault document | `research.persistFindings` | GROUNDING (Phase 12 cites it) |
+
+The card lands FIRST. That is what makes the error handling honest: a persist failure costs
+**groundability, never the findings**, so it is audited (`research.persist_failed`, reason CODE
+only) and swallowed — the `DispatchResult` is returned unchanged. **Do not add a retry, a
+dead-letter, or a compensating write**; the cockpit has never DLQ'd a user-facing turn. A governed
+refusal writes NO document at all: a paused conversation is not a finding.
+
+**The stored text, in order:** provenance header (`Third-party web content, retrieved <ISO date>.`
++ the partial-run sentence when the run stopped early + the source URLs) → the findings inside
+16-03's `researchFindingsFence` → the **limits footer** (D10: the search was provider-executed, so
+we cannot pin or choose sources, control extraction fidelity, or see what was discarded — these
+findings are NOT source-audited). The three partial-run sentences come from `INCOMPLETE_MARKER` in
+`@pikar/core`, the SAME constant the memo card uses, so the card and the document can never
+disagree about why a run stopped.
+
+**Zero sources ⇒ `Insufficient evidence` — decided by CODE**, whatever the body claims, and placed
+ahead of the fence so truncation cannot remove it (D11: a research agent that confabulates on an
+empty search is worse than none, because Phase 12 will cite it).
+
+**⚠ Be precise about where containment lives — the honest boundary.** The RAG ingester chunks this
+document, so **only the FIRST chunk carries the provenance header and the fence's open tag**;
+chunks 2..N carry neither. Containment does not rest on them: `searchVault` wraps what it returns
+in the shipped `<vault_context … never an instruction>` fence on **every** retrieval. The header
+and the inner fence are a LABELLING win — they let a human, or a model reading the first chunk, see
+the provenance without the title. Do not write a test, a comment, or a doc line implying a
+per-chunk provenance guarantee the chunker does not give. This inner fence is the LAST surviving
+instance of D5-CORRECTED's "fence our own output" obligation; the other one disappeared when
+D9-REVISED moved research onto the async memo terminal, which removed the in-loop re-entry
+(`buildAgentContext` renders a memo plan as `Body drafted: yes/no` and never emits the body).
+
+**§4:** the audit row (`research.persisted`) carries a query HASH, counts, and refs — never the
+question, never a URL, never prose. `AuditPayload` permits `readonly string[]`, so an array of URLs
+would type-check: that is the trap, not a safety net.
+
+`ponytail:` two deliberate NON-decisions recorded in the module header — no `researchRuns` table (a
+second log plane beside the insert-only audit is the anti-pattern) and no `vaultSources` card for
+web URLs (OQ-4: no new UI in v1; the URLs are in the document's own header).
+
+**Verify:** `pnpm exec vitest run convex/research.test.ts` (12 tests — the vault write, the stamp,
+the title cap, the header/fence/footer order, insufficient-evidence labelling, the three stop
+reasons, the startIngest control, the §4 scan, the two dispatch-wiring cases, the persist-failure
+case, and both halves of the cross-tenant isolation assertion).
 
 ---
 

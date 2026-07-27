@@ -1,6 +1,6 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-27 (16-03) — the research route joins SPECIALIST_ROUTES with its own least-privilege grant; SPECIALIST_ROUTES is now a SUPERSET of what diagnose() emits (ADR-010). Adds researchFindingsFence and the three-reason incomplete marker. PREVIOUSLY: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
+> Last verified: 2026-07-27 (16-07) — `INCOMPLETE_MARKER` is now EXPORTED so the stored research document reuses the SAME three stop-cause sentences the memo card carries (one phrasing per cause). No math, gate order, route literal or `SPECIALISTS` entry changed. PREVIOUSLY: 2026-07-27 (16-03) — the research route joins SPECIALIST_ROUTES with its own least-privilege grant; SPECIALIST_ROUTES is now a SUPERSET of what diagnose() emits (ADR-010). Adds researchFindingsFence and the three-reason incomplete marker. PREVIOUSLY: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
 > `tierBriefing({tier?, agentName?, styleDirective?})` and `PRESET_SKILL`. **No diagnostic math, gate
 > order, route literal, or `SPECIALISTS` entry changed** — this is additive and lives beside the
 > registry, not inside it. The CODE-owned / REGISTRY-owned split is the thing to preserve: the FACT
@@ -79,6 +79,12 @@ Consumer side — specialist dispatch (`packages/core/src/specialists.ts`, + `sp
   "incomplete — cost ceiling reached" marker lives in the BODY, never on the plan row: a new
   `plans.status` literal would touch the PINNED status enum with `apps/web` blast radius, and the
   body is visible at the Approve gate where the human decides.
+- **`INCOMPLETE_MARKER` is EXPORTED (16-07)**, not just used by `specialistMemoBody`. A research run
+  produces TWO artifacts — the memo plan card and a `web_research` vault document — and the document
+  is not a memo body (no `> Produced by the … specialist.` line), so it needs the three stop-cause
+  sentences without the wrapper. Exporting the map keeps ONE phrasing per cause: a second copy in
+  `convex/research.ts` is exactly how the card and the document start disagreeing about why the same
+  run stopped. `cost` stays BYTE-IDENTICAL to the pre-Phase-16 string (eval fixtures + `dispatch.test.ts`).
 - The three `skillName` values are INLINED copies of `OFFER_ARCHITECT_SKILL` /
   `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` (`packages/contracts/src/skill.ts`) because
   `@pikar/contracts` is not a dependency of `@pikar/core`. `specialists.test.ts` reads that file off
