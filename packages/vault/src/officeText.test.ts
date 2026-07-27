@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { extractOfficeText } from "./officeText";
@@ -237,5 +240,91 @@ describe("extractOfficeText — determinism (same bytes in, byte-identical text 
 
   it.each(cases)("%s is byte-identical across two calls", (_name, bytes) => {
     expect(extractOfficeText(bytes).text).toBe(extractOfficeText(bytes).text);
+  });
+});
+
+// A structural header (`Sheet 3`, `Slide 7`) is SCAFFOLDING. Emitted unconditionally it makes an
+// empty extraction NON-EMPTY, so vaultExtract.ts's `empty_extraction` guard never fires and a
+// document with nothing readable in it reports `ready` — a plausible failure, which is worse than a
+// failure. Same family as 15.2-06's `okPages` and 15.2-07's `okSheets`: the success signal is a
+// COUNT of parts that yielded content, NEVER the truthiness of the joined string.
+describe("extractOfficeText — the false-ready family: scaffolding is not content (SC#4)", () => {
+  it('XLSX: sheets with no cell values extract to "" — NOT `Sheet 1 / Sheet 2`', () => {
+    const bytes = xlsxOf({
+      // value-less cells (self-closing <c/>) and a sheet with no <row> at all
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml(`<row r="1"><c r="A1"/><c r="B1"/></row>`)),
+      "xl/worksheets/sheet2.xml": strToU8(sheetXml("")),
+    });
+    // `=== ""`, not `.trim() === ""`: "Sheet 1\n\n\nSheet 2" is what shipped before this gate.
+    expect(extractOfficeText(bytes).text).toBe("");
+  });
+
+  it("XLSX: an empty sheet emits NO header and the surviving sheet keeps its OWN number", () => {
+    const bytes = xlsxOf({
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml(`<row r="1"><c r="A1"/></row>`)),
+      "xl/worksheets/sheet2.xml": strToU8(sheetXml(`<row><c><v>7</v></c><c><v>8</v></c></row>`)),
+    });
+    const { text } = extractOfficeText(bytes);
+    expect(text).toBe("Sheet 2\n7\t8"); // NOT renumbered to "Sheet 1"
+    expect(text).not.toContain("Sheet 1");
+  });
+
+  it('PPTX: slides whose only <a:t> is a slide-number field extract to ""', () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(
+        slideXml(`<a:fld id="{A}" type="slidenum"><a:t>1</a:t></a:fld>`),
+      ),
+      "ppt/slides/slide2.xml": strToU8(
+        slideXml(`<a:fld id="{B}" type="slidenum"><a:t>2</a:t></a:fld>`),
+      ),
+      "ppt/slideLayouts/slideLayout1.xml": strToU8(
+        slideXml(`<a:t>Click to edit Master title style</a:t>`),
+      ),
+    });
+    expect(extractOfficeText(bytes).text).toBe("");
+  });
+
+  it("PPTX: a whitespace-only run cannot hold a header up on its own", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t xml:space="preserve">   </a:t>`)),
+    });
+    expect(extractOfficeText(bytes).text).toBe("");
+  });
+
+  it("PPTX: a blank slide emits no header and the surviving slide keeps its OWN number", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t xml:space="preserve"> </a:t>`)),
+      "ppt/slides/slide2.xml": strToU8(slideXml(`<a:t>Real content</a:t>`)),
+    });
+    const { text } = extractOfficeText(bytes);
+    expect(text).toBe("Slide 2\nReal content");
+    expect(text).not.toContain("Slide 1");
+  });
+
+  // *No sheets/slides at all* is a BROKEN ARCHIVE; *sheets/slides with nothing in them* is an EMPTY
+  // DOCUMENT. Different facts, different endings — do not let anyone merge the throws into the ""
+  // path above.
+  it("the structural throws are UNCHANGED and still reachable", () => {
+    expect(() => extractOfficeText(xlsxOf({ "xl/other.xml": strToU8("<x/>") }))).toThrow(
+      "office_parse_failed: no worksheets",
+    );
+    expect(() => extractOfficeText(pptxOf({ "ppt/other.xml": strToU8("<x/>") }))).toThrow(
+      "office_parse_failed: no slides",
+    );
+  });
+});
+
+describe("officeText source contract", () => {
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "officeText.ts"), "utf8");
+  // Scan CODE, not prose (the 15.2-07 precedent): this file's comments deliberately name the banned
+  // form so the next reader knows what it is, and a naive scan would go red on a correct file.
+  const code = src.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const PART_LABEL = /`(?:Sheet|Slide) \$\{/g;
+
+  it("every `Sheet ${n}` / `Slide ${n}` literal is an argument to labelled()", () => {
+    const all = [...code.matchAll(PART_LABEL)].length;
+    const gated = [...code.matchAll(/labelled\(\s*`(?:Sheet|Slide) \$\{/g)].length;
+    expect(all, "the part-label literals must still exist").toBeGreaterThan(0);
+    expect(gated, "a part label may ONLY reach the output through labelled()").toBe(all);
   });
 });
