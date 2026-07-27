@@ -50,15 +50,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 7
+current_plan: 7 (done — all 7 planned waves complete; owner-created 15.2-08 still outstanding)
 status: in_progress
-stopped_at: "Completed 15.2-06-PLAN.md (Wave 6 — SC#5, the per-page fan-out, verified LIVE on local-joel_feruzi-pikar_ai_50c69-1 and owner-APPROVED). The 12-page scanned deck went 2,161 → 7,868 chars of per-page transcription for 13¢. ONE plan left in the phase (15.2-07, SC#3-XLS), plus owner-created 15.2-08 after it. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not this plan's job either."
-last_updated: "2026-07-27T15:35:00.000Z"
+stopped_at: "Completed 15.2-07-PLAN.md (Wave 7 — SC#3's XLS half, the phase's highest-risk item, verified LIVE on local-joel_feruzi-pikar_ai_50c69-1 and owner-APPROVED). Legacy .xls now reads its NUMBERS via SheetJS pinned from the vendor CDN. ALL SEVEN success criteria are now closed and all 3 Manual-Only validation rows are executed and passing. REMAINING IN THE PHASE: owner-created 15.2-08 (the parser false-ready family — officeText.ts:65/:74 emit Sheet N/Slide N unconditionally), which is NOT one of the original 7 waves. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not this plan's job either."
+last_updated: "2026-07-27T17:05:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
   total_plans: 179
-  completed_plans: 174
+  completed_plans: 175
 ---
 
 # Project State
@@ -72,8 +72,8 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 6 of 7 PLANS COMPLETE
-(7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — ALL 7 PLANNED WAVES
+COMPLETE; owner-created 15.2-08 still outstanding.** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
 plan's FIRST commit before any code landed. Lane V owns `packages/vault/src/*`, `vaultExtract.ts`,
@@ -84,7 +84,82 @@ deliberately** — 16∥17 needed one because both add literals to the same clos
 `schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
 commit that was never meant to exist.
 
-Status (15.2-06): **SCANNED PDFs ARE TRANSCRIBED, NOT SUMMARISED — proven LIVE and owner-APPROVED,
+Status (15.2-07): **SC#3 IS FULLY CLOSED — LEGACY `.xls` READS ITS NUMBERS, PROVEN LIVE AND
+OWNER-APPROVED. The phase's highest-risk item passed, and it was made to prove it could FAIL first.**
+`xlsx` (SheetJS) **0.20.3 is pinned EXACTLY to the vendor CDN tarball**
+(`https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`, no caret, §6) and **deliberately NOT npm
+`xlsx@0.18.5`** — the last registry publish carries **CVE-2023-30533** (prototype pollution) and
+**CVE-2024-22363** (ReDoS), and this code parses UNTRUSTED UPLOADS. **THE SPIKE RAN BEFORE THE
+PARSER WAS WRITTEN**, so a failure would have cost a dependency revert rather than a wasted module.
+Rebuilt with Convex's exact node-action esbuild flags (read out of
+`convex/dist/esm/bundler/debugBundle.js` + the `platform:"node"` call site in `cli/lib/config.js`;
+`format:"esm"`, `conditions:["convex","module"]`, `splitting:true`, esbuild 0.27.0): **STATIC import
+→ 19 REAL NAMED EXPORTS** (`read`=function, `utils.sheet_to_csv`=function), **dynamic → also 19**,
+and the **`pdf-lib` CONTROL still collapsed to 1 key (`default`), `PDFDocument`=undefined**.
+**THE CONTROL IS THE ACTUAL RESULT:** without a known-collapsing case, "SheetJS was fine" and "my
+probe cannot see a collapse" produce identical output. **PITFALL 9's PREDICTOR WAS WRONG AND IS NOW
+CORRECTED — the plan assumed SheetJS was "CJS-first, same shape as pdf-lib"; it is not.** The
+discriminator is **THE PACKAGE MANIFEST, NOT THE IMPORT FORM**: `pdf-lib` has `main: cjs/index.js`
+and **NO `exports` map**, while `xlsx` 0.20.3 ships `"exports": {".": {"import": "./xlsx.mjs"}}` — a
+real ESM build — so it is the **`unpdf` case** and survives BOTH forms. **That rule was promoted OUT
+of the phase narrative into `## Invariants — what must never break` and `## Dependencies & blast
+radius` in the playbook**, because a rule only a SUMMARY reader finds is not a rule: **before adding
+ANY dependency to a node action, read its `package.json` for an `exports` map + ESM build.** The
+static import was kept anyway — it is the shape actually proven, it costs nothing, and a version
+bump could drop the ESM build with no test going red. **A HAZARD THE PLAN DID NOT PREDICT, CAUGHT BY
+MEASURING: SheetJS's `read()` FALLS BACK TO A DSV/PLAIN-TEXT GUESSER**, so **64 bytes of noise come
+back as a workbook holding ONE CELL OF MOJIBAKE** — non-empty, therefore clearing `empty_extraction`
+and landing as a `ready` document. A plausible failure that would have shipped. Fixed by REUSE
+(rung 2): `xlsText` gates on **`sniffContainer`** (dep-free, already on the barrel) and accepts only
+`ole2`/`zip`. **`xlsText` is SUBPATH-ONLY** (`@pikar/vault/xlsText`) — the `officeText` rule for
+~1 MB instead of a few KB — and **its success signal is `okSheets`, a COUNT** (the 15.2-06 `okPages`
+rule), with the `Sheet N` header emitted ONLY for a sheet that yielded content, so **it is
+deliberately NOT a third instance of the false-ready family**. **TWO HONEST TERMINAL ENDINGS, one
+earlier than expected and both pinned:** an OLE2 file with a `Workbook` stream but no BIFF content →
+`xls_parse_failed`; a real `.xls` **truncated in half** → **`unsupported_format`**, because halving
+removes the CFB DIRECTORY SECTOR so `ole2Kind` cannot find `Workbook` and the dispatcher refuses one
+rail EARLIER — **do not "fix" that reason to the one that reads better.** **THE LIVE RESULT:**
+freshness proved by touch probe (**2.984 s CPU vs 0.000 s idle**); `npx convex dev --once` **REFUSES
+while the local backend holds `:3210`**, so no one-shot push verdict was available without stopping
+the owner's `convex dev` (not done unilaterally); the **deployed module was proven to LOAD with
+SheetJS in it** via a throwaway-tenant probe (`vaultSmoke:insertBrief` → live
+`vaultExtract:extractDoc` → terminal `no_stored_bytes`, **$0**, row purged); then **a real legacy
+`.xls` upload reached `ready` with its NUMBERS visible — OWNER APPROVED.** **EVIDENCE LEVEL RECORDED
+PRECISELY AND NOT ROUNDED UP: the owner confirmed the stated criterion (`ready`, numbers present,
+NOT headings-only); NO individual figures were transcribed back and NOTHING was diffed against
+Excel** — so "the round trip works and did not degrade to header recovery" is proven, "every value
+is correct" is not claimed. **THE DATE-SERIAL CEILING IS NOT CLOSED BY THAT APPROVAL:** a
+SheetJS-WRITTEN `.xls` yields the Excel serial **`46067`** (its BIFF8 *writer* emits no date
+number-format record; **`cellDates: true` does NOT help** — measured), while the same workbook as
+`.xlsb`/`.xlsx` renders `2/14/26`; **a real Excel-AUTHORED `.xls` with a format record remains
+UNOBSERVED** (upgrade path: a per-cell `t === "d"` walk instead of `sheet_to_csv`). **THREE
+MUTATION-CHECKS, each confirmed applied and each reverted green:** the SheetJS import made dynamic ⇒
+**1 RED (the scan) WHILE ALL 10 BEHAVIOUR TESTS STAYED GREEN** — Pitfall 9's invisibility reproduced
+on demand inside our own suite; the `sniffContainer` guard removed ⇒ **1 RED** (mojibake); the
+`Sheet N` header emitted unconditionally ⇒ **2 RED**. Three auto-fixed deviations, all from
+verifying rather than assuming: **(a) `xlsx` does NOT resolve from `@pikar/backend`** (the same
+arrangement that keeps `fflate` out of the V8 bundle, confirmed by `ERR_MODULE_NOT_FOUND`), so it
+was added as a **DEV-ONLY** dep there to keep the fixture SheetJS-written rather than a committed
+binary — **nothing in production imports `xlsx` from `@pikar/backend`**; **(b) my own static scan
+matched the banned form inside a COMMENT** (the file deliberately spells out `await import("xlsx")`
+so the next reader knows what is forbidden), so the scan now strips comments and asserts against
+CODE; **(c) my truncated-`.xls` assertion was an ASPIRATION** — corrected to the observed
+`unsupported_format` routing, with 15.2-03's synthetic OLE2 fixture repurposed to cover the parser's
+own `xls_parse_failed` ending. **The spike probe was deliberately NOT committed** — a test that
+esbuild-bundles a 2.4 MB package on every run is debt; the durable lock is the static scan and every
+observed number lives in the playbook. Gates: `@pikar/vault` **125/125** (was 114), `vaultExtract`
+**47/47** (was 41), backend `test vault` **121/121** (was 115), backend `tsc` **52 errors ALL in
+test files, ZERO non-test** (baseline held exactly), `check-playbooks` exit 0, graph refreshed
+(+261 convex edges). **`nyquist_compliant: true` NOW STANDS ON EXECUTION EVIDENCE** — all 3
+Manual-Only rows executed, recorded and passing — rather than planning-time conditions alone.
+**STILL OPEN AND NOT TOUCHED HERE: (1) the parser false-ready family** — `xlsxText`
+(`officeText.ts:65`) and `pptxText` (`:74`) emit `` `Sheet ${n}` ``/`` `Slide ${n}` ``
+UNCONDITIONALLY, so scaffolding-only output defeats `empty_extraction` and reports `ready`; **that
+is 15.2-08's scope** and `okSheets` is the pattern it should reuse. **(2) `failureCopy` has STILL
+never been rendered in a browser** at any point in this phase, and the `:3000` `next start`
+(PID 14512) **still predates its own build** — restart it before trusting any vault-UI observation.
+
+PRIOR — Status (15.2-06): **SCANNED PDFs ARE TRANSCRIBED, NOT SUMMARISED — proven LIVE and owner-APPROVED,
 with the `attachment-extractor` prompt BYTE-UNCHANGED.** `extractPdf`'s hosted fallback used to slice
 the PDF to the page cap and send the whole thing as **ONE** file part. The skill's contract is
 written for *a single image or document (PDF page…)*, so a 12-page deck asked it to do something its

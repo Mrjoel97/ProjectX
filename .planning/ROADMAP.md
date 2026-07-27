@@ -55,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
  (completed 2026-07-25)
 - [x] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md` (completed 2026-07-26)
-- [ ] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17
+- [x] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17 (completed 2026-07-27)
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
 - [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
@@ -605,6 +605,7 @@ Plans:
   7. **LIVE GATE:** the owner's stuck `.xlsm` reaches `ready` with non-zero `textChars` on the real deployment via `vaultSweep:runSweep`. Offline green does NOT close this phase (Pitfall-1 class — only the deployed run proves it).
 **Non-goal**: folders, 1–1.5 GB folder upload, the 200 MB per-file cap raise, document-identity classification and folder-level synthesis are **Phase 2 of this line of work** — the cap raise is unsafe until the fan-out bounds per-action memory (the playbook already flags large-doc extraction memory/time at the CURRENT 100 MiB cap).
 **Plans**: 7 plans in 7 waves (serial — `vaultExtract.ts` is the spine of four of them, and `execute-phase` serialises on `wave`, not on intra-wave `depends_on`)
+**STATUS 2026-07-27:** **all 7 authored waves COMPLETE and ALL SEVEN success criteria CLOSED**, each of the three live-only ones executed against `local-joel_feruzi-pikar_ai_50c69-1` and owner-approved (SC#7 by 15.2-05, SC#5 by 15.2-06, SC#3-XLS by 15.2-07). `15.2-VALIDATION.md`'s three Manual-Only rows are all executed and passing, and `nyquist_compliant: true` now rests on execution evidence rather than planning-time conditions. **THE PHASE IS NOT FINISHED: 15.2-08 (below) was created BY the 15.2-05 live gate, has no PLAN.md yet, and is outstanding.** Two honest gaps carried to the verifier: **`failureCopy` has never been rendered in a browser** (SC#4's live half only partially paid, compounded by the `:3000` `next start` predating its own build), and a real **Excel-authored `.xls` with DATE cells** is unobserved (the serial-`46067` ceiling was measured only on a SheetJS-written fixture).
 
 Plans:
 - [x] 15.2-01-PLAN.md — Lane V contract + magic-byte `sniff.ts` + the never-null scheduling decision [SC#1, SC#4] (Wave 1)
@@ -613,7 +614,7 @@ Plans:
 - [x] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
 - [x] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5) — **PAID 2026-07-27 on `local-joel_feruzi-pikar_ai_50c69-1`: 0 → 256,439 chars.** Owner approved but PARTIALLY OBSERVED — `failureCopy` still unverified live. Gate finding: `runSweep` is a NO-OP without `'{"reset": true}'`
 - [x] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6) — **VERIFIED LIVE + owner-APPROVED 2026-07-27: the 12-page deck went 2,161 → 7,868 chars, `Page 1`…`Page 12`, 0 `[unreadable]`, 13¢/12 calls, no OCC.** `attachment-extractor` prompt BYTE-UNCHANGED (§5 by reuse). Verdict from row data, NOT a browser (`:3000` still stale). `extractionTruncated` on long scans is now expected, not a regression
-- [ ] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7)
+- [x] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7) — **SPIKE PASSED + VERIFIED LIVE + owner-APPROVED 2026-07-27: a real legacy `.xls` reached `ready` with its NUMBERS visible, so SC#3 is FULLY CLOSED and all seven criteria are now closed.** `xlsx` 0.20.3 pinned EXACTLY to the vendor CDN tarball (NOT npm `xlsx@0.18.5` — CVE-2023-30533, CVE-2024-22363). Rebuilt under Convex's own esbuild flags: SheetJS carries **19 real named exports**, the `pdf-lib` **control still collapsed to 1**, so the probe provably detects a collapse. **PITFALL 9 GENERALISED — the discriminator is the missing `exports` map / ESM build, NOT the import form — and promoted into the playbook's `## Invariants`.** Approval evidence level: the owner's direct confirmation of the criterion; **no figures transcribed back, nothing diffed against Excel.** Date-serial ceiling remains open
 - [ ] 15.2-08-PLAN.md — **(NEW, added by the 15.2-05 live gate)** PPTX extracts slide TITLES ONLY (`pptxText` reads `<a:t>` from slides, never opens `ppt/charts/*`), and scaffolding-only output reports `ready` because `` `Slide ${n}` ``/`` `Sheet ${n}` `` are emitted unconditionally so `empty_extraction` never fires — a false-ready one layer below the scheduler. Both halves. Sequenced AFTER 15.2-07 (Wave 8)
 
 ### Phase 16: Research Sub-Agent & Web Research
@@ -683,7 +684,7 @@ Locked owner decisions D1-D5 in spec §2.1.
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 - [ ] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
@@ -812,7 +813,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
-| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 6/7 | In Progress|  |
+| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/7 | Complete   | 2026-07-27 |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
