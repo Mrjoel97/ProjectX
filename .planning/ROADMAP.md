@@ -58,6 +58,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
+- [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
 - [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated)
 
@@ -635,6 +636,26 @@ Plans:
   3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
 **Plans**: TBD
 
+### Phase 17.1: Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED)
+
+**Goal:** Every agent surface carries a standing, cited description of the business instead of
+reaching it only through query-scoped retrieval. One blueprint artifact = the user's typed profile
+(authoritative, never overwritten) + document-derived fields where they left blanks (cited) + the
+top graph entities. Draft -> user confirms -> live; prepended in `vaultGroundHydrated` so all five
+callers (cockpit, onboarding, evaluations, voiceDoc, tenantProfile) inherit it from one seam.
+
+**Source:** `docs/superpowers/specs/2026-07-27-business-blueprint-design.md` (PRD express path).
+Locked owner decisions D1-D5 in spec §2.1.
+
+**Requirements**: TBD (run /gsd:plan-phase 17.1)
+**Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
+(Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
+**Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 17.1 to break down)
+
 ### Phase 18: Document & Content Creation
 **Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
 **Depends on**: Phase 15 (dispatch + executor); reuses the shipped attachment/render pattern (`renderAndStore` + `plans.recordAttachments`)
@@ -752,6 +773,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
+| 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
 | 20. Media Canvas | 0/TBD | Not started | - |
