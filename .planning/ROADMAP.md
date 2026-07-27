@@ -634,7 +634,7 @@ Plans:
 - [x] 16-04-PLAN.md — the §5 research-specialist skill body (D10 sophistication) + the 5-file mirror
 - [x] 16-05-PLAN.md — the hosted webSearch tool, per-call billing, SSRF scan + non-vacuity floor
 - [x] 16-06-PLAN.md — the ASYNC dispatch seam (D9-REVISED: stage -> schedule -> land), the persisted `collecting` interlock, the relocated model pin. NOT the superseded D9 in-loop seam: no per-turn envelope closure (the interlock replaces it) and NO guard-comment amendment (dispatchGuard.test.ts:16-24 predicted this shape and is left untouched, deliberately)
-- [ ] 16-07-PLAN.md — the vault terminal: research.ts, the freshness stamp, cross-tenant isolation
+- [x] 16-07-PLAN.md — the vault terminal: research.ts, the freshness stamp, cross-tenant isolation — completed 2026-07-27 (one `kind: "web_research"` vault document per successful run, written by the DISPATCHER after `dispatchAndLand` returns — so the approvable card already holds the findings and a persist failure costs groundability, not the work: audited as `research.persist_failed` with a reason CODE, swallowed, no retry/DLQ. Stored text is provenance header → 16-03's `<research_findings …>` fence → the D10 limits footer; the zero-source "insufficient evidence" verdict is CODE's, not the model's, and sits ahead of the fence. `retrievedAt` is a stored, queryable number; ingest starts through `startIngest` with `rootRequestId` as the correlation id. Honest boundary recorded in the playbook: only the FIRST chunk carries the header + inner fence — per-chunk containment is `searchVault`'s outer `<vault_context …>` fence. research.test.ts 12/12; backend 723/723 across 48 files; tsc ZERO non-test errors; 3 mutation-checks RED-then-green. 4 auto-fixed deviations, two of which make the plan's own done-criteria checkable: `INCOMPLETE_MARKER` exported from `@pikar/core` (one phrasing per stop cause) and a `research` flag on `__runSpecialistWithScript` — `runResearch` cannot be driven offline. `llmRedaction.test.ts`'s pinned audit-payload count 4→5, discharged by REVIEWING the new §4 site. NOT live-verified — offline only)
 - [ ] 16-08-PLAN.md — D11 offline: containment proven positively + the failure-mode matrix + the mutation ledger
 - [ ] 16-09-PLAN.md — SC#4 citation + the eval:golden gate (D11's second proof) + the phase checkpoint
 
@@ -814,7 +814,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/8 | 7 waves complete; 15.2-08 planned, not executed | 2026-07-27 |
-| 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
+| 16. Research Sub-Agent & Web Research | 7/9 | In Progress (waves 1-5 done; 16-07 landed the vault terminal — next 16-08) | 2026-07-27 |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 3/10 | Wave 2 COMPLETE: 17.1-03 — precedence as code, the citation trust boundary, the spine renderer. Next: 17.1-04 (Wave 3) | 2026-07-27 |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
