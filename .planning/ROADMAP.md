@@ -609,7 +609,7 @@ Plans:
 Plans:
 - [x] 15.2-01-PLAN.md — Lane V contract + magic-byte `sniff.ts` + the never-null scheduling decision [SC#1, SC#4] (Wave 1)
 - [x] 15.2-02-PLAN.md — Format coverage in the pure layer: ZIP-entry dispatch (XLSM/DOCM/PPTM/ODF/EPUB) + RTF/markup/OLE2 DOC-PPT, no new dependency [SC#2, SC#3] (Wave 2)
-- [ ] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
+- [x] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
 - [ ] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
 - [ ] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5)
 - [ ] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6)
@@ -811,7 +811,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
-| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 2/7 | In Progress|  |
+| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 3/7 | In Progress|  |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
