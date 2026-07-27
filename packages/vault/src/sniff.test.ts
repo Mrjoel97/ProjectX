@@ -102,7 +102,8 @@ describe("sniffContainer — magic bytes decide, not the file name", () => {
 });
 
 describe("ole2Kind — doc / ppt / xls told apart from the directory stream names, with no MIME", () => {
-  const ole2With = (name: string) => cat(OLE2_HEADER, fill(500, 0x00), utf16le(name), fill(64, 0x00));
+  const ole2With = (name: string) =>
+    cat(OLE2_HEADER, fill(500, 0x00), utf16le(name), fill(64, 0x00));
 
   test("WordDocument → doc", () => {
     expect(ole2Kind(ole2With("WordDocument"))).toBe("doc");
