@@ -452,11 +452,28 @@ export const ownedDocsMeta = internalQuery({
   },
 });
 
-/** Terminal success: the doc is embedded + extracted → groundable. */
+/**
+ * Terminal success: the doc is embedded + extracted → groundable.
+ *
+ * Clears `failureReason` so a row that succeeded stops reporting a PREVIOUS attempt's error. It is
+ * the backstop half — `markExtracting` is where a new attempt normally drops the old state — but it
+ * is still needed because the late-text `docId` seam in `vaultIngestText` reaches
+ * `processing` → `markReady` WITHOUT passing through `markExtracting`, so a previously-failed doc
+ * rescued that way would otherwise keep its stale reason.
+ *
+ * DELIBERATE DIVERGENCE from 15.2-CONTEXT.md, which reads "markReady clears failureReason +
+ * extractionTruncated": clearing `extractionTruncated` HERE is a defect. It is written by
+ * `ingestExtractedText` on the CURRENT attempt (below), moments before the ingest workflow reaches
+ * this mutation — so clearing it here would erase a TRUE truncation flag on every successful
+ * large-document ingest, and that flag is what tells a downstream consumer (voiceDoc's digest,
+ * voiceToken's readiness check) that the grounded text is only a head slice. The user-visible
+ * intent is fully satisfied by clearing `failureReason` here and clearing BOTH at `markExtracting`.
+ * Pinned by "markReady does NOT clear a TRUE extractionTruncated" in vault.test.ts.
+ */
 export const markReady = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments"), ragEntryId: v.string() },
   handler: async (ctx, { vaultDocId, ragEntryId }) => {
-    await ctx.db.patch(vaultDocId, { status: "ready", ragEntryId });
+    await ctx.db.patch(vaultDocId, { status: "ready", ragEntryId, failureReason: undefined });
   },
 });
 
@@ -470,11 +487,22 @@ export const markFailed = internalMutation({
 
 // ── Phase-3.8 extraction lifecycle (Wave-0 seam — called by vaultExtract/vaultTranscribe) ─────
 
-/** The extraction action flips the visible pill when work actually starts (honest pill). */
+/**
+ * The extraction action flips the visible pill when work actually starts (honest pill).
+ *
+ * This is ALSO where the previous attempt's state dies, because this runs at the START of every
+ * attempt (vaultExtract.ts / vaultTranscribe.ts, before any parsing): a new attempt has neither a
+ * failure nor a truncation yet, so carrying either forward would report the last attempt's outcome
+ * against this one.
+ */
 export const markExtracting = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments") },
   handler: async (ctx, { vaultDocId }) => {
-    await ctx.db.patch(vaultDocId, { status: "extracting" });
+    await ctx.db.patch(vaultDocId, {
+      status: "extracting",
+      failureReason: undefined,
+      extractionTruncated: undefined,
+    });
   },
 });
 
