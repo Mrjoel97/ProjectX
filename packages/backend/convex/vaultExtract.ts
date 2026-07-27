@@ -190,7 +190,7 @@ export const extractDoc = internalAction({
         extracted = { text: await extractHosted(ctx, bytes, meta.mimeType), path: "hosted" };
       } else if (kind === "office") {
         try {
-          extracted = { text: extractOfficeText(bytes, meta.mimeType).text, path: "office" };
+          extracted = { text: extractOfficeText(bytes).text, path: "office" };
         } catch {
           await fail("office_parse_failed");
           return null;

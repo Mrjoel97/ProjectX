@@ -24,7 +24,8 @@
     "packages/backend/convex/opsSignals.ts",
     "packages/backend/convex/opsSignals.test.ts",
     "packages/backend/scripts/run-eval-golden.mjs",
-    "packages/backend/scripts/eval-cases/"
+    "packages/backend/scripts/eval-cases/",
+    "packages/backend/scripts/run-probe-websearch.mjs"
   ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
@@ -54,7 +55,9 @@
     "packages/backend/convex/dispatch.test.ts",
     "packages/backend/convex/dispatchGuard.test.ts",
     "packages/core/src/actionType.ts",
-    "packages/core/src/actionType.test.ts"
+    "packages/core/src/actionType.test.ts",
+    "packages/backend/convex/research.ts",
+    "packages/backend/convex/research.test.ts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/audit.ts",

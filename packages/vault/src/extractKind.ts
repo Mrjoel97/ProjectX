@@ -26,6 +26,29 @@ export function extractionKindFor(mimeType: string, filename?: string): Extracti
   return null;
 }
 
+/** Which rail an upload is SCHEDULED onto. Deliberately TOTAL — there is no "don't schedule". */
+export type SchedulingRail = "transcribe" | "extract";
+
+/**
+ * The scheduling decision, in ONE place for all three callers (vault.vaultUpload,
+ * vaultSweep.sweepPendingExtraction, vaultSweep.retryExtraction).
+ *
+ * Media rides vaultTranscribe by MIME, exactly as before. EVERYTHING ELSE rides
+ * vaultExtract.extractDoc — including formats no allow-list here recognises. That is the whole
+ * fix: `ctx.storage.get` is ACTION-ONLY (queries and mutations get getUrl/getMetadata), so the
+ * magic-byte sniff physically cannot run at a scheduling site (RESEARCH §2). Instead of teaching
+ * three mutations to guess, we schedule permissively and let the ONE place that can read bytes
+ * decide — where `fail("unsupported_format")` already exists (vaultExtract.ts:200) and, until
+ * this change, was UNREACHABLE.
+ *
+ * The invariant the owner cares about is preserved and strengthened: an unresolvable format is
+ * TERMINAL `failed`, never a silent `pending_extraction`. Only its LOCATION moved, from the
+ * mutation to the action.
+ */
+export function schedulingRailFor(mimeType: string, filename?: string): SchedulingRail {
+  return extractionKindFor(mimeType, filename) === "transcribe" ? "transcribe" : "extract";
+}
+
 /** Chars stored via the ingest seam (Pitfall 6: stays well under Convex's ~1 MiB doc cap). */
 export const VAULT_EXTRACT_CHAR_CAP = 400_000;
 /** Pages sent to the hosted model for scanned PDFs (under OpenAI's 100-page PDF-input limit). */
