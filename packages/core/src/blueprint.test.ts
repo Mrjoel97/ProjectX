@@ -8,7 +8,9 @@ import {
   FIELD_SPEC,
   mergeBlueprint,
   probesFor,
+  renderSpine,
   serializeBlueprint,
+  SPINE_CHAR_CAP,
   statedFromProfile,
   validateCandidates,
 } from "./blueprint";
@@ -506,5 +508,106 @@ describe("mergeBlueprint — the drift contract (item 29)", () => {
     expect(Object.keys(merged).sort()).toEqual([...BLUEPRINT_FIELDS].sort());
     expect(merged.offering).toBeNull();
     expect(merged.name).toEqual(entry("Acme Ltd"));
+  });
+});
+
+// ── The spine: the standing-context block both seams inject (items 4, 26, 27) ──────────────────
+
+/** The line for one field, or `undefined` if the field did not render. */
+const spineLine = (spine: string, field: BlueprintField): string | undefined =>
+  spine.split("\n").find((l) => l.startsWith(`- ${FIELD_SPEC[field].label}: `));
+
+describe("renderSpine — origin markers (item 26)", () => {
+  const spine = renderSpine(FULL, { unincorporatedCount: 0 });
+
+  it("a stated field carries [stated] and NEVER a [source: …] marker", () => {
+    expect(spineLine(spine, "name")).toBe("- Name: Acme Ltd [stated]");
+    expect(spineLine(spine, "stage")).toContain("[stated]");
+    // What lets the agent treat a stated fact as settled: it is not attributed to a document.
+    for (const f of ["name", "stage", "tier", "primaryGoals"] as const) {
+      expect({ f, cited: spineLine(spine, f)?.includes("[source:") }).toEqual({ f, cited: false });
+    }
+  });
+
+  it("a derived field carries [source: <the actual document title>]", () => {
+    expect(spineLine(spine, "targetCustomer")).toBe(
+      "- Target customer: Independent cafés [source: Deck.pptx]"
+    );
+    expect(spineLine(spine, "bindingConstraint")).toContain("[source: Ops notes.docx]");
+  });
+
+  it("renders a labelled block the model reads as CONTEXT, and skips null fields entirely", () => {
+    const sparse = renderSpine(blueprint({ name: entry("Acme Ltd") }), { unincorporatedCount: 0 });
+    expect(sparse).toContain("<business_blueprint>");
+    expect(sparse).toContain("</business_blueprint>");
+    expect(sparse).toContain("- Name: Acme Ltd [stated]");
+    expect(spineLine(sparse, "offering")).toBeUndefined();
+  });
+
+  it("NEVER emits `- **Persona:**` — the profile detector applies to the spine too", () => {
+    // The spine is fed into `evaluations.ts`, whose detector is that exact literal.
+    expect(spine).not.toContain("- **Persona:**");
+    expect(spine).not.toContain("**");
+  });
+});
+
+describe("renderSpine — the staleness line (item 27)", () => {
+  it("names the count when documents are unincorporated", () => {
+    const spine = renderSpine(FULL, { unincorporatedCount: 7 });
+    expect(spine).toContain("7 documents");
+    expect(spine).toContain("⚠");
+    // It must let the agent SAY it is missing something rather than assert into the gap.
+    expect(spine).toContain("missing something");
+  });
+
+  it("emits NO staleness line at all when the count is 0", () => {
+    const spine = renderSpine(FULL, { unincorporatedCount: 0 });
+    expect(spine).not.toContain("⚠");
+    expect(spine).not.toContain("documents have been added");
+  });
+});
+
+describe("renderSpine — the hard cap (item 4)", () => {
+  /** Every field carrying a 10,000-char value AND a long source title — the pathological max. */
+  const HUGE = blueprint(
+    Object.fromEntries(
+      BLUEPRINT_FIELDS.map((f) => [
+        f,
+        {
+          values: ["x".repeat(10_000), "y".repeat(10_000)],
+          origin: "derived",
+          source: "A quarterly business review deck with an extremely long file name.pptx",
+        },
+      ])
+    ) as Partial<Record<BlueprintField, BlueprintEntry>>
+  );
+
+  it("renders within SPINE_CHAR_CAP no matter how large the values are", () => {
+    const spine = renderSpine(HUGE, { unincorporatedCount: 999 });
+    expect(spine.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
+  });
+
+  it("truncates each field's line to its FIELD_SPEC cap, VISIBLY", () => {
+    const spine = renderSpine(HUGE, { unincorporatedCount: 999 });
+    for (const f of BLUEPRINT_FIELDS) {
+      const line = spineLine(spine, f);
+      expect({ f, over: (line?.length ?? 0) > FIELD_SPEC[f].cap }).toEqual({ f, over: false });
+    }
+    expect(spine).toContain("…"); // truncation is visible, never silent
+  });
+
+  it("the per-field caps SUM under the total — that is what makes the hard assertion a tripwire", () => {
+    const capSum = BLUEPRINT_FIELDS.reduce((n, f) => n + FIELD_SPEC[f].cap, 0);
+    expect(capSum).toBeLessThan(SPINE_CHAR_CAP);
+  });
+});
+
+describe("renderSpine — a blueprint with nothing in it", () => {
+  it("still names the business as unknown rather than emitting an empty fence", () => {
+    const spine = renderSpine(blueprint(), { unincorporatedCount: 0 });
+    expect(spine).toContain("<business_blueprint>");
+    expect(spine).toContain("(nothing confirmed about this business yet)");
+    // Pinned: it does NOT throw, because a grounding call must never crash on a sparse tenant.
+    expect(spine.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
   });
 });
