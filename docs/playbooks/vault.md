@@ -1,6 +1,21 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-27 (21) — **LEGACY `.xls` READS ITS NUMBERS: SheetJS is in, pinned from the
+> Last verified: 2026-07-27 (22) — **THE FALSE-READY FAMILY IS CLOSED, and a KPI deck now reads the
+> numbers in its CHARTS.** `officeText.ts`'s `Sheet N` / `Slide N` headers were emitted
+> unconditionally, so 100%-scaffolding output was non-empty, `empty_extraction` never fired and a
+> document holding nothing reported **`ready`**. `labelled()` now binds every structural header to
+> its body — **no body, no label, no part** — and a text-free archive returns `""`, which the
+> EXISTING `empty_extraction` guard turns into the plain-language remedy that already ships. The
+> rule, found SIX times in this phase: **never let a non-empty string stand in for "we got
+> content"; the success signal is a COUNT** (`okPages` → `okSheets` → `parts.length`). Second half:
+> `pptxText` now routes each slide's `_rels` to the chart / SmartArt / notes entries **already in
+> the same unzip result** — an ALLOW-LIST of three part types, with `diagrams/drawingN.xml` (a
+> byte-duplicate that doubles the text) and all layout/master boilerplate deliberately excluded.
+> **LIVE: the owner's deck went 356 → 1,182 chars and its Entities panel went from empty to 5 nodes
+> / 4 edges, including the three plant codes that exist only in the chart series names.** Details in
+> `### Phase 15.2 — 15.2-08`.
+>
+> PRIOR (21) — **LEGACY `.xls` READS ITS NUMBERS: SheetJS is in, pinned from the
 > vendor's CDN (`xlsx-0.20.3.tgz`, EXACT, no caret) and NOT npm `xlsx@0.18.5` (CVE-2023-30533,
 > CVE-2024-22363 — this parses untrusted uploads).** The Pitfall-9 spike was run BEFORE the parser
 > was written and it is a **GO**: rebuilt under Convex's own esbuild flags, SheetJS carries **19 real
@@ -1037,3 +1052,134 @@ ZERO non-test** (baseline held exactly), biome at the pre-existing 2 findings.
 written by SheetJS rather than committed as a binary — it does not resolve there otherwise, the
 same arrangement that keeps `fflate` out of the V8 bundle. **Nothing in production imports `xlsx`
 from `@pikar/backend`**; the only production path is `@pikar/vault/xlsText`.
+
+---
+
+### Phase 15.2 — 15.2-08 (the false-ready FAMILY, and the entries already in the archive)
+
+#### INVARIANT — never let a non-empty string stand in for "we got content"
+
+**This bug shape was found SIX times in one phase.** A structural header (`Sheet 3`, `Slide 7`,
+`Page 12`) is **SCAFFOLDING**. Emitted unconditionally it makes an empty extraction *non-empty*, so
+`vaultExtract.ts`'s `empty_extraction` guard never fires and a document holding nothing readable
+reports **`ready`** — a plausible failure, which is worse than a failure.
+
+**The rule outlives the two sites it was found at.** The success signal is a **COUNT of parts that
+yielded content**, never the truthiness of the joined string:
+
+| Where | Signal |
+| --- | --- |
+| `vaultExtract.ts` per-page PDF fan-out (15.2-06) | `okPages` |
+| `xlsText.ts` legacy BIFF (15.2-07) | `okSheets` |
+| `officeText.ts` XLSX + PPTX (15.2-08) | `labelled()` returning `null`, then `parts.length` |
+
+`labelled(label, body)` returns `null` for a blank body: **no body, no label, no part.** `trim()` is
+the TEST, never a rewrite — the body is emitted exactly as it came in, so a part whose first row is
+blank still renders that blank row and every pre-existing expectation stayed byte-identical.
+**Anyone adding a new walker starts from the count.** A static scan in `officeText.test.ts` asserts
+that every `Sheet ${n}` / `Slide ${n}` literal in the file is an argument to `labelled(`.
+
+#### INVARIANT — `""`, not a throw, and the two endings must not be merged
+
+A text-free ZIP office document returns `""`. It does **not** throw.
+
+- The archive **parsed fine**, so `office_parse_failed` ("the archive is broken") would be a lie
+  about a perfectly valid chart-only or password-protected deck.
+- `vaultExtract.ts:392` already turns `""` into **`empty_extraction`**, which is accurate and
+  already carries user-facing copy: *"We opened this file but found no readable text."* + a remedy.
+  A throw here would be a **second failure mechanism** for a case the existing one already
+  describes correctly (the 15.2-06 rung-2 decision).
+
+**Do not merge these two:** *no worksheets / no slides at all* is a **broken archive** and THROWS;
+*worksheets / slides with nothing in them* is an **empty document** and returns `""`. Different
+facts, different endings. Both are pinned by tests.
+
+#### INVARIANT — the PPTX entry list, positive AND negative
+
+`pptxText` is **routing, not parsing**: every part it reads is already in the same `unzipSync`
+result it holds. Attachment is via `ppt/slides/_rels/slideN.xml.rels` (`Target="../charts/chart1.xml"`,
+a leading `../` resolving to `ppt/`), so a chart's values land under the slide that shows them.
+
+**READ (an ALLOW-LIST of exactly three content part types):**
+
+| Entry | Walker |
+| --- | --- |
+| `ppt/slides/slideN.xml` | `<a:t>` runs, minus `<a:fld>` blocks |
+| `ppt/charts/chartN.xml` | `<a:t>` title runs, then ONE tab-joined line per `<c:ser>` of its `<c:v>` values |
+| `ppt/diagrams/dataN.xml` | `<a:t>` runs (SmartArt) |
+| `ppt/notesSlides/notesSlideN.xml` | `<a:t>` runs, minus `<a:fld>` |
+
+**NEVER READ, and each for a measured reason:**
+
+- **`ppt/diagrams/drawingN.xml`** — a **byte-duplicate** of `dataN.xml`, and BOTH are referenced
+  from the same slide's rels. Reading it doubles every SmartArt phrase. Matched as
+  `^ppt/diagrams/data\d+\.xml$`, never `diagrams/*`. Pinned by a test that asserts a **COUNT**
+  (`text.split("Agenda:").length - 1 === 1`) — `toContain` passes on duplicated text.
+- **`ppt/slideLayouts/*`, `slideMasters/*`, `notesMasters/*`, `handoutMasters/*`** — boilerplate.
+  Measured on the owner's deck: **15 such parts holding ~110 runs**, so a naive "read every `<a:t>`
+  in the archive" would inject *"Click to edit Master title style"* and the deck title ~22 times and
+  bury the real content. A rels file points at plenty of scaffolding, which is exactly why the
+  dispatch is an allow-list and not "whatever the `Target` says".
+
+`<a:fld>` blocks (slide-number / date / footer FIELDS) are stripped everywhere. Measured: a field is
+the **entire** `<a:t>` content of all three of this deck's notes slides. A `Set` of consumed paths
+emits a twice-referenced part once, and an **orphan sweep** emits any chart/diagram no slide
+references as its own part labelled by entry path — so a rels file that fails to parse degrades to
+"the numbers are present but unattached", never back to titles-only.
+
+#### The measured ceilings, each with its upgrade path
+
+- **PICTURE-ONLY SLIDES ARE UNREADABLE BY ANY TEXT WALKER.** Slides 6 and 7 of the owner's deck are
+  image exports (`image1.png`, two `.wmf`); they yield a title run and nothing else. **This is a
+  ceiling, not coverage.** Upgrade path: render the slide and route it through the hosted OCR rail
+  15.2-06 built — a different rail with a real per-page cost.
+- **CACHED CHART VALUES ARE EMITTED VERBATIM.** Categories come back as Excel **date serials**
+  (`46023 / 46054 / 46082` = the Jan/Feb/Mar 2026 month ends) and percentages as full-precision
+  floats (`4.7100000000000003E-2`, displayed as 4.71%). Same family as 15.2-07's `46067`. Upgrade
+  path: read `<c:formatCode>` and apply it. **Observed asymmetry: only the chart whose categories
+  are a `<c:numCache>` shows serials — the two charts whose categories are a `<c:strCache>` came
+  back as `Jan-26 / Feb-26 / Mar-26`.**
+- **EMBEDDED WORKSHEETS ARE OUT OF SCOPE BY MEASUREMENT, NOT OMISSION.** This deck has **no
+  `ppt/embeddings/` directory at all**; its charts declare `externalData` pointing at a `file:///`
+  path on the AUTHOR'S machine, so the cached `<c:v>` values are the complete numeric truth inside
+  the archive. If a deck ever surfaces `ppt/embeddings/*.xlsx` the upgrade is one line — recurse
+  `extractOfficeText` on that entry, since it is a self-identifying ZIP. **An `externalData` target
+  must NEVER be dereferenced: it is an attacker-controlled path/URL in an untrusted upload.**
+
+#### Live result — 2026-07-27, `local-joel_feruzi-pikar_ai_50c69-1`
+
+Row `mx7a40n7460cj3d1ww97bms6wd8bb9zg` — `Rejection Review- Mar 2026.pptx`, re-extracted from its
+stored bytes via `internal.vaultExtract.extractDoc` (**$0** — the pure `zip` rail; only the re-embed
+costs, and `remainingDailyCents` read **499** after).
+
+| | BEFORE | AFTER |
+| --- | --- | --- |
+| audit `charCount` | **356** | **1,182** (3.3×) |
+| Slide 2 | title only | Objective + Agenda block, **once** |
+| Slide 3/4/5 | title only | `Rej %` + `ZBIJ / ZBBW / ZBFL` × `Jan-26 / Feb-26 / Mar-26` with values |
+| Slide 6/7 | title only | title only — **the picture-export ceiling, unchanged** |
+| `Click to edit` | n/a | **0 occurrences** |
+| `status` | `ready` | `ready` |
+| `graphEdges` for this doc | the Entities panel read *"No entities extracted"* | **4 edges, 5 nodes** — `Monthly Rejection Overview` (topic, degree 4), `March 2026` (date), and **`ZBIJ` / `ZBBW` / `ZBFL`** |
+
+The three plant codes are entities **only because the chart series names now reach the extractor** —
+they exist nowhere in the 356-char titles-only text. The graph plane was never broken; the parser
+had starved it.
+
+**Deployment freshness was PROVED before the run, not assumed:** a touch probe on
+`packages/vault/src/officeText.ts` moved the `convex dev` watcher (PID 14684) **1.97 s CPU vs
+0.000 s idle**. Worth carrying forward — this is the first time the watcher was shown to react to a
+file **outside `packages/backend/convex/`**, i.e. `packages/vault` edits do reach the deployment.
+
+The live text is **byte-identical** to the offline one-shot measurement against the same file on
+disk, and the stored 356-char BEFORE text matched the offline slide-only runs byte for byte, which
+is what identifies the row as that file.
+
+**OWNER VERDICT: ⏳ PENDING** — written before the blocking checkpoint on the 15.2-05/06/07
+precedent, because a session limit must not be able to lose the observation. What is still owed is
+the **browser** half: the extracted-text pane and the Entities & Relationships panel on
+`/dashboard/vault`, and the `pikar-false-ready-probe.pptx` upload showing `failureCopy`'s
+*"We opened this file but found no readable text."* — **`failureCopy` has never been rendered in a
+browser at any point in this phase.** The character count is Claude's evidence; the render is the
+owner's.
+
