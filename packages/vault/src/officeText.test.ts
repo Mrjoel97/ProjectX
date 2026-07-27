@@ -188,9 +188,13 @@ describe("extractOfficeText — EPUB", () => {
 describe("extractOfficeText — dispatch precedence and the unrecognized case", () => {
   it("OOXML markers are checked FIRST: word/document.xml wins over an ODF mimetype entry", () => {
     const bytes = zipSync({
-      "word/document.xml": strToU8(`<w:document><w:p><w:r><w:t>OOXML</w:t></w:r></w:p></w:document>`),
+      "word/document.xml": strToU8(
+        `<w:document><w:p><w:r><w:t>OOXML</w:t></w:r></w:p></w:document>`,
+      ),
       mimetype: strToU8("application/vnd.oasis.opendocument.text"),
-      "content.xml": strToU8(`<office:document-content><text:p>ODF</text:p></office:document-content>`),
+      "content.xml": strToU8(
+        `<office:document-content><text:p>ODF</text:p></office:document-content>`,
+      ),
     });
     expect(extractOfficeText(bytes).text).toBe("OOXML");
   });
@@ -220,10 +224,7 @@ describe("extractOfficeText — determinism (same bytes in, byte-identical text 
     ],
     [
       "ODT",
-      odfOf(
-        "application/vnd.oasis.opendocument.text",
-        `<text:p>One</text:p><text:p>Two</text:p>`,
-      ),
+      odfOf("application/vnd.oasis.opendocument.text", `<text:p>One</text:p><text:p>Two</text:p>`),
     ],
     [
       "EPUB",
