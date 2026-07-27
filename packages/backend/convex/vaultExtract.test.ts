@@ -262,16 +262,62 @@ describe("PDF + image engines (EXTR-B)", () => {
     expect(success?.payload).toMatchObject({ kind: "pdf", path: "text_layer" });
   }, 30000);
 
-  test("a no-text-layer scan trips the garbage heuristic and routes HOSTED (fails closed unseeded)", async () => {
+  test("a no-text-layer scan routes HOSTED PER PAGE; zero good pages is TERMINAL failed (SC#5)", async () => {
     const t = setup();
-    const docId = await uploadBytes(t, await scanPdf(2), "application/pdf", "scan.pdf");
+    const docId = await uploadBytes(t, await scanPdf(3), "application/pdf", "scan.pdf");
 
     await runExtract(t, docId);
 
     const doc = await getDoc(t, docId);
-    // The hosted branch was chosen: it fail-closed at the registry (never a model call offline).
+    // The hosted branch was CHOSEN: every page fails closed at the unseeded registry (never a
+    // model call offline). 15.2-06 changed WHAT the failure looks like — fanOutPages absorbs each
+    // page's throw into a marker (§4: never an SDK string), so the reason is no longer
+    // NO_ACTIVE_SKILL but our own okPages===0 refusal. That refusal is the point: three
+    // `[unreadable]` markers stored as a `ready` document would be a false-ready of exactly the
+    // family this phase exists to delete.
     expect(doc?.status).toBe("failed");
-    expect(doc?.failureReason).toMatch(/NO_ACTIVE_SKILL/);
+    expect(doc?.failureReason).toMatch(/hosted_extract_failed/);
+    expect(doc?.failureReason?.length ?? 0).toBeGreaterThan(0);
+    expect(doc?.status).not.toBe("pending_extraction"); // never left non-terminal
+    expect(doc?.status).not.toBe("extracting");
+    expect(doc?.text).toBeUndefined();
+  }, 30000);
+
+  test("pdfPages emits ONE-PAGE documents from a SINGLE loaded source", async () => {
+    vi.useRealTimers(); // pure helper test — no scheduler involved
+    const { pdfPages } = await import("./vaultExtract");
+    const { PDFDocument } = await import("pdf-lib");
+    const { VAULT_EXTRACT_PAGE_CAP } = await import("@pikar/vault");
+
+    const pages = await pdfPages(await scanPdf(3), VAULT_EXTRACT_PAGE_CAP);
+
+    expect(pages).toHaveLength(3);
+    for (const p of pages) expect((await PDFDocument.load(p)).getPageCount()).toBe(1);
+  }, 30000);
+
+  test("VAULT_EXTRACT_PAGE_CAP still binds AFTER the fan-out — an oversize scan emits at most 50", async () => {
+    vi.useRealTimers();
+    const { pdfPages } = await import("./vaultExtract");
+    const { VAULT_EXTRACT_PAGE_CAP } = await import("@pikar/vault");
+
+    const pages = await pdfPages(await scanPdf(VAULT_EXTRACT_PAGE_CAP + 5), VAULT_EXTRACT_PAGE_CAP);
+
+    expect(pages).toHaveLength(VAULT_EXTRACT_PAGE_CAP);
+  }, 60000);
+
+  test("the .slice() discipline: unpdf must not detach the buffer pdfPages then reads", async () => {
+    vi.useRealTimers();
+    const { pdfPages } = await import("./vaultExtract");
+    const { getDocumentProxy, extractText } = await import("unpdf");
+
+    const bytes = await scanPdf(3);
+    // extractPdf's sequence VERBATIM: pdf.js TRANSFERS (detaches) the buffer it is handed, so it
+    // gets a COPY — otherwise the fan-out emitter below reads a zeroed buffer (caught offline
+    // once already, when pdf-lib did). Drop the .slice() in the source and this goes red.
+    const pdf = await getDocumentProxy(bytes.slice());
+    await extractText(pdf, { mergePages: false });
+
+    expect(await pdfPages(bytes, 50)).toHaveLength(3);
   }, 30000);
 
   test("an image routes HOSTED with its real mediaType (fails closed unseeded)", async () => {
@@ -795,6 +841,24 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     ]) {
       expect(src, `vaultExtract.ts is missing "${needle}"`).toContain(needle);
     }
+  });
+
+  test("the hosted branch no longer sends the WHOLE DOCUMENT as one call (15.2-06)", () => {
+    // THE DEFECT, named so nobody optimises it back: a 12-page deck handed to
+    // attachment-extractor as ONE file part returned 2,161 chars of "here's a breakdown" instead
+    // of the deck's text. The skill's contract is written for a SINGLE page (§5 — satisfied by
+    // REUSE: no new skill row, no prompt change), so the CALL SHAPE was the defect, not the
+    // prompt. This scan is the only thing standing between a green suite and that regression:
+    // the behavioural tests prove batching SHAPE, and shape stays green when the model digests.
+    expect(src, "the per-page fan-out must be wired in").toContain("fanOutPages(");
+    expect(src, "slicePdfToPageCap's output must never reach extractHosted again").not.toMatch(
+      /extractHosted\(\s*ctx\s*,\s*sliced/,
+    );
+    expect(src, "the hosted call must receive ONE PAGE").toMatch(/extractHosted\(\s*ctx\s*,\s*pages\[/);
+  });
+
+  test("unpdf gets a COPY — pdf.js detaches the buffer the fan-out emitter then reads", () => {
+    expect(src).toContain("getDocumentProxy(bytes.slice())");
   });
 
   test("Promise.withResolvers polyfill sits BEFORE any unpdf usage (Pitfall 1 — deployed Node 20)", () => {
