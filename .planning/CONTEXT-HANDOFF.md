@@ -32,6 +32,30 @@ module forces regeneration.
 
 **Offline work remaining: none.** Both lanes' next plans are the blocked roots above.
 
+### ✅ Three-lane conflict state — VERIFIED CLEAN 2026-07-27 16:30
+
+All three lanes are synchronised and there is **no outstanding or latent conflict**. Re-verify with
+the same checks before resuming, since Lane V continues to commit on `main`.
+
+| Check | Result |
+|---|---|
+| `lane-r` / `lane-k` divergence from `main` | **behind 0** each (synced down; each ahead only by its own empty catch-up merge) |
+| All 8 shared freeze files across the 3 worktrees | **byte-identical** (`schema.ts`, `cards.tsx`, `actionType.ts`, `specialists.ts`, `llm.ts`, `cockpit.ts`, `plans.ts`, `watch.json`) |
+| `git merge-tree` dry-run, both lanes → `main` | **0 conflict markers** each |
+| Append-only playbook singletons | both lanes' sections present and intact (`cockpit.md` has Phase 16 **and** 17; `vault.md` has Phase 15.2 **and** 16) |
+| Backend suite on `main` | **673/673**, 47/47 files |
+| Core / contracts on `main` | **307/307** / **19/19** |
+| Backend `tsc` | 52-error test-file baseline, **zero in production `convex/*.ts`** |
+| Web `tsc`, `check-playbooks.mjs` | exit 0 |
+
+**Lane V's `vault.test.ts` red is RESOLVED** — the "unrecognized binary (zip) stays
+pending_extraction" assertion that `15.2-03`'s always-armed scheduling contradicted now passes;
+they reconciled it in `15.2-04`. Nothing is owed there.
+
+**The one file still shared going forward is `convex/llm.ts`** (16-05, 16-06 ∥ 17-03). Whichever
+lane reaches its `llm.ts` wave second merges `main` down FIRST and re-runs `tsc` before writing a
+line.
+
 Written after a session that planned Phases 16 and 17 concurrently. Read this + `STATE.md` +
 `.planning/PARALLELIZATION.md` + `CLAUDE.md` to resume.
 
