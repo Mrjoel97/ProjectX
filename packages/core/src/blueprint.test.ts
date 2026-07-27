@@ -9,6 +9,7 @@ import {
   probesFor,
   serializeBlueprint,
   statedFromProfile,
+  validateCandidates,
 } from "./blueprint";
 import type { BusinessProfile } from "./businessProfile";
 
@@ -220,5 +221,130 @@ describe("serializeBlueprint / deserializeBlueprint", () => {
 
   it("deserialize is TOTAL — it fills all eleven fields whatever it is handed", () => {
     expect(Object.keys(deserializeBlueprint("garbage")).sort()).toEqual([...BLUEPRINT_FIELDS].sort());
+  });
+});
+
+// ── The citation trust boundary (item 3) ───────────────────────────────────────────────────────
+
+/** The index-parallel grounding results a probe pass produced. The model cites an INDEX into this. */
+const SOURCES = [
+  { docId: "d1", title: "Pricing deck.pdf" },
+  { docId: "d2", title: "Ops notes.docx" },
+];
+
+describe("validateCandidates — an invented citation DROPS the claim (item 3)", () => {
+  it("out-of-range, the -1 sentinel, and a non-integer index are ALL dropped, none kept uncited", () => {
+    const out = validateCandidates(
+      [
+        { field: "offering", values: ["Beans"], sourceIndex: SOURCES.length }, // one past the end
+        { field: "targetCustomer", values: ["Cafés"], sourceIndex: -1 }, // strict-schema "no source"
+        { field: "revenueModel", values: ["Wholesale"], sourceIndex: 999 },
+        { field: "bindingConstraint", values: ["Roasting"], sourceIndex: 1.5 },
+        { field: "stage", values: ["Growing"], sourceIndex: Number.NaN },
+      ],
+      SOURCES
+    );
+    // The KEY SET, not one field: nothing was emitted at all, so nothing was emitted with a
+    // missing or placeholder source.
+    expect(Object.keys(out.derived)).toEqual([]);
+    expect(out.dropped.map((d) => [d.field, d.reason])).toEqual([
+      ["offering", "bad_citation"],
+      ["targetCustomer", "bad_citation"],
+      ["revenueModel", "bad_citation"],
+      ["bindingConstraint", "bad_citation"],
+      ["stage", "bad_citation"],
+    ]);
+  });
+
+  it("with NO sources at all, every candidate is dropped — index 0 cites nothing", () => {
+    const out = validateCandidates([{ field: "offering", values: ["Beans"], sourceIndex: 0 }], []);
+    expect(Object.keys(out.derived)).toEqual([]);
+    expect(out.dropped).toEqual([{ field: "offering", reason: "bad_citation" }]);
+  });
+
+  it("the model cannot rename the business or reclassify the tier — non-derivable fields drop", () => {
+    const out = validateCandidates(
+      [
+        { field: "name", values: ["Globex"], sourceIndex: 0 },
+        { field: "tier", values: ["enterprise"], sourceIndex: 0 },
+        { field: "entities", values: ["Globex"], sourceIndex: 0 },
+        { field: "profitMargin", values: ["40%"], sourceIndex: 0 },
+        { field: "__proto__", values: ["owned"], sourceIndex: 0 },
+      ],
+      SOURCES
+    );
+    expect(Object.keys(out.derived)).toEqual([]);
+    expect(out.dropped.map((d) => [d.field, d.reason])).toEqual([
+      ["name", "not_derivable"],
+      ["tier", "not_derivable"],
+      ["entities", "not_derivable"],
+      ["profitMargin", "unknown_field"],
+      ["__proto__", "unknown_field"],
+    ]);
+  });
+
+  it("an empty or whitespace-only candidate drops — an entry is NEVER empty", () => {
+    const out = validateCandidates(
+      [
+        { field: "offering", values: [], sourceIndex: 0 },
+        { field: "revenueModel", values: ["  ", "\n"], sourceIndex: 1 },
+      ],
+      SOURCES
+    );
+    expect(Object.keys(out.derived)).toEqual([]);
+    expect(out.dropped.map((d) => d.reason)).toEqual(["empty", "empty"]);
+  });
+
+  it("a SURVIVING candidate carries origin 'derived' and the source DOCUMENT TITLE", () => {
+    const out = validateCandidates(
+      [
+        { field: "offering", values: ["  Single-origin beans  "], sourceIndex: 1 },
+        { field: "primaryGoals", values: ["Reach £10k MRR", "  ", "Open a roastery"], sourceIndex: 0 },
+      ],
+      SOURCES
+    );
+    expect(out.derived).toEqual({
+      // The TITLE, not the docId — it is what the spine's `[source: …]` marker shows the agent.
+      offering: { values: ["Single-origin beans"], origin: "derived", source: "Ops notes.docx" },
+      primaryGoals: {
+        values: ["Reach £10k MRR", "Open a roastery"],
+        origin: "derived",
+        source: "Pricing deck.pdf",
+      },
+    });
+    expect(out.dropped).toEqual([]);
+  });
+
+  it("the FIRST candidate for a field wins — `evaluations.ts:271`'s rule, ONE rule in the codebase", () => {
+    const out = validateCandidates(
+      [
+        { field: "offering", values: ["First"], sourceIndex: 0 },
+        { field: "offering", values: ["Second"], sourceIndex: 1 },
+      ],
+      SOURCES
+    );
+    expect(out.derived.offering).toEqual({
+      values: ["First"],
+      origin: "derived",
+      source: "Pricing deck.pdf",
+    });
+    // A duplicate is not a validation failure — the field DID make it in, so it is not reported.
+    expect(out.dropped).toEqual([]);
+  });
+
+  it("drops are REPORTED so the live gate can count them (VALIDATION L2: 0 and 8 are both signals)", () => {
+    const clean = validateCandidates(
+      [{ field: "offering", values: ["Beans"], sourceIndex: 0 }],
+      SOURCES
+    );
+    expect(clean.dropped).toHaveLength(0);
+    const dirty = validateCandidates(
+      [
+        { field: "offering", values: ["Beans"], sourceIndex: 7 },
+        { field: "name", values: ["Globex"], sourceIndex: 0 },
+      ],
+      SOURCES
+    );
+    expect(dirty.dropped).toHaveLength(2);
   });
 });
