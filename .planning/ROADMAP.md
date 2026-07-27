@@ -647,11 +647,11 @@ callers (cockpit, onboarding, evaluations, voiceDoc, tenantProfile) inherit it f
 **Source:** `docs/superpowers/specs/2026-07-27-business-blueprint-design.md` (PRD express path).
 Locked owner decisions D1-D5 in spec §2.1.
 
-**Requirements**: TBD (run /gsd:plan-phase 17.1)
+**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every grounding call + staleness + drift diff)
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 0 plans
+**Plans:** 1/7 plans executed
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 17.1 to break down)

@@ -121,6 +121,8 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [x] **BEVL-02**: The assessment surfaces gaps and turns them into governed action proposals through the approve→execute spine; a healthy business honestly returns zero gaps
 - [x] **BEVL-03**: A proactive business review is delivered in-app on a recurring cadence (weekly-style briefing) using no OAuth mailbox token
 - [ ] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
+- [ ] **BLPR-01**: A single cited business blueprint is synthesized from the user's typed profile, their vault documents, and the extracted entity graph. Typed values are AUTHORITATIVE and are never overwritten by derivation; derived claims carry a source citation and require explicit user confirmation before reaching any agent. Both entry routes (typing and uploading) remain permanent and compose — a one-line profile edit costs no model call and no confirmation step
+- [ ] **BLPR-02**: The confirmed blueprint is standing context on EVERY agent grounding call (all `vaultGroundHydrated` callers inherit it from one seam), distinguishes user-stated from system-derived claims, carries its own staleness signal when documents are unincorporated, and proposes a reviewable diff — never a silent change — when new documents drift from it
 
 ### S2 — Breadth of Action
 
@@ -241,6 +243,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
 | DOCV-01 | Phase 14 | Pending |
+| BLPR-01 | Phase 17.1 | Pending |
+| BLPR-02 | Phase 17.1 | Pending |
 | DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
 | ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
 | DISP-02 | Phase 16 | Pending |
@@ -261,8 +265,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Unmapped: 0 ✓
 
 **v2.0 coverage (milestone v2.0 - Platform -> Private Beta, mapped 2026-07-24):**
-- v2.0 requirements: **24 total** - 20 new (VGND-01; ONBD-01/02; BEVL-01/02/03; DOCV-01; DISP-01/02; ACTN-01/02/03/04/05; MEDIA-01; SKILL-01/02; GOVN-01/02; BETA-05) + 4 carried-in (BETA-01, BETA-02, BETA-03, DLVR-02, repointed from the superseded Phase 9 to Phase 25)
-- Mapped to phases 10-25: 24
+- v2.0 requirements: **26 total** - 22 new (VGND-01; ONBD-01/02; BEVL-01/02/03; DOCV-01; BLPR-01/02; DISP-01/02; ACTN-01/02/03/04/05; MEDIA-01; SKILL-01/02; GOVN-01/02; BETA-05) + 4 carried-in (BETA-01, BETA-02, BETA-03, DLVR-02, repointed from the superseded Phase 9 to Phase 25)
+- Mapped to phases 10-25: 26
 - Unmapped: 0 ✓
 - Each v2.0 requirement maps to exactly one phase; no orphans, no duplicates.
 
