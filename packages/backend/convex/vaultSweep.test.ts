@@ -336,7 +336,11 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
     expect(watchdog).toHaveLength(1);
     expect(watchdog[0]?.args[0]).toMatchObject({ vaultDocId: docId });
     // Per-attempt, and armed well past any honest run (the 480s call ceiling / 10-min action limit).
-    expect(watchdog[0]!.scheduledTime - rail[0]!.scheduledTime).toBe(EXTRACTION_WATCHDOG_MS);
+    // A window, not an equality: the two runAfter calls read Date.now() independently, so the delta
+    // is the constant plus however many milliseconds elapsed between them.
+    const delta = watchdog[0]!.scheduledTime - rail[0]!.scheduledTime;
+    expect(delta).toBeGreaterThanOrEqual(EXTRACTION_WATCHDOG_MS);
+    expect(delta).toBeLessThan(EXTRACTION_WATCHDOG_MS + 1000);
   });
 
   test("an EMPTY mimeType still schedules extractDoc (the allow-list no longer decides)", async () => {
