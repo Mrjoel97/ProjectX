@@ -103,11 +103,89 @@ function slideRuns(xml: string): string[] {
   return runsOf(xml.replace(PPT_FIELD, ""), "a:t").filter((r) => r.trim().length > 0);
 }
 
+/**
+ * The three PPTX part types that carry CONTENT, as an ALLOW-LIST. A slide's rels point at plenty of
+ * scaffolding (layouts, masters, themes, media, colour/style parts), so "read whatever the Target
+ * says" would inject ~110 runs of "Click to edit Master title style" and repeat the deck title on
+ * every layout. `drawingN.xml` is deliberately ABSENT: it is a byte-duplicate of `dataN.xml` (both
+ * are referenced from the same slide), so reading it doubles the SmartArt text.
+ */
+const CHART_PART = /^ppt\/charts\/chart\d+\.xml$/;
+const DIAGRAM_PART = /^ppt\/diagrams\/data\d+\.xml$/;
+const NOTES_PART = /^ppt\/notesSlides\/notesSlide\d+\.xml$/;
+
+const REL_TARGET = /Target="([^"]+)"/g;
+
+/** One line per `<c:ser>`: the cached values `<c:v>` in document order, tab-joined. */
+function chartLines(xml: string): string[] {
+  // <c:v> is the cache inside <c:numCache>/<c:strCache> AND carries the series NAME through
+  // <c:tx><c:strRef>, so ONE tag covers names, categories and values. Tab-joined to match
+  // xlsxText's and xlsText's row convention — one convention for every spreadsheet-shaped thing.
+  const lines = slideRuns(xml); // the chart's own <a:t> title runs come first
+  for (const frag of xml.split("</c:ser>")) {
+    if (!frag.includes("<c:ser")) continue;
+    const values = runsOf(frag, "c:v")
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+    if (values.length > 0) lines.push(values.join("\t"));
+  }
+  return lines;
+}
+
+/** Content lines of one referenced part — [] for anything outside the allow-list. */
+function partLines(path: string, xml: string): string[] {
+  if (CHART_PART.test(path)) return chartLines(xml);
+  if (DIAGRAM_PART.test(path) || NOTES_PART.test(path)) return slideRuns(xml);
+  return [];
+}
+
+/**
+ * PPTX. ROUTING, not parsing: every part read here is already in the `entries` map `unzipSync`
+ * returned — nothing new is unzipped, no dependency is added, no second XML walker is written.
+ *
+ * ponytail — the MEASURED ceilings of this walker, none of them built here:
+ * - PICTURE SLIDES ARE UNREADABLE. A slide that is an image export (`image1.png`, `.wmf`) yields
+ *   its title run and nothing more. No text walker will ever read them. Upgrade path: render each
+ *   slide and route it through the hosted OCR rail 15.2-06 built — a different rail with a real
+ *   per-page cost, deliberately out of scope. This is a ceiling, not coverage.
+ * - CACHED VALUES ARE EMITTED VERBATIM. Chart categories come back as Excel DATE SERIALS
+ *   (46023 / 46054 / 46082 = the Jan/Feb/Mar 2026 month ends) and percentages as full-precision
+ *   floats (4.7100000000000003E-2, displayed as 4.71%). Same family as 15.2-07's `46067`.
+ *   Upgrade path: read `<c:formatCode>` and apply it.
+ * - EMBEDDED WORKSHEETS ARE OUT OF SCOPE BY MEASUREMENT, not omission. The real deck has no
+ *   `ppt/embeddings/` directory at all; its charts declare `externalData` pointing at a path on the
+ *   AUTHOR'S machine, so the cached `<c:v>` values are the complete numeric truth inside the
+ *   archive. If a deck ever surfaces `ppt/embeddings/*.xlsx` the upgrade is one line — recurse
+ *   `extractOfficeText` on that entry, since it is a self-identifying ZIP. An `externalData` target
+ *   must NEVER be dereferenced: it is an attacker-controlled path/URL in an untrusted upload.
+ * - MASTERS AND LAYOUTS ARE DELIBERATELY NEVER READ — boilerplate, pinned by a test.
+ */
 function pptxText(entries: Record<string, Uint8Array>): string {
   const slides = numericSorted(entries, /^ppt\/slides\/slide(\d+)\.xml$/);
   // See xlsxText: no slides at all is a broken archive; slides with nothing in them is empty.
   if (slides.length === 0) throw new Error("office_parse_failed: no slides");
-  return joinParts(slides.map(({ xml, n }) => labelled(`Slide ${n}`, slideRuns(xml).join("\n"))));
+  const consumed = new Set<string>();
+  const parts = slides.map(({ xml, n }) => {
+    const lines = slideRuns(xml);
+    const rels = entries[`ppt/slides/_rels/slide${n}.xml.rels`];
+    for (const m of rels ? strFromU8(rels).matchAll(REL_TARGET) : []) {
+      const target = m[1] ?? "";
+      const path = target.startsWith("../") ? `ppt/${target.slice(3)}` : target;
+      const data = entries[path];
+      if (!data || consumed.has(path)) continue; // a part referenced twice is emitted ONCE
+      consumed.add(path);
+      lines.push(...partLines(path, strFromU8(data)));
+    }
+    return labelled(`Slide ${n}`, lines.join("\n"));
+  });
+  // Orphan sweep: a chart or diagram no slide's rels reference is still emitted, labelled by its
+  // entry path. A rels file that fails to parse must degrade to "the numbers are present but
+  // unattached", never back to titles-only. Sorted, because entry order is archive order.
+  for (const path of Object.keys(entries).sort()) {
+    if (consumed.has(path) || !(CHART_PART.test(path) || DIAGRAM_PART.test(path))) continue;
+    parts.push(labelled(path, partLines(path, strFromU8(entries[path] as Uint8Array)).join("\n")));
+  }
+  return joinParts(parts);
 }
 
 /** `<text:p>` runs of one ODF block, inner markup (`<text:span>`, `<text:a>`, …) stripped. */
