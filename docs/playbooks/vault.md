@@ -1,6 +1,21 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-27 (20) — **SCANNED PDFs ARE NOW TRANSCRIBED, NOT SUMMARISED.** The hosted
+> Last verified: 2026-07-27 (21) — **LEGACY `.xls` READS ITS NUMBERS: SheetJS is in, pinned from the
+> vendor's CDN (`xlsx-0.20.3.tgz`, EXACT, no caret) and NOT npm `xlsx@0.18.5` (CVE-2023-30533,
+> CVE-2024-22363 — this parses untrusted uploads).** The Pitfall-9 spike was run BEFORE the parser
+> was written and it is a **GO**: rebuilt under Convex's own esbuild flags, SheetJS carries **19 real
+> named exports**, while the `pdf-lib` **control still collapses to 1 (`default`)** under the same
+> harness — so the probe demonstrably detects a collapse and did not see one here. **Pitfall 9 is now
+> a GENERAL rule: the predictor is the absence of an `exports` map with a real ESM build, not the
+> import form; offline green is NOT evidence.** `xlsText` is **subpath-only** (~1 MB into ONE node
+> action) and gates on `sniffContainer` first, because SheetJS's `read()` otherwise falls back to a
+> DSV guesser and turns **64 bytes of noise into a one-cell sheet of mojibake** that would clear
+> `empty_extraction`. Its success signal is **`okSheets`, a COUNT** — so it is deliberately NOT a
+> third instance of the `Slide N`/`Sheet N` false-ready family. **THE LIVE `.xls` ROUND TRIP WAS
+> PENDING THE OWNER'S CHECKPOINT when this line was written** — the deployed module was proven to
+> LOAD with SheetJS in it (throwaway-tenant probe, $0), which is not the same as proving a real
+> workbook extracts. See `### Phase 15.2 — 15.2-07` at the END of this file. PRIOR (20) —
+> **SCANNED PDFs ARE NOW TRANSCRIBED, NOT SUMMARISED.** The hosted
 > branch sends **ONE PAGE PER CALL** (`fanOutPages`, 6 in flight, page-ordered reassembly, 60 s per
 > page, 7-min budget) reusing `attachment-extractor` **unchanged** — §5 satisfied by REUSE: the
 > prompt was always right, the INPUT was wrong. Live on `local-joel_feruzi-pikar_ai_50c69-1`: the
@@ -843,3 +858,159 @@ Two properties of the new hosted path to carry forward:
 - **13¢ across 12 calls is the new per-scan cost shape** (≈1.08¢/page), replacing one call per
   document. A 50-page scan is ~50 calls. The daily budget (`DAILY_BUDGET_CENTS` 500) is unchanged
   and still the ceiling.
+
+---
+
+### Phase 15.2 — 15.2-07 (legacy XLS / SheetJS)
+
+**SPIKE RESULT: GO.** SheetJS survives a bundle built with Convex's exact esbuild flags, and the
+`.xls` rail now runs the real parser instead of 15.2-03's honest refusal. **The live half — a real
+legacy `.xls` reaching `ready` with its NUMBERS visible — is PENDING the owner's checkpoint at the
+time this block was written** (the 15.2-05/06 precedent: record before the gate, because a
+verification living only in a chat transcript did not happen).
+
+#### The pinned dependency, and why NOT npm
+
+```
+xlsx: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+```
+
+**EXACT, no caret (§6), and doubly so because it is not a registry package.** The vendor's own CDN
+is the only supported channel. **npm `xlsx@0.18.5` — the last registry publish — is NOT an option
+to "just try first":** CVE-2023-30533 (prototype pollution) and CVE-2024-22363 (ReDoS). This code
+parses **untrusted uploads**, so the registry version is disqualified on input, not on preference.
+Treat it like the other pinned pre-1.0 components: do not bump casually.
+
+#### The spike, with the numbers — reusable for ANY future dependency in a node action
+
+The single fact that predicts the hazard is the installed package's own manifest:
+
+| Package | `main` | `exports` map | ESM build |
+| --- | --- | --- | --- |
+| `pdf-lib` (the 2026-07-26 defect) | `cjs/index.js` | **NONE** | none |
+| `xlsx` 0.20.3 | `xlsx.js` | **YES** — `"import": "./xlsx.mjs"` | **yes** |
+
+Rebuilt with Convex's flags read out of `convex/dist/esm/bundler/debugBundle.js` (`innerEsbuild`)
+and the `platform: "node"` call site in `cli/lib/config.js` — `bundle, platform:"node",
+format:"esm", target:"esnext", conditions:["convex","module"], splitting:true, treeShaking,
+minifySyntax, minifyIdentifiers, keepNames`, no `convex.json` so no external-package allow-list.
+esbuild 0.27.0. **Observed namespace keys:**
+
+| Probe | Chunks | Namespace keys | Result |
+| --- | --- | --- | --- |
+| SheetJS **STATIC** import | 1 | **19** — `CFB, SSF, default, parse_xlscfb, parse_zip, read, readFile, readFileSync, set_cptable, set_fs, stream, utils, write, …` | `typeof read === "function"`, `typeof utils.sheet_to_csv === "function"` PASS |
+| SheetJS **dynamic** `await import()` | 3 | **19** — also survives | PASS |
+| **CONTROL** `pdf-lib` dynamic | 3 | **1** — `default` only | `typeof PDFDocument === "undefined"` FAIL |
+
+**The control is the point.** Without it, "SheetJS was fine" is indistinguishable from "the probe
+cannot see a collapse". The pdf-lib control still collapses under the identical harness, so the
+SheetJS result is a measurement rather than a reassurance.
+
+#### Pitfall 9 restated as a GENERAL rule (it is not a pdf-lib quirk)
+
+> **Any package reached from a Convex node action must be a STATIC top-level import.** The
+> predictor of collapse is **the absence of an `exports` map with a real ESM build**, not the
+> import form: a CJS-only package crossing a dynamic-import chunk boundary loses its named exports
+> because esbuild cannot synthesise them there. **Offline green is NOT evidence** — Node and vitest
+> recover CJS named exports via `cjs-module-lexer`, so the broken production path is invisible in
+> the suite. Only a deployed run, or a rebuild under Convex's own flags, proves it.
+
+SheetJS is the **`unpdf` case** (real ESM, survives both forms), not the `pdf-lib` case. The static
+import is used anyway: it is the shape that was actually proven, it costs nothing, and a version
+bump could drop the ESM build without a single test going red. **Two static scans now lock this
+rule** — `pdf-lib` in `vaultExtract.test.ts` and SheetJS in `xlsText.test.ts`. The xlsText scan
+strips comments before matching, because that file deliberately spells out the banned form.
+
+#### Why a text sweep was NEVER an option for BIFF
+
+Legacy `.xls` stores numbers as **binary doubles**. A printable-run sweep (`oleText`) recovers the
+column headers and **silently loses every value** — a spreadsheet that reads as a document with no
+data in it. That is a *plausible* failure, which is worse than a failure, and is the exact shape
+this phase exists to delete. **`oleText` must never be pointed at `.xls`.** `xlsText.test.ts`'s
+headline case is named *"numbers survive — the exact thing a text sweep silently loses"* precisely
+so the distinction stays visible.
+
+#### Shape of the code
+
+- **`packages/vault/src/xlsText.ts` is SUBPATH-ONLY** (`@pikar/vault/xlsText`), never on the barrel
+  — the `officeText.ts` rule, for ~1 MB instead of a few KB. It enters exactly one node action.
+  The barrel's NOTE comment now states the rule where someone would otherwise add the export.
+- **REJECTED, do not re-propose:** consolidating all spreadsheet handling onto SheetJS and deleting
+  the `fflate` XLSX path. It removes code but adds ~1 MB to a deliberately lean bundle, and the
+  fflate path is shipped and tested.
+- **TRUST-BOUNDARY GUARD — a measured hazard, not a defensive flourish.** SheetJS's `read()` falls
+  back to a **DSV/plain-text guesser** for unrecognised bytes, so **64 bytes of noise come back as a
+  workbook holding one cell of mojibake** — non-empty, so it would clear `empty_extraction` and be
+  stored as a `ready` document. `xlsText` therefore gates on `sniffContainer(bytes)` (dep-free,
+  already on the barrel — reuse, not new code) and accepts only `ole2` or `zip`.
+- **The success signal is `okSheets`, a COUNT** — the 15.2-06 `okPages` rule. The `Sheet N` header
+  is emitted **only for a sheet that actually yielded content**, so **this file is deliberately NOT
+  a third instance of the `Slide N`/`Sheet N` false-ready family** (`officeText.ts:65` and `:74`
+  emit theirs unconditionally — still open, plan 15.2-08).
+- Throws `xls_parse_failed: <reason>` — **our string, never SheetJS's** (§4). Never returns `""`.
+
+#### ponytail ceilings, all MEASURED against 0.20.3
+
+- **DATES:** in a **SheetJS-written** `.xls` a date surfaces as the Excel **serial** (`46067`), not
+  `2/14/26`, because its BIFF8 *writer* emits no date number-format record; **`cellDates: true` does
+  not change it** (measured). The same workbook as `.xlsb`/`.xlsx` renders the date. Whether a real
+  **Excel-authored** `.xls` (which does carry a format record) renders as a date is **NOT observed**
+  — if a user reports serial dates, the upgrade path is a per-cell `t === "d"` walk instead of
+  `sheet_to_csv`.
+- **FORMULAE:** the cached **value** appears, not the formula string; the `.xls` round-trip drops
+  the formula entirely.
+- **MERGED CELLS:** value once, blanks for the spanned cells (`sheet_to_csv` default).
+- **XLSB:** supported by SheetJS's writer, so it is covered by a real fixture rather than a guess.
+- **No cell/sheet cap** — `VAULT_EXTRACT_CHAR_CAP` downstream is what bounds a huge workbook.
+
+#### Two honest terminal endings on the XLS rail, one earlier than you would guess
+
+| Input | Reason | Why |
+| --- | --- | --- |
+| OLE2 with a `Workbook` stream but no BIFF content | `xls_parse_failed` | reaches the parser, which throws |
+| A real `.xls` **truncated in half** | **`unsupported_format`** | halving removes the CFB **directory sector**, so `ole2Kind` can no longer find `Workbook` and the **dispatcher refuses one rail earlier** — `xlsText` is never called |
+
+Both are terminal and both are pinned. **Do not "fix" the second reason to the one that reads
+better** — it describes what actually happens.
+
+`unsupported_legacy_spreadsheet` is no longer produced by this rail. **Its `failureCopy` row STAYS**
+— historical rows still carry the code, and deleting the row would render them as a raw code.
+
+#### What was proven live, and what was not
+
+Deployment `local-joel_feruzi-pikar_ai_50c69-1`, 2026-07-27.
+
+- **Watch-mode freshness PROVED, not assumed:** touch probe on `vaultExtract.ts` gave **2.984 s CPU
+  vs 0.000 s idle**. `npx convex dev --once` **refuses while the local backend holds `:3210`** ("A
+  local backend is still running on port 3210") — so an explicit one-shot push verdict is
+  unavailable without stopping the owner's `convex dev`, which was not done unilaterally.
+- **THE DEPLOYED MODULE LOADS WITH SHEETJS IN IT.** A throwaway row was created on a throwaway
+  tenant (`vaultSmoke:insertBrief`, tenant `smoke-15207`, no `storageId`), then
+  `vaultExtract:extractDoc` was invoked **on the deployment**: it returned cleanly and drove the
+  spine to a terminal `failed` (`no_stored_bytes` — the only branch reachable without a
+  `storageId`). **A bundle that could not carry SheetJS would have failed at module load**, which is
+  the failure mode a static top-level import has. Row purged afterwards; **$0**, no model call, no
+  owner data touched.
+- **NOT PROVEN by any of the above: that a real legacy `.xls` extracts with its numbers on the
+  deployment.** That is the owner's checkpoint, and it is the only thing that closes SC#3's XLS
+  half. The offline suite proves the parser; the probe proves the import; **neither proves the
+  round trip.**
+
+#### Gates
+
+`@pikar/vault` **125/125** (was 114), `vaultExtract` **47/47** (was 41), backend `test vault`
+**121/121** (was 115), `@pikar/vault` tsc exit 0, backend tsc **52 errors, ALL in `*.test.ts`,
+ZERO non-test** (baseline held exactly), biome at the pre-existing 2 findings.
+
+**Three mutation-checks, each confirmed applied and each reverted green:**
+
+| Mutation | Result |
+| --- | --- |
+| SheetJS import made dynamic | **1 RED (the scan) — and ALL 10 behaviour tests stayed GREEN**, i.e. Pitfall 9 reproduced on demand |
+| `sniffContainer` container guard removed | **1 RED** (64 bytes of noise came back as mojibake) |
+| `Sheet N` header emitted unconditionally | **2 RED** (the no-header case and the empty-workbook throw) |
+
+**`xlsx` is also a DEV-only dependency of `@pikar/backend`** so the convex-test fixture can be
+written by SheetJS rather than committed as a binary — it does not resolve there otherwise, the
+same arrangement that keeps `fflate` out of the V8 bundle. **Nothing in production imports `xlsx`
+from `@pikar/backend`**; the only production path is `@pikar/vault/xlsText`.
