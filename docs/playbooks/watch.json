@@ -14,6 +14,10 @@
   "onboarding.md": [
     "packages/core/src/businessProfile.ts",
     "packages/core/src/businessProfile.test.ts",
+    "packages/core/src/blueprint.ts",
+    "packages/core/src/blueprint.test.ts",
+    "packages/backend/convex/blueprint.ts",
+    "packages/backend/convex/blueprint.test.ts",
     "packages/backend/convex/onboarding.ts",
     "packages/backend/convex/tenantProfile.ts",
     "packages/backend/convex/tenantProfile.test.ts",
