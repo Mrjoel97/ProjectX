@@ -251,8 +251,13 @@ export function specialistMemoBody(args: {
 }
 
 /** The three stop causes, each with its own sentence. `cost` is BYTE-IDENTICAL to the
- *  pre-Phase-16 string — existing eval fixtures and dispatch.test.ts depend on it. */
-const INCOMPLETE_MARKER: Record<"cost" | "steps" | "clock", string> = {
+ *  pre-Phase-16 string — existing eval fixtures and dispatch.test.ts depend on it.
+ *
+ *  EXPORTED for 16-07's stored research document, which needs the same three sentences in a
+ *  document that is NOT a memo body (no `> Produced by the … specialist.` line). One phrasing of
+ *  each stop cause in the codebase — a second copy in `convex/research.ts` is exactly how the memo
+ *  and the vault document start disagreeing about why the same run stopped. */
+export const INCOMPLETE_MARKER: Record<"cost" | "steps" | "clock", string> = {
   cost:
     "\n> **Incomplete — cost ceiling reached.** This is what the specialist finished before the" +
     " run's shared budget ran out; approve it as-is or ask for another pass.",
