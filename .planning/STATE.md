@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: in_progress
-stopped_at: Completed 15.2-01-PLAN.md
-last_updated: "2026-07-27T00:34:42.309Z"
+stopped_at: Completed 15.2-02-PLAN.md
+last_updated: "2026-07-27T01:05:47.801Z"
 progress:
   total_phases: 40
   completed_phases: 24
   total_plans: 179
-  completed_plans: 169
+  completed_plans: 170
 ---
 
 ---
@@ -18,15 +18,31 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 2
+current_plan: 3
 status: in_progress
-stopped_at: "Completed 15.2-01-PLAN.md (Wave 1 — the pure recognition layer). NOTE: Phases 16 (Lane R) and 17 (Lane K) are LIVE in their own worktrees with their own STATE; this file's phase/plan counters describe LANE V (Phase 15.2, on main). Resolve any merge conflict here by keeping BOTH lanes' progress."
-last_updated: "2026-07-27T00:00:00.000Z"
+stopped_at: Completed 15.2-02-PLAN.md
+last_updated: "2026-07-27T01:04:16.154Z"
+progress:
+  total_phases: 40
+  completed_phases: 24
+  total_plans: 179
+  completed_plans: 170
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 15.2
+current_plan: 3
+status: in_progress
+stopped_at: "Completed 15.2-02-PLAN.md (Wave 2 — universal format coverage in the pure layer). NOTE: Phases 16 (Lane R) and 17 (Lane K) are LIVE in their own worktrees with their own STATE; this file's phase/plan counters describe LANE V (Phase 15.2, on main). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block above and reported a false `last_plan / ready_for_verification` on 15.2-02 — both blocks are hand-corrected; verify them before trusting the tool here."
+last_updated: "2026-07-27T01:05:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
   total_plans: 179
-  completed_plans: 168
+  completed_plans: 170
 ---
 
 # Project State
@@ -40,7 +56,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 1 of 7 PLANS COMPLETE
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 2 of 7 PLANS COMPLETE
 (7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
@@ -52,7 +68,74 @@ deliberately** — 16∥17 needed one because both add literals to the same clos
 `schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
 commit that was never meant to exist.
 
-Status (15.2-01): **THE ROOT CAUSE IS NOW UNEXPRESSIBLE IN THE TYPE SYSTEM, but nothing live was
+Status (15.2-02): **EVERY FORMAT THE PURE LAYER CAN READ WITHOUT A NEW DEPENDENCY NOW ACTUALLY
+READS — and again NOTHING LIVE WAS PROVEN: this plan touched ZERO `convex/` files by design and
+added ZERO dependencies (`pnpm-lock.yaml` untouched).** `extractOfficeText` LOST its second
+parameter — it takes the BYTES ONLY, unzips once, and dispatches on the MARKER ENTRY the archive
+carries (`word/document.xml` → DOCX/DOCM, `xl/workbook.xml` → XLSX/**XLSM**, `ppt/presentation.xml`
+→ PPTX/PPTM, a `mimetype` entry starting `application/vnd.oasis.opendocument.` → ODT/ODS/ODP,
+`META-INF/container.xml` → EPUB; OOXML markers FIRST, with a test pinning that an archive carrying
+BOTH a `word/document.xml` and an ODF `mimetype` resolves deterministically to DOCX). **The owner's
+`.xlsm` needed NO NEW PARSER — only routing:** an `.xlsm` is byte-structurally an `.xlsx`, same zip,
+same entries, same walker, which is why the defect looked far larger than it was, and why entry
+dispatch makes coverage true BY CONSTRUCTION instead of by an enumeration that is always one format
+behind. No marker at all now throws `office_parse_failed: unrecognized zip` — the message names the
+ZIP, not a mime type, because there is no longer a mime type to name. The three `*_MIME` constants
+are DELETED, and so is `docxText`'s `missing word/document.xml` guard, which entry dispatch made
+UNREACHABLE (the 15.1-04 `?? "lean"` dead-branch lesson); `odfText`'s `missing content.xml` throw is
+REAL by contrast — the ODF branch is gated on the `mimetype` entry, which does not guarantee
+`content.xml` — so it moved UP into the dispatcher where it is still reachable and is pinned.
+The two new walkers write NO second XML walker (rung 2): `odfText` and `epubText` reuse `rawRunsOf` /
+`markupText`, and `runsOf` was split into `rawRunsOf` (undecoded) + `runsOf` (decoded) precisely so
+the ODF walker can hand raw `<text:p>` runs to `markupText` without decoding entities twice.
+`odfText` is ONE function for THREE formats: split on `</table:table-row>` and tab-join, else on
+`</draw:page>`, else join `<text:p>` runs — chosen from what `content.xml` CONTAINS, never from the
+declared `mimetype`. **NEW `packages/vault/src/rawText.ts`, dep-free and therefore ON THE BARREL**
+(the same rule `sniff.ts` passed; `officeText.ts` stays subpath-only because it imports `fflate` —
+state the RULE, not the current file list): `decodeEntities` MOVED here so there is exactly ONE
+entity decoder for three callers; `markupText` removes script/style/comment **BODIES BEFORE** the
+generic tag strip (strip tags first and you inline the script source as document text); `rtfText` is
+a brace-DEPTH scanner, not a regex, because `{\*\...}` ignorable destinations NEST and a regex
+cannot balance braces (flattening them would emit generator/font/colour tables as prose); and
+`oleText` is the dependency-free half of SC#3 — maximal printable runs in CP1252 **AND** UTF-16LE,
+merged in BYTE-OFFSET order (deterministic and roughly document-ordered), min run 4, a 13-name
+stop-list matched on the **WHOLE RUN** (a substring rule would delete any sentence containing the
+word "Data"). **`oleText` THROWS rather than returning `""`** — an empty extraction that "succeeds"
+lands as a `ready` document with 0 chars, a plausible failure, which is worse than a failure; the
+same one-line rule was extended to `rtfText`. `TextDecoder("windows-1252")` is constructed **LAZILY
+inside the decode helper**, never at module scope: `rawText.ts` is on the barrel and that
+constructor throws `RangeError` on a runtime without full ICU, so a module-scope throw would take
+down every module that touches the barrel. **SIX MUTATION-CHECKS, each confirmed applied before
+being trusted and each reverted green:** XLSM marker unhooked ⇒ **6 RED** (every XLSX/XLSM row incl.
+the headline `.xlsm` routing test); `epubText`'s `.sort()` → `.slice()` ⇒ **1 RED**; `markupText`'s
+script-body removal disarmed ⇒ **1 RED** (`alert(1)` leaked as text); stop-list removed + RTF
+destination-skip disarmed ⇒ **3 RED**; `MIN_RUN` 4→1 ⇒ **2 RED**; `oleText`'s throw → `return ""` ⇒
+**1 RED**. The last two are the load-bearing pair — together they prove the never-silent guarantee is
+enforced by tests, not asserted in a comment. **KNOWN TRANSIENT, EXPECTED, DO NOT "FIX":**
+`vaultExtract.ts:193` still calls `extractOfficeText(bytes, meta.mimeType)` and therefore FAILS
+`@pikar/backend` typecheck until 15.2-03's first task; restoring an ignored second parameter to get a
+clean tree mid-phase would reintroduce exactly the enumeration this plan deleted. Three deviations,
+all recorded: `markupText` had to land in Task 1 (Task 1's `epubText` imports it, but the plan
+scheduled `rawText.ts` in Task 2 — both halves still TDD, RED committed apart from GREEN); the plan's
+`\x05`-strip before stop-list comparison was NOT implemented because `0x05` is not a printable byte,
+so those runs already surface as the bare name and the strip would be a dead branch (the *test* still
+plants the `\x05` prefixes); and `oleText`'s `kind` is unused (`_kind`) because the sweep is
+format-agnostic and the stop-list is the union of both formats' names. **TOOLING TRAP THAT COST
+REWRITES:** Bash heredocs in this environment HALVE backslashes even when quoted (`<<'EOF'`) — it
+surfaced loudly in `rawText.ts` as an esbuild `Unexpected ")" in regular expression`, but the
+matching damage in the TEST file would NOT have surfaced (a template literal containing `\r` is a
+valid string), so it would have silently tested the wrong input. Separately the Write tool
+JSON-decodes its content, so `\x05` in a source string literal lands as a literal control character.
+**Do not use heredocs for backslash-bearing source in this repo.** Gates: `@pikar/vault` **108/108**
+(was 77 — +17 officeText, +14 rawText), `tsc --noEmit` exit 0, `check-playbooks` exit 0, biome with
+NO new findings (`officeText.ts`'s single format finding is byte-identical to the same finding on the
+pre-change blob at `5d7e58e`), and both
+`git diff 5d7e58e..HEAD --name-only | grep -c packages/backend/convex` and the same for
+`pnpm-lock.yaml` return **0**. **DO NOT READ THIS AS A LIVE FIX.** `rtfText`/`oleText` have no
+production caller, and `extractOfficeText`'s only caller is still on the old signature. SC#7 is the
+live gate and it is Wave 5's.
+
+PRIOR — Status (15.2-01): **THE ROOT CAUSE IS NOW UNEXPRESSIBLE IN THE TYPE SYSTEM, but nothing live was
 proven — this plan touched ZERO `convex/` files by design.** Origin: a `.xlsm` sat at
 `pending_extraction` ~20 h with 0 chars and no `failureReason`, because `extractionKindFor` returns
 `null` for any MIME outside a three-entry allow-list and `null` schedules nothing. Two pieces
@@ -952,6 +1035,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 14 P03 | ~25 min | 3 tasks | 5 files |
 | Phase 14 P04 | ~18 min | 2 tasks | 3 files |
 | Phase 15.2 P01 | 35m | 4 tasks | 7 files |
+| Phase 15.2 P02 | 25m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -1070,6 +1154,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.2]: sniff.ts is dep-free so it IS on the @pikar/vault barrel; officeText.ts stays subpath-only for V8-bundle hygiene
 - [Phase 15.2]: extractionKindFor is byte-unchanged and kept as the MIME FALLBACK behind resolveRail — its null just stops being a scheduling decision
 - [Phase 15.2]: video/audio resolve to 'unsupported' at resolveRail deliberately: media is routed by MIME at the scheduling gate before any action runs
+- [Phase 15.2]: extractOfficeText dispatches on the ZIP marker ENTRY and takes ONE argument — adding mimeType back is a regression (15.2-02)
+- [Phase 15.2]: The @pikar/vault barrel rule is about DEPENDENCIES: dep-free modules (sniff.ts, rawText.ts) are barrel-safe; fflate/node:* importers (officeText.ts) stay subpath-only (15.2-02)
+- [Phase 15.2]: oleText/rtfText THROW rather than returning '' — an empty extraction that succeeds becomes a ready doc with 0 chars (15.2-02)
 
 ### Pending Todos
 
@@ -1101,8 +1188,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-27T00:34:23.447Z
-Stopped at: Completed 15.2-01-PLAN.md
+Last session: 2026-07-27T01:04:16.127Z
+Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
 Resume file: None
