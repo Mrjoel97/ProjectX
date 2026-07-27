@@ -68,6 +68,21 @@ if (typeof PromiseCtor.withResolvers !== "function") {
 // node-action limit.
 const CALL_TIMEOUT_MS = 480_000;
 
+// ── Per-page fan-out bounds (15.2-06) ────────────────────────────────────────
+// Pages sent concurrently. 6 is a BOUNDED FAN-OUT, not a throughput knob: each page is its own
+// hosted call AND its own recordSpend write, and recordSpend is a rateLimiter.limit on ONE
+// KEYLESS `dailySpendCents` window (guardrails.ts:166-173) — so the batch width is also the
+// OCC-contention width against that single document. 6, not 50.
+const PAGE_BATCH_SIZE = 6;
+// Per-page wall-clock bound. CALL_TIMEOUT_MS (480 s) is PER CALL and was tuned for ONE
+// whole-document call; under fan-out every page would inherit all 480 s, letting a single stuck
+// page eat the entire 10-minute action ceiling. ~10 s/page is the measured norm — 60 s is 6x
+// headroom and the binding constraint stops being the action limit.
+const PAGE_TIMEOUT_MS = 60_000;
+// Total budget for the whole fan-out, under Convex's 10-minute node-action limit with room left
+// for the surrounding scan/audit/seam work.
+const FANOUT_BUDGET_MS = 420_000;
+
 // SMOKE:: offline seam — the intake.ts grammar verbatim: SMOKE::extract::<text> short-circuits
 // to <text> with NO model call and NO spend. PII_POISON:: routes the extracted output into
 // scanText's OWN non-string Err branch (never a fabricated Err), intake.ts precedent.
@@ -129,6 +144,74 @@ export async function slicePdfToPageCap(bytes: Uint8Array): Promise<Uint8Array> 
   const pages = await out.copyPages(src, Array.from({ length: VAULT_EXTRACT_PAGE_CAP }, (_, i) => i));
   for (const p of pages) out.addPage(p);
   return out.save();
+}
+
+/**
+ * Run `run(i)` for pages 0..pageCount-1 in bounded-concurrency batches, SEQUENTIAL across
+ * batches, and reassemble the results in PAGE ORDER.
+ *
+ * Exported for the offline test (the slicePdfToPageCap precedent): the orchestration — batch
+ * width, ordering, per-page isolation, the deadline — is the non-trivial part and is fully
+ * provable with a stub and zero model calls. The hosted call itself is NOT provable offline,
+ * which is why the plan's live checkpoint exists.
+ *
+ * A page that fails or times out contributes a MARKER, not a throw: 49 good pages beat losing the
+ * document to one bad scan. `okPages` is what the caller judges success on — a document made
+ * entirely of markers is a failure wearing a success costume, which is the shape this whole phase
+ * exists to delete.
+ */
+export async function fanOutPages(
+  pageCount: number,
+  run: (index: number) => Promise<string>,
+  opts?: { batchSize?: number; pageTimeoutMs?: number; deadlineAt?: number },
+): Promise<{ text: string; okPages: number; truncated: boolean }> {
+  const batchSize = opts?.batchSize ?? PAGE_BATCH_SIZE;
+  const pageTimeoutMs = opts?.pageTimeoutMs ?? PAGE_TIMEOUT_MS;
+  const deadlineAt = opts?.deadlineAt ?? Date.now() + FANOUT_BUDGET_MS;
+
+  // Pre-sized and indexed BY PAGE — ordering is structural, not a sort anyone has to remember.
+  const results: (string | null)[] = new Array(pageCount).fill(null);
+  let okPages = 0;
+  let truncated = false;
+
+  for (let start = 0; start < pageCount; start += batchSize) {
+    if (Date.now() > deadlineAt) {
+      truncated = true;
+      break;
+    }
+    const indices = Array.from(
+      { length: Math.min(batchSize, pageCount - start) },
+      (_, k) => start + k,
+    );
+    await Promise.all(
+      indices.map(async (i) => {
+        // ponytail: Promise.race, not a real per-page AbortSignal. extractHosted's contract is
+        // reused UNCHANGED (a locked decision) and it owns its own 480 s abortSignal, so a
+        // raced-out page's request lingers in the background — it just stops BLOCKING the batch,
+        // and FANOUT_BUDGET_MS bounds the whole fan-out regardless. Upgrade path if lingering
+        // requests ever matter: thread an optional timeoutMs through extractHosted (one optional
+        // parameter; every existing call site unchanged).
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const text = await Promise.race([
+          run(i).catch(() => null),
+          new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), pageTimeoutMs);
+          }),
+        ]);
+        if (timer !== undefined) clearTimeout(timer);
+        if (typeof text === "string") {
+          results[i] = text;
+          okPages++;
+        }
+      }),
+    );
+  }
+
+  // `Page N` matches the existing `Sheet N` / `Slide N` convention in officeText.ts — the house
+  // style, not a third one. `[unreadable]` is a MARKER, never an error message: §4 — no SDK or
+  // parser string, no document content, nothing that could carry PII.
+  const text = results.map((r, i) => `Page ${i + 1}\n${r ?? "[unreadable]"}`).join("\n\n");
+  return { text, okPages, truncated };
 }
 
 /**
