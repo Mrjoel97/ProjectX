@@ -50,15 +50,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 5
+current_plan: 6
 status: in_progress
-stopped_at: "Completed 15.2-04-PLAN.md (Wave 4 — the HONESTY plan: attempt-state staleness, the graph-extraction input cap, and user-readable failure copy). NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here."
-last_updated: "2026-07-27T12:40:00.000Z"
+stopped_at: "Completed 15.2-05-PLAN.md (Wave 5 — THE PHASE GATE, paid LIVE on deployment local-joel_feruzi-pikar_ai_50c69-1). The owner's stranded .xlsm is `ready` with 256,439 chars; owner APPROVED but only PARTIALLY OBSERVED. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not a verification plan's job."
+last_updated: "2026-07-27T14:20:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
   total_plans: 179
-  completed_plans: 172
+  completed_plans: 173
 ---
 
 # Project State
@@ -72,7 +72,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 4 of 7 PLANS COMPLETE
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 5 of 7 PLANS COMPLETE
 (7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
@@ -84,7 +84,77 @@ deliberately** — 16∥17 needed one because both add literals to the same clos
 `schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
 commit that was never meant to exist.
 
-Status (15.2-04): **THE HONESTY PLAN — three closes, no schema change, `pnpm-lock.yaml` untouched,
+Status (15.2-05): **[Phase 15.2] THE PHASE GATE WAS PAID LIVE — and it is the first thing in this
+phase that was.** Deployment **`local-joel_feruzi-pikar_ai_50c69-1`** (local, `:3210`, project
+`joel-feruzi:pikar-ai-50c69`), sweep executed **2026-07-27T13:58:34Z**. **The owner's stranded
+`.xlsm` (`mx725hvxy1vsjvtaa4hza18pms8b8gp4`, `Zainab_Blowing_Operators_KPIs_Feb_2026.xlsm`, created
+2026-07-26T21:33:43Z, stranded 16.4 h) went `pending_extraction` / 0 chars / no `failureReason` →
+`ready` / 256,439 chars / no `failureReason`.** The content is SUBSTANTIVE, not plausible: **46
+sheets, 3,084 lines, 2,313 numeric-bearing lines**, real cell values (`Zan Aqua 1.5 Ltr *6 → 80000 /
+4800 / 16.666666666666668 / 600000`) with `#DIV/0!` preserved — headers AND numbers, i.e. NOT the
+degraded shape SC#3 warns about. A full row-by-row diff of `vaultDocuments` shows **exactly 1 of 55
+rows changed**, zero collateral. **TWO FINDINGS THE GATE ITSELF PRODUCED, both recorded rather than
+smoothed over. (1) `npx convex run vaultSweep:runSweep` — the plan's own gate command, and the one
+written into `vaultSweep.ts`'s header comment — IS A SILENT NO-OP.** It returned *"Migration already
+done"* (`lastFinished: 2026-07-18`): `runSweep` is `migrations.runner(...)`, a `@convex-dev/migrations`
+migration that records completion and refuses to re-run, and the `.xlsm` was uploaded EIGHT DAYS
+AFTER it finished, so a bare invocation would never have seen that row. Recovery required
+**`'{"reset": true}'`** (the component's own `toStartOver` hint); safe by construction because
+`migrateOne` early-returns unless `pending_extraction` + `storageId` (55 processed, 1 changed).
+**Any future backlog recovery MUST pass `{"reset": true}` or it will report success having done
+nothing** — the same silent-success family this phase exists to delete, found in the phase's own
+tooling. **(2) `size` and `contentHash` are REWRITTEN on every successful extraction** —
+`vault.ts:632-633` (`ingestExtractedText`) sets `size: byteLen(text)` / `contentHash: contentHash(text)`,
+so `size` describes the EXTRACTED TEXT, not the uploaded file (803281 → 256569). Pre-existing and
+intentional (hash-dedup keys on text), **but it means the 803,281-byte fingerprint identifying this
+row in every 15.2 planning document NO LONGER MATCHES IT** — search by `_id`/title, do not conclude
+the row was deleted. **OWNER VERDICT: APPROVED but only PARTIALLY OBSERVED, and the unobserved half
+is recorded as unverified rather than rounded up.** OBSERVED: a fresh **`.pptx`** upload
+**auto-progressed to `ready` with no button pressed** — the FIRST live confirmation of the
+15.2-01/02/03 spine on a NEW upload rather than a recovered row, for a format never in the old
+three-entry MIME allow-list. **NOT OBSERVED:** the `.xlsm` preview PANE contents; the junk-file →
+plain-English `failed` + remedy path, so **15.2-04's `failureCopy` HAS STILL NEVER BEEN SEEN IN A
+BROWSER and SC#4's live half is only partially paid**; and legacy `.doc`/`.ppt`/`.xls`.
+**NEW KNOWN GAP, NOT A WAVE-5 REGRESSION — the owner's `.pptx` came back TITLES ONLY**
+(`mx7a40n7460cj3d1ww97bms6wd8bb9zg`, `ready`, `ragEntryId` populated so full ingest incl.
+`extractGraph` ran, **`size: 356` = the entire text**). Root cause: `pptxText`
+(`packages/vault/src/officeText.ts:70-76`) reads `<a:t>` runs from `ppt/slides/slideN.xml` and
+NOTHING ELSE — the deck's KPI content lives in `ppt/charts/chart*.xml`, embedded worksheets and
+images, **entries already present in the same `unzipSync` result and never opened**; the entity graph
+was empty because it was handed 356 chars of headings, so do NOT go debugging `extractGraph`.
+**The trap: line 74 emits `` `Slide ${n}` `` UNCONDITIONALLY, so a deck with zero extractable runs
+still yields non-empty text, `empty_extraction` never fires, and the row reports `ready` — a
+FALSE-READY of exactly the family this phase exists to delete. `xlsxText` has the same shape at
+line 65 (`` `Sheet ${n}` ``), so it is a FAMILY, not one site: the honesty gap was closed at the
+scheduler in 15.2-03 and is STILL OPEN one layer down, in the parsers.** Owner disposition: **new
+plan 15.2-08, sequenced AFTER 15.2-07**, covering both halves (chart/diagram/notes walk +
+scaffolding-only output failing honestly). Deliberately NOT fixed here — a verification plan does
+not smuggle in an edit. **ENVIRONMENT: the deployment was DOWN at plan start and had to be recovered
+first (owner-approved).** Nothing on `:3210`/`:3211`, no `convex-local-backend` process at all, and
+three orphaned convex CLI processes from the previous day — a `dev --once --configure existing` hung
+since 21:51 (18 min after the `.xlsm` upload, the likely cause, cf. the untracked
+`.env.local.bak-*` files) plus a `convex dev` that had burned **860 s of CPU** against a dead backend
+(a burnt-out retry storm; all three measured at 0.00 s CPU delta over 12 s before being killed).
+Recovery: kill exactly those three PIDs → verify ports free and no respawn → **ONE**
+`convex dev --run skills:seedSkills`. **Seeding in the same push is not optional** — the ingest
+workflow's graph-extract step fails closed with `NO_ACTIVE_SKILL` when unseeded, which would land the
+row at `failed` for a reason unrelated to this phase. Push reported `Convex functions ready! (36.14s)`
+with no bundler or type error. **A SECOND TRAP, reported not worked around: the `:3000` server is
+`next start` launched 2026-07-26 21:35:06 while `.next` was rebuilt 2026-07-27 16:22:39** — a process
+predating its own build, the exact Phase-14 `voice.md` trap; the owner was told to restart before
+trusting any vault-UI symptom, and `failureCopy`'s unverified status is partly downstream of this.
+Offline pre-flight all green: `pnpm install` with **`pnpm-lock.yaml` diff = 0 lines**, `@pikar/vault`
+**114/114** + tsc exit 0, backend `test vault --maxWorkers=1` **102/102**, backend tsc **52 errors
+ALL in test files, ZERO in any non-test file**, `pnpm --filter web build` green, `check-playbooks`
+exit 0. **`nyquist_compliant` LEFT UNCHANGED at its planning-time `true`** — the plan expected to
+find it `false`; flipping a flag to match a plan's assumption is the paper-over this phase forbids,
+and the VALIDATION file's own text says the flag describes planning-time conditions. 07-T5 owns the
+final call. **STILL UNPROVEN: SC#5** (verbatim scanned-PDF output — the 12-page deck
+`mx78ake083gn575pg43sw9j66x8b86eb` is still `ready` at 2,191 chars carrying a stale
+`extract_error: The operation was aborted due to timeout`) belongs to 15.2-06, and **SC#3's XLS
+half** to 15.2-07. Recovery spend: **$0** on extraction (pure `zip` rail).
+
+PRIOR — Status (15.2-04): **THE HONESTY PLAN — three closes, no schema change, `pnpm-lock.yaml` untouched,
 and STILL OFFLINE-ONLY (no upload re-run, no failure card ever viewed in a browser).** (1) **Stale
 attempt state can no longer survive into a success.** `markExtracting` — which runs at the START of
 every attempt, before any parsing — clears BOTH `failureReason` and `extractionTruncated`;

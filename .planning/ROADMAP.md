@@ -611,9 +611,10 @@ Plans:
 - [x] 15.2-02-PLAN.md — Format coverage in the pure layer: ZIP-entry dispatch (XLSM/DOCM/PPTM/ODF/EPUB) + RTF/markup/OLE2 DOC-PPT, no new dependency [SC#2, SC#3] (Wave 2)
 - [x] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
 - [x] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
-- [ ] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5)
+- [x] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5) — **PAID 2026-07-27 on `local-joel_feruzi-pikar_ai_50c69-1`: 0 → 256,439 chars.** Owner approved but PARTIALLY OBSERVED — `failureCopy` still unverified live. Gate finding: `runSweep` is a NO-OP without `'{"reset": true}'`
 - [ ] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6)
 - [ ] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7)
+- [ ] 15.2-08-PLAN.md — **(NEW, added by the 15.2-05 live gate)** PPTX extracts slide TITLES ONLY (`pptxText` reads `<a:t>` from slides, never opens `ppt/charts/*`), and scaffolding-only output reports `ready` because `` `Slide ${n}` ``/`` `Sheet ${n}` `` are emitted unconditionally so `empty_extraction` never fires — a false-ready one layer below the scheduler. Both halves. Sequenced AFTER 15.2-07 (Wave 8)
 
 ### Phase 16: Research Sub-Agent & Web Research
 **Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
@@ -682,7 +683,7 @@ Locked owner decisions D1-D5 in spec §2.1.
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 4/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 - [ ] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
@@ -811,7 +812,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
-| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 4/7 | In Progress|  |
+| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 5/7 | In Progress|  |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
