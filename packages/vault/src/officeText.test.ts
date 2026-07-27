@@ -314,6 +314,165 @@ describe("extractOfficeText — the false-ready family: scaffolding is not conte
   });
 });
 
+// ROUTING, not parsing: every part below is already in the SAME unzipSync result pptxText holds.
+// Entry names and shapes are taken from a real KPI deck, not invented — its numbers live in
+// ppt/charts/*, its agenda in ppt/diagrams/data1.xml, and 15 layout/master parts hold ~110 runs of
+// boilerplate that a naive "read every <a:t> in the archive" would inject 22 times.
+const rels = (...targets: string[]) =>
+  strToU8(
+    `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${targets
+      .map((t, i) => `<Relationship Id="rId${i + 1}" Type="http://x" Target="${t}"/>`)
+      .join("")}</Relationships>`,
+  );
+
+const pts = (values: string[]) => values.map((v) => `<c:pt><c:v>${v}</c:v></c:pt>`).join("");
+
+const ser = (name: string, cats: string[], vals: string[]) =>
+  `<c:ser><c:tx><c:strRef><c:strCache>${pts([name])}</c:strCache></c:strRef></c:tx>` +
+  `<c:cat><c:strRef><c:strCache>${pts(cats)}</c:strCache></c:strRef></c:cat>` +
+  `<c:val><c:numRef><c:numCache>${pts(vals)}</c:numCache></c:numRef></c:val></c:ser>`;
+
+const chartXml = (body: string) =>
+  strToU8(
+    `<?xml version="1.0"?><c:chartSpace xmlns:c="http://c" xmlns:a="http://a"><c:chart>${body}</c:chart></c:chartSpace>`,
+  );
+
+const MONTHS = ["46023", "46054", "46082"];
+
+describe("extractOfficeText — PPTX fan-out: charts, SmartArt and notes (SC#2)", () => {
+  it("chart series values land under the SLIDE its rels attach them to, tab-joined", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide3.xml": strToU8(slideXml(`<a:t>Trend 2026</a:t>`)),
+      "ppt/slides/_rels/slide3.xml.rels": rels("../charts/chart1.xml"),
+      "ppt/charts/chart1.xml": chartXml(ser("Rej %", MONTHS, ["0.0471", "0.0503", "0.0388"])),
+    });
+    expect(extractOfficeText(bytes).text).toBe(
+      "Slide 3\nTrend 2026\nRej %\t46023\t46054\t46082\t0.0471\t0.0503\t0.0388",
+    );
+  });
+
+  it("three <c:ser> blocks yield THREE lines, not one 21-value line", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide4.xml": strToU8(slideXml(`<a:t>By plant</a:t>`)),
+      "ppt/slides/_rels/slide4.xml.rels": rels("../charts/chart2.xml"),
+      "ppt/charts/chart2.xml": chartXml(
+        ser("ZBIJ", MONTHS, ["1", "2", "3"]) +
+          ser("ZBBW", MONTHS, ["4", "5", "6"]) +
+          ser("ZBFL", MONTHS, ["7", "8", "9"]),
+      ),
+    });
+    const lines = extractOfficeText(bytes).text.split("\n");
+    expect(lines).toHaveLength(5); // header + slide title + one line per series
+    expect(lines[2]).toBe("ZBIJ\t46023\t46054\t46082\t1\t2\t3");
+    expect(lines[4]).toBe("ZBFL\t46023\t46054\t46082\t7\t8\t9");
+  });
+
+  it("a chart's own <a:t> title runs appear BEFORE its series lines", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Overview</a:t>`)),
+      "ppt/slides/_rels/slide1.xml.rels": rels("../charts/chart1.xml"),
+      "ppt/charts/chart1.xml": chartXml(
+        `<c:title><a:t>Rejection %</a:t></c:title>${ser("Rej %", ["46023"], ["0.05"])}`,
+      ),
+    });
+    expect(extractOfficeText(bytes).text).toBe(
+      "Slide 1\nOverview\nRejection %\nRej %\t46023\t0.05",
+    );
+  });
+
+  // THE MEASURED HAZARD: data1.xml and drawing1.xml carry byte-identical <a:t> runs and BOTH are
+  // referenced from the slide. `toContain` passes on duplicated text, so this asserts a COUNT.
+  it("SmartArt reads ONCE — drawingN.xml is a byte-duplicate of dataN.xml and is NEVER read", () => {
+    const smartArt = strToU8(
+      slideXml(`<a:t>Agenda:</a:t><a:t>Objective</a:t><a:t>Findings</a:t><a:t>Next steps</a:t>`),
+    );
+    const bytes = pptxOf({
+      "ppt/slides/slide2.xml": strToU8(slideXml(`<a:t>Objective &amp; Agenda</a:t>`)),
+      "ppt/slides/_rels/slide2.xml.rels": rels("../diagrams/data1.xml", "../diagrams/drawing1.xml"),
+      "ppt/diagrams/data1.xml": smartArt,
+      "ppt/diagrams/drawing1.xml": smartArt,
+    });
+    const { text } = extractOfficeText(bytes);
+    expect(text.split("Agenda:").length - 1).toBe(1);
+    expect(text.split("Next steps").length - 1).toBe(1);
+    expect(text).toBe("Slide 2\nObjective & Agenda\nAgenda:\nObjective\nFindings\nNext steps");
+  });
+
+  it("speaker notes appear under their slide; a notes slide holding only a slide-number field does not", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Title</a:t>`)),
+      "ppt/slides/_rels/slide1.xml.rels": rels("../notesSlides/notesSlide1.xml"),
+      "ppt/notesSlides/notesSlide1.xml": strToU8(
+        slideXml(`<a:t>Mention the Q1 recovery</a:t><a:fld type="slidenum"><a:t>1</a:t></a:fld>`),
+      ),
+      "ppt/slides/slide2.xml": strToU8(slideXml("")),
+      "ppt/slides/_rels/slide2.xml.rels": rels("../notesSlides/notesSlide2.xml"),
+      "ppt/notesSlides/notesSlide2.xml": strToU8(
+        slideXml(`<a:fld id="{B}" type="slidenum"><a:t>2</a:t></a:fld>`),
+      ),
+    });
+    // Slide 2 contributed nothing at all, so it emits NO header (Task 1's gate).
+    expect(extractOfficeText(bytes).text).toBe("Slide 1\nTitle\nMention the Q1 recovery");
+  });
+
+  // A rels file points at plenty of scaffolding. The dispatch is an ALLOW-LIST of three content
+  // part types, never "whatever the Target says".
+  it("master / layout / handout boilerplate appears NOWHERE, even when a rels file points at it", () => {
+    const boilerplate = (footer: string) =>
+      strToU8(slideXml(`<a:t>Click to edit Master title style</a:t><a:t>${footer}</a:t>`));
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Real slide text</a:t>`)),
+      "ppt/slides/_rels/slide1.xml.rels": rels(
+        "../slideLayouts/slideLayout1.xml",
+        "../media/image1.png",
+        "../theme/theme1.xml",
+      ),
+      "ppt/slideLayouts/slideLayout1.xml": boilerplate("Monthly Rejection Overview"),
+      "ppt/slideMasters/slideMaster1.xml": boilerplate("Monthly Rejection Overview"),
+      "ppt/notesMasters/notesMaster1.xml": boilerplate("Monthly Rejection Overview"),
+      "ppt/handoutMasters/handoutMaster1.xml": boilerplate("Monthly Rejection Overview"),
+    });
+    const { text } = extractOfficeText(bytes);
+    expect(text).toBe("Slide 1\nReal slide text");
+    expect(text).not.toContain("Click to edit");
+    expect(text).not.toContain("Monthly Rejection Overview");
+  });
+
+  it("an ORPHAN chart referenced by no slide still appears, as its own labelled part", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Cover</a:t>`)),
+      "ppt/charts/chart9.xml": chartXml(ser("Orphan", ["46023"], ["42"])),
+    });
+    const { text } = extractOfficeText(bytes);
+    // Never silently lost: a rels file that fails to parse degrades to "present but unattached",
+    // never back to titles-only.
+    expect(text).toBe("Slide 1\nCover\n\nppt/charts/chart9.xml\nOrphan\t46023\t42");
+  });
+
+  it("a deck with slides and NO rels files at all extracts exactly as it did before", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>Title</a:t><a:t>Subtitle</a:t>`)),
+      "ppt/slides/slide2.xml": strToU8(slideXml(`<a:t>Body</a:t>`)),
+    });
+    expect(extractOfficeText(bytes).text).toBe("Slide 1\nTitle\nSubtitle\n\nSlide 2\nBody");
+  });
+
+  it("is byte-identical across two calls with charts, diagrams, notes and an orphan present", () => {
+    const bytes = pptxOf({
+      "ppt/slides/slide2.xml": strToU8(slideXml(`<a:t>Two</a:t>`)),
+      "ppt/slides/_rels/slide2.xml.rels": rels("../diagrams/data1.xml", "../charts/chart1.xml"),
+      "ppt/slides/slide1.xml": strToU8(slideXml(`<a:t>One</a:t>`)),
+      "ppt/slides/_rels/slide1.xml.rels": rels("../notesSlides/notesSlide1.xml"),
+      "ppt/diagrams/data1.xml": strToU8(slideXml(`<a:t>Agenda</a:t>`)),
+      "ppt/charts/chart1.xml": chartXml(ser("S", ["a"], ["1"])),
+      "ppt/charts/chart8.xml": chartXml(ser("Orphan B", ["b"], ["2"])),
+      "ppt/charts/chart7.xml": chartXml(ser("Orphan A", ["c"], ["3"])),
+      "ppt/notesSlides/notesSlide1.xml": strToU8(slideXml(`<a:t>Note</a:t>`)),
+    });
+    expect(extractOfficeText(bytes).text).toBe(extractOfficeText(bytes).text);
+  });
+});
+
 describe("officeText source contract", () => {
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "officeText.ts"), "utf8");
   // Scan CODE, not prose (the 15.2-07 precedent): this file's comments deliberately name the banned
