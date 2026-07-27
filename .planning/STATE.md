@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17
-current_plan: 1
+current_plan: 3
 status: in_progress
-stopped_at: "17-01 COMPLETE (468cbd6) — the Lane-K freeze half, on a base already carrying Lane R 16-01. Stage-1 freeze is now DONE on both sides. Next: 17-02, which is the FIRST plan needing a real Convex deployment (new convex modules force api.d.ts regen) AND owner-granted Google OAuth consent for the widened scope. CARRY-FORWARD for 17-03: parseSendTime has no month-name grammar — see 17-01-SUMMARY."
+stopped_at: "16-01 (freeze, merged to main), 16-04 (research-specialist skill body) and 16-03 (research route + grant + fence + ADR-010) COMPLETE. Waves 1-3 partially done: 16-02 (OpenAI web-search probe, ~/usr/bin/bash.01) is the remaining wave-2 plan and needs a real OPENAI_API_KEY; 16-05 depends on it. 16-07 needs a Convex deployment (new module forces api.d.ts regen). 16-09 needs a paid eval:golden run."
 last_updated: "2026-07-27T04:15:00.000Z"
 progress:
   total_phases: 38

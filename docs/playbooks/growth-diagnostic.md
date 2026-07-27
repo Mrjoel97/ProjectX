@@ -1,6 +1,6 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
+> Last verified: 2026-07-27 (16-03) — the research route joins SPECIALIST_ROUTES with its own least-privilege grant; SPECIALIST_ROUTES is now a SUPERSET of what diagnose() emits (ADR-010). Adds researchFindingsFence and the three-reason incomplete marker. PREVIOUSLY: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
 > `tierBriefing({tier?, agentName?, styleDirective?})` and `PRESET_SKILL`. **No diagnostic math, gate
 > order, route literal, or `SPECIALISTS` entry changed** — this is additive and lives beside the
 > registry, not inside it. The CODE-owned / REGISTRY-owned split is the thing to preserve: the FACT
@@ -198,3 +198,55 @@ Run `graphify query "growth diagnostic"` for the live subgraph. Couplings graphi
   upgrade path = route Gate 2 through `cfa()` if the payback/tdc fields are ever derived rather than supplied.
 - **Market-fact grounding is out of scope** — Phase 12 diagnoses from vault-grounded findings only; external
   market facts wait on web research (Phase 16). Until then `marketViable` is a supplied signal, not verified.
+
+## Phase 16 — the research route
+
+> Append-only container: each Phase-16 plan writes ONLY inside its own subsection.
+> On merge conflict, **keep both**.
+
+### Phase 16 — 16-03
+
+**`SPECIALIST_ROUTES` is no longer "exactly what `diagnose()` emits" — see
+[ADR-010](../decisions/010-dispatchable-routes-superset-of-diagnose.md).** It is now the set of
+routes the SYSTEM can dispatch, and the routes `diagnose()` emits are a strict **subset**.
+
+`research` is dispatch-reachable (the executive agent asks for it) but is **never prescribed as a
+gap remedy**. Research is not a fix for a business constraint — it is how you find out what the
+constraint is. **Widening `diagnose()` to emit it is a separate decision and needs its own ADR.**
+
+Two assertions in `specialists.test.ts` keep that honest, and together they cover both directions
+of the old equality more precisely than the equality did:
+
+1. every route `diagnose()` can emit is a key of `SPECIALISTS` (one-directional coverage — a
+   diagnosis can never name a route the dispatcher cannot resolve);
+2. `diagnose()` emits **no** `"research"` under any input.
+
+**The research capability grant is `["searchVault", "webResearch"]` and nothing else — this IS
+SC#1's containment.** An instruction injected into a fetched page reaches an agent structurally
+incapable of sending, writing, or moving a plan row, so at most it can influence a proposal that
+still stops at the human Approve gate. Asserted two ways: whole-registry exact equality (a write
+tool added to ANY specialist fails), plus an explicit deny-list so the intent survives a refactor.
+Mutation-verified — adding `proposePlan` to `RESEARCH_TOOLS` turns both RED.
+
+> **ACCEPTED RESIDUAL:** an injected page CAN steer this specialist's `searchVault` calls. Blast
+> radius is a read of the tenant's OWN corpus whose output never leaves the tenant. Upgrade path if
+> that ever matters: withhold `searchVault` from research.
+
+**`researchFindingsFence` — and what it deliberately does NOT claim (D5-CORRECTED).** The retrieved
+page text **cannot be fenced**: `openai.tools.webSearch` is provider-executed, OpenAI reads pages
+server-side, and that text never traverses our process. A test asserting "retrieved text is fenced"
+would PASS because the text is **absent**, not because it is contained — which is why no such test
+exists. What the fence covers is the specialist's **output** as it lands in the stored vault
+document, where it survives chunking and is re-read by a later `searchVault`. Mutation-verified for
+breakout (a body carrying a literal `</research_findings>` cannot end the fence early) and for the
+zero-source branch.
+
+**`sourceCount === 0` forces the insufficient-evidence label regardless of what the body says** —
+D11's zero-results contract, and the verdict is not the model's to decide. The label is placed
+BEFORE the fence so it survives truncation of the tail.
+
+**Three incomplete causes, three distinct sentences** (`cost` / `steps` / `clock`), as a CLOSED
+union so a fourth cause is a compile error rather than a silent reuse of the wrong wording. `cost`
+is byte-identical to the pre-Phase-16 string because the eval harness matches the first line and
+`dispatch.test.ts` pins the marker. D12 raises the research budget but does **not** make this
+redundant: raising a limit and defining behaviour AT the limit are different fixes.

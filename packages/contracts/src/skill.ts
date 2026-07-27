@@ -97,6 +97,11 @@ export const MONEY_MODEL_DESIGNER_SKILL = "money-model-designer" as const;
 /** Registry name of the lead-engine specialist rubric (BEVL-01 — the gap-action target; execution deferred to Phase 15+). */
 export const LEAD_ENGINE_SKILL = "lead-engine" as const;
 
+/** Registry name of the research specialist (Phase 16, DISP-02/ACTN-03 — the web-research
+ *  sub-agent). The spelling is load-bearing: `specialists.test.ts` reads THIS file off disk and
+ *  asserts a matching exported constant for every `SPECIALISTS[route].skillName`. */
+export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
+
 /** Registry name of the conversational onboarding system prompt (ONBD-01 / 15.1, design §6). */
 export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
 
@@ -154,6 +159,11 @@ export const GATED_SKILLS: readonly string[] = [
   OFFER_ARCHITECT_SKILL,
   MONEY_MODEL_DESIGNER_SKILL,
   LEAD_ENGINE_SKILL,
+  // Phase 16 (DISP-02/ACTN-03): the strongest gating case in this list. This body's whole value is
+  // BEHAVIOURAL — does it refuse to confabulate when search comes back empty — which is exactly
+  // what an eval corpus can assert and code cannot. Bootstrap v1 still activates ungated via
+  // seedSkills' `rows.length === 0` path, so the gate costs nothing until the first edit.
+  RESEARCH_SPECIALIST_SKILL,
 ];
 
 /** Whether activation of a candidate version of this skill requires eval evidence. */
