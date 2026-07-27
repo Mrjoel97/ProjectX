@@ -24,7 +24,7 @@ created: 2026-07-27
 | **Full suite command** | `pnpm test` |
 | **Typecheck (a REAL test here)** | `pnpm typecheck` — the `satisfies Record<ActionType, Arm>` binds and `assertNever` are enforced by `tsc`, not Vitest. Half this phase's enforcement is compile-time. |
 | **Estimated runtime** | ~30s quick, ~3min full |
-| **Known pre-existing red** | `convex/audit.test.ts` (`auditCounts` unregistered) — documented since Phase 2, NOT a regression |
+| **Known pre-existing red** | **NONE — CORRECTED 2026-07-27.** `17-RESEARCH.md`, `17-01` and `17-04` still call `convex/audit.test.ts` a documented pre-existing red. **It is GREEN** — verified by running it this session (1/1 pass); the 2026-07-26 handoff already recorded the backend suite at 643/643 with `auditCounts` fixed. **Treat ANY red in `audit.test.ts` as a REAL regression.** This stale claim is the dangerous kind — it instructs an executor to ignore exactly the failure they would be causing. |
 | **Harness note** | Any test exercising an audit-writing action must register the aggregate component (`gmail.test.ts:20-25` `harness()` idiom) or the audit path throws "component not registered" |
 
 ---
