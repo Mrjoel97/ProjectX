@@ -321,7 +321,7 @@ describe("officeText source contract", () => {
   const code = src.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
   const PART_LABEL = /`(?:Sheet|Slide) \$\{/g;
 
-  it("every `Sheet ${n}` / `Slide ${n}` literal is an argument to labelled()", () => {
+  it("every Sheet-N / Slide-N part-label literal is an argument to labelled()", () => {
     const all = [...code.matchAll(PART_LABEL)].length;
     const gated = [...code.matchAll(/labelled\(\s*`(?:Sheet|Slide) \$\{/g)].length;
     expect(all, "the part-label literals must still exist").toBeGreaterThan(0);

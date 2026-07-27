@@ -43,15 +43,40 @@ function numericSorted(
     .sort((a, b) => a.n - b.n);
 }
 
+/**
+ * A structural header (`Sheet 3`, `Slide 7`) is SCAFFOLDING. Emitted unconditionally it makes an
+ * empty extraction non-empty, so `empty_extraction` never fires and a document with nothing in it
+ * reports `ready` — a plausible failure, which is worse than a failure. The label is therefore
+ * bound to the body: no body, no label, no part. The success signal downstream is the COUNT of
+ * surviving parts, never the truthiness of the joined string (`okPages` 15.2-06, `okSheets`
+ * 15.2-07). `trim()` is the TEST, never a rewrite — the body is returned as it came in, so a part
+ * whose first row is blank still renders that blank row.
+ */
+function labelled(label: string, body: string): string | null {
+  return body.trim().length === 0 ? null : `${label}\n${body}`;
+}
+
+/** Parts that yielded content, blank-line joined. Nothing survived => "" — see joinParts' note. */
+function joinParts(parts: (string | null)[]): string {
+  // "" and NOT a throw: the archive parsed fine, so `office_parse_failed` would be a lie about a
+  // perfectly valid chart-only or password-protected document. vaultExtract.ts's empty_extraction
+  // guard already turns "" into the accurate reason, and that reason already carries user-facing
+  // copy ("We opened this file but found no readable text."). A throw here would be a SECOND
+  // failure mechanism for a case the existing one already describes correctly.
+  return parts.filter((p): p is string => p !== null).join("\n\n");
+}
+
 function xlsxText(entries: Record<string, Uint8Array>): string {
   const sst = entries["xl/sharedStrings.xml"]; // optional: literal-only workbooks omit it
   // ponytail: a rich-text <si> (multiple <r><t> runs) indexes as multiple entries here;
   // per-<si> grouping is the upgrade path if real workbooks surface it.
   const shared = sst ? runsOf(strFromU8(sst), "t") : [];
   const sheets = numericSorted(entries, /^xl\/worksheets\/sheet(\d+)\.xml$/);
+  // *No worksheets at all* is a BROKEN ARCHIVE and throws; *worksheets with nothing in them* is an
+  // EMPTY DOCUMENT and returns "". Different facts, different endings — do not merge them.
   if (sheets.length === 0) throw new Error("office_parse_failed: no worksheets");
-  return sheets
-    .map(({ xml, n }) => {
+  return joinParts(
+    sheets.map(({ xml, n }) => {
       const rows = [...xml.matchAll(/<row(?:\s[^>]*)?>([\s\S]*?)<\/row>/g)].map((row) =>
         [...(row[1] ?? "").matchAll(/<c(?:\s([^>]*))?>([\s\S]*?)<\/c>/g)]
           .map((cell) => {
@@ -62,17 +87,27 @@ function xlsxText(entries: Record<string, Uint8Array>): string {
           })
           .join("\t"),
       );
-      return [`Sheet ${n}`, ...rows].join("\n");
-    })
-    .join("\n\n");
+      return labelled(`Sheet ${n}`, rows.join("\n"));
+    }),
+  );
+}
+
+/**
+ * `<a:fld>` blocks are slide-number / date / footer FIELDS — scaffolding, not content. Measured on
+ * a real deck: a field is the ENTIRE `<a:t>` content of all three of its notes slides.
+ */
+const PPT_FIELD = /<a:fld(?:\s[^>]*)?>[\s\S]*?<\/a:fld>/g;
+
+/** `<a:t>` runs of one part, fields stripped and blank runs dropped (they are not content). */
+function slideRuns(xml: string): string[] {
+  return runsOf(xml.replace(PPT_FIELD, ""), "a:t").filter((r) => r.trim().length > 0);
 }
 
 function pptxText(entries: Record<string, Uint8Array>): string {
   const slides = numericSorted(entries, /^ppt\/slides\/slide(\d+)\.xml$/);
+  // See xlsxText: no slides at all is a broken archive; slides with nothing in them is empty.
   if (slides.length === 0) throw new Error("office_parse_failed: no slides");
-  return slides
-    .map(({ xml, n }) => [`Slide ${n}`, ...runsOf(xml, "a:t")].join("\n"))
-    .join("\n\n");
+  return joinParts(slides.map(({ xml, n }) => labelled(`Slide ${n}`, slideRuns(xml).join("\n"))));
 }
 
 /** `<text:p>` runs of one ODF block, inner markup (`<text:span>`, `<text:a>`, …) stripped. */
@@ -111,7 +146,13 @@ function epubText(entries: Record<string, Uint8Array>): string {
     .filter((n) => EPUB_CONTENT.test(n))
     .sort();
   if (names.length === 0) throw new Error("office_parse_failed: no epub content");
-  return names.map((n) => markupText(strFromU8(entries[n] as Uint8Array))).join("\n\n");
+  // The `.filter` is the same rule as `labelled`, made explicit: without it a book of empty
+  // chapters returns "\n\n" — whitespace-only, which the downstream guard trims and so already
+  // fails honestly, but "already honest by someone else's trim()" is not a property worth relying on.
+  return names
+    .map((n) => markupText(strFromU8(entries[n] as Uint8Array)))
+    .filter((t) => t.length > 0)
+    .join("\n\n");
 }
 
 const ODF_MIME_PREFIX = "application/vnd.oasis.opendocument.";
