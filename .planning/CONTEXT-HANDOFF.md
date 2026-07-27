@@ -1,5 +1,37 @@
 # Context Handoff — 2026-07-27
 
+## ⏸ CURRENT POSITION (updated 2026-07-27, after the freeze + waves 2-3)
+
+**4 of 13 plans complete and merged to `main`. Everything remaining is blocked on the owner.**
+
+| Plan | State |
+|---|---|
+| `16-01` freeze | ✅ merged `7386744` |
+| `17-01` freeze | ✅ merged `0da5041` — **Stage 1 COMPLETE** |
+| `16-04` research-specialist skill body (GATED) | ✅ merged `46547f4` |
+| `16-03` research route + grant + fence + ADR-010 | ✅ merged `46547f4` |
+
+**Both lanes are stalled at their wave-2 root, and every later plan transitively depends on one of
+these two:**
+
+| Blocker | Gates | Needs from the owner |
+|---|---|---|
+| **`16-02`** — the OQ-2 hosted-web-search probe | `16-05` → `16-06` → `16-07`, `16-08`, `16-09` | **`OPENAI_API_KEY` exported into a shell**, and ~$0.01 for ONE real call. It is NOT in `packages/backend/.env.local`, NOT in `.env`, and NOT in the environment — it lives on the Convex deployment (`npx convex env get OPENAI_API_KEY`), which is not running. |
+| **`17-02`** — the calendar adapter | `17-03` → `17-04` | **Google OAuth consent** for the widened scope, **plus** a real Convex deployment (it adds `calendar.ts` + `calendarComplete.ts`, and a NEW `convex/` module forces `api.d.ts` regeneration). |
+
+**Do not guess the probe's answer.** `16-02` exists because OpenAI's own guide and pricing page
+contradict each other on which model accepts `openai.tools.webSearch`, and guessing wrong fails
+**silently** — $0 spend and the governance rail simply absent. That is the exact failure the probe
+was written to prevent.
+
+**Deployment constraint:** this project runs a **local** Convex backend (`CONVEX_DEPLOYMENT=local:…`,
+`127.0.0.1:3210`). Three lanes cannot each run one concurrently — the deployment-dependent plans
+must be **sequenced**, not parallelised. Everything through wave 3 ran fully offline because
+`dataModel.d.ts` derives schema types generically (field/table changes need no codegen); only a NEW
+module forces regeneration.
+
+**Offline work remaining: none.** Both lanes' next plans are the blocked roots above.
+
 Written after a session that planned Phases 16 and 17 concurrently. Read this + `STATE.md` +
 `.planning/PARALLELIZATION.md` + `CLAUDE.md` to resume.
 
