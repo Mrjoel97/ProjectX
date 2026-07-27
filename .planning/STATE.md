@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 16
-current_plan: 0
-status: phase_complete
-stopped_at: "Phase 15.1 COMPLETE and VERIFIED (6/6 success criteria). Merged with main: Phase 14 (voice-doc) arrives at 8/9 — one plan outstanding. Phase 15's specialist-body eval gate remains UNPAID and 15.1 has 4 manual-only VALIDATION rows; neither is deployed."
-last_updated: "2026-07-26T00:00:00.000Z"
+current_plan: 1
+status: in_progress
+stopped_at: "16-01 COMPLETE + committed on lane-r (4d32ce1) — the Lane-R freeze half. NOT YET MERGED to main: a Lane V session is LIVE on main (Phase 15.2, committing as of 2026-07-27 04:14). Merging is a coordination event. Next: merge lane-r to main when Lane V is quiet, announce to Lane K, then Lane K merges main down and runs 17-01."
+last_updated: "2026-07-27T04:15:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
