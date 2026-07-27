@@ -61,6 +61,22 @@ progress:
   completed_plans: 175
 ---
 
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 17.1
+current_plan: 2
+status: in_progress
+stopped_at: "Completed 17.1-01-PLAN.md (Wave 1 — the pure blueprint core: closed field set + FIELD_SPEC totality table + probes + the deterministic serializer pair). 327/327 @pikar/core, typecheck exit 0, two mutation-checks confirmed applied and reverted green. Wave-1 sibling 17.1-02 (the business-blueprint skill row) was executing CONCURRENTLY in this same tree. NOTE: this block describes LANE 17.1 ONLY. The blocks above are other lanes (15.2 / 16 / 17) and are HAND-EDITED — `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the rest, so it was deliberately NOT run. Resolve any merge conflict here by keeping ALL lanes' blocks. BLPR-01 was deliberately left PENDING in REQUIREMENTS.md: six of this phase's ten plans claim it, and marking it complete after plan 1 of 10 would be a false signal."
+last_updated: "2026-07-27T20:35:00.000Z"
+progress:
+  total_phases: 38
+  completed_phases: 23
+  total_plans: 179
+  completed_plans: 176
+---
+
 # Project State
 
 ## Project Reference
@@ -72,7 +88,55 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — ALL 7 PLANNED WAVES
+**PHASE 17.1 — Business Blueprint (Wave 1 of 8) — 17.1-01 COMPLETE: the pure blueprint core.**
+`packages/core/src/blueprint.ts` is live — Convex-free, portable (§1), 20 tests, and the type
+contract every later 17.1 plan is written against. **The one thing worth carrying forward is that
+BOTH of its guarantees are structural, and both were mutation-checked rather than asserted.**
+(1) **Totality:** one `as const satisfies Record<BlueprintField, FieldSpec>` table (`label`/`list`/
+`cap`/`derivable`/`probe`) makes the serializer, the diff, the probe map and the spine caps total AT
+ONCE — deliberately not a switch, whose `default` branch would make a new field silently inherit
+another's behaviour and make the coverage test vacuous forever (`TIER_REASON`/`armFor` lesson).
+**Proven: a 12th `BLUEPRINT_FIELDS` member with no spec entry ⇒ `TS2741` at the `satisfies`;
+reverted ⇒ exit 0.** (2) **The `- **Persona:**` collision:** the stored markdown uses the PLAIN
+`- <Label>: ` scalar shape, because that exact bolded string is the BUSINESS-PROFILE DETECTOR in
+`evaluations.ts` and `vault.profileSeedDocs` and a blueprint wearing it is misread as a profile doc
+by BOTH. **Proven: making the marker bold turned the suite 4 RED** — without that check,
+`not.toContain("- **Persona:**")` would have passed forever. **A THIRD trap is closed by SIGNATURE,
+not by a comment:** `statedFromProfile(profile: BusinessProfile, tier: Tier, entities)` takes the
+typed profile and nothing else, so `tenantProfiles.revenueStage` — the closed union with the
+confusingly similar name to `BusinessProfile.stage`'s free string — is structurally unreachable;
+CONTEXT names reading the wrong one "a silent correctness bug NO test would catch". Cost scales with
+BLANKS (`probesFor` emits nothing for a typed field, and never for `name`/`tier`/`entities`, which
+are `derivable: false`); a blank is ABSENT/`null`, never an empty entry (`trim().length > 0` per
+value — the `SLOT_PRESENT` rule, never `!value`); `deserializeBlueprint` is TOTAL and never throws,
+so a foreign blob degrades to "no blueprint" instead of crashing a grounding call. Per-field caps sum
+to **2280** chars (measured, not estimated) inside the ≈2500 spine budget — **17.1-03 owns the hard
+total assertion.** **TWO THINGS RECORDED RATHER THAN PAPERED OVER. (1) The plan's preflight
+("confirm 15.2/16/17 have merged; if a lane is still live, STOP") was OVERRIDDEN by the orchestrator
+and all three lanes were live throughout** — 16-06, 15.2-08 and wave-mate 17.1-02 all committed into
+this tree DURING execution. Safe here only because this plan shares NO file with any lane
+(`packages/core` + docs only); every commit checked `.git/MERGE_HEAD` first and used the
+`git commit -- <paths>` pathspec form with an explicit file list, never `git add -A`. **The
+preflight's `vaultGround.ts`/`vault.ts`/`schema.ts` re-read was NOT performed and TRANSFERS TO
+17.1-07**, the plan that actually edits `vaultGround.ts` and the one Lane R overlaps. **(2)
+`check-playbooks` BLOCKS, entirely on foreign work** — `skill-registry.md` (17.1-02's four
+uncommitted skill files) and `vault.md` (15.2-08's `officeText.ts`). **Deliberately NOT satisfied:**
+bumping either `Last verified` would write a verification claim about a diff this plan never read and
+would discharge another plan's §9 obligation. This plan's own obligation IS discharged —
+`onboarding.md` is not in the stale list, and no blueprint path is in the creation-gap list, which is
+what the new `watch.json` entries bought. **CONTEXT's Definition-of-Done line *"blueprint.ts needs no
+new watch.json entry — the packages/core/ prefix covers it"* is FACTUALLY WRONG** (there is no such
+prefix — only three specific `packages/core` paths), as `17.1-VALIDATION.md` §3 already flagged; all
+four blueprint paths are now registered under `onboarding.md`. **`BLPR-01` was left PENDING in
+REQUIREMENTS.md on purpose:** `gsd-tools requirements mark-complete` flipped it to Complete, but SIX
+of this phase's TEN plans claim BLPR-01 (01, 02, 03, 05, 08, 09, 10) and the requirement's own text
+covers the confirm gate, which is 17.1-08's — so the flip was REVERTED. **`gsd-tools state
+advance-plan` was NOT run** (this file holds four lanes' frontmatter blocks and the tool reads only
+the first); the 17.1 block was hand-added. **ROADMAP `update-plan-progress` DID work this time**
+(contrary to the standing warning) but left the plan checkbox and the date cell stale — both
+hand-fixed, and it also corrected a pre-existing false *"7/7 plans complete"* line for this phase.
+
+PRIOR — **PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — ALL 7 PLANNED WAVES
 COMPLETE; owner-created 15.2-08 still outstanding.** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
@@ -1342,6 +1406,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 10 | 02 | 20 min | 3 | 7 |
 | 10 | 03 | 12 min | 2 | 2 |
 | 15.1 | 01 | 31 min | 3 | 7 |
+| 17.1 | 01 | 22 min | 2 | 5 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -1391,6 +1456,10 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
+- [Phase 17.1 / 17.1-01]: **The blueprint field set is closed and bound by ONE `as const satisfies Record<BlueprintField, FieldSpec>` table** carrying `label`/`list`/`cap`/`derivable`/`probe`. Deliberately NOT a switch — a `default` branch makes a new field silently inherit another's behaviour and makes the coverage test vacuous forever. Mutation-verified: a 12th field with no spec entry ⇒ `TS2741`. Every later 17.1 plan (diff, serializer, spine caps, candidate gate) indexes this one table rather than re-enumerating the fields.
+- [Phase 17.1 / 17.1-01]: **The stored blueprint markdown uses the plain `- <Label>: ` scalar shape and must NEVER emit `- **Persona:**`** — that exact string is the business-profile DETECTOR in `evaluations.ts` and `vault.profileSeedDocs`, so a blueprint wearing it is misread as a profile doc by both. Mutation-verified (bold marker ⇒ 4 RED). It is also byte-deterministic with no date and no document count: both are computed at READ time in the spine, and baking either in would make every rebuild "differ", breaking the drift diff and the `contentHash` dedup.
+- [Phase 17.1 / 17.1-01]: **`BLPR-01` stays PENDING until the phase actually delivers it.** Six of the phase's ten plans claim it and its text covers the confirm gate (17.1-08's), so `gsd-tools requirements mark-complete` flipping it after plan 1 of 10 was reverted. A requirement checkbox is a claim, not a progress bar.
+- [Phase 17.1 / 17.1-01]: **A playbook's `Last verified` is only bumped by the plan that OWNS it.** `check-playbooks` blocked on `skill-registry.md` and `vault.md` for other lanes' uncommitted work; satisfying it would have written a verification claim about a diff this plan never read. Report, don't discharge someone else's §9 obligation.
 - [v2.0 open]: Build platform breadth BEFORE opening the beta — former Phase 9 productionization moves to the milestone's END (now Phase 25).
 - [Roadmap]: `requireOwner` (GOVN-01) pulled EARLY to Phase 22 — it must exist before agent-authored skills (Phase 23) activate and before multi-user (Phase 25).
 - [Roadmap]: BEVL market-fact grounding depends on web research (Phase 16); Phase 12 evaluation scopes to vault-grounded findings until then.
@@ -1530,6 +1599,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-07-27T20:35:00.000Z
+Stopped at: Completed 17.1-01-PLAN.md (the pure blueprint core, Wave 1 — Phase 17.1)
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
