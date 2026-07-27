@@ -563,10 +563,31 @@ describe("rail dispatch — content decides, and every refusal is TERMINAL (SC#1
 
     const doc = await getDoc(t, docId);
     expect(doc?.status).toBe("failed");
-    expect(doc?.failureReason).toBe("xls_parse_failed");
+    // OBSERVED, not assumed: the reason is `unsupported_format`, NOT `xls_parse_failed`, because
+    // halving the file takes the CFB directory sector with it, so `ole2Kind` can no longer find
+    // the `Workbook` stream name and the dispatcher refuses before xlsText is ever called. Two
+    // honest terminal refusals, one rail earlier than you would guess — worth pinning so nobody
+    // "fixes" the reason string to the one that reads better.
+    expect(doc?.failureReason).toBe("unsupported_format");
+    expect(doc?.failureReason?.length).toBeGreaterThan(0);
     // Terminal, not parked — the stranding shape this whole phase exists to delete.
     expect(doc?.status).not.toBe("pending_extraction");
     expect(doc?.status).not.toBe("extracting");
+  }, 20000);
+
+  test("an OLE2 workbook that is NOT parseable BIFF fails with xls_parse_failed", async () => {
+    const t = setup();
+    // 15.2-03's exact fixture — real OLE2 magic and a `Workbook` stream name, but no BIFF content.
+    // It used to assert `unsupported_legacy_spreadsheet`; it now proves the PARSER's own terminal
+    // ending is reachable, and that the failure carries OUR reason and never SheetJS's message
+    // ("Cannot set properties of undefined (setting 'name')") — §4.
+    const docId = await uploadBytes(t, ole2With("Workbook"), "application/vnd.ms-excel", "q3.xls");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    expect(doc?.status).toBe("failed");
+    expect(doc?.failureReason).toBe("xls_parse_failed");
   }, 20000);
 
   test("the two legacy rails did NOT get crossed: an OLE2 .doc still routes to oleText", async () => {

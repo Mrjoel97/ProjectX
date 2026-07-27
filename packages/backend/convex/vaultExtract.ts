@@ -27,6 +27,9 @@ import {
 } from "@pikar/vault";
 // Subpath import (NOT the barrel) — keeps fflate structurally out of the V8 bundle.
 import { extractOfficeText } from "@pikar/vault/officeText";
+// Subpath import (NOT the barrel), same discipline and a much bigger number: SheetJS is ~1 MB and
+// enters ONLY this node action. Pitfall 9 applies to the package it imports — see xlsText.ts.
+import { xlsText } from "@pikar/vault/xlsText";
 import { generateText } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -350,13 +353,17 @@ export const extractDoc = internalAction({
           return null;
         }
       } else if (rail === "legacy_xls") {
-        // An HONEST refusal, deliberately not a plausible one. A printable-run sweep over BIFF is
-        // NOT an acceptable substitute: legacy .xls stores numbers as binary doubles, so a sweep
-        // recovers the column headers and silently loses every value — a spreadsheet that reads as
-        // a document with no data in it. The real parser (SheetJS) lands in plan 15.2-07; until
-        // then the remedy shown to the user is "re-save as .xlsx".
-        await fail("unsupported_legacy_spreadsheet");
-        return null;
+        // SheetJS (15.2-07). oleText is NOT an acceptable substitute and must never be pointed
+        // here: legacy .xls stores numbers as binary doubles, so a printable-run sweep recovers
+        // the column headers and silently loses every value — a spreadsheet that reads as a
+        // document with no data in it, i.e. a PLAUSIBLE failure. xlsText throws rather than
+        // returning "" for an empty or unreadable workbook, so this catch is the only ending.
+        try {
+          extracted = { text: xlsText(bytes), path: "legacy" };
+        } catch {
+          await fail("xls_parse_failed");
+          return null;
+        }
       } else if (rail === "rtf") {
         try {
           extracted = { text: rtfText(bytes), path: "raw" };
