@@ -99,6 +99,45 @@ its own `pnpm install`, its own `npx convex dev` deployment, its own `_generated
 **Stage 3 — integrate, then verify.** Merge each lane to `main` as it lands; announce it so the
 other lane merges `main` down. Verify each phase after its own merge.
 
+### ⚠ THE TYPECHECK BASELINE IS NOT CLEAN — measured 2026-07-27, applies to ALL THREE lanes
+
+Every plan in Phases 16 and 17 gates on "typecheck clean". **It is not, and never has been.**
+Measured on `main` and in both lane worktrees:
+
+```
+pnpm exec turbo run typecheck --filter=@pikar/backend --force   ->  52 errors
+```
+
+**`pnpm typecheck` reports GREEN and is lying.** Turbo's `typecheck` task declares no `inputs`
+(`turbo.json`), and its cache restores a stale pass without running `tsc`. **Always pass
+`--force` when you mean it.** This is how the red survived unnoticed since Phase 1.
+
+**All 52 errors are in `convex/*.test.ts`. ZERO are in production `convex/` source** — the
+shipped code typechecks clean. Root cause is a tsconfig artifact, not a code defect:
+`packages/backend/tsconfig.json` sets `"types": ["node"]`, which suppresses every other ambient
+type package (including the one declaring `import.meta.glob`), while its `include` of
+`convex/**/*.ts` sweeps the test files in anyway. `tenant.test.ts`'s `import.meta.glob` dates to
+commit `0385176` — **Phase 1**.
+
+Per-file baseline (`skills` 10, `audit` 7, `plans` 5, `vault` 4, `llmRedaction` 4, `tenant` 3,
+`optimizerConfig` 3, `notifications` 3, `feedback` 3, `evaluations` 3, `worm` 2, then
+`optimizerEligibility` / `opsSignals` / `importGuard` / `guardrails` / `deadLetters` 1 each).
+
+**What an executor must do instead of "typecheck clean":** check the **delta**. Re-measure with
+`--force` before your change, and require that your change adds no error and no error in a
+production `convex/*.ts` file. An absolute-clean gate is unachievable and will make an executor
+either thrash or start ignoring reds wholesale.
+
+> **Do not conflate this with the `audit.test.ts` correction.** Both are true and they are
+> different tools: `audit.test.ts` is **GREEN at runtime** (`vitest`, 1/1 — any runtime red there
+> is a REAL regression, per both VALIDATION.md files) and simultaneously carries **7 of these
+> pre-existing TYPECHECK errors**. Phase 16 touches the audit path heavily, so keep the two
+> apart.
+
+**NOT fixed here, deliberately.** `tsconfig.json` is a build singleton all three lanes share, and
+widening `types` / excluding tests mid-flight could mask a real error in exactly the phases that
+are building. Owner call, best taken between lanes rather than during them.
+
 ### Carried-forward debt neither lane owns
 
 Both of these predate this contract and are recorded so they are not silently lost:
