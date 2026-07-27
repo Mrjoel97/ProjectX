@@ -6,6 +6,7 @@ import {
   type BusinessBlueprint,
   deserializeBlueprint,
   FIELD_SPEC,
+  mergeBlueprint,
   probesFor,
   serializeBlueprint,
   statedFromProfile,
@@ -346,5 +347,164 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
       SOURCES
     );
     expect(dirty.dropped).toHaveLength(2);
+  });
+});
+
+// ── Precedence as CODE, and the two-kind diff (items 2, 5, 29) ─────────────────────────────────
+
+/** A derived entry, always carrying the source title a derived claim must have. */
+const derivedEntry = (value: string, source = "Deck.pptx"): BlueprintEntry => ({
+  values: [value],
+  origin: "derived",
+  source,
+});
+
+describe("mergeBlueprint — the typed value wins (item 2, the owner-required rule)", () => {
+  it("a contradicting derived candidate does NOT change the typed value; it raises ONE row", () => {
+    const { blueprint: merged, diff } = mergeBlueprint(
+      { targetCustomer: entry("independent consultants") },
+      { targetCustomer: derivedEntry("enterprise procurement teams", "Pricing deck.pdf") }
+    );
+
+    // The value the user typed survived, still marked as their own words.
+    expect(merged.targetCustomer).toEqual({
+      values: ["independent consultants"],
+      origin: "stated",
+    });
+
+    // …and the disagreement is SURFACED, never silently applied.
+    expect(diff).toEqual([
+      {
+        kind: "contradiction",
+        field: "targetCustomer",
+        stated: { values: ["independent consultants"], origin: "stated" },
+        derived: {
+          values: ["enterprise procurement teams"],
+          origin: "derived",
+          source: "Pricing deck.pdf",
+        },
+      },
+    ]);
+  });
+
+  it("holds for EVERY field in the closed set — a property, not one hand-picked field", () => {
+    const allStated: Partial<Record<BlueprintField, BlueprintEntry>> = {};
+    const allDerived: Partial<Record<BlueprintField, BlueprintEntry>> = {};
+    for (const f of BLUEPRINT_FIELDS) {
+      allStated[f] = entry(`typed ${f}`);
+      allDerived[f] = derivedEntry(`derived ${f}`);
+    }
+
+    const { blueprint: merged, diff } = mergeBlueprint(allStated, allDerived);
+
+    // There is no branch that assigns a derived entry over a stated one. This loop is what
+    // survives someone adding a twelfth field.
+    for (const f of BLUEPRINT_FIELDS) {
+      expect({ f, entry: merged[f] }).toEqual({ f, entry: allStated[f] });
+    }
+    expect(diff).toHaveLength(BLUEPRINT_FIELDS.length);
+    expect(diff.every((row) => row.kind === "contradiction")).toBe(true);
+  });
+
+  it("a derived candidate that AGREES with the typed value raises no row", () => {
+    const { blueprint: merged, diff } = mergeBlueprint(
+      { offering: entry("Single-origin beans") },
+      { offering: derivedEntry("  Single-origin beans  ") }
+    );
+    expect(merged.offering).toEqual({ values: ["Single-origin beans"], origin: "stated" });
+    expect(diff).toEqual([]);
+  });
+});
+
+describe("mergeBlueprint — diff classification (item 5)", () => {
+  it("blank → derived value is an ADDITION", () => {
+    const { blueprint: merged, diff } = mergeBlueprint({}, { offering: derivedEntry("Beans") });
+    expect(merged.offering).toEqual(derivedEntry("Beans"));
+    expect(diff).toEqual([{ kind: "addition", field: "offering", derived: derivedEntry("Beans") }]);
+  });
+
+  it("typed ≠ derived is a CONTRADICTION and nothing else", () => {
+    const { diff } = mergeBlueprint(
+      { stage: entry("pre-launch idea") },
+      { stage: derivedEntry("scaling") }
+    );
+    expect(diff.map((r) => r.kind)).toEqual(["contradiction"]);
+  });
+
+  it("unchanged versus `live` is NEITHER — no row at all", () => {
+    const live = blueprint({ offering: derivedEntry("Beans") });
+    const { diff } = mergeBlueprint({}, { offering: derivedEntry("Beans") }, live);
+    expect(diff).toEqual([]);
+  });
+
+  it("a CHANGED derived value is still an ADDITION, never a contradiction", () => {
+    // `live.offering` was inferred from doc A; this run infers a different value from doc B.
+    // A contradiction is only ever raised against content the USER typed — a changed inference
+    // replaces a system inference, never user content, so there is nothing for the user to lose
+    // by accepting it in the default-ON group.
+    const live = blueprint({ offering: derivedEntry("Beans", "Doc A.pdf") });
+    const { blueprint: merged, diff } = mergeBlueprint(
+      {},
+      { offering: derivedEntry("Beans and brewing kit", "Doc B.pdf") },
+      live
+    );
+    expect(diff).toEqual([
+      {
+        kind: "addition",
+        field: "offering",
+        derived: derivedEntry("Beans and brewing kit", "Doc B.pdf"),
+      },
+    ]);
+    expect(merged.offering).toEqual(derivedEntry("Beans and brewing kit", "Doc B.pdf"));
+  });
+
+  it("a contradiction row carries BOTH values and the derived source — the UI defaults it OFF", () => {
+    const { diff } = mergeBlueprint(
+      { targetCustomer: entry("independent consultants") },
+      { targetCustomer: derivedEntry("enterprise buyers", "Ops notes.docx") }
+    );
+    const [row] = diff;
+    expect(row?.kind).toBe("contradiction");
+    if (row?.kind !== "contradiction") throw new Error("expected a contradiction row");
+    expect(row.stated.values).toEqual(["independent consultants"]);
+    expect(row.derived.values).toEqual(["enterprise buyers"]);
+    expect(row.derived.source).toBe("Ops notes.docx");
+  });
+});
+
+describe("mergeBlueprint — the drift contract (item 29)", () => {
+  it("an identical rebuild produces an EMPTY diff, so nothing is proposed", () => {
+    const stated = { name: entry("Acme Ltd"), targetCustomer: entry("Independent cafés") };
+    const derived = {
+      offering: derivedEntry("Single-origin beans"),
+      revenueModel: derivedEntry("Wholesale + subscription", "Pricing deck.pdf"),
+    };
+    const first = mergeBlueprint(stated, derived);
+    expect(first.diff.length).toBeGreaterThan(0);
+
+    // Same inputs, now with the previous result as `live` — the diff IS the drift signal, so an
+    // identical rebuild is silently discarded.
+    const second = mergeBlueprint(stated, derived, first.blueprint);
+    expect(second.diff).toEqual([]);
+    expect(second.blueprint).toEqual(first.blueprint);
+  });
+
+  it("a rebuild whose probes came back EMPTY carries the previous value forward, silently", () => {
+    // Monotone: a blank probe pass must not blank a field the blueprint already had, or every
+    // sparse rebuild would read as drift.
+    const live = blueprint({
+      offering: derivedEntry("Beans"),
+      bindingConstraint: derivedEntry("Roasting capacity"),
+    });
+    const { blueprint: merged, diff } = mergeBlueprint({}, {}, live);
+    expect(merged).toEqual(live);
+    expect(diff).toEqual([]);
+  });
+
+  it("with no `live` at all, every blank field is null and the merge is total", () => {
+    const { blueprint: merged } = mergeBlueprint({ name: entry("Acme Ltd") }, {});
+    expect(Object.keys(merged).sort()).toEqual([...BLUEPRINT_FIELDS].sort());
+    expect(merged.offering).toBeNull();
+    expect(merged.name).toEqual(entry("Acme Ltd"));
   });
 });
