@@ -147,6 +147,29 @@ export async function slicePdfToPageCap(bytes: Uint8Array): Promise<Uint8Array> 
 }
 
 /**
+ * Emit each of the first `limit` pages as its OWN single-page PDF, from ONE loaded source.
+ *
+ * The source is loaded ONCE on purpose: reloading it per page is the memory pressure the playbook
+ * already flags for large documents, and bounding per-action memory is half the reason the
+ * fan-out exists. Same `copyPages` call slicePdfToPageCap already proves works here — in a loop.
+ *
+ * Pitfall 9 applies unchanged: pdf-lib is reached by the STATIC top-level import, never a
+ * dynamic one. Exported for the offline test (the slicePdfToPageCap precedent).
+ */
+export async function pdfPages(bytes: Uint8Array, limit: number): Promise<Uint8Array[]> {
+  const src = await PDFDocument.load(bytes);
+  const count = Math.min(src.getPageCount(), limit);
+  const out: Uint8Array[] = [];
+  for (let i = 0; i < count; i++) {
+    const one = await PDFDocument.create();
+    const [page] = await one.copyPages(src, [i]);
+    if (page) one.addPage(page);
+    out.push(await one.save());
+  }
+  return out;
+}
+
+/**
  * Run `run(i)` for pages 0..pageCount-1 in bounded-concurrency batches, SEQUENTIAL across
  * batches, and reassemble the results in PAGE ORDER.
  *
@@ -228,10 +251,31 @@ async function extractPdf(ctx: GenericActionCtx<DataModel>, bytes: Uint8Array): 
   const hasTextLayer =
     joined.replace(/\s/g, "").length / Math.max(totalPages, 1) >= MIN_CHARS_PER_PAGE;
   if (hasTextLayer) return { text: joined, path: "text_layer" }; // free — no model, no spend
-  // Hosted fallback for scans: slice oversize PDFs to the page cap, then send the PDF bytes as
-  // a file part (in-repo precedent: intake already sends application/pdf to gpt-4o-mini).
-  const sliced = await slicePdfToPageCap(bytes);
-  return { text: await extractHosted(ctx, sliced, "application/pdf"), path: "hosted" };
+  // Hosted fan-out for scans: ONE PAGE PER CALL (15.2-06). The attachment-extractor skill's
+  // contract is written for a SINGLE page — §5 is satisfied by REUSE here: no new skill row and
+  // no prompt change, because the prompt was always right and the INPUT was wrong. Handing it the
+  // whole document asked it to do something its prompt never promised and it summarised: a
+  // 12-page deck yielded 2,161 chars of digest instead of the deck's text (measured live
+  // 2026-07-26). Do NOT "optimise" this back into a single whole-document call — the offline
+  // suite proves batching SHAPE, so the regression would come back green.
+  const pages = await pdfPages(bytes, VAULT_EXTRACT_PAGE_CAP);
+  // `text` is already taken by the text-layer destructure above — the fan-out's own name.
+  const { text: transcribed, okPages } = await fanOutPages(
+    pages.length,
+    (i) => extractHosted(ctx, pages[i]!, "application/pdf"),
+    {
+      batchSize: PAGE_BATCH_SIZE,
+      pageTimeoutMs: PAGE_TIMEOUT_MS,
+      deadlineAt: Date.now() + FANOUT_BUDGET_MS,
+    },
+  );
+  // A document made entirely of [unreadable] markers is non-empty, so `empty_extraction` would
+  // never fire on it — a false-ready of exactly the family this phase exists to delete. okPages
+  // is the honest signal. The throw lands in extractDoc's existing outer catch ->
+  // markFailed("extract_error: …"); reusing that path rather than adding a second failure
+  // mechanism. The message is OUR OWN string — no SDK text, no document content (§4).
+  if (okPages === 0) throw new Error("hosted_extract_failed: no page produced text");
+  return { text: transcribed, path: "hosted" };
 }
 
 export const extractDoc = internalAction({
