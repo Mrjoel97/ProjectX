@@ -1,6 +1,15 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-27 (19) — **THE LIVE GATE PAID: the stranded `.xlsm` is `ready` with
+> Last verified: 2026-07-27 (20) — **SCANNED PDFs ARE NOW TRANSCRIBED, NOT SUMMARISED.** The hosted
+> branch sends **ONE PAGE PER CALL** (`fanOutPages`, 6 in flight, page-ordered reassembly, 60 s per
+> page, 7-min budget) reusing `attachment-extractor` **unchanged** — §5 satisfied by REUSE: the
+> prompt was always right, the INPUT was wrong. Live on `local-joel_feruzi-pikar_ai_50c69-1`: the
+> 12-page deck went **2,161 → 7,868 chars**, `Page 1`…`Page 12`, zero `[unreadable]`, 13¢ / 12 calls,
+> no OCC. **Owner APPROVED from the row data + excerpts — NOT from a browser (the `:3000` server was
+> still stale).** `extractionTruncated` on long scans is now EXPECTED, not a regression. **Anyone
+> collapsing this back into one whole-document call reintroduces the defect AND the offline suite
+> stays green** — it proves shape, not verbatimness. See `### Phase 15.2 — 15.2-06` at the END of
+> this file. PRIOR (19) — **THE LIVE GATE PAID: the stranded `.xlsm` is `ready` with
 > 256,439 chars of real spreadsheet text on `local-joel_feruzi-pikar_ai_50c69-1`, and a fresh
 > `.pptx` upload auto-progressed to `ready` unattended.** Owner APPROVED but **PARTIALLY OBSERVED** —
 > **15.2-04's `failureCopy` is still UNVERIFIED LIVE** (the junk-file path was never run), as are
@@ -814,8 +823,23 @@ Content is **verbatim, not descriptive**: slide copy, a reproduced comparison ta
 figures preserved (`$53.2B`, `44.9% CAGR`, `2,136 commits`, `www.pikar-ai.com`). No digest tell
 ("Here's a breakdown…", "The document discusses…") appears anywhere in the 7,868 characters.
 
-**OWNER VERDICT: ⏳ PENDING — NOT YET GIVEN.** Recorded here before the blocking checkpoint on the
-15.2-05 precedent (a session limit cut 15.2-04 mid-task; a verification living only in a chat
-transcript did not happen). **SC#5's substance is NOT closed until the owner confirms the text reads
-like the document.** The character count and the absence of digest tells are Claude's own
-observation, not the owner's verdict.
+**OWNER VERDICT: ✅ APPROVED — "the text reads as transcription, not summary."** SC#5's substance is
+**CLOSED** on the owner's own reading. (The block above was written BEFORE the blocking checkpoint,
+marked PENDING, on the 15.2-05 precedent — a session limit cut 15.2-04 mid-task, and a verification
+living only in a chat transcript did not happen.)
+
+**Exactly what the verdict rests on, stated so nobody reads it as broader than it is:** the owner
+read the **Page 3 and Page 11 excerpts** plus the character-count / page-header / no-digest-tells
+evidence above, and judged it transcription. **The verdict was given from the recorded row data and
+those excerpts, NOT from a browser session** — at verdict time the `:3000` server was still the
+stale `next start` (PID 14512, launched 2026-07-26 21:35:06, against a `.next` built 2026-07-27
+16:22:39), the same staleness 15.2-05 reported. **No vault-UI check happened here.** The preview
+pane's rendering of a fanned-out scan remains unobserved, exactly as `failureCopy` does.
+
+Two properties of the new hosted path to carry forward:
+
+- **`extractionTruncated` is now EXPECTED on long scans.** A verbatim 50-page transcription is far
+  likelier to hit the 400k `VAULT_EXTRACT_CHAR_CAP` than a summary was. **That is not a regression.**
+- **13¢ across 12 calls is the new per-scan cost shape** (≈1.08¢/page), replacing one call per
+  document. A 50-page scan is ~50 calls. The daily budget (`DAILY_BUDGET_CENTS` 500) is unchanged
+  and still the ceiling.
