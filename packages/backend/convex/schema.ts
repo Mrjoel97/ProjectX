@@ -243,7 +243,25 @@ export default defineSchema({
     // evaluations.actOnGap: no recipients, and executePlan takes the PERSIST terminal (a
     // next_step_memo vault doc) instead of the gmail fan-out. Closed literal so a widening is a
     // deliberate schema edit, never a runtime surprise.
-    kind: v.optional(v.literal("memo")),
+    // Phase-17 (ACTN-02) widened it to a closed UNION: "calendar_event" = an event staged by the
+    // proposeCalendarEvent tool, executed on Approve by the `externalAction` arm. ABSENT still
+    // means email, so this stays a no-migration, no-backfill change (the sendAt/attachments
+    // precedent) — and it is still CLOSED, so the next widening is still a deliberate edit.
+    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"))),
+    // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
+    // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
+    // plan. All optional → no migration (the sendAt precedent).
+    eventTitle: v.optional(v.string()), // CONTENT. Never audited, never a model-supplied instant.
+    eventStartMs: v.optional(v.number()), // ONE absolute epoch ms — the `sendAt` rule verbatim.
+    eventDurationMs: v.optional(v.number()), // duration as ms, NOT an end wall-clock string.
+    eventTz: v.optional(v.string()), // the TRUSTED client's IANA zone (§2-D). Never the model's.
+    // The last TWO are written ONLY by cockpit.ts (the run id, inside the Approve transaction) and
+    // calendarComplete.ts (the event id, in the retrier terminal), via direct ctx.db.patch. They
+    // are deliberately NOT `patchPlan` args: nothing reachable from the model may write an event
+    // ref or a run id. Do not add them to patchPlan speculatively.
+    calendarEventId: v.optional(v.string()), // the Google event ref, set on success. A ref, not content.
+    calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
+    // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
@@ -251,7 +269,12 @@ export default defineSchema({
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_thread", ["tenantId", "threadId"])
+    // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
+    // context bag — so the run id is the sole correlation handle back to the plan that started it.
+    // This index is what makes that resolvable; without it the terminal cannot find its own plan.
+    .index("by_calendar_run", ["calendarRunId"]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).
@@ -460,6 +483,13 @@ export default defineSchema({
       // worse than none: it reads as a trace that exists and would send the next reader hunting
       // for the insert that writes it.
       v.literal("dispatchResearch"),
+      // Phase-17 (ACTN-02): the in-loop availability READ and the plan-staging WRITE. Two literals,
+      // no text field — §4 on this path stays enforced by the ABSENCE of anywhere to put an event
+      // title or an attendee address. Without these literals the step insert throws and the AI SDK
+      // SWALLOWS it → no trace row in prod while every offline test passes (Research Pitfall 4 —
+      // this codebase has been bitten twice already, at searchVault and evaluateBusiness).
+      v.literal("checkAvailability"),
+      v.literal("proposeCalendarEvent"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -488,6 +518,16 @@ export default defineSchema({
   // row exists. Written ONLY by smoke.seedInboxFixture (an internalMutation) — real tenants
   // never have rows, so the live path is unreachable from a fixture and vice versa. Powers
   // both the offline Playwright E2E and the eval injection probe (whose tenant has no mailbox).
+  // Phase-17 (ACTN-02) — the inboxFixtures analogue for calendar availability, and it carries the
+  // same rationale verbatim: written ONLY by an internal mutation, so real tenants never have rows,
+  // the live freeBusy path is unreachable from a fixture, and a fixture is unreachable from the
+  // live path. Epoch ms, NOT RFC3339 strings — conversion happens at the adapter boundary ONLY
+  // (17-02), so the seam cannot drift into a second date format.
+  calendarFixtures: defineTable({
+    tenantId: v.string(),
+    busy: v.array(v.object({ startMs: v.number(), endMs: v.number() })),
+  }).index("by_tenant", ["tenantId"]),
+
   inboxFixtures: defineTable({
     tenantId: v.string(),
     offlineDigest: v.boolean(), // true = E2E (the digest short-circuits offline); false = eval (a LIVE digest runs, so the injection probe is real)

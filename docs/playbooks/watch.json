@@ -57,7 +57,13 @@
     "packages/core/src/actionType.ts",
     "packages/core/src/actionType.test.ts",
     "packages/backend/convex/research.ts",
-    "packages/backend/convex/research.test.ts"
+    "packages/backend/convex/research.test.ts",
+    "packages/backend/convex/calendar.ts",
+    "packages/backend/convex/calendarComplete.ts",
+    "packages/backend/convex/calendar.test.ts",
+    "packages/backend/convex/traceParity.test.ts",
+    "packages/core/src/calendar.ts",
+    "packages/core/src/calendar.test.ts"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/audit.ts",

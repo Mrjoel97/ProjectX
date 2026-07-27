@@ -21,8 +21,8 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
 
   // Adding a member here without an arm is a COMPILE error at the arm table (15-05).
   // This assertion makes widening the union a deliberate, visible act.
-  test("the union is exactly email + memo at Wave 0", () => {
-    expect(ACTION_TYPES).toEqual(["email", "memo"]);
+  test("the union is exactly email + memo + calendar_event after Phase 17", () => {
+    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event"]);
   });
 });
 
@@ -35,6 +35,13 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
 
   test("memo executes inline", () => {
     expect(armFor("memo")).toBe("inline");
+  });
+
+  // 17-01 ACTN-02. NOT `inline` (executePlan is a tenantMutation and a Convex mutation cannot
+  // `fetch`) and NOT `workflow` (that case IS the gmail fan-out, so an external write classified
+  // as `workflow` would silently inherit the EMAIL terminal). A third arm is structurally forced.
+  test("calendar_event executes as an externalAction", () => {
+    expect(armFor("calendar_event")).toBe("externalAction");
   });
 
   // Totality at RUNTIME as well as at compile time: a member added to the union without an arm
@@ -61,10 +68,11 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
 // if a future edit ever makes an incomplete arm table legal, this file stops compiling.
 
 /** A complete arm table compiles. */
-const _COMPLETE_ARMS = { email: "workflow", memo: "inline" } as const satisfies Record<
+const _COMPLETE_ARMS = { email: "workflow", memo: "inline", calendar_event: "externalAction" } as const satisfies Record<
   ActionType,
   Arm
 >;
 
-// @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` is missing).
+// @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` and
+// `calendar_event` are missing).
 const _MISSING_ARM = { email: "workflow" } as const satisfies Record<ActionType, Arm>;

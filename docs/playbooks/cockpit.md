@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
+> Last verified: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
 > Prior: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
 > Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
 > Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
@@ -733,3 +733,59 @@ part worth protecting — **no tool emits a step row; the SDK does.** But `threa
 now DO reach the builder, as dispatch lineage on `agentContext` (ADR-008: lineage travels as
 validator-checked call args), so 16-06's scheduled research tool can correlate its async run.
 **Lineage in, emission still out.**
+
+## Phase 17 — Calendar actions
+
+> Append-only container: each Phase-17 plan writes ONLY inside its own
+> `### Phase 17 — <plan>` subsection. On merge conflict, **keep both**.
+
+### Phase 17 — Wave 0 (freeze)
+
+The Lane-K half of the serialized Stage-1 freeze, landed on a base that already carried Lane R's.
+Output is a compiling repo with the calendar seams present and **inert**: no calendar HTTP call
+exists, nothing can write `kind: "calendar_event"`, so the new arm is unreachable at runtime.
+
+**A third `Arm` is STRUCTURALLY FORCED — the roadmap's "likely skippable" was refuted.**
+`actionType.ts` used to promise "calendar in Phase 17" under `workflow`. That promise was wrong:
+
+| Candidate | Why it fails |
+|---|---|
+| `inline` | `executePlan` is a `tenantMutation` (pinned by `dispatchGuard.test.ts:95`) and a Convex mutation **cannot `fetch`**. |
+| `workflow` | That case **IS** the gmail fan-out (`cockpit.ts:496-505`). Classifying an external write as `workflow` silently inherits the EMAIL terminal. |
+
+So `externalAction` = ONE governed external side effect, executed by the action-retrier behind the
+Approve gate. Phases 18 (documents) and 19 (CRM) are the same mechanism and **reuse this arm**
+rather than adding a fourth. The switch case is a **stub that throws** — deliberate, because a
+silent no-op would mark a plan approved with nothing created. 17-04 replaces it.
+
+**`plans.by_calendar_run` had to be caught before the freeze.** The action-retrier's `onComplete`
+carries only `{runId, result}` — no context bag — so `deadLetter.onPipelineComplete` cannot be
+reused and the run id is the *sole* correlation handle back to the plan. Without this index the
+terminal cannot find its own plan. `calendarEventId`/`calendarRunId` are **not** `patchPlan` args:
+nothing reachable from the model may write an event ref or a run id.
+
+**Attendees are out of scope, enforced by ABSENCE.** `events.insert` with attendees makes GOOGLE
+email them on the app's behalf — an outbound communication with no plan, no audit, no DLQ and no
+PII scan. `calendar.ts` contains neither an `attendees` nor a `sendUpdates` key; 17-04 scans for
+both substrings. Absence is a stronger guarantee than pinning `sendUpdates: "none"`, and fewer lines.
+
+**`freeBusy.query`, not `events.list`** — it returns only busy `{start,end}` intervals, so titles
+and attendee addresses never enter the system. That deletes the §4/§2-D problem by construction
+rather than by a redaction layer.
+
+**`parseSendTime` gained a 4th `horizonMs` parameter, defaulting to the existing constant.** The
+7-day bound is a **Gmail-token-lifetime** constraint on DEFERRED SEND (a schedule past it finds a
+dead token at fire time). A calendar event is created at **Approve** time, so that bound is simply
+false here. Threaded through all three `classify` call sites so a bound cannot drift between
+branches.
+
+> ⚠ **Found while testing it: `parseSendTime` has NO month-name grammar.** `"January 30 at 3pm"`
+> silently resolves to **today** at 3pm. The only shipped form that reaches past 7 days is
+> `"in N hours"`. The horizon widening is real and correct, but **17-03's staging tool cannot rely
+> on natural-language absolute dates** — a far-future event needs another route to an epoch.
+
+**Drive-by fix, unrelated to Phase 17:** `replyToMessage` (Phase 3.11, RPLY-01) has been in
+`agentSteps.tool` with no `VERB` entry since it shipped, so every inbox-reply trace row rendered the
+generic "Working…"/"Done" fallback. Fixed here because 17-01 is the only Phase-17 plan permitted to
+touch `cards.tsx`, and because the new `traceParity.test.ts` asserts set equality **both ways** —
+leaving the gap would have made a brand-new test RED on arrival inside a freeze commit.

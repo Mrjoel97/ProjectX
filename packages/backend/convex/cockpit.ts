@@ -502,7 +502,11 @@ export const startScheduledDelivery = internalMutation({
  * forcing that author to visit the dispatcher and decide: an inline arm executes inline, a durable
  * arm starts its OWN workflow. The switch's `assertNever` covers a new ARM; this covers a new TYPE.
  */
-const _ARM_TABLE = { email: "workflow", memo: "inline" } as const satisfies Record<ActionType, Arm>;
+const _ARM_TABLE = {
+  email: "workflow",
+  memo: "inline",
+  calendar_event: "externalAction",
+} as const satisfies Record<ActionType, Arm>;
 
 /**
  * The human approve gate (SC4). Idempotent CAS on plan.status: only the FIRST proposed→approved
@@ -551,6 +555,13 @@ export const executePlan = tenantMutation({
         await persistNextStepMemo(ctx, plan);
         return { ok: true };
       }
+      case "externalAction":
+        // FREEZE STUB (17-01) — the real body lands in 17-04 (retrier.run →
+        // internal.calendar.createEvent, onComplete → internal.calendarComplete.onCreateComplete).
+        // UNREACHABLE today: no code path writes plans.kind = "calendar_event" until 17-03's
+        // staging tool exists. The throw is deliberate — a silent no-op here would mark a plan
+        // approved with nothing created.
+        throw new Error("calendar arm not wired (17-04)");
       case "workflow":
         break; // → the existing pre-check → CAS flip → seed requests → startFanout block below
       default:

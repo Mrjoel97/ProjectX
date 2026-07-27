@@ -317,3 +317,20 @@ describe("parseSendTime — pure NL time → resolved | ambiguous | past | none 
     expect(parseSendTime("in 2 hours", NOW, TZ)).toEqual({ kind: "resolved", epochMs: NOW + 7_200_000 });
   });
 });
+
+// 17-01 (ACTN-02) — the horizon parameter. Exactly TWO rows: the default-preserved row and the
+// wider-horizon row. The parser's grammar and its tz-independence are already covered above; this
+// is only about the BOUND.
+describe("parseSendTime horizonMs (17-01)", () => {
+  const now = Date.UTC(2026, 0, 5, 12, 0, 0);
+  // 10 days out — `in N hours` is the only shipped grammar that reaches past the 7-day horizon.
+  const farOut = "in 240 hours";
+
+  test("the default is unchanged — the email path does not move", () => {
+    expect(parseSendTime(farOut, now, "UTC").kind).toBe("tooFar");
+  });
+
+  test("an explicit wider horizon resolves the same instant", () => {
+    expect(parseSendTime(farOut, now, "UTC", 365 * 24 * 60 * 60 * 1000).kind).toBe("resolved");
+  });
+});
