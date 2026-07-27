@@ -689,6 +689,14 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"]) // browse
     .index("by_tenant_contentHash", ["tenantId", "contentHash"]) // dedup
+    // Phase-17.1 (BLPR-01) Stage-1 drift: the tenant's `ready` docs and NOTHING else. Without it
+    // the read is a `by_tenant` scan over every status — on the table whose own comment above warns
+    // a `.collect()` walks into the 16 MiB / 32k-doc read cap.
+    // DECLARED DEVIATION from 17.1-CONTEXT, which names "One new index" (the graphNodes one). This
+    // is a deliberate SECOND index because the drift read runs on the path `spineForTenant` uses.
+    // Migration-free by the same rule as the first: Convex builds indexes automatically, and the
+    // convex-migration-helper skill lists index changes under "When Not to Use".
+    .index("by_tenant_status", ["tenantId", "status"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
@@ -704,7 +712,14 @@ export default defineSchema({
     name: v.string(), // surface form
     normalizedName: v.string(), // normalizeName(name) → dedup key
     degree: v.number(),
-  }).index("by_tenant_normalized", ["tenantId", "normalizedName"]), // upsert/dedup
+  })
+    .index("by_tenant_normalized", ["tenantId", "normalizedName"]) // upsert/dedup
+    // Phase-17.1 (BLPR-01): the blueprint's top-entities read —
+    // `.withIndex("by_tenant_degree", q => q.eq("tenantId", tenantId)).order("desc").take(20)`.
+    // ponytail: `degree` is bumped per edge insert with NO dedup (`vaultGraph.ts:75-78`), so this
+    // ranks "most-repeated", not "most-central", and the index is rewritten on every edge insert.
+    // Acceptable at beta scale; upgrade path is a dedup key on the bump.
+    .index("by_tenant_degree", ["tenantId", "degree"]),
 
   // A relationship between two graphNodes, attributed to its source document.
   // fromNode/toNode indexes drive hop-capped BFS traversal; by_tenant_source
@@ -843,5 +858,24 @@ export default defineSchema({
     behaviorPreset: v.optional(
       v.union(v.literal("direct"), v.literal("coaching"), v.literal("concise")),
     ),
+    // ── Phase-17.1 business blueprint (BLPR-01/02) ────────────────────────────
+    // ALL optional ⇒ NO migration (convex-migration-helper: "Safe Changes → Adding Optional
+    // Field"), and the table's own comment above already blesses optionality.
+    // The DRAFT lives here and NOT in `vaultDocuments` on purpose: a draft vault row would be
+    // retrievable, and unconfirmed inferences would surface in grounding BEFORE the user approves
+    // them — D2's confirm gate leaking through the back door. Do not "simplify" this into one row.
+    /** JSON: `{ blueprint: BusinessBlueprint, diff: BlueprintDiffRow[] }`. One optional string
+     *  rather than a nested validator — the draft is read whole, parsed once, and replaced whole. */
+    blueprintDraft: v.optional(v.string()),
+    blueprintDraftAt: v.optional(v.number()),
+    /** The `ready` doc ids the LIVE blueprint was synthesized from. Stage-1 drift is the set
+     *  difference against the tenant's current ready docs — a pure comparison, no detector. */
+    blueprintSourceDocIds: v.optional(v.array(v.string())),
+    /** HOT-PATH REQUIREMENT, not a convenience. Without it the live-blueprint read is the
+     *  `currentProfileDoc` clone (`onboarding.ts:521-533`), which `.collect()`s vaultDocuments
+     *  INCLUDING every `text` blob. Fine on a profile save; unacceptable on a path that now runs
+     *  on every grounding call and every cockpit turn. One indexed row + one `ctx.db.get`. */
+    blueprintDocId: v.optional(v.id("vaultDocuments")),
+    blueprintConfirmedAt: v.optional(v.number()),
   }).index("by_tenant", ["tenantId"]),
 });
