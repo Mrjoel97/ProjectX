@@ -9,6 +9,12 @@
 // `node` environment (the runCockpitAgent.test.ts idiom): `dispatch.ts` imports
 // `runSpecialistTurn` from the `"use node"` llm.ts, and the mock-model loop wants the node runtime.
 import { serializeProfile } from "@pikar/core";
+import {
+  CHEAP_MODEL,
+  DEFAULT_MODEL,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+} from "@pikar/cost";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
@@ -20,6 +26,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
+import { buildCockpitTools } from "./llm";
 import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
@@ -39,6 +46,13 @@ const rateLimiterModules = import.meta.glob(
 // default (15-01 hit the same wall in runCockpitAgent.test.ts). Raise the file's budget rather
 // than shipping a test that is red once per fresh clone.
 vi.setConfig({ testTimeout: 30_000 });
+
+// 16-06: the executive-turn tests SCHEDULE a real `internal.dispatch.runResearch`, and convex-test
+// RUNS scheduled functions rather than merely queueing them. Without a key that run dies harmlessly
+// on LoadAPIKeyError (logged to stderr, asserted on by nothing); WITH one — every dev box that runs
+// the live evals has it exported — a unit test would fire a genuine, BILLED, hosted-web-search
+// research run. Stub it off for this file rather than relying on the box being unconfigured.
+vi.stubEnv("OPENAI_API_KEY", "");
 
 // ── Wave 0 (15-01): the anti-silent-failure guard ─────────────────────────────────────────────
 //
@@ -103,10 +117,8 @@ const provUsage = (input: number, output: number) => ({
   inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
   outputTokens: { total: output, text: output, reasoning: 0 },
 });
-const toolStep = (toolName: string, input: unknown) => ({
-  content: [
-    { type: "tool-call", toolCallId: `c-${toolName}`, toolName, input: JSON.stringify(input) },
-  ],
+const toolStep = (toolName: string, input: unknown, callId = `c-${toolName}`) => ({
+  content: [{ type: "tool-call", toolCallId: callId, toolName, input: JSON.stringify(input) }],
   finishReason: { unified: "tool-calls", raw: "tool-calls" },
   usage: provUsage(0, 0),
   warnings: [],
@@ -897,6 +909,387 @@ describe("tier in agent context — the specialist prompt carries it", () => {
     expect(out).not.toContain("Business tier:");
     expect(out).not.toContain("undefined");
     expect(out).toContain("Binding constraint:"); // non-vacuity: a real prompt was still built
+  });
+});
+
+// ── 16-06: the ASYNC research dispatch (DISP-02, D9-REVISED) ──────────────────────────────────
+//
+// The executive asks for research mid-turn; the tool STAGES a memo plan row, SCHEDULES the
+// governed run and RETURNS. Nothing here is a second spine — `runResearch` calls the same
+// `dispatchAndLand` the gap path calls, so every guard below is INHERITED, not re-implemented.
+
+const QUESTION = "What do competing in-home dog trainers charge per session in Chicago?";
+const RESEARCH = { ...BASE, route: "research", question: QUESTION };
+const LOST_CONTEXT_PHRASE = "no longer on file";
+
+const scheduledResearch = async (t: T) =>
+  (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
+    s.name.includes("runResearch"),
+  );
+
+describe("the question-prompt seam (16-06 Task 1)", () => {
+  const promptWith = (t: T, question?: string) =>
+    t.run(async (ctx) =>
+      buildSpecialistPrompt(ctx as never, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        gapIndex: 0,
+        route: "research",
+        question,
+      }),
+    );
+
+  test("a question REPLACES the evaluation snapshot and still carries the tier briefing", async () => {
+    const { t } = await setupDispatched();
+    await t.run((ctx) =>
+      ctx.db.insert("tenantProfiles", {
+        tenantId: TENANT,
+        tierSource: "derived",
+        derivedAt: Date.now(),
+        tier: "solopreneur",
+      } as never),
+    );
+
+    const out = await promptWith(t, QUESTION);
+    expect(out).toContain(QUESTION);
+    expect(out, "the tier briefing was dropped — a research turn is still a tenant's turn").toContain(
+      "solopreneur",
+    );
+    expect(out).not.toContain("Framework:");
+    expect(out).not.toContain("Binding constraint:");
+    // Non-vacuity: the SAME thread without a question still gets the whole snapshot, so the
+    // absences above are the question branch, not an empty fixture.
+    expect(await promptWith(t)).toContain("Binding constraint:");
+  });
+
+  test("an over-long question is TRUNCATED, never rejected and never passed whole", async () => {
+    const { t } = await setupDispatched();
+    const long = `${"x".repeat(900)}END`;
+
+    const out = await promptWith(t, long);
+    expect(out, "the question was rejected rather than capped").not.toBe("");
+    expect(out).not.toContain(long);
+    expect(out).not.toContain("END");
+    expect(out).toContain("…");
+  });
+});
+
+describe("runResearch — the scheduled entry point inherits every guard (16-06 Task 1)", () => {
+  test("a cycling ancestry REFUSES conversationally rather than throwing", async () => {
+    const { t, planId } = await setup();
+    const res = await t.action(internal.dispatch.runResearch, {
+      ...RESEARCH,
+      planId,
+      ancestry: ["research"],
+    });
+
+    expect(res.ok, "a cycle ran the specialist anyway").toBe(false);
+    if (res.ok) return;
+    expect(res.reason).toBe("cycle_refused");
+    expect(res.reply).not.toContain("cycle_refused");
+    expect(await readSteps(t), "a refused research dispatch painted an activity step").toEqual([]);
+  });
+
+  test("a REFUSED run lands an HONEST memo — never the gap path's lost-evaluation wording", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
+
+    // depth 2 > MAX_DEPTH. There is no evaluation row on this thread, so the shipped landing would
+    // have written LOST_CONTEXT_MEMO — "the evaluation it was based on is no longer on file. Ask me
+    // to run the assessment again" — for a run that was never based on an evaluation.
+    await t.action(internal.dispatch.runResearch, { ...RESEARCH, planId, depth: 2 });
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "a refused research run left the plan stuck at `collecting`").toBe(
+      "proposed",
+    );
+    expect(plan?.body, "the research run inherited the gap path's false wording").not.toContain(
+      LOST_CONTEXT_PHRASE,
+    );
+    expect(plan?.body).not.toContain("run the assessment again");
+    expect((plan?.body ?? "").length).toBeGreaterThan(20);
+  });
+
+  test("fallbackBody is used ONLY where LOST_CONTEXT_MEMO was — the gap path is byte-identical", async () => {
+    const { t, planId } = await setup();
+    const staged = async (): Promise<Id<"plans">> => {
+      const id = await t.mutation(internal.plans.insertPlan, {
+        tenantId: TENANT,
+        threadId: `th_${Math.random().toString(36).slice(2)}`,
+      });
+      await t.run((ctx) => ctx.db.patch(id, { kind: "memo", status: "collecting", body: "" }));
+      return id;
+    };
+    const land = (id: Id<"plans">, fallbackBody?: string) =>
+      t.mutation(internal.evaluations.landSpecialistResult, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        planId: id,
+        gapIndex: 0,
+        route: "research",
+        incomplete: false,
+        fallbackReason: "error",
+        ...(fallbackBody === undefined ? {} : { fallbackBody }),
+      });
+
+    const withBody = await staged();
+    await land(withBody, "HONEST-SENTENCE");
+    expect((await readPlan(t, withBody))?.body).toBe("HONEST-SENTENCE");
+
+    // The gap path passes nothing → the shipped memo, unchanged.
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
+    await land(planId);
+    expect((await readPlan(t, planId))?.body).toContain(LOST_CONTEXT_PHRASE);
+  });
+
+  // The scripted twin (`__runSpecialistWithScript`) drives the SAME `dispatchAndLand` runResearch
+  // does — a LanguageModel is not Convex-serializable, so a mock cannot ride through runResearch's
+  // own args. The happy path and the clock row are asserted through it for that reason.
+  test("the happy path returns the findings, the sources and a retrieval stamp", async () => {
+    const { t, planId } = await setup();
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+
+    expect(res.route).toBe("research");
+    expect(res.body).toBe(REPLY);
+    expect(res.incomplete).toBe(false);
+    expect(res.incompleteReason).toBeUndefined();
+    expect(res.sources).toEqual([]); // the mock retrieves none — the FIELD travels, which is the point
+    expect(res.retrievedAt).toBeGreaterThan(0);
+    expect(res.spentCents).toBeGreaterThan(0);
+    expect((await readSteps(t)).map((s) => s.tool)).toContain("dispatchResearch");
+  });
+
+  test("a soft wall-clock stop is marked `clock`, distinct from the cost condition", async () => {
+    const { t, planId } = await setup();
+    // `softCutoffMs: 0` fires on the FIRST evaluation, so the loop stops cleanly BETWEEN steps and
+    // keeps what it has. Deliberately not a shrunken HARD budget: that would make AbortSignal race
+    // the mock and throw agent_timeout — the discard-the-work outcome D11's row exists to disprove.
+    const clock = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [toolStep("searchVault", { query: "SMOKE::" }), REPLY_STEP],
+        softCutoffMs: 0,
+      }),
+    );
+    expect(clock.incomplete).toBe(true);
+    expect(clock.incompleteReason).toBe("clock");
+
+    // …and the cost condition still produces its OWN marker, so the three-way union is not one
+    // value wearing three names. (`steps` is pinned at the loop seam by 16-05.)
+    const cost = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [REPLY_STEP],
+        envelopeCents: 5,
+        spentCents: 0,
+      }),
+    );
+    expect(cost.incomplete).toBe(true);
+    expect(cost.incompleteReason).toBe("cost");
+  });
+});
+
+describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => {
+  const stage = (t: T, threadId = THREAD) =>
+    t.mutation(internal.plans.stageResearchPlan, {
+      tenantId: TENANT,
+      threadId,
+      subject: "Research: pricing",
+    });
+
+  test("no plan row: one is inserted, memo-shaped, parked at `collecting` with no body", async () => {
+    const t = convexTest(schema, modules);
+    const res = await stage(t as T);
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(await (t as T).run((ctx) => ctx.db.get(res.planId))).toMatchObject({
+      kind: "memo",
+      status: "collecting",
+      subject: "Research: pricing",
+      body: "",
+      recipients: [],
+    });
+  });
+
+  test("a `collecting` MEMO row is a run IN FLIGHT — refused, and the row is untouched", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, { kind: "memo", status: "collecting", subject: "Research: first", body: "" }),
+    );
+    const before = await readPlan(t, planId);
+
+    expect(await stage(t)).toEqual({ ok: false, reason: "research_in_flight" });
+    // The WHOLE row, not just its status: a recycle that raced the in-flight run would discard
+    // findings already paid for.
+    expect(await readPlan(t, planId)).toEqual(before);
+  });
+
+  test("a `proposed` EMAIL draft is the USER's work — refused, and it survives intact", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        status: "proposed",
+        recipients: ["someone@example.com"],
+        subject: "Quarterly update",
+        body: "Half-composed prose the user typed.",
+      }),
+    );
+    const before = await readPlan(t, planId);
+
+    expect(await stage(t)).toEqual({ ok: false, reason: "draft_in_progress" });
+    expect(await readPlan(t, planId)).toEqual(before);
+  });
+
+  test("a `collecting` EMAIL draft with content is refused too — the composing row is user work", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { recipients: ["a@b.com"], subject: "Draft" }));
+
+    expect(await stage(t)).toEqual({ ok: false, reason: "draft_in_progress" });
+  });
+
+  test("the POSITIVE half: an EMPTY composing row, a proposed MEMO and a canceled row all recycle", async () => {
+    // Without this the refusals above would pass against a mutation that refuses everything — and
+    // the empty-composing case is the PRIMARY path: cockpit.ts inserts every thread's plan row at
+    // `collecting` and it stays there for the whole composition.
+    const cases: readonly (readonly [string, Record<string, unknown>])[] = [
+      ["an empty composing row", {}],
+      ["a proposed memo", { kind: "memo", status: "proposed", body: "previous findings" }],
+      ["a canceled row", { status: "canceled", subject: "abandoned", body: "abandoned" }],
+    ];
+    for (const [name, patch] of cases) {
+      const { t, planId } = await setup();
+      if (Object.keys(patch).length > 0) await t.run((ctx) => ctx.db.patch(planId, patch));
+
+      const res = await stage(t);
+      expect(res.ok, `${name} was refused — research can never start`).toBe(true);
+      // resetPlan, not patchPlan: a previous memo's subject must not survive onto this one.
+      expect(await readPlan(t, planId)).toMatchObject({
+        kind: "memo",
+        status: "collecting",
+        subject: "Research: pricing",
+        body: "",
+      });
+    }
+  });
+});
+
+describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)", () => {
+  const TURN = { turnId: "turn-exec-1", threadId: THREAD };
+  const runExec = (t: T, planId: Id<"plans">, primary: unknown[]) =>
+    t.action(internal.llm.__runCockpitAgentWithScript, {
+      tenantId: TENANT,
+      planId,
+      ...TURN,
+      primary: primary as never,
+    });
+
+  test("the executive's turn SCHEDULES the run and comes back without waiting for it", async () => {
+    const { t, planId } = await setup();
+    const res = await runExec(t, planId, [
+      toolStep("dispatchResearch", { question: QUESTION }),
+      textStep("I've started looking into that."),
+    ]);
+
+    // The turn COMPLETED — it was not held for the length of a multi-search research run.
+    expect(res.reply).toContain("started looking into that");
+    const queued = await scheduledResearch(t);
+    expect(queued, "the research run was not scheduled").toHaveLength(1);
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("memo");
+    expect(plan?.status).toBe("collecting");
+    expect(plan?.body).toBe("");
+    expect(plan?.subject).toContain("Research:");
+  });
+
+  test("THE INTERLOCK: a second dispatch in the same turn is refused, and schedules NOTHING more", async () => {
+    const { t, planId } = await setup();
+    await runExec(t, planId, [
+      toolStep("dispatchResearch", { question: QUESTION }, "c-first"),
+      toolStep("dispatchResearch", { question: "a second question" }, "c-second"),
+      textStep("Both handled."),
+    ]);
+
+    // Non-vacuity in the SAME test: exactly ONE was scheduled, not zero.
+    expect(await scheduledResearch(t), "the interlock let a second run race the first").toHaveLength(
+      1,
+    );
+    // The refusal is CONVERSATIONAL: a throw would terminalize the step as `error`.
+    const steps = (await readSteps(t)).filter((s) => s.tool === "dispatchResearch");
+    expect(steps).toHaveLength(2);
+    for (const s of steps) expect(s.phase, "the in-flight refusal threw instead of returning").toBe("done");
+  });
+
+  test("a SPECIALIST turn never CONSTRUCTS dispatchResearch — unreachable, not merely filtered", () => {
+    const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+    const build = (agentContext: Record<string, unknown>) =>
+      Object.keys(
+        buildCockpitTools(
+          stubCtx,
+          TENANT,
+          "plan_stub" as Id<"plans">,
+          undefined,
+          undefined,
+          undefined,
+          agentContext as never,
+        ),
+      );
+
+    const specialist = build({
+      grantWebResearch: true,
+      grantDispatch: false,
+      threadId: THREAD,
+      rootRequestId: ROOT,
+    });
+    // POSITIVE half first, so this cannot pass against an empty record.
+    expect(specialist).toContain("searchVault");
+    expect(specialist).toContain("webResearch");
+    // A withheld-but-constructed closure would still be reachable via invokeTool, and this tool
+    // hardcodes depth 1 / ancestry [] — a re-entry there would bypass MAX_DEPTH and wouldCycle.
+    expect(specialist, "a specialist can construct a dispatch").not.toContain("dispatchResearch");
+
+    expect(build({ grantDispatch: true, threadId: THREAD, rootRequestId: ROOT })).toContain(
+      "dispatchResearch",
+    );
+    // No turn identity ⇒ no lineage to dispatch under ⇒ structurally absent.
+    expect(build({ grantDispatch: true })).not.toContain("dispatchResearch");
+  });
+
+  test("THE MODEL PIN (relocated from 16-05): research bills its own pair, every other route the default", async () => {
+    const { t, planId } = await setup();
+    const research = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(research.modelId).toBe(RESEARCH_MODEL);
+    expect(research.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
+
+    const other = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(other.modelId).toBe(DEFAULT_MODEL);
+    expect(other.fallbackModelId).toBe(CHEAP_MODEL);
+
+    // The non-vacuity anchor. The 16-02 probe ladder deliberately EXCLUDES gpt-4.1-nano and that IS
+    // CHEAP_MODEL, so the two FALLBACKS can never coincide — deleting 16-05's route ternary turns
+    // this red even in the case where RESEARCH_MODEL happens to equal DEFAULT_MODEL (it does today).
+    expect(RESEARCH_FALLBACK_MODEL).not.toBe(CHEAP_MODEL);
   });
 });
 

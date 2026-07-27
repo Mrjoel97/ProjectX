@@ -5,8 +5,8 @@ milestone_name: - Platform -> Private Beta
 current_phase: 17
 current_plan: 5
 status: in_progress
-stopped_at: "16-01/02/03/04/05 COMPLETE. Lane R waves 1-3 DONE. Next: 16-06 (wave 4) — dispatch wiring + the relocated model-pin assertion + the scripted-specialist harness. 16-07 needs a Convex deployment (new convex/research.ts forces api.d.ts regen). Lane K blocked at 17-02 (needs its own deployment; Google consent-screen scopes are DONE per owner)."
-last_updated: "2026-07-27T04:15:00.000Z"
+stopped_at: "16-01/02/03/04/05/06 COMPLETE. Lane R waves 1-4 DONE. 16-06 shipped the async research seam (stage -> schedule -> land), the relocated model-pin assertion and the softCutoffMs harness; backend 710/710, 4 mutations RED-then-green. NOTE for the verifier: SC#1 is satisfied VIA THE PLAN CARD, not inline (D9-REVISED's accepted cost), and the plan's literal collecting-recycle rule was CORRECTED to require kind==='memo' — see 16-06-SUMMARY.md. Next: 16-07 — needs a Convex deployment (new convex/research.ts forces api.d.ts regen). Lane K blocked at 17-02 (needs its own deployment; Google consent-screen scopes are DONE per owner)."
+last_updated: "2026-07-27T20:30:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23

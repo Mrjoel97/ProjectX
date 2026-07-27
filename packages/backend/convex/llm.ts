@@ -667,6 +667,27 @@ export function stripRePrefix(subject: string): string {
   return subject.replace(/^(?:\s*re\s*:\s*)+/i, "").trim();
 }
 
+// ── The dispatchResearch tool's three code-owned replies (DISP-02) ────────────────────────────
+//
+// Driver-plane synthetic strings, NOT agent prompts — §5 does not apply (the RESOLUTION_CONTINUE /
+// dispatch-refusal precedent). They are read by the MODEL, so each one closes the loop it opens:
+// the model must NOT be told to poll or to wait — there is nothing to poll and a waiting model
+// burns steps it could spend answering the user.
+const EXECUTIVE_AGENT_ID = "executive"; // matches applyActOnGap's literal — one agent id, two writers
+const RESEARCH_UNDERWAY_REPLY =
+  "The research run has started in the background. It will arrive as a plan card the user can " +
+  "approve — you do not have the findings yet, so do not claim them, do not wait for them, and " +
+  "do not ask for research again on this conversation. Tell the user it is underway and carry on.";
+const RESEARCH_REFUSAL_REPLY: Record<"research_in_flight" | "draft_in_progress", string> = {
+  research_in_flight:
+    "A research run is already underway on this conversation and its findings will arrive as a " +
+    "plan card. Nothing new was started. Tell the user it is still running.",
+  draft_in_progress:
+    "There is an email draft on this conversation's plan card, and starting research would " +
+    "discard it. Nothing was started. Tell the user plainly, and offer to research once the " +
+    "draft is sent or discarded.",
+};
+
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
  * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
@@ -701,14 +722,77 @@ export function buildCockpitTools(
   //   threadId/rootRequestId — DISPATCH LINEAGE for the SCHEDULED research tool (16-06): the tool
   //     stages a plan row and schedules the run, it does not run a loop inline. Not an emission
   //     channel. See the amended CKPT-05 note at runAgentLoop.
+  //   grantDispatch — the EXECUTIVE-ONLY flag (16-06). Derived in runAgentLoop from
+  //     `toolNames === undefined`, never read here: `toolNames` is simply not in scope in this
+  //     function (the call site applies the filter to the RETURNED record).
   agentContext?: {
     grantWebResearch?: boolean;
+    grantDispatch?: boolean;
     threadId?: string;
     rootRequestId?: string;
   },
 ) {
   // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
   const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+
+  // DISP-02. D9-REVISED's async research seam: STAGE a memo plan row, SCHEDULE the governed run,
+  // RETURN immediately. Nothing here runs a model, so nothing runs inside THIS turn's step budget —
+  // which is exactly the shape dispatchGuard.test.ts:16-24 prescribes ("dispatch RETURNS to the
+  // orchestrator, which starts the specialist loop as its own governed call"). A research run that
+  // overruns its clock therefore fails in the BACKGROUND, where D11's wall-clock row governs it,
+  // instead of throwing out of the executive turn and discarding every partial finding.
+  //
+  // Built ONLY under `grantDispatch` + a real turn identity. Structural absence, not a filter: a
+  // withheld-but-CONSTRUCTED closure stays reachable via invokeTool (:1709-1713's own comment says
+  // so), and this tool hardcodes `depth: 1, ancestry: []` — a re-entry through that path during a
+  // SPECIALIST turn would bypass MAX_DEPTH and wouldCycle, the two guards this seam claims to
+  // inherit for free. **The executive is the only agent that dispatches.**
+  const dispatchResearchTool = {
+    dispatchResearch: tool({
+      description:
+        "Research a question using the outside world. The research runs in the background and " +
+        "arrives as a plan card the user can approve — you do not get the findings in this turn.",
+      inputSchema: jsonSchema<{ question: string }>({
+        type: "object",
+        properties: { question: { type: "string" } },
+        required: ["question"],
+        additionalProperties: false,
+      }),
+      execute: async ({ question }): Promise<string> => {
+        // Non-null asserted: the whole record key is absent unless both are present (the gate below).
+        const threadId = agentContext?.threadId as string;
+        const rootRequestId = agentContext?.rootRequestId as string;
+        const staged = await ctx.runMutation(internal.plans.stageResearchPlan, {
+          tenantId,
+          threadId,
+          subject: `Research: ${question}`.slice(0, 120),
+        });
+        // Conversational, never a throw — a governed stop is a paused conversation (the
+        // PAUSED_REPLY / dispatch-refusal precedent).
+        if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
+        await ctx.scheduler.runAfter(0, internal.dispatch.runResearch, {
+          tenantId,
+          threadId,
+          planId: staged.planId,
+          gapIndex: 0, // unused on this path — the QUESTION is what briefs the specialist
+          route: "research",
+          question,
+          // The executive's turnId IS the tree's root correlation id. `applyActOnGap` mints its own
+          // because a TAPPED CONTROL has no turn to inherit from; a tool call does, and 16-09's
+          // webSearchCallsForThread join warns against mixing the two.
+          rootRequestId,
+          parentAgentId: EXECUTIVE_AGENT_ID,
+          // `depth: 1`, matching applyActOnGap. NOT 0 — a divergence here silently changes what
+          // MAX_DEPTH means for this route.
+          depth: 1,
+          ancestry: [],
+          envelopeCents: 0, // the ROOT signal — governedDispatch derives the real envelope
+          spentCents: 0,
+        });
+        return RESEARCH_UNDERWAY_REPLY;
+      },
+    }),
+  };
 
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -936,6 +1020,11 @@ export function buildCockpitTools(
     // in turn degrades ai@7's onToolExecution* event types to a variant without `toolCall`. Same
     // type, different runtime presence — which is exactly the structural-absence property we want.
     ...(agentContext?.grantWebResearch ? webResearchTool : ({} as typeof webResearchTool)),
+    // DISP-02: present ONLY for the executive, and only when it has a turn identity to dispatch
+    // under (no lineage ⇒ nothing to correlate the async run to). Same one-type-both-branches trick.
+    ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
+      ? dispatchResearchTool
+      : ({} as typeof dispatchResearchTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -1836,7 +1925,16 @@ async function runAgentLoop(
     // ACTN-03: the hosted-search key is BUILT only for an agent whose grant names it. A
     // listed-but-ungranted name is simply absent from the record; a granted-and-listed one
     // survives the filter below unchanged.
-    { grantWebResearch: toolNames?.includes("webResearch") ?? false },
+    //
+    // DISP-02: the SAME mechanism pointed the opposite way — grant the specialist hosted search,
+    // withhold dispatch FROM it. This is the ONE place `toolNames` is in scope, which is exactly
+    // why buildCockpitTools' gate reads a derived flag rather than the expression.
+    {
+      grantWebResearch: toolNames?.includes("webResearch") ?? false,
+      grantDispatch: toolNames === undefined,
+      threadId,
+      rootRequestId: turnId,
+    },
   );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
   // `toolNames ? … : built` would hand a zero-tool specialist the full 20-key set.
@@ -2054,6 +2152,9 @@ export async function runSpecialistTurn(
   // decision with exactly one owner, and would drag dispatch.ts into model selection for no gain.
   webSearchCalls: number;
   truncated: boolean;
+  /** WHY it truncated — the `...res` spread already forwarded it; only this type omitted it, which
+   *  made D11's three-way marker invisible to `governedDispatch` (16-06 consumes it). */
+  truncatedReason?: "steps" | "clock";
   sources: readonly { url: string; title: string }[];
   modelId: string;
   fallbackModelId: string;

@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-27 (16-05) — the webResearch key (built only when granted), per-call search billing counted on providerExecuted, and the research route wall clock + step budget. PREVIOUSLY: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
+> Last verified: 2026-07-27 (16-06) — **the async research dispatch seam (DISP-02).** The executive's `dispatchResearch` tool STAGES a `collecting` memo plan row, SCHEDULES `internal.dispatch.runResearch`, and RETURNS — it never runs a model, so nothing runs inside the executive turn's step budget. Findings arrive as an approvable plan card, NOT inline. A persisted `collecting`+`kind:"memo"` interlock replaces the superseded per-turn envelope closure. See "Phase 16 — the async research dispatch seam" below. PREVIOUSLY: 2026-07-27 (16-05) — the webResearch key (built only when granted), per-call search billing counted on providerExecuted, and the research route wall clock + step budget. PREVIOUSLY: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
 > Prior: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
 > Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
 > Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
@@ -843,3 +843,162 @@ rather than raising the clock**.
 `callTimeoutMsFor` is the ONE chooser and is exported so the 45s default is *assertable*, not
 assumed. The test pins a LITERAL `45_000` — an assertion written against `CALL_TIMEOUT_MS` would
 track the very refactor it exists to catch.
+
+## Phase 16 — the async research dispatch seam (16-06, DISP-02)
+
+**This is a second CALLER of the shipped dispatch path, not a second path.** The whole chain
+already existed for the Growth OS specialists: `applyActOnGap` →
+`ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist)` → `dispatchAndLand` →
+`governedDispatch` → `landSpecialistResult` → an approvable memo card, with the CKPT-05 `agentSteps`
+trace streaming while it runs. 16-06 adds a second entry point onto it. If a change here starts
+inventing a job table, a polling query, a second terminal or a second landing, something has been
+misread (CLAUDE.md §8 rung 2).
+
+### Stage → schedule → land
+
+`dispatchResearch` (a `buildCockpitTools` key) does exactly three things and **awaits nothing that
+runs a model**:
+
+1. `internal.plans.stageResearchPlan` — the `collecting` memo row the run will land on.
+2. `ctx.scheduler.runAfter(0, internal.dispatch.runResearch, {...})` — depth `1`, `ancestry: []`,
+   `envelopeCents: 0` (the ROOT signal), `route: "research"`, and the QUESTION.
+3. return `RESEARCH_UNDERWAY_REPLY`.
+
+`rootRequestId` is the **executive `turnId`**, not a fresh uuid. `applyActOnGap` mints its own
+because a tapped control has no turn to inherit from; a tool call does, and 16-09's
+`webSearchCallsForThread` join warns against mixing the two. `depth: 1` matches `applyActOnGap` —
+not 0; a divergence there silently changes what `MAX_DEPTH` means for this route.
+
+**Why async, and why it is not a regression.** Hosted `web_search` is the slowest operation in the
+system and a research run makes several deliberately varied searches. Holding a conversational turn
+for that is the wrong shape — and a loop that overruns its clock THROWS, killing the whole executive
+turn and discarding every partial finding. Async moves the failure into the background where D11's
+wall-clock row catches it as a governed outcome.
+
+> **`dispatchGuard.test.ts:16-24` was RE-READ and deliberately LEFT UNAMENDED.** That comment argues
+> against a `generateText` inside a tool's `execute` and prescribes the fix in as many words:
+> *"dispatch RETURNS to the orchestrator, which starts the specialist loop as its own governed
+> call."* That is a verbatim description of what this seam ships, so the comment is not merely
+> un-contradicted — it is SATISFIED, and it was the comment that predicted the right architecture.
+> The superseded in-loop design (D9) would have contradicted it; that design was not built. Do not
+> "finish" an amendment that was correctly not started.
+
+### SC#1 is satisfied VIA THE PLAN CARD, not inline — an ACCEPTED COST
+
+SC#1 says the specialist "returns findings to the executive agent". Phase 16 returns them as an
+approvable memo plan card, and the executive never sees the prose: `buildAgentContext` renders a
+memo plan as `Body drafted: yes/no` only. D9-REVISED accepts this in writing. **A verifier must not
+read SC#1 as requiring an in-conversation return.**
+
+That same fact is why there is **no `researchFindingsFence` call in `llm.ts`**: the memo BODY never
+reaches the model, so there is no re-entry boundary here to fence. The fence wraps the STORED vault
+document (16-07), where web-derived text genuinely can re-enter a model context via a later
+`searchVault` retrieval.
+
+### The `collecting` interlock — and why it replaced the per-turn envelope closure
+
+`plans.by_thread` is `.unique()`, so a thread has exactly ONE plan row. A research run OWNS it at
+`status: "collecting"` + `kind: "memo"` until `landSpecialistResult` flips it, and
+`stageResearchPlan` refuses to recycle such a row (`research_in_flight`). A second research dispatch
+on the same thread is therefore refused **while the first is in flight, by a PERSISTED interlock** —
+strictly stronger than the in-memory per-turn closure the superseded design threaded through call
+args: it holds across turns, across requests, and across a fallback retry that rebuilds the tool
+record. Each run takes exactly ONE freshly-derived root envelope, byte-identical to what every
+`actOnGap` dispatch does. Nothing to thread, nothing to drift.
+
+The interlock is scoped to the in-flight window **by design**: once the row flips to
+`proposed` + memo it is recyclable again, so a later sequential dispatch legitimately takes a second
+envelope. 16-08's cost-ceiling row is the rail that governs that case.
+
+> WARNING — **`kind === "memo"` in that refusal is load-bearing, not decoration.** `cockpit.ts`
+> inserts EVERY thread's plan row at `status: "collecting"` on the first turn and it stays there for
+> the whole composition. A bare `status === "collecting"` refusal — which is how 16-06's plan first
+> wrote the rule — would refuse research on essentially every live conversation, i.e. the primary
+> use case. A collecting row is "owned by a dispatch" only when a dispatch staged it, and `kind` is
+> what records that.
+
+### `stageResearchPlan`'s recycle rule is DELIBERATELY narrower than `applyActOnGap`'s
+
+| row | `actOnGap` | `stageResearchPlan` |
+|---|---|---|
+| `collecting` + `kind: "memo"` | recycles | **refuses** — `research_in_flight` |
+| `collecting`, empty composing row | recycles | recycles (the fresh-thread path) |
+| any actable row carrying the user's draft content | recycles | **refuses** — `draft_in_progress` |
+| `proposed` + memo, `canceled` | recycles | recycles |
+| `approved` → `done` | refuses (`plan_busy`) | refuses |
+
+`actOnGap` may reset a draft because the **USER** tapped a control. Here the **MODEL** decides, and
+destroying a half-composed email because someone asked a research question is not a trade the user
+agreed to. "Draft content" is the five slots a person fills: recipients, subject, body, bodyIntent,
+attachments.
+
+**Do NOT refactor the two into a shared helper.** The rules disagree, so sharing would need the rule
+as a parameter — a knob for two callers that disagree is the abstraction §8 forbids. They
+cross-reference each other in comments instead; change one and decide consciously whether the other
+moves.
+
+*ponytail:* refusing rather than staging a second row. The real fix is more than one plan row per
+thread — a `schema.ts` change, frozen this phase. Upgrade path, not a final answer.
+
+### The `grantDispatch` gate — the executive is the only agent that dispatches
+
+`dispatchResearch` is CONSTRUCTED only when `agentContext.grantDispatch` **and** a real
+`threadId`/`rootRequestId` are present. Structural absence, not post-hoc filtering: `llm.ts`'s own
+comment records that a withheld-but-constructed closure "would still exist in the record and stay
+reachable via `invokeTool`" — and this tool hardcodes `depth: 1, ancestry: []`, so a re-entry
+through that path during a SPECIALIST turn would bypass `MAX_DEPTH` and `wouldCycle`, the two guards
+this seam claims to inherit for free.
+
+`grantDispatch` is derived in `runAgentLoop` from `toolNames === undefined`, beside 16-05's
+`grantWebResearch: toolNames?.includes("webResearch")`. **`runAgentLoop` is the one place `toolNames`
+is in scope** — `buildCockpitTools` takes positional args and the filter is applied AFTERWARDS to
+the returned record — which is why the gate reads a derived flag rather than the expression. One
+mechanism, two flags, pointed in opposite directions: grant the specialist hosted search, withhold
+dispatch from it.
+
+### The honest fallback body — paid at the seam, not with a route conditional
+
+`landSpecialistResult`'s no-body branch falls back to `buildMemo(evaluationRow, gap, reason)` and,
+when neither exists, to `LOST_CONTEXT_MEMO` — *"the evaluation it was based on is no longer on file.
+Ask me to run the assessment again."* **A research run has no evaluation row and no gap, so it lands
+there EVERY time**, and that sentence is simply false for it: the user is told to re-run an
+assessment they never started. Fixed once, with one `??`: `landSpecialistResult` takes an optional
+`fallbackBody`, `dispatchAndLand` takes an optional 4th parameter that forwards it (and forwards the
+governed refusal's own `reply` instead when the caller supplied one — those replies are already
+written to be read by a user). `runSpecialist` passes nothing, so **the gap path is byte-identical**.
+
+### Two write sites, ONE `stepKey` literal
+
+`governedDispatch` mints its own `turnId` and writes a `stepKey` of `dispatch:<rootRequestId>`. The
+executive's own `dispatchResearch` step row is emitted by the SDK's `onToolExecutionStart` under the
+EXECUTIVE turnId. Never two rows in one trace, and 16-09's `webSearchCallsForThread` join
+discriminates on `stepKey.startsWith("dispatch:")` — written on this path exactly as on the gap
+path. Do not add a second literal and do not suppress either write.
+
+### D11's three-way incomplete marker now reaches `DispatchResult`
+
+`governedDispatch` keeps `spentAfter >= envelopeCents` as the COST condition, ORs in the loop's own
+`truncated`, and carries `incompleteReason: turn.truncatedReason ?? (costCondition ? "cost" :
+undefined)` — so the loop's stop reason (`"steps"` / `"clock"`) wins when both are true, because it
+is what actually stopped the run. `incomplete` stays a boolean, so no existing consumer changed.
+`sources` and `retrievedAt` ride the same result as CONTENT-PLANE fields for 16-07; the audit
+payload gets `webSearchCalls`, a COUNT.
+
+### Testing this offline
+
+`dispatch.test.ts` stubs `OPENAI_API_KEY` to `""` for the whole file. That is not hygiene — it is a
+COST guard: `convex-test` RUNS scheduled functions rather than queueing them, so the executive-turn
+tests actually execute `internal.dispatch.runResearch`, and on any box with the key exported (every
+box that runs the live evals) a unit test would fire a genuine, billed, hosted-web-search run.
+
+`__runSpecialistWithScript` gained `softCutoffMs`, the SOFT-stop-only test knob and the only way
+D11's wall-clock row is assertable offline. **It must never become a hard-budget override:** a
+shrunken `AbortSignal.timeout` would race the mock loop and throw `agent_timeout` — the exact
+discard-the-work outcome the row exists to disprove. Do not add a `timeoutMs` sibling.
+
+The research MODEL pin is asserted HERE, not in 16-05: `governedDispatch` resolves the route through
+`SPECIALISTS` before the loop runs, so no harness hands `runSpecialistTurn` a `skillName` literally.
+The assertion is token equality on the RETURNED `modelId`/`fallbackModelId` — never a source grep,
+and never an inference from `costUsd`, because `RESEARCH_MODEL` currently EQUALS `DEFAULT_MODEL` and
+the two price identically. **The FALLBACK pair is the non-vacuity anchor:** the 16-02 probe ladder
+excludes `gpt-4.1-nano`, which IS `CHEAP_MODEL`, so the fallbacks can never coincide.

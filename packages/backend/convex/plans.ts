@@ -10,6 +10,8 @@
 // workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -67,6 +69,100 @@ export const insertPlan = internalMutation({
       recipients: [],
       createdAt: Date.now(),
     }),
+});
+
+/** Statuses a research stage may recycle from. Same three literals as `ACTABLE_PLAN_STATUS`
+ *  (evaluations.ts) — anything past `proposed` is mid-flight or delivered. */
+const RECYCLABLE_STATUS: ReadonlySet<Doc<"plans">["status"]> = new Set([
+  "collecting",
+  "proposed",
+  "canceled",
+] as const);
+
+/** Does this row hold composition work the USER would lose to a reset? The five slots a person
+ *  actually fills; `candidates`/`pendingValid` are transient lookup state, not authored content. */
+const hasDraftContent = (p: Doc<"plans">): boolean =>
+  (p.recipients?.length ?? 0) > 0 ||
+  Boolean(p.subject) ||
+  Boolean(p.body) ||
+  Boolean(p.bodyIntent) ||
+  (p.attachments?.length ?? 0) > 0;
+
+/**
+ * Stage the `collecting` memo row a scheduled research run will land on (16-06 / DISP-02).
+ *
+ * Mirrors `evaluations.ts` `applyActOnGap`'s staging block — same insertPlan/resetPlan/patchPlan
+ * spine, same `collecting` handoff — with a NARROWER recycle rule, and the narrowing IS the point:
+ *
+ *  - a `collecting` MEMO row is REFUSED as `research_in_flight` (actOnGap recycles it). That row is
+ *    one a DISPATCH staged and still owns; recycling it would race two runs onto one row and the
+ *    loser's findings — already paid for — would be silently discarded. This persisted interlock is
+ *    ALSO what makes a per-turn envelope closure unnecessary: one run per thread, one freshly
+ *    derived root envelope. It is strictly stronger than an in-memory closure — it holds across
+ *    turns, across requests, and across a fallback retry that rebuilds the tool record.
+ *    **`kind === "memo"` is load-bearing, not decoration.** `cockpit.ts` inserts EVERY thread's plan
+ *    row at `collecting` on the first turn and it stays there for the whole composition, so a bare
+ *    `status === "collecting"` refusal would refuse research on essentially every live conversation
+ *    — the primary use case. A collecting row is only "owned by a dispatch" when a dispatch staged
+ *    it, and `kind: "memo"` is what records that.
+ *  - a plan carrying the USER'S OWN draft content is REFUSED as `draft_in_progress`. `actOnGap` may
+ *    reset one because the USER tapped a control; here the MODEL decides, and destroying a
+ *    half-composed email because someone asked a research question is not a trade the user agreed
+ *    to. An EMPTY composing row (the fresh-thread case) carries nothing to protect and recycles.
+ *  - anything past `proposed` (approved → done) is mid-flight or delivered and never recycles.
+ *
+ * Deliberately NOT refactored into a shared helper with `applyActOnGap`: the rules disagree, so
+ * sharing would need the rule as a parameter — a knob for two callers that disagree is the
+ * abstraction §8 forbids. Cross-referenced in both directions instead, so the divergence reads as
+ * chosen rather than accidental.
+ *
+ * ponytail: REFUSING rather than staging a second row. The real fix is more than one plan row per
+ * thread, and `plans.by_thread` is `.unique()` with `schema.ts` frozen after 16-01 — upgrade path,
+ * not this phase.
+ */
+export const stageResearchPlan = internalMutation({
+  args: { tenantId: v.string(), threadId: v.string(), subject: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId, subject },
+  ): Promise<
+    | { ok: true; planId: Id<"plans"> }
+    | { ok: false; reason: "research_in_flight" | "draft_in_progress" }
+  > => {
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .unique();
+
+    let planId: Id<"plans">;
+    if (plan) {
+      if (plan.status === "collecting" && plan.kind === "memo") {
+        return { ok: false, reason: "research_in_flight" };
+      }
+      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
+      // A memo row holds a PREVIOUS run's findings (already landed and readable), and a canceled row
+      // is one the user halted — neither is work in progress. Anything else with content in it is.
+      const userWork = plan.kind !== "memo" && plan.status !== "canceled" && hasDraftContent(plan);
+      if (userWork) return { ok: false, reason: "draft_in_progress" };
+      planId = plan._id;
+      // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot,
+      // which would carry a previous memo's subject/attachments onto this one.
+      await ctx.runMutation(internal.plans.resetPlan, { planId });
+    } else {
+      planId = await ctx.runMutation(internal.plans.insertPlan, { tenantId, threadId });
+    }
+    await ctx.runMutation(internal.plans.patchPlan, {
+      planId,
+      kind: "memo",
+      recipients: [], // a memo has no recipients — it is not an email
+      subject,
+      // NO template body: the specialist's output is the only body this plan will ever carry, and a
+      // staged template is exactly what must not become approvable under an attribution header.
+      body: "",
+      status: "collecting", // ← not approvable until landSpecialistResult flips it
+    });
+    return { ok: true, planId };
+  },
 });
 
 /**

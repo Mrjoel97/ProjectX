@@ -671,6 +671,12 @@ export type ActOnGapResult =
  * not `"proposed"` (cockpit.ts:530), so a `collecting` row is not approvable by construction — no
  * new guard, no new status literal, no `apps/web` change. `PlanCard` renders only at `proposed`
  * (cards.tsx:1624), so the CKPT-05 trace step is the progress indicator.
+ *
+ * 16-06 added a SECOND stager, `plans.stageResearchPlan`, for the async research dispatch. It is a
+ * near-copy of the staging block below with a DELIBERATELY NARROWER recycle rule (it refuses a
+ * `collecting` row and refuses a `proposed` EMAIL draft — read the comment there for why). The two
+ * are not shared on purpose: the rules disagree, and a shared helper would need the rule as a
+ * parameter. Change one and decide CONSCIOUSLY whether the other moves.
  */
 async function applyActOnGap(
   ctx: MutationCtx,
@@ -806,6 +812,11 @@ export const landSpecialistResult = internalMutation({
     /** a reason CODE (unknown_route|depth_exceeded|cycle_refused|budget_exhausted|error) — never
      *  prose, and never surfaced to the user (§4 + the refusal-reply precedent). */
     fallbackReason: v.optional(v.string()),
+    /** 16-06: the memo body to use when there is no evaluation row and no gap to build one from.
+     *  A RESEARCH run always lands there — it was never based on an evaluation — and
+     *  LOST_CONTEXT_MEMO's "the evaluation it was based on is no longer on file" is FALSE for it.
+     *  The gap path (`runSpecialist`) passes nothing, so it stays byte-identical. */
+    fallbackBody: v.optional(v.string()),
   },
   handler: async (ctx, a): Promise<void> => {
     const plan = await ctx.db.get(a.planId);
@@ -832,7 +843,10 @@ export const landSpecialistResult = internalMutation({
         .order("desc")
         .first();
       const gap = row?.gaps[a.gapIndex];
-      body = row && gap ? buildMemo(row, gap, a.fallbackReason ?? "error") : LOST_CONTEXT_MEMO;
+      body =
+        row && gap
+          ? buildMemo(row, gap, a.fallbackReason ?? "error")
+          : (a.fallbackBody ?? LOST_CONTEXT_MEMO);
     }
     // patchPlan, not resetPlan: we are FILLING a staged row, and resetPlan would clear `kind: memo`.
     await ctx.runMutation(internal.plans.patchPlan, { planId: a.planId, body, status: "proposed" });

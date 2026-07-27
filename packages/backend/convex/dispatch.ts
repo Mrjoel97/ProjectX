@@ -76,8 +76,13 @@ const NO_SNAPSHOT = "There is no evaluation on file for this conversation yet.";
  *  must not blow the specialist's context (and the loop's cost) on carried prose. */
 const MAX_FINDINGS = 8;
 const MAX_LABEL_CHARS = 160;
-const cap = (s: string): string =>
-  s.length > MAX_LABEL_CHARS ? `${s.slice(0, MAX_LABEL_CHARS)}…` : s;
+/** The research QUESTION originates from the MODEL, so this cap is a trust-boundary control, not
+ *  cosmetics (§8: never lazy about input validation at a trust boundary). Truncate rather than
+ *  reject — a long question is a verbose model, not an attack, and refusing it would cost the user
+ *  their run. */
+const MAX_QUESTION_CHARS = 500;
+const cap = (s: string, limit = MAX_LABEL_CHARS): string =>
+  s.length > limit ? `${s.slice(0, limit)}…` : s;
 
 export type DispatchRefusal =
   | "unknown_route"
@@ -91,12 +96,25 @@ export type DispatchResult =
       route: string;
       body: string;
       incomplete: boolean;
+      /** D11's three-way marker: WHY it stopped early. The loop's own stop reason wins over the
+       *  cost condition when both are true — it is what actually stopped the run. Absent ⇒ the run
+       *  finished inside every budget. */
+      incompleteReason?: "cost" | "steps" | "clock";
       costUsd: number;
       /** the tree's running total AFTER this hop — thread it to the next one */
       spentCents: number;
       /** the tree's ONE ceiling (derived at the root) — thread it to the next hop UNCHANGED */
       envelopeCents: number;
       skillVersion: number;
+      /** CONTENT-PLANE (§4): these feed 16-07's vault document. `sources` may NEVER reach an
+       *  `audit`/`telemetry` payload — those carry `sourceCount` and `retrievedAt` (a number). */
+      sources: readonly { url: string; title: string }[];
+      retrievedAt: number;
+      /** The models that actually BILLED this hop. On the return because a dispatch exposes no
+       *  other observable of the route's model pin, and 16-05's research ternary has to be
+       *  assertable on the value that priced the run rather than on source text. */
+      modelId: string;
+      fallbackModelId: string;
     }
   | { ok: false; reason: DispatchRefusal; reply: string };
 
@@ -113,6 +131,9 @@ type DispatchArgs = {
   ancestry: readonly string[];
   envelopeCents: number;
   spentCents: number;
+  /** 16-06: the executive's research question. Present ⇒ buildSpecialistPrompt takes the question
+   *  branch instead of the evaluation snapshot. */
+  question?: string;
 };
 
 /** The Convex validators for the above — shared by BOTH entry points so neither can drift. */
@@ -130,6 +151,7 @@ const dispatchArgs = {
   ancestry: v.array(v.string()),
   envelopeCents: v.number(),
   spentCents: v.number(),
+  question: v.optional(v.string()),
 };
 
 /** Compile-time bind: every registered specialist's `stepTool` is a real agentSteps.tool literal.
@@ -147,7 +169,9 @@ type SpecialistRunner = (a: {
   prompt: string;
   turnId: string;
   threadId: string;
-}) => Promise<{ reply: string; costUsd: number; skillVersion: number }>;
+  // The FULL loop return, derived rather than re-listed: `runSpecialistTurn` is the only
+  // implementation, so a hand-copied shape here would just be something to drift.
+}) => Promise<Awaited<ReturnType<typeof runSpecialistTurn>>>;
 
 type Ctx = GenericActionCtx<DataModel>;
 
@@ -159,7 +183,16 @@ type Ctx = GenericActionCtx<DataModel>;
  */
 export async function buildSpecialistPrompt(
   ctx: Ctx,
-  a: { tenantId: string; threadId: string; gapIndex: number; route: string },
+  a: {
+    tenantId: string;
+    threadId: string;
+    gapIndex: number;
+    route: string;
+    /** 16-06: the executive's research QUESTION. Present ⇒ the question IS the task and the
+     *  evaluation snapshot is not read at all — a research dispatch may run on a thread that has
+     *  no evaluation. Absent ⇒ the shipped gap-briefing path, byte-identical. */
+    question?: string;
+  },
 ): Promise<string> {
   // The tier reaches the loop as prompt context assembled by the CALLER (ADR-009) — never as a read
   // inside `runSpecialistTurn`. `llm.ts` is byte-unchanged by this plan, deliberately.
@@ -186,6 +219,15 @@ export async function buildSpecialistPrompt(
   });
   /** Both return paths carry the briefing: a tenant with no evaluation snapshot still has a tier. */
   const withBriefing = (rest: string): string => (briefing ? `${briefing}\n\n${rest}` : rest);
+
+  // The QUESTION branch (16-06). §5 stays intact: the question is the PROMPT, the research skill
+  // body is the SYSTEM prompt (loaded in runSpecialistTurn) — a model-supplied string is never
+  // concatenated ahead of a system prompt. The tier briefing still rides it: a research turn is
+  // still a tenant's turn (ADR-009).
+  // ponytail: an `if`, not a per-route prompt-builder table. There are exactly TWO prompt shapes
+  // and a table keyed on route for two entries is the abstraction §8 forbids. Upgrade path: at a
+  // THIRD shape, a `Record<route, builder>` table.
+  if (a.question !== undefined) return withBriefing(cap(a.question, MAX_QUESTION_CHARS));
 
   const evaluation = await ctx.runQuery(internal.evaluations.lastForThread, {
     tenantId: a.tenantId,
@@ -291,6 +333,7 @@ async function governedDispatch(
     threadId,
     gapIndex: args.gapIndex,
     route: resolved.route,
+    question: args.question,
   });
   const turnId = crypto.randomUUID(); // the evaluations.ts:174 mint-your-own-turnId precedent
   const stepKey = `dispatch:${rootRequestId}`;
@@ -328,7 +371,11 @@ async function governedDispatch(
     // (llm.ts:1678-1680), so this needs no second accounting. The global rail is drawn down
     // independently by recordSpend inside the loop — the envelope is a TREE-LOCAL SECOND ceiling.
     const spentAfter = args.spentCents + Math.ceil(turn.costUsd * 100);
-    const incomplete = spentAfter >= envelopeCents;
+    const overCost = spentAfter >= envelopeCents;
+    // Three causes, one boolean (no existing consumer changes) plus a REASON. The loop's own stop
+    // reason wins over the cost condition when both are true: it is what actually stopped the run.
+    const incomplete = overCost || turn.truncated;
+    const incompleteReason = turn.truncatedReason ?? (overCost ? ("cost" as const) : undefined);
     phase = "done";
     await ctx.runMutation(internal.audit.log, {
       tenantId,
@@ -342,6 +389,9 @@ async function governedDispatch(
         spentCents: spentAfter,
         envelopeCents,
         incomplete,
+        // A COUNT (§4 clean) — the hosted-search calls this hop billed for. NEVER `sources`: an
+        // array of URLs would type-check against AuditPayload, which is exactly the trap.
+        webSearchCalls: turn.webSearchCalls,
       },
     });
     return {
@@ -349,10 +399,15 @@ async function governedDispatch(
       route: resolved.route,
       body: turn.reply,
       incomplete,
+      incompleteReason,
       costUsd: turn.costUsd,
       spentCents: spentAfter,
       envelopeCents,
       skillVersion: turn.skillVersion,
+      sources: turn.sources,
+      retrievedAt: Date.now(),
+      modelId: turn.modelId,
+      fallbackModelId: turn.fallbackModelId,
     };
   } finally {
     await ctx.runMutation(internal.agentSteps.finish, {
@@ -389,9 +444,18 @@ async function dispatchAndLand(
   ctx: Ctx,
   args: DispatchArgs,
   run: SpecialistRunner,
+  // 16-06, append-only 4th param. `landSpecialistResult`'s no-body branch falls back to
+  // `buildMemo(evaluationRow, gap, …)` and, when neither exists, to LOST_CONTEXT_MEMO — whose text
+  // says "the evaluation it was based on is no longer on file. Ask me to run the assessment again".
+  // A RESEARCH run has no evaluation row and no gap, so it lands in that branch EVERY time, and
+  // that sentence is simply false for it. This is the price of reusing the gap path's terminal for
+  // a caller that has no gap — paid at the SEAM, once, rather than with a route conditional inside
+  // the shared spine. `runSpecialist` omits it, so the gap path is byte-identical.
+  fallbackBody?: string,
 ): Promise<DispatchResult> {
   // Pre-seeded for the throw path, which never reaches the assignment below.
   let landing: Landing = { incomplete: false, fallbackReason: "error" };
+  let honestBody = fallbackBody;
   try {
     const result = await governedDispatch(ctx, args, run);
     landing = result.ok
@@ -399,6 +463,9 @@ async function dispatchAndLand(
       : // A governed refusal is a paused conversation, not an error — the user still gets the
         // deterministic memo, worded honestly for THIS reason (never the code itself).
         { incomplete: false, fallbackReason: result.reason };
+    // The four refusal replies are ALREADY written to be read by a user, so a caller that supplied
+    // a fallback gets the specific one rather than its generic sentence.
+    if (!result.ok && fallbackBody !== undefined) honestBody = result.reply;
     return result;
   } catch (err) {
     // A thrown turn is a real failure (the §5 loader fails closed by throwing, for instance), not a
@@ -424,6 +491,7 @@ async function dispatchAndLand(
       planId: args.planId,
       gapIndex: args.gapIndex,
       route: args.route,
+      fallbackBody: honestBody,
       ...landing,
     });
   }
@@ -441,20 +509,60 @@ export const runSpecialist = internalAction({
     ),
 });
 
+/** The honest one sentence a FAILED research run lands as its memo body. It replaces
+ *  LOST_CONTEXT_MEMO's "the evaluation it was based on is no longer on file", which is false for a
+ *  run that was never based on an evaluation — a user told to re-run an assessment they never
+ *  started has been given a dead end wearing an explanation's clothes. Driver-plane synthetic
+ *  string, not a skill (§5 n/a — the four refusal replies above are the precedent). */
+const RESEARCH_FAILED_MEMO =
+  "# Research\n\nI couldn't finish that piece of research — the run stopped before it produced" +
+  " anything. Ask me to look into it again and I'll start it over.";
+
+/**
+ * D9-REVISED's scheduled entry point (DISP-02). Calls `dispatchAndLand` — the SAME landing path
+ * `runSpecialist` uses — so the memo plan card is guaranteed to leave `collecting` on every
+ * outcome, including a throw. It is NOT a second spine: the only differences from `runSpecialist`
+ * are the honest fallback body and, from 16-07, the vault persist bolted on after a success.
+ * Explicit return type (`dispatch.ts` is "use node" — an inferred one degrades the generated API).
+ */
+export const runResearch = internalAction({
+  args: dispatchArgs,
+  handler: async (ctx, args): Promise<DispatchResult> =>
+    dispatchAndLand(
+      ctx,
+      args,
+      (a) => runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
+      RESEARCH_FAILED_MEMO,
+    ),
+});
+
 /**
  * The OFFLINE twin (the __runCockpitAgentWithScript precedent, llm.ts:2116). A LanguageModel is
  * not Convex-serializable, so the mock is built inside runSpecialistTurn from a script. It calls
  * the SAME governedDispatch — test-support surface, never a second code path.
  */
 export const __runSpecialistWithScript = internalAction({
-  args: { ...dispatchArgs, primary: v.array(v.any()), fallback: v.optional(v.array(v.any())) },
+  args: {
+    ...dispatchArgs,
+    primary: v.array(v.any()),
+    fallback: v.optional(v.array(v.any())),
+    // D11's wall-clock row, and the ONLY way it is testable offline. Drives the SOFT stop ONLY —
+    // never the hard budget. A test that shrank `AbortSignal.timeout` instead would have the abort
+    // RACE the mock loop and throw ConvexError({kind:"agent_timeout"}) (llm.ts), i.e. produce the
+    // exact discard-the-work outcome this row exists to disprove. Do not add a `timeoutMs` sibling.
+    softCutoffMs: v.optional(v.number()),
+  },
   handler: async (ctx, args): Promise<DispatchResult> =>
     dispatchAndLand(ctx, args, (a) =>
       runSpecialistTurn(ctx, {
         tenantId: args.tenantId,
         planId: args.planId,
         ...a,
-        mockScript: { primary: args.primary, fallback: args.fallback },
+        mockScript: {
+          primary: args.primary,
+          fallback: args.fallback,
+          softCutoffMs: args.softCutoffMs,
+        },
       }),
     ),
 });
