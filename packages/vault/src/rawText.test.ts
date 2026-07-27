@@ -59,32 +59,32 @@ describe("markupText — HTML/XML to text", () => {
 
 describe("rtfText — control words, destination groups and escapes", () => {
   it("returns the body of a minimal RTF document", () => {
-    expect(rtfText(ansi(`{\rtf1ansideff0 Hello world}`))).toBe("Hello world");
+    expect(rtfText(ansi("{\\rtf1\\ansi\\deff0 Hello world}"))).toBe("Hello world");
   });
 
-  it("treats par as a BREAK, not as deleted text", () => {
-    expect(rtfText(ansi(`{\rtf1 Apar B}`))).toBe("A\nB");
+  it("treats \\par as a BREAK, not as deleted text", () => {
+    expect(rtfText(ansi("{\\rtf1 A\\par B}"))).toBe("A\nB");
   });
 
-  it("DROPS a {*...} ignorable destination group and everything inside it", () => {
-    const out = rtfText(ansi(`{\rtf1 {*generator Riched20}Real text}`));
+  it("DROPS an ignorable {\\*\\...} destination group and everything inside it", () => {
+    const out = rtfText(ansi("{\\rtf1 {\\*\\generator Riched20}Real text}"));
     expect(out).toBe("Real text");
     expect(out).not.toContain("Riched20");
   });
 
-  it("unescapes 'hh hex escapes through CP1252", () => {
-    expect(rtfText(ansi(`{\rtf1 caf'e9}`))).toBe("café");
+  it("unescapes hex escapes through CP1252", () => {
+    expect(rtfText(ansi("{\\rtf1 caf\\'e9}"))).toBe("café");
   });
 
-  it("keeps escaped literals { } \\ as {, } and a backslash", () => {
-    const out = rtfText(ansi(`{\rtf1 {a} \\ b}`));
+  it("keeps escaped literals as {, } and a backslash", () => {
+    const out = rtfText(ansi("{\\rtf1 \\{a\\} \\\\ b}"));
     expect(out).toContain("{");
     expect(out).toContain("}");
     expect(out).toContain("\\");
   });
 
   it("reads text out of nested (non-ignorable) groups", () => {
-    const out = rtfText(ansi(`{\rtf1 {\b bold} plain}`));
+    const out = rtfText(ansi("{\\rtf1 {\\b bold} plain}"));
     expect(out).toContain("bold");
     expect(out).toContain("plain");
   });
@@ -95,6 +95,7 @@ describe("rtfText — control words, destination groups and escapes", () => {
 });
 
 const SENTENCE = "The quarterly report is attached.";
+// The two SummaryInformation streams really do carry a leading 0x05 in a compound file.
 const STREAM_NAMES = [
   "Root Entry",
   "WordDocument",
@@ -173,7 +174,7 @@ describe("oleText — legacy DOC/PPT printable-run sweep (SC#3, no dependency)",
     expect(out).not.toContain("Pictures");
   });
 
-  it("THROWS rather than returning '' when nothing survives — an empty 'success' would store a ready doc with 0 chars", () => {
+  it("THROWS rather than returning '' — an empty 'success' stores a ready doc with 0 chars", () => {
     expect(() => oleText(cat(OLE2, nuls(64)), "doc")).toThrow(
       "raw_parse_failed: no text recovered",
     );
