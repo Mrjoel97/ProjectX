@@ -224,3 +224,127 @@ export function probesFor(
   }
   return probes;
 }
+
+// ── The stored blueprint markdown ──────────────────────────────────────────────────────────────
+//
+// Mirrors `serializeProfile`/`deserializeProfile` in shape and inherits its invariant verbatim:
+//   "Deterministic = same input yields byte-identical output (no dates, no ordering churn) so
+//    re-embedding on edit replaces cleanly and diffs stay meaningful."
+// Here that is load-bearing twice over: the staleness count and the confirmation date are computed
+// at READ time in the spine, and either one baked into the stored text would break the rebuild diff
+// (every rebuild would "differ") and the `contentHash` dedup.
+//
+// The scalar marker prefix is the plain `- <Label>: `, deliberately NOT `- **<Label>:** `:
+// `- **Persona:**` is the exact BUSINESS-PROFILE DETECTOR string in `evaluations.ts` and
+// `vault.profileSeedDocs`, and the bolded shape is one careless edit away from it.
+
+const HEADING = "# Business blueprint";
+const STATED = "[stated]";
+const SOURCE_PREFIX = "source: ";
+
+/**
+ * `[stated]` / `[source: <title>]` — the suffix that round-trips `origin` and `source`.
+ *
+ * ponytail: a `derived` entry with no `source` serializes as an empty title and reads back as
+ * `source: ""`, because the type contract is "present iff `origin === 'derived'`". Ceiling: that
+ * one malformed shape does not round-trip. Upgrade path: make `source` required on a `derived`
+ * entry via a discriminated union if a producer is ever able to omit it.
+ */
+const marker = (entry: BlueprintEntry): string =>
+  entry.origin === "stated" ? STATED : `[${SOURCE_PREFIX}${entry.source ?? ""}]`;
+
+/**
+ * Split `"<value> [stated]"` / `"<value> [source: <title>]"` back into its parts.
+ *
+ * The suffix is parsed from the LAST `[` on the line, so a VALUE containing brackets still parses
+ * and a source TITLE containing `]` still round-trips. Returns `null` for anything that does not
+ * carry a recognized marker — the "degrade, never throw" rule.
+ */
+function parseMarked(rest: string): BlueprintEntry | null {
+  const open = rest.lastIndexOf("[");
+  const close = rest.lastIndexOf("]");
+  if (open === -1 || close < open) return null;
+  const value = rest.slice(0, open).trim();
+  if (value === "") return null;
+  const mark = rest.slice(open + 1, close);
+  if (mark === "stated") return { values: [value], origin: "stated" };
+  if (mark.startsWith(SOURCE_PREFIX))
+    return { values: [value], origin: "derived", source: mark.slice(SOURCE_PREFIX.length) };
+  return null;
+}
+
+/**
+ * Render a blueprint to the deterministic markdown stored as its `business_blueprint` vault doc.
+ *
+ * Driven off `FIELD_SPEC[f].label` / `.list` and iterated in `BLUEPRINT_FIELDS` order, so a new
+ * field cannot be forgotten and the byte output cannot drift with object key order. A `null` field
+ * is simply omitted — `deserializeBlueprint` fills it back as `null`.
+ */
+export function serializeBlueprint(b: BusinessBlueprint): string {
+  const scalars: string[] = [];
+  const sections: string[] = [];
+  for (const field of BLUEPRINT_FIELDS) {
+    const entry = b[field];
+    if (entry === null) continue;
+    const [first] = entry.values;
+    if (first === undefined) continue; // an empty entry is a blank field, not an empty section
+    const spec = FIELD_SPEC[field];
+    const mark = marker(entry);
+    if (spec.list) {
+      sections.push("", `## ${spec.label}`, "", ...entry.values.map((v) => `- ${v} ${mark}`));
+    } else {
+      scalars.push(`- ${spec.label}: ${first} ${mark}`);
+    }
+  }
+  return [HEADING, "", ...scalars, ...sections, ""].join("\n");
+}
+
+/**
+ * Inverse of `serializeBlueprint` — parses by the serializer's FIXED MARKERS, never line offsets
+ * (the `deserializeProfile` rule).
+ *
+ * TOTAL by construction: it iterates `BLUEPRINT_FIELDS` and fills every one of the eleven fields,
+ * `null` when absent. It NEVER throws — a deleted-and-replaced vault doc, or any foreign blob, must
+ * degrade to "no blueprint" rather than crash a grounding call.
+ */
+export function deserializeBlueprint(markdown: string): BusinessBlueprint {
+  const lines = markdown.split("\n");
+
+  const scalar = (label: string): BlueprintEntry | null => {
+    const prefix = `- ${label}: `;
+    const line = lines.find((l) => l.startsWith(prefix));
+    return line === undefined ? null : parseMarked(line.slice(prefix.length));
+  };
+
+  const section = (label: string): BlueprintEntry | null => {
+    const start = lines.findIndex((l) => l.trim() === `## ${label}`);
+    if (start === -1) return null;
+    const values: string[] = [];
+    let origin: BlueprintEntry["origin"] = "stated";
+    let source: string | undefined;
+    for (let i = start + 1; i < lines.length; i++) {
+      const line = lines[i] ?? "";
+      if (line.startsWith("#")) break;
+      if (!line.startsWith("- ")) continue;
+      const parsed = parseMarked(line.slice(2));
+      if (parsed === null) continue;
+      // Origin is a property of the FIELD, not of an individual value — the first item carries it.
+      if (values.length === 0) {
+        origin = parsed.origin;
+        source = parsed.source;
+      }
+      values.push(...parsed.values);
+    }
+    if (values.length === 0) return null;
+    return source === undefined ? { values, origin } : { values, origin, source };
+  };
+
+  return Object.fromEntries(
+    BLUEPRINT_FIELDS.map((field) => {
+      const spec = FIELD_SPEC[field];
+      return [field, spec.list ? section(spec.label) : scalar(spec.label)];
+    })
+    // `Object.fromEntries` cannot express the per-key mapped type; the map above is driven off
+    // BLUEPRINT_FIELDS, so every key is present by construction.
+  ) as unknown as BusinessBlueprint;
+}
