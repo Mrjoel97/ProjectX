@@ -13,6 +13,10 @@ import { expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
+// A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
+// precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
+import { callTimeoutMsFor } from "./llm";
+import { RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
 // recordSpend drives the rate-limiter component (reserve into the daily-spend window); register it
 // (relative import — the package blocks the deep specifier) so the REAL guardrail path runs under
 // convex-test instead of throwing "component not registered".
@@ -603,4 +607,47 @@ test("draftDocument pin: loads the pinned drafter version, fails closed on a mis
   await insertCandidate(t, "document-drafter", 2);
   const doc = await t.action(internal.llm.draftDocument, { ...args, skillVersion: 2 });
   expect(doc.title).toBe("Smoke Document");
+});
+
+
+// ── Phase 16 (16-05) — the research exception, and the floors that keep it an EXCEPTION ────────
+
+// D12 obligation #2. This is a TEST rather than a comment because the whole claim of the research
+// exception is that it changes NOTHING for any other path.
+test("callTimeoutMsFor: research gets its own clock, everything else keeps 45s", () => {
+  expect(callTimeoutMsFor(RESEARCH_SPECIALIST_SKILL)).toBe(180_000);
+  // A LITERAL 45_000, never the CALL_TIMEOUT_MS symbol — an assertion written against the symbol
+  // tracks the very refactor it exists to catch, and would stay green while the default moved.
+  expect(callTimeoutMsFor("offer-architect")).toBe(45_000);
+  expect(callTimeoutMsFor("some-skill-that-does-not-exist")).toBe(45_000);
+});
+
+// THE STEP REGRESSION FLOOR, and it is a different assertion from any cost floor.
+//
+// If the soft wall-clock stop were derived UNCONDITIONALLY from the budget, then for a default
+// turn `45_000 - 60_000` is NEGATIVE, and `elapsed >= negative` is true on the FIRST evaluation —
+// so every executive turn, every Growth OS specialist turn and this scripted shim would truncate
+// at step 1. A cost floor cannot catch that: a one-step turn still prices correctly.
+test("a NON-research scripted turn runs all four tool steps and is NOT truncated", async () => {
+  const { t, planId } = await setup();
+
+  const res = await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      toolStep("addRecipients", { addresses: ["bob@example.com"] }),
+      toolStep("setSubject", { subject: "Four steps" }),
+      toolStep("draftBody", { intent: SMOKE_BODY }),
+      toolStep("proposePlan", {}),
+      textStep("Done.", 10, 10),
+    ],
+  });
+
+  expect(res.reply).toBe("Done.");
+  expect(res.truncated, "the default path truncated — the soft clock leaked onto it").toBe(false);
+  expect(res.truncatedReason).toBeUndefined();
+  // The COST floor, asserted in the same turn: a turn with no hosted search must bill exactly as
+  // before, so this change cannot silently re-price every existing cockpit turn.
+  expect(res.webSearchCalls).toBe(0);
+  expect(res.sources).toEqual([]);
 });
