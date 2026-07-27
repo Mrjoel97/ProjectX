@@ -19,6 +19,7 @@ import { crc32 } from "node:zlib";
 import { VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { utils as xlsxUtils, write as xlsxWrite } from "xlsx";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
@@ -448,6 +449,26 @@ const SENTENCE = "The board approved the budget on Tuesday.";
 const ole2With = (stream: string): Uint8Array =>
   cat(OLE2, nuls(8), utf16(stream), nuls(4), ansi(SENTENCE), nuls(16));
 
+/**
+ * A REAL BIFF workbook, written by SheetJS itself — no binary fixture in the repo. `xlsx` is a
+ * DEV-only dependency of this package (it does not resolve here otherwise, the same arrangement
+ * that keeps `fflate` out of the V8 bundle); production reaches it solely through
+ * `@pikar/vault/xlsText`.
+ */
+const xlsFixture = (): Uint8Array => {
+  const wb = xlsxUtils.book_new();
+  xlsxUtils.book_append_sheet(
+    wb,
+    xlsxUtils.aoa_to_sheet([
+      ["Region", "Revenue", "Margin"],
+      ["North", 152340.5, 0.31],
+      ["South", 98120, 0.27],
+    ]),
+    "Sales",
+  );
+  return new Uint8Array(xlsxWrite(wb, { bookType: "xls", type: "buffer" }));
+};
+
 /** 64 bytes nothing can read: not a signature, not %PDF, not valid printable text. */
 const NOISE = Uint8Array.from({ length: 64 }, (_, i) => i % 2);
 
@@ -492,20 +513,83 @@ describe("rail dispatch — content decides, and every refusal is TERMINAL (SC#1
     expect(await successAudit(t)).toMatchObject({ kind: "legacy_doc", path: "legacy" });
   }, 20000);
 
-  test("a legacy .xls refuses HONESTLY rather than plausibly (headers-and-no-numbers)", async () => {
+  test("a legacy .xls reaches the seam WITH ITS NUMBERS (SC#3)", async () => {
     const t = setup();
-    // A printable-run sweep over BIFF would recover the column headers and silently lose every
-    // value (numbers are binary doubles) — a plausible failure, which is worse than a failure.
-    // SheetJS lands in plan 15.2-07; until then the refusal IS the correct behaviour.
-    const docId = await uploadBytes(t, ole2With("Workbook"), "application/vnd.ms-excel", "q3.xls");
+    const docId = await uploadBytes(t, xlsFixture(), "application/vnd.ms-excel", "q3.xls");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    expect(doc?.status).toBe("processing");
+    for (const header of ["Region", "Revenue", "North"]) {
+      expect(doc?.text).toContain(header);
+    }
+    // THE POINT OF THE WHOLE DEPENDENCY. A printable-run sweep over BIFF recovers the headers
+    // above and silently loses every value (numbers are binary doubles) — it would pass the
+    // first loop and fail this one, landing a `ready` spreadsheet with no data in it.
+    for (const value of ["152340.5", "98120", "0.31"]) {
+      expect(doc?.text, `NUMBER ${value} missing — the parser degraded to header recovery`).toContain(
+        value,
+      );
+    }
+    expect(await successAudit(t)).toMatchObject({ kind: "legacy_xls", path: "legacy" });
+  }, 20000);
+
+  test("the SAME .xls with NO mimeType at all is identical — SC#1 and SC#3 meeting", async () => {
+    const t = setup();
+    // `ole2Kind` found `Workbook` in the compound file's own stream names, so no MIME was needed
+    // and the extension is a lie the dispatcher never consulted.
+    const docId = await uploadBytes(t, xlsFixture(), "", "budget.bin");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    expect(doc?.status).toBe("processing");
+    expect(doc?.text).toContain("152340.5");
+    expect(await successAudit(t)).toMatchObject({ kind: "legacy_xls", path: "legacy" });
+  }, 20000);
+
+  test("a truncated .xls reaches TERMINAL failed — never a partial success", async () => {
+    const t = setup();
+    const full = xlsFixture();
+    const docId = await uploadBytes(
+      t,
+      full.slice(0, Math.floor(full.length / 2)),
+      "application/vnd.ms-excel",
+      "corrupt.xls",
+    );
 
     await runExtract(t, docId);
 
     const doc = await getDoc(t, docId);
     expect(doc?.status).toBe("failed");
-    expect(doc?.failureReason).toBe("unsupported_legacy_spreadsheet");
-    expect(doc?.failureReason?.length).toBeGreaterThan(0);
-  });
+    expect(doc?.failureReason).toBe("xls_parse_failed");
+    // Terminal, not parked — the stranding shape this whole phase exists to delete.
+    expect(doc?.status).not.toBe("pending_extraction");
+    expect(doc?.status).not.toBe("extracting");
+  }, 20000);
+
+  test("the two legacy rails did NOT get crossed: an OLE2 .doc still routes to oleText", async () => {
+    const t = setup();
+    const docId = await uploadBytes(t, ole2With("WordDocument"), "", "minutes.doc");
+
+    await runExtract(t, docId);
+
+    expect((await getDoc(t, docId))?.text).toContain(SENTENCE);
+    expect(await successAudit(t)).toMatchObject({ kind: "legacy_doc", path: "legacy" });
+  }, 20000);
+
+  test("the XLS rail no longer produces unsupported_legacy_spreadsheet", async () => {
+    // 15.2-03's honest interim refusal, now superseded. The `failureCopy` ROW for this code stays
+    // in the UI on purpose: historical rows still carry it, and deleting the row would render
+    // them as a raw code.
+    const t = setup();
+    const docId = await uploadBytes(t, xlsFixture(), "application/vnd.ms-excel", "q3.xls");
+
+    await runExtract(t, docId);
+
+    expect((await getDoc(t, docId))?.failureReason).not.toBe("unsupported_legacy_spreadsheet");
+  }, 20000);
 
   test("RTF extracts on the raw rail with no MIME type at all", async () => {
     const t = setup();
@@ -826,6 +910,18 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     );
     expect(src, "pdf-lib must be a STATIC top-level import").toMatch(
       /^import\s*\{[^}]*\bPDFDocument\b[^}]*\}\s*from\s*["']pdf-lib["'];?$/m,
+    );
+  });
+
+  test("SheetJS is reached by the @pikar/vault/xlsText SUBPATH, never the barrel", () => {
+    // Same discipline as officeText, for a much bigger number: SheetJS is ~1 MB and must enter
+    // ONLY this node action. Importing xlsText from the "@pikar/vault" barrel would drag it into
+    // every V8-runtime module that touches the barrel.
+    expect(src, "xlsText must come from the subpath").toMatch(
+      /^import\s*\{\s*xlsText\s*\}\s*from\s*["']@pikar\/vault\/xlsText["'];?$/m,
+    );
+    expect(src, "xlsText must NOT be pulled from the barrel").not.toMatch(
+      /^import\s*\{[^}]*\bxlsText\b[^}]*\}\s*from\s*["']@pikar\/vault["'];?$/m,
     );
   });
 
