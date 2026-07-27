@@ -682,7 +682,7 @@ Locked owner decisions D1-D5 in spec §2.1.
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 10 plans in 7 waves
+**Plans:** 10 plans in 8 waves
 
 Plans:
 - [ ] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
@@ -691,10 +691,10 @@ Plans:
 - [ ] 17.1-04-PLAN.md — Backend read plane: `liveForTenant`, `topEntities`, Stage-1 drift, `spineForTenant` (Wave 3)
 - [ ] 17.1-05-PLAN.md — Synthesis: probes -> grounding -> ONE governed model call -> draft write that refuses without a tier row (Wave 4)
 - [ ] 17.1-06-PLAN.md — SEAM 1: the cockpit turn prompt, proven on a turn that calls no tools (Wave 4)
-- [ ] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 4)
-- [ ] 17.1-08-PLAN.md — The confirm gate: `confirmBlueprint`, one never-ingested blueprint document, refs-only audit, four-state query (Wave 5)
-- [ ] 17.1-09-PLAN.md — The confirm surface: `BlueprintPanel` + `BlueprintDiff` (additions grouped ON, contradictions ticked OFF), brand-token styled (Wave 6)
-- [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 7, has a blocking checkpoint)
+- [ ] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 5)
+- [ ] 17.1-08-PLAN.md — The confirm gate: `confirmBlueprint`, one never-ingested blueprint document, refs-only audit, four-state query (Wave 6)
+- [ ] 17.1-09-PLAN.md — The confirm surface: `BlueprintPanel` + `BlueprintDiff` (additions grouped ON, contradictions ticked OFF), brand-token styled (Wave 7)
+- [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 8, has a blocking checkpoint)
 
 ### Phase 18: Document & Content Creation
 **Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
