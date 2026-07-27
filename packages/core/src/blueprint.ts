@@ -69,7 +69,13 @@ type FieldSpec = {
   label: string;
   /** true ⇒ rendered as a bullet list; false ⇒ one inline value. */
   list: boolean;
-  /** Per-field char cap applied when rendering the spine (the ≈2500-char standing-context budget). */
+  /**
+   * The field's budget in the spine, measured on the WHOLE RENDERED LINE (`- Label: value
+   * [marker]`), not on the value alone. Line-level is what makes the block's total bound
+   * arithmetic — `sum(cap) + framing ≤ SPINE_CHAR_CAP` — provable rather than hopeful, and it is
+   * why a very long source title costs the VALUE room instead of overflowing the budget.
+   * Unused by `serializeBlueprint`: the STORED markdown is never truncated.
+   */
   cap: number;
   /**
    * Whether the MODEL may propose this field. false ⇒ never probed, never accepted from a
@@ -99,61 +105,61 @@ export const FIELD_SPEC = {
   oneLineDescription: {
     label: "One-line description",
     list: false,
-    cap: 280,
+    cap: 220,
     derivable: true,
     probe: "what this business does, described in one sentence",
   },
   stage: {
     label: "Stage",
     list: false,
-    cap: 100,
+    cap: 80,
     derivable: true,
     probe: "what stage the business is at — an idea, launching, growing, or established",
   },
-  tier: { label: "Tier", list: false, cap: 20, derivable: false, probe: null },
+  tier: { label: "Tier", list: false, cap: 60, derivable: false, probe: null },
   offering: {
     label: "Offering",
     list: false,
-    cap: 280,
+    cap: 240,
     derivable: true,
     probe: "what the business sells, its products and services",
   },
   targetCustomer: {
     label: "Target customer",
     list: false,
-    cap: 240,
+    cap: 200,
     derivable: true,
     probe: "who the business sells to — its customers, market and audience",
   },
   revenueModel: {
     label: "Revenue model",
     list: false,
-    cap: 240,
+    cap: 200,
     derivable: true,
     probe: "how the business makes money — pricing, packages, subscriptions, fees and margins",
   },
   bindingConstraint: {
     label: "Binding constraint",
     list: false,
-    cap: 240,
+    cap: 200,
     derivable: true,
     probe: "the single biggest bottleneck or constraint limiting growth",
   },
   primaryGoals: {
     label: "Primary goals",
     list: true,
-    cap: 280,
+    cap: 240,
     derivable: true,
     probe: "the goals, targets and objectives the business is working toward",
   },
   knownConstraints: {
     label: "Known constraints",
     list: true,
-    cap: 280,
+    cap: 240,
     derivable: true,
     probe: "the constraints, limitations, risks and blockers the business is working under",
   },
-  entities: { label: "Entities", list: true, cap: 240, derivable: false, probe: null },
+  entities: { label: "Entities", list: true, cap: 200, derivable: false, probe: null },
 } as const satisfies Record<BlueprintField, FieldSpec>;
 
 /** A field's content is PRESENT when it trims non-empty — the `SLOT_PRESENT` rule, not `!value`. */
@@ -529,4 +535,94 @@ export function deserializeBlueprint(markdown: string): BusinessBlueprint {
     // `Object.fromEntries` cannot express the per-key mapped type; the map above is driven off
     // BLUEPRINT_FIELDS, so every key is present by construction.
   ) as unknown as BusinessBlueprint;
+}
+
+// ── The spine: the standing-context block ──────────────────────────────────────────────────────
+
+/**
+ * The spine's hard ceiling. Budgeted OUTSIDE `vaultGround.ts`'s `TOTAL_CHAR_CAP` (8000), which
+ * stays entirely for retrieval results — the spine is not a search result and must not compete
+ * with them for budget.
+ *
+ * The bound is arithmetic, not hopeful: every field line is capped at `FIELD_SPEC[f].cap`, so the
+ * worst case is `sum(cap)` + this block's own framing, and both are fixed constants.
+ */
+export const SPINE_CHAR_CAP = 2500;
+
+const SPINE_OPEN = "<business_blueprint>";
+const SPINE_CLOSE = "</business_blueprint>";
+const SPINE_INTRO =
+  "Facts marked [stated] are the user's own words — settled, do not second-guess them. " +
+  "Facts marked [source: X] were inferred from X — cite X when you lean on it.";
+const SPINE_EMPTY = "- (nothing confirmed about this business yet)";
+/** A long file name must cost the VALUE room, never the block's budget. */
+const SOURCE_TITLE_CAP = 40;
+
+/** Truncate VISIBLY, never silently. `n <= 0` yields nothing at all rather than overflowing by one. */
+const clip = (s: string, n: number): string =>
+  n <= 0 ? "" : s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`;
+
+/** `- <Label>: <values> [marker]`, guaranteed no longer than the field's cap. */
+function spineLine(field: BlueprintField, entry: BlueprintEntry): string {
+  const spec = FIELD_SPEC[field];
+  const head = `- ${spec.label}: `;
+  // The marker is the load-bearing half of the line — it is what tells the agent whether a fact is
+  // settled or challengeable — so the value yields budget to it, never the other way round.
+  const mark =
+    entry.origin === "stated"
+      ? STATED
+      : `[${SOURCE_PREFIX}${clip(entry.source ?? "", SOURCE_TITLE_CAP)}]`;
+  const body = surviving(entry.values).join("; ");
+  return `${head}${clip(body, spec.cap - head.length - mark.length - 1)} ${mark}`;
+}
+
+/**
+ * The standing-context block BOTH seams inject verbatim: the cockpit turn prompt (`llm.ts`) and
+ * `vaultGroundHydrated`'s `spine` return field. ONE renderer, so the two seams cannot drift.
+ *
+ * NOT the same bytes as `serializeBlueprint`: this one carries a READ-TIME staleness count, which
+ * is exactly why it must not be what gets stored — determinism, and therefore the rebuild diff and
+ * the `contentHash` dedup, would break.
+ *
+ * A labelled fence (the `<vault_context>` idiom already used in `llm.ts`) so the model reads it as
+ * CONTEXT rather than as an instruction. Never `- **<Label>:** `: the spine is fed into
+ * `evaluations.ts`, whose business-profile detector is the exact literal `- **Persona:**`.
+ */
+export function renderSpine(
+  blueprint: BusinessBlueprint,
+  opts: { unincorporatedCount: number }
+): string {
+  const lines: string[] = [];
+  for (const field of BLUEPRINT_FIELDS) {
+    const entry = blueprint[field];
+    // A sparse blueprint renders short — a null field is skipped entirely, not rendered as blank.
+    if (entry !== null && surviving(entry.values).length > 0) lines.push(spineLine(field, entry));
+  }
+
+  const out = [
+    SPINE_OPEN,
+    SPINE_INTRO,
+    "",
+    ...(lines.length > 0 ? lines : [SPINE_EMPTY]),
+    // Emitted iff something is unincorporated. Worded so the agent can SAY it is missing something
+    // instead of asserting into the gap.
+    ...(opts.unincorporatedCount > 0
+      ? [
+          `⚠ ${opts.unincorporatedCount} documents have been added since this was confirmed — ` +
+            "it may be missing something; say so rather than guessing.",
+        ]
+      : []),
+    SPINE_CLOSE,
+    "",
+  ].join("\n");
+
+  // A code-bug tripwire, not a runtime path: it can only fire if the per-field caps were mis-set
+  // so they no longer sum under the total. Mutation-verified in 17.1-03 by raising one cap.
+  if (out.length > SPINE_CHAR_CAP) {
+    throw new Error(
+      `blueprint spine is ${out.length} chars, over SPINE_CHAR_CAP (${SPINE_CHAR_CAP}) — the ` +
+        "FIELD_SPEC caps no longer sum under the total"
+    );
+  }
+  return out;
 }
