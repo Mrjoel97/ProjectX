@@ -338,7 +338,10 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
     // Per-attempt, and armed well past any honest run (the 480s call ceiling / 10-min action limit).
     // A window, not an equality: the two runAfter calls read Date.now() independently, so the delta
     // is the constant plus however many milliseconds elapsed between them.
-    const delta = watchdog[0]!.scheduledTime - rail[0]!.scheduledTime;
+    const [railEntry] = rail;
+    const [watchdogEntry] = watchdog;
+    if (!railEntry || !watchdogEntry) throw new Error("both must be scheduled");
+    const delta = watchdogEntry.scheduledTime - railEntry.scheduledTime;
     expect(delta).toBeGreaterThanOrEqual(EXTRACTION_WATCHDOG_MS);
     expect(delta).toBeLessThan(EXTRACTION_WATCHDOG_MS + 1000);
   });
