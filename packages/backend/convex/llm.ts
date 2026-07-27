@@ -30,6 +30,7 @@ import {
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
   REPLY_DRAFTER_SKILL,
+  RESEARCH_SPECIALIST_SKILL,
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
@@ -58,7 +59,14 @@ import {
   tokenizeMarkdown,
   toWinAnsi,
 } from "@pikar/core";
-import { CHEAP_MODEL, DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import {
+  CHEAP_MODEL,
+  DEFAULT_MODEL,
+  priceUsage,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+  WEB_SEARCH_CALL_USD,
+} from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
 import {
@@ -82,6 +90,47 @@ import { contentHash } from "./lib/hash";
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
 const CALL_TIMEOUT_MS = 45_000;
+
+/**
+ * D12 (owner, LOCKED). The research route is the ONLY path in this codebase with its own wall
+ * clock. WHY it is the exception: `openai.tools.webSearch` is PROVIDER-EXECUTED — OpenAI runs the
+ * search AND reads the pages server-side — so one research step's latency is unlike every other
+ * tool here, and D10 requires several deliberately varied searches per run. Decompose → 3-5 hosted
+ * searches → cross-check → synthesise does not fit in 45 seconds.
+ *
+ * `CALL_TIMEOUT_MS = 45_000` is UNCHANGED for every other path, and a test pins that.
+ *
+ * 180s, not 240s: `runAgentLoop` may run the primary AND the fallback, each with its own clock, so
+ * the worst case is 2 × 180s = 360s — comfortably inside Convex's 10-minute action ceiling. Nobody
+ * is watching a spinner; the run is scheduled in the background (D9-REVISED).
+ */
+const RESEARCH_CALL_TIMEOUT_MS = 180_000;
+
+/** Headroom between the SOFT stop and the HARD abort, so the loop stops cleanly BETWEEN steps
+ *  (keeping its partial findings) instead of being killed mid-step and discarding them. */
+const RESEARCH_STEP_SLACK_MS = 60_000;
+
+/**
+ * D10 + D12. The SECOND ceiling, not the binding one — the soft clock binds first.
+ * Sized against the SOFT cutoff (180s − 60s = 120s), NOT against the 180s wall clock: sizing
+ * against 180s would put routine truncation around step 6-8, which is exactly what D12 forbids
+ * ("the wall-clock marker would stop being a rare safety net and become the ROUTINE outcome").
+ * The 16-02 probe observed ~8-10s per provider-executed search, so 12 × ~10s ≈ 120s lands NEAR the
+ * soft cutoff without overshooting it. This ceiling exists to stop a loop that is cheap-and-fast
+ * but STUCK (a model re-issuing near-identical searches), which the clock would not catch for
+ * minutes. If per-search latency ever rises, LOWER this rather than raising the clock.
+ */
+const RESEARCH_MAX_STEPS = 12;
+
+/**
+ * THE one chooser for the per-call wall clock. Exported so the 45s default is assertable rather
+ * than assumed. Deliberately NOT overridable from `mockScript`: a test that shrank the HARD budget
+ * would make the abort race the loop and throw the very `agent_timeout` that D11's wall-clock row
+ * exists to disprove. The test knob is `softCutoffMs`, which touches only the SOFT stop.
+ */
+export function callTimeoutMsFor(skillName: string): number {
+  return skillName === RESEARCH_SPECIALIST_SKILL ? RESEARCH_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
+}
 
 // Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel.
 // The `openai/` prefix is the gateway namespace; the @ai-sdk/openai provider wants the bare
@@ -658,6 +707,9 @@ export function buildCockpitTools(
     rootRequestId?: string;
   },
 ) {
+  // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
+  const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
     if (!plan || plan.tenantId !== tenantId) throw new Error("cockpit: plan row missing"); // no cross-tenant
@@ -864,6 +916,26 @@ export function buildCockpitTools(
     // §4 destructures at the loop cannot read. The runtime truth (keys absent under the flag) is
     // unit-proven in cockpitTools.test.ts; the type states the full set every normal turn has.
     ...(omitRecipientEdits ? ({} as typeof recipientEditTools) : recipientEditTools),
+    // ACTN-03. ONE more key of the ONE record — not a second generateText. A separate search-only
+    // loop would carry `tools:` and FAIL dispatchGuard's "exactly one tool-bearing call site", and
+    // it is the nested-loop hazard that test documents.
+    // ponytail: BUILT only when granted, never filtered after the fact — a filtered record still
+    //   holds the closure and stays reachable via invokeTool. Structural absence (the
+    //   omitRecipientEdits precedent directly above).
+    // ponytail: searchContextSize "medium", not "high" — a `high` context is materially more input
+    //   tokens on EVERY call (the 16-02 probe observed ~8.2k input tokens per search at "medium"),
+    //   drawn against a 25%-of-remaining-day envelope.
+    // ponytail: no `filters.allowedDomains` in v1 — the SSRF property is STRUCTURAL (D1: our
+    //   backend issues no outbound request at all), so a domain list is a QUALITY knob, not a
+    //   security one, and a wrong list silently starves market research. Upgrade path if result
+    //   quality ever demands it.
+    // Do NOT set providerOptions.include — the provider sets
+    // `include: ["web_search_call.action.sources"]` itself.
+    // Both branches share ONE type, deliberately (the `omitRecipientEdits` trick two lines up):
+    // a union of DIFFERING object shapes widens the inferred TOOLS into an index signature, which
+    // in turn degrades ai@7's onToolExecution* event types to a variant without `toolCall`. Same
+    // type, different runtime presence — which is exactly the structural-absence property we want.
+    ...(agentContext?.grantWebResearch ? webResearchTool : ({} as typeof webResearchTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -1641,6 +1713,14 @@ function invokeTool(
     tools as unknown as Record<string, { execute: (i: unknown, o: unknown) => Promise<string> }>
   )[name];
   if (!t) throw new Error(`unknown cockpit tool: ${name}`);
+  // Pitfall 5: a PROVIDER-EXECUTED tool (`openai.tools.webSearch`) has no `execute` at all — the
+  // provider runs it server-side. Without this guard the cast above yields `undefined` and a raw
+  // TypeError escapes from a line that reads as if it were an ordinary tool call. Provider-executed
+  // tools have no local execution path BY DESIGN and must never be named in a `SMOKE::agent::` op
+  // or a test shim.
+  if (typeof t.execute !== "function") {
+    throw new Error(`provider-executed tool is not locally invokable: ${name}`);
+  }
   return t.execute(input, { toolCallId: "cockpit", messages: [] });
 }
 
@@ -1710,12 +1790,22 @@ async function runAgentLoop(
     // route-specific budget (16-05 sets it); a silently truncated multi-search run presented as
     // complete is the failure D10 names.
     maxSteps?: number;
+    // D12. The per-call wall clock, chosen ONCE by callTimeoutMsFor at the runSpecialistTurn seam.
+    // Absent => the shipped 45s. This is the HARD budget; it drives AbortSignal.timeout.
+    timeoutMs?: number;
+    // D11 test knob, and the reason the wall-clock row is deterministically assertable. Drives
+    // ONLY the SOFT stop. Shrinking the HARD budget instead would make the abort race the loop and
+    // throw the very agent_timeout this row exists to disprove — a green-looking failure. `0` fires
+    // on the FIRST evaluation regardless of how fast a mock resolves.
+    softCutoffMs?: number;
   },
 ): Promise<{
   reply: string;
   costUsd: number;
   webSearchCalls: number;
   truncated: boolean;
+  /** WHY it truncated. Absent when it did not. Feeds specialistMemoBody's closed reason union. */
+  truncatedReason?: "steps" | "clock";
   sources: readonly { url: string; title: string }[];
   modelId: string;
   fallbackModelId: string;
@@ -1733,8 +1823,21 @@ async function runAgentLoop(
     omitRecipientEdits,
     toolNames,
     maxSteps,
+    timeoutMs,
+    softCutoffMs,
   } = args;
-  const built = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions, omitRecipientEdits);
+  const built = buildCockpitTools(
+    ctx,
+    tenantId,
+    planId,
+    undefined,
+    skillVersions,
+    omitRecipientEdits,
+    // ACTN-03: the hosted-search key is BUILT only for an agent whose grant names it. A
+    // listed-but-ungranted name is simply absent from the record; a granted-and-listed one
+    // survives the filter below unchanged.
+    { grantWebResearch: toolNames?.includes("webResearch") ?? false },
+  );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
   // `toolNames ? … : built` would hand a zero-tool specialist the full 20-key set.
   const tools =
@@ -1751,6 +1854,21 @@ async function runAgentLoop(
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
   const stepBudget = maxSteps ?? 8;
+  const budgetMs = timeoutMs ?? CALL_TIMEOUT_MS;
+  // D11's wall-clock row. `stopWhen` accepts an ARRAY of conditions in ai@7, so this is a NATIVE
+  // framework feature, not new infrastructure (§8 rung 4): the loop stops cleanly BETWEEN steps
+  // and returns the steps it has. An AbortSignal cannot deliver this — an abort THROWS, and every
+  // partial finding is discarded.
+  //
+  // The soft cutoff is only installed when a caller opts in (a research route, or a test via
+  // softCutoffMs). It must NOT be derived unconditionally from budgetMs: `45_000 - 60_000` is
+  // NEGATIVE and elapsed is always >= 0, so an unconditional soft stop would be true on its FIRST
+  // evaluation and truncate every executive turn, every Growth OS specialist turn and the scripted
+  // cockpit shim at step 1.
+  const softMs =
+    softCutoffMs ?? (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
+  const startedAt = Date.now();
+  const outOfClock = (): boolean => softMs !== undefined && Date.now() - startedAt >= softMs;
   const run = async (
     m: PricedModel,
     maxRetries: number,
@@ -1759,6 +1877,7 @@ async function runAgentLoop(
     costUsd: number;
     webSearchCalls: number;
     truncated: boolean;
+    truncatedReason?: "steps" | "clock";
     sources: readonly { url: string; title: string }[];
     modelId: string;
     fallbackModelId: string;
@@ -1768,8 +1887,10 @@ async function runAgentLoop(
       system,
       prompt,
       tools,
-      stopWhen: stepCountIs(stepBudget),
-      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      // Two conditions, whichever fires first. The soft clock stops BETWEEN steps and keeps the
+      // partial findings; the hard abort below stays as the backstop for a single hung step.
+      stopWhen: [stepCountIs(stepBudget), outOfClock],
+      abortSignal: AbortSignal.timeout(budgetMs),
       maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
@@ -1817,17 +1938,40 @@ async function runAgentLoop(
       },
     });
     costUsd += await recordModelSpend(ctx, m.id, res.usage);
+    // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
+    // ONLY — so without this the shared envelope under-counts exactly the capability this phase
+    // adds. NOT res.sources.length: one search yields many sources.
+    // Counted on `providerExecuted` rather than on a toolName literal because the SDK surfaces a
+    // hosted call under the PROVIDER's name — the 16-02 probe observed
+    // `{"toolName":"web_search","providerExecuted":true}`, NOT our record key `webResearch`. This
+    // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
+    // cannot drift when the provider renames anything.
+    const webSearchCalls = res.steps
+      .flatMap((st) => st.content)
+      .filter((p) => p.type === "tool-call" && p.providerExecuted === true).length;
+    const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
+    if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: feeUsd });
+    costUsd += feeUsd;
+    // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
+    // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
+    // provider-supplied — NEVER parse URLs out of the model's prose.
+    // §4 BOUNDARY: these URLs are CONTENT-PLANE data. They may reach the vault document body and a
+    // tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
+    // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
+    // gets a COUNT.
+    const sources = (res.sources ?? [])
+      .filter((src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url")
+      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const hitStepCap = res.steps.length >= stepBudget && res.finishReason !== "stop";
+    const hitClock = outOfClock() && res.finishReason !== "stop";
     return {
       reply: res.text,
       costUsd,
-      // Phase-16 freeze: the three research observables travel from here on. `truncated` is REAL
-      // from day one — pure arithmetic on the shipped result, no new computation. `webSearchCalls`
-      // and `sources` are wired in 16-05, once the OQ-2 probe has told us what a
-      // PROVIDER-EXECUTED tool call actually looks like in `res.steps`; guessing the shape now
-      // would bake in an assumption the probe exists to settle.
-      webSearchCalls: 0,
-      sources: [],
-      truncated: res.steps.length >= stepBudget && res.finishReason !== "stop",
+      webSearchCalls,
+      sources,
+      // The step cap is reported first when both are true: it is the more specific cause.
+      truncatedReason: hitStepCap ? ("steps" as const) : hitClock ? ("clock" as const) : undefined,
+      truncated: hitStepCap || hitClock,
       // Ids the caller ALREADY supplied on the two PricedModel bags (`{ model, id }`) — a field
       // that existed and never travelled, not a new computation. It is in the FREEZE rather than
       // invented later because 16-05 pins a research-only model inside runSpecialistTurn and
@@ -1883,8 +2027,11 @@ export async function runSpecialistTurn(
     threadId?: string;
     skillVersions?: Record<string, number>;
     /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
-     *  shim's mechanism). Absent ⇒ the real gateway models. */
-    mockScript?: { primary: unknown[]; fallback?: unknown[] };
+     *  shim's mechanism). Absent ⇒ the real gateway models.
+     *  `softCutoffMs` drives ONLY the soft wall-clock stop (D11). It is deliberately NOT a hard-
+     *  budget override: shrinking the hard budget would make the abort race the loop and throw the
+     *  agent_timeout the wall-clock row exists to disprove. */
+    mockScript?: { primary: unknown[]; fallback?: unknown[]; softCutoffMs?: number };
   },
 ): Promise<{
   reply: string;
@@ -1920,6 +2067,15 @@ export async function runSpecialistTurn(
       ? await ctx.runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
       : await ctx.runQuery(internal.skills.getActiveSkill, { name: skillName });
   const mock = args.mockScript;
+  // The research specialist runs on its OWN pin: only these two models were PROVEN to accept
+  // `openai.tools.webSearch` (the 16-02 probe, recorded in docs/playbooks/agent-runtime.md), and an
+  // unpriced model would make the whole run bill $0 against both the daily rail and the tree
+  // envelope — silently. Derived HERE, from skillName, because this is where the models are already
+  // resolved; a `models?` / `maxSteps?` arg would be a second mechanism for a decision with exactly
+  // one owner, and would drag dispatch.ts into model selection for no gain.
+  const isResearch = skillName === RESEARCH_SPECIALIST_SKILL;
+  const primaryId = isResearch ? RESEARCH_MODEL : DEFAULT_MODEL;
+  const fallbackId = isResearch ? RESEARCH_FALLBACK_MODEL : CHEAP_MODEL;
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
@@ -1928,21 +2084,32 @@ export async function runSpecialistTurn(
     primary: {
       model: mock
         ? (new MockLanguageModelV4({ doGenerate: mock.primary as never }) as unknown as LanguageModel)
-        : resolveModel(DEFAULT_MODEL),
-      id: DEFAULT_MODEL,
+        : resolveModel(primaryId),
+      // The `id` is what priceUsage charges against AND — since 16-01 — what travels out as
+      // modelId/fallbackModelId for 16-06 to assert. Leaving a literal here while the ternary picks
+      // a different model would bill research at the wrong model's rate and make the relocated pin
+      // assert a lie that looks green. Both replaced, deliberately.
+      id: primaryId,
     },
     fallback: {
       model: mock
         ? (new MockLanguageModelV4({
             doGenerate: (mock.fallback ?? mock.primary) as never,
           }) as unknown as LanguageModel)
-        : resolveModel(CHEAP_MODEL),
-      id: CHEAP_MODEL,
+        : resolveModel(fallbackId),
+      id: fallbackId,
     },
     skillVersions,
     turnId,
     threadId,
     toolNames,
+    // D10: decompose -> several deliberately varied searches -> synthesise does not fit the
+    // cockpit's 8 steps. Raised for THIS route only; a run that still exhausts it comes back
+    // MARKED (truncated), never as a confident partial answer.
+    maxSteps: isResearch ? RESEARCH_MAX_STEPS : undefined,
+    // D12. The ONE call site of the ONE chooser.
+    timeoutMs: callTimeoutMsFor(skillName),
+    softCutoffMs: mock?.softCutoffMs,
   });
   // The version rides the return so the caller can put {name, version} on the lineage audit row
   // (closing the §5 / IMPR-03 "record the skill version for every use" loop).

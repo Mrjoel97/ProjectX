@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
+> Last verified: 2026-07-27 (16-05) — the webResearch key (built only when granted), per-call search billing counted on providerExecuted, and the research route wall clock + step budget. PREVIOUSLY: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
 > Prior: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
 > Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
 > Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
@@ -789,3 +789,57 @@ branches.
 generic "Working…"/"Done" fallback. Fixed here because 17-01 is the only Phase-17 plan permitted to
 touch `cards.tsx`, and because the new `traceParity.test.ts` asserts set equality **both ways** —
 leaving the gap would have made a brand-new test RED on arrival inside a freeze commit.
+
+### Phase 16 — 16-05 (the hosted search capability)
+
+`webResearch` is **one more key of the ONE governed tool record** — never a second `generateText`.
+A separate search-only loop would carry `tools:` and fail `dispatchGuard`'s *"exactly one
+tool-bearing call site"*, which is the nested-loop hazard that test exists to document.
+
+**Built only when granted, never filtered after the fact.** A filtered record still holds the
+tool's closure and stays reachable via `invokeTool`. The grant rides
+`agentContext.grantWebResearch`, set from `toolNames?.includes("webResearch")`.
+
+> **Both spread branches share ONE type** — `...(grant ? webResearchTool : ({} as typeof
+> webResearchTool))`, the shipped `omitRecipientEdits` trick. This is not style. A union of
+> *differing* object shapes widens the inferred `TOOLS` into an index signature, which degrades
+> `ai@7`'s `onToolExecution*` event types to a variant with no `toolCall` — and the CKPT-05
+> callbacks stop compiling. Found the hard way; do not "simplify" the cast away.
+
+**`invokeTool` now refuses a provider-executed tool explicitly.** `openai.tools.webSearch` has no
+`execute` at all, so without the guard the cast yields `undefined` and a raw TypeError escapes from
+a line that reads like an ordinary tool call. Provider-executed tools have no local execution path
+BY DESIGN and must never appear in a `SMOKE::agent::` op or a test shim.
+
+**Billing: counted on `providerExecuted`, not on a tool-name literal.** The 16-02 probe observed the
+SDK surfacing the hosted call as `{"toolName":"web_search","providerExecuted":true}` — the
+*provider's* name, not our record key. OpenAI bills per CALL on top of tokens and `priceUsage`
+prices tokens only, so without the fee the shared envelope under-counts exactly the capability this
+phase adds. Counting on the flag means it cannot drift when the provider renames anything.
+
+> **§4 boundary on `sources`.** The URLs are CONTENT-PLANE. They may reach a vault document body and
+> a tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
+> permits `readonly string[]`, so an array of URLs would **type-check** — that is the trap. Audit
+> gets a COUNT.
+
+**The wall clock (D11/D12).** `stopWhen` takes an ARRAY in `ai@7`, so the soft stop is a native
+framework feature, not new infrastructure: the loop stops cleanly BETWEEN steps and keeps its
+partial findings. An `AbortSignal` cannot deliver that — an abort THROWS and every partial finding
+is discarded.
+
+> ⚠ **The soft cutoff must NEVER be derived unconditionally from the budget.** For a default turn
+> `45_000 − 60_000` is NEGATIVE and elapsed is always `>= 0`, so an unconditional soft stop is true
+> on its FIRST evaluation and truncates **every** executive turn, **every** Growth OS specialist
+> turn and the scripted shim at step 1. A cost floor cannot catch this — a one-step turn still
+> prices correctly. The guard is the step-regression floor in `runCockpitAgent.test.ts`
+> (*"a NON-research scripted turn runs all four tool steps"*), and it is **mutation-verified**.
+
+`RESEARCH_MAX_STEPS = 12` is the **second** ceiling, not the binding one — the soft clock binds
+first. It is sized against the SOFT cutoff (180s − 60s = **120s**), not the 180s wall clock: sizing
+against 180s would make truncation routine around step 6-8, which is exactly what D12 forbids. It
+exists to stop a loop that is cheap-and-fast but STUCK. If per-search latency rises, **lower this
+rather than raising the clock**.
+
+`callTimeoutMsFor` is the ONE chooser and is exported so the 45s default is *assertable*, not
+assumed. The test pins a LITERAL `45_000` — an assertion written against `CALL_TIMEOUT_MS` would
+track the very refactor it exists to catch.

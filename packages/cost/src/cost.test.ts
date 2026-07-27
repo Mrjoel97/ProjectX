@@ -5,7 +5,10 @@ import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
   REALTIME_PRICING,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
   TRANSCRIPTION_PRICING,
+  WEB_SEARCH_CALL_USD,
   chooseModel,
   estimateCostUsd,
   estimateTokens,
@@ -136,5 +139,54 @@ describe("priceRealtime", () => {
   it("NaN / Infinity any-field → err, never NaN (fail closed)", () => {
     expect(priceRealtime(Number.NaN, 0, 0, 0).ok).toBe(false);
     expect(priceRealtime(0, Number.POSITIVE_INFINITY, 0, 0).ok).toBe(false);
+  });
+});
+
+
+// ── Phase 16 (16-02, ACTN-03/D8) — the research model pins ───────────────────────────────────
+//
+// Why these assertions and not a looser one: the failure mode of an unpriced research model is
+// SILENT. priceUsage returns Err({unknown_model}) -> recordModelSpend returns 0 -> a research run
+// draws down NOTHING against the daily rail or the Phase-15 shared envelope. A specialist that
+// appears free is worse than one that errors.
+//
+// Pitfall 3, stated so nobody "simplifies" these back: a cost assertion written as
+// `expect(spend).toBeGreaterThan(0)` can pass on the OTHER model's spend while research bills
+// nothing. That is why these assert on priceUsage(RESEARCH_MODEL, ...) BY NAME.
+//
+// Both pins were probed for real on 2026-07-27 — see docs/playbooks/agent-runtime.md.
+describe("research model pins (16-02)", () => {
+  it("RESEARCH_MODEL is priced — an unpriced pin would bill nothing, silently", () => {
+    const r = priceUsage(RESEARCH_MODEL, { inputTokens: 1, outputTokens: 1 });
+    expect(r.ok, `${RESEARCH_MODEL} has no PRICING row`).toBe(true);
+  });
+
+  // The fallback needs a price for the same reason, AND it was probed to accept the hosted search
+  // tool: isFallbackEligible returns false for a non-retryable 4xx, so an unsupported-tool 400
+  // propagates loudly — the good failure mode ONLY if the fallback is not itself the unsupported one.
+  it("RESEARCH_FALLBACK_MODEL is priced", () => {
+    const r = priceUsage(RESEARCH_FALLBACK_MODEL, { inputTokens: 1, outputTokens: 1 });
+    expect(r.ok, `${RESEARCH_FALLBACK_MODEL} has no PRICING row`).toBe(true);
+  });
+
+  // The per-call hosted-search fee is charged on TOP of tokens; omitting it under-reports every
+  // research run's true cost against the envelope.
+  it("WEB_SEARCH_CALL_USD is a positive finite number", () => {
+    expect(WEB_SEARCH_CALL_USD).toBeGreaterThan(0);
+    expect(Number.isFinite(WEB_SEARCH_CALL_USD)).toBe(true);
+  });
+
+  // The fail-closed property must SURVIVE the new rows — adding entries to PRICING must not turn
+  // the unknown-model branch into a lookup that accidentally resolves.
+  it("an unknown model still fails closed", () => {
+    const r = priceUsage("openai/not-a-real-model", { inputTokens: 1, outputTokens: 1 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("unknown_model");
+  });
+
+  // The research pin must never silently become the repo-wide CHEAP_MODEL: gpt-4.1-nano appears in
+  // NEITHER OpenAI page and was deliberately never probed, so it is not known to accept the tool.
+  it("the fallback is NOT the unprobed repo CHEAP_MODEL", () => {
+    expect(RESEARCH_FALLBACK_MODEL).not.toBe("openai/gpt-4.1-nano");
   });
 });

@@ -11,10 +11,39 @@ import type { SafeText } from "@pikar/pii";
 export const DEFAULT_MODEL = "openai/gpt-4o-mini";
 export const CHEAP_MODEL = "openai/gpt-4.1-nano"; // downgrade AND fallback target
 
+// Phase-16 (ACTN-03/D8). The research specialist gets its OWN model pin, NOT DEFAULT_MODEL /
+// CHEAP_MODEL: global model constants have repo-wide blast radius, and only these two were PROVEN
+// to accept `openai.tools.webSearch` — probe recorded verbatim in docs/playbooks/agent-runtime.md,
+// run 2026-07-27 against @ai-sdk/openai@4.0.11 + ai@7.0.20.
+//
+// An unpriced model makes priceUsage return Err({unknown_model}) → recordModelSpend returns 0 →
+// the run draws down NOTHING against the daily rail or the Phase-15 shared envelope. A research
+// specialist that appears FREE is worse than one that errors. **The constant and its PRICING row
+// land together, always** — cost.test.ts asserts exactly that for both pins.
+//
+// RESEARCH_MODEL currently EQUALS DEFAULT_MODEL. That is a coincidence of today's lineup, not a
+// synonym: keep it a separate constant so a later change to DEFAULT_MODEL cannot silently move
+// research onto a model nobody probed.
+export const RESEARCH_MODEL = "openai/gpt-4o-mini";
+// The fallback was probed TOO, deliberately. `isFallbackEligible` returns false for a
+// non-retryable 4xx, so an unsupported-tool 400 propagates loudly instead of degrading silently —
+// which is the GOOD failure mode only if the fallback is not itself the unsupported one.
+// NOT CHEAP_MODEL (`gpt-4.1-nano`): it appears in neither OpenAI page and was never probed.
+export const RESEARCH_FALLBACK_MODEL = "openai/gpt-4.1-mini";
+
+// The hosted search fee is per CALL and is charged ON TOP of tokens (published $10 / 1k calls).
+// Omitting it under-reports every research run against the envelope. Separate from PRICING because
+// PRICING is per-MTok and this is not a token cost at all.
+// ponytail: one flat rate. `searchContextSize` is pinned to "medium" at the call site, so a single
+// constant is honest today. Upgrade path if the tier is ever varied per-call: key it by size.
+export const WEB_SEARCH_CALL_USD = 0.01;
+
 // Vercel AI Gateway per-MTok pricing, verified 2026-07-12.
+// gpt-4.1-mini row added 2026-07-27 (16-02) — published OpenAI rate at the time of the probe.
 export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> = {
   [DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
   [CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
+  [RESEARCH_FALLBACK_MODEL]: { inPerMTok: 0.4, outPerMTok: 1.6 },
 };
 
 // ponytail: chars/4 heuristic — feeds a budget THRESHOLD, not billing; real cost
