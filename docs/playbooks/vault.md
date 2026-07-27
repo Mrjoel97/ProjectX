@@ -507,6 +507,8 @@ Verify with `pnpm --filter @pikar/vault test`,
 - `pnpm --filter @pikar/vault test` — pure-domain tests (normalize, categories, traversal, fusion).
 - `pnpm --filter @pikar/vault typecheck` — clean.
 - `pnpm --filter @pikar/backend test vault vaultGround` — the Convex adapter tests: ingest/dedup/cascade + the read plane (grounding fusion, hop-cap, cross-tenant isolation, browse/stats/download-guard/docEntities/category-search). Windows note: convex-test files crash on parallel-fork teardown ("Cannot set properties of undefined (setting 'exit')") → false red; each file passes run alone.
+- `pnpm --filter @pikar/backend test vaultExtract -- --maxWorkers=1` — the extraction dispatcher: rail dispatch, the per-page fan-out's SHAPE (batch width, page order, per-page isolation, the deadline), and the static scans (pdf-lib static import; the hosted branch not sending the whole document as one call). **Green here does NOT mean scanned PDFs are transcribed** — see the hosted-path check below.
+- **The hosted (scanned-PDF) path is LIVE-ONLY.** The offline suite proves batching shape, and shape stays green when the model digests instead of transcribing. To verify it for real: re-extract a scanned PDF on a running deployment (`npx convex run internal.vaultExtract.extractDoc '{"vaultDocId":"…","tenantId":"…"}'` from `packages/backend`) and read the stored text — it must carry `Page 1`…`Page N` headers and **read like the document**, not like a description of it. `internal.vault.getDoc` returns the text without dumping the 20 MB `vaultDocuments` table.
 - `pnpm --filter @pikar/backend smoke:vault` — the live-deployment gate (VALT-01/03): REAL embed + hybrid search + `vaultGround` graph-neighbor merge on a running `convex dev` deployment (needs its OPENAI_API_KEY).
 - `pnpm --filter @pikar/web exec playwright test vault --list` — the vault E2E is Playwright-discovered + type-loads; a full green run needs the running local stack + the auth harness (may defer to verify-work).
 
@@ -738,3 +740,82 @@ scaffolding-only output passes the `empty_extraction` guard because the scaffold
 halves — (a) walk chart / diagram / notes text, and (b) make scaffolding-only output fail honestly
 instead of reporting `ready`. **Not fixed here by design**; a verification plan does not smuggle in
 an edit.
+
+---
+
+### Phase 15.2 — 15.2-06 (per-page fan-out: scanned PDFs are TRANSCRIBED, not summarised)
+
+**THE INVARIANT: the hosted branch sends ONE PAGE PER CALL.** `extractHosted`'s signature is
+**unchanged** and is reused per page; the `attachment-extractor` skill row is **unchanged**. §5 is
+satisfied by **REUSE**, not by a new prompt — the prompt was always right ("extract ALL of it
+VERBATIM", "Never summarize"); the **input** was wrong. Its contract is written for *a single image
+or document (PDF page…)*, so handing it a 12-page deck as one file part asked it to do something the
+prompt never promised, and it did the reasonable thing: it digested.
+
+**Anyone "optimising" this back into a single whole-document call reintroduces the defect — and the
+offline suite will stay GREEN, because it proves batching *shape*, not verbatimness.** That is what
+the static scan *"the hosted branch no longer sends the WHOLE DOCUMENT as one call"* in
+`vaultExtract.test.ts` exists to stop.
+
+#### The four constants, and why each number is what it is
+
+| Constant | Value | Why |
+| -------- | ----- | --- |
+| `PAGE_BATCH_SIZE` | 6 | A bounded fan-out, not a throughput knob. Each page is its own hosted call **and** its own `recordSpend` write against **one keyless `dailySpendCents` window** (`guardrails.ts:166-173`), so the batch width is also the **OCC-contention width**. 6, not 50. |
+| `PAGE_TIMEOUT_MS` | 60 s | `CALL_TIMEOUT_MS` (480 s) is **PER CALL** and was tuned for ONE whole-document call. Under fan-out every page would inherit all 480 s, letting **one stuck page eat the entire 10-minute action ceiling**. ~10 s/page is the measured norm — 60 s is 6× headroom. |
+| `FANOUT_BUDGET_MS` | 420 s | The whole fan-out's wall-clock budget, under Convex's 10-min node-action limit with room for the surrounding scan/audit/seam work. Checked **before each batch**; expiry returns `truncated`. |
+| `VAULT_EXTRACT_PAGE_CAP` | 50 | Unchanged and **still binding** — `pdfPages` applies it, so the cap survives the fan-out. |
+
+`fanOutPages` reassembles into a **pre-sized array indexed BY PAGE**, so ordering is *structural*
+rather than a sort someone has to remember. A failing or timed-out page contributes an
+**`[unreadable]` marker, never a throw** (§4 — no SDK string, no parser string, no document
+content). **`okPages` is the success signal, NOT the text being non-empty:** a document made
+entirely of markers is non-empty, so `empty_extraction` would never fire on it — that is the same
+false-ready family as the `Slide N`/`Sheet N` gap above. `okPages === 0` throws
+`hosted_extract_failed` into `extractDoc`'s existing outer catch.
+
+#### `recordSpend` fan-out — RESOLVED BY OBSERVATION (closes RESEARCH §11 item 4)
+
+N spend writes where there was 1, against one keyless rate-limit window. It **cannot under-count**
+(`reserve: true` lets the window go negative) and it **cannot throw** (the return value is ignored),
+so the only exposure was OCC-retry latency at the batch width. **Observed live: 12 pages, 2 batches
+of 6, zero OCC/write-conflict errors, zero new `deadLetters` rows, 77 s wall clock. Spend delta 13
+cents** (`remainingDailyCents` 440 → 427, ≈1.08¢/page). Not assumed — measured.
+
+#### `ponytail:` ceilings (named, not built)
+
+- **`Promise.race`, not a threaded `AbortSignal`.** `extractHosted`'s contract is reused UNCHANGED
+  and owns its own 480 s `abortSignal`, so a raced-out page's request **lingers in the background**
+  — it just stops *blocking* the batch, and `FANOUT_BUDGET_MS` bounds the whole fan-out regardless.
+  Upgrade path: thread an optional `timeoutMs` through `extractHosted` (one optional parameter;
+  every existing call site unchanged).
+- **Batching inside ONE action, not a durable workflow.** Beyond the page cap this needs a workflow
+  or the already-installed `@convex-dev/workpool`.
+
+#### ⚠ `extractionTruncated` will now start appearing on long scans — EXPECTED, not a regression
+
+A verbatim 50-page transcription is **far** more likely to reach `VAULT_EXTRACT_CHAR_CAP` (400k)
+than a summary ever was. 15.2-04 made sure the flag survives into `ready`. Do not "fix" it.
+
+#### Live result — 2026-07-27, `local-joel_feruzi-pikar_ai_50c69-1`
+
+Row `mx78ake083gn575pg43sw9j66x8b86eb` — `The_AI_Executive_OS.pdf`, 12 pages, no text layer.
+
+| | BEFORE | AFTER |
+| --- | --- | --- |
+| `charCount` (audit) | **2,161** | **7,868** (3.64×) |
+| shape | one whole-document call → a digest | 12 per-page calls → `Page 1`…`Page 12` |
+| `[unreadable]` markers | n/a | **0** |
+| per-page chars | n/a | 344–986, evenly distributed |
+| `status` | `ready` (stale `extract_error: … aborted due to timeout`) | `ready` |
+| spend | 1 call | 13¢ / 12 calls, no OCC |
+
+Content is **verbatim, not descriptive**: slide copy, a reproduced comparison table, and specific
+figures preserved (`$53.2B`, `44.9% CAGR`, `2,136 commits`, `www.pikar-ai.com`). No digest tell
+("Here's a breakdown…", "The document discusses…") appears anywhere in the 7,868 characters.
+
+**OWNER VERDICT: ⏳ PENDING — NOT YET GIVEN.** Recorded here before the blocking checkpoint on the
+15.2-05 precedent (a session limit cut 15.2-04 mid-task; a verification living only in a chat
+transcript did not happen). **SC#5's substance is NOT closed until the owner confirms the text reads
+like the document.** The character count and the absence of digest tells are Claude's own
+observation, not the owner's verdict.
