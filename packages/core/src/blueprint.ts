@@ -225,6 +225,98 @@ export function probesFor(
   return probes;
 }
 
+// ── The citation trust boundary ────────────────────────────────────────────────────────────────
+
+/**
+ * What the model returns — one proposed field, with an INDEX into the grounding results it was
+ * shown. Mirrors the strict `jsonSchema` the adapter sends (every property required — strict-mode
+ * legality is statically asserted in `llmRedaction.test.ts`), which is why "no source" arrives as
+ * the sentinel `-1` rather than an omitted field.
+ *
+ * `field` is deliberately `string` and not `BlueprintField`: it is UNTRUSTED input, and a cast
+ * would launder a model's invention into the type system.
+ */
+export type DerivedCandidate = {
+  readonly field: string;
+  readonly values: readonly string[];
+  readonly sourceIndex: number;
+};
+
+/** Why a candidate did not make it in. Reported, never silent — see `validateCandidates`. */
+export type DroppedCandidate = {
+  readonly field: string;
+  readonly reason: "unknown_field" | "not_derivable" | "bad_citation" | "empty";
+};
+
+const isBlueprintField = (f: unknown): f is BlueprintField =>
+  typeof f === "string" && (BLUEPRINT_FIELDS as readonly string[]).includes(f);
+
+/**
+ * THE TRUST BOUNDARY. Admits only candidates that survive every check; everything else is DROPPED
+ * and REPORTED.
+ *
+ * 17.1-CONTEXT: *"An out-of-range index means an invented citation and that field is **DROPPED, not
+ * kept uncited**. A blueprint claim with no traceable source is the confidently-unfounded grounding
+ * this whole phase exists to prevent."* CLAUDE.md §8 names validation at a trust boundary as one of
+ * the things never to be lazy about.
+ *
+ * **A missing citation is NOT a formatting problem.** This is the function most likely to be
+ * "simplified" later by someone who thinks the fix is to emit the field with a placeholder source —
+ * that would put an unfounded claim in front of every agent, wearing a marker that says a document
+ * backs it. If the model could not cite it, the system does not know it.
+ *
+ * `sources` is the index-parallel grounding result the probe pass produced (`vaultGroundHydrated`
+ * returns parallel `docIds`/`titles`/`chunks`). The range test handles the `-1` sentinel and an
+ * out-of-range index in the SAME branch, because CONTEXT requires they be treated identically.
+ */
+export function validateCandidates(
+  candidates: readonly DerivedCandidate[],
+  sources: readonly { docId: string; title: string }[]
+): {
+  derived: Partial<Record<BlueprintField, BlueprintEntry>>;
+  dropped: readonly DroppedCandidate[];
+} {
+  const derived: Partial<Record<BlueprintField, BlueprintEntry>> = {};
+  const dropped: DroppedCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const { field } = candidate;
+    // Membership test, never a cast — `field` arrives from a model.
+    if (!isBlueprintField(field)) {
+      dropped.push({ field: String(field), reason: "unknown_field" });
+      continue;
+    }
+    // `name` / `tier` / `entities`: the user names their own business, `deriveTier` owns the tier,
+    // the graph owns the entities. A model may not propose any of them.
+    if (!FIELD_SPEC[field].derivable) {
+      dropped.push({ field, reason: "not_derivable" });
+      continue;
+    }
+    // FIRST wins, matching `evaluations.ts:271`'s documented first-write-wins rule — ONE rule in
+    // the codebase, not two. A later duplicate is not a validation failure (the field DID make it
+    // in), so it is skipped rather than reported.
+    if (derived[field] !== undefined) continue;
+
+    const i = candidate.sourceIndex;
+    const source = Number.isInteger(i) && i >= 0 && i < sources.length ? sources[i] : undefined;
+    if (source === undefined) {
+      dropped.push({ field, reason: "bad_citation" });
+      continue;
+    }
+
+    const values = surviving(Array.isArray(candidate.values) ? candidate.values : []);
+    if (values.length === 0) {
+      dropped.push({ field, reason: "empty" });
+      continue;
+    }
+
+    // The TITLE, not the docId: it is what the spine's `[source: …]` marker shows the agent.
+    derived[field] = { values, origin: "derived", source: source.title };
+  }
+
+  return { derived, dropped };
+}
+
 // ── The stored blueprint markdown ──────────────────────────────────────────────────────────────
 //
 // Mirrors `serializeProfile`/`deserializeProfile` in shape and inherits its invariant verbatim:
