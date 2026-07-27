@@ -34,15 +34,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 4
+current_plan: 5
 status: in_progress
-stopped_at: Completed 15.2-03-PLAN.md
-last_updated: "2026-07-27T05:10:00.000Z"
+stopped_at: Completed 15.2-04-PLAN.md
+last_updated: "2026-07-27T12:40:00.000Z"
 progress:
   total_phases: 40
   completed_phases: 24
   total_plans: 179
-  completed_plans: 171
+  completed_plans: 172
 ---
 
 ---
@@ -50,15 +50,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 4
+current_plan: 5
 status: in_progress
-stopped_at: "Completed 15.2-03-PLAN.md (Wave 3 — THE UNBLOCK: permissive scheduling + in-action rail dispatch). NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during this plan; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here."
-last_updated: "2026-07-27T05:10:00.000Z"
+stopped_at: "Completed 15.2-04-PLAN.md (Wave 4 — the HONESTY plan: attempt-state staleness, the graph-extraction input cap, and user-readable failure copy). NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here."
+last_updated: "2026-07-27T12:40:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
   total_plans: 179
-  completed_plans: 171
+  completed_plans: 172
 ---
 
 # Project State
@@ -72,7 +72,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 3 of 7 PLANS COMPLETE
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 4 of 7 PLANS COMPLETE
 (7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
@@ -84,7 +84,63 @@ deliberately** — 16∥17 needed one because both add literals to the same clos
 `schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
 commit that was never meant to exist.
 
-Status (15.2-03): **THE UNBLOCK — the first plan of this phase to touch `convex/`, and it is STILL
+Status (15.2-04): **THE HONESTY PLAN — three closes, no schema change, `pnpm-lock.yaml` untouched,
+and STILL OFFLINE-ONLY (no upload re-run, no failure card ever viewed in a browser).** (1) **Stale
+attempt state can no longer survive into a success.** `markExtracting` — which runs at the START of
+every attempt, before any parsing — clears BOTH `failureReason` and `extractionTruncated`;
+`markReady` clears **`failureReason` ONLY**. **THIS IS A DELIBERATE, DOCUMENTED DIVERGENCE FROM THE
+LOCKED 15.2-CONTEXT WORDING** (*"markReady clears failureReason + extractionTruncated"*), which is a
+DEFECT: `ingestExtractedText` writes `extractionTruncated` on the CURRENT attempt moments before the
+ingest workflow reaches `markReady`, so clearing it there would erase a TRUE truncation flag on every
+successful large-document ingest — and that flag is the only thing telling a downstream consumer the
+grounded text is a head slice. Pinned by a named anti-regression test and written into the playbook
+as a trap; **anyone "restoring" the spec's wording re-breaks truncation reporting for every large
+document.** `markReady` keeps its half rather than relying on `markExtracting` alone because
+`vaultIngestText`'s late-text `docId` seam reaches `processing` → `markReady` WITHOUT passing through
+`markExtracting`. (2) **`extractGraph` is no longer the one uncapped model call in the repo** —
+`GRAPH_EXTRACT_CHAR_CAP` (120_000) + `capGraphText` on the `@pikar/vault` barrel, applied as
+`prompt: capGraphText(safeText)`. Ordering is **REDACT-then-CAP, never cap-then-redact** (the PII
+scan must see the whole document or tail PII escapes both the scan and the audit counts) and the
+SMOKE short-circuit stays ABOVE the cap. A test asserts `GRAPH_EXTRACT_CHAR_CAP <
+VAULT_EXTRACT_CHAR_CAP` (400k) — the RELATIONSHIP is the point, because lowering the storage cap
+under the graph cap makes the graph cap dead code. `ponytail:` ceiling — a HEAD SLICE, not chunk-wise
+fan-out; tail entities in a very long document are MISSED and **nothing persists a "graph truncated"
+flag** (no schema change permitted this phase). (3) **`apps/web/.../vault/failureCopy.ts` is the ONE
+place a refs-only reason code becomes prose** — 21 codes → a plain-language title + an actionable
+remedy, rendered on BOTH vault surfaces, and **the raw code is NEVER shown** (it rides in `title=`
+only, §4). `PreviewModal`'s HARDCODED "scanned or image-only PDFs" sentence is DELETED — it was wrong
+for most of 15.2-03's vocabulary (a legacy `.xls` is not an image-only PDF) — while the DOCV-01
+no-voice clause and the Retry button survive; `DocGrid`'s failed card carries the title as one muted
+ellipsis-truncated line. `unsupported_legacy_spreadsheet`'s remedy (*"open it in Excel and re-save as
+.xlsx"*) is **what lets the SheetJS spike in 15.2-07 fail without taking SC#3 with it.** THREE
+AUTO-FIXED DEVIATIONS, all from verifying the prior session's cut-off work before building on it:
+**(a) the `failureCopy` import was MISSING from `PreviewModal.tsx`** — the three call sites were
+written but the file could not compile, so the plan's own build gate would have failed on first run;
+**(b) FOUR reason codes had no row** — the plan enumerated the extraction rail but not the TRANSCRIBE
+rail's three honest endings (`no_audio_track_or_undecodable`, `transcribe_timeout`,
+`transcribe_failed`) nor the legacy `not_implemented` that pre-3.8 rows still carry, and
+`no_audio_track_or_undecodable` is the one worth distinguishing because a soundless screen-recording
+is not a broken file and "re-save it" is a loop that cannot succeed; **(c) the source comment
+described a `startsWith('extract_error:')` branch that does not exist** — the `Object.hasOwn` lookup
+already misses and falls through to GENERIC, which is exactly what the branch would produce, so the
+branch was deliberately NOT written (the 15.1-04 `?? "lean"` dead-branch lesson) and the comments now
+say so. Two choices inside the plan's latitude: **the `DocGrid` failure line is card TEXT, not an
+`aria-label`** — the card `<button>` has no aria-label, its accessible name IS its text content, and
+adding one would REPLACE that name and take the filename with it (a net accessibility LOSS); and
+**no unit test for `failureCopy`**, because `apps/web` has no unit-test runner (playwright only) and
+adding vitest there is a `pnpm-lock.yaml` change in a tree with two other lanes merging — the map's
+real risk is COVERAGE, verified by exhaustive grep over every `fail(...)`/`markFailed` producer and
+pinned in the playbook table with the standing "you owe a row" rule. Gates: `@pikar/vault`
+**114/114** (was 108), backend `vault.test` **28/28** (was 24), backend `tsc` **52 errors ALL in test
+files, ZERO in any non-test file** (baseline unchanged), `pnpm --filter web typecheck` exit 0,
+`pnpm --filter web build` GREEN, biome at the touched files' pre-existing CRLF baseline,
+`check-playbooks` exit 0, and `git diff --name-only | grep -E "pnpm-lock|schema.ts"` returns **0**.
+Environment: another lane committed into this shared tree mid-plan (`ead805f`, a 16/17 handoff doc,
+landed between a `git status` and a commit) — harmless ONLY because every commit used the
+`git commit -- <paths>` pathspec form. **DO NOT READ THIS AS A LIVE FIX.** SC#7 is the live gate, it
+is 15.2-05's, and `vaultSweep:runSweep` has still not been run against any deployment.
+
+PRIOR — Status (15.2-03): **THE UNBLOCK — the first plan of this phase to touch `convex/`, and it is STILL
 OFFLINE-ONLY: no upload was re-run and the owner's stranded `.xlsm` has NOT been recovered.**
 Three things landed. (1) **`vault.scheduleExtraction` is now the ONE scheduling decision**, the
 `vaultIngest.startIngest` precedent applied to extraction: `vaultUpload`, the recovery sweep and the
