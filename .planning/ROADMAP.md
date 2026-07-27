@@ -655,20 +655,46 @@ Plans:
 **Goal:** Every agent surface carries a standing, cited description of the business instead of
 reaching it only through query-scoped retrieval. One blueprint artifact = the user's typed profile
 (authoritative, never overwritten) + document-derived fields where they left blanks (cited) + the
-top graph entities. Draft -> user confirms -> live; prepended in `vaultGroundHydrated` so all five
-callers (cockpit, onboarding, evaluations, voiceDoc, tenantProfile) inherit it from one seam.
+top graph entities. Draft -> user confirms -> live.
+
+**Delivered through TWO SEAMS** (owner decision 2026-07-27, REPLACING the original "prepended in
+`vaultGroundHydrated` so all five callers inherit it from one seam" plan, which research disproved):
+- **Seam 1 — the cockpit turn prompt.** The blueprint is prepended to the `prompt` passed into
+  `runAgentLoop`, so it is present on EVERY turn regardless of tool use. Prepending it inside
+  `vaultGroundHydrated` would have reached the cockpit only on turns that happened to call
+  `searchVault` — and would have made `llm.ts:1364`'s honest "nothing in your vault" answer
+  structurally unreachable (HIGH severity), inflated every `vault.searched` count, and put a
+  blueprint chip on every search.
+- **Seam 2 — a separate `spine` field** on `vaultGroundHydrated`'s return, ALONGSIDE the parallel
+  arrays and never inside them, consumed explicitly by `evaluations.ts` and `voiceDoc.ts`. There
+  are **THREE** real callers of that function, not five: `onboarding.ts` and `tenantProfile.ts`
+  mention it in comments only.
+
+Also amended 2026-07-27: the blueprint is **NOT embedded and NOT graph-extracted**; the
+`business-blueprint` skill is **UNGATED**; Stage-2 drift is **USER-TRIGGERED** (detection is
+automatic and free, the rebuild is one click — no automatic trigger until a bulk-ingest completion
+event exists); `stage` is `BusinessProfile.stage`, never `tenantProfiles.revenueStage`.
 
 **Source:** `docs/superpowers/specs/2026-07-27-business-blueprint-design.md` (PRD express path).
 Locked owner decisions D1-D5 in spec §2.1.
 
-**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every grounding call + staleness + drift diff)
+**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every cockpit turn + the explicit `spine` field + staleness + drift diff)
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 2/7 plans executed
+**Plans:** 10 plans in 7 waves
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 17.1 to break down)
+- [ ] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
+- [ ] 17.1-02-PLAN.md — Substrate: migration-free `tenantProfiles` widening + 2 indexes; the UNGATED `business-blueprint` skill row (Wave 1)
+- [ ] 17.1-03-PLAN.md — Precedence as code: citation trust boundary, `mergeBlueprint` + the two-kind diff, `renderSpine` (Wave 2)
+- [ ] 17.1-04-PLAN.md — Backend read plane: `liveForTenant`, `topEntities`, Stage-1 drift, `spineForTenant` (Wave 3)
+- [ ] 17.1-05-PLAN.md — Synthesis: probes -> grounding -> ONE governed model call -> draft write that refuses without a tier row (Wave 4)
+- [ ] 17.1-06-PLAN.md — SEAM 1: the cockpit turn prompt, proven on a turn that calls no tools (Wave 4)
+- [ ] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 4)
+- [ ] 17.1-08-PLAN.md — The confirm gate: `confirmBlueprint`, one never-ingested blueprint document, refs-only audit, four-state query (Wave 5)
+- [ ] 17.1-09-PLAN.md — The confirm surface: `BlueprintPanel` + `BlueprintDiff` (additions grouped ON, contradictions ticked OFF), brand-token styled (Wave 6)
+- [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 7, has a blocking checkpoint)
 
 ### Phase 18: Document & Content Creation
 **Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
