@@ -298,6 +298,9 @@ export function validateCandidates(
     if (derived[field] !== undefined) continue;
 
     const i = candidate.sourceIndex;
+    // Belt AND braces, both deliberate: the range test states the rule, and the lookup's
+    // `undefined` is the second gate. Either alone drops an invented citation — do not "tidy" one
+    // away on the grounds that the other covers it.
     const source = Number.isInteger(i) && i >= 0 && i < sources.length ? sources[i] : undefined;
     if (source === undefined) {
       dropped.push({ field, reason: "bad_citation" });
@@ -315,6 +318,93 @@ export function validateCandidates(
   }
 
   return { derived, dropped };
+}
+
+// ── Precedence, and the two-kind diff ──────────────────────────────────────────────────────────
+
+/**
+ * The ONLY two kinds, deliberately. There is no third kind for "the derived value changed":
+ * a `contradiction` is only ever raised against content the USER typed, and a changed inference
+ * replaces a system inference — never user content — so there is nothing for the user to lose by
+ * accepting it fast. That is why a blank/previously-derived field taking a NEW derived value is an
+ * `addition`, and why the UI can default the whole addition group ON with one Accept while every
+ * contradiction is checkboxed individually and defaulted OFF.
+ *
+ * Additions are non-destructive BY CONSTRUCTION; contradictions are the only destructive case.
+ * The row shape carries enough for the surface to make that split without re-deriving it.
+ */
+export type BlueprintDiffRow =
+  | { kind: "addition"; field: BlueprintField; derived: BlueprintEntry }
+  | {
+      kind: "contradiction";
+      field: BlueprintField;
+      stated: BlueprintEntry;
+      derived: BlueprintEntry;
+    };
+
+/** Order-sensitive equality over the trimmed values. ONE helper — three ad-hoc comparisons is how
+ *  the addition and contradiction branches end up disagreeing about what "changed" means. */
+const sameValues = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((v, i) => v.trim() === (b[i] ?? "").trim());
+
+/**
+ * Merge the stated half with the model's validated candidates. Returns the blueprint AND the diff
+ * the confirm surface reviews.
+ *
+ * **Precedence is CODE, never a prompt (D5).** There is deliberately NO branch in this function
+ * that assigns a derived entry over a stated one — that ABSENCE is the guarantee, in the same way
+ * `businessProfile.ts:78` records *"there is deliberately no branch that auto-commits a persona"*.
+ * The model returns candidates only: it is never shown `live` and is never asked to merge anything,
+ * because a merge rule in a prompt is a request while a function with no overwrite branch is a
+ * guarantee (the `canComplete`/`missingSlots` reasoning, `businessProfile.ts:345`).
+ *
+ * Total over `BLUEPRINT_FIELDS`, so a twelfth field cannot silently miss the diff.
+ *
+ * ponytail: contradiction rows RE-SURFACE on every rebuild — there is no decline-tracking. The
+ * user asked for the rebuild, and a standing disagreement between what they typed and what their
+ * documents say is worth showing again. Ceiling: it could become noise. Upgrade path: a per-row
+ * "dismissed" set keyed by field + derived values. Note this is why item 29's "identical rebuild ⇒
+ * empty diff" is about a run where the derived half AGREES with the stated half.
+ */
+export function mergeBlueprint(
+  stated: Partial<Record<BlueprintField, BlueprintEntry>>,
+  derived: Partial<Record<BlueprintField, BlueprintEntry>>,
+  live?: BusinessBlueprint | null
+): { blueprint: BusinessBlueprint; diff: BlueprintDiffRow[] } {
+  const out: Partial<Record<BlueprintField, BlueprintEntry | null>> = {};
+  const diff: BlueprintDiffRow[] = [];
+
+  for (const field of BLUEPRINT_FIELDS) {
+    const typed = stated[field];
+    const candidate = derived[field];
+    const previous = live?.[field] ?? null;
+
+    if (typed !== undefined) {
+      // The user's value. Full stop — the only thing a candidate can do here is raise a row.
+      out[field] = typed;
+      if (candidate !== undefined && !sameValues(typed.values, candidate.values)) {
+        diff.push({ kind: "contradiction", field, stated: typed, derived: candidate });
+      }
+      continue;
+    }
+
+    if (candidate !== undefined) {
+      out[field] = candidate;
+      // Non-destructive by construction: this field carried no typed content. It is only NEWS if
+      // the live blueprint does not already say the same thing.
+      if (previous === null || !sameValues(previous.values, candidate.values)) {
+        diff.push({ kind: "addition", field, derived: candidate });
+      }
+      continue;
+    }
+
+    // Neither: carry the previous value forward. A rebuild whose probes came back empty must not
+    // blank a field the blueprint already had — that keeps the blueprint monotone and keeps the
+    // diff empty on an identical rebuild.
+    out[field] = previous;
+  }
+
+  return { blueprint: out as BusinessBlueprint, diff };
 }
 
 // ── The stored blueprint markdown ──────────────────────────────────────────────────────────────
