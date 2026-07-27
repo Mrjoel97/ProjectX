@@ -51,6 +51,7 @@ const DISPATCH_STEP_TOOLS = [
   "dispatchOfferArchitect",
   "dispatchMoneyModelDesigner",
   "dispatchLeadEngine",
+  "dispatchResearch",
 ] as const;
 
 test.each(DISPATCH_STEP_TOOLS)("agentSteps accepts the %s literal", async (tool) => {

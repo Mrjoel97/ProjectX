@@ -452,6 +452,14 @@ export default defineSchema({
       v.literal("dispatchOfferArchitect"),
       v.literal("dispatchMoneyModelDesigner"),
       v.literal("dispatchLeadEngine"),
+      // Phase-16 (DISP-02): the research sub-agent's dispatch step. ONE literal — there is
+      // deliberately NO `webResearch` companion. `openai.tools.webSearch()` is a
+      // PROVIDER-EXECUTED tool, and ai@7.0.20's `executeToolCall` returns early at
+      // `if (!isExecutableTool(tool)) return undefined;` BEFORE it fires `onToolExecutionStart`,
+      // so a hosted search emits no step row at all. A declared-and-never-written literal is
+      // worse than none: it reads as a trace that exists and would send the next reader hunting
+      // for the insert that writes it.
+      v.literal("dispatchResearch"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -629,6 +637,14 @@ export default defineSchema({
     ),
     failureReason: v.optional(v.string()),
     extractionTruncated: v.optional(v.boolean()), // Phase-3.8: the per-doc extract cap bit (honesty flag)
+    // Phase-16 (D7): the web-research freshness stamp, as a STORED, QUERYABLE field.
+    // Deliberately NOT `createdAt`: a row's creation time stops being its retrieval time the
+    // moment anything re-creates the row (a re-ingest, a backfill), and `schema.ts` is frozen
+    // after this commit — the field is one optional line now, or a second freeze later.
+    // Only `kind: "web_research"` docs write it; every other writer leaves it absent.
+    // ponytail: no dedicated index — `by_tenant` + a `kind === "web_research"` filter is the
+    // read. Upgrade path if freshness ever needs ranking at scale: a `by_tenant_kind` index.
+    retrievedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse

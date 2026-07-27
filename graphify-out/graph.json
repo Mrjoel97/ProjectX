@@ -4,14 +4,864 @@
   "graph": {},
   "nodes": [
     {
+      "label": "16-08-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-08-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_08_plan",
+      "community": 197,
+      "norm_label": "16-08-plan.md"
+    },
+    {
+      "label": "16-09-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-09-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_09_plan",
+      "community": 198,
+      "norm_label": "16-09-plan.md"
+    },
+    {
+      "label": "16-VALIDATION.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation",
+      "community": 177,
+      "norm_label": "16-validation.md"
+    },
+    {
+      "label": "Phase 16 \u2014 Validation Strategy",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "community": 177,
+      "norm_label": "phase 16 \u2014 validation strategy"
+    },
+    {
+      "label": "Test Infrastructure",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_test_infrastructure",
+      "community": 177,
+      "norm_label": "test infrastructure"
+    },
+    {
+      "label": "Sampling Rate",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L33",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_sampling_rate",
+      "community": 177,
+      "norm_label": "sampling rate"
+    },
+    {
+      "label": "Per-Task Verification Map",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L42",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_per_task_verification_map",
+      "community": 177,
+      "norm_label": "per-task verification map"
+    },
+    {
+      "label": "Wave 0 Requirements",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L74",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_wave_0_requirements",
+      "community": 177,
+      "norm_label": "wave 0 requirements"
+    },
+    {
+      "label": "Manual-Only Verifications",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L88",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_manual_only_verifications",
+      "community": 177,
+      "norm_label": "manual-only verifications"
+    },
+    {
+      "label": "Validation Sign-Off",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L100",
+      "_origin": "ast",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_validation_validation_sign_off",
+      "community": 177,
+      "norm_label": "validation sign-off"
+    },
+    {
+      "label": "16-06-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-06-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 195,
+      "norm_label": "16-06-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_06_plan"
+    },
+    {
+      "label": "1. The `dispatchGuard.test.ts:16-24` amendment is VOID. Leave that comment ALONE.",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-06-PLAN.md",
+      "source_location": "L81",
+      "_origin": "ast",
+      "community": 195,
+      "norm_label": "1. the `dispatchguard.test.ts:16-24` amendment is void. leave that comment alone.",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_06_plan_1_the_dispatchguard_test_ts_16_24_amendment_is_void_leave_that_comment_alone"
+    },
+    {
+      "label": "2. The per-turn envelope closure does NOT apply, and the shipped `collecting` interlock replaces it.",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-06-PLAN.md",
+      "source_location": "L102",
+      "_origin": "ast",
+      "community": 195,
+      "norm_label": "2. the per-turn envelope closure does not apply, and the shipped `collecting` interlock replaces it.",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_06_plan_2_the_per_turn_envelope_closure_does_not_apply_and_the_shipped_collecting_interlock_replaces_it"
+    },
+    {
+      "label": "16-CONTEXT.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "16-context.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context"
+    },
+    {
+      "label": "Phase 16: Research Sub-Agent & Web Research - Context",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "phase 16: research sub-agent & web research - context",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context"
+    },
+    {
+      "label": "Phase Boundary",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "phase boundary",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_phase_boundary"
+    },
+    {
+      "label": "Implementation Decisions",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "implementation decisions",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions"
+    },
+    {
+      "label": "D1 \u2014 Web access: OpenAI's HOSTED web_search (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L25",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d1 \u2014 web access: openai's hosted web_search (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d1_web_access_openai_s_hosted_web_search_locked"
+    },
+    {
+      "label": "D2 \u2014 One swap seam, not an abstraction layer (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L43",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d2 \u2014 one swap seam, not an abstraction layer (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d2_one_swap_seam_not_an_abstraction_layer_locked"
+    },
+    {
+      "label": "D3 \u2014 `research` joins the closed route union (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L52",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d3 \u2014 `research` joins the closed route union (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d3_research_joins_the_closed_route_union_locked"
+    },
+    {
+      "label": "D4 \u2014 The tool-set is the containment (derived from SC#1, non-negotiable)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L66",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d4 \u2014 the tool-set is the containment (derived from sc#1, non-negotiable)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d4_the_tool_set_is_the_containment_derived_from_sc_1_non_negotiable"
+    },
+    {
+      "label": "D5 \u2014 CORRECTED 2026-07-27 by research. Read this whole entry; the original is wrong.",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L79",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d5 \u2014 corrected 2026-07-27 by research. read this whole entry; the original is wrong.",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d5_corrected_2026_07_27_by_research_read_this_whole_entry_the_original_is_wrong"
+    },
+    {
+      "label": "D6 \u2014 \u00a74 applies to findings and lineage alike (SC#3)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L108",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d6 \u2014 \u00a74 applies to findings and lineage alike (sc#3)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d6_4_applies_to_findings_and_lineage_alike_sc_3"
+    },
+    {
+      "label": "D7 \u2014 Freshness stamp is a stored field, not prose (SC#2, SC#4)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L115",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d7 \u2014 freshness stamp is a stored field, not prose (sc#2, sc#4)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d7_freshness_stamp_is_a_stored_field_not_prose_sc_2_sc_4"
+    },
+    {
+      "label": "D8 \u2014 OQ-2 RESOLVED (owner, 2026-07-27): probe before pinning the model (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L120",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d8 \u2014 oq-2 resolved (owner, 2026-07-27): probe before pinning the model (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d8_oq_2_resolved_owner_2026_07_27_probe_before_pinning_the_model_locked"
+    },
+    {
+      "label": "D9 \u2014 OQ-1 RESOLVED (owner, 2026-07-27): both return paths, and amend the guard (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L138",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d9 \u2014 oq-1 resolved (owner, 2026-07-27): both return paths, and amend the guard (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d9_oq_1_resolved_owner_2026_07_27_both_return_paths_and_amend_the_guard_locked"
+    },
+    {
+      "label": "D9-REVISED \u2014 SUPERSEDES D9 (owner, 2026-07-27, after a wall-clock finding) (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L153",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d9-revised \u2014 supersedes d9 (owner, 2026-07-27, after a wall-clock finding) (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d9_revised_supersedes_d9_owner_2026_07_27_after_a_wall_clock_finding_locked"
+    },
+    {
+      "label": "D12 \u2014 the research route gets its OWN wall-clock budget (owner, 2026-07-27) (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L207",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d12 \u2014 the research route gets its own wall-clock budget (owner, 2026-07-27) (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d12_the_research_route_gets_its_own_wall_clock_budget_owner_2026_07_27_locked"
+    },
+    {
+      "label": "D10 \u2014 \"SOPHISTICATED\": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L233",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d10 \u2014 \"sophisticated\": agentic depth on hosted search (owner directive, 2026-07-27) (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d10_sophisticated_agentic_depth_on_hosted_search_owner_directive_2026_07_27_locked"
+    },
+    {
+      "label": "D11 \u2014 \"HIGHLY RELIABLE\": a degradation contract, proven two ways (owner, 2026-07-27) (LOCKED)",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L269",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "d11 \u2014 \"highly reliable\": a degradation contract, proven two ways (owner, 2026-07-27) (locked)",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_d11_highly_reliable_a_degradation_contract_proven_two_ways_owner_2026_07_27_locked"
+    },
+    {
+      "label": "Claude's Discretion",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L307",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "claude's discretion",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_claude_s_discretion"
+    },
+    {
+      "label": "Specific Ideas",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L319",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "specific ideas",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_specific_ideas"
+    },
+    {
+      "label": "Deferred Ideas",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L332",
+      "_origin": "ast",
+      "community": 83,
+      "norm_label": "deferred ideas",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_context_deferred_ideas"
+    },
+    {
+      "label": "16-01-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-01-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 189,
+      "norm_label": "16-01-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_01_plan"
+    },
+    {
+      "label": "16-02-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-02-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 190,
+      "norm_label": "16-02-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_02_plan"
+    },
+    {
+      "label": "16-03-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-03-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 191,
+      "norm_label": "16-03-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_03_plan"
+    },
+    {
+      "label": "16-05-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-05-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 194,
+      "norm_label": "16-05-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_05_plan"
+    },
+    {
+      "label": "ROADMAP.md",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "roadmap.md",
+      "id": "planning_roadmap"
+    },
+    {
+      "label": "Roadmap: Pikar-AI",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "roadmap: pikar-ai",
+      "id": "planning_roadmap_roadmap_pikar_ai"
+    },
+    {
+      "label": "Overview",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "overview",
+      "id": "planning_roadmap_overview"
+    },
+    {
+      "label": "Phases",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phases",
+      "id": "planning_roadmap_phases"
+    },
+    {
+      "label": "Milestone v2.0 - Platform -> Private Beta (Phases 10-25)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L39",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "milestone v2.0 - platform -> private beta (phases 10-25)",
+      "id": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25"
+    },
+    {
+      "label": "Phase Details",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L73",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase details",
+      "id": "planning_roadmap_phase_details"
+    },
+    {
+      "label": "Phase 1: Foundation & Governance Substrate",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L75",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 1: foundation & governance substrate",
+      "id": "planning_roadmap_phase_1_foundation_governance_substrate"
+    },
+    {
+      "label": "Phase 2: Thin End-to-End Slice",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L99",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 2: thin end-to-end slice",
+      "id": "planning_roadmap_phase_2_thin_end_to_end_slice"
+    },
+    {
+      "label": "Phase 3: Guardrails",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L126",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3: guardrails",
+      "id": "planning_roadmap_phase_3_guardrails"
+    },
+    {
+      "label": "Phase 3.1: Cockpit Core (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L147",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.1: cockpit core (inserted)",
+      "id": "planning_roadmap_phase_3_1_cockpit_core_inserted"
+    },
+    {
+      "label": "Phase 3.2: Inbox Reading (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L169",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.2: inbox reading (inserted)",
+      "id": "planning_roadmap_phase_3_2_inbox_reading_inserted"
+    },
+    {
+      "label": "Phase 03.2.1: Agent-Driven Cockpit (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L188",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 03.2.1: agent-driven cockpit (inserted)",
+      "id": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted"
+    },
+    {
+      "label": "Phase 3.3: Attachment Generation (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L204",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.3: attachment generation (inserted)",
+      "id": "planning_roadmap_phase_3_3_attachment_generation_inserted"
+    },
+    {
+      "label": "Phase 3.4: Per-Recipient Personalization (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L222",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.4: per-recipient personalization (inserted)",
+      "id": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted"
+    },
+    {
+      "label": "Phase 3.5: Deferred Send (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L237",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.5: deferred send (inserted)",
+      "id": "planning_roadmap_phase_3_5_deferred_send_inserted"
+    },
+    {
+      "label": "Phase 3.6: Agent Eval Gate (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L256",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.6: agent eval gate (inserted)",
+      "id": "planning_roadmap_phase_3_6_agent_eval_gate_inserted"
+    },
+    {
+      "label": "Phase 3.7: Inbox Briefing (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L275",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.7: inbox briefing (inserted)",
+      "id": "planning_roadmap_phase_3_7_inbox_briefing_inserted"
+    },
+    {
+      "label": "Phase 3.8: Vault Document Extraction (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L301",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.8: vault document extraction (inserted)",
+      "id": "planning_roadmap_phase_3_8_vault_document_extraction_inserted"
+    },
+    {
+      "label": "Phase 3.9: Agent Activity Streaming (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L315",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.9: agent activity streaming (inserted)",
+      "id": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted"
+    },
+    {
+      "label": "Phase 3.10: Cockpit Conversation Repair (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L331",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.10: cockpit conversation repair (inserted)",
+      "id": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted"
+    },
+    {
+      "label": "Phase 3.11: Inbox Reply (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L346",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 3.11: inbox reply (inserted)",
+      "id": "planning_roadmap_phase_3_11_inbox_reply_inserted"
+    },
+    {
+      "label": "Phase 4: Attachment & Voice-Dictation Intake",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L360",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 4: attachment & voice-dictation intake",
+      "id": "planning_roadmap_phase_4_attachment_voice_dictation_intake"
+    },
+    {
+      "label": "Phase 5: Knowledge Vault & GraphRAG",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L377",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 5: knowledge vault & graphrag",
+      "id": "planning_roadmap_phase_5_knowledge_vault_graphrag"
+    },
+    {
+      "label": "Phase 6: Live Voice Sessions",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L397",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 6: live voice sessions",
+      "id": "planning_roadmap_phase_6_live_voice_sessions"
+    },
+    {
+      "label": "Phase 7: Resilience & Operations Hardening",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L417",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 7: resilience & operations hardening",
+      "id": "planning_roadmap_phase_7_resilience_operations_hardening"
+    },
+    {
+      "label": "Phase 8: Self-Improvement",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L436",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 8: self-improvement",
+      "id": "planning_roadmap_phase_8_self_improvement"
+    },
+    {
+      "label": "Phase 9: Private Beta Productionization",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L454",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 9: private beta productionization",
+      "id": "planning_roadmap_phase_9_private_beta_productionization"
+    },
+    {
+      "label": "Phase Details - Milestone v2.0",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L467",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase details - milestone v2.0",
+      "id": "planning_roadmap_phase_details_milestone_v2_0"
+    },
+    {
+      "label": "Phase 10: Vault->Agent Grounding",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L469",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 10: vault->agent grounding",
+      "id": "planning_roadmap_phase_10_vault_agent_grounding"
+    },
+    {
+      "label": "Phase 11: Persona Onboarding & Business Profile",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L484",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 11: persona onboarding & business profile",
+      "id": "planning_roadmap_phase_11_persona_onboarding_business_profile"
+    },
+    {
+      "label": "Phase 12: Business Evaluation Engine",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L495",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 12: business evaluation engine",
+      "id": "planning_roadmap_phase_12_business_evaluation_engine"
+    },
+    {
+      "label": "Phase 13: Proactive In-App Review",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L515",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 13: proactive in-app review",
+      "id": "planning_roadmap_phase_13_proactive_in_app_review"
+    },
+    {
+      "label": "Phase 14: Flagship Voice-Doc Workflow",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L531",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 14: flagship voice-doc workflow",
+      "id": "planning_roadmap_phase_14_flagship_voice_doc_workflow"
+    },
+    {
+      "label": "Phase 15: Sub-Agent Dispatch & Generalized Action Executor",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L553",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 15: sub-agent dispatch & generalized action executor",
+      "id": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor"
+    },
+    {
+      "label": "Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L571",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 15.1: fact-derived tier & conversational onboarding (inserted)",
+      "id": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted"
+    },
+    {
+      "label": "Phase 16: Research Sub-Agent & Web Research",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L591",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 16: research sub-agent & web research",
+      "id": "planning_roadmap_phase_16_research_sub_agent_web_research"
+    },
+    {
+      "label": "Phase 17: Calendar Actions",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L612",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 17: calendar actions",
+      "id": "planning_roadmap_phase_17_calendar_actions"
+    },
+    {
+      "label": "Phase 18: Document & Content Creation",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L622",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 18: document & content creation",
+      "id": "planning_roadmap_phase_18_document_content_creation"
+    },
+    {
+      "label": "Phase 19: Contacts, CRM & Follow-ups",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L632",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 19: contacts, crm & follow-ups",
+      "id": "planning_roadmap_phase_19_contacts_crm_follow_ups"
+    },
+    {
+      "label": "Phase 20: Media Canvas",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L642",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 20: media canvas",
+      "id": "planning_roadmap_phase_20_media_canvas"
+    },
+    {
+      "label": "Phase 21: User-Authored Skills",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L653",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 21: user-authored skills",
+      "id": "planning_roadmap_phase_21_user_authored_skills"
+    },
+    {
+      "label": "Phase 22: Owner Authorization Primitive (requireOwner)",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L663",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 22: owner authorization primitive (requireowner)",
+      "id": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner"
+    },
+    {
+      "label": "Phase 23: Agent-Authored Skills",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L673",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 23: agent-authored skills",
+      "id": "planning_roadmap_phase_23_agent_authored_skills"
+    },
+    {
+      "label": "Phase 24: ISO 9001 Conformance Map",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L683",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 24: iso 9001 conformance map",
+      "id": "planning_roadmap_phase_24_iso_9001_conformance_map"
+    },
+    {
+      "label": "Phase 25: Private Beta Productionization",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L692",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "phase 25: private beta productionization",
+      "id": "planning_roadmap_phase_25_private_beta_productionization"
+    },
+    {
+      "label": "Progress",
+      "file_type": "document",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L704",
+      "_origin": "ast",
+      "community": 95,
+      "norm_label": "progress",
+      "id": "planning_roadmap_progress"
+    },
+    {
+      "label": "16-04-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-04-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 192,
+      "norm_label": "16-04-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_04_plan"
+    },
+    {
+      "label": "16-07-PLAN.md",
+      "file_type": "document",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-07-PLAN.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 196,
+      "norm_label": "16-07-plan.md",
+      "id": "planning_phases_16_research_sub_agent_web_research_16_07_plan"
+    },
+    {
       "label": "deferred-items.md",
       "file_type": "document",
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items",
       "community": 134,
-      "norm_label": "deferred-items.md"
+      "norm_label": "deferred-items.md",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items"
     },
     {
       "label": "Deferred items \u2014 Phase 15.1",
@@ -19,9 +869,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
       "community": 134,
-      "norm_label": "deferred items \u2014 phase 15.1"
+      "norm_label": "deferred items \u2014 phase 15.1",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1"
     },
     {
       "label": "1. Backend full-suite run is FLAKY on this worktree (found during 15.1-01)",
@@ -29,9 +879,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L6",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01",
       "community": 134,
-      "norm_label": "1. backend full-suite run is flaky on this worktree (found during 15.1-01)"
+      "norm_label": "1. backend full-suite run is flaky on this worktree (found during 15.1-01)",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01"
     },
     {
       "label": "2. The four live-only verifications \u2014 RUNNABLE DEBT (recorded during 15.1-07)",
@@ -39,9 +889,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L36",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
       "community": 134,
-      "norm_label": "2. the four live-only verifications \u2014 runnable debt (recorded during 15.1-07)"
+      "norm_label": "2. the four live-only verifications \u2014 runnable debt (recorded during 15.1-07)",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07"
     },
     {
       "label": "SC#6 paid \u2014 live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)",
@@ -49,9 +899,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L50",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1",
       "community": 134,
-      "norm_label": "sc#6 paid \u2014 live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)"
+      "norm_label": "sc#6 paid \u2014 live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1"
     },
     {
       "label": "SC#1c paid \u2014 profile page, 2026-07-26 (real browser, real deployment)",
@@ -59,9 +909,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L73",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment",
       "community": 134,
-      "norm_label": "sc#1c paid \u2014 profile page, 2026-07-26 (real browser, real deployment)"
+      "norm_label": "sc#1c paid \u2014 profile page, 2026-07-26 (real browser, real deployment)",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment"
     },
     {
       "label": "SC#3 paid \u2014 a real conversational turn, 2026-07-26 (real model)",
@@ -69,9 +919,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L104",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model",
       "community": 134,
-      "norm_label": "sc#3 paid \u2014 a real conversational turn, 2026-07-26 (real model)"
+      "norm_label": "sc#3 paid \u2014 a real conversational turn, 2026-07-26 (real model)",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model"
     },
     {
       "label": "SC#5 run but NOT confirmed \u2014 2026-07-26. **This row stays OPEN.**",
@@ -79,9 +929,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L122",
       "_origin": "ast",
-      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open",
       "community": 134,
-      "norm_label": "sc#5 run but not confirmed \u2014 2026-07-26. **this row stays open.**"
+      "norm_label": "sc#5 run but not confirmed \u2014 2026-07-26. **this row stays open.**",
+      "id": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open"
     },
     {
       "label": "PARALLELIZATION.md",
@@ -959,7 +1809,7 @@
       "source_file": "packages/voice/src/realtime.ts",
       "source_location": "L72",
       "_origin": "ast",
-      "community": 80,
+      "community": 652,
       "norm_label": "realtime_events",
       "id": "packages_voice_src_realtime_realtime_events"
     },
@@ -1009,7 +1859,7 @@
       "source_file": "packages/voice/src/realtime.ts",
       "source_location": "L150",
       "_origin": "ast",
-      "community": 80,
+      "community": 469,
       "norm_label": "realtimeusage",
       "id": "packages_voice_src_realtime_realtimeusage"
     },
@@ -1019,7 +1869,7 @@
       "source_file": "packages/voice/src/realtime.ts",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 137,
+      "community": 80,
       "norm_label": "readusage()",
       "id": "packages_voice_src_realtime_readusage"
     },
@@ -2698,7 +3548,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 2,
+      "community": 200,
       "norm_label": "badge()",
       "id": "apps_web_app_app_dashboard_workspace_cards_badge"
     },
@@ -2708,7 +3558,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 2,
+      "community": 202,
       "norm_label": "fmtsize()",
       "id": "apps_web_app_app_dashboard_workspace_cards_fmtsize"
     },
@@ -2728,7 +3578,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 2,
+      "community": 202,
       "norm_label": "planattachments()",
       "id": "apps_web_app_app_dashboard_workspace_cards_planattachments"
     },
@@ -2818,7 +3668,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L566",
       "_origin": "ast",
-      "community": 2,
+      "community": 200,
       "norm_label": "reportcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_reportcard"
     },
@@ -2838,7 +3688,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L616",
       "_origin": "ast",
-      "community": 2,
+      "community": 203,
       "norm_label": "matchhint()",
       "id": "apps_web_app_app_dashboard_workspace_cards_matchhint"
     },
@@ -2848,7 +3698,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L622",
       "_origin": "ast",
-      "community": 2,
+      "community": 203,
       "norm_label": "resolutioncard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_resolutioncard"
     },
@@ -2868,7 +3718,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L737",
       "_origin": "ast",
-      "community": 139,
+      "community": 183,
       "norm_label": "fmtitemtime()",
       "id": "apps_web_app_app_dashboard_workspace_cards_fmtitemtime"
     },
@@ -2878,7 +3728,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L748",
       "_origin": "ast",
-      "community": 2,
+      "community": 205,
       "norm_label": "senderlabel()",
       "id": "apps_web_app_app_dashboard_workspace_cards_senderlabel"
     },
@@ -2968,7 +3818,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L847",
       "_origin": "ast",
-      "community": 2,
+      "community": 205,
       "norm_label": "sendercell()",
       "id": "apps_web_app_app_dashboard_workspace_cards_sendercell"
     },
@@ -2978,7 +3828,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L868",
       "_origin": "ast",
-      "community": 139,
+      "community": 183,
       "norm_label": "briefingrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_briefingrow"
     },
@@ -3028,7 +3878,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L947",
       "_origin": "ast",
-      "community": 139,
+      "community": 183,
       "norm_label": "priorityrow()",
       "id": "apps_web_app_app_dashboard_workspace_cards_priorityrow"
     },
@@ -3068,7 +3918,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1145",
       "_origin": "ast",
-      "community": 2,
+      "community": 199,
       "norm_label": "steptext()",
       "id": "apps_web_app_app_dashboard_workspace_cards_steptext"
     },
@@ -3098,7 +3948,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1178",
       "_origin": "ast",
-      "community": 2,
+      "community": 199,
       "norm_label": "activitycard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_activitycard"
     },
@@ -3198,7 +4048,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1391",
       "_origin": "ast",
-      "community": 2,
+      "community": 201,
       "norm_label": "deltaline()",
       "id": "apps_web_app_app_dashboard_workspace_cards_deltaline"
     },
@@ -3208,7 +4058,7 @@
       "source_file": "apps/web/app/(app)/dashboard/workspace/cards.tsx",
       "source_location": "L1409",
       "_origin": "ast",
-      "community": 2,
+      "community": 201,
       "norm_label": "evaluationcard()",
       "id": "apps_web_app_app_dashboard_workspace_cards_evaluationcard"
     },
@@ -3658,7 +4508,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "base()",
       "id": "apps_web_app_auth_icons_base"
     },
@@ -3838,7 +4688,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L170",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "chevrondownicon()",
       "id": "apps_web_app_auth_icons_chevrondownicon"
     },
@@ -3848,7 +4698,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L180",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "gridicon()",
       "id": "apps_web_app_auth_icons_gridicon"
     },
@@ -3878,7 +4728,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L209",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "fileicon()",
       "id": "apps_web_app_auth_icons_fileicon"
     },
@@ -3898,7 +4748,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L227",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "pieicon()",
       "id": "apps_web_app_auth_icons_pieicon"
     },
@@ -3928,7 +4778,7 @@
       "source_file": "apps/web/app/(auth)/icons.tsx",
       "source_location": "L255",
       "_origin": "ast",
-      "community": 140,
+      "community": 6,
       "norm_label": "chevronlefticon()",
       "id": "apps_web_app_auth_icons_chevronlefticon"
     },
@@ -4788,7 +5638,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 13,
+      "community": 157,
       "norm_label": "agentsteps.ts",
       "id": "packages_backend_convex_agentsteps"
     },
@@ -4798,7 +5648,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 13,
+      "community": 157,
       "norm_label": "stepview",
       "id": "packages_backend_convex_agentsteps_stepview"
     },
@@ -4808,7 +5658,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 13,
+      "community": 157,
       "norm_label": "record",
       "id": "packages_backend_convex_agentsteps_record"
     },
@@ -4818,7 +5668,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 13,
+      "community": 157,
       "norm_label": "finish",
       "id": "packages_backend_convex_agentsteps_finish"
     },
@@ -4828,7 +5678,7 @@
       "source_file": "packages/backend/convex/agentSteps.ts",
       "source_location": "L103",
       "_origin": "ast",
-      "community": 13,
+      "community": 157,
       "norm_label": "latestturn",
       "id": "packages_backend_convex_agentsteps_latestturn"
     },
@@ -4888,7 +5738,7 @@
       "source_file": "packages/backend/convex/audit.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 51,
+      "community": 159,
       "norm_label": "log",
       "id": "packages_backend_convex_audit_log"
     },
@@ -4958,7 +5808,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "auth.ts",
       "id": "packages_backend_convex_auth"
     },
@@ -4968,7 +5818,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "password",
       "id": "packages_backend_convex_auth_password"
     },
@@ -4978,7 +5828,7 @@
       "source_file": "packages/backend/convex/auth.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "{ auth, signin, signout, store, isauthenticated }",
       "id": "packages_backend_convex_auth_auth_signin_signout_store_isauthenticated"
     },
@@ -4988,7 +5838,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 176,
+      "community": 117,
       "norm_label": "briefings.test.ts",
       "id": "packages_backend_convex_briefings_test"
     },
@@ -4998,7 +5848,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 176,
+      "community": 117,
       "norm_label": "modules",
       "id": "packages_backend_convex_briefings_test_modules"
     },
@@ -5008,7 +5858,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 176,
+      "community": 117,
       "norm_label": "t",
       "id": "packages_backend_convex_briefings_test_t"
     },
@@ -5018,7 +5868,7 @@
       "source_file": "packages/backend/convex/briefings.test.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 176,
+      "community": 117,
       "norm_label": "seed()",
       "id": "packages_backend_convex_briefings_test_seed"
     },
@@ -5028,7 +5878,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "briefings.ts",
       "id": "packages_backend_convex_briefings"
     },
@@ -5038,7 +5888,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "insert",
       "id": "packages_backend_convex_briefings_insert"
     },
@@ -5048,7 +5898,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "bythread",
       "id": "packages_backend_convex_briefings_bythread"
     },
@@ -5058,7 +5908,7 @@
       "source_file": "packages/backend/convex/briefings.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 175,
+      "community": 19,
       "norm_label": "adr-0004",
       "id": "packages_backend_convex_briefings_ts_docref_adr_0004"
     },
@@ -5198,7 +6048,7 @@
       "source_file": "packages/backend/convex/cockpit.ts",
       "source_location": "L58",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "notifyifagenttimeout()",
       "id": "packages_backend_convex_cockpit_notifyifagenttimeout"
     },
@@ -5498,7 +6348,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "crons.ts",
       "id": "packages_backend_convex_crons"
     },
@@ -5508,7 +6358,7 @@
       "source_file": "packages/backend/convex/crons.ts",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "crons",
       "id": "packages_backend_convex_crons_crons"
     },
@@ -5518,7 +6368,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 0,
       "norm_label": "deadletter.ts",
       "id": "packages_backend_convex_deadletter"
     },
@@ -5528,7 +6378,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L17",
       "_origin": "ast",
-      "community": 51,
+      "community": 0,
       "norm_label": "onpipelinecomplete",
       "id": "packages_backend_convex_deadletter_onpipelinecomplete"
     },
@@ -5538,7 +6388,7 @@
       "source_file": "packages/backend/convex/deadLetter.ts",
       "source_location": "L116",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "deadletterrecipient",
       "id": "packages_backend_convex_deadletter_deadletterrecipient"
     },
@@ -5548,7 +6398,7 @@
       "source_file": "packages/backend/convex/deadLetters.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 179,
+      "community": 184,
       "norm_label": "deadletters.test.ts",
       "id": "packages_backend_convex_deadletters_test"
     },
@@ -5558,7 +6408,7 @@
       "source_file": "packages/backend/convex/deadLetters.test.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 179,
+      "community": 184,
       "norm_label": "modules",
       "id": "packages_backend_convex_deadletters_test_modules"
     },
@@ -5568,7 +6418,7 @@
       "source_file": "packages/backend/convex/deadLetters.test.ts",
       "source_location": "L10",
       "_origin": "ast",
-      "community": 179,
+      "community": 184,
       "norm_label": "seeddeadletter()",
       "id": "packages_backend_convex_deadletters_test_seeddeadletter"
     },
@@ -5618,7 +6468,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "deliverapprovedplan.ts",
       "id": "packages_backend_convex_deliverapprovedplan"
     },
@@ -5628,7 +6478,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "deliverapprovedplan",
       "id": "packages_backend_convex_deliverapprovedplan_deliverapprovedplan"
     },
@@ -5638,7 +6488,7 @@
       "source_file": "packages/backend/convex/deliverApprovedPlan.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "markplandone",
       "id": "packages_backend_convex_deliverapprovedplan_markplandone"
     },
@@ -5928,7 +6778,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "dispatch.ts",
       "id": "packages_backend_convex_dispatch"
     },
@@ -5938,7 +6788,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L79",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "cap()",
       "id": "packages_backend_convex_dispatch_cap"
     },
@@ -5948,7 +6798,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L82",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "dispatchrefusal",
       "id": "packages_backend_convex_dispatch_dispatchrefusal"
     },
@@ -5958,7 +6808,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L88",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "dispatchresult",
       "id": "packages_backend_convex_dispatch_dispatchresult"
     },
@@ -5968,7 +6818,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "dispatchargs",
       "id": "packages_backend_convex_dispatch_dispatchargs"
     },
@@ -5978,7 +6828,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L138",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "_steptools",
       "id": "packages_backend_convex_dispatch_steptools"
     },
@@ -5988,7 +6838,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L144",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "specialistrunner",
       "id": "packages_backend_convex_dispatch_specialistrunner"
     },
@@ -5998,7 +6848,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L152",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "ctx",
       "id": "packages_backend_convex_dispatch_ctx"
     },
@@ -6008,7 +6858,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L160",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "buildspecialistprompt()",
       "id": "packages_backend_convex_dispatch_buildspecialistprompt"
     },
@@ -6018,7 +6868,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L235",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "lineagerefs()",
       "id": "packages_backend_convex_dispatch_lineagerefs"
     },
@@ -6028,7 +6878,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L244",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "governeddispatch()",
       "id": "packages_backend_convex_dispatch_governeddispatch"
     },
@@ -6038,7 +6888,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L371",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "landing",
       "id": "packages_backend_convex_dispatch_landing"
     },
@@ -6048,7 +6898,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L388",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "dispatchandland()",
       "id": "packages_backend_convex_dispatch_dispatchandland"
     },
@@ -6058,7 +6908,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L436",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "runspecialist",
       "id": "packages_backend_convex_dispatch_runspecialist"
     },
@@ -6068,7 +6918,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L449",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "__runspecialistwithscript",
       "id": "packages_backend_convex_dispatch_runspecialistwithscript"
     },
@@ -6078,7 +6928,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "adr-0007",
       "id": "packages_backend_convex_dispatch_ts_docref_adr_0007"
     },
@@ -6088,7 +6938,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L103",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "adr-0008",
       "id": "packages_backend_convex_dispatch_ts_docref_adr_0008"
     },
@@ -6098,7 +6948,7 @@
       "source_file": "packages/backend/convex/dispatch.ts",
       "source_location": "L164",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "adr-0009",
       "id": "packages_backend_convex_dispatch_ts_docref_adr_0009"
     },
@@ -6158,7 +7008,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 19,
+      "community": 188,
       "norm_label": "documentdraft.test.ts",
       "id": "packages_backend_convex_documentdraft_test"
     },
@@ -6168,7 +7018,7 @@
       "source_file": "packages/backend/convex/documentDraft.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 19,
+      "community": 188,
       "norm_label": "modules",
       "id": "packages_backend_convex_documentdraft_test_modules"
     },
@@ -6468,7 +7318,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L133",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "lastforthread",
       "id": "packages_backend_convex_evaluations_lastforthread"
     },
@@ -6488,7 +7338,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L166",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "runevaluation",
       "id": "packages_backend_convex_evaluations_runevaluation"
     },
@@ -6608,7 +7458,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L786",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "landspecialistresult",
       "id": "packages_backend_convex_evaluations_landspecialistresult"
     },
@@ -6618,7 +7468,7 @@
       "source_file": "packages/backend/convex/evaluations.ts",
       "source_location": "L841",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "persistnextstepmemo()",
       "id": "packages_backend_convex_evaluations_persistnextstepmemo"
     },
@@ -6698,7 +7548,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 117,
+      "community": 105,
       "norm_label": "feedback.ts",
       "id": "packages_backend_convex_feedback"
     },
@@ -6708,7 +7558,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 117,
+      "community": 105,
       "norm_label": "submitfeedback",
       "id": "packages_backend_convex_feedback_submitfeedback"
     },
@@ -6718,7 +7568,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L64",
       "_origin": "ast",
-      "community": 117,
+      "community": 105,
       "norm_label": "undofeedback",
       "id": "packages_backend_convex_feedback_undofeedback"
     },
@@ -6728,7 +7578,7 @@
       "source_file": "packages/backend/convex/feedback.ts",
       "source_location": "L78",
       "_origin": "ast",
-      "community": 117,
+      "community": 105,
       "norm_label": "myfeedback",
       "id": "packages_backend_convex_feedback_myfeedback"
     },
@@ -6738,7 +7588,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "gapaction.test.ts",
       "id": "packages_backend_convex_gapaction_test"
     },
@@ -6748,7 +7598,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "modules",
       "id": "packages_backend_convex_gapaction_test_modules"
     },
@@ -6758,7 +7608,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_gapaction_test_aggregatemodules"
     },
@@ -6768,7 +7618,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "workflowmodules",
       "id": "packages_backend_convex_gapaction_test_workflowmodules"
     },
@@ -6778,7 +7628,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "workpoolmodules",
       "id": "packages_backend_convex_gapaction_test_workpoolmodules"
     },
@@ -6788,7 +7638,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "newtest()",
       "id": "packages_backend_convex_gapaction_test_newtest"
     },
@@ -6798,7 +7648,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L48",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "profiledoctext()",
       "id": "packages_backend_convex_gapaction_test_profiledoctext"
     },
@@ -6808,7 +7658,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "seeddoc()",
       "id": "packages_backend_convex_gapaction_test_seeddoc"
     },
@@ -6818,7 +7668,7 @@
       "source_file": "packages/backend/convex/gapAction.test.ts",
       "source_location": "L94",
       "_origin": "ast",
-      "community": 102,
+      "community": 58,
       "norm_label": "evaluatewithgap()",
       "id": "packages_backend_convex_gapaction_test_evaluatewithgap"
     },
@@ -6828,7 +7678,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "gmail.test.ts",
       "id": "packages_backend_convex_gmail_test"
     },
@@ -6838,7 +7688,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "modules",
       "id": "packages_backend_convex_gmail_test_modules"
     },
@@ -6848,7 +7698,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_gmail_test_aggregatemodules"
     },
@@ -6858,7 +7708,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "harness()",
       "id": "packages_backend_convex_gmail_test_harness"
     },
@@ -6868,7 +7718,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "b64url()",
       "id": "packages_backend_convex_gmail_test_b64url"
     },
@@ -6878,7 +7728,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "legacy",
       "id": "packages_backend_convex_gmail_test_legacy"
     },
@@ -6888,7 +7738,7 @@
       "source_file": "packages/backend/convex/gmail.test.ts",
       "source_location": "L111",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "rfc-5322",
       "id": "packages_backend_convex_gmail_test_ts_docref_rfc_5322"
     },
@@ -6908,7 +7758,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "freshaccesstoken()",
       "id": "packages_backend_convex_gmail_freshaccesstoken"
     },
@@ -6928,7 +7778,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "wrap76()",
       "id": "packages_backend_convex_gmail_wrap76"
     },
@@ -6938,7 +7788,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L81",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "buildmime()",
       "id": "packages_backend_convex_gmail_buildmime"
     },
@@ -6948,7 +7798,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L142",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "base64url()",
       "id": "packages_backend_convex_gmail_base64url"
     },
@@ -6968,7 +7818,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L158",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "send",
       "id": "packages_backend_convex_gmail_send"
     },
@@ -7068,7 +7918,7 @@
       "source_file": "packages/backend/convex/gmail.ts",
       "source_location": "L395",
       "_origin": "ast",
-      "community": 94,
+      "community": 136,
       "norm_label": "pickplaintext()",
       "id": "packages_backend_convex_gmail_pickplaintext"
     },
@@ -7238,7 +8088,7 @@
       "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 1,
+      "community": 128,
       "norm_label": "store",
       "id": "packages_backend_convex_gmailauth_store"
     },
@@ -7278,7 +8128,7 @@
       "source_file": "packages/backend/convex/gmailAuth.ts",
       "source_location": "L169",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "flagexpiringtokens",
       "id": "packages_backend_convex_gmailauth_flagexpiringtokens"
     },
@@ -7308,7 +8158,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "guardrails.test.ts",
       "id": "packages_backend_convex_guardrails_test"
     },
@@ -7318,7 +8168,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "modules",
       "id": "packages_backend_convex_guardrails_test_modules"
     },
@@ -7328,7 +8178,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "req",
       "id": "packages_backend_convex_guardrails_test_req"
     },
@@ -7338,7 +8188,7 @@
       "source_file": "packages/backend/convex/guardrails.test.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 19,
+      "community": 175,
       "norm_label": "seedconfig()",
       "id": "packages_backend_convex_guardrails_test_seedconfig"
     },
@@ -7348,7 +8198,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "guardrails.ts",
       "id": "packages_backend_convex_guardrails"
     },
@@ -7358,7 +8208,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "ratelimiter",
       "id": "packages_backend_convex_guardrails_ratelimiter"
     },
@@ -7368,7 +8218,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "default_config",
       "id": "packages_backend_convex_guardrails_default_config"
     },
@@ -7378,7 +8228,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L34",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "getconfig()",
       "id": "packages_backend_convex_guardrails_getconfig"
     },
@@ -7388,7 +8238,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "setkillswitch",
       "id": "packages_backend_convex_guardrails_setkillswitch"
     },
@@ -7398,7 +8248,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "prepare",
       "id": "packages_backend_convex_guardrails_prepare"
     },
@@ -7408,7 +8258,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L114",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "getsafetextbyhash",
       "id": "packages_backend_convex_guardrails_getsafetextbyhash"
     },
@@ -7418,7 +8268,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L137",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "saveinstruction",
       "id": "packages_backend_convex_guardrails_saveinstruction"
     },
@@ -7448,7 +8298,7 @@
       "source_file": "packages/backend/convex/guardrails.ts",
       "source_location": "L187",
       "_origin": "ast",
-      "community": 639,
+      "community": 102,
       "norm_label": "remainingdailycents",
       "id": "packages_backend_convex_guardrails_remainingdailycents"
     },
@@ -7458,7 +8308,7 @@
       "source_file": "packages/backend/convex/http.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "http.ts",
       "id": "packages_backend_convex_http"
     },
@@ -7468,7 +8318,7 @@
       "source_file": "packages/backend/convex/http.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "http",
       "id": "packages_backend_convex_http_http"
     },
@@ -7658,7 +8508,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "intake.ts",
       "id": "packages_backend_convex_intake"
     },
@@ -7668,7 +8518,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "decodeutf8()",
       "id": "packages_backend_convex_intake_decodeutf8"
     },
@@ -7678,7 +8528,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "transcribeaudio()",
       "id": "packages_backend_convex_intake_transcribeaudio"
     },
@@ -7688,7 +8538,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L83",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "extractvisual()",
       "id": "packages_backend_convex_intake_extractvisual"
     },
@@ -7698,7 +8548,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L108",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "runintakeargs",
       "id": "packages_backend_convex_intake_runintakeargs"
     },
@@ -7708,7 +8558,7 @@
       "source_file": "packages/backend/convex/intake.ts",
       "source_location": "L123",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "runintake()",
       "id": "packages_backend_convex_intake_runintake"
     },
@@ -7738,7 +8588,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "intakedb.ts",
       "id": "packages_backend_convex_intakedb"
     },
@@ -7748,7 +8598,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "kind",
       "id": "packages_backend_convex_intakedb_kind"
     },
@@ -7758,7 +8608,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "status",
       "id": "packages_backend_convex_intakedb_status"
     },
@@ -7768,7 +8618,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "generateuploadurl",
       "id": "packages_backend_convex_intakedb_generateuploadurl"
     },
@@ -7778,7 +8628,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "insertartifact",
       "id": "packages_backend_convex_intakedb_insertartifact"
     },
@@ -7788,7 +8638,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "patchartifact",
       "id": "packages_backend_convex_intakedb_patchartifact"
     },
@@ -7798,7 +8648,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "bythread",
       "id": "packages_backend_convex_intakedb_bythread"
     },
@@ -7808,7 +8658,7 @@
       "source_file": "packages/backend/convex/intakeDb.ts",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 0,
+      "community": 112,
       "norm_label": "getartifact",
       "id": "packages_backend_convex_intakedb_getartifact"
     },
@@ -7898,7 +8748,7 @@
       "source_file": "packages/backend/convex/lib/functions.ts",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "tenantaction",
       "id": "packages_backend_convex_lib_functions_tenantaction"
     },
@@ -7918,7 +8768,7 @@
       "source_file": "packages/backend/convex/lib/hash.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "contenthash()",
       "id": "packages_backend_convex_lib_hash_contenthash"
     },
@@ -8608,7 +9458,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 128,
+      "community": 96,
       "norm_label": "notifications.test.ts",
       "id": "packages_backend_convex_notifications_test"
     },
@@ -8618,7 +9468,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 128,
+      "community": 96,
       "norm_label": "modules",
       "id": "packages_backend_convex_notifications_test_modules"
     },
@@ -8628,7 +9478,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 128,
+      "community": 96,
       "norm_label": "notifications()",
       "id": "packages_backend_convex_notifications_test_notifications"
     },
@@ -8638,7 +9488,7 @@
       "source_file": "packages/backend/convex/notifications.test.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 128,
+      "community": 96,
       "norm_label": "listscheduled()",
       "id": "packages_backend_convex_notifications_test_listscheduled"
     },
@@ -8678,7 +9528,7 @@
       "source_file": "packages/backend/convex/notifications.ts",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 51,
+      "community": 0,
       "norm_label": "notify",
       "id": "packages_backend_convex_notifications_notify"
     },
@@ -8688,7 +9538,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "notifyexternal.ts",
       "id": "packages_backend_convex_notifyexternal"
     },
@@ -8698,7 +9548,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "kinds",
       "id": "packages_backend_convex_notifyexternal_kinds"
     },
@@ -8708,7 +9558,7 @@
       "source_file": "packages/backend/convex/notifyExternal.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 83,
+      "community": 151,
       "norm_label": "dispatch",
       "id": "packages_backend_convex_notifyexternal_dispatch"
     },
@@ -8978,7 +9828,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L157",
       "_origin": "ast",
-      "community": 55,
+      "community": 182,
       "norm_label": "getprofile",
       "id": "packages_backend_convex_onboarding_getprofile"
     },
@@ -9098,7 +9948,7 @@
       "source_file": "packages/backend/convex/onboarding.ts",
       "source_location": "L457",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "writeprofiledoc()",
       "id": "packages_backend_convex_onboarding_writeprofiledoc"
     },
@@ -9248,7 +10098,7 @@
       "source_file": "packages/backend/convex/opsSignals.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 112,
+      "community": 52,
       "norm_label": "evalsignals",
       "id": "packages_backend_convex_opssignals_evalsignals"
     },
@@ -9368,7 +10218,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 181,
+      "community": 19,
       "norm_label": "optimizereligibility.test.ts",
       "id": "packages_backend_convex_optimizereligibility_test"
     },
@@ -9378,7 +10228,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 181,
+      "community": 19,
       "norm_label": "modules",
       "id": "packages_backend_convex_optimizereligibility_test_modules"
     },
@@ -9388,7 +10238,7 @@
       "source_file": "packages/backend/convex/optimizerEligibility.test.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 181,
+      "community": 19,
       "norm_label": "seedfeedback()",
       "id": "packages_backend_convex_optimizereligibility_test_seedfeedback"
     },
@@ -9488,7 +10338,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 72,
+      "community": 28,
       "norm_label": "request_status",
       "id": "packages_backend_convex_pipeline_request_status"
     },
@@ -9538,7 +10388,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L90",
       "_origin": "ast",
-      "community": 72,
+      "community": 28,
       "norm_label": "pipelineworkflow",
       "id": "packages_backend_convex_pipeline_pipelineworkflow"
     },
@@ -9548,7 +10398,7 @@
       "source_file": "packages/backend/convex/pipeline.ts",
       "source_location": "L341",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "setstatus",
       "id": "packages_backend_convex_pipeline_setstatus"
     },
@@ -9578,7 +10428,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 177,
+      "community": 181,
       "norm_label": "plans.test.ts",
       "id": "packages_backend_convex_plans_test"
     },
@@ -9588,7 +10438,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 177,
+      "community": 181,
       "norm_label": "modules",
       "id": "packages_backend_convex_plans_test_modules"
     },
@@ -9598,7 +10448,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 177,
+      "community": 181,
       "norm_label": "storeblob()",
       "id": "packages_backend_convex_plans_test_storeblob"
     },
@@ -9608,7 +10458,7 @@
       "source_file": "packages/backend/convex/plans.test.ts",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 177,
+      "community": 181,
       "norm_label": "seedplan()",
       "id": "packages_backend_convex_plans_test_seedplan"
     },
@@ -9668,7 +10518,7 @@
       "source_file": "packages/backend/convex/plans.ts",
       "source_location": "L76",
       "_origin": "ast",
-      "community": 20,
+      "community": 30,
       "norm_label": "patchplan",
       "id": "packages_backend_convex_plans_patchplan"
     },
@@ -9818,7 +10668,7 @@
       "source_file": "packages/backend/convex/proactiveReview.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 77,
+      "community": 8,
       "norm_label": "profiletext()",
       "id": "packages_backend_convex_proactivereview_test_profiletext"
     },
@@ -9888,7 +10738,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "proactivereview.ts",
       "id": "packages_backend_convex_proactivereview"
     },
@@ -9898,7 +10748,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "runweekly",
       "id": "packages_backend_convex_proactivereview_runweekly"
     },
@@ -9908,7 +10758,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L59",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "reviewone",
       "id": "packages_backend_convex_proactivereview_reviewone"
     },
@@ -9918,7 +10768,7 @@
       "source_file": "packages/backend/convex/proactiveReview.ts",
       "source_location": "L117",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "insertreviewnotification",
       "id": "packages_backend_convex_proactivereview_insertreviewnotification"
     },
@@ -9928,7 +10778,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "profileredaction.test.ts",
       "id": "packages_backend_convex_profileredaction_test"
     },
@@ -9938,7 +10788,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "modules",
       "id": "packages_backend_convex_profileredaction_test_modules"
     },
@@ -9948,7 +10798,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L23",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "aggregatemodules",
       "id": "packages_backend_convex_profileredaction_test_aggregatemodules"
     },
@@ -9958,7 +10808,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "workflowmodules",
       "id": "packages_backend_convex_profileredaction_test_workflowmodules"
     },
@@ -9968,7 +10818,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "workpoolmodules",
       "id": "packages_backend_convex_profileredaction_test_workpoolmodules"
     },
@@ -9978,7 +10828,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "setup()",
       "id": "packages_backend_convex_profileredaction_test_setup"
     },
@@ -9988,7 +10838,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L46",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "astenant()",
       "id": "packages_backend_convex_profileredaction_test_astenant"
     },
@@ -9998,7 +10848,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L52",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "sentinels",
       "id": "packages_backend_convex_profileredaction_test_sentinels"
     },
@@ -10008,7 +10858,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "fact_numbers",
       "id": "packages_backend_convex_profileredaction_test_fact_numbers"
     },
@@ -10018,7 +10868,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L71",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "profile",
       "id": "packages_backend_convex_profileredaction_test_profile"
     },
@@ -10028,7 +10878,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L82",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "seedfacts()",
       "id": "packages_backend_convex_profileredaction_test_seedfacts"
     },
@@ -10038,7 +10888,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L99",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "logplanejson()",
       "id": "packages_backend_convex_profileredaction_test_logplanejson"
     },
@@ -10048,7 +10898,7 @@
       "source_file": "packages/backend/convex/profileRedaction.test.ts",
       "source_location": "L119",
       "_origin": "ast",
-      "community": 77,
+      "community": 51,
       "norm_label": "payloadnumbers()",
       "id": "packages_backend_convex_profileredaction_test_payloadnumbers"
     },
@@ -10058,7 +10908,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 72,
+      "community": 28,
       "norm_label": "requests.ts",
       "id": "packages_backend_convex_requests"
     },
@@ -10078,7 +10928,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 72,
+      "community": 28,
       "norm_label": "attachmentarg",
       "id": "packages_backend_convex_requests_attachmentarg"
     },
@@ -10118,7 +10968,7 @@
       "source_file": "packages/backend/convex/requests.ts",
       "source_location": "L208",
       "_origin": "ast",
-      "community": 72,
+      "community": 28,
       "norm_label": "get",
       "id": "packages_backend_convex_requests_get"
     },
@@ -10458,7 +11308,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "skilloptexport.ts",
       "id": "packages_backend_convex_skilloptexport"
     },
@@ -10468,7 +11318,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "scrub()",
       "id": "packages_backend_convex_skilloptexport_scrub"
     },
@@ -10478,7 +11328,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "hashstring()",
       "id": "packages_backend_convex_skilloptexport_hashstring"
     },
@@ -10488,7 +11338,7 @@
       "source_file": "packages/backend/convex/skilloptExport.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "buildtrajectoryexport",
       "id": "packages_backend_convex_skilloptexport_buildtrajectoryexport"
     },
@@ -10558,7 +11408,7 @@
       "source_file": "packages/backend/convex/skills.ts",
       "source_location": "L92",
       "_origin": "ast",
-      "community": 151,
+      "community": 80,
       "norm_label": "getactiveskill",
       "id": "packages_backend_convex_skills_getactiveskill"
     },
@@ -10568,7 +11418,7 @@
       "source_file": "packages/backend/convex/skills.ts",
       "source_location": "L104",
       "_origin": "ast",
-      "community": 157,
+      "community": 179,
       "norm_label": "activateskillversion()",
       "id": "packages_backend_convex_skills_activateskillversion"
     },
@@ -10638,7 +11488,7 @@
       "source_file": "packages/backend/convex/skills.ts",
       "source_location": "L368",
       "_origin": "ast",
-      "community": 51,
+      "community": 128,
       "norm_label": "insertcandidate",
       "id": "packages_backend_convex_skills_insertcandidate"
     },
@@ -11138,7 +11988,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 11,
+      "community": 0,
       "norm_label": "telemetry.ts",
       "id": "packages_backend_convex_telemetry"
     },
@@ -11148,7 +11998,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 11,
+      "community": 0,
       "norm_label": "terminaloutcome",
       "id": "packages_backend_convex_telemetry_terminaloutcome"
     },
@@ -11158,7 +12008,7 @@
       "source_file": "packages/backend/convex/telemetry.ts",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 11,
+      "community": 0,
       "norm_label": "writeterminal",
       "id": "packages_backend_convex_telemetry_writeterminal"
     },
@@ -11508,7 +12358,7 @@
       "source_file": "packages/backend/convex/tenantProfile.ts",
       "source_location": "L129",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "fortenant",
       "id": "packages_backend_convex_tenantprofile_fortenant"
     },
@@ -11578,7 +12428,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 19,
+      "community": 166,
       "norm_label": "vault.test.ts",
       "id": "packages_backend_convex_vault_test"
     },
@@ -11588,7 +12438,7 @@
       "source_file": "packages/backend/convex/vault.test.ts",
       "source_location": "L32",
       "_origin": "ast",
-      "community": 19,
+      "community": 166,
       "norm_label": "withingest()",
       "id": "packages_backend_convex_vault_test_withingest"
     },
@@ -11598,7 +12448,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "vault.ts",
       "id": "packages_backend_convex_vault"
     },
@@ -11608,7 +12458,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "bytelen()",
       "id": "packages_backend_convex_vault_bytelen"
     },
@@ -11638,7 +12488,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L188",
       "_origin": "ast",
-      "community": 58,
+      "community": 21,
       "norm_label": "deletevaultdoc",
       "id": "packages_backend_convex_vault_deletevaultdoc"
     },
@@ -11668,7 +12518,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L273",
       "_origin": "ast",
-      "community": 58,
+      "community": 21,
       "norm_label": "vaultdownloadurl",
       "id": "packages_backend_convex_vault_vaultdownloadurl"
     },
@@ -11678,7 +12528,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L287",
       "_origin": "ast",
-      "community": 58,
+      "community": 21,
       "norm_label": "docentities",
       "id": "packages_backend_convex_vault_docentities"
     },
@@ -11688,7 +12538,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L340",
       "_origin": "ast",
-      "community": 58,
+      "community": 21,
       "norm_label": "vaultsearch",
       "id": "packages_backend_convex_vault_vaultsearch"
     },
@@ -11698,7 +12548,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L380",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "getdoc",
       "id": "packages_backend_convex_vault_getdoc"
     },
@@ -11708,7 +12558,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L398",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "owneddocsmeta",
       "id": "packages_backend_convex_vault_owneddocsmeta"
     },
@@ -11748,7 +12598,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L467",
       "_origin": "ast",
-      "community": 58,
+      "community": 13,
       "norm_label": "profileseeddocs",
       "id": "packages_backend_convex_vault_profileseeddocs"
     },
@@ -11758,7 +12608,7 @@
       "source_file": "packages/backend/convex/vault.ts",
       "source_location": "L510",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "ingestfromattachment",
       "id": "packages_backend_convex_vault_ingestfromattachment"
     },
@@ -12198,7 +13048,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "vaultground.ts",
       "id": "packages_backend_convex_vaultground"
     },
@@ -12208,7 +13058,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 166,
+      "community": 94,
       "norm_label": "runvaultground()",
       "id": "packages_backend_convex_vaultground_runvaultground"
     },
@@ -12218,7 +13068,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L105",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "vaultground",
       "id": "packages_backend_convex_vaultground_vaultground"
     },
@@ -12228,7 +13078,7 @@
       "source_file": "packages/backend/convex/vaultGround.ts",
       "source_location": "L126",
       "_origin": "ast",
-      "community": 58,
+      "community": 13,
       "norm_label": "vaultgroundhydrated",
       "id": "packages_backend_convex_vaultground_vaultgroundhydrated"
     },
@@ -12248,7 +13098,7 @@
       "source_file": "packages/backend/convex/vaultIngest.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "startingest()",
       "id": "packages_backend_convex_vaultingest_startingest"
     },
@@ -12288,7 +13138,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "vaultllm.ts",
       "id": "packages_backend_convex_vaultllm"
     },
@@ -12298,7 +13148,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "resolvemodel()",
       "id": "packages_backend_convex_vaultllm_resolvemodel"
     },
@@ -12308,7 +13158,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "graphnode",
       "id": "packages_backend_convex_vaultllm_graphnode"
     },
@@ -12318,7 +13168,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "graphedge",
       "id": "packages_backend_convex_vaultllm_graphedge"
     },
@@ -12328,7 +13178,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "extractedgraph",
       "id": "packages_backend_convex_vaultllm_extractedgraph"
     },
@@ -12338,7 +13188,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "graphschema",
       "id": "packages_backend_convex_vaultllm_graphschema"
     },
@@ -12348,7 +13198,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L82",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "smokegraphfixture()",
       "id": "packages_backend_convex_vaultllm_smokegraphfixture"
     },
@@ -12358,7 +13208,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L109",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "extractgraph",
       "id": "packages_backend_convex_vaultllm_extractgraph"
     },
@@ -12368,7 +13218,7 @@
       "source_file": "packages/backend/convex/vaultLlm.ts",
       "source_location": "L150",
       "_origin": "ast",
-      "community": 151,
+      "community": 106,
       "norm_label": "getdoctext",
       "id": "packages_backend_convex_vaultllm_getdoctext"
     },
@@ -12378,7 +13228,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "vaultrag.ts",
       "id": "packages_backend_convex_vaultrag"
     },
@@ -12388,7 +13238,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L28",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "openaiembeddingv2",
       "id": "packages_backend_convex_vaultrag_openaiembeddingv2"
     },
@@ -12398,7 +13248,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L66",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "ragembeddingmodel",
       "id": "packages_backend_convex_vaultrag_ragembeddingmodel"
     },
@@ -12408,7 +13258,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 58,
+      "community": 94,
       "norm_label": "rag",
       "id": "packages_backend_convex_vaultrag_rag"
     },
@@ -12418,7 +13268,7 @@
       "source_file": "packages/backend/convex/vaultRag.ts",
       "source_location": "L88",
       "_origin": "ast",
-      "community": 58,
+      "community": 422,
       "norm_label": "embeddoc",
       "id": "packages_backend_convex_vaultrag_embeddoc"
     },
@@ -13298,7 +14148,7 @@
       "source_file": "packages/backend/convex/worm.ts",
       "source_location": "L44",
       "_origin": "ast",
-      "community": 96,
+      "community": 154,
       "norm_label": "exportaudit",
       "id": "packages_backend_convex_worm_exportaudit"
     },
@@ -14358,7 +15208,7 @@
       "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L130",
       "_origin": "ast",
-      "community": 157,
+      "community": 179,
       "norm_label": "gated_skills",
       "id": "packages_contracts_src_skill_gated_skills"
     },
@@ -14368,7 +15218,7 @@
       "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L148",
       "_origin": "ast",
-      "community": 157,
+      "community": 179,
       "norm_label": "isgatedskill()",
       "id": "packages_contracts_src_skill_isgatedskill"
     },
@@ -14388,7 +15238,7 @@
       "source_file": "packages/contracts/src/skill.ts",
       "source_location": "L183",
       "_origin": "ast",
-      "community": 157,
+      "community": 179,
       "norm_label": "haspassingevidence()",
       "id": "packages_contracts_src_skill_haspassingevidence"
     },
@@ -14658,7 +15508,7 @@
       "source_file": "packages/contracts/src/skills/voiceSession.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 24,
+      "community": 80,
       "norm_label": "voicesession.ts",
       "id": "packages_contracts_src_skills_voicesession"
     },
@@ -15188,7 +16038,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 173,
+      "community": 8,
       "norm_label": "businessprofile",
       "id": "packages_core_src_businessprofile_businessprofile"
     },
@@ -15198,7 +16048,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 77,
+      "community": 17,
       "norm_label": "profileinput",
       "id": "packages_core_src_businessprofile_profileinput"
     },
@@ -15268,7 +16118,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L114",
       "_origin": "ast",
-      "community": 77,
+      "community": 8,
       "norm_label": "bullets()",
       "id": "packages_core_src_businessprofile_bullets"
     },
@@ -15278,7 +16128,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L122",
       "_origin": "ast",
-      "community": 77,
+      "community": 8,
       "norm_label": "serializeprofile()",
       "id": "packages_core_src_businessprofile_serializeprofile"
     },
@@ -15308,7 +16158,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L228",
       "_origin": "ast",
-      "community": 173,
+      "community": 55,
       "norm_label": "revenue_stages",
       "id": "packages_core_src_businessprofile_revenue_stages"
     },
@@ -15358,7 +16208,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L245",
       "_origin": "ast",
-      "community": 55,
+      "community": 173,
       "norm_label": "tiersource",
       "id": "packages_core_src_businessprofile_tiersource"
     },
@@ -15398,7 +16248,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L267",
       "_origin": "ast",
-      "community": 173,
+      "community": 91,
       "norm_label": "tiers",
       "id": "packages_core_src_businessprofile_tiers"
     },
@@ -15438,7 +16288,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L314",
       "_origin": "ast",
-      "community": 173,
+      "community": 8,
       "norm_label": "derivetier()",
       "id": "packages_core_src_businessprofile_derivetier"
     },
@@ -15448,7 +16298,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L345",
       "_origin": "ast",
-      "community": 173,
+      "community": 17,
       "norm_label": "required_slots",
       "id": "packages_core_src_businessprofile_required_slots"
     },
@@ -15458,7 +16308,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L353",
       "_origin": "ast",
-      "community": 17,
+      "community": 55,
       "norm_label": "slotname",
       "id": "packages_core_src_businessprofile_slotname"
     },
@@ -15488,7 +16338,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L377",
       "_origin": "ast",
-      "community": 173,
+      "community": 182,
       "norm_label": "missingslots()",
       "id": "packages_core_src_businessprofile_missingslots"
     },
@@ -15498,7 +16348,7 @@
       "source_file": "packages/core/src/businessProfile.ts",
       "source_location": "L382",
       "_origin": "ast",
-      "community": 173,
+      "community": 182,
       "norm_label": "cancomplete()",
       "id": "packages_core_src_businessprofile_cancomplete"
     },
@@ -15998,7 +16848,7 @@
       "source_file": "packages/core/src/growth/financialSpine.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 219,
+      "community": 139,
       "norm_label": "financialspine.test.ts",
       "id": "packages_core_src_growth_financialspine_test"
     },
@@ -16008,7 +16858,7 @@
       "source_file": "packages/core/src/growth/financialSpine.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 219,
+      "community": 139,
       "norm_label": "financialspine.ts",
       "id": "packages_core_src_growth_financialspine"
     },
@@ -16018,7 +16868,7 @@
       "source_file": "packages/core/src/growth/financialSpine.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 219,
+      "community": 139,
       "norm_label": "round2()",
       "id": "packages_core_src_growth_financialspine_round2"
     },
@@ -16028,7 +16878,7 @@
       "source_file": "packages/core/src/growth/financialSpine.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "community": 219,
+      "community": 139,
       "norm_label": "ltgpcac()",
       "id": "packages_core_src_growth_financialspine_ltgpcac"
     },
@@ -16038,7 +16888,7 @@
       "source_file": "packages/core/src/growth/financialSpine.ts",
       "source_location": "L50",
       "_origin": "ast",
-      "community": 219,
+      "community": 139,
       "norm_label": "cfa()",
       "id": "packages_core_src_growth_financialspine_cfa"
     },
@@ -16098,7 +16948,7 @@
       "source_file": "packages/core/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 170,
+      "community": 188,
       "norm_label": "index.ts",
       "id": "packages_core_src_index"
     },
@@ -16198,7 +17048,7 @@
       "source_file": "packages/core/src/notificationTemplates.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "notificationtemplates.test.ts",
       "id": "packages_core_src_notificationtemplates_test"
     },
@@ -16208,7 +17058,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "notificationtemplates.ts",
       "id": "packages_core_src_notificationtemplates"
     },
@@ -16218,7 +17068,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "notificationkind",
       "id": "packages_core_src_notificationtemplates_notificationkind"
     },
@@ -16228,7 +17078,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "messages",
       "id": "packages_core_src_notificationtemplates_messages"
     },
@@ -16238,7 +17088,7 @@
       "source_file": "packages/core/src/notificationTemplates.ts",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 51,
+      "community": 96,
       "norm_label": "notificationmessage()",
       "id": "packages_core_src_notificationtemplates_notificationmessage"
     },
@@ -16248,7 +17098,7 @@
       "source_file": "packages/core/src/optimizerBreach.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "optimizerbreach.test.ts",
       "id": "packages_core_src_optimizerbreach_test"
     },
@@ -16258,7 +17108,7 @@
       "source_file": "packages/core/src/optimizerBreach.test.ts",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "cfg",
       "id": "packages_core_src_optimizerbreach_test_cfg"
     },
@@ -16268,7 +17118,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "optimizerbreach.ts",
       "id": "packages_core_src_optimizerbreach"
     },
@@ -16278,7 +17128,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "breachconfig",
       "id": "packages_core_src_optimizerbreach_breachconfig"
     },
@@ -16288,7 +17138,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L20",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "breachinput",
       "id": "packages_core_src_optimizerbreach_breachinput"
     },
@@ -16298,7 +17148,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L29",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "breachreason",
       "id": "packages_core_src_optimizerbreach_breachreason"
     },
@@ -16308,7 +17158,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "breachresult",
       "id": "packages_core_src_optimizerbreach_breachresult"
     },
@@ -16318,7 +17168,7 @@
       "source_file": "packages/core/src/optimizerBreach.ts",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 61,
+      "community": 71,
       "norm_label": "classifybreach()",
       "id": "packages_core_src_optimizerbreach_classifybreach"
     },
@@ -16628,7 +17478,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L100",
       "_origin": "ast",
-      "community": 160,
+      "community": 5,
       "norm_label": "wouldcycle()",
       "id": "packages_core_src_specialists_wouldcycle"
     },
@@ -16638,7 +17488,7 @@
       "source_file": "packages/core/src/specialists.ts",
       "source_location": "L168",
       "_origin": "ast",
-      "community": 91,
+      "community": 5,
       "norm_label": "tierbriefing()",
       "id": "packages_core_src_specialists_tierbriefing"
     },
@@ -16708,7 +17558,7 @@
       "source_file": "packages/core/src/tokenExpiry.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 136,
+      "community": 176,
       "norm_label": "tokenexpiry.test.ts",
       "id": "packages_core_src_tokenexpiry_test"
     },
@@ -16718,7 +17568,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 136,
+      "community": 176,
       "norm_label": "tokenexpiry.ts",
       "id": "packages_core_src_tokenexpiry"
     },
@@ -16728,7 +17578,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 136,
+      "community": 176,
       "norm_label": "isexpiringsoon()",
       "id": "packages_core_src_tokenexpiry_isexpiringsoon"
     },
@@ -16738,7 +17588,7 @@
       "source_file": "packages/core/src/tokenExpiry.ts",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 136,
+      "community": 176,
       "norm_label": "isdead()",
       "id": "packages_core_src_tokenexpiry_isdead"
     },
@@ -16888,7 +17738,7 @@
       "source_file": "packages/cost/src/cost.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "cost.test.ts",
       "id": "packages_cost_src_cost_test"
     },
@@ -16898,7 +17748,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "cost.ts",
       "id": "packages_cost_src_cost"
     },
@@ -16908,7 +17758,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "pricing",
       "id": "packages_cost_src_cost_pricing"
     },
@@ -16918,7 +17768,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "estimatetokens()",
       "id": "packages_cost_src_cost_estimatetokens"
     },
@@ -16928,7 +17778,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "costerror",
       "id": "packages_cost_src_cost_costerror"
     },
@@ -16938,7 +17788,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L29",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "estimatecostusd()",
       "id": "packages_cost_src_cost_estimatecostusd"
     },
@@ -16948,7 +17798,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "priceusage()",
       "id": "packages_cost_src_cost_priceusage"
     },
@@ -16958,7 +17808,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "transcription_pricing",
       "id": "packages_cost_src_cost_transcription_pricing"
     },
@@ -16968,7 +17818,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L53",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "pricetranscription()",
       "id": "packages_cost_src_cost_pricetranscription"
     },
@@ -16978,7 +17828,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "realtime_pricing",
       "id": "packages_cost_src_cost_realtime_pricing"
     },
@@ -16988,7 +17838,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L72",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "pricerealtime()",
       "id": "packages_cost_src_cost_pricerealtime"
     },
@@ -16998,7 +17848,7 @@
       "source_file": "packages/cost/src/cost.ts",
       "source_location": "L94",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "choosemodel()",
       "id": "packages_cost_src_cost_choosemodel"
     },
@@ -17008,7 +17858,7 @@
       "source_file": "packages/cost/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 71,
+      "community": 106,
       "norm_label": "index.ts",
       "id": "packages_cost_src_index"
     },
@@ -17028,7 +17878,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "classify.test.ts",
       "id": "packages_extraction_src_classify_test"
     },
@@ -17038,7 +17888,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "bytes()",
       "id": "packages_extraction_src_classify_test_bytes"
     },
@@ -17048,7 +17898,7 @@
       "source_file": "packages/extraction/src/classify.test.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "generic",
       "id": "packages_extraction_src_classify_test_generic"
     },
@@ -17058,7 +17908,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "classify.ts",
       "id": "packages_extraction_src_classify"
     },
@@ -17068,7 +17918,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "intakekind",
       "id": "packages_extraction_src_classify_intakekind"
     },
@@ -17078,7 +17928,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "classifyresult",
       "id": "packages_extraction_src_classify_classifyresult"
     },
@@ -17088,7 +17938,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "startswith()",
       "id": "packages_extraction_src_classify_startswith"
     },
@@ -17098,7 +17948,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L19",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "asciiat()",
       "id": "packages_extraction_src_classify_asciiat"
     },
@@ -17108,7 +17958,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "sniffbytes()",
       "id": "packages_extraction_src_classify_sniffbytes"
     },
@@ -17118,7 +17968,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L51",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "sniffextension()",
       "id": "packages_extraction_src_classify_sniffextension"
     },
@@ -17128,7 +17978,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "sniffmime()",
       "id": "packages_extraction_src_classify_sniffmime"
     },
@@ -17138,7 +17988,7 @@
       "source_file": "packages/extraction/src/classify.ts",
       "source_location": "L76",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "norm_label": "classify()",
       "id": "packages_extraction_src_classify_classify"
     },
@@ -17148,7 +17998,7 @@
       "source_file": "packages/extraction/src/frame.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "frame.test.ts",
       "id": "packages_extraction_src_frame_test"
     },
@@ -17158,7 +18008,7 @@
       "source_file": "packages/extraction/src/frame.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "frame.ts",
       "id": "packages_extraction_src_frame"
     },
@@ -17168,7 +18018,7 @@
       "source_file": "packages/extraction/src/frame.ts",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "frameforconversation()",
       "id": "packages_extraction_src_frame_frameforconversation"
     },
@@ -17178,7 +18028,7 @@
       "source_file": "packages/extraction/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 5,
+      "community": 106,
       "norm_label": "index.ts",
       "id": "packages_extraction_src_index"
     },
@@ -17208,7 +18058,7 @@
       "source_file": "packages/pii/src/scan.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "scan.test.ts",
       "id": "packages_pii_src_scan_test"
     },
@@ -17218,7 +18068,7 @@
       "source_file": "packages/pii/src/scan.test.ts",
       "source_location": "L4",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "unwrapok()",
       "id": "packages_pii_src_scan_test_unwrapok"
     },
@@ -17318,7 +18168,7 @@
       "source_file": "packages/pii/src/scan.ts",
       "source_location": "L87",
       "_origin": "ast",
-      "community": 154,
+      "community": 106,
       "norm_label": "scantext()",
       "id": "packages_pii_src_scan_scantext"
     },
@@ -17348,7 +18198,7 @@
       "source_file": "packages/vault/src/categories.test.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "categories.test.ts",
       "id": "packages_vault_src_categories_test"
     },
@@ -17358,7 +18208,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "categories.ts",
       "id": "packages_vault_src_categories"
     },
@@ -17368,7 +18218,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L2",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "vaultcategory",
       "id": "packages_vault_src_categories_vaultcategory"
     },
@@ -17378,7 +18228,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "vaultsource",
       "id": "packages_vault_src_categories_vaultsource"
     },
@@ -17388,7 +18238,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "searchable_mime",
       "id": "packages_vault_src_categories_searchable_mime"
     },
@@ -17398,7 +18248,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "categoryfor()",
       "id": "packages_vault_src_categories_categoryfor"
     },
@@ -17408,7 +18258,7 @@
       "source_file": "packages/vault/src/categories.ts",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 95,
+      "community": 94,
       "norm_label": "issearchable()",
       "id": "packages_vault_src_categories_issearchable"
     },
@@ -25568,7 +26418,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L31",
       "_origin": "convex_table",
-      "community": 51,
+      "community": 0,
       "norm_label": "deadletters (table)",
       "id": "packages_backend_convex_schema_deadletters_table"
     },
@@ -25588,7 +26438,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L65",
       "_origin": "convex_table",
-      "community": 28,
+      "community": 168,
       "norm_label": "pendingtimeouts (table)",
       "id": "packages_backend_convex_schema_pendingtimeouts_table"
     },
@@ -25608,7 +26458,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L88",
       "_origin": "convex_table",
-      "community": 72,
+      "community": 20,
       "norm_label": "requests (table)",
       "id": "packages_backend_convex_schema_requests_table"
     },
@@ -25628,7 +26478,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L266",
       "_origin": "convex_table",
-      "community": 175,
+      "community": 19,
       "norm_label": "briefings (table)",
       "id": "packages_backend_convex_schema_briefings_table"
     },
@@ -25658,7 +26508,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L394",
       "_origin": "convex_table",
-      "community": 13,
+      "community": 157,
       "norm_label": "agentsteps (table)",
       "id": "packages_backend_convex_schema_agentsteps_table"
     },
@@ -25678,7 +26528,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L489",
       "_origin": "convex_table",
-      "community": 72,
+      "community": 20,
       "norm_label": "attachments (table)",
       "id": "packages_backend_convex_schema_attachments_table"
     },
@@ -25688,7 +26538,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L501",
       "_origin": "convex_table",
-      "community": 11,
+      "community": 0,
       "norm_label": "telemetry (table)",
       "id": "packages_backend_convex_schema_telemetry_table"
     },
@@ -25698,7 +26548,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L520",
       "_origin": "convex_table",
-      "community": 96,
+      "community": 154,
       "norm_label": "notifications (table)",
       "id": "packages_backend_convex_schema_notifications_table"
     },
@@ -25718,7 +26568,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L544",
       "_origin": "convex_table",
-      "community": 639,
+      "community": 102,
       "norm_label": "guardrailconfig (table)",
       "id": "packages_backend_convex_schema_guardrailconfig_table"
     },
@@ -25738,7 +26588,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L561",
       "_origin": "convex_table",
-      "community": 0,
+      "community": 112,
       "norm_label": "intakeartifacts (table)",
       "id": "packages_backend_convex_schema_intakeartifacts_table"
     },
@@ -25788,7 +26638,7 @@
       "source_file": "packages/backend/convex/schema.ts",
       "source_location": "L686",
       "_origin": "convex_table",
-      "community": 117,
+      "community": 105,
       "norm_label": "feedback (table)",
       "id": "packages_backend_convex_schema_feedback_table"
     },
@@ -25817,12 +26667,742 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_manual_only_verifications",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L42",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_per_task_verification_map",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_sampling_rate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L17",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_test_infrastructure",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L100",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_validation_sign_off",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-VALIDATION.md",
+      "source_location": "L74",
+      "weight": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_validation_phase_16_validation_strategy",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_validation_wave_0_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-06-PLAN.md",
+      "source_location": "L81",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_06_plan",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_06_plan_1_the_dispatchguard_test_ts_16_24_amendment_is_void_leave_that_comment_alone"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-06-PLAN.md",
+      "source_location": "L102",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_06_plan",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_06_plan_2_the_per_turn_envelope_closure_does_not_apply_and_the_shipped_collecting_interlock_replaces_it"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L332",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_deferred_ideas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_phase_boundary"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L319",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_phase_16_research_sub_agent_web_research_context",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_specific_ideas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L307",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_claude_s_discretion"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L233",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d10_sophisticated_agentic_depth_on_hosted_search_owner_directive_2026_07_27_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L269",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d11_highly_reliable_a_degradation_contract_proven_two_ways_owner_2026_07_27_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L207",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d12_the_research_route_gets_its_own_wall_clock_budget_owner_2026_07_27_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L25",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d1_web_access_openai_s_hosted_web_search_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L43",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d2_one_swap_seam_not_an_abstraction_layer_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L52",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d3_research_joins_the_closed_route_union_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d4_the_tool_set_is_the_containment_derived_from_sc_1_non_negotiable"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L79",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d5_corrected_2026_07_27_by_research_read_this_whole_entry_the_original_is_wrong"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L108",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d6_4_applies_to_findings_and_lineage_alike_sc_3"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L115",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d7_freshness_stamp_is_a_stored_field_not_prose_sc_2_sc_4"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L120",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d8_oq_2_resolved_owner_2026_07_27_probe_before_pinning_the_model_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L138",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d9_oq_1_resolved_owner_2026_07_27_both_return_paths_and_amend_the_guard_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/phases/16-research-sub-agent-web-research/16-CONTEXT.md",
+      "source_location": "L153",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_phases_16_research_sub_agent_web_research_16_context_implementation_decisions",
+      "target": "planning_phases_16_research_sub_agent_web_research_16_context_d9_revised_supersedes_d9_owner_2026_07_27_after_a_wall_clock_finding_locked"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap",
+      "target": "planning_roadmap_roadmap_pikar_ai"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_milestone_v2_0_platform_private_beta_phases_10_25"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_overview"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L73",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_phase_details"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L467",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_phase_details_milestone_v2_0"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_phases"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L704",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_roadmap_pikar_ai",
+      "target": "planning_roadmap_progress"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L188",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_03_2_1_agent_driven_cockpit_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L75",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_1_foundation_governance_substrate"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L99",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_2_thin_end_to_end_slice"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L331",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_10_cockpit_conversation_repair_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L346",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_11_inbox_reply_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L147",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_1_cockpit_core_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L169",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_2_inbox_reading_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L204",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_3_attachment_generation_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L222",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_4_per_recipient_personalization_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L237",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_5_deferred_send_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L256",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_6_agent_eval_gate_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L275",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_7_inbox_briefing_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L301",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_8_vault_document_extraction_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L315",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_9_agent_activity_streaming_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L126",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_3_guardrails"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L360",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_4_attachment_voice_dictation_intake"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L377",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_5_knowledge_vault_graphrag"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L397",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_6_live_voice_sessions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L417",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_7_resilience_operations_hardening"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L436",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_8_self_improvement"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L454",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details",
+      "target": "planning_roadmap_phase_9_private_beta_productionization"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L469",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_10_vault_agent_grounding"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L484",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_11_persona_onboarding_business_profile"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L495",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_12_business_evaluation_engine"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L515",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_13_proactive_in_app_review"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L531",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_14_flagship_voice_doc_workflow"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L571",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_15_1_fact_derived_tier_conversational_onboarding_inserted"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L553",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_15_sub_agent_dispatch_generalized_action_executor"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L591",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_16_research_sub_agent_web_research"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L612",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_17_calendar_actions"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L622",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_18_document_content_creation"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L632",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_19_contacts_crm_follow_ups"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L642",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_20_media_canvas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L653",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_21_user_authored_skills"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L663",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_22_owner_authorization_primitive_requireowner"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L673",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_23_agent_authored_skills"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L683",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_24_iso_9001_conformance_map"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".planning/ROADMAP.md",
+      "source_location": "L692",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "planning_roadmap_phase_details_milestone_v2_0",
+      "target": "planning_roadmap_phase_25_private_beta_productionization"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1"
     },
     {
       "relation": "contains",
@@ -25830,9 +27410,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L6",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_1_backend_full_suite_run_is_flaky_on_this_worktree_found_during_15_1_01"
     },
     {
       "relation": "contains",
@@ -25840,9 +27420,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L36",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_deferred_items_phase_15_1",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07"
     },
     {
       "relation": "contains",
@@ -25850,9 +27430,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L73",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_1c_paid_profile_page_2026_07_26_real_browser_real_deployment"
     },
     {
       "relation": "contains",
@@ -25860,9 +27440,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L104",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_3_paid_a_real_conversational_turn_2026_07_26_real_model"
     },
     {
       "relation": "contains",
@@ -25870,9 +27450,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L122",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_5_run_but_not_confirmed_2026_07_26_this_row_stays_open"
     },
     {
       "relation": "contains",
@@ -25880,9 +27460,9 @@
       "source_file": ".planning/phases/15.1-fact-derived-tier-conversational-onboarding/deferred-items.md",
       "source_location": "L50",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_2_the_four_live_only_verifications_runnable_debt_recorded_during_15_1_07",
-      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1",
-      "confidence_score": 1.0
+      "target": "planning_phases_15_1_fact_derived_tier_conversational_onboarding_deferred_items_sc_6_paid_live_backfill_2026_07_26_local_deployment_local_joel_feruzi_pikar_ai_50c69_1"
     },
     {
       "relation": "contains",
@@ -66679,5 +68259,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "712da780e2cd8fdef879b113590c125667d792da"
+  "built_at_commit": "cedf7260f6443f32602cd81a1b827e917557f4ee"
 }
