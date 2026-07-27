@@ -60,6 +60,39 @@ session on `main` lands ONE commit adding **every union member both phases need*
 built yet. Then each lane fills in its *own* files instead of both editing the union. Skipping
 this is the single failure mode this contract exists to prevent.
 
+> **RESOLVED 2026-07-27 — the freeze is ABSORBED INTO THE LANES and SERIALIZED through `main`.
+> There is no single joint Stage-1 commit, and a later reader must not go looking for one.**
+> This is the Phase-15 precedent (recorded below: *"both lanes absorbed the freeze"*), and BOTH
+> Wave-1 plans already specify it as an accepted execution — `16-01 <freeze_contract>` bullet 2
+> and `17-01 <parallelization_contract>` last paragraph. The freeze property that matters is
+> **serialization, not single-commit-ness**: no two lanes may edit a shared union concurrently.
+>
+> Execution order (each step completes and merges before the next begins):
+>
+> 1. **Lane R runs `16-01` → merge to `main`.** First because its `llm.ts` change is the three
+>    *signature* widenings (`buildCockpitTools` 7th arg, `runAgentLoop`/`runSpecialistTurn`
+>    returns); Lane K's `17-03` later adds a tool key *inside* that widened shape, so landing
+>    the shape first makes the second edit additive instead of a re-derivation.
+> 2. **Lane K merges `main` down, runs `17-01` → merge to `main`.** Its union members
+>    (`calendar_event` + the `externalAction` arm, the two trace literals, the staged-event
+>    `plans` fields, `calendarFixtures`) then apply on a base that already carries Lane R's.
+> 3. **Only then Stage 2** — remaining waves run in parallel (16-02…16-09 ∥ 17-02…17-04).
+>
+> **Why hand-writing a joint commit was rejected:** it would re-derive ~2/3 of two
+> checker-verified plans with no plan doc, no tests and no SUMMARY, after which both plans still
+> have to be re-verified as "already present" — more work and more risk for the same end state.
+>
+> **The one file still shared after the freeze is `convex/llm.ts`** (16-05, 16-06 ∥ 17-03).
+> Different regions of a 2,985-line file, so git should merge it — but it is the file this
+> contract was written to protect. Whichever lane reaches its `llm.ts` wave second merges `main`
+> down FIRST and re-runs `pnpm exec tsc --noEmit` before writing a line.
+>
+> **Owner decision that unblocked the freeze (2026-07-27):** `stageResearchPlan` **REFUSES**
+> while a `proposed` email draft is on the card ("finish or discard your draft first").
+> `plans.byThread` stays `.unique()` — **no multi-row-per-thread schema change**, so the
+> one-root-envelope invariant `16-06`/`16-07` are planned against holds. The >1-plan-row fix
+> stays deferred and is a later phase's schema change.
+
 **Stage 2 — parallel execution.** Each lane runs `/gsd:execute-phase` in its own worktree, with
 its own `pnpm install`, its own `npx convex dev` deployment, its own `_generated/`.
 
