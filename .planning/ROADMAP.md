@@ -624,7 +624,17 @@ Plans:
   2. The web-research tool is injection- and SSRF-hardened (retrieved page text quarantined as untrusted data; no internal/metadata endpoints reachable); findings are stored in the vault with a retrieval-date freshness stamp.
   3. Research findings and the sub-agent trace write refs/counts only to audit/telemetry (no page content, no grounded prose); an isolation assertion ships for stored findings.
   4. The evaluation engine (Phase 12) can now cite fresh web-research results with a freshness stamp for market claims instead of relying on stale model memory.
-**Plans**: TBD
+**Plans**: 9 plans (6 waves)
+Plans:
+- [ ] 16-01-PLAN.md — Wave-0 freeze: shared unions, llm.ts signature widening, watch registrations
+- [ ] 16-02-PLAN.md — the OQ-2 live web-search probe (D8) and the research model + cost constants it gates
+- [ ] 16-03-PLAN.md — the research route, its least-privilege grant, the output fence, ADR-010
+- [ ] 16-04-PLAN.md — the §5 research-specialist skill body (D10 sophistication) + the 5-file mirror
+- [ ] 16-05-PLAN.md — the hosted webSearch tool, per-call billing, SSRF scan + non-vacuity floor
+- [ ] 16-06-PLAN.md — the in-loop dispatch seam (D9), the per-turn shared envelope, the guard-comment amendment
+- [ ] 16-07-PLAN.md — the vault terminal: research.ts, the freshness stamp, cross-tenant isolation
+- [ ] 16-08-PLAN.md — D11 offline: containment proven positively + the failure-mode matrix + the mutation ledger
+- [ ] 16-09-PLAN.md — SC#4 citation + the eval:golden gate (D11's second proof) + the phase checkpoint
 
 ### Phase 17: Calendar Actions
 **Goal**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions - a read tool that surfaces availability in-loop and a write that stages an event into the plan for human approval.

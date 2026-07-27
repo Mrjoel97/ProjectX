@@ -1129,6 +1129,7 @@ const VERB: Record<string, [running: string, done: string]> = {
     "Money-model designer finished",
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
+  dispatchResearch: ["Researching…", "Research finished"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
+> Last verified: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
 > Prior: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
 > Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
 > Prior: 2026-07-25 (15-03 — Phase 15 Lane A, the governed dispatcher). See "Phase 15 —
@@ -695,3 +695,41 @@ a surface with no composer.
 `CardList` over the same seeded row — and no navigation entry point to that URL may be added
 anywhere in the product. "A workspace EVALUATION card for voice-doc findings" is an explicitly
 deferred idea.
+
+## Phase 16 — Research sub-agent
+
+> Append-only container (the Phase-15 rule): each Phase-16 plan writes ONLY inside its own
+> `### Phase 16 — <plan>` subsection. On merge conflict, **keep both**.
+
+### Phase 16 — Wave 0 (freeze)
+
+The Lane-R half of the Stage-1 shared-union freeze. Whole diff is unions, one optional schema
+field, one verb, three watch registrations and three widened signatures no caller passes yet.
+**No behaviour change**; two assertions in `16-01`'s verification prove no capability landed early.
+
+**ONE `agentSteps.tool` literal — `dispatchResearch`. There is deliberately NO `webResearch`
+companion, and this is the single most likely thing for a later reader to "fix".**
+`openai.tools.webSearch()` is a **provider-executed** tool: `ai@7.0.20`'s `executeToolCall`
+returns early at `if (!isExecutableTool(tool)) return undefined;` **before** it fires
+`onToolExecutionStart`. A hosted search therefore emits no step row at all, and a
+declared-and-never-written literal is worse than none — it reads as a trace that exists and sends
+the next reader hunting for the insert that writes it.
+
+`vaultDocuments.retrievedAt` (D7) is the web-research freshness stamp as a stored, queryable
+field — **not** `createdAt`, whose meaning stops being "retrieval time" the moment anything
+re-creates the row. Only `kind: "web_research"` docs write it. See `vault.md` for the read path.
+
+**The three widened signatures** (all append-only, all no-ops until 16-05/16-06):
+
+| Site | Added | Why it is in the freeze rather than invented later |
+|---|---|---|
+| `buildCockpitTools` 7th arg `agentContext` | `grantWebResearch`, `threadId`, `rootRequestId` | The hosted-search key is BUILT only when granted — structural absence, the `omitRecipientEdits` precedent. Unconditional construction would hand the EXECUTIVE agent web search on every cockpit turn, because `runAgentLoop` returns the FULL record when `toolNames === undefined`. |
+| `runAgentLoop` | `maxSteps?`; return += `webSearchCalls` / `truncated` / `sources` / `modelId` / `fallbackModelId` | `?? 8` preserves today exactly. `truncated` is real from day one (arithmetic on the shipped result); `webSearchCalls`/`sources` wait for 16-02's probe to settle what a provider-executed call looks like in `res.steps`. |
+| `runSpecialistTurn` | the same five, as pass-throughs (`...res` already spread them — only the type widened) | `governedDispatch` sees NOTHING but this return. **`modelId` is what makes 16-05's research model pin assertable at all** — the only other observable is `costUsd`, and `RESEARCH_MODEL` may well BE `DEFAULT_MODEL`, making the pricing identical and the assertion vacuous. Drop `sources` and 16-06 either fails to compile or quietly defaults it to `[]`, after which every research run ships labelled "insufficient evidence". |
+
+**The CKPT-05 comment at `runAgentLoop` was amended, not left stale.** It used to end *"They do
+NOT reach buildCockpitTools: the tools don't emit, the SDK does."* Half still holds and is the
+part worth protecting — **no tool emits a step row; the SDK does.** But `threadId`/`rootRequestId`
+now DO reach the builder, as dispatch lineage on `agentContext` (ADR-008: lineage travels as
+validator-checked call args), so 16-06's scheduled research tool can correlate its async run.
+**Lineage in, emission still out.**

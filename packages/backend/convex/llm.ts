@@ -643,6 +643,20 @@ export function buildCockpitTools(
   // runner, the test shims) keeps the full set byte-identically. resolveContacts stays — it writes
   // candidates, not recipients, and proposePlan's pending-pick gate covers it.
   omitRecipientEdits?: boolean,
+  // Phase-16 (DISP-02/ACTN-03). Append-only 7th arg — every existing caller keeps working and
+  // gets a byte-identical record. Two orthogonal things ride it:
+  //   grantWebResearch — the hosted-search key is BUILT only when granted (structural absence,
+  //     the omitRecipientEdits precedent at :619-626). Unconditional construction would hand the
+  //     EXECUTIVE agent web search on every cockpit turn, because runAgentLoop returns the FULL
+  //     record when toolNames === undefined (:1704).
+  //   threadId/rootRequestId — DISPATCH LINEAGE for the SCHEDULED research tool (16-06): the tool
+  //     stages a plan row and schedules the run, it does not run a loop inline. Not an emission
+  //     channel. See the amended CKPT-05 note at runAgentLoop.
+  agentContext?: {
+    grantWebResearch?: boolean;
+    threadId?: string;
+    rootRequestId?: string;
+  },
 ) {
   const readPlan = async (): Promise<PlanRow> => {
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
@@ -1672,8 +1686,16 @@ async function runAgentLoop(
     // Activity trace (CKPT-05). Append-only optional args — the codebase's signature-evolution
     // convention (buildCockpitTools' 4th `clientContext` / 5th `skillVersions`): every existing
     // caller keeps working. A caller that supplies neither simply emits nothing (see the guard in
-    // the callbacks) rather than writing a malformed row. They do NOT reach buildCockpitTools:
-    // the tools don't emit, the SDK does — keep it that way (zero tool-wrapper edits).
+    // the callbacks) rather than writing a malformed row.
+    //
+    // AMENDED Phase-16: this note used to end "They do NOT reach buildCockpitTools: the tools
+    // don't emit, the SDK does — keep it that way (zero tool-wrapper edits)." Half of that still
+    // holds and is the part worth protecting: **no tool emits a step row — the SDK does.** That
+    // invariant stands. But `threadId`/`rootRequestId` DO now reach buildCockpitTools, as
+    // DISPATCH LINEAGE on the 7th `agentContext` arg (ADR-008: lineage travels as
+    // validator-checked call args), so the scheduled research tool can correlate its async run.
+    // Lineage in, emission still out. Left stale, this comment would document a rule the code
+    // violates.
     turnId?: string;
     threadId?: string;
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
@@ -1683,8 +1705,21 @@ async function runAgentLoop(
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
     toolNames?: readonly string[];
+    // Phase-16 (D10). Append-only optional — `?? 8` preserves today EXACTLY for every existing
+    // caller. A research run decomposes into several searches and needs a deliberately larger,
+    // route-specific budget (16-05 sets it); a silently truncated multi-search run presented as
+    // complete is the failure D10 names.
+    maxSteps?: number;
   },
-): Promise<{ reply: string; costUsd: number }> {
+): Promise<{
+  reply: string;
+  costUsd: number;
+  webSearchCalls: number;
+  truncated: boolean;
+  sources: readonly { url: string; title: string }[];
+  modelId: string;
+  fallbackModelId: string;
+}> {
   const {
     tenantId,
     planId,
@@ -1697,6 +1732,7 @@ async function runAgentLoop(
     threadId,
     omitRecipientEdits,
     toolNames,
+    maxSteps,
   } = args;
   const built = buildCockpitTools(ctx, tenantId, planId, undefined, skillVersions, omitRecipientEdits);
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
@@ -1714,16 +1750,25 @@ async function runAgentLoop(
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
+  const stepBudget = maxSteps ?? 8;
   const run = async (
     m: PricedModel,
     maxRetries: number,
-  ): Promise<{ reply: string; costUsd: number }> => {
+  ): Promise<{
+    reply: string;
+    costUsd: number;
+    webSearchCalls: number;
+    truncated: boolean;
+    sources: readonly { url: string; title: string }[];
+    modelId: string;
+    fallbackModelId: string;
+  }> => {
     const res = await generateText({
       model: m.model,
       system,
       prompt,
       tools,
-      stopWhen: stepCountIs(8),
+      stopWhen: stepCountIs(stepBudget),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
@@ -1772,7 +1817,27 @@ async function runAgentLoop(
       },
     });
     costUsd += await recordModelSpend(ctx, m.id, res.usage);
-    return { reply: res.text, costUsd };
+    return {
+      reply: res.text,
+      costUsd,
+      // Phase-16 freeze: the three research observables travel from here on. `truncated` is REAL
+      // from day one — pure arithmetic on the shipped result, no new computation. `webSearchCalls`
+      // and `sources` are wired in 16-05, once the OQ-2 probe has told us what a
+      // PROVIDER-EXECUTED tool call actually looks like in `res.steps`; guessing the shape now
+      // would bake in an assumption the probe exists to settle.
+      webSearchCalls: 0,
+      sources: [],
+      truncated: res.steps.length >= stepBudget && res.finishReason !== "stop",
+      // Ids the caller ALREADY supplied on the two PricedModel bags (`{ model, id }`) — a field
+      // that existed and never travelled, not a new computation. It is in the FREEZE rather than
+      // invented later because 16-05 pins a research-only model inside runSpecialistTurn and
+      // 16-06 must ASSERT it, but runSpecialistTurn's return is the only thing governedDispatch
+      // ever sees. Without this the sole indirect observable is costUsd — and RESEARCH_MODEL may
+      // well BE DEFAULT_MODEL (16-02's probe ladder starts at gpt-4o-mini), making the pricing
+      // identical and the assertion both unwritable and meaningless.
+      modelId: primary.id,
+      fallbackModelId: fallback.id,
+    };
   };
   try {
     return await run(primary, 1);
@@ -1821,7 +1886,31 @@ export async function runSpecialistTurn(
      *  shim's mechanism). Absent ⇒ the real gateway models. */
     mockScript?: { primary: unknown[]; fallback?: unknown[] };
   },
-): Promise<{ reply: string; costUsd: number; skillVersion: number }> {
+): Promise<{
+  reply: string;
+  costUsd: number;
+  skillVersion: number;
+  // Phase-16 freeze: PASS-THROUGHS of runAgentLoop's return (the `...res` spread below already
+  // forwards them — only this type needed widening). Callers ignore all five today.
+  //
+  // `sources` is the easiest field in this phase to drop, and dropping it is not cosmetic. It is
+  // produced in runAgentLoop and consumed off DispatchResult: 16-06 computes
+  // `sourceCount = r.sources.length`, and that count drives BOTH the fence's zero-source branch
+  // and 16-07's stored insufficient-evidence label (D11's zero-results contract).
+  // `governedDispatch` sees NOTHING except this return — so if `sources` does not travel through
+  // HERE, 16-06 either fails to compile or someone quietly defaults it to `[]`, after which every
+  // research run ships labelled "insufficient evidence". Widen it once, here.
+  //
+  // Deliberately NO new ARGS: the model pin and the step budget are properties of WHICH
+  // SPECIALIST is running, so 16-05 derives them from `args.skillName` right here, where the
+  // models are already resolved. A `models?` / `maxSteps?` arg would be a second mechanism for a
+  // decision with exactly one owner, and would drag dispatch.ts into model selection for no gain.
+  webSearchCalls: number;
+  truncated: boolean;
+  sources: readonly { url: string; title: string }[];
+  modelId: string;
+  fallbackModelId: string;
+}> {
   const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
