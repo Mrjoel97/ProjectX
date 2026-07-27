@@ -740,10 +740,12 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
   // refused / dispatched / completed, plus 15-04's thrown-turn `subagent.refused` — the one place
   // an EXCEPTION reaches the audit plane, and therefore the one most likely to be handed
-  // `err.message`. A FIFTH lineage write is a new §4 surface, so the count is pinned the way
-  // cockpit.ts's two audit.log sites are.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(4);
-  // All four SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
+  // `err.message`. 16-07 adds the FIFTH: `research.persist_failed`, the vault-write failure, which
+  // is the second exception-fed site and was REVIEWED against this rule when the count moved —
+  // it carries `{...lineageRefs(args), reason: "persist_error"}`, a CODE and refs, never the caught
+  // error. A SIXTH is a new §4 surface and must be reviewed the same way, not renumbered.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(5);
+  // All five SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.
   const refs = src.match(/const lineageRefs = \([^)]*\) => \(?(\{[^}]*\})/);

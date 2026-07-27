@@ -110,6 +110,11 @@ export type DispatchResult =
        *  `audit`/`telemetry` payload — those carry `sourceCount` and `retrievedAt` (a number). */
       sources: readonly { url: string; title: string }[];
       retrievedAt: number;
+      /** 16-07: the vault document the findings landed in. Present ONLY on a research run whose
+       *  persist succeeded — absent on the gap path (which persists nothing here) and absent when
+       *  the persist failed, which costs groundability and not the findings: the plan card landed
+       *  before the persist ran and already carries them. */
+      vaultDocId?: string;
       /** The models that actually BILLED this hop. On the return because a dispatch exposes no
        *  other observable of the route's model pin, and 16-05's research ternary has to be
        *  assertable on the value that priced the run rather than on source text. */
@@ -519,6 +524,58 @@ const RESEARCH_FAILED_MEMO =
   " anything. Ask me to look into it again and I'll start it over.";
 
 /**
+ * 16-07's findings terminal (ACTN-03), bolted onto a research dispatch AFTER `dispatchAndLand` has
+ * returned. The ordering is the whole error-handling argument and it is structural, not incidental:
+ * `dispatchAndLand` lands the memo plan card in its `finally`, so by the time this runs the user
+ * already has the findings on an approvable card. A persist failure therefore degrades to a
+ * narrower, truthful statement — *the findings are on the card but are not yet groundable* — which
+ * is why it is audited and swallowed. NO retry, NO dead-letter, NO compensating write: the cockpit
+ * has never DLQ'd a user-facing turn.
+ *
+ * Deliberately NOT inside `governedDispatch` (that would put a route conditional in the shared
+ * spine) and NOT inside `landSpecialistResult` (that would thread `sources`/`retrievedAt` through a
+ * mutation with no business knowing about them).
+ *
+ * It is a MUTATION called from an ACTION: actions cannot write, and each `runMutation` commits
+ * immediately — which is what pushes the new document to live `useQuery` subscribers while the
+ * action is still running.
+ */
+async function persistResearchFindings(
+  ctx: Ctx,
+  args: DispatchArgs,
+  res: DispatchResult,
+): Promise<DispatchResult> {
+  // SUCCESS PATH ONLY. A governed refusal is a paused conversation, not a finding — it writes no
+  // vault document at all (its reply is already on the card via `fallbackBody`).
+  if (!res.ok) return res;
+  try {
+    const vaultDocId = await ctx.runMutation(internal.research.persistFindings, {
+      tenantId: args.tenantId,
+      question: args.question ?? "",
+      body: res.body,
+      // Copied to a mutable array: `sources` is readonly on the result, and a validator arg is not.
+      sources: res.sources.map((s) => ({ url: s.url, title: s.title })),
+      retrievedAt: res.retrievedAt,
+      rootRequestId: args.rootRequestId,
+      incomplete: res.incomplete,
+      incompleteReason: res.incompleteReason,
+    });
+    return { ...res, vaultDocId };
+  } catch {
+    // ONE audit row with the reason CODE — never `err.message`, which can carry prompt or grounded
+    // prose (§4). The result is returned UNCHANGED, so the run itself still succeeded.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "research.persist_failed",
+      actor: "system",
+      payload: { ...lineageRefs(args), reason: "persist_error" },
+    });
+    return res;
+  }
+}
+
+/**
  * D9-REVISED's scheduled entry point (DISP-02). Calls `dispatchAndLand` — the SAME landing path
  * `runSpecialist` uses — so the memo plan card is guaranteed to leave `collecting` on every
  * outcome, including a throw. It is NOT a second spine: the only differences from `runSpecialist`
@@ -528,11 +585,15 @@ const RESEARCH_FAILED_MEMO =
 export const runResearch = internalAction({
   args: dispatchArgs,
   handler: async (ctx, args): Promise<DispatchResult> =>
-    dispatchAndLand(
+    persistResearchFindings(
       ctx,
       args,
-      (a) => runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
-      RESEARCH_FAILED_MEMO,
+      await dispatchAndLand(
+        ctx,
+        args,
+        (a) => runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
+        RESEARCH_FAILED_MEMO,
+      ),
     ),
 });
 
@@ -551,18 +612,31 @@ export const __runSpecialistWithScript = internalAction({
     // RACE the mock loop and throw ConvexError({kind:"agent_timeout"}) (llm.ts), i.e. produce the
     // exact discard-the-work outcome this row exists to disprove. Do not add a `timeoutMs` sibling.
     softCutoffMs: v.optional(v.number()),
+    // 16-07: drive `runResearch`'s SEAM — the honest fallback body and the findings terminal — under
+    // a scripted model. A LanguageModel is not Convex-serializable, so `runResearch` itself can
+    // never be driven offline (16-06 deviation 4); without this flag the vault persist would be
+    // wiring no test can reach, and "one web_research document per successful research run" would
+    // be an assertion about `persistFindings` alone rather than about the dispatch. Absent ⇒ the gap
+    // path, byte-identical. The `softCutoffMs` precedent, same reason.
+    research: v.optional(v.boolean()),
   },
-  handler: async (ctx, args): Promise<DispatchResult> =>
-    dispatchAndLand(ctx, args, (a) =>
-      runSpecialistTurn(ctx, {
-        tenantId: args.tenantId,
-        planId: args.planId,
-        ...a,
-        mockScript: {
-          primary: args.primary,
-          fallback: args.fallback,
-          softCutoffMs: args.softCutoffMs,
-        },
-      }),
-    ),
+  handler: async (ctx, args): Promise<DispatchResult> => {
+    const res = await dispatchAndLand(
+      ctx,
+      args,
+      (a) =>
+        runSpecialistTurn(ctx, {
+          tenantId: args.tenantId,
+          planId: args.planId,
+          ...a,
+          mockScript: {
+            primary: args.primary,
+            fallback: args.fallback,
+            softCutoffMs: args.softCutoffMs,
+          },
+        }),
+      args.research === true ? RESEARCH_FAILED_MEMO : undefined,
+    );
+    return args.research === true ? persistResearchFindings(ctx, args, res) : res;
+  },
 });
