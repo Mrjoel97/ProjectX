@@ -50,15 +50,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.2
-current_plan: 6
+current_plan: 7
 status: in_progress
-stopped_at: "Completed 15.2-05-PLAN.md (Wave 5 — THE PHASE GATE, paid LIVE on deployment local-joel_feruzi-pikar_ai_50c69-1). The owner's stranded .xlsm is `ready` with 256,439 chars; owner APPROVED but only PARTIALLY OBSERVED. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not a verification plan's job."
-last_updated: "2026-07-27T14:20:00.000Z"
+stopped_at: "Completed 15.2-06-PLAN.md (Wave 6 — SC#5, the per-page fan-out, verified LIVE on local-joel_feruzi-pikar_ai_50c69-1 and owner-APPROVED). The 12-page scanned deck went 2,161 → 7,868 chars of per-page transcription for 13¢. ONE plan left in the phase (15.2-07, SC#3-XLS), plus owner-created 15.2-08 after it. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not this plan's job either."
+last_updated: "2026-07-27T15:35:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
   total_plans: 179
-  completed_plans: 173
+  completed_plans: 174
 ---
 
 # Project State
@@ -72,7 +72,7 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 5 of 7 PLANS COMPLETE
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 6 of 7 PLANS COMPLETE
 (7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
 live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
 `.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
@@ -84,7 +84,67 @@ deliberately** — 16∥17 needed one because both add literals to the same clos
 `schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
 commit that was never meant to exist.
 
-Status (15.2-05): **[Phase 15.2] THE PHASE GATE WAS PAID LIVE — and it is the first thing in this
+Status (15.2-06): **SCANNED PDFs ARE TRANSCRIBED, NOT SUMMARISED — proven LIVE and owner-APPROVED,
+with the `attachment-extractor` prompt BYTE-UNCHANGED.** `extractPdf`'s hosted fallback used to slice
+the PDF to the page cap and send the whole thing as **ONE** file part. The skill's contract is
+written for *a single image or document (PDF page…)*, so a 12-page deck asked it to do something its
+prompt never promised and it digested. **CLAUDE.md §5 is satisfied by REUSE, not a new skill row:
+`extractHosted`'s signature is unchanged and is called ONCE PER PAGE.** Three pieces landed.
+(1) **`fanOutPages`** — bounded-concurrency batches, **SEQUENTIAL across batches**, reassembled into
+a **pre-sized array indexed BY PAGE** so ordering is *structural* rather than a sort someone must
+remember. A failing or timed-out page contributes an **`[unreadable]` marker, never a throw** (§4 —
+no SDK string, no parser string, no document content). **The success signal is `okPages`, a COUNT,
+not the text being non-empty** — a document made entirely of markers IS non-empty, so
+`empty_extraction` would never fire on it, which is the identical false-ready shape as the
+`Slide N`/`Sheet N` parser gap. **15.2-08 should reuse this pattern.** (2) **`pdfPages`** — N
+one-page PDFs from **ONE loaded source** (reloading per page is the memory pressure the playbook
+flags); `VAULT_EXTRACT_PAGE_CAP` (50) still binds. (3) The hosted branch rewired; `okPages === 0`
+throws into `extractDoc`'s **existing** outer catch rather than adding a second failure mechanism.
+**FOUR CONSTANTS, each with a reason: `PAGE_BATCH_SIZE` 6 — also the OCC-CONTENTION WIDTH, because
+each page is its own `recordSpend` write against ONE KEYLESS `dailySpendCents` window;
+`PAGE_TIMEOUT_MS` 60 s — `CALL_TIMEOUT_MS` (480 s) is PER CALL and was tuned for one whole-document
+call, so under fan-out ONE STUCK PAGE WOULD EAT THE 10-MINUTE ACTION CEILING; `FANOUT_BUDGET_MS`
+420 s; page cap 50 unchanged.** **THE LIVE RESULT** on `local-joel_feruzi-pikar_ai_50c69-1`,
+2026-07-27 15:00Z: row `mx78ake083gn575pg43sw9j66x8b86eb` (`The_AI_Executive_OS.pdf`) went
+**2,161 → 7,868 chars (3.64×)**, headers **`Page 1`…`Page 12` ascending**, **0 `[unreadable]`**,
+per-page 344–986 chars evenly spread, **no digest tell anywhere in the text**, figures verbatim
+(`$53.2B`, `44.9% CAGR`, `2,136 commits`). **77 s, 13¢ across 12 calls, ZERO OCC and zero new
+`deadLetters`** — which **RESOLVES RESEARCH §11 item 4 BY OBSERVATION** rather than by argument.
+**DEPLOYMENT FRESHNESS WAS PROVED BEFORE A CENT WAS SPENT:** an idle CPU reading is equally
+consistent with "already pushed" and "watch not running", so the source file was TOUCHED and the CPU
+measured — **3.77 s vs 0.125 s idle**, i.e. watch mode demonstrably re-pushed. **OWNER VERDICT:
+APPROVED — *"the text reads as transcription, not summary."* RECORDED PRECISELY AND NOT ROUNDED UP:
+the verdict rests on the Page 3/Page 11 excerpts plus the char-count/page-header/no-digest-tells
+evidence, and it was given FROM THE ROW DATA, NOT FROM A BROWSER** — at verdict time `:3000` was
+still the stale `next start` (PID 14512, launched 2026-07-26 21:35:06 against a `.next` built
+2026-07-27 16:22:39), unrestarted since 15.2-05 flagged it. **No vault-UI check happened; the preview
+pane's rendering of a fanned-out scan is UNOBSERVED, as is `failureCopy` still.** **TWO PROPERTIES OF
+THE NEW PATH TO CARRY FORWARD: `extractionTruncated` WILL NOW START APPEARING ON LONG SCANS** — a
+verbatim 50-page transcription is far likelier to reach the 400k `VAULT_EXTRACT_CHAR_CAP` than a
+summary ever was, and **that is NOT a regression** (15.2-04 made sure the flag survives into
+`ready`); and **13¢/12 calls (~1.08¢/page) is the new per-scan cost shape**, replacing one call per
+document. **TWO MUTATION-CHECKS, each confirmed applied and each reverted green:** reassembly written
+in COMPLETION order instead of by page index ⇒ **3 RED**; the loop advancing by `pageCount` plus the
+deadline check disarmed ⇒ **5 RED** (including both deadline rows). **THE OFFLINE SUITE PROVES SHAPE,
+NOT VERBATIMNESS, AND STAYS GREEN WHEN THE MODEL DIGESTS** — which is exactly why a static scan named
+*"the hosted branch no longer sends the WHOLE DOCUMENT as one call"* was added, and why SC#5 was NOT
+reported closed on green. Two auto-fixed deviations: the plan's literal `const { text, okPages }`
+**collided with `extractPdf`'s existing `text` binding** and esbuild refused the whole module, taking
+all 32 tests red (a transform failure, not a logic one) — renamed to `transcribed`; and an existing
+test **asserted the OLD `NO_ACTIVE_SKILL` failure string**, which the fan-out necessarily changes
+(per-page throws become markers, §4), so it was **INVERTED, not deleted** — it now asserts the branch
+was still taken and the row is TERMINAL — because left alone it would have gone red on `main` and
+read as a regression in the fix. **`slicePdfToPageCap` KEPT despite having no production caller**
+(owner-confirmed): `must_haves` names it a required export and its page-cap test still covers it —
+explicitly NOT a deviation. Gates: `vaultExtract` **41/41** (was 28), backend `test vault`
+**115/115** (was 102), `@pikar/vault` **114/114**, backend `tsc` **52 errors ALL in test files, ZERO
+non-test** (baseline held exactly), `check-playbooks` exit 0. **STILL OPEN AND NOT TOUCHED HERE: the
+parser false-ready family** — `pptxText` (`officeText.ts:74`) and `xlsxText` (`:65`) emit
+`` `Slide ${n}` ``/`` `Sheet ${n}` `` UNCONDITIONALLY, so scaffolding-only output defeats
+`empty_extraction` and reports `ready` — **that is 15.2-08's scope, after 15.2-07.** SC#3's XLS half
+remains 15.2-07's and is now the **LAST** open Manual-Only row.
+
+PRIOR — Status (15.2-05): **[Phase 15.2] THE PHASE GATE WAS PAID LIVE — and it is the first thing in this
 phase that was.** Deployment **`local-joel_feruzi-pikar_ai_50c69-1`** (local, `:3210`, project
 `joel-feruzi:pikar-ai-50c69`), sweep executed **2026-07-27T13:58:34Z**. **The owner's stranded
 `.xlsm` (`mx725hvxy1vsjvtaa4hza18pms8b8gp4`, `Zainab_Blowing_Operators_KPIs_Feb_2026.xlsm`, created
