@@ -9,6 +9,7 @@
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
   BMC_SKILL,
+  BUSINESS_BLUEPRINT_SKILL,
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
   DOCUMENT_DRAFTER_SKILL,
@@ -40,6 +41,7 @@ import {
 } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
+import { businessBlueprintSkillBody } from "@pikar/contracts/skills/businessBlueprint";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalyst";
@@ -310,6 +312,11 @@ export const seedSkills = internalMutation({
       { name: STYLE_DIRECT_SKILL, body: styleDirectSkillBody },
       { name: STYLE_COACHING_SKILL, body: styleCoachingSkillBody },
       { name: STYLE_CONCISE_SKILL, body: styleConciseSkillBody },
+      // UNGATED (17.1-02, BLPR-01): output is candidate fields for a vault-doc blueprint a human
+      // confirms (D2), not tool-state — the `business-profile` rationale verbatim. And the golden
+      // runner hard-validates --skill against a closed name list it cannot extend to the synthesis
+      // path, so gating would deadlock this skill at v1 on its first body edit.
+      { name: BUSINESS_BLUEPRINT_SKILL, body: businessBlueprintSkillBody },
     ];
 
     for (const { name, body } of seeds) {

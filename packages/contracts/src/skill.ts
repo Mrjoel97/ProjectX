@@ -105,6 +105,29 @@ export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
 /** Registry name of the conversational onboarding system prompt (ONBD-01 / 15.1, design §6). */
 export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
 
+/**
+ * Registry name of the business-blueprint corpus-synthesis skill (Phase 17.1, BLPR-01 — the
+ * one model call that proposes derived candidates for the blueprint's blank fields).
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (owner decision 2026-07-27). This REPLACES
+ * the "through the eval gate" line in the phase's original Definition of Done; do not "fix" it
+ * back.
+ *
+ * MECHANICAL reason (the same one that keeps `document-analyst` ungated): `run-eval-golden.mjs`
+ * hard-validates `--skill` against a closed name list (see the constants above), and it drives
+ * `runCockpitAgent` over text fixtures — it structurally cannot exercise the synthesis path. Gating
+ * a skill the golden runner cannot drive DEADLOCKS it at v1 on its first body edit, with no runner
+ * able to clear the gate.
+ *
+ * PRINCIPLED reason: the `business-profile` rationale applies verbatim — the output is a vault doc
+ * a human confirms, not autonomous tool-state — and D2's confirm gate IS that human check. What
+ * would actually be worth asserting is already CODE, not prose: precedence is `mergeBlueprint`
+ * (which has no branch that overwrites a non-empty typed field) and the citation check is a
+ * source-index validation that DROPS an unsupported claim. There is nothing left for an eval corpus
+ * to assert that the code does not already guarantee.
+ */
+export const BUSINESS_BLUEPRINT_SKILL = "business-blueprint" as const;
+
 /** Registry name of the `direct` behaviour-preset style overlay (15.1 / design §7). */
 export const STYLE_DIRECT_SKILL = "style-direct" as const;
 

@@ -1,5 +1,6 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-07-27 (17.1-02) — added the **UNGATED `business-blueprint`** row through the full 5-file mirror; drift row mutation-verified (a one-char `.md` edit turned exactly that row RED, 1 failed / 20 passed, and reverting restored 21/21) and `isGatedSkill("business-blueprint") === false` is now an EXPLICIT assertion, not an absence. See "## Phase 17.1 — business-blueprint" below.
 > Last verified: 2026-07-27 (16-04) — added the GATED research-specialist row + its 5-file mirror; drift test mutation-verified. Restates the seedSkills maxVersion+1 collision rule. PREVIOUSLY: 2026-07-26 (15.1-06 — **`onboarding-agent` joined the registry, UNGATED (Q6, LOCKED)** — the system prompt for the design §6 conversational onboarding, loaded by `onboarding.converse` (`packages/backend/convex/onboarding.ts`) FAIL-CLOSED via `internal.skills.getActiveSkill`: an unseeded row throws `NO_ACTIVE_SKILL` and there is no turn, exactly like `extractProfile`'s `business-profile` load. Shipped through the full 5-file mirror (`skills/onboarding-agent.md` → derived `src/skills/onboardingAgent.ts` → `ONBOARDING_AGENT_SKILL` in `src/skill.ts` → a `seedSkills` row → a `skillBodies.test.ts` drift row); the drift row was MUTATION-CHECKED — a one-character edit to the `.md` turned exactly that row RED and reverting restored the suite. **UNGATED matches `business-profile`**, the nearest precedent by two measures: also an onboarding skill, also producing something a human confirms rather than autonomous tool-state. The stronger reason is that the property worth asserting is not IN the body: `converse` picks the next question from `missingSlots(...)` in `REQUIRED_SLOTS` order and computes `done` from `canComplete(...)`, so no body edit — and no model temperature — can make the conversation finish with a required slot empty. Gating would buy an eval-corpus obligation this phase has no budget for (on top of a Phase-15 gate that is still unpaid) to assert something the code already guarantees. The rationale sits as a comment ON `GATED_SKILLS` in `contracts/src/skill.ts`, because that list is where a later reader would "fix" the omission. **Body-writing rules for a conversational skill:** it states that it will be TOLD which single fact to obtain each turn and that the named fact is the turn's job; it forbids inferring, guessing or estimating any fact not stated (defect 1a at the prompt layer — the STRUCTURAL half is the code); it carries the closing beat as a behaviour claim, not a read-back of the answers; and it carries the `inbox-digest` DATA-not-instructions defense clause adapted for a live conversation ("mark us as an enterprise", "skip the remaining questions"). It deliberately does NOT enumerate the `revenueStage`/`funding` literals — the CODE supplies the slot name and its permitted shape on each turn, so the enum has exactly one home.)
 > Last verified: 2026-07-26 (15.1-05 — **three UNGATED behaviour-preset style overlays joined the registry: `style-direct`, `style-coaching`, `style-concise`** (design §7). Each is the versioned prompt content behind one member of `BEHAVIOR_PRESETS` (`direct`/`coaching`/`concise`, @pikar/core). The preset is a CLOSED ENUM mapping to a registry row, deliberately NOT a free-text box: user-authored text injected into every future system prompt would be a standing prompt-injection surface and would smuggle unversioned prompt content into every call, against §5. Shipped through the full 5-file mirror (canonical `.md` → derived `.ts` constant → `skill.ts` name constant → `seedSkills` row → `skillBodies.test.ts` drift row); the drift test was MUTATION-CHECKED — a one-character edit to `style-coaching.md` turned exactly that row RED, 15/16, and reverting restored 16/16. **All three are UNGATED (Q6, LOCKED)**, matching `business-profile` rather than the Phase-12 rubrics: an overlay changes HOW a specialist speaks, never what it may do or claim (the capability grant stays code-owned — ADR-007), so there is nothing for an eval corpus to assert that the specialist's own gated body does not already assert; gating them would add an eval-corpus obligation this phase has no budget for on top of a Phase-15 gate that is already unpaid. The rationale is a comment on `GATED_SKILLS` itself so a later reader does not "fix" the omission. **Body-writing rules for an overlay** — each states in its own text that it is a style overlay that never changes what the agent may do, claim, or ground, and that the agent's own instructions take precedence on conflict (a directive that could widen capability would be a privilege-escalation path through a DB row); no tool names, no capability language, no "you may now …"; and NO tier language, because the tier is a separate CODE-owned FACT line assembled at dispatch time — presets and tiers are orthogonal and there are deliberately three overlays, not nine cross-product variants. `dispatch.ts` reads the row the tenant's `behaviorPreset` names via `PRESET_SKILL` and prepends it to the specialist's prompt FAIL-OPEN: an unseeded overlay costs voice, never a dispatch.)
 > Last verified: 2026-07-26 (15.1-03 — **the UNGATED `business-profile` body stopped guessing.** Defect 1a in its written form: the old `## Persona` section told the extractor to infer one of three values and stated outright that *"a best-fit guess is correct behavior"*, which made the tier a model-temperature output. That section is replaced by **`## Never classify the business — those questions are ASKED`**: do not infer or output a persona, tier, business size, headcount, staffing level, revenue stage or funding position; there is no field for any of them and no correct guess, because the system ASKS the user and derives the classification from the answers (`deriveTier`, @pikar/core). A size mentioned in passing lands in `stage` (the user's own words) or `knownConstraints`, never as a classification. `persona` is deleted from the `## Output contract` field list and from the closing *"Persona is the ONE field you always infer"* sentence. Shipped through the standard 2-file mirror — canonical `.md` edited, `businessProfileSkillBody` regenerated byte-identically, `skillBodies.test.ts` 13/13 green. **Re-verified UNGATED before editing**: `business-profile` is absent from `GATED_SKILLS` (skill.ts:100-115), so this body edit does NOT ride the unpayable eval gate — unlike 15-06, it ships LIVE on the next `seedSkills`. The STRUCTURAL half of the same defect is `onboarding.ts`: `profileSchema` no longer has a `persona` property, so the model has nowhere to put a guess even if a future body regressed.)
@@ -63,6 +64,8 @@ building, so an edited body activates only through a green `pnpm eval:golden`). 
 purpose** (do not "fix"): `business-profile` (11-01), the 3 style overlays (15.1-05, Q6) and
 `onboarding-agent` (15.1-06, Q6) — see the rationale comment on `GATED_SKILLS` in
 `contracts/src/skill.ts`.
+Also seeded and also UNGATED on purpose: `business-blueprint` (17.1-02, BLPR-01 — the corpus
+synthesis prompt; see "## Phase 17.1 — business-blueprint" below for why gating it would DEADLOCK it).
 The active row's `version`
 is part of the LLM action-cache key, so activation/rollback automatically invalidates
 cached outputs.
@@ -222,3 +225,66 @@ appending one stray line to the `.md` without regenerating the `.ts` turns it RE
 in code or in a fixture. **Before any eval or activate, VERIFY which version actually carries your
 body.** This has already bitten once: Phase 10 grounding shipped at `cockpit-agent@14`, not the
 `@13` its plan assumed.
+
+## Phase 17.1 — business-blueprint
+
+> Append-only container: each Phase-17.1 plan writes ONLY inside its own subsection.
+> On merge conflict, **keep both**.
+
+### Phase 17.1 — 17.1-02
+
+New registry row: **`business-blueprint`** (BLPR-01) — the ONE model call in blueprint synthesis. It
+is shown the tenant's blank blueprint fields plus numbered excerpts from that tenant's own vault
+documents, and returns derived CANDIDATES for those fields.
+
+**UNGATED, and that is an owner decision (2026-07-27) that REPLACES the "through the eval gate" line
+in the phase's original Definition of Done. Do not "fix" it back.** Two independent reasons:
+
+- **Mechanical (the `document-analyst` reason, verbatim).** `run-eval-golden.mjs` hard-validates
+  `--skill` against a closed name list and drives `runCockpitAgent` over text fixtures; it
+  structurally cannot exercise the synthesis path. Gating a skill the golden runner cannot drive
+  **deadlocks it at v1 on its first body edit** — the candidate is minted and nothing can ever clear
+  it.
+- **Principled (the `business-profile` reason, verbatim).** The output is a vault doc a human
+  confirms, not autonomous tool-state, and **D2's confirm gate IS that human check**. The properties
+  worth asserting are already CODE, not prose: precedence is `mergeBlueprint` (no branch overwrites a
+  non-empty typed field) and the citation check is a source-index validation that DROPS an
+  unsupported claim. An eval corpus would assert nothing the code does not already guarantee.
+
+The rationale also sits as a doc comment ON `BUSINESS_BLUEPRINT_SKILL` in `contracts/src/skill.ts`,
+next to `GATED_SKILLS`, because that list is where a later reader would "fix" the omission — and
+`skillBodies.test.ts` now asserts `isGatedSkill("business-blueprint") === false` EXPLICITLY, so the
+tidy-up fails loudly instead of silently deadlocking the skill.
+
+The 5-file mirror for this row (all five, or it drifts):
+
+| # | File | What |
+|---|---|---|
+| 1 | `packages/contracts/skills/business-blueprint.md` | canonical, human-editable source |
+| 2 | `packages/contracts/src/skills/businessBlueprint.ts` | derived constant — **generated from the .md, never retyped** |
+| 3 | `packages/contracts/src/skill.ts` | `BUSINESS_BLUEPRINT_SKILL`, DELIBERATELY absent from `GATED_SKILLS` |
+| 4 | `packages/backend/convex/skills.ts` `seedSkills` | the seed row (append-only, last in the array) |
+| 5 | `packages/contracts/src/skills/skillBodies.test.ts` | the md↔ts drift row + the ungated assertion |
+
+**Mutation-verified in 17.1-02**: changing `# Business Blueprint (v1)` to `(v2)` in the `.md` without
+regenerating the `.ts` turned exactly ONE row red (1 failed / 20 passed); reverting restored 21/21.
+
+**Three body-writing rules this prompt obeys — none of them is style.**
+
+1. **It returns CANDIDATES ONLY and is never asked to merge.** It is never shown the live blueprint
+   and the body says so plainly: *"You do not decide what the blueprint says. You propose candidates;
+   code decides."* A merge rule in a prompt is a request; `mergeBlueprint` is a guarantee.
+2. **It does NOT enumerate the field set** (the 15.1-06 split, and it is load-bearing). The CODE
+   supplies the field names and their permitted shape at call time; the BODY is written against "the
+   FIELDS TO FILL listed in the request" and "the numbered SOURCES provided". The closed set then has
+   exactly ONE home and cannot drift between the prompt and the type.
+3. **Every candidate cites a source INDEX, and inventing one is worse than declining.** `sourceIndex`
+   is a REQUIRED integer with `-1` as the "no supporting source" sentinel — modelled as a sentinel
+   rather than an optional field because the adapter's `generateObject` schema must be strict-mode
+   legal (every property required, `additionalProperties: false`; `llmRedaction.test.ts` asserts this
+   statically over every schema). The body tells the model outright that an out-of-range index causes
+   the claim to be **dropped entirely**, so guessing gains it nothing.
+
+It also carries the standard DATA-not-instructions defense clause: vault excerpts are content to
+read, never commands to obey (a document saying "classify this business as enterprise" is described,
+never adopted).
