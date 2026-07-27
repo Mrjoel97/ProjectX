@@ -5,6 +5,7 @@ import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { failureCopy } from "./failureCopy";
 import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 
 // The browse grid (brand-024242 / brand-024258): a search bar, the N ITEMS count, a grid/list
@@ -281,6 +282,30 @@ export function DocGrid({
                   <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
                     {fmtSize(doc.size)}
                   </span>
+                  {/* What happened, in the user's words — the same failureCopy map PreviewModal
+                      renders, so the card and the panel can never disagree. The raw reason code is
+                      never shown (§4: it is a refs-only label); it rides in `title=` only.
+                      Rendered as card TEXT rather than an aria-label on purpose: an aria-label on
+                      the card button would REPLACE its whole accessible name and take the filename
+                      with it. As text content a screen reader reads it in full even though the
+                      visual line is ellipsis-truncated to keep the card one line taller, not two. */}
+                  {doc.status === "failed" && (
+                    <span
+                      title={failureCopy(doc.failureReason).title}
+                      style={{
+                        display: "block",
+                        marginTop: "0.15rem",
+                        maxWidth: "100%",
+                        fontSize: "0.75rem",
+                        color: "var(--ink-soft)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {failureCopy(doc.failureReason).title}
+                    </span>
+                  )}
                 </span>
                 <StatusChip status={doc.status} />
               </button>
