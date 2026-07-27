@@ -2,16 +2,31 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 16
-current_plan: 0
-status: phase_complete
-stopped_at: "Phase 15.1 COMPLETE and VERIFIED (6/6 success criteria). Merged with main: Phase 14 (voice-doc) arrives at 8/9 — one plan outstanding. Phase 15's specialist-body eval gate remains UNPAID and 15.1 has 4 manual-only VALIDATION rows; neither is deployed."
-last_updated: "2026-07-26T00:00:00.000Z"
+current_plan: 7 (done)
+status: in_progress
+stopped_at: Completed 15.2-01-PLAN.md
+last_updated: "2026-07-27T00:34:42.309Z"
+progress:
+  total_phases: 40
+  completed_phases: 24
+  total_plans: 179
+  completed_plans: 169
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 15.2
+current_plan: 2
+status: in_progress
+stopped_at: "Completed 15.2-01-PLAN.md (Wave 1 — the pure recognition layer). NOTE: Phases 16 (Lane R) and 17 (Lane K) are LIVE in their own worktrees with their own STATE; this file's phase/plan counters describe LANE V (Phase 15.2, on main). Resolve any merge conflict here by keeping BOTH lanes' progress."
+last_updated: "2026-07-27T00:00:00.000Z"
 progress:
   total_phases: 38
   completed_phases: 23
-  total_plans: 172
-  completed_plans: 167
+  total_plans: 179
+  completed_plans: 168
 ---
 
 # Project State
@@ -25,7 +40,66 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 ## Current Position
 
-**PHASE 14 CLOSED — 2026-07-26 (9/9 plans, owner live human-verify APPROVED).** The flagship
+**PHASE 15.2 — Vault Universal Format Recognition & Extraction Fan-Out — 1 of 7 PLANS COMPLETE
+(7 serial waves).** Runs on `main` as **Lane V**, an explicitly contracted THIRD lane alongside the
+live Phases 16 (Lane R) and 17 (Lane K) in their own worktrees. The contract is
+`.planning/PARALLELIZATION.md` § *Phase 15.2 — vault format recognition (Lane V)*, written in this
+plan's FIRST commit before any code landed. Lane V owns `packages/vault/src/*`, `vaultExtract.ts`,
+`vaultSweep.ts`, `vaultLlm.ts` and the vault UI route; `packages/backend/convex/vault.ts` is the ONE
+shared-risk file (Lane R stores web research in the vault) and Lane V's edit there is confined to
+`vaultUpload`'s scheduling block plus `markReady`. **There is NO Wave-0 union freeze for this lane,
+deliberately** — 16∥17 needed one because both add literals to the same closed unions and to
+`schema.ts`; 15.2 touches no closed union and needs no schema change. Do not "restore" a Stage-1
+commit that was never meant to exist.
+
+Status (15.2-01): **THE ROOT CAUSE IS NOW UNEXPRESSIBLE IN THE TYPE SYSTEM, but nothing live was
+proven — this plan touched ZERO `convex/` files by design.** Origin: a `.xlsm` sat at
+`pending_extraction` ~20 h with 0 chars and no `failureReason`, because `extractionKindFor` returns
+`null` for any MIME outside a three-entry allow-list and `null` schedules nothing. Two pieces
+landed, both pure. (1) `packages/vault/src/sniff.ts` — dep-free and V8-safe, so unlike
+`officeText.ts` it IS on the index barrel. `sniffContainer` is an offset-0 prefix table (3 ZIP
+variants, OLE2, RTF, PNG/JPEG/GIF) → a BOUNDED `%PDF` search over the first 1024 bytes (leading junk
+before `%PDF` is legal and happens; the window is what keeps a text file that merely *mentions*
+`%PDF` from being read as one) → a UTF-8 text heuristic. **The heuristic uses `TextDecoder("utf-8",
+{fatal:true})` with `stream:true`, and that is not decoration:** decoding a flat
+`subarray(0,4096)` throws on any multi-byte character straddling byte 4096, which would report every
+non-ASCII document over 4 KiB as binary. `stream:true` holds back the incomplete tail — the
+stdlib answer rather than a hand-rolled trailing-byte trim — and it has its own test. BOM stripped
+before counting, ≥95% printable required, empty input is `"binary"` and never a throw. `ole2Kind`
+is an 8 KiB UTF-16LE needle scan over the directory stream names (`Workbook` checked BEFORE the
+BIFF5 `Book`, which is a suffix of it), gated on the OLE2 header so it is honest standalone — this
+is what tells a MIME-less `.xls` from a MIME-less `.doc`. `resolveRail` composes them with the
+sniffed container as an **OVERRIDE AHEAD OF** the MIME/extension checks; `extractionKindFor` is
+BYTE-UNCHANGED and survives as the FALLBACK behind it (rung 2 — the MIME table already exists, so it
+is reused, not restated), which is why `image/webp` bytes the magic table does not enumerate still
+reach the image rail. `video/*` resolves to `"unsupported"` **deliberately**: media is routed by
+MIME at the SCHEDULING gate before any action runs, so anything reaching `resolveRail` as media has
+already failed to be recognised as media, and failing honestly beats claiming a document rail.
+(2) `schedulingRailFor` in `extractKind.ts` — `SchedulingRail = "transcribe" | "extract"`, three
+lines of logic under a comment deliberately longer than the code. **`ctx.storage.get` is
+ACTION-ONLY** (queries and mutations get `getUrl`/`getMetadata`), so a magic-byte sniff physically
+cannot run at a scheduling site; rather than teach three mutations to guess, we schedule
+permissively and let the one place that can read bytes decide — where
+`fail("unsupported_format")` already existed at `vaultExtract.ts:200` and was, until this line,
+UNREACHABLE. The owner's invariant is preserved and strengthened: an unresolvable format is TERMINAL
+`failed`, never a silent `pending_extraction`; only its LOCATION moved, from the mutation to the
+action. **TWO MUTATION-CHECKS, both confirmed present before being trusted and both reverted green:**
+`PDF_SCAN_BYTES 1024→4` + `resolveRail`'s zip case → `break` ⇒ **2 RED**, exactly the junk-prefixed
+PDF row and the SC#1 headline row (the `.xlsx` renamed `budget.dat` with an empty MIME fell through
+to the MIME fallback and reported `"unsupported"` — the defect itself, observed); and
+`schedulingRailFor` given back its old `if (k === null) return null` branch (needing an
+`as unknown` cast, since the return type alone forbids it) ⇒ **3 RED**, including the ~20-row
+property test. That second one is the load-bearing check: the property test is what fails if anyone
+reintroduces "we don't know, so do nothing". Zero deviations — every interface the plan named was
+where it said. Gates: `@pikar/vault` **77/77** (was 42 — +29 sniff, +6 scheduling), `tsc --noEmit`
+exit 0, `check-playbooks` exit 0, biome clean on all five touched source files, and
+`git diff --name-only | grep -c packages/backend/convex` returns **0**. **DO NOT READ THIS AS A LIVE
+FIX.** No upload was re-run, no stranded row recovered, no rail exercised end to end; `resolveRail`
+has NO production caller until 15.2-03 rewires the three `kind === null` sites
+(`vault.ts:166`, `vaultSweep.ts:34`, `vaultSweep.ts:62` — the last being the user's Retry button,
+where a press produced nothing observable). SC#7 is the live gate and it is Wave 5's, not this one's.
+
+PRIOR — **PHASE 14 CLOSED — 2026-07-26 (9/9 plans, owner live human-verify APPROVED).** The flagship
 voice-doc flow is verified on a REAL call: the agent discussed the uploaded report, a mid-call
 drill-in returned a grounded answer from that document (proving the `search_document` relay reached
 the model), and BOTH outcome paths landed — a memo saved to the vault AND a gap turned into a plan
@@ -877,6 +951,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 14 P02 | ~20 min | 3 tasks | 5 files |
 | Phase 14 P03 | ~25 min | 3 tasks | 5 files |
 | Phase 14 P04 | ~18 min | 2 tasks | 3 files |
+| Phase 15.2 P01 | 35m | 4 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -992,6 +1067,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 14]: 14-04: the document read is a module-local voiceToken.docForMint internalQuery, NOT internal.vault.getDoc — that query returns {text,contentHash,title} with no status and no extractionTruncated, so it can answer neither the readiness refusal nor the truncation disclosure (the same wrong plan premise 14-03 hit). Widening the shared Phase-10 query would touch vault.ts, outside this plan's files_modified/ownership row and watched by vault.md. docForMint returns null on missing/cross-tenant so the MINT owns the message.
 - [Phase 14]: 14-04 (Open Question 3): BOTH branches shipped, the answer still blank. Mint-time tools first (server-owned, races nothing); on a 400 ONLY, an automatic re-POST of the identical body minus tools/tool_choice returning toolsAtMint:false. A 500 still throws first time and does NOT re-POST — a SHAPE fallback, not a retry policy. toolsAtMint is transport control (not a secret, not document content) and is trivially true on an unscoped mint so 14-06's branch stays one line. The dated LIVE-VERIFIED ____-__-__ line in realtime.ts stays BLANK until 14-09's live call.
 - [Phase 14]: 14-04: exactly ONE tool, READ-ONLY, is the tool-SET containment — asserted by length 1 plus the absence of a 'function' key (FLAT Realtime shape). The digest sits in the SYSTEM instructions field, a materially stronger prompt-injection exposure than ADR-006's tool-RETURN case, so the three containments are the fence + its one safety line, this tool set, and the human Approve gate. Upgrade path named in a ponytail: block — move the digest to a first conversation.item.create user-role message, at the cost of first-second fluency.
+- [Phase 15.2]: sniff.ts is dep-free so it IS on the @pikar/vault barrel; officeText.ts stays subpath-only for V8-bundle hygiene
+- [Phase 15.2]: extractionKindFor is byte-unchanged and kept as the MIME FALLBACK behind resolveRail — its null just stops being a scheduling decision
+- [Phase 15.2]: video/audio resolve to 'unsupported' at resolveRail deliberately: media is routed by MIME at the scheduling gate before any action runs
 
 ### Pending Todos
 
@@ -1023,8 +1101,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-26T15:44:14.245Z
-Stopped at: Completed 15.1-07-PLAN.md (both surfaces — the conversation and the facts; phase 15.1 complete)
+Last session: 2026-07-27T00:34:23.447Z
+Stopped at: Completed 15.2-01-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
 Resume file: None
