@@ -97,7 +97,18 @@ export const patchPlan = internalMutation({
     // 12-05 BEVL-02: the plan-SHAPE discriminator. "memo" marks a next-step memo (no recipients)
     // so executePlan takes the persist terminal instead of the gmail fan-out. Drop-undefined means
     // an email patch never touches it; resetPlan clears it explicitly.
-    kind: v.optional(v.literal("memo")),
+    // 17-01 ACTN-02: widened to the same closed union as schema.ts.
+    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"))),
+    // 17-01 ACTN-02: the four STAGED event slots a cockpit tool may write. Drop-undefined means a
+    // non-calendar patch never touches them; resetPlan clears them explicitly.
+    // `calendarEventId` and `calendarRunId` are deliberately NOT args here: they are written only
+    // by cockpit.ts (the run id, in the Approve transaction) and calendarComplete.ts (the event
+    // id, in the retrier terminal) via direct ctx.db.patch. Nothing reachable from the MODEL may
+    // write an event ref or a run id. Do not add them here speculatively.
+    eventTitle: v.optional(v.string()),
+    eventStartMs: v.optional(v.number()),
+    eventDurationMs: v.optional(v.number()),
+    eventTz: v.optional(v.string()),
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
@@ -215,6 +226,15 @@ export const resetPlan = internalMutation({
       // 12-05: a reset must also drop the memo SHAPE, or the next fresh compose in this thread
       // would silently take the memo terminal instead of sending (the Pitfall-6 class, one rung up).
       kind: undefined,
+      // 17-01 ACTN-02: all SIX staged-event fields, explicitly. A staged event surviving a reset
+      // would re-stage onto the NEXT plan — the recipientNames/threading precedent above, and the
+      // same Pitfall-6 class. patchPlan drops undefined, so each must be named to clear.
+      eventTitle: undefined,
+      eventStartMs: undefined,
+      eventDurationMs: undefined,
+      eventTz: undefined,
+      calendarEventId: undefined,
+      calendarRunId: undefined,
     });
   },
 });

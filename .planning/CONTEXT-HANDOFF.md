@@ -1,109 +1,167 @@
-# Context Handoff — 2026-07-26
+# Context Handoff — 2026-07-27
 
-Written when the working session's context filled. Read this + `STATE.md` + `CLAUDE.md` to resume.
-Everything below is committed and **pushed** (`origin/main` = `d19c729`, 0 ahead / 0 behind).
+Written after a session that planned Phases 16 and 17 concurrently. Read this + `STATE.md` +
+`.planning/PARALLELIZATION.md` + `CLAUDE.md` to resume.
 
 ## Where the project is
 
 ```
 v2.0  Phases 10 · 11 · 12 · 13 · 14 · 15 · 15.1   ✅ CLOSED
-Next: /gsd:verify-work on Phase 15.1  →  Phase 16 (Research Sub-Agent & Web Research)
+      Phase 17  ✅ PLANNED + VERIFIED        (lane-k/calendar-actions)
+      Phase 16  ⚠  PLANNED, final check in flight (lane-r/research-web)
+Next: finish 16's check → settle the ONE open UX call → Stage-1 freeze on `main` → execute
 ```
 
-Phase 14 closed 2026-07-26 with an owner live human-verify on a real call (real duplex audio, real
-model): the agent discussed the uploaded report, a mid-call drill-in returned a grounded answer, and
-both outcome paths landed — memo saved to the vault, and a gap turned into a plan that produced an
-email through the Approve gate. SC4 is enforced by seven mutation-verified static scans.
+Both phases were planned **concurrently in two git worktrees**. `.planning/PARALLELIZATION.md`'s
+CURRENT CONTRACT section is the 16 ∥ 17 lane definition — read it before touching either lane.
 
-## Environment — READ BEFORE DEBUGGING ANYTHING UI-LEVEL
+| Lane | Worktree | Branch | Plans |
+|---|---|---|---|
+| R | `.worktrees/lane-r-research` | `lane-r/research-web` | 9 plans / 6 waves |
+| K | `.worktrees/lane-k-calendar` | `lane-k/calendar-actions` | 4 plans / 4 waves |
 
-Two traps cost hours this session. Both are now in `docs/playbooks/voice.md`; repeating them here
-because they present as product bugs.
+Both merged `main` at `880b061` and carry the `llm.ts` memo-context fix. **Neither has run
+`pnpm install` or `npx convex dev`** — every verify command in every plan needs that first.
 
-1. **`pnpm start` serves a FROZEN production build.** A live voice session produced a generic
-   assistant (*"I can't access any knowledge vault"*) that read exactly like a grounding regression.
-   The code was fine — the running bundle had been compiled **4h14m before the first Phase-14
-   commit**, so there was no picker, no `?doc=`, no `docId` at the mint, and therefore no document
-   scope. **Run `pnpm build` before any UAT, and check the build timestamp against `git log` before
-   believing a UI symptom.** `next dev` is not an option here (it OOMs on the workspace page).
-2. **The local Convex deployment config is fragile.** `packages/backend/.convex/local/default/
-   config.json` had been deleted; the backend kept running only because the live process held it in
-   memory, so the break was invisible until a restart. If `npx convex dev` says *"Failed to load
-   deployment config"*, that file is missing. It is reconstructible — `instanceSecret` falls back to
-   a shipped public constant (`LOCAL_BACKEND_INSTANCE_SECRET`) and the loader does a bare
-   `JSON.parse` with no schema validation, so it needs only `ports`, `backendVersion`,
-   `deploymentName`. **`CONVEX_DEPLOYMENT`'s trailing `# team: … project: …` is a dotenv COMMENT,
-   not part of the deployment name** — capturing it breaks the match silently.
+## ~~THE GATE~~ — CLEARED 2026-07-27. Stage 1 is COMPLETE on both sides.
 
-Current runtime state (started from THIS session — they die with it, restart in a real terminal):
-- web: `pnpm --filter @pikar/web start` → `localhost:3000` (built from `main`)
-- backend: `npx convex dev` from `packages/backend` → `127.0.0.1:3210`, functions pushed,
-  skills seeded, `document-analyst` active v1. `OPENAI_API_KEY` + auth vars set in the deployment.
-- `npx convex dev --configure` **cannot be run from an agent shell** — it checks for a TTY, and
-  piping stdin does not satisfy it (winpty does not help; it refuses piped stdin too).
+The freeze was **absorbed into the lanes and serialized through `main`**, not landed as one joint
+commit — resolved in `22c7bb0`, recorded in `.planning/PARALLELIZATION.md`. The property that
+matters is **serialization, not single-commit-ness**. Do not go looking for a joint freeze commit;
+there is none to restore.
 
-## Outstanding work, in priority order
+| Step | Commit | Result |
+|---|---|---|
+| Lane R `16-01` | `4d32ce1` → merged `7386744` | `dispatchResearch` literal, `vaultDocuments.retrievedAt`, VERB entry, watch paths, the three `llm.ts` signature widenings |
+| Lane K `17-01` | `468cbd6` → merged `0da5041` | `calendar_event` + the `externalAction` arm, two trace literals, staged-event `plans` fields + `by_calendar_run`, `calendarFixtures`, the calendar plan card, pure `@pikar/core` calendar module |
 
-1. **`/gsd:verify-work` on Phase 15.1** — 7/7 plans complete, never verified.
-2. **The `WAVE-0.md` post-integration items** (full rationale in `.planning/WAVE-0.md`, §A/§B/§D —
-   read it, the design reasoning matters more than the task list):
-   - **§A the `evaluations` facts split.** `evaluations` currently holds facts (the scorecard,
-     **patched in place** on every in-conversation answer) in the same document as conclusions
-     (findings/gaps/verdict). That violates two documented Convex rules —
-     `convex/_generated/ai/guidelines.md:159` (every update rewrites the whole document) and `:160`
-     (high-churn and stable data must not share a document). Splitting into an append-only
-     `businessFacts` table is a **net deletion**: the patch branch, the seed-carrier branch, the
-     deep-copy carry-forward, the provenance rebuild loop and `userProvided[]` all go, and storage
-     moves from `O(tenants × weeks)` to `O(tenants × changes)`. Blast radius verified contained —
-     nothing outside `evaluations.ts` reads `.scorecard` or `userProvided`.
-   - **§B `gaps[].proofMetricPath`** — one optional field; makes the later outcome-ledger work pure
-     logic with no migration.
-   - **§D weekly-cron hardening** — `runWeekly` does an unbounded `.collect()` over every
-     `business_profile` doc (reading full text to get tenant ids). It dies near **~3,000 tenants**,
-     as a cliff, taking every tenant's review with it. Also: no jitter (whole fleet at one instant
-     Monday 06:00 UTC), no cost-kill-switch check, no DLQ on failure, and `groundedDocCount` is
-     computed for the audit but never stored — so nothing can tell a degraded week from a real one.
-     **Re-derive before applying: `proactiveReview.ts` is no longer lane-unowned — Lane C edited
-     `reviewOne`.**
-3. **Phase 16** — Research Sub-Agent & Web Research (depends on the Phase-15 dispatch framework,
-   which is now landed).
+Lane R went first so its `llm.ts` **signature** widenings landed before `17-03` adds a tool key
+inside that shape. Lane K's down-merge and its merge to `main` both had **zero conflicts** — the
+freeze working as designed. Both lanes may now run their remaining waves **in parallel**.
 
-## Open by decision — do NOT fabricate either
+**The one file still shared after the freeze is `convex/llm.ts`** (16-05, 16-06 ∥ 17-03).
+Whichever lane reaches its `llm.ts` wave second merges `main` down FIRST and re-runs `tsc`.
 
-- **Open Question 3 (tool-declaration branch).** Which branch the Realtime API accepts is
-  **unrecoverable after a session**: `toolsAtMint` is returned to the browser
-  (`voiceToken.ts:174-191`) and never persisted, and both branches are invisible in the UI. A
-  successful drill-in proves *a* branch works, not which. `realtime.ts:107` carries the full note and
-  names the one-line fix. `voiceToken.ts` has been wrong about that request body **twice** — a
-  guessed value is worse than a blank one.
-- **Retrieval round-trip latency.** Never timed. "Never observed as a problem" is weak evidence it is
-  acceptable, not evidence it is fast.
+## RESOLVED — the owner decision that gated the freeze
 
-## Gotchas confirmed this session
+**`stageResearchPlan` REFUSES while a `proposed` email draft is on the card** (owner, 2026-07-27).
+The alternative is `resetPlan`, which `applyActOnGap` does — but only because a USER tapped a
+control. Here the MODEL decides, so a research question would silently destroy a half-composed
+email. Consequence, accepted: "research this" can fail with *"finish or discard your draft first."*
+`plans.byThread` **stays `.unique()`** — no multi-row schema change, so the one-root-envelope
+invariant `16-06`/`16-07` are planned against holds. The >1-plan-row fix is a later phase's work.
 
-- **Mutation-verifying a static scan:** in `docReviewSchema`, `properties` keys are indented 10
-  spaces and `required` 8. A literal-anchor mutation misses silently — the mutation *looks* applied,
-  the test stays green, and the scan gets recorded as verified having never been exercised. Two of
-  seven reported a false PASS this way. **Anchor on a regex.** Ledger is in the `llmRedaction.test.ts`
-  header.
-- **`packages/audit` had no `tsconfig.json`** since Phase 01-03, so root `pnpm typecheck` had never
-  been green. Fixed (`d684640`). Root typecheck still exits non-zero on backend's **52 pre-existing
-  test-file errors** — that is the documented baseline; **0 errors in source** is the real gate.
-- **Stale codegen reads as source errors.** `convex/_generated/` is gitignored; if `api.d.ts` lacks
-  a module you'll get phantom `Property 'x' does not exist` errors in *source* files. Regenerate
-  before believing them.
-- Backend suite is **643/643** — the long-documented `audit.test.ts` `auditCounts` red is now green.
-  Do not re-document it as expected-red.
-- `git worktree remove` fails on Windows against `node_modules` (`Directory not empty`); it
-  deregisters anyway, then delete the folder with PowerShell `Remove-Item -Recurse -Force`.
-- The `UV_HANDLE_CLOSING` assertion from `npx convex run` is benign exit noise — check the actual
-  result, not the assertion.
+## ⚠ NEW — the typecheck baseline is not clean, and `pnpm typecheck` lies
 
-## Uncommitted, deliberately left alone
+`turbo`'s `typecheck` task declares no `inputs`, so its cache restores a **stale pass without
+running `tsc`**. Always pass `--force`. Forced, `@pikar/backend` has **52 errors** — all in
+`*.test.ts`, **zero in production source**, all Phase-1 vintage (`tsconfig.json` sets
+`"types": ["node"]`, starving test files of ambient types, while `include` sweeps them in).
+**Check the DELTA, not an absolute-clean gate**, which no plan in either phase can meet as written.
+Full analysis in `PARALLELIZATION.md` (`0d85975`).
 
-- `Skills/` (untracked) — the owner-added Growth OS suite.
-- `CLAUDE.md` (modified before this session started).
-- `graphify-out/*` — regenerated artifacts, churn on every commit.
-- **`packages/backend/.env.local.bak-pre-repair` and `.bak-before-configure` (untracked).**
-  These are env-file backups that are **not covered by the `.env.local` ignore rule**. Do not
-  `git add -A` without checking — delete them once the deployment is known-good.
+## Phase 16 — what is owed
+
+The **third plan-checker pass** was in flight when this was written. Two earlier passes each found
+3 blockers (all fixed); then D9-REVISED + D12 forced a targeted replan of `16-06`/`16-07` and
+amendments to `16-03`/`16-05`/`16-08`. **That replan is what the check is verifying.** If it did not
+finish, look for `16-CHECK-PARTIAL.md` in the phase dir before re-running.
+
+### Verified by hand — do NOT re-derive
+
+- **`dispatchGuard.test.ts:16-24` PRESCRIBES the async design** — it ends *"dispatch RETURNS to the
+  orchestrator, which starts the specialist loop as its own governed call."* Written in Phase 15,
+  before research existed. The comment is SATISFIED, so the D9 amendment obligation is correctly
+  **DROPPED**, and `16-06` asserts `git diff --name-only` does not list that file. **Do not amend it.**
+- **`stopWhen?: Arrayable<StopCondition<…>>`** exists in the shipped `ai` typings
+  (`dist/index.d.ts:4838`) — so `stopWhen: [stepCountIs(n), outOfClock]` stops BETWEEN steps and
+  returns partial findings. `AbortSignal` throws instead. Different mechanisms; the hard abort stays
+  as a backstop for a single hung step.
+- **`plans.byThread` is `.unique()`** (`plans.ts:281`) — the one-row-per-thread interlock really does
+  yield one persisted root envelope (it replaced the per-turn closure two passes had validated).
+- **D12's test pins a LITERAL `45_000`**, never the `CALL_TIMEOUT_MS` symbol, with the RED mutation
+  named (change `callTimeoutMsFor`'s fallback to `RESEARCH_CALL_TIMEOUT_MS`).
+
+### ⚠ A stale claim that was propagated into 11 files — partially swept
+
+`convex/audit.test.ts` is **GREEN** (verified, 1/1). The 2026-07-26 handoff already recorded the
+backend suite at 643/643 with `auditCounts` fixed, but this session's research agents found the older
+"documented pre-existing red" line in legacy phase docs and carried it into both phases.
+
+**This is the dangerous class of stale doc: it instructs an executor to ignore a red in exactly the
+file their change might break** — and Phase 16 touches the audit path heavily.
+
+Swept so far: both `VALIDATION.md` files (corrected), `17-01`/`17-04` (`<verification>` blocks).
+**Still carrying it:** `16-RESEARCH.md`, `17-RESEARCH.md`, and `16-01`/`16-05`/`16-06`/`16-08`/`16-09`.
+The lane-r plan files were left alone deliberately — the checker was reading them. **Sweep them
+before executing Phase 16.** RESEARCH files may keep the original wording as a historical record;
+VALIDATION supersedes them.
+
+## The locked decisions (16-CONTEXT.md is authoritative — this is the index)
+
+D1 hosted OpenAI `web_search`, no new dep/key · D2 one swap seam, not an abstraction layer ·
+D3 `research` joins `SPECIALIST_ROUTES`, `diagnose()` NOT widened · D4 least-privilege tool-set is
+SC#1's containment · **D5 CORRECTED** — retrieved page text is provider-side and CANNOT be fenced
+(a "retrieved text is fenced" test would pass because the text is ABSENT); containment is the empty
+grant proved POSITIVELY, the OUTPUT fence, and an SSRF scan with a non-vacuity floor ·
+D6 §4 refs/counts only · D7 freshness is a stored queryable field · D8 probe before pinning the model ·
+**D9-REVISED** async memo terminal, supersedes D9 — read its CORRECTION block ·
+D10 sophistication = agentic depth in the specialist loop (owner directive) ·
+D11 degradation contract, six failure modes, proven by mocks AND `eval:golden` ·
+**D12** research-only `RESEARCH_CALL_TIMEOUT_MS ≈ 180s`; 45s unchanged elsewhere.
+
+**The three-decision interaction is easy to break — restating it because I got it wrong once:**
+async alone still aborts at 45s (the timeout is a property of the `generateText` call, not the
+caller: `runSpecialistTurn` → `runAgentLoop`). D12 alone builds a bigger cliff that still discards
+work. D11 alone makes truncation the ROUTINE outcome, so the sophistication silently never happens.
+**All three are required.**
+
+## Phase 17 — done, nothing owed
+
+4 plans / 4 waves (serial). Research **REFUTED** the roadmap's "likely skippable":
+
+- `inline` cannot create an event (a Convex mutation cannot `fetch`, and `executePlan` is a
+  `tenantMutation` pinned by source scan) and `workflow` IS the gmail fan-out — so a third `Arm`
+  (`externalAction`, on `retrier.run`) is **structurally forced**.
+- `freshAccessToken` returns `{ok:true}` for a token lacking the calendar scope → 403 lands AFTER
+  the human approved. Read the persisted `gmailTokens.scope` first.
+- **Use `freeBusy.query`, not `events.list`** — it returns only busy `{start,end}`, deleting the
+  §4/§2-D PII problem by construction rather than by a redaction layer.
+- `events.insert` with attendees makes GOOGLE send invitations outside the governed path. Attendees
+  are out of scope, enforced by the ABSENCE of both `attendees` and `sendUpdates`.
+- A client-supplied event id gives exactly-once free — 409 MEANS success.
+- The retrier's `onComplete` carries only `{runId, result}` (no `context`), so
+  `deadLetter.onPipelineComplete` cannot be reused; correlation rides `returnValue` (typed refs-only,
+  making §4 structural) plus a `plans.by_calendar_run` index — **which is why it had to be caught
+  before the schema freeze.**
+
+**Carries a drive-by fix:** `replyToMessage` is in `agentSteps.tool` but has no `VERB` entry, so every
+inbox-reply trace row renders the generic "Working…"/"Done" `FALLBACK`. A live defect since Phase
+3.11, found by specifying a parity test precisely enough to be checkable. Fixed in `17-01` Task 1e,
+labelled as unrelated.
+
+**Cannot be fully verified without the owner** — 4 criteria need owner-granted Google OAuth consent.
+
+## Environment
+
+- The local Convex backend was RESTARTED this session and `convex dev` ran **from that session — it
+  dies with it.** Restart in a real terminal from `packages/backend`.
+- `pnpm start` serves a FROZEN production build. Rebuild before any UAT and check the build timestamp
+  against `git log` before believing a UI symptom.
+- `npx convex data <bigTable>` times out / dumps megabytes (`vaultDocuments`). The
+  `UV_HANDLE_CLOSING` assert is benign exit noise.
+- **Network is flaky here: two subagents died to ECONNRESET, one to the session limit.** Tell
+  long-running agents to commit incrementally and flush partial work before stopping.
+
+## Also still open from the previous handoff
+
+1. **Phase 15.1 SC#5** (perceivable tier difference) — run this session, **INCONCLUSIVE**. With the
+   framework pinned so only tier varied, the two memos were near-identical. The negative assertion
+   (solopreneur output never presumes delegation) holds; "tier visibly changes treatment" does not
+   survive into memo output. See `.planning/phases/15.1-*/deferred-items.md`.
+   **SC#6, SC#1c and SC#3 were PAID live this session** — details in the same file.
+2. `.planning/WAVE-0.md` §A/§B/§D post-integration items (the `evaluations` facts split,
+   `gaps[].proofMetricPath`, weekly-cron hardening — `runWeekly`'s unbounded `.collect()` dies as a
+   cliff near ~3,000 tenants).
+3. Phase 15's specialist-body eval gate is still UNPAID; those three bodies ship DARK.
+4. The dev tenant is left at `sme` / `tierSource: "derived"`, not its original factless legacy row.

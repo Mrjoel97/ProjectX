@@ -19,8 +19,9 @@
 import type { EntryId } from "@convex-dev/rag";
 import {
   categoryFor,
-  extractionKindFor,
+  EXTRACTION_WATCHDOG_MS,
   isSearchable,
+  schedulingRailFor,
   VAULT_CATEGORIES,
   VAULT_FILE_CAP_BYTES,
   VAULT_VIDEO_CAP_BYTES,
@@ -29,13 +30,54 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
+
+/**
+ * The ONE place an extraction is scheduled. Three callers: vaultUpload, the recovery sweep
+ * (vaultSweep.sweepPendingExtraction) and the user's Retry button (vaultSweep.retryExtraction).
+ *
+ * Deliberately PERMISSIVE. The old shape asked `extractionKindFor` and, on `null`, scheduled
+ * NOTHING — which is how a .xlsm sat at pending_extraction for ~20 hours with 0 chars and no
+ * failureReason. The sniff cannot move here: `ctx.storage.get` is action-only, so a mutation
+ * physically cannot see the bytes. So we schedule unconditionally and let the ONE runtime that CAN
+ * read bytes decide — where `fail("unsupported_format")` has existed all along and was simply
+ * unreachable.
+ *
+ * Every attempt also ARMS A WATCHDOG. That is what makes silent parking impossible rather than
+ * merely rarer: format coverage only reduces how often the guarantee is needed. The watchdog is
+ * per-attempt (a Retry arms a fresh one) and idempotent, so it cannot kill a racing success — the
+ * onIngestComplete pattern. It is a scheduled function, NOT a cron over a table scan: no "status
+ * began at" timestamp exists (createdAt is UPLOAD time, and a Retry on a 20-hour-old row would be
+ * instantly killed by a createdAt-based cutoff), and no schema change is permitted.
+ *
+ * This helper deliberately does NOT sniff (bytes are unreachable in a mutation) and does NOT
+ * decide supportability (that is the action's job, and its refusal is terminal).
+ */
+export async function scheduleExtraction(
+  ctx: MutationCtx,
+  {
+    vaultDocId,
+    tenantId,
+    mimeType,
+    title,
+  }: { vaultDocId: Id<"vaultDocuments">; tenantId: string; mimeType: string; title?: string },
+): Promise<void> {
+  const rail = schedulingRailFor(mimeType, title);
+  await ctx.scheduler.runAfter(
+    0,
+    rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
+    { vaultDocId, tenantId },
+  );
+  await ctx.scheduler.runAfter(EXTRACTION_WATCHDOG_MS, internal.vaultSweep.watchdogStalled, {
+    vaultDocId,
+  });
+}
 
 // ── Public ingest mutations ───────────────────────────────────────────────────
 
@@ -160,19 +202,17 @@ export const vaultUpload = tenantMutation({
       const correlationId = crypto.randomUUID();
       await startIngest(ctx, { vaultDocId, tenantId: ctx.tenantId, correlationId });
     } else {
-      // Phase-3.8 auto-extract: a recognized binary schedules its extraction rail immediately.
-      // The row stays pending_extraction here — the action flips it to `extracting` when work
-      // actually starts (honest pill). Unrecognized formats stay storage-only (kind === null).
-      const kind = extractionKindFor(mimeType, filename);
-      if (kind !== null) {
-        await ctx.scheduler.runAfter(
-          0,
-          kind === "transcribe"
-            ? internal.vaultTranscribe.transcribeDoc
-            : internal.vaultExtract.extractDoc,
-          { vaultDocId, tenantId: ctx.tenantId },
-        );
-      }
+      // Auto-extract: EVERY stored binary schedules an extraction rail, recognized or not. The
+      // row stays pending_extraction here — the action flips it to `extracting` when work actually
+      // starts (honest pill). Nothing is decided from the MIME type beyond transcribe-vs-extract:
+      // only the action can read the bytes, so only the action can refuse, and its refusal is a
+      // terminal failed(...) rather than a row that quietly never moves.
+      await scheduleExtraction(ctx, {
+        vaultDocId,
+        tenantId: ctx.tenantId,
+        mimeType,
+        title: filename,
+      });
     }
     return { vaultDocId };
   },

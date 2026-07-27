@@ -60,11 +60,83 @@ session on `main` lands ONE commit adding **every union member both phases need*
 built yet. Then each lane fills in its *own* files instead of both editing the union. Skipping
 this is the single failure mode this contract exists to prevent.
 
+> **RESOLVED 2026-07-27 — the freeze is ABSORBED INTO THE LANES and SERIALIZED through `main`.
+> There is no single joint Stage-1 commit, and a later reader must not go looking for one.**
+> This is the Phase-15 precedent (recorded below: *"both lanes absorbed the freeze"*), and BOTH
+> Wave-1 plans already specify it as an accepted execution — `16-01 <freeze_contract>` bullet 2
+> and `17-01 <parallelization_contract>` last paragraph. The freeze property that matters is
+> **serialization, not single-commit-ness**: no two lanes may edit a shared union concurrently.
+>
+> Execution order (each step completes and merges before the next begins):
+>
+> 1. **Lane R runs `16-01` → merge to `main`.** First because its `llm.ts` change is the three
+>    *signature* widenings (`buildCockpitTools` 7th arg, `runAgentLoop`/`runSpecialistTurn`
+>    returns); Lane K's `17-03` later adds a tool key *inside* that widened shape, so landing
+>    the shape first makes the second edit additive instead of a re-derivation.
+> 2. **Lane K merges `main` down, runs `17-01` → merge to `main`.** Its union members
+>    (`calendar_event` + the `externalAction` arm, the two trace literals, the staged-event
+>    `plans` fields, `calendarFixtures`) then apply on a base that already carries Lane R's.
+> 3. **Only then Stage 2** — remaining waves run in parallel (16-02…16-09 ∥ 17-02…17-04).
+>
+> **Why hand-writing a joint commit was rejected:** it would re-derive ~2/3 of two
+> checker-verified plans with no plan doc, no tests and no SUMMARY, after which both plans still
+> have to be re-verified as "already present" — more work and more risk for the same end state.
+>
+> **The one file still shared after the freeze is `convex/llm.ts`** (16-05, 16-06 ∥ 17-03).
+> Different regions of a 2,985-line file, so git should merge it — but it is the file this
+> contract was written to protect. Whichever lane reaches its `llm.ts` wave second merges `main`
+> down FIRST and re-runs `pnpm exec tsc --noEmit` before writing a line.
+>
+> **Owner decision that unblocked the freeze (2026-07-27):** `stageResearchPlan` **REFUSES**
+> while a `proposed` email draft is on the card ("finish or discard your draft first").
+> `plans.byThread` stays `.unique()` — **no multi-row-per-thread schema change**, so the
+> one-root-envelope invariant `16-06`/`16-07` are planned against holds. The >1-plan-row fix
+> stays deferred and is a later phase's schema change.
+
 **Stage 2 — parallel execution.** Each lane runs `/gsd:execute-phase` in its own worktree, with
 its own `pnpm install`, its own `npx convex dev` deployment, its own `_generated/`.
 
 **Stage 3 — integrate, then verify.** Merge each lane to `main` as it lands; announce it so the
 other lane merges `main` down. Verify each phase after its own merge.
+
+### ⚠ THE TYPECHECK BASELINE IS NOT CLEAN — measured 2026-07-27, applies to ALL THREE lanes
+
+Every plan in Phases 16 and 17 gates on "typecheck clean". **It is not, and never has been.**
+Measured on `main` and in both lane worktrees:
+
+```
+pnpm exec turbo run typecheck --filter=@pikar/backend --force   ->  52 errors
+```
+
+**`pnpm typecheck` reports GREEN and is lying.** Turbo's `typecheck` task declares no `inputs`
+(`turbo.json`), and its cache restores a stale pass without running `tsc`. **Always pass
+`--force` when you mean it.** This is how the red survived unnoticed since Phase 1.
+
+**All 52 errors are in `convex/*.test.ts`. ZERO are in production `convex/` source** — the
+shipped code typechecks clean. Root cause is a tsconfig artifact, not a code defect:
+`packages/backend/tsconfig.json` sets `"types": ["node"]`, which suppresses every other ambient
+type package (including the one declaring `import.meta.glob`), while its `include` of
+`convex/**/*.ts` sweeps the test files in anyway. `tenant.test.ts`'s `import.meta.glob` dates to
+commit `0385176` — **Phase 1**.
+
+Per-file baseline (`skills` 10, `audit` 7, `plans` 5, `vault` 4, `llmRedaction` 4, `tenant` 3,
+`optimizerConfig` 3, `notifications` 3, `feedback` 3, `evaluations` 3, `worm` 2, then
+`optimizerEligibility` / `opsSignals` / `importGuard` / `guardrails` / `deadLetters` 1 each).
+
+**What an executor must do instead of "typecheck clean":** check the **delta**. Re-measure with
+`--force` before your change, and require that your change adds no error and no error in a
+production `convex/*.ts` file. An absolute-clean gate is unachievable and will make an executor
+either thrash or start ignoring reds wholesale.
+
+> **Do not conflate this with the `audit.test.ts` correction.** Both are true and they are
+> different tools: `audit.test.ts` is **GREEN at runtime** (`vitest`, 1/1 — any runtime red there
+> is a REAL regression, per both VALIDATION.md files) and simultaneously carries **7 of these
+> pre-existing TYPECHECK errors**. Phase 16 touches the audit path heavily, so keep the two
+> apart.
+
+**NOT fixed here, deliberately.** `tsconfig.json` is a build singleton all three lanes share, and
+widening `types` / excluding tests mid-flight could mask a real error in exactly the phases that
+are building. Owner call, best taken between lanes rather than during them.
 
 ### Carried-forward debt neither lane owns
 
@@ -74,6 +146,37 @@ Both of these predate this contract and are recorded so they are not silently lo
 2. **`.planning/WAVE-0.md` §A/§B/§D post-integration items** — the `evaluations` facts split, the
    `gaps[].proofMetricPath` field, and the weekly-cron hardening (`runWeekly`'s unbounded
    `.collect()` dies as a cliff near ~3,000 tenants).
+
+## Phase 15.2 — vault format recognition (Lane V, added 2026-07-27)
+
+Phases 16 (Lane R) and 17 (Lane K) are LIVE. Phase 15.2 runs as an explicitly contracted **third
+lane**. This contract is written BEFORE any code lands, per 15.2-CONTEXT `<coordination>`.
+
+| | Files |
+|---|---|
+| **Lane V owns (edit freely)** | `packages/vault/src/*`, `packages/backend/convex/vaultExtract.ts`, `packages/backend/convex/vaultSweep.ts`, `packages/backend/convex/vaultLlm.ts`, `apps/web/app/(app)/dashboard/vault/*` |
+| **Lane V must NOT touch** | `convex/schema.ts` (this phase needs NO schema change and NO migration — a locked decision), `convex/llm.ts`, `convex/cockpit.ts`, `apps/web/.../workspace/cards.tsx`, `packages/core/src/actionType.ts`, `packages/core/src/specialists.ts`, `convex/skills.ts` (this phase adds NO skill row — §5 is satisfied by REUSING `attachment-extractor`) |
+| **Shared risk (ONE file)** | `packages/backend/convex/vault.ts` |
+
+**`packages/backend/convex/vault.ts` is the one shared-risk file** (RESEARCH §10 rates it MEDIUM:
+Lane R stores web research in the vault). Lane V's edit is confined to the `vaultUpload` scheduling
+block (`:162-176`) plus `markReady` (`:416-421`). Any Lane R edit elsewhere in that file merges
+cleanly; a collision **inside those two blocks is a coordination event, not a resolution** — stop and
+talk, do not merge-resolve by hand.
+
+**Why there is NO Wave-0 union freeze here** (RESEARCH §10): 16∥17 needed one because both lanes add
+literals to the same closed unions and to `convex/schema.ts`. Phase 15.2 touches **no closed union**
+and needs **no `schema.ts` edit** — so the freeze is not applicable, not forgotten. A later reader
+must not "restore" a missing Stage-1 commit for this lane; there is none to restore.
+
+**`docs/playbooks/vault.md` is an append-only shared singleton this phase** (the Phase-3.8 rule):
+each plan writes ONLY inside its own `### Phase 15.2 — 15.2-0N` subsection under one `## Phase 15.2`
+container, and bumps `Last verified`. On merge conflict, **keep both**.
+
+Lane V also appends to the shared singletons `.planning/STATE.md` + `.planning/ROADMAP.md` (phase-15.2
+rows) under the same append-only / keep-both discipline — see
+[The three shared singletons](#the-three-shared-singletons--append-only-discipline) below; the full
+list is not restated here.
 
 ## Phases 14 + 15 — voice-doc flagship ∥ dispatch framework (set up 2026-07-25)
 

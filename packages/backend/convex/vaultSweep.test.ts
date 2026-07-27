@@ -9,10 +9,17 @@
 // Assertions ride the _scheduled_functions system table (vault.test.ts's inspection pattern):
 // the sweep/retry must schedule the Wave-0 stub NAMES (vaultExtract.extractDoc /
 // vaultTranscribe.transcribeDoc) by kind — never import Lane 1/4 modules.
+//
+// Phase 15.2 (15.2-03) added the NEVER-SILENT half: all three scheduling sites now route through
+// vault.scheduleExtraction, which schedules unconditionally and arms watchdogStalled per attempt.
+// The two tests that used to assert "an unrecognized mime schedules nothing" asserted the DEFECT
+// as a requirement; they are inverted here, and the watchdog gets its own idempotence suite.
+import { EXTRACTION_WATCHDOG_MS } from "@pikar/vault";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -40,6 +47,17 @@ const extractionScheduled = (t: ReturnType<typeof convexTest>) =>
       /vaultExtract|vaultTranscribe/.test(s.name),
     ),
   );
+
+/** The per-attempt watchdogs armed so far — the other half of every scheduling decision. */
+const watchdogScheduled = (t: ReturnType<typeof convexTest>) =>
+  t.run(async (ctx) =>
+    (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) =>
+      /watchdogStalled/.test(s.name),
+    ),
+  );
+
+/** The owner's stuck file: an .xlsm, which no allow-list in this repo ever recognised. */
+const XLSM_MIME = "application/vnd.ms-excel.sheet.macroEnabled.12";
 
 /** Raw-insert a vault doc row (bypasses the ingest mutation — sweep operates on existing rows). */
 const seedDoc = (
@@ -108,14 +126,23 @@ describe("sweepPendingExtraction (EXTR-G backlog sweep)", () => {
     }
   });
 
-  test("skips unrecognized mime (application/zip) and rows with no storageId", async () => {
+  // THE OFFLINE REHEARSAL OF THE LIVE GATE (SC#7). This test previously asserted the OPPOSITE —
+  // that an unrecognized mime was skipped — which is the defect stated as a requirement. The sweep
+  // is the recovery mechanism for the stranded .xlsm, so it must now pick that row UP. The
+  // no-storageId skip survives: that guard scopes the sweep, it does not guess at formats.
+  test("sweeps the unrecognized .xlsm row and still skips ready rows and rows with no storageId", async () => {
     const t = setup();
-    await seedDoc(t, { title: "archive.zip", mimeType: "application/zip" });
+    const xlsmId = await seedDoc(t, { title: "budget.xlsm", mimeType: XLSM_MIME });
+    const readyId = await seedDoc(t, { status: "ready" });
     await seedDoc(t, { storageId: undefined });
 
     await runOneBatch(t);
 
-    expect(await extractionScheduled(t)).toHaveLength(0);
+    const sched = await extractionScheduled(t);
+    expect(sched).toHaveLength(1);
+    expect(sched[0]?.name).toContain("vaultExtract");
+    expect(String(sched[0]?.args[0]?.vaultDocId)).toBe(String(xlsmId));
+    expect((await t.run((ctx) => ctx.db.get(readyId)))?.status).toBe("ready");
   });
 
   test("a swept row's status stays pending_extraction (the action flips it, not the sweep)", async () => {
@@ -203,7 +230,7 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
     expect(await extractionScheduled(t)).toHaveLength(0);
   });
 
-  test("retry on an unrecognized mime is a no-op (no rail to schedule)", async () => {
+  test("Retry no longer returns a silent {ok:false} for an unknown format", async () => {
     const t = setup();
     const docId = await seedDoc(t, {
       title: "archive.zip",
@@ -213,7 +240,126 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
     });
 
     const res = await asTenant(t).mutation(api.vaultSweep.retryExtraction, { vaultDocId: docId });
-    expect(res).toEqual({ ok: false });
-    expect(await extractionScheduled(t)).toHaveLength(0);
+    expect(res).toEqual({ ok: true });
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("pending_extraction");
+    expect(doc?.failureReason).toBeUndefined();
+
+    // Observable work: the extraction rail AND a fresh per-attempt watchdog.
+    const sched = await extractionScheduled(t);
+    expect(sched).toHaveLength(1);
+    expect(sched[0]?.name).toContain("vaultExtract");
+    expect(await watchdogScheduled(t)).toHaveLength(1);
+  });
+});
+
+// ── The never-silent guarantee (Phase 15.2 SC#4) ─────────────────────────────
+
+describe("watchdogStalled — the per-attempt backstop for the non-terminal statuses", () => {
+  const fire = (t: ReturnType<typeof convexTest>, vaultDocId: Id<"vaultDocuments">) =>
+    t.mutation(internal.vaultSweep.watchdogStalled, { vaultDocId });
+
+  test.each(["pending_extraction", "extracting"] as const)(
+    "a row still at %s is flipped to failed(extraction_stalled)",
+    async (status) => {
+      const t = setup();
+      const docId = await seedDoc(t, { status });
+
+      await fire(t, docId);
+
+      const doc = await t.run((ctx) => ctx.db.get(docId));
+      expect(doc?.status).toBe("failed");
+      expect(doc?.failureReason).toBe("extraction_stalled");
+    },
+  );
+
+  // The onIngestComplete idempotence property: a watchdog firing one second after a success (or
+  // after an honest, more specific failure) must change NOTHING.
+  test.each(["ready", "processing"] as const)("a row at %s is untouched", async (status) => {
+    const t = setup();
+    const docId = await seedDoc(t, { status });
+
+    await fire(t, docId);
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe(status);
+    expect(doc?.failureReason).toBeUndefined();
+  });
+
+  test("a failed row keeps its ORIGINAL reason — extraction_stalled never overwrites unsupported_format", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, { status: "failed", failureReason: "unsupported_format" });
+
+    await fire(t, docId);
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("failed");
+    expect(doc?.failureReason).toBe("unsupported_format");
+  });
+
+  test("a deleted doc is a silent no-op — no throw, no write", async () => {
+    const t = setup();
+    const docId = await seedDoc(t);
+    await t.run((ctx) => ctx.db.delete(docId));
+
+    await expect(fire(t, docId)).resolves.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(docId))).toBeNull();
+  });
+});
+
+describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => {
+  /** Upload through the REAL public mutation (the first of scheduleExtraction's three callers). */
+  const upload = async (t: ReturnType<typeof convexTest>, mimeType: string, filename: string) => {
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["bytes"])));
+    const { vaultDocId } = await asTenant(t).mutation(api.vault.vaultUpload, {
+      storageId,
+      filename,
+      mimeType,
+      size: 803_281,
+      contentHash: `h-${Math.random()}`,
+    });
+    return vaultDocId;
+  };
+
+  test("the owner's .xlsm — previously scheduled NOTHING — now schedules extractDoc + a +15min watchdog", async () => {
+    const t = setup();
+    const docId = await upload(t, XLSM_MIME, "budget.xlsm");
+
+    expect((await t.run((ctx) => ctx.db.get(docId)))?.status).toBe("pending_extraction");
+
+    const rail = await extractionScheduled(t);
+    expect(rail).toHaveLength(1);
+    expect(rail[0]?.name).toContain("vaultExtract");
+
+    const watchdog = await watchdogScheduled(t);
+    expect(watchdog).toHaveLength(1);
+    expect(watchdog[0]?.args[0]).toMatchObject({ vaultDocId: docId });
+    // Per-attempt, and armed well past any honest run (the 480s call ceiling / 10-min action limit).
+    // A window, not an equality: the two runAfter calls read Date.now() independently, so the delta
+    // is the constant plus however many milliseconds elapsed between them.
+    const delta = watchdog[0]!.scheduledTime - rail[0]!.scheduledTime;
+    expect(delta).toBeGreaterThanOrEqual(EXTRACTION_WATCHDOG_MS);
+    expect(delta).toBeLessThan(EXTRACTION_WATCHDOG_MS + 1000);
+  });
+
+  test("an EMPTY mimeType still schedules extractDoc (the allow-list no longer decides)", async () => {
+    const t = setup();
+    await upload(t, "", "mystery.bin");
+
+    const rail = await extractionScheduled(t);
+    expect(rail).toHaveLength(1);
+    expect(rail[0]?.name).toContain("vaultExtract");
+    expect(await watchdogScheduled(t)).toHaveLength(1);
+  });
+
+  test("media still rides the transcribe rail by MIME — and is watched too", async () => {
+    const t = setup();
+    await upload(t, "video/mp4", "clip.mp4");
+
+    const rail = await extractionScheduled(t);
+    expect(rail).toHaveLength(1);
+    expect(rail[0]?.name).toContain("vaultTranscribe");
+    expect(await watchdogScheduled(t)).toHaveLength(1);
   });
 });

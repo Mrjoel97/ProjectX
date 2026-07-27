@@ -479,7 +479,7 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo";
+    kind?: "memo" | "calendar_event";
     recipients?: string[];
     subject?: string;
     body?: string;

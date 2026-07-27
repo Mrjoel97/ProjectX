@@ -1,31 +1,28 @@
-// Deterministic DOCX/XLSX/PPTX flatten: one fflate unzip + one attribute-tolerant regex
-// XML text-walk (the locked fidelity bar is FLATTEN — text runs only, no XML parser dep).
+// Deterministic flatten of every ZIP-based office document: one fflate unzip + one
+// attribute-tolerant regex XML text-walk (the locked fidelity bar is FLATTEN — text runs only, no
+// XML parser dep). Dispatch is on the MARKER ENTRY the archive carries, never on a declared MIME
+// type: that is what makes coverage true BY CONSTRUCTION (a .docm/.xlsm/.pptm is byte-structurally
+// its non-macro twin) instead of by an enumeration that is always one format behind.
 // Deliberately NOT exported from the index barrel: only the "use node" vaultExtract.ts imports
 // it via the subpath export `@pikar/vault/officeText`, which keeps fflate structurally out of
 // the V8 Convex bundle. Throws `office_parse_failed: ...` on malformed input — the Lane-1
 // dispatcher catches and marks the doc failed.
 import { strFromU8, unzipSync } from "fflate";
+import { decodeEntities, markupText } from "./rawText";
 
-const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
-
-function decodeEntities(s: string): string {
-  return s.replace(/&(amp|lt|gt|quot|apos|#x?[0-9a-fA-F]+);/g, (match, e: string) => {
-    if (e[0] !== "#") return NAMED[e] ?? match;
-    const code = e[1] === "x" ? Number.parseInt(e.slice(2), 16) : Number.parseInt(e.slice(1), 10);
-    return Number.isNaN(code) ? match : String.fromCodePoint(code);
-  });
+/** Raw (still entity-encoded) inner text of each `<tag ...>...</tag>` — attribute-tolerant. */
+function rawRunsOf(xml: string, tag: string): string[] {
+  return [...xml.matchAll(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "g"))].map(
+    (m) => m[1] ?? "",
+  );
 }
 
 /** All text runs of `<tag ...>...</tag>` — attribute-tolerant (Pitfall 7: xml:space="preserve"). */
 function runsOf(xml: string, tag: string): string[] {
-  return [...xml.matchAll(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-    (m) => decodeEntities(m[1] ?? ""),
-  );
+  return rawRunsOf(xml, tag).map(decodeEntities);
 }
 
-function docxText(entries: Record<string, Uint8Array>): string {
-  const doc = entries["word/document.xml"];
-  if (!doc) throw new Error("office_parse_failed: missing word/document.xml");
+function docxText(doc: Uint8Array): string {
   return strFromU8(doc)
     .split("</w:p>")
     .map((p) => runsOf(p, "w:t").join(""))
@@ -78,19 +75,72 @@ function pptxText(entries: Record<string, Uint8Array>): string {
     .join("\n\n");
 }
 
-const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+/** `<text:p>` runs of one ODF block, inner markup (`<text:span>`, `<text:a>`, …) stripped. */
+function paragraphsOf(block: string): string[] {
+  return rawRunsOf(block, "text:p")
+    .map(markupText)
+    .filter((t) => t.length > 0);
+}
 
-export function extractOfficeText(bytes: Uint8Array, mimeType: string): { text: string } {
+/**
+ * ODT / ODS / ODP from `content.xml`. ONE walker, three shapes — the block separator is chosen from
+ * what the document actually contains, never from the declared `mimetype`, so a spreadsheet inside
+ * a text document still reads as rows.
+ */
+function odfText(content: Uint8Array): string {
+  const xml = strFromU8(content);
+  for (const [close, sep] of [
+    ["</table:table-row>", "\t"],
+    ["</draw:page>", "\n"],
+  ] as const) {
+    const blocks = xml
+      .split(close)
+      .map((b) => paragraphsOf(b).join(sep))
+      .filter((b) => b.length > 0);
+    if (xml.includes(close) && blocks.length > 0) return blocks.join("\n");
+  }
+  return paragraphsOf(xml).join("\n");
+}
+
+const EPUB_CONTENT = /\.x?html?$/i;
+
+function epubText(entries: Record<string, Uint8Array>): string {
+  // ponytail: entry-name sort, not the OPF spine order — a book whose files are not
+  // lexicographically ordered reads out of order. Upgrade path: parse content.opf's <spine>.
+  const names = Object.keys(entries)
+    .filter((n) => EPUB_CONTENT.test(n))
+    .sort();
+  if (names.length === 0) throw new Error("office_parse_failed: no epub content");
+  return names.map((n) => markupText(strFromU8(entries[n] as Uint8Array))).join("\n\n");
+}
+
+const ODF_MIME_PREFIX = "application/vnd.oasis.opendocument.";
+
+/**
+ * Flatten any ZIP-based office document to text. Takes the BYTES ONLY — the archive identifies
+ * itself, so a wrong, renamed or absent MIME type cannot strand a readable file.
+ *
+ * ponytail: dispatch is on the PRESENCE of a marker entry, so a malformed archive carrying the
+ * marker but not its payload still throws `office_parse_failed` from the walker. That is the honest
+ * outcome and is exactly what the vaultExtract.ts dispatcher already handles.
+ */
+export function extractOfficeText(bytes: Uint8Array): { text: string } {
   let entries: Record<string, Uint8Array>;
   try {
     entries = unzipSync(bytes);
   } catch {
     throw new Error("office_parse_failed: not a zip");
   }
-  if (mimeType === DOCX_MIME) return { text: docxText(entries) };
-  if (mimeType === XLSX_MIME) return { text: xlsxText(entries) };
-  if (mimeType === PPTX_MIME) return { text: pptxText(entries) };
-  throw new Error(`office_parse_failed: unrecognized mime ${mimeType}`);
+  const doc = entries["word/document.xml"]; // DOCX / DOCM
+  if (doc) return { text: docxText(doc) };
+  if (entries["xl/workbook.xml"]) return { text: xlsxText(entries) }; // XLSX / XLSM
+  if (entries["ppt/presentation.xml"]) return { text: pptxText(entries) }; // PPTX / PPTM
+  const mimetype = entries.mimetype; // ODT / ODS / ODP — first entry, stored uncompressed
+  if (mimetype && strFromU8(mimetype).trim().startsWith(ODF_MIME_PREFIX)) {
+    const content = entries["content.xml"];
+    if (!content) throw new Error("office_parse_failed: missing content.xml");
+    return { text: odfText(content) };
+  }
+  if (entries["META-INF/container.xml"]) return { text: epubText(entries) }; // EPUB
+  throw new Error("office_parse_failed: unrecognized zip");
 }

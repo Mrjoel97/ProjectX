@@ -55,8 +55,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15: Sub-Agent Dispatch & Generalized Action Executor** - Real swappable (skill, tool-set) dispatch + action-agnostic approve->execute spine (the framework all breadth rides)
  (completed 2026-07-25)
 - [x] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md` (completed 2026-07-26)
+- [ ] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
+- [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
 - [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated)
 
@@ -588,6 +590,31 @@ Plans:
 - [x] 15.1-06-PLAN.md — Conversational onboarding: the `onboarding-agent` skill + a `generateObject` slot-filler where code owns the state machine (Q1) — completed 2026-07-26 (`converse` = ONE `generateObject` turn → `{reply, slots, missing, nextSlot, done}`; a `tenantAction`, STATELESS, writes NOTHING. `nextSlot` = `missingSlots(slots)[0]` in `REQUIRED_SLOTS` order and `done` = `canComplete(slots)`, NEVER read off the model — a reply claiming "your onboarding is complete!" leaves `done:false`, and the non-vacuity turn says the opposite while going `done:true`. UNGATED `onboarding-agent` (Q6) through the FULL 5-file mirror, loaded FAIL-CLOSED and FIRST — before the `SMOKE::onboard::` short-circuit — so SC#3c is exercised offline. The code supplies the slot NAME + shape, the body the words; the merge's admission test IS `missingSlots` over a one-slot object, so `0` is an answer and off-union enums are DROPPED. **Q1 honoured literally: `llm.ts` AND `schema.ts` byte-unchanged via `git diff --exit-code`, no new `agentSteps.tool` literal, no `"use node"`, and the `ponytail:` ceiling names the three `runAgentLoop` blockers + the upgrade path.** FOUR mutation-checks, all CRLF-aware and loud on NO MATCH: load-after-short-circuit ⇒ 1 RED exactly SC#3c; `done` off the reply ⇒ 2 RED; `nextSlot` in model order ⇒ 1 RED; one-char `.md` edit ⇒ 1 RED. ZERO deviations. contracts 17/17, core 277/277, onboarding+profileRedaction 26/26, +skills+tenantProfile 87/87, backend FULL 585/586 (sole red the documented `audit.test.ts` row), backend `tsc` at the exact 55-error baseline with 0 in any non-test file, apps/web exit 0, turbo 8/10, `check-playbooks` exit 0, diff limited to the 9 owned files)
 - [x] 15.1-07-PLAN.md — apps/web: the conversational onboarding surface + the profile facts form with a read-only tier and its reason — completed 2026-07-26 (**the deploy block from 15.1-03/06 is LIFTED — `commitProfile` is satisfiable again**; the onboarding page runs the fact conversation and writes `saveFacts` before `commitProfile`, the profile page renders the tier READ-ONLY with its `tierSource` reason and the preset as the closed `BEHAVIOR_PRESETS` enum, never free text. The closing beat costs a SECOND `converse` call and that is load-bearing: `converse` derives `nextSlot` from the slots it was GIVEN, so the turn completing the set is still under `Next fact to obtain: <last>` — re-asking with the completed slots is the only path to the prompt's "nothing left to obtain" branch; ceiling + upgrade path in a `ponytail:` comment. **TWO would-be-vacuous checks caught: (a) plan 03's mutation-check did NOT carry over — it pasted back a persona pill block that no longer exists in either rewritten file, so against the new source it was a no-op reporting CLEAN; re-armed properly, a planted `saveFacts({tier:"sme"})` button gave 2 RED on the profile page. (b) the scan's four `not.toContain` rows were ALL satisfiable by a page with no controls at all — added a positive row asserting the `BEHAVIOR_PRESETS` group survives, so "no tier control" now means "no tier control AND the legitimate preference control still exists".** 3 deviations auto-fixed: the plan's `role="radio"` group tripped `useSemanticElements` and had no keyboard nav (replaced with native `fieldset`/`legend` + `input[type=radio]` on both pages), the new `tier:` scan rule false-positived on the read-only render `{tierRow ? tierRow.tier : "—"}` (re-anchored on property position), and `onboarding.md` still described the persona confirm/change control plan 03 deleted. Measurement caveat carried forward: `grep -c $'\r'` under Git Bash here matched EVERY line — do not measure EOLs that way in this worktree. apps/web `tsc` exit 0, core 282/282, SC#1c scan 14/14, backend full 585/586, backend `tsc` at the exact 55-error baseline, turbo 8/10, `check-playbooks` exit 0, `git diff -- packages/backend/` zero files)
 
+### Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out (INSERTED)
+**Goal**: A document the user uploads is either READ or it FAILS — never a silent "reading…" pill forever. Recognition becomes content-based (magic bytes) instead of a MIME-string allow-list, every common business format extracts, and scanned PDFs transcribe verbatim instead of being summarised.
+**Depends on**: Phase 15 only in sequence, not in substance — this is independent vault work. Runs as a THIRD concurrent lane alongside the live Phases 16 and 17 (see `.planning/PARALLELIZATION.md`).
+**Requirements**: consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md` (owner-approved 2026-07-27, incl. the SheetJS dependency call)
+**Origin**: owner-reported "the vault has been reading this document for 10+ minutes". Diagnosed live 2026-07-27: a `.xlsm` sat at `pending_extraction` ~20h with 0 chars and NO `failureReason`, because `extractionKindFor` returns `null` for any MIME outside a three-entry allow-list and `null` schedules nothing.
+**Success Criteria** (what must be TRUE):
+  1. `sniffContainer(bytes)` decides the extraction rail from magic bytes; a correct file with a wrong, renamed or ABSENT MIME type still extracts (closes the same class as the documented Windows empty-MIME `.md` defect).
+  2. `extractOfficeText` dispatches on ZIP ENTRIES, not mimeType — so XLSM/DOCM/PPTM/ODT/ODS/ODP/EPUB are covered by construction rather than by enumeration. No new dependency for this tier (`fflate` is installed).
+  3. Legacy formats read: DOC/PPT via an OLE2 printable-run sweep (no dep); XLS/XLSB via SheetJS pinned from the CDN tarball, NOT the npm `xlsx@0.18.5` publish (CVE-2023-30533 / CVE-2024-22363). A text sweep is NOT acceptable for BIFF — it recovers headers and silently loses every number.
+  4. **No document ever parks silently.** An unresolvable format is terminal `failed("unsupported_format")` at the `vaultUpload` chokepoint, and a 15-minute watchdog flips stalled `pending_extraction`/`extracting` rows — the two non-terminal statuses that never got the guarantee `onIngestComplete` gave `processing` after the 2026-07-20 stranding incident.
+  5. Scanned PDFs extract VERBATIM: the hosted-OCR branch fans out per-page (pdf-lib `copyPages`, bounded-concurrency batches, page-ordered reassembly), matching the `attachment-extractor` skill's existing single-page contract — so §5 is satisfied by REUSE, with no new skill row and no prompt change.
+  6. `markReady` clears `failureReason`/`extractionTruncated`, so a successful retry stops reporting a stale error; and `extractGraph` caps its prompt (today it is the one uncapped model call in the repo).
+  7. **LIVE GATE:** the owner's stuck `.xlsm` reaches `ready` with non-zero `textChars` on the real deployment via `vaultSweep:runSweep`. Offline green does NOT close this phase (Pitfall-1 class — only the deployed run proves it).
+**Non-goal**: folders, 1–1.5 GB folder upload, the 200 MB per-file cap raise, document-identity classification and folder-level synthesis are **Phase 2 of this line of work** — the cap raise is unsafe until the fan-out bounds per-action memory (the playbook already flags large-doc extraction memory/time at the CURRENT 100 MiB cap).
+**Plans**: 7 plans in 7 waves (serial — `vaultExtract.ts` is the spine of four of them, and `execute-phase` serialises on `wave`, not on intra-wave `depends_on`)
+
+Plans:
+- [x] 15.2-01-PLAN.md — Lane V contract + magic-byte `sniff.ts` + the never-null scheduling decision [SC#1, SC#4] (Wave 1)
+- [x] 15.2-02-PLAN.md — Format coverage in the pure layer: ZIP-entry dispatch (XLSM/DOCM/PPTM/ODF/EPUB) + RTF/markup/OLE2 DOC-PPT, no new dependency [SC#2, SC#3] (Wave 2)
+- [ ] 15.2-03-PLAN.md — **THE UNBLOCK**: permissive scheduling at ONE chokepoint, in-action rail dispatch, reachable `unsupported_format`, 15-min per-attempt watchdog [SC#1, SC#2, SC#3, SC#4] (Wave 3)
+- [ ] 15.2-04-PLAN.md — Stale-reason fix, `GRAPH_EXTRACT_CHAR_CAP`, plain-language failure copy + remedy [SC#4, SC#6] (Wave 4)
+- [ ] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5)
+- [ ] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6)
+- [ ] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7)
+
 ### Phase 16: Research Sub-Agent & Web Research
 **Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
 **Depends on**: Phase 15 (dispatch framework + generalized executor)
@@ -617,7 +644,31 @@ Plans:
   1. The agent reads calendar availability in-loop (like `listInbox`) and proposes a calendar event; the event is created only after the human Approve gate fires the generalized executor - never inside a tool call.
   2. Calendar actions reuse the shipped OAuth-refresh/adapter pattern and log refs/ids/counts only to audit.
   3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
-**Plans**: TBD
+**Plans**: 4 plans in 4 waves (serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
+- [ ] 17-01-PLAN.md — Stage-1 shared-union freeze (agentSteps literals, widened `plans.kind`, staged-event fields, `calendarFixtures`, VERB, watch.json) + the three arm-table compile sites + the pure `@pikar/core` calendar domain
+- [ ] 17-02-PLAN.md — the Google Calendar adapter: the offline fixture seam, the widened one-URL Google grant, `freeBusy` read, `events.insert` write, and the single retrier-`onComplete` terminal handler
+- [ ] 17-03-PLAN.md — the two in-loop tools in `llm.ts`: `checkAvailability` (read) and `proposeCalendarEvent` (stages onto the plan, never creates)
+- [ ] 17-04-PLAN.md — the real `externalAction` arm behind the Approve gate, the enforcement scans (write unreachable from `llm.ts`, POST targets by NAME, no attendees/`sendUpdates`), and the SC#3 two-tenant isolation assertion
+
+### Phase 17.1: Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED)
+
+**Goal:** Every agent surface carries a standing, cited description of the business instead of
+reaching it only through query-scoped retrieval. One blueprint artifact = the user's typed profile
+(authoritative, never overwritten) + document-derived fields where they left blanks (cited) + the
+top graph entities. Draft -> user confirms -> live; prepended in `vaultGroundHydrated` so all five
+callers (cockpit, onboarding, evaluations, voiceDoc, tenantProfile) inherit it from one seam.
+
+**Source:** `docs/superpowers/specs/2026-07-27-business-blueprint-design.md` (PRD express path).
+Locked owner decisions D1-D5 in spec §2.1.
+
+**Requirements**: BLPR-01 (synthesis + typed-wins precedence + confirm gate), BLPR-02 (standing spine on every grounding call + staleness + drift diff)
+**Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
+(Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
+**Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
+**Plans:** 2/7 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 17.1 to break down)
 
 ### Phase 18: Document & Content Creation
 **Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
@@ -734,8 +785,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
+| 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 2/7 | In Progress|  |
 | 16. Research Sub-Agent & Web Research | 0/TBD | Not started | - |
 | 17. Calendar Actions | 0/TBD | Not started | - |
+| 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 0/TBD | Not started | - |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
 | 20. Media Canvas | 0/TBD | Not started | - |
