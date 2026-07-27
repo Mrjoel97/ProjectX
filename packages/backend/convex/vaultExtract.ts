@@ -3,7 +3,7 @@
 // Lane-1 (03.8-02) extraction dispatcher — PDF text-layer-first + hosted OCR + office delegation.
 // The spine (RESEARCH Pattern 1, intake.ts ordering): preCall gate -> markExtracting -> load
 // bytes via ctx.storage.get (NEVER via args — 5 MiB node-action arg cap, vault files go to
-// 8 MiB) -> SMOKE::extract:: sniff -> dispatch by extractionKindFor -> scanText FAIL-CLOSED on
+// 8 MiB) -> SMOKE::extract:: sniff -> dispatch by resolveRail (magic bytes, 15.2-03) -> scanText FAIL-CLOSED on
 // the extracted output BEFORE any audit write (§4) -> refs/counts-only audit -> char-cap
 // truncation -> internal.vault.ingestExtractedText seam with the RAW post-gate text
 // (planner-confirmed: the content plane holds the user's own data; downstream re-scans).
@@ -16,8 +16,12 @@ import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import {
-  extractionKindFor,
   MIN_CHARS_PER_PAGE,
+  markupText,
+  oleText,
+  resolveRail,
+  rtfText,
+  sniffContainer,
   VAULT_EXTRACT_CHAR_CAP,
   VAULT_EXTRACT_PAGE_CAP,
 } from "@pikar/vault";
@@ -74,7 +78,7 @@ function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
-type ExtractPath = "smoke" | "text_layer" | "hosted" | "office";
+type ExtractPath = "smoke" | "text_layer" | "hosted" | "office" | "legacy" | "raw";
 type Extracted = { text: string; path: ExtractPath };
 
 /**
@@ -177,27 +181,82 @@ export const extractDoc = internalAction({
         return null;
       }
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      const kind = extractionKindFor(meta.mimeType, meta.title) ?? "unknown";
+      // THE dispatch decision, taken from the BYTES — this action is the only runtime that can see
+      // them (ctx.storage.get is action-only), which is why scheduling upstream is permissive and
+      // why the refusals below are where format support is actually decided. A wrong, renamed or
+      // absent MIME type no longer decides anything on its own; `meta.title` is only the extension
+      // fallback behind the magic-byte sniff.
+      const rail = resolveRail(bytes, meta.mimeType, meta.title);
 
-      // 4. SMOKE:: sniff FIRST (intake.ts grammar), then dispatch by kind.
+      // 4. SMOKE:: sniff FIRST (intake.ts grammar) — vaultSmoke.ts depends on it staying AHEAD of
+      // the rail dispatch — then dispatch by rail.
       const sniffed = decodeUtf8(bytes);
       let extracted: Extracted;
       if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
-      } else if (kind === "pdf") {
+      } else if (rail === "pdf") {
         extracted = await extractPdf(ctx, bytes);
-      } else if (kind === "image") {
-        extracted = { text: await extractHosted(ctx, bytes, meta.mimeType), path: "hosted" };
-      } else if (kind === "office") {
+      } else if (rail === "image") {
+        // A SNIFFED image with an empty/wrong MIME must still be sent with a real mediaType, or
+        // the model call is malformed — SC#1 would "work" right up to the point it silently didn't.
+        const imageMediaType = meta.mimeType.startsWith("image/")
+          ? meta.mimeType
+          : (({ png: "image/png", jpeg: "image/jpeg", gif: "image/gif" } as const)[
+              sniffContainer(bytes) as "png" | "jpeg" | "gif"
+            ] ?? "image/png");
+        extracted = { text: await extractHosted(ctx, bytes, imageMediaType), path: "hosted" };
+      } else if (rail === "zip") {
+        // Every ZIP-based office format (DOCX/DOCM, XLSX/XLSM, PPTX/PPTM, ODT/ODS/ODP, EPUB) —
+        // extractOfficeText dispatches on the archive's own marker entry, not on a mime type.
         try {
           extracted = { text: extractOfficeText(bytes).text, path: "office" };
         } catch {
           await fail("office_parse_failed");
           return null;
         }
+      } else if (rail === "legacy_doc" || rail === "legacy_ppt") {
+        try {
+          const text = oleText(bytes, rail === "legacy_doc" ? "doc" : "ppt");
+          extracted = { text, path: "legacy" };
+        } catch {
+          await fail("legacy_parse_failed");
+          return null;
+        }
+      } else if (rail === "legacy_xls") {
+        // An HONEST refusal, deliberately not a plausible one. A printable-run sweep over BIFF is
+        // NOT an acceptable substitute: legacy .xls stores numbers as binary doubles, so a sweep
+        // recovers the column headers and silently loses every value — a spreadsheet that reads as
+        // a document with no data in it. The real parser (SheetJS) lands in plan 15.2-07; until
+        // then the remedy shown to the user is "re-save as .xlsx".
+        await fail("unsupported_legacy_spreadsheet");
+        return null;
+      } else if (rail === "rtf") {
+        try {
+          extracted = { text: rtfText(bytes), path: "raw" };
+        } catch {
+          await fail("raw_parse_failed");
+          return null;
+        }
+      } else if (rail === "markup") {
+        extracted = { text: markupText(decodeUtf8(bytes)), path: "raw" };
+      } else if (rail === "text") {
+        // JSON / YAML / TSV / LOG / plain text all ride here — the document IS its own extraction.
+        extracted = { text: decodeUtf8(bytes), path: "raw" };
       } else {
-        // "transcribe" rides vaultTranscribe.ts (Lane 4); null should never be scheduled here.
+        // NOT dead code any more. This line has existed since 03.8-02 and was UNREACHABLE, because
+        // the mutation upstream refused to schedule anything it could not name — which is exactly
+        // how a .xlsm parked at pending_extraction for ~20 hours with no failureReason. Bytes that
+        // nothing here can read now land as a TERMINAL failure the user can see and retry.
         await fail("unsupported_format");
+        return null;
+      }
+
+      // An extraction that recovered nothing must FAIL, not succeed with 0 chars. A `ready`
+      // document with empty text is a PLAUSIBLE failure — the agent grounds confidently on
+      // nothing — and this phase exists to remove exactly that shape (the same reason oleText
+      // throws rather than returning "").
+      if (extracted.text.trim().length === 0) {
+        await fail("empty_extraction");
         return null;
       }
 
@@ -213,7 +272,7 @@ export const extractDoc = internalAction({
           correlationId: vaultDocId,
           eventType: "vault.extraction_failed",
           actor: "system",
-          payload: { vaultDocId, kind, reason: "pii_scan_failed" },
+          payload: { vaultDocId, kind: rail, reason: "pii_scan_failed" },
         });
         return null;
       }
@@ -230,7 +289,9 @@ export const extractDoc = internalAction({
         actor: "system",
         payload: {
           vaultDocId,
-          kind,
+          // The RAIL that read the bytes. Still keyed `kind` so existing audit readers are
+          // unaffected; it is a label — refs/counts only, never document text (§4).
+          kind: rail,
           path: extracted.path,
           piiCounts: scan.value.counts,
           charCount: outText.length,
