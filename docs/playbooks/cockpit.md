@@ -1,5 +1,9 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-30 (17-03) — the two Calendar tools live in the one governed cockpit loop:
+> availability returns busy ranges only, while event proposals stage all four event fields at
+> `status: "proposed"` and stop before the human Approve gate. See "Phase 17 — 17-03" below.
+>
 > Last verified: 2026-07-30 (17.1-06) — **the confirmed business blueprint is standing context on every model-backed cockpit turn, including turns that call no tools.** `runCockpitAgent` reads `spineForTenant` only after the no-model SMOKE return path and routes the result through the one `buildTurnPrompt`: spine first, then history, plan context, and the current user line last. The read fails open to the byte-identical legacy prompt; `system: skill.body` remains the versioned registry body. VALIDATION item 24 drives the real read/render chain and mutation-pins production plus the test shim to exactly two helper call sites. See "Phase 17.1 — standing business-blueprint turn context" below.
 > Also verified: 2026-07-29 (17-02) — the Calendar write arm is a two-module split: `calendar.ts`
 > is `"use node"` and holds only `freeBusy` / `createEvent` actions; `calendarComplete.ts` is
@@ -826,6 +830,12 @@ leaving the gap would have made a brand-new test RED on arrival inside a freeze 
 **Invariant:** the Calendar arm is a two-module split. `calendar.ts` is `"use node"` and contains
 only the availability and event-create actions; `calendarComplete.ts` is non-Node and is the sole
 writer of plan status, Calendar audit rows, and Calendar dead letters for this arm.
+
+### Phase 17 — 17-03 (Calendar tool staging)
+
+**Invariant:** the Calendar tools stage only. `proposeCalendarEvent` writes `eventTitle`,
+`eventStartMs`, `eventDurationMs`, and `eventTz` together with `status: "proposed"` and nothing
+else; neither Calendar tool may reach the event-creation action.
 
 ### Phase 16 — 16-05 (the hosted search capability)
 

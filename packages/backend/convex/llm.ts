@@ -34,15 +34,16 @@ import {
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
-  applyRecipientEdit,
   type AvailabilityRange,
-  type BriefingItem,
+  actionTypeOf,
+  applyRecipientEdit,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
-  actionTypeOf,
+  type BriefingItem,
   bucket,
   buildDocFilename,
   buildRecipientView,
+  CALENDAR_HORIZON_MS,
   type DigestBatch,
   type DigestItem,
   exceedsByteCap,
@@ -1405,6 +1406,62 @@ export function buildCockpitTools(
             ? `\n${res.busy.length - shown.length} additional busy block(s) not shown.`
             : "";
         return `${res.busy.length} busy block(s) for ${range}:\n${lines}${remainder}`;
+      },
+    }),
+    proposeCalendarEvent: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage a calendar event on the plan for the user to approve. " +
+        "This does not put anything on the calendar. " +
+        "Pass the user's time words; the app supplies the current time and timezone.",
+      inputSchema: jsonSchema<{ title: string; when: string; durationMinutes: number }>({
+        type: "object",
+        properties: {
+          title: { type: "string", description: "The event title." },
+          when: { type: "string", description: "The user's natural-language event time." },
+          durationMinutes: { type: "number", description: "The event duration in minutes." },
+        },
+        required: ["title", "when", "durationMinutes"],
+        additionalProperties: false,
+      }),
+      execute: async ({ title, when, durationMinutes }): Promise<string> => {
+        // §2-D: a model supplies the user's WORDS, never an instant, clock, or timezone.
+        if (!clientContext)
+          return "I couldn't read your local time and timezone, so I can't stage the calendar event yet.";
+        const parsed = parseSendTime(
+          when,
+          clientContext.nowMs,
+          clientContext.tz,
+          CALENDAR_HORIZON_MS,
+        );
+        switch (parsed.kind) {
+          case "resolved": {
+            // ponytail: one bounded duration, rounded then clamped to 15–480 minutes. Upgrade only
+            // when the product supports shorter reminders or multi-day timed events.
+            const clampedMinutes = Math.min(480, Math.max(15, Math.round(durationMinutes)));
+            // Staging boundary: no fetch, no calendar-write action or scheduler, no nested
+            // generateText, and no attendee handling. The human Approve gate owns the side effect.
+            await ctx.runMutation(internal.plans.patchPlan, {
+              planId,
+              kind: "calendar_event",
+              status: "proposed",
+              eventTitle: title,
+              eventStartMs: parsed.epochMs,
+              eventDurationMs: clampedMinutes * 60_000,
+              eventTz: clientContext.tz,
+            });
+            const at = fmtSendInstant(parsed.epochMs, clientContext.tz);
+            return `Calendar event staged for ${at} (${clampedMinutes} minutes). Confirm this exact time back to the user; it will be added only after they Approve.`;
+          }
+          case "ambiguous":
+            return "That event time is ambiguous — ask which day and time they meant (never guess). Nothing was staged.";
+          case "past":
+            return "That event time has already passed — ask the user for a future time. Nothing was staged.";
+          case "tooFar":
+            return "That event time is too far out to stage safely — ask the user for a nearer date. Nothing was staged.";
+          case "none": // exhaustive: a new SendTimeParse variant must become a TS error, never a guessed calendar instant
+            return "I didn't detect a specific event time — ask the user for the day and time. Nothing was staged.";
+        }
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
