@@ -173,7 +173,7 @@ describe("freeBusy — fixture-first, governed read", () => {
   test("a grant lacking free/busy scope returns reauth before even the refresh POST", async () => {
     const t = harness();
     await seedGoogleToken(t, TENANT, GMAIL_MODIFY_SCOPE);
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);
 
     expect(await t.action(internal.calendar.freeBusy, freeBusyArgs)).toEqual({
