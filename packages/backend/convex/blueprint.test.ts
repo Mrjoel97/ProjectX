@@ -2,13 +2,18 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
+  probesFor,
+  serializeProfile,
   SPINE_CHAR_CAP,
+  statedFromProfile,
   serializeBlueprint,
+  type BusinessProfile,
   type BusinessBlueprint,
 } from "@pikar/core";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import { __collectGroundedSources } from "./blueprint";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -124,6 +129,76 @@ const LIVE_BLUEPRINT_TEXT = serializeBlueprint({
   knownConstraints: null,
   entities: null,
 } satisfies BusinessBlueprint);
+
+const TYPED_PROFILE = {
+  name: "Acme",
+  oneLineDescription: "Spring-water systems for growing hotels.",
+  persona: "startup",
+  stage: "growing",
+  offering: "Spring-water filtration systems",
+  targetCustomer: "Independent hotels",
+  primaryGoals: ["Reach 50 hotel customers"],
+  knownConstraints: ["Founder-led sales"],
+} satisfies BusinessProfile;
+
+const FULL_LIVE_BLUEPRINT_TEXT = serializeBlueprint({
+  name: { values: ["Acme"], origin: "stated" },
+  oneLineDescription: { values: ["Old description"], origin: "stated" },
+  stage: { values: ["growing"], origin: "stated" },
+  tier: { values: ["startup"], origin: "stated" },
+  offering: { values: ["Spring-water filtration systems"], origin: "stated" },
+  targetCustomer: { values: ["Independent hotels"], origin: "stated" },
+  revenueModel: {
+    values: ["Installation plus maintenance"],
+    origin: "derived",
+    source: "pricing.md",
+  },
+  bindingConstraint: {
+    values: ["Founder-led sales"],
+    origin: "derived",
+    source: "operating-plan.md",
+  },
+  primaryGoals: { values: ["Reach 50 hotel customers"], origin: "stated" },
+  knownConstraints: { values: ["Founder-led sales"], origin: "stated" },
+  entities: { values: ["Acme"], origin: "derived", source: "entity graph" },
+} satisfies BusinessBlueprint);
+
+async function insertBusinessProfile(
+  t: ReturnType<typeof makeTest>,
+  tenantId: string,
+  profile: BusinessProfile,
+): Promise<Id<"vaultDocuments">> {
+  return await insertVaultDocument(t, {
+    tenantId,
+    kind: "business_profile",
+    text: serializeProfile(profile),
+  });
+}
+
+async function rejectionData(promise: Promise<unknown>): Promise<{ code?: string }> {
+  try {
+    await promise;
+  } catch (error) {
+    return ((error as { data?: unknown }).data ?? {}) as { code?: string };
+  }
+  throw new Error("expected the call to reject");
+}
+
+const tenantRows = (t: ReturnType<typeof makeTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect(),
+  );
+
+const tenantVaultDocs = (t: ReturnType<typeof makeTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect(),
+  );
 
 async function insertLiveBlueprint(
   t: ReturnType<typeof makeTest>,
@@ -500,5 +575,117 @@ describe("blueprint candidate synthesis", () => {
     await expect(
       t.query(internal.guardrails.remainingDailyCents, {}),
     ).resolves.toBe(before);
+  });
+});
+
+describe("blueprint draft build", () => {
+  test("refuses a tenant with no tier row before any write or spend (item 12)", async () => {
+    const t = makeTest();
+    await insertBusinessProfile(t, "tenant_missing", TYPED_PROFILE);
+    const rowsBefore = await tenantRows(t, "tenant_missing");
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    const refused = await rejectionData(
+      t.withIdentity({ subject: "tenant_missing" }).action(api.blueprint.buildBlueprintDraft, {}),
+    );
+
+    expect(refused.code).toBe("NO_TENANT_PROFILE");
+    expect(await tenantRows(t, "tenant_missing")).toEqual(rowsBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+  });
+
+  test("a fully typed profile edit reuses live derived fields with no probe, model call, or vault write", async () => {
+    const t = makeTest();
+    await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: ["live-source-a", "live-source-b"],
+      text: FULL_LIVE_BLUEPRINT_TEXT,
+    });
+    const profileDocId = await insertBusinessProfile(t, "tenant_a", TYPED_PROFILE);
+    await t.run((ctx) =>
+      ctx.db.insert("graphNodes", {
+        tenantId: "tenant_a",
+        type: "organization",
+        name: "Acme",
+        normalizedName: "acme",
+        degree: 10,
+      }),
+    );
+    const vaultCountBefore = (await tenantVaultDocs(t, "tenant_a")).length;
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {}),
+    ).resolves.toEqual({
+      ok: true,
+      additions: 0,
+      contradictions: 0,
+      dropped: 0,
+      sourceDocCount: 0,
+    });
+
+    const [firstRow] = await tenantRows(t, "tenant_a");
+    expect(firstRow?.blueprintDraft).toBeTruthy();
+    expect(firstRow?.blueprintSourceDocIds).toEqual(["live-source-a", "live-source-b"]);
+    expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+
+    const firstDraft = firstRow?.blueprintDraft;
+    await t.run((ctx) =>
+      ctx.db.patch(profileDocId, {
+        text: serializeProfile({
+          ...TYPED_PROFILE,
+          oneLineDescription: "A one-line edit that must stay free.",
+        }),
+      }),
+    );
+    await t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {});
+
+    const [secondRow] = await tenantRows(t, "tenant_a");
+    expect(secondRow?.blueprintDraft).not.toBe(firstDraft);
+    expect(secondRow?.blueprintSourceDocIds).toEqual(["live-source-a", "live-source-b"]);
+    expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
+    const draft = JSON.parse(secondRow?.blueprintDraft ?? "{}") as {
+      blueprint?: BusinessBlueprint;
+      sourceDocIds?: string[];
+    };
+    expect(draft.blueprint?.oneLineDescription?.values).toEqual([
+      "A one-line edit that must stay free.",
+    ]);
+    expect(draft.sourceDocIds).toEqual([]);
+  });
+
+  test("grounds sparse-profile probes in closed-field order and dedupes sources by doc id", async () => {
+    const sparse = { ...TYPED_PROFILE, offering: "", targetCustomer: "" };
+    const probes = probesFor(statedFromProfile(sparse, "startup", []));
+    const calls: string[] = [];
+
+    const sources = await __collectGroundedSources(probes, async (query) => {
+      calls.push(query);
+      return {
+        docIds: ["shared-doc", `doc-${calls.length}`],
+        titles: ["Shared source", `Source ${calls.length}`],
+        chunks: ["First stable passage", `Passage ${calls.length}`],
+      };
+    });
+
+    expect(calls).toEqual(probes.map(({ query }) => query));
+    expect(probes.map(({ field }) => field)).toEqual([
+      "offering",
+      "targetCustomer",
+      "revenueModel",
+      "bindingConstraint",
+    ]);
+    expect(sources.map(({ docId }) => docId)).toEqual([
+      "shared-doc",
+      "doc-1",
+      "doc-2",
+      "doc-3",
+      "doc-4",
+    ]);
+    expect(sources[0]).toEqual({
+      docId: "shared-doc",
+      title: "Shared source",
+      text: "First stable passage",
+    });
   });
 });
