@@ -79,9 +79,12 @@ export function xlsText(bytes: Uint8Array): string {
 // ponytail ceilings, all MEASURED against SheetJS 0.20.3 rather than assumed:
 // - DATES in a SheetJS-WRITTEN .xls surface as the Excel serial (46067), not "2/14/26", because
 //   its BIFF8 writer emits no date number-format record; `cellDates: true` does not change it.
-//   The same workbook as .xlsb/.xlsx renders the date. A real Excel-authored .xls does carry a
-//   format record, but that is NOT observed here — if a user reports serial dates from a real
-//   file, the upgrade path is a per-cell `t === "d"` walk instead of sheet_to_csv.
+//   The same workbook as .xlsb/.xlsx renders the date. A REAL Excel-authored .xls was observed
+//   2026-07-29: 31 numeric cells carried raw serial 46232 plus Excel's
+//   `[$-F800]dddd\,\ mmmm\ dd\,\ yyyy` format record; this function emitted
+//   "Wednesday, July 29, 2026" 31 times and the raw serial zero times. If another real file ever
+//   emits serial dates, the upgrade path remains a per-cell `t === "d"` walk instead of
+//   sheet_to_csv.
 // - FORMULAE yield the cached value, and the .xls round-trip drops the formula string entirely.
 // - MERGED CELLS render the value once and blanks for the spanned cells (sheet_to_csv default).
 // - No cell/sheet cap: VAULT_EXTRACT_CHAR_CAP downstream is what bounds a huge workbook.

@@ -1,6 +1,14 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-27 (23) — **A NEW DOCUMENT CLASS LANDS IN THE VAULT: `kind: "web_research"`,
+> Last verified: 2026-07-29 (24) — **THE LAST LEGACY-XLS DATE CEILING IS CLOSED WITH A REAL
+> EXCEL-AUTHORED BIFF FILE.** `Zainab_Blowing_Operators_KPIs_Feb_2026.xls` has the OLE2 signature,
+> 31 numeric date cells, raw serial `46232`, and Excel's
+> `[$-F800]dddd\,\ mmmm\ dd\,\ yyyy` number-format record. The production `xlsText` path emitted
+> *"Wednesday, July 29, 2026"* **31 times** and `46232` **zero times**, across 346,692 extracted
+> characters. The prior `46067` result remains true only for the SheetJS-written test fixture,
+> whose BIFF writer omits the format record. No parser change and no binary fixture were needed.
+>
+> PRIOR (23) — **A NEW DOCUMENT CLASS LANDS IN THE VAULT: `kind: "web_research"`,
 > written by the DISPATCHER (`convex/research.ts` ← `dispatch.runResearch`), never by the specialist
 > that produced the prose.** One row per successful research run, through the SOLE legal starter
 > (`startIngest`), carrying the D7 freshness stamp as a stored `retrievedAt` number. The stored text
@@ -40,8 +48,9 @@
 > reached `ready` with its numbers visible — OWNER APPROVED, SC#3's XLS half CLOSED** (evidence
 > level: the owner's direct confirmation of the checkpoint criterion — `ready`, numbers present,
 > not headings-only; **no figures were transcribed back or diffed against Excel**). **The
-> date-serial ceiling is NOT closed by that approval** — a SheetJS-written `.xls` yields the serial
-> `46067`, and a real Excel-authored file with a format record remains **unobserved**. The
+> date-serial ceiling was not closed by that approval; it was closed later on 2026-07-29 by a real
+> Excel-authored workbook with 31 date cells. The SheetJS-written `.xls` still yields `46067`
+> because its fixture writer omits the format record. The
 > generalised Pitfall-9 rule now lives in `## Invariants` and the dependency-selection note in
 > `## Dependencies & blast radius`, not only in the phase narrative. See
 > `### Phase 15.2 — 15.2-07` at the END of this file. PRIOR (20) —
@@ -1055,10 +1064,11 @@ so the distinction stays visible.
 
 - **DATES:** in a **SheetJS-written** `.xls` a date surfaces as the Excel **serial** (`46067`), not
   `2/14/26`, because its BIFF8 *writer* emits no date number-format record; **`cellDates: true` does
-  not change it** (measured). The same workbook as `.xlsb`/`.xlsx` renders the date. Whether a real
-  **Excel-authored** `.xls` (which does carry a format record) renders as a date is **NOT observed**
-  — if a user reports serial dates, the upgrade path is a per-cell `t === "d"` walk instead of
-  `sheet_to_csv`.
+  not change it** (measured). The same workbook as `.xlsb`/`.xlsx` renders the date. **CLOSED
+  2026-07-29 on a real Excel-authored `.xls`:** 31 numeric date cells stored raw serial `46232`
+  plus Excel's `[$-F800]dddd\,\ mmmm\ dd\,\ yyyy` format record; `xlsText` emitted
+  *"Wednesday, July 29, 2026"* 31 times and the raw serial zero times. If another real file reports
+  serial dates, the upgrade path is a per-cell `t === "d"` walk instead of `sheet_to_csv`.
 - **FORMULAE:** the cached **value** appears, not the formula string; the `.xls` round-trip drops
   the formula entirely.
 - **MERGED CELLS:** value once, blanks for the spanned cells (`sheet_to_csv` default).
@@ -1099,10 +1109,10 @@ Deployment `local-joel_feruzi-pikar_ai_50c69-1`, 2026-07-27.
   level: the owner's direct confirmation against the checkpoint criterion (reached `ready`, numbers
   present, not headings-only). **No figures were transcribed back and nothing was diffed against
   Excel** — so "the numbers are there" is proven; "every number is correct" is not claimed.
-- **STILL NOT OBSERVED: a real Excel-AUTHORED `.xls` containing DATE cells.** See the date-serial
-  ceiling above — the owner's approval does not close it, because the uploaded file is not known to
-  have contained dates and the serial behaviour was only ever measured on a SheetJS-written
-  fixture.
+- **POST-PLAN CLOSURE, 2026-07-29:** a real Excel-authored `.xls` containing 31 numeric date cells
+  was measured through the production `xlsText` function. Raw BIFF value `46232` plus the stored
+  date format rendered as *"Wednesday, July 29, 2026"* 31 times; the raw serial appeared zero
+  times. This closes the evidence gap without a parser change.
 
 #### Gates
 
@@ -1205,8 +1215,10 @@ references as its own part labelled by entry path — so a rels file that fails 
   15.2-06 built — a different rail with a real per-page cost.
 - **CACHED CHART VALUES ARE EMITTED VERBATIM.** Categories come back as Excel **date serials**
   (`46023 / 46054 / 46082` = the Jan/Feb/Mar 2026 month ends) and percentages as full-precision
-  floats (`4.7100000000000003E-2`, displayed as 4.71%). Same family as 15.2-07's `46067`. Upgrade
-  path: read `<c:formatCode>` and apply it. **Observed asymmetry: only the chart whose categories
+  floats (`4.7100000000000003E-2`, displayed as 4.71%). This matches the SheetJS-written fixture's
+  `46067`, not the now-proven Excel-authored BIFF path, because the chart cache does not carry the
+  workbook cell's usable formatting. Upgrade path: read `<c:formatCode>` and apply it.
+  **Observed asymmetry: only the chart whose categories
   are a `<c:numCache>` shows serials — the two charts whose categories are a `<c:strCache>` came
   back as `Jan-26 / Feb-26 / Mar-26`.**
 - **EMBEDDED WORKSHEETS ARE OUT OF SCOPE BY MEASUREMENT, NOT OMISSION.** This deck has **no

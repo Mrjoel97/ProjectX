@@ -98,8 +98,9 @@ describe("xlsText", () => {
     // record, so on read the cell is indistinguishable from a number and `sheet_to_csv` renders
     // the serial (46067), not "2/14/26". `cellDates: true` does NOT change this — measured.
     // The same workbook written as .xlsb/.xlsx DOES render "2/14/26", so this is a property of
-    // the FIXTURE WRITER. Whether a real Excel-authored .xls (which does carry a format record)
-    // renders as a date is NOT observed here — see the ponytail ceiling in xlsText.ts.
+    // the FIXTURE WRITER. A real Excel-authored .xls was observed separately on 2026-07-29:
+    // xlsText rendered all 31 formatted date cells and emitted their raw serial zero times. The
+    // owner workbook is not committed because this suite's no-binary-fixture rule still applies.
     const wb = workbook([{ name: "Dated", rows: [["when"]] }]);
     const ws = wb.Sheets.Dated;
     if (!ws) throw new Error("fixture sheet missing");
