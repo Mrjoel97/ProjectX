@@ -11,18 +11,19 @@ const makeTest = () => convexTest(schema, modules);
 
 async function insertVaultDocument(
   t: ReturnType<typeof makeTest>,
-  {
-    tenantId,
-    kind = "business_blueprint",
-    text = "# Business Blueprint",
-    status = "ready",
-  }: {
+  options: {
     tenantId: string;
     kind?: string;
     text?: string | undefined;
     status?: "processing" | "ready";
   },
 ): Promise<Id<"vaultDocuments">> {
+  const {
+    tenantId,
+    kind = "business_blueprint",
+    status = "ready",
+  } = options;
+  const text = Object.hasOwn(options, "text") ? options.text : "# Business Blueprint";
   return await t.run(async (ctx) => {
     return await ctx.db.insert("vaultDocuments", {
       tenantId,
