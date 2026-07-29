@@ -1,6 +1,11 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-27 — 16-06 (DISP-02), **CONFIRMED by 16-06's author against the committed code.** **`landSpecialistResult` gained an optional `fallbackBody`, and 16-06 added a SECOND stager (`plans.stageResearchPlan`).** The section **"A second stager, and a memo that stops lying"** below was drafted by the 15.2 lane off the then-uncommitted diff; 16-06's author has now read it against the shipped code and it is ACCURATE — the provenance caveat it carried is resolved and removed. The gap path is byte-identical (`runSpecialist` passes no `fallbackBody`), and the whole 15-04 landing suite is green unchanged, which is the proof rather than the claim. See `cockpit.md` § "Phase 16 — the async research dispatch seam" for the seam's other half.
+> Last verified: 2026-07-30 — 17.1-07 (BLPR-02): the confirmed Business Blueprint now enters the
+> evaluation chunk set explicitly, after authoritative profile seeds and before ordinary retrieval.
+> A contradictory derived figure cannot beat the user's typed value or take its provenance. See
+> **"Blueprint standing context and the provenance ceiling"** below.
+>
+> PRIOR — 2026-07-27 — 16-06 (DISP-02), **CONFIRMED by 16-06's author against the committed code.** **`landSpecialistResult` gained an optional `fallbackBody`, and 16-06 added a SECOND stager (`plans.stageResearchPlan`).** The section **"A second stager, and a memo that stops lying"** below was drafted by the 15.2 lane off the then-uncommitted diff; 16-06's author has now read it against the shipped code and it is ACCURATE — the provenance caveat it carried is resolved and removed. The gap path is byte-identical (`runSpecialist` passes no `fallbackBody`), and the whole 15-04 landing suite is green unchanged, which is the proof rather than the claim. See `cockpit.md` § "Phase 16 — the async research dispatch seam" for the seam's other half.
 > Prior: 2026-07-26 — 15.1-04 (ONBD-02, SC#2b): **the rubric is picked from the `tenantProfiles` ROW, not from a string matched out of markdown.** `PERSONA_FRAMEWORK` became `TIER_FRAMEWORK`, bound `as const satisfies Record<Tier, Framework>` (`enterprise` → `swot`, the honest SME-shaped default for an operator grant, D6), and `runEvaluation` reads `internal.tenantProfile.forTenant({ tenantId })` ONCE beside the carry-forward read. **`personaHint` is deleted** — it was the LAST authoritative reader of the markdown persona, which is what makes design §4.2's claim true that `deserializeProfile`'s `"solopreneur"` fallback "stops being a silent reclassification risk once nothing authoritative depends on it". The `text.includes("- **Persona:**")` block SURVIVES as a profile detector and keeps its four CONTENT `fillVault` calls; only the AUTHORITY was removed. The trailing `?? "lean"` was dropped deliberately (the lookup is total, so it was an assertion that could never fail — the Phase-15 `armFor` lesson). **Q3 is unchanged and LOCKED:** `financialsPresent` still overrides with `growth-os`; the tier's perceivable effect lands on the specialist prompt (ADR-009), not on the rubric. New tests confirmed RED first — both authority cases returned `"lean"` against the old code. `evaluations.test.ts` 23/23, `proactiveReview.test.ts` 8/8, `gapAction.test.ts` 5/5.
 > Prior: 2026-07-26 — 15-06 (DISP-01): **`actOnGap` now has an identity-less twin.** Its handler was extracted verbatim into a shared `applyActOnGap(ctx, tenantId, threadId, gapIndex)` behind TWO surfaces: the unchanged auth-scoped `actOnGap` (the UI path) and the new `internal.evaluations.actOnGapInternal`, which takes an explicit `tenantId`. Same shape and same reason as `applyScorecardAnswer` / `recordScorecardAnswerInternal` (12-04): `npx convex run` carries NO auth identity, so the golden-eval harness could not otherwise reach the tenant-scoped mutation. It exists so an eval fixture drives the REAL user path — gap → tap → `collecting` → scheduled `internal.dispatch.runSpecialist` → `landSpecialistResult` → `proposed` — rather than a re-implemented imitation of it; because both surfaces share one implementation, the two-terminal choice, the plan recycle and the scheduled dispatch cannot be true in one and absent in the other. ZERO behaviour change: the returned union is unchanged (now the named `ActOnGapResult`, explicit per Convex guidelines §96 so the generated API does not collapse for `apps/web`), and the whole 18-test `evaluations.test.ts` + 5-test `gapAction.test.ts` + 31-test `dispatch.test.ts` set is green unchanged — that is the proof, not a claim. **If you add a guard to the tap, add it to `applyActOnGap`, never to a wrapper.**
 > Last verified: 2026-07-26 — 15-04 (DISP-01): **"Act on this" RUNS the specialist.** `actOnGap` stays a `tenantMutation` and now has TWO terminals — a gap routed at a REGISTERED specialist stages `status: "collecting"` with NO body and schedules `internal.dispatch.runSpecialist`; a gap with no registered specialist keeps the 12-05 memo at `proposed` and schedules nothing. The `collecting` staging IS the Approve-race mitigation (a template must never be approvable under a specialist attribution header) and must not be "simplified" back. `landSpecialistResult` is the only writer of the dispatched body and no-ops on any row that is not still `collecting`/`kind: "memo"` under the same tenant; `buildMemo` is now the FALLBACK and its wording branches on `fallbackReason`. See the **"Act on this" now RUNS the specialist** section below. `evaluations.test.ts` 18/18, `gapAction.test.ts` 5/5.
@@ -79,8 +84,12 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
 
 1. **Carry forward** — `lastForThread` reads the tenant's latest row; its `scorecard` +
    `userProvided[]` seed this run (a previously-answered figure is never re-asked).
-2. **Ground** — `vaultGroundHydrated` returns `{ docIds, titles, chunks }` (parallel arrays). Fail
-   open on any error (the carried values still stand).
+2. **Ground** — `vaultGroundHydrated` returns `{ docIds, titles, chunks, spine }`. The three
+   retrieval arrays stay parallel and the confirmed Blueprint is a separate field. The engine reads
+   its real vault document id through `blueprint.liveForTenant`, then assembles the final chunk order
+   as **profile seeds → Business Blueprint → ordinary retrieval**. Fail open on any error (the
+   carried values and ordinary grounding still stand); `spine: null` keeps the pre-17.1 path
+   byte-identical.
 3. **Fill** — parse a grounded business-profile chunk (`deserializeProfile`) into identity fields
    and scan for direct labeled figures (`CAC: $150`) into financials; each fill records its source
    doc as provenance. A user-provided carried field is provenance "user-provided". A field still
@@ -98,6 +107,21 @@ Run `graphify query "business evaluation"` for the live subgraph. Couplings grap
    vault|user-provided, each cited).
 7. **Audit + step** — ONE `internal.audit.log` `evaluation.ran` (counts + framework/verdict enums
    ONLY) + an `"evaluateBusiness"` activity step (running→done/error).
+
+### Blueprint standing context and the provenance ceiling
+
+The Blueprint is consumed explicitly from `vaultGroundHydrated.spine`; it is never smuggled into the
+retrieval arrays. `profileSeedDocs` remains authoritative and is moved to the front even when a
+profile document was already a retrieval hit. This ordering is load-bearing because `fillVault`
+keeps the first value and provenance it sees. The BLPR-02 evaluation test seeds profile
+`CAC: $150`, a contradictory Blueprint `CAC: $999`, and an ordinary retrieval figure, then pins the
+distinct citation order to profile → Blueprint → retrieval and keeps CAC attributed to the profile.
+
+**Accepted provenance ceiling:** `FINANCIAL_PATTERNS` scans every chunk. A figure stated only in the
+serialized Blueprint is therefore attributed to "Business blueprint", not to the source document
+from which `mergeBlueprint` derived it. This is provenance quality, not value correctness: the
+profile-first rule still protects the user's typed figure. Upgrade path: suppress numeric restatements
+in the serialized spine.
 
 ## Invariants — what must never break
 

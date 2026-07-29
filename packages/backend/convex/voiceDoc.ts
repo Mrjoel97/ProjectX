@@ -72,10 +72,13 @@ async function docScopedPassages(
   // Reuse the Phase-10 retrieval engine rather than reading `vaultDocuments.text` here: that blob
   // is book-sized (the 16 MiB read cap) and re-selecting chunks by hand would fork the one place
   // chunk selection lives. `namespace = tenantId` inside it is the isolation linchpin (BETA-05).
-  const { docIds, chunks } = await ctx.runAction(internal.vaultGround.vaultGroundHydrated, {
-    tenantId,
-    query,
-  });
+  const { docIds, chunks, spine } = await ctx.runAction(
+    internal.vaultGround.vaultGroundHydrated,
+    {
+      tenantId,
+      query,
+    },
+  );
 
   // ponytail: DOC SCOPING IS POST-HOC. `vaultGroundHydrated` searches the tenant's WHOLE vault
   // (`rag.search` top-K, limit 8) and everything that is not `docRef` is dropped right here.
@@ -94,8 +97,17 @@ async function docScopedPassages(
   //      entry: a migration, not a swap.
   // Explicitly NOT a cache — cost control for voice is time-cap-only by decision (ADR-005).
   const passages: string[] = [];
-  let used = 0;
-  for (let i = 0; i < docIds.length && passages.length < RETRIEVAL_MAX_PASSAGES; i++) {
+  // BLPR-02 SEAM 2: consumed EXPLICITLY, above the docRef filter below — that filter is what would
+  // have silently discarded a prepended entry 0, so this caller would have received no standing
+  // context at all.
+  if (spine) passages.push(spine);
+  let used = 0; // RETRIEVAL_CHAR_CAP accounting is unchanged: the spine is budgeted outside it.
+  let documentPassageCount = 0;
+  for (
+    let i = 0;
+    i < docIds.length && documentPassageCount < RETRIEVAL_MAX_PASSAGES;
+    i++
+  ) {
     if (docIds[i] !== docRef) continue;
     // One entry per doc, whose several matched passages `vaultGroundHydrated` joined with a blank
     // line — split on that same separator so RETRIEVAL_MAX_PASSAGES counts passages, not documents.
@@ -107,10 +119,14 @@ async function docScopedPassages(
       if (remaining <= 0) break;
       const capped = passage.slice(0, remaining);
       passages.push(capped);
+      documentPassageCount += 1;
       used += capped.length;
-      if (passages.length >= RETRIEVAL_MAX_PASSAGES) break;
+      if (documentPassageCount >= RETRIEVAL_MAX_PASSAGES) break;
     }
   }
+  // ponytail: REALTIME COST CEILING. The spine rides every `search_document` call, and realtime
+  // input tokens are re-billed on every turn. Upgrade path: move it to the session mint in
+  // `voiceToken.ts`; that file is deliberately outside this phase.
   return passages;
 }
 
