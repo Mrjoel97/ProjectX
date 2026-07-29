@@ -360,6 +360,18 @@ export const seedCockpitPlan = internalMutation({
 //     body, which is the only way the probe measures anything — the eval tenant has no mailbox
 //     and the runner rejects SMOKE:: turns, so the malicious mail cannot ride the turn text).
 
+/** Read the tenant's calendar fixture (null = no fixture → the live Google path). Explicit return
+ *  type: inferred through the internal graph it would collapse calendar.ts's actions to `any`
+ *  (Convex guidelines §96). */
+export const getCalendarFixture = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<Doc<"calendarFixtures"> | null> =>
+    await ctx.db
+      .query("calendarFixtures")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .first(),
+});
+
 /** Read the tenant's inbox fixture (null = no fixture → the live Gmail path). Explicit return
  *  type: inferred through the internal graph it would collapse gmail.ts's actions to `any`
  *  (Convex guidelines §96). */
@@ -626,6 +638,29 @@ export const seedInboxFixture = internalMutation({
     ];
     await ctx.db.insert("inboxFixtures", { tenantId, offlineDigest, messages });
     return { messageCount: messages.length };
+  },
+});
+
+/** Seed deterministic calendar busy blocks for offline tests and smokes. This internal mutation is
+ *  the ONLY writer: real tenants have no fixture row, so the fixture and live paths cannot overlap. */
+export const seedCalendarFixture = internalMutation({
+  args: { tenantId: v.string(), baseMs: v.optional(v.number()) },
+  handler: async (ctx, { tenantId, baseMs }): Promise<{ busyCount: number }> => {
+    const existing = await ctx.db
+      .query("calendarFixtures")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    const base = baseMs ?? Date.now();
+    const hour = 3_600_000;
+    const busy = [
+      { startMs: base + hour, endMs: base + 2 * hour },
+      { startMs: base + 4 * hour, endMs: base + 5.5 * hour },
+      { startMs: base + 26 * hour, endMs: base + 27 * hour },
+    ];
+    await ctx.db.insert("calendarFixtures", { tenantId, busy });
+    return { busyCount: busy.length };
   },
 });
 

@@ -5,13 +5,14 @@ milestone_name: - Platform -> Private Beta
 current_phase: 17.1
 current_plan: 6
 status: in_progress
-stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..06 COMPLETE, next 17.1-07; cockpit SEAM 1 is mutation-verified and plan 17.1-07 was not started. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-29T21:54:13.969Z"
+stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed through its final completion commit. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 2/4 with the adapter and terminal complete; next 17-03. 17.1 Business Blueprint is 6/10 with the cockpit spine complete and 17.1-07 in progress. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-30T01:18:54.699Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 191
+  completed_plans: 192
+  percent: 95
 ---
 
 # Project State
@@ -26,12 +27,12 @@ read only the first frontmatter block.
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
 | — | **17.1** Business Blueprint | 6/10 plans, waves 1-4 through cockpit SEAM 1 done | 17.1-07 (wave 5, grounding seam) | 17.1-06 is complete and mutation-verified; 17.1-07 was not started and still requires lane coordination |
-| V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
-| R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
-| K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
+| V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
+| R | **16** Research Sub-Agent | 8/9 plans | 16-09 live eval | Deterministic gates are green; awaiting a securely available `OPENAI_API_KEY` for the required model-backed golden run |
+| K | **17** Calendar Actions | 2/4 plans | 17-03 | Adapter + terminal complete; owner OAuth checks M1-M3 remain non-blocking |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-191 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+192 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -55,9 +56,9 @@ read only the first frontmatter block.
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
-plans 01-06 through cockpit SEAM 1 and stops here; 15.2 is complete bar the owner-added 15.2-08;
-16 is at 16-08; 17 is blocked on its own deployment.
+**Current focus:** See `## Lane Status` above. Phase 15.2 is complete. Phase 16 is paused at
+16-09's live model gate pending a securely available OpenAI key. Phase 17 is ready for 17-03.
+Phase 17.1 is executing 17.1-07 after completing the cockpit spine seam.
 
 ## Current Position
 
@@ -1469,6 +1470,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 10 | 03 | 12 min | 2 | 2 |
 | 15.1 | 01 | 31 min | 3 | 7 |
 | 17.1 | 01 | 22 min | 2 | 5 |
+| 17 | 02 | 35 min | 3 | 8 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -1520,6 +1522,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
+- [Phase 17 / 17-02]: **Calendar uses one widened Google grant and a two-module terminal split.** `calendar.ts` is a Node actions-only adapter; `calendarComplete.ts` is non-Node and the sole writer of Calendar plan status, audit, reconnect notifications, and dead letters. Stored scope is checked before refresh, and deterministic event IDs make Google 409 duplicate an idempotent success. ACTN-02 stays pending until the later Phase-17 plans wire the complete action surface.
 - [Phase 17.1 / 17.1-01]: **The blueprint field set is closed and bound by ONE `as const satisfies Record<BlueprintField, FieldSpec>` table** carrying `label`/`list`/`cap`/`derivable`/`probe`. Deliberately NOT a switch — a `default` branch makes a new field silently inherit another's behaviour and makes the coverage test vacuous forever. Mutation-verified: a 12th field with no spec entry ⇒ `TS2741`. Every later 17.1 plan (diff, serializer, spine caps, candidate gate) indexes this one table rather than re-enumerating the fields.
 - [Phase 17.1 / 17.1-01]: **The stored blueprint markdown uses the plain `- <Label>: ` scalar shape and must NEVER emit `- **Persona:**`** — that exact string is the business-profile DETECTOR in `evaluations.ts` and `vault.profileSeedDocs`, so a blueprint wearing it is misread as a profile doc by both. Mutation-verified (bold marker ⇒ 4 RED). It is also byte-deterministic with no date and no document count: both are computed at READ time in the spine, and baking either in would make every rebuild "differ", breaking the drift diff and the `contentHash` dedup.
 - [Phase 17.1 / 17.1-01]: **`BLPR-01` stays PENDING until the phase actually delivers it.** Six of the phase's ten plans claim it and its text covers the confirm gate (17.1-08's), so `gsd-tools requirements mark-complete` flipping it after plan 1 of 10 was reverted. A requirement checkbox is a claim, not a progress bar.
@@ -1669,8 +1672,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-29T21:54:13.933Z
-Stopped at: Completed 17.1-06-PLAN.md
+Last session: 2026-07-30T01:18:54.699Z
+Stopped at: Integrated completed 17.1-06 and 17-02 lanes; 17.1-07 executing, 17-03 next, 16-09 awaiting OpenAI key
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z

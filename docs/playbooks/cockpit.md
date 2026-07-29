@@ -1,6 +1,10 @@
 # Playbook: Email Chat Cockpit
 
 > Last verified: 2026-07-30 (17.1-06) — **the confirmed business blueprint is standing context on every model-backed cockpit turn, including turns that call no tools.** `runCockpitAgent` reads `spineForTenant` only after the no-model SMOKE return path and routes the result through the one `buildTurnPrompt`: spine first, then history, plan context, and the current user line last. The read fails open to the byte-identical legacy prompt; `system: skill.body` remains the versioned registry body. VALIDATION item 24 drives the real read/render chain and mutation-pins production plus the test shim to exactly two helper call sites. See "Phase 17.1 — standing business-blueprint turn context" below.
+> Also verified: 2026-07-29 (17-02) — the Calendar write arm is a two-module split: `calendar.ts`
+> is `"use node"` and holds only `freeBusy` / `createEvent` actions; `calendarComplete.ts` is
+> non-Node and is the sole writer of plan status, Calendar audit rows, and Calendar dead letters.
+> See "Phase 17 — 17-02 (Calendar adapter + terminal)" below.
 
 > Last verified: 2026-07-29 (16-08) — **D11's deterministic degradation contract is mutation-verified:** retryable search errors fall back, non-retryable errors propagate, zero results are labelled insufficient evidence, contradictions survive storage, and cost/step/clock ceilings return distinct partial-result markers. The research §4 audit scan proves only the question hash and source count cross the log plane, and the lineage reconstructs from `rootRequestId`. See "Phase 16 — the research degradation contract" below.
 
@@ -816,6 +820,12 @@ branches.
 generic "Working…"/"Done" fallback. Fixed here because 17-01 is the only Phase-17 plan permitted to
 touch `cards.tsx`, and because the new `traceParity.test.ts` asserts set equality **both ways** —
 leaving the gap would have made a brand-new test RED on arrival inside a freeze commit.
+
+### Phase 17 — 17-02 (Calendar adapter + terminal)
+
+**Invariant:** the Calendar arm is a two-module split. `calendar.ts` is `"use node"` and contains
+only the availability and event-create actions; `calendarComplete.ts` is non-Node and is the sole
+writer of plan status, Calendar audit rows, and Calendar dead letters for this arm.
 
 ### Phase 16 — 16-05 (the hosted search capability)
 

@@ -1,4 +1,4 @@
-import { notificationMessage } from "@pikar/core";
+import { GOOGLE_SCOPES, notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -69,7 +69,7 @@ http.route({
       refreshToken: tok.refresh_token,
       accessToken: tok.access_token,
       expiresAt: Date.now() + (tok.expires_in ?? 3600) * 1000,
-      scope: tok.scope ?? "https://www.googleapis.com/auth/gmail.modify",
+      scope: tok.scope ?? GOOGLE_SCOPES,
     });
     // Back to the cockpit — gmailStatus (reactive) flips the composer to connected on arrival.
     return seeOther("/dashboard/workspace");

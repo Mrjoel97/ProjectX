@@ -7,12 +7,12 @@
 // The tokens are the crown jewels (CONTEXT): the `refreshToken`/`accessToken` are read
 // ONLY by internal functions, NEVER returned to a client query, and NEVER placed in an
 // audit payload (CLAUDE.md §4). `gmailStatus` exposes booleans/timestamps only.
-import { v } from "convex/values";
+import { GOOGLE_SCOPES } from "@pikar/core";
 import { isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "@pikar/core/tokenExpiry";
+import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
-const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 
 // ── Opaque, tamper-evident `state` (binds the tenant into the OAuth round-trip) ──
@@ -39,7 +39,9 @@ function requireEnv(name: string): string {
   return val;
 }
 
-/** Google authorize URL requesting offline access + forced consent (Research Pitfall 3). */
+/** Google authorize URL requesting offline access + forced consent (Research Pitfall 3).
+ *  `gmailTokens` deliberately keeps its shipped name: this is now one Google grant covering mail
+ *  and calendar, and renaming a Convex table would be a migration for cosmetic gain. */
 export async function buildAuthorizeUrl(tenantId: string): Promise<string> {
   const secret = requireEnv("GOOGLE_OAUTH_CLIENT_SECRET");
   const params = new URLSearchParams({
@@ -49,7 +51,7 @@ export async function buildAuthorizeUrl(tenantId: string): Promise<string> {
     access_type: "offline", // ← required for a refresh_token
     prompt: "consent", // ← required so Google re-issues a refresh_token every time
     include_granted_scopes: "true",
-    scope: GMAIL_SCOPE,
+    scope: GOOGLE_SCOPES,
     state: `${tenantId}.${await hmacHex(tenantId, secret)}`,
   });
   return `${GOOGLE_AUTH_ENDPOINT}?${params.toString()}`;
