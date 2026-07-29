@@ -1,15 +1,94 @@
 /**
- * Business-blueprint reads run on the hot path in the DEFAULT (V8) runtime — no `"use node"`.
+ * Business-blueprint reads run on the hot path in the DEFAULT (V8) runtime, with no Node directive.
  * Every handler has an explicit Promise return type to prevent generated-API circular inference.
  * CLAUDE.md §2 bans public query/mutation/action builders; these identity-less tenant-scoped
  * readers deliberately use the allowed internalQuery builder and accept an explicit tenantId.
  */
-import { deserializeBlueprint, renderSpine } from "@pikar/core";
+import { openai } from "@ai-sdk/openai";
+import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
+import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import {
+  deserializeBlueprint,
+  FIELD_SPEC,
+  renderSpine,
+  type DerivedCandidate,
+} from "@pikar/core";
+import { scanText } from "@pikar/pii";
+import { generateObject, jsonSchema, type LanguageModel } from "ai";
 import { v } from "convex/values";
-import { internalQuery, type QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalAction, internalQuery, type QueryCtx } from "./_generated/server";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
+const CALL_TIMEOUT_MS = 45_000;
+const SMOKE_BLUEPRINT_PREFIX = "SMOKE::blueprint::";
+
+const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
+
+type DeriveCandidatesResult =
+  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }
+  | { ok: true; candidates: DerivedCandidate[] };
+
+const candidatesSchema = jsonSchema<{ candidates: DerivedCandidate[] }>({
+  type: "object",
+  additionalProperties: false,
+  required: ["candidates"],
+  properties: {
+    candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["field", "values", "sourceIndex"],
+        properties: {
+          field: { type: "string" },
+          values: { type: "array", items: { type: "string" } },
+          sourceIndex: { type: "integer" },
+        },
+      },
+    },
+  },
+});
+
+function smokeCandidatesFixture(safeText: string): DerivedCandidate[] {
+  const start = safeText.indexOf(SMOKE_BLUEPRINT_PREFIX);
+  if (start === -1) return [];
+  const line = safeText.slice(start + SMOKE_BLUEPRINT_PREFIX.length).split(/\r?\n/, 1)[0] ?? "";
+  const candidates: DerivedCandidate[] = [];
+  for (const segment of line.split("::")) {
+    const [field, rawValues, rawSourceIndex] = segment.split("|");
+    const sourceIndex = Number(rawSourceIndex);
+    if (!field || !rawValues || !Number.isInteger(sourceIndex)) continue;
+    candidates.push({
+      field,
+      values: rawValues
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+      sourceIndex,
+    });
+  }
+  return candidates;
+}
+
+function candidatePrompt(
+  fields: readonly string[],
+  sources: readonly { title: string; text: string }[],
+): string {
+  const fieldBlock = fields
+    .map((field) => {
+      const spec = Object.hasOwn(FIELD_SPEC, field)
+        ? FIELD_SPEC[field as keyof typeof FIELD_SPEC]
+        : undefined;
+      return `- ${field}: ${spec?.probe ?? "derive only when a cited source supports it"}`;
+    })
+    .join("\n");
+  const sourceBlock = sources
+    .map(({ title, text }, index) => `[${index}] ${title}\n${text}`)
+    .join("\n\n");
+  return `FIELDS TO FILL:\n${fieldBlock}\n\nSOURCES:\n${sourceBlock}`;
+}
 
 type LiveBlueprint = {
   docId: string;
@@ -65,6 +144,49 @@ export const topEntities = internalQuery({
         .order("desc")
         .take(TOP_ENTITY_COUNT)
     ).map((node) => node.name),
+});
+
+/**
+ * The blueprint's ONE governed model call. The skill load is deliberately first, including before
+ * the offline seam: an unseeded deployment must never synthesize from a hardcoded fallback.
+ */
+export const deriveCandidates = internalAction({
+  args: {
+    tenantId: v.string(),
+    fields: v.array(v.string()),
+    sources: v.array(v.object({ title: v.string(), text: v.string() })),
+  },
+  handler: async (ctx, { fields, sources }): Promise<DeriveCandidatesResult> => {
+    const skill: { body: string; version: number } = await ctx.runQuery(
+      internal.skills.getActiveSkill,
+      { name: BUSINESS_BLUEPRINT_SKILL },
+    );
+
+    const gate = await ctx.runMutation(internal.guardrails.preCall, {});
+    if (!gate.ok) return { ok: false, reason: gate.reason };
+
+    const scan = scanText(candidatePrompt(fields, sources));
+    if (!scan.ok) throw new Error("blueprint: candidate scan failed");
+    const safePrompt = scan.value.safeText;
+
+    if (safePrompt.includes(SMOKE_BLUEPRINT_PREFIX)) {
+      return { ok: true, candidates: smokeCandidatesFixture(safePrompt) };
+    }
+
+    const { object, usage } = await generateObject({
+      model: resolveModel(DEFAULT_MODEL),
+      schema: candidatesSchema,
+      system: skill.body,
+      prompt: safePrompt,
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      maxRetries: 1,
+    });
+    const priced = priceUsage(DEFAULT_MODEL, usage);
+    if (priced.ok) {
+      await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+    }
+    return { ok: true, candidates: object.candidates };
+  },
 });
 
 /** Stage-1 drift: a pure set difference, no detector, no cron (CONTEXT: "there is no separate
