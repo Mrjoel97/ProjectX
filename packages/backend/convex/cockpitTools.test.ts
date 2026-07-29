@@ -5,9 +5,9 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
-import { PLAN_ATTACHMENT_CAP_BYTES } from "@pikar/core";
+import { CALENDAR_HORIZON_MS, parseSendTime, PLAN_ATTACHMENT_CAP_BYTES } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
@@ -946,4 +946,195 @@ test("buildAgentContext still describes an email plan as an email (no kind ⇒ e
   const ctx = buildAgentContext({ recipients: ["bob@example.com"], subject: "Q3 numbers" });
   expect(ctx).toContain("Current email plan:"); // the absent-kind default is unchanged
   expect(ctx).toMatch(/Send mode/); // email slots still offered
+});
+
+// ── Phase 17-03 Task 1: checkAvailability — read-only busy ranges in the governed loop ────────
+const CALENDAR_TITLE_NEEDLE = "ZZQX private event title";
+const CALENDAR_ATTENDEE_NEEDLE = "private-attendee@example.com";
+const CALENDAR_DESCRIPTION_NEEDLE = "ZZQX private event description";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const fmtCalendarInstant = (ms: number, tz = "UTC") =>
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+
+test("checkAvailability returns the busy-block count and every displayed block time, never event content", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/2 busy block/i);
+  for (const offset of [1, 2, 4, 5.5]) {
+    expect(reply).toContain(fmtCalendarInstant(PIN_CLOCK.nowMs + offset * 3_600_000));
+  }
+  expect(reply).not.toContain(CALENDAR_TITLE_NEEDLE);
+  expect(reply).not.toContain(CALENDAR_ATTENDEE_NEEDLE);
+  expect(reply).not.toContain(CALENDAR_DESCRIPTION_NEEDLE);
+});
+
+test("checkAvailability says the user is free when the selected window has zero busy blocks", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs + 8 * DAY_MS,
+  });
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/free|no busy/i);
+});
+
+test("checkAvailability turns reauth into a reconnect notification and conversational fallback", async () => {
+  const { t, planId } = await setup();
+  await t.run((ctx) =>
+    ctx.db.insert("gmailTokens", {
+      tenantId: "t1",
+      refreshToken: "refresh-token",
+      accessToken: "access-token",
+      expiresAt: PIN_CLOCK.nowMs + 3_600_000,
+      scope: "https://www.googleapis.com/auth/gmail.modify",
+      updatedAt: PIN_CLOCK.nowMs,
+    }),
+  );
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/calendar/i);
+  expect(reply).toMatch(/reconnect/i);
+  const notifications = await t.run((ctx) => ctx.db.query("notifications").collect());
+  expect(notifications.filter((row) => row.kind === "gmail_reconnect")).toHaveLength(1);
+});
+
+test("checkAvailability without clientContext refuses before freeBusy is called", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  const reply = await call(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/local time|timezone/i);
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toEqual([]);
+});
+
+// ── Phase 17-03 Task 2: proposeCalendarEvent — stage only; Approve owns the external write ─────
+const expectCalendarStageEmpty = async (t: T, planId: Id<"plans">) => {
+  const plan = await readPlan(t, planId);
+  expect(plan?.status).toBe("collecting");
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.eventTitle).toBeUndefined();
+  expect(plan?.eventStartMs).toBeUndefined();
+  expect(plan?.eventDurationMs).toBeUndefined();
+  expect(plan?.eventTz).toBeUndefined();
+  expect(plan?.calendarEventId).toBeUndefined();
+  expect(plan?.calendarRunId).toBeUndefined();
+};
+
+test("proposeCalendarEvent stages all four fields at proposed, never fetches or crosses Approve", async () => {
+  const { t, planId } = await setup();
+  const fetchMock = vi.fn(() => {
+    throw new Error("a staging tool must never call fetch");
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const when = "in 2 hours";
+
+  try {
+    const reply = await callClock(t, planId, "proposeCalendarEvent", {
+      title: CALENDAR_TITLE_NEEDLE,
+      when,
+      durationMinutes: 10,
+    });
+    const parsed = parseSendTime(when, PIN_CLOCK.nowMs, PIN_CLOCK.tz, CALENDAR_HORIZON_MS);
+    if (parsed.kind !== "resolved") throw new Error("invalid resolved-time test fixture");
+
+    expect(reply).toMatch(/confirm|approve|proposed|staged/i);
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("calendar_event");
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.eventTitle).toBe(CALENDAR_TITLE_NEEDLE);
+    expect(plan?.eventStartMs).toBe(parsed.epochMs);
+    expect(plan?.eventDurationMs).toBe(15 * 60_000); // lower clamp, not a model-provided clock
+    expect(plan?.eventTz).toBe(PIN_CLOCK.tz);
+    expect(plan?.status).not.toMatch(/approved|delivering|done/);
+    expect(plan?.calendarEventId).toBeUndefined();
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("proposeCalendarEvent resolves the same relative instant under different timezones", async () => {
+  const utc = await setup();
+  const dar = await setup();
+  const when = "in 2 hours";
+
+  await callClock(
+    utc.t,
+    utc.planId,
+    "proposeCalendarEvent",
+    { title: "UTC event", when, durationMinutes: 30 },
+    { ...PIN_CLOCK, tz: "UTC" },
+  );
+  await callClock(
+    dar.t,
+    dar.planId,
+    "proposeCalendarEvent",
+    { title: "Dar event", when, durationMinutes: 30 },
+    { ...PIN_CLOCK, tz: "Africa/Dar_es_Salaam" },
+  );
+
+  const utcStart = (await readPlan(utc.t, utc.planId))?.eventStartMs;
+  const darStart = (await readPlan(dar.t, dar.planId))?.eventStartMs;
+  expect(utcStart).toBe(PIN_CLOCK.nowMs + 2 * 3_600_000);
+  expect(darStart).toBe(utcStart);
+});
+
+test("proposeCalendarEvent re-asks and writes nothing for ambiguous, past, or absent times", async () => {
+  for (const when of ["4am", "today at 8am", "please schedule the proposal"]) {
+    const { t, planId } = await setup();
+
+    const reply = await callClock(t, planId, "proposeCalendarEvent", {
+      title: "Do not stage",
+      when,
+      durationMinutes: 30,
+    });
+
+    expect(reply).toMatch(/ask|ambiguous|passed|specific time|detect/i);
+    await expectCalendarStageEmpty(t, planId);
+  }
+});
+
+test("proposeCalendarEvent accepts an event beyond email's seven-day horizon", async () => {
+  const { t, planId } = await setup();
+  const when = "in 240 hours";
+  const parsed = parseSendTime(when, PIN_CLOCK.nowMs, PIN_CLOCK.tz, CALENDAR_HORIZON_MS);
+  if (parsed.kind !== "resolved") throw new Error("calendar-horizon test fixture did not resolve");
+
+  await callClock(t, planId, "proposeCalendarEvent", {
+    title: "Ten-day planning session",
+    when,
+    durationMinutes: 60,
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.status).toBe("proposed");
+  expect(plan?.eventStartMs).toBe(parsed.epochMs);
+});
+
+test("proposeCalendarEvent without clientContext refuses and leaves the plan untouched", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await call(t, planId, "proposeCalendarEvent", {
+    title: "No trusted clock",
+    when: "in 2 hours",
+    durationMinutes: 30,
+  });
+
+  expect(reply).toMatch(/local time|timezone/i);
+  await expectCalendarStageEmpty(t, planId);
 });

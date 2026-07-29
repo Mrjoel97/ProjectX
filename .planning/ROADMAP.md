@@ -646,10 +646,10 @@ Plans:
   1. The agent reads calendar availability in-loop (like `listInbox`) and proposes a calendar event; the event is created only after the human Approve gate fires the generalized executor - never inside a tool call.
   2. Calendar actions reuse the shipped OAuth-refresh/adapter pattern and log refs/ids/counts only to audit.
   3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
-**Plans**: 2/4 plans executed (4 plans in 4 waves, serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
+**Plans**: 3/4 plans executed (4 plans in 4 waves, serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
 - [x] 17-01-PLAN.md — Stage-1 shared-union freeze (agentSteps literals, widened `plans.kind`, staged-event fields, `calendarFixtures`, VERB, watch.json) + the three arm-table compile sites + the pure `@pikar/core` calendar domain
 - [x] 17-02-PLAN.md — the Google Calendar adapter: the offline fixture seam, the widened one-URL Google grant, `freeBusy` read, `events.insert` write, and the single retrier-`onComplete` terminal handler
-- [ ] 17-03-PLAN.md — the two in-loop tools in `llm.ts`: `checkAvailability` (read) and `proposeCalendarEvent` (stages onto the plan, never creates)
+- [x] 17-03-PLAN.md — the two in-loop tools in `llm.ts`: `checkAvailability` (read) and `proposeCalendarEvent` (stages onto the plan, never creates) — completed 2026-07-29
 - [ ] 17-04-PLAN.md — the real `externalAction` arm behind the Approve gate, the enforcement scans (write unreachable from `llm.ts`, POST targets by NAME, no attendees/`sendUpdates`), and the SC#3 two-tenant isolation assertion
 
 ### Phase 17.1: Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED)
@@ -815,7 +815,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/8 | 7 waves complete; 15.2-08 planned, not executed | 2026-07-27 |
 | 16. Research Sub-Agent & Web Research | 7/9 | In Progress (waves 1-5 done; 16-07 landed the vault terminal — next 16-08) | 2026-07-27 |
-| 17. Calendar Actions | 2/4 | In Progress (Lane K — 17-01 freeze and 17-02 adapter/terminal complete; next 17-03 in-loop tools; owner live OAuth checks remain non-blocking) | 2026-07-29 |
+| 17. Calendar Actions | 3/4 | In Progress (Lane K — in-loop availability and staging tools complete; next 17-04 Approve arm; live trace/card observation remains outstanding) | 2026-07-29 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 7/10 | In Progress (17.1-01..07 complete; both Blueprint seams landed; next 17.1-08) | 2026-07-30 |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
