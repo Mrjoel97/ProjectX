@@ -1,18 +1,51 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
   SPINE_CHAR_CAP,
   serializeBlueprint,
   type BusinessBlueprint,
 } from "@pikar/core";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
-const makeTest = () => convexTest(schema, modules);
+const makeTest = () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  return t;
+};
+
+async function seedBlueprintSkill(t: ReturnType<typeof makeTest>): Promise<void> {
+  await t.run(async (ctx) => {
+    await ctx.db.insert("skills", {
+      name: BUSINESS_BLUEPRINT_SKILL,
+      version: 1,
+      body: "Derive only source-backed candidates for the requested blueprint fields.",
+      status: "active",
+      createdAt: Date.now(),
+    });
+  });
+}
+
+const smokeDeriveArgs = {
+  tenantId: "tenant_a",
+  fields: ["offering"],
+  sources: [
+    {
+      title: "owner-notes.md",
+      text: "SMOKE::blueprint::offering|Spring water systems|0",
+    },
+  ],
+};
 
 async function insertVaultDocument(
   t: ReturnType<typeof makeTest>,
@@ -416,5 +449,56 @@ describe("blueprint spine and Stage-1 drift", () => {
     await expect(
       t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
     ).resolves.toBeNull();
+  });
+});
+
+describe("blueprint candidate synthesis", () => {
+  test("fails closed before the offline seam when the registry skill is unseeded", async () => {
+    const t = makeTest();
+
+    await expect(
+      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+  });
+
+  test("returns both guardrail refusals as governed stops", async () => {
+    const killSwitchTest = makeTest();
+    await seedBlueprintSkill(killSwitchTest);
+    await killSwitchTest.mutation(internal.guardrails.setKillSwitch, { on: true });
+
+    await expect(
+      killSwitchTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({ ok: false, reason: "kill_switch" });
+
+    const budgetTest = makeTest();
+    await seedBlueprintSkill(budgetTest);
+    await budgetTest.mutation(internal.guardrails.recordSpend, { costUsd: 10 });
+
+    await expect(
+      budgetTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({ ok: false, reason: "daily_budget_exhausted" });
+  });
+
+  test("returns deterministic source-indexed candidates from the offline seam without spend", async () => {
+    const t = makeTest();
+    await seedBlueprintSkill(t);
+    const before = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    await expect(
+      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({
+      ok: true,
+      candidates: [
+        {
+          field: "offering",
+          values: ["Spring water systems"],
+          sourceIndex: 0,
+        },
+      ],
+    });
+
+    await expect(
+      t.query(internal.guardrails.remainingDailyCents, {}),
+    ).resolves.toBe(before);
   });
 });
