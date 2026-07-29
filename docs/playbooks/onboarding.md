@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-30 — Phase 17.1 Wave 6 (plan 17.1-08, D2 confirmation gate): a draft remains invisible to `spineForTenant` until `confirmBlueprint` promotes it. Confirmation applies every non-destructive addition, opts contradictions in field-by-field, writes one `business_blueprint` vault row directly at `ready`, patches that same row on re-confirm, promotes the draft's source IDs, and clears the draft. The user's `business_profile` document is never rewritten. See "Blueprint confirmation" below.
+> Last verified: 2026-07-30 — Phase 17.1 Wave 6 (plan 17.1-08, D2 confirmation gate): a draft remains invisible to `spineForTenant` until `confirmBlueprint` promotes it. Confirmation applies every non-destructive addition, opts contradictions in field-by-field, writes one `business_blueprint` vault row directly at `ready`, patches that same row on re-confirm, promotes the draft's source IDs, clears the draft, and emits the pinned refs/counts-only audit row. `blueprintState` is the profile page's one read for `none` / `live` / `live_stale` / `draft`; `discardDraft` clears only draft fields. The user's `business_profile` document is never rewritten. See "Blueprint confirmation" below.
 
 > Last verified: 2026-07-29 — Phase 17.1 Wave 4 (plan 17.1-05, governed draft build): `buildBlueprintDraft` refuses before spend when the required tier row is absent, composes typed profile + top entities + blank-driven grounding, calls `deriveCandidates` at most once, citation-validates and merges in code, then replaces one JSON draft blob on the existing `tenantProfiles` row. `writeDraft` patches exactly `blueprintDraft` and `blueprintDraftAt`; it never inserts a tier, writes a vault document, or changes the live `blueprintSourceDocIds`. A current live blueprint makes a fully typed profile edit probe-free and spend-free; document drift re-enables blank-field probes. See "Blueprint draft synthesis" below.
 
@@ -291,6 +291,24 @@ document ID, confirmation time, and the source IDs carried inside the draft blob
 `blueprintDraft` and `blueprintDraftAt` are cleared. Nothing touches the user's
 `business_profile` markdown. The Blueprint row deliberately bypasses ingestion; the vault
 playbook records why.
+
+The `blueprint.confirmed` audit payload has exactly five keys:
+`{ docId, sourceDocCount, fieldCount, additionsApplied, contradictionsAccepted }`. The document ID
+is a ref and every other value is a count; no Blueprint field value is allowed in the insert-only
+log. The test pins the sorted key set so adding a seemingly useful content key fails before it can
+turn the audit table into a honeypot.
+
+**The four-state profile read (`blueprintState`).** One tenant-scoped query returns the parsed live
+Blueprint, parsed draft, persisted diff rows, Stage-1 count, and confirmation time. State derives
+from those same values: `none` has neither live nor draft; `live` has a current live document;
+`live_stale` has a live document plus at least one unincorporated ready document; and `draft` takes
+precedence over every other state because review is the action in front of the user. The UI must
+render the returned `diff` rather than recompute it.
+
+`discardDraft` exists because draft precedence would otherwise trap a user in review. It patches
+only `blueprintDraft` and `blueprintDraftAt`, writes no audit row or vault document, and never
+changes `blueprintDocId` or `blueprintSourceDocIds`. The next `blueprintState` immediately reveals
+the underlying `none`, `live`, or `live_stale` state.
 
 ### Tier control plane — `tenantProfiles` (Phase 15.1, design §4.1)
 

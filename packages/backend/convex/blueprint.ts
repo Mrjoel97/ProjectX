@@ -35,7 +35,7 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
-import { tenantAction, tenantMutation } from "./lib/functions";
+import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
 const TOP_ENTITY_COUNT = 20;
@@ -69,6 +69,14 @@ type BlueprintDraft = {
 type ConfirmBlueprintResult =
   | { ok: false; reason: "no_draft" }
   | { ok: true; docId: Id<"vaultDocuments"> };
+type BlueprintStateResult = {
+  state: "none" | "live" | "live_stale" | "draft";
+  live: BusinessBlueprint | null;
+  draft: BusinessBlueprint | null;
+  diff: BlueprintDiffRow[];
+  unincorporatedCount: number;
+  confirmedAt: number | null;
+};
 
 const BLUEPRINT_KIND = "business_blueprint";
 const BLUEPRINT_TITLE = "Business blueprint";
@@ -368,7 +376,92 @@ export const confirmBlueprint = tenantMutation({
       blueprintDraft: undefined,
       blueprintDraftAt: undefined,
     });
+    const sourceDocCount = draft.sourceDocIds.length;
+    const fieldCount = BLUEPRINT_FIELDS.filter((field) => final[field] !== null).length;
+    const additionsApplied = draft.diff.filter(
+      (diffRow) => diffRow.kind === "addition",
+    ).length;
+    const contradictionsAccepted = draft.diff.filter(
+      (diffRow) =>
+        diffRow.kind === "contradiction" && accepted.has(diffRow.field),
+    ).length;
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: crypto.randomUUID(),
+      eventType: "blueprint.confirmed",
+      actor: "user",
+      // §4: refs and COUNTS only. Never a field value — this table must not become a honeypot.
+      // The test asserts the sorted KEY SET, so an added key fails there rather than shipping.
+      payload: {
+        docId,
+        sourceDocCount,
+        fieldCount,
+        additionsApplied,
+        contradictionsAccepted,
+      },
+    });
     return { ok: true, docId };
+  },
+});
+
+/**
+ * `blueprintState` gives `draft` precedence over `live`, so without this a user who opened a draft
+ * could never see their live blueprint again without confirming SOMETHING. Discard must discard.
+ */
+export const discardDraft = tenantMutation({
+  args: {},
+  handler: async (ctx): Promise<{ ok: boolean }> => {
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    if (!row) return { ok: false };
+    await ctx.db.patch(row._id, {
+      blueprintDraft: undefined,
+      blueprintDraftAt: undefined,
+    });
+    return { ok: true };
+  },
+});
+
+/** The profile page's one read for the complete four-state Blueprint surface. */
+export const blueprintState = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<BlueprintStateResult> => {
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    const liveRow = await readLiveForTenant(ctx, ctx.tenantId);
+    const live = liveRow ? deserializeBlueprint(liveRow.text) : null;
+    const unincorporatedCount = liveRow
+      ? (await unincorporatedFor(ctx, ctx.tenantId, liveRow.sourceDocIds)).count
+      : 0;
+
+    let draft: BusinessBlueprint | null = null;
+    let diff: BlueprintDiffRow[] = [];
+    if (row?.blueprintDraft) {
+      const draftBlob = JSON.parse(row.blueprintDraft) as BlueprintDraft;
+      draft = draftBlob.blueprint;
+      diff = draftBlob.diff;
+    }
+
+    const state: BlueprintStateResult["state"] =
+      draft !== null
+        ? "draft"
+        : live === null
+          ? "none"
+          : unincorporatedCount > 0
+            ? "live_stale"
+            : "live";
+    return {
+      state,
+      live,
+      draft,
+      diff,
+      unincorporatedCount,
+      confirmedAt: liveRow?.confirmedAt ?? null,
+    };
   },
 });
 
