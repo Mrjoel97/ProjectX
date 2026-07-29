@@ -429,7 +429,7 @@ async function governedDispatch(
 /** What `landSpecialistResult` needs to know: either the specialist PRODUCED something, or it did
  *  not and the memo falls back — never both, never neither. */
 type Landing =
-  | { body: string; incomplete: boolean }
+  | { body: string; incomplete: boolean; incompleteReason?: "cost" | "steps" | "clock" }
   | { incomplete: boolean; fallbackReason: string };
 
 /**
@@ -464,7 +464,13 @@ async function dispatchAndLand(
   try {
     const result = await governedDispatch(ctx, args, run);
     landing = result.ok
-      ? { body: result.body, incomplete: result.incomplete }
+      ? {
+          body: result.body,
+          incomplete: result.incomplete,
+          ...(result.incompleteReason === undefined
+            ? {}
+            : { incompleteReason: result.incompleteReason }),
+        }
       : // A governed refusal is a paused conversation, not an error — the user still gets the
         // deterministic memo, worded honestly for THIS reason (never the code itself).
         { incomplete: false, fallbackReason: result.reason };

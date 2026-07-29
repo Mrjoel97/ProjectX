@@ -8,13 +8,14 @@
 //
 // `node` environment (the runCockpitAgent.test.ts idiom): `dispatch.ts` imports
 // `runSpecialistTurn` from the `"use node"` llm.ts, and the mock-model loop wants the node runtime.
-import { serializeProfile } from "@pikar/core";
+import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
 } from "@pikar/cost";
+import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
@@ -26,7 +27,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
-import { buildCockpitTools } from "./llm";
+import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
@@ -160,6 +161,13 @@ const searchedStep = (text: string, urls: readonly string[]) => ({
   finishReason: { unified: "stop", raw: "stop" },
   usage: provUsage(12_000, 800),
   warnings: [],
+});
+const textToolStep = (text: string, toolName: string, input: unknown, callId: string) => ({
+  ...toolStep(toolName, input, callId),
+  content: [
+    { type: "text", text },
+    { type: "tool-call", toolCallId: callId, toolName, input: JSON.stringify(input) },
+  ],
 });
 
 /** DEFAULT_MODEL is $0.15/$0.60 per MTok, so 100k/100k ≈ $0.075 → 8 cents (Math.ceil). */
@@ -959,6 +967,8 @@ describe("tier in agent context — the specialist prompt carries it", () => {
 const QUESTION = "What do competing in-home dog trainers charge per session in Chicago?";
 const RESEARCH = { ...BASE, route: "research", question: QUESTION };
 const LOST_CONTEXT_PHRASE = "no longer on file";
+const BUDGET_EXHAUSTED_REPLY =
+  "This request has used up the budget I set aside for it. Here's where things stand — ask me to carry on and I'll pick it back up.";
 
 const scheduledResearch = async (t: T) =>
   (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
@@ -1013,6 +1023,52 @@ describe("the question-prompt seam (16-06 Task 1)", () => {
 });
 
 describe("runResearch — the scheduled entry point inherits every guard (16-06 Task 1)", () => {
+  test("search call errors: retryable failures fall back, non-retryable failures propagate", async () => {
+    const { t, planId } = await setup();
+    const ctxBackedTurn = (
+      primary: unknown,
+      fallback: unknown = [textStep("Recovered on the research fallback.")],
+    ) =>
+      runSpecialistTurn(
+        {
+          runQuery: (ref: never, args: never) => t.query(ref, args),
+          runMutation: (ref: never, args: never) => t.mutation(ref, args),
+          runAction: (ref: never, args: never) => t.action(ref, args),
+        } as never,
+        {
+          tenantId: TENANT,
+          planId,
+          skillName: "research-specialist",
+          toolNames: ["searchVault", "webResearch"],
+          prompt: QUESTION,
+          mockScript: {
+            primary: primary as never,
+            fallback: fallback as never,
+          },
+        },
+      );
+    const providerError = (statusCode: number, isRetryable: boolean) =>
+      new APICallError({
+        message: `scripted provider ${statusCode}`,
+        url: "https://provider.invalid",
+        requestBodyValues: {},
+        statusCode,
+        isRetryable,
+      });
+
+    const recovered = await ctxBackedTurn(async () => {
+      throw providerError(503, true);
+    });
+    expect(recovered.reply).toBe("Recovered on the research fallback.");
+    expect(recovered.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
+
+    await expect(
+      ctxBackedTurn(async () => {
+        throw providerError(400, false);
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, isRetryable: false });
+  });
+
   test("a cycling ancestry REFUSES conversationally rather than throwing", async () => {
     const { t, planId } = await setup();
     const res = await t.action(internal.dispatch.runResearch, {
@@ -1103,35 +1159,139 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect((await readSteps(t)).map((s) => s.tool)).toContain("dispatchResearch");
   });
 
-  test("a soft wall-clock stop is marked `clock`, distinct from the cost condition", async () => {
+  test("wall clock: partial findings return and land with the distinct clock marker", async () => {
     const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
     // `softCutoffMs: 0` fires on the FIRST evaluation, so the loop stops cleanly BETWEEN steps and
     // keeps what it has. Deliberately not a shrunken HARD budget: that would make AbortSignal race
     // the mock and throw agent_timeout — the discard-the-work outcome D11's row exists to disprove.
     const clock = ok(
-      await t.action(internal.dispatch.__runSpecialistWithScript, {
-        ...RESEARCH,
-        planId,
-        primary: [toolStep("searchVault", { query: "SMOKE::" }), REPLY_STEP],
-        softCutoffMs: 0,
-      }),
+      await t
+        .action(internal.dispatch.__runSpecialistWithScript, {
+          ...RESEARCH,
+          planId,
+          primary: [
+            textToolStep(
+              "Partial findings from four good sources.",
+              "searchVault",
+              { query: "SMOKE::" },
+              "clock-local",
+            ),
+            REPLY_STEP,
+          ],
+          softCutoffMs: 0,
+        })
+        .catch((cause) => {
+          throw new Error("wall clock discarded partial findings by throwing agent_timeout", {
+            cause,
+          });
+        }),
     );
     expect(clock.incomplete).toBe(true);
     expect(clock.incompleteReason).toBe("clock");
+    expect(clock.body).toContain("Partial findings");
+    const card = (await readPlan(t, planId))?.body ?? "";
+    expect(card).toContain(INCOMPLETE_MARKER.clock.trim());
+    // Mutation that turns this RED: collapse the clock marker onto cost or steps.
+    expect(card).not.toContain(INCOMPLETE_MARKER.cost.trim());
+    expect(card).not.toContain(INCOMPLETE_MARKER.steps.trim());
 
-    // …and the cost condition still produces its OWN marker, so the three-way union is not one
-    // value wearing three names. (`steps` is pinned at the loop seam by 16-05.)
+    // Non-vacuity: the granted local tool ran before the clock stopped.
+    expect((await readSteps(t)).map((s) => s.tool)).toContain("searchVault");
+  });
+
+  test("cost ceiling: partial output lands, then the exhausted envelope refuses exactly", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
     const cost = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...RESEARCH,
         planId,
         primary: [REPLY_STEP],
+        research: true,
         envelopeCents: 5,
         spentCents: 0,
       }),
     );
     expect(cost.incomplete).toBe(true);
     expect(cost.incompleteReason).toBe("cost");
+    expect(cost.body).toBe(REPLY);
+    const card = (await readPlan(t, planId))?.body ?? "";
+    expect(card).toContain(INCOMPLETE_MARKER.cost.trim());
+    // Mutation that turns this RED: collapse the cost marker onto steps or clock.
+    expect(card).not.toContain(INCOMPLETE_MARKER.steps.trim());
+    expect(card).not.toContain(INCOMPLETE_MARKER.clock.trim());
+
+    // A second HARNESS dispatch starts with the exhausted envelope. Resetting the landing fixture
+    // is not `stageResearchPlan` and not a second dispatchResearch tool call; it only makes the
+    // governed refusal's existing fallbackBody observable on the card.
+    await t.run((ctx) => ctx.db.patch(planId, { status: "collecting", body: "" }));
+    const refused = await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...RESEARCH,
+      planId,
+      primary: [REPLY_STEP],
+      research: true,
+      envelopeCents: cost.envelopeCents,
+      spentCents: cost.spentCents,
+    });
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.reply).toBe(BUDGET_EXHAUSTED_REPLY);
+    expect((await readPlan(t, planId))?.body).toBe(BUDGET_EXHAUSTED_REPLY);
+  });
+
+  test("step budget: partial findings land with the distinct steps marker", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
+    const steps = Array.from({ length: 12 }, (_, i) =>
+      textToolStep(
+        `Partial angle ${i + 1}.`,
+        "searchVault",
+        { query: "SMOKE::" },
+        `step-cap-${i}`,
+      ),
+    );
+
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: steps,
+      }),
+    );
+    expect(res.incomplete).toBe(true);
+    expect(res.incompleteReason).toBe("steps");
+    expect(res.body).toContain("Partial angle");
+    const card = (await readPlan(t, planId))?.body ?? "";
+    expect(card).toContain(INCOMPLETE_MARKER.steps.trim());
+    // Mutation that turns this RED: collapse the steps marker onto cost or clock.
+    expect(card).not.toContain(INCOMPLETE_MARKER.cost.trim());
+    expect(card).not.toContain(INCOMPLETE_MARKER.clock.trim());
+  });
+
+  test("three-way marker distinctness: cost, steps and clock differ on the plan card", async () => {
+    expect(INCOMPLETE_MARKER.cost).not.toBe(INCOMPLETE_MARKER.steps);
+    expect(INCOMPLETE_MARKER.cost).not.toBe(INCOMPLETE_MARKER.clock);
+    expect(INCOMPLETE_MARKER.steps).not.toBe(INCOMPLETE_MARKER.clock);
+  });
+
+  test("ONE literal, not two: hosted search emits no step while local searchVault does", async () => {
+    const { t, planId } = await setup();
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [
+          toolStep("searchVault", { query: "SMOKE::" }, "one-literal-local"),
+          searchedStep(REPLY, ["https://example.com/hosted"]),
+        ],
+      }),
+    );
+    expect(res.sources).toHaveLength(1);
+    const tools = (await readSteps(t)).map((s) => s.tool);
+    expect(tools).toContain("searchVault");
+    // Mutation that turns this RED: emit a hosted-search row and add its schema literal.
+    expect(tools).not.toContain("web_search");
   });
 });
 

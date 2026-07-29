@@ -809,6 +809,9 @@ export const landSpecialistResult = internalMutation({
     /** the specialist's own output; ABSENT ⇒ fall back to the deterministic buildMemo template */
     body: v.optional(v.string()),
     incomplete: v.boolean(),
+    /** D11: the governed stop that made a returned body incomplete. The shared memo formatter
+     *  owns the three user-visible sentences; absent preserves the pre-Phase-16 cost default. */
+    incompleteReason: v.optional(v.union(v.literal("cost"), v.literal("steps"), v.literal("clock"))),
     /** a reason CODE (unknown_route|depth_exceeded|cycle_refused|budget_exhausted|error) — never
      *  prose, and never surfaced to the user (§4 + the refusal-reply precedent). */
     fallbackReason: v.optional(v.string()),
@@ -833,7 +836,12 @@ export const landSpecialistResult = internalMutation({
       // The attribution line AND the cost-ceiling marker ride the BODY (15-02), not a new
       // plans.status literal: the status enum is PINNED with apps/web blast radius, and the body
       // is rendered verbatim at the Approve gate — exactly where the human decides.
-      body = specialistMemoBody({ route: a.route, body: produced, incomplete: a.incomplete });
+      body = specialistMemoBody({
+        route: a.route,
+        body: produced,
+        incomplete: a.incomplete,
+        reason: a.incompleteReason,
+      });
     } else {
       const row = await ctx.db
         .query("evaluations")

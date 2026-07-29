@@ -171,6 +171,22 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     expect(text.indexOf("Insufficient evidence")).toBeLessThan(text.indexOf("Confirmed:"));
   });
 
+  test("sources contradict: the contradiction section survives storage intact", async () => {
+    const t = newTest();
+    const contradiction = [
+      "## Contradictions",
+      "- Source 1 reports a $95 median.",
+      "- Source 2 reports a $140 median for the same market.",
+      "- The disagreement remains unresolved.",
+    ].join("\n");
+    await persist(t, { body: `${FINDINGS}\n\n${contradiction}` });
+
+    const text = (await readDocs(t))[0]?.text ?? "";
+    expect(text).toContain(contradiction);
+    expect(text.indexOf("<research_findings")).toBeLessThan(text.indexOf("## Contradictions"));
+    expect(text.indexOf("## Contradictions")).toBeLessThan(text.indexOf("</research_findings>"));
+  });
+
   test("each incompleteReason gets its OWN sentence — three, pairwise distinct", async () => {
     const t = newTest();
     const reasons = ["cost", "steps", "clock"] as const;
@@ -183,10 +199,14 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
       expect(text).toContain(INCOMPLETE_MARKER[reason].trim());
       texts.push(text);
     }
-    expect(new Set(texts).size).toBe(3);
+    expect(texts[0]).not.toBe(texts[1]);
+    expect(texts[0]).not.toBe(texts[2]);
+    expect(texts[1]).not.toBe(texts[2]);
     // A complete run says none of them.
     const okId = await persist(t);
     const okText = (await t.run((ctx) => ctx.db.get(okId as Id<"vaultDocuments">)))?.text ?? "";
+    // Mutation that turns this RED: force `assembleResearchDocument` to add an incomplete marker
+    // when `incomplete === false`.
     for (const reason of reasons) expect(okText).not.toContain(INCOMPLETE_MARKER[reason].trim());
   });
 
