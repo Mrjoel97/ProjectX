@@ -9,6 +9,7 @@
 // These tests seed a graph via internal.vaultGraph.upsertGraph and assert: vector-seed + ≤2-hop
 // graph merge, hop-cap exclusion, cross-tenant isolation, plus the cheap metadata read plane
 // (listVaultDocs / vaultStats / vaultDownloadUrl / docEntities / vaultSearch).
+import { serializeBlueprint, type BusinessBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -60,26 +61,76 @@ const seedEdge = (
     edges: [{ from, to, rel: "rel" }],
   });
 
-describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
-  /**
-   * Chain of docs sharing nodes: A(a—b) B(b—c) C(c—d) D(d—e) E(e—f). Seeding from doc A
-   * (nodes a,b), BFS ≤2 reaches nodes c (hop1) and d (hop2); docs B/C/D touch {c,d} and merge in,
-   * while doc E (nodes e,f — nearest node e is 3 hops out) is excluded.
-   */
-  async function seedChain(t: ReturnType<typeof convexTest>) {
-    const docA = await seedDoc(t, { title: "A" });
-    const docB = await seedDoc(t, { title: "B" });
-    const docC = await seedDoc(t, { title: "C" });
-    const docD = await seedDoc(t, { title: "D" });
-    const docE = await seedDoc(t, { title: "E" });
-    await seedEdge(t, docA, "a", "b");
-    await seedEdge(t, docB, "b", "c");
-    await seedEdge(t, docC, "c", "d");
-    await seedEdge(t, docD, "d", "e");
-    await seedEdge(t, docE, "e", "f");
-    return { docA, docB, docC, docD, docE };
-  }
+/**
+ * Chain of docs sharing nodes: A(a—b) B(b—c) C(c—d) D(d—e) E(e—f). Seeding from doc A
+ * (nodes a,b), BFS ≤2 reaches nodes c (hop1) and d (hop2); docs B/C/D touch {c,d} and merge in,
+ * while doc E (nodes e,f — nearest node e is 3 hops out) is excluded.
+ */
+async function seedChain(t: ReturnType<typeof convexTest>) {
+  const docA = await seedDoc(t, { title: "A", text: "A body" });
+  const docB = await seedDoc(t, { title: "B", text: "B body" });
+  const docC = await seedDoc(t, { title: "C", text: "C body" });
+  const docD = await seedDoc(t, { title: "D", text: "D body" });
+  const docE = await seedDoc(t, { title: "E", text: "E body" });
+  await seedEdge(t, docA, "a", "b");
+  await seedEdge(t, docB, "b", "c");
+  await seedEdge(t, docC, "c", "d");
+  await seedEdge(t, docD, "d", "e");
+  await seedEdge(t, docE, "e", "f");
+  return { docA, docB, docC, docD, docE };
+}
 
+const BLUEPRINT_TEXT = serializeBlueprint({
+  name: { values: ["Acme"], origin: "stated" },
+  oneLineDescription: {
+    values: ["A blueprint-grounded business"],
+    origin: "derived",
+    source: "owner-notes.md",
+  },
+  stage: null,
+  tier: { values: ["startup"], origin: "stated" },
+  offering: null,
+  targetCustomer: null,
+  revenueModel: null,
+  bindingConstraint: null,
+  primaryGoals: null,
+  knownConstraints: null,
+  entities: null,
+} satisfies BusinessBlueprint);
+
+async function seedConfirmedBlueprint(
+  t: ReturnType<typeof convexTest>,
+  tenantId = TENANT,
+): Promise<string> {
+  const docId = await seedDoc(
+    t,
+    {
+      title: "Business blueprint",
+      kind: "business_blueprint",
+      category: "business",
+      source: "blueprint",
+      mimeType: "text/markdown",
+      text: BLUEPRINT_TEXT,
+      size: BLUEPRINT_TEXT.length,
+      status: "ready",
+    },
+    tenantId,
+  );
+  await t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "startup",
+      tierSource: "derived",
+      derivedAt: Date.now(),
+      blueprintDocId: docId,
+      blueprintSourceDocIds: [],
+      blueprintConfirmedAt: Date.now(),
+    }),
+  );
+  return docId;
+}
+
+describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
   test("merges the vector seed with ≤2-hop graph neighbors; excludes a 3-hop doc", async () => {
     const t = convexTest(schema, modules);
     const { docA, docC, docE } = await seedChain(t);
@@ -129,10 +180,13 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
     const body = "Playbook A body. ".repeat(150); // ~2550 chars > PER_DOC_CHAR_CAP
     const docA = await seedDoc(t, { title: "Playbook A", text: body });
 
-    const { docIds, titles, chunks } = await t.action(internal.vaultGround.vaultGroundHydrated, {
-      tenantId: TENANT,
-      query: `SMOKE::${docA}`,
-    });
+    const { docIds, titles, chunks, spine } = await t.action(
+      internal.vaultGround.vaultGroundHydrated,
+      {
+        tenantId: TENANT,
+        query: `SMOKE::${docA}`,
+      },
+    );
 
     expect(docIds).toContain(docA);
     // three parallel arrays
@@ -143,9 +197,10 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
     expect(titles[i]).toBe("Playbook A");
     expect(chunks[i]?.startsWith("Playbook A body")).toBe(true);
     expect(chunks[i]!.length).toBeLessThanOrEqual(PER_DOC_CHAR_CAP); // source is longer → truncated
+    expect(spine).toBeNull();
   });
 
-  test("total chunk budget never exceeds TOTAL_CHAR_CAP across many fused docs", async () => {
+  test("blueprint presence does not consume any of TOTAL_CHAR_CAP", async () => {
     const t = convexTest(schema, modules);
     const big = "z".repeat(2000);
     // Six docs all sharing a "hub" node → seeding from the first, 1-hop BFS fuses in all six.
@@ -157,26 +212,60 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       docs.push(d);
     }
 
-    const { chunks } = await t.action(internal.vaultGround.vaultGroundHydrated, {
+    const withoutBlueprint = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${docs[0]}`,
+    });
+    await seedConfirmedBlueprint(t);
+    const withBlueprint = await t.action(internal.vaultGround.vaultGroundHydrated, {
       tenantId: TENANT,
       query: `SMOKE::${docs[0]}`,
     });
 
-    const total = chunks.reduce((s, c) => s + c.length, 0);
-    expect(total).toBeLessThanOrEqual(TOTAL_CHAR_CAP);
-    expect(total).toBeGreaterThan(0);
+    const withoutTotal = withoutBlueprint.chunks.reduce((s, c) => s + c.length, 0);
+    const withTotal = withBlueprint.chunks.reduce((s, c) => s + c.length, 0);
+    expect(withTotal).toBeLessThanOrEqual(TOTAL_CHAR_CAP);
+    expect(withTotal).toBeGreaterThan(0);
+    expect(withTotal).toBe(withoutTotal);
+    expect(withBlueprint.spine).toEqual(expect.any(String));
   });
 
-  test("cross-tenant: an explicit foreign tenantId yields empty parallel arrays (VALT-03)", async () => {
+  test("cross-tenant: an explicit foreign tenantId yields no arrays or foreign spine (VALT-03)", async () => {
     const t = convexTest(schema, modules);
     const docA = await seedDoc(t, { title: "Playbook A", text: "secret tenant-A body" });
+    await seedConfirmedBlueprint(t, TENANT);
 
     const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
       tenantId: "tenant_b", // a tenant-A doc id, but scoped to tenant B — no identity to fall back on
       query: `SMOKE::${docA}`,
     });
 
-    expect(out).toEqual({ docIds: [], titles: [], chunks: [] });
+    expect(out).toEqual({ docIds: [], titles: [], chunks: [], spine: null });
+  });
+});
+
+describe("vaultGroundHydrated spine (BLPR-02)", () => {
+  test("returns a live spine without changing any retrieval array", async () => {
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+    const withoutBlueprint = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${docA}`,
+    });
+
+    const blueprintDocId = await seedConfirmedBlueprint(t);
+    const withBlueprint = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${docA}`,
+    });
+
+    expect(withoutBlueprint.spine).toBeNull();
+    expect(withBlueprint.spine).toContain("A blueprint-grounded business");
+    expect(withBlueprint.spine).not.toContain("- **Persona:**");
+    expect(withBlueprint.docIds).toEqual(withoutBlueprint.docIds);
+    expect(withBlueprint.titles).toEqual(withoutBlueprint.titles);
+    expect(withBlueprint.chunks).toEqual(withoutBlueprint.chunks);
+    expect(withBlueprint.docIds).not.toContain(blueprintDocId);
   });
 });
 
