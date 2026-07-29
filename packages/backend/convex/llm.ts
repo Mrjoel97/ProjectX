@@ -653,6 +653,26 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
   ].join("\n");
 }
 
+/**
+ * The ONE cockpit turn-prompt assembly (BLPR-02, SEAM 1 of 2). The blueprint rides the TURN
+ * PROMPT, not the system string: `system` is the versioned `cockpit-agent` registry body (§5) at
+ * 18 call sites, and tenant context spliced into a versioned skill body would make the body's
+ * version stop describing what the model actually saw.
+ *
+ * Spine FIRST, then history, then the plan context, then the current turn — `The user says:` must
+ * stay the final line. `spine === null` returns the pre-17.1 string byte-for-byte.
+ */
+function buildTurnPrompt(a: {
+  spine: string | null;
+  history: { role: "user" | "assistant"; content: string }[] | undefined;
+  plan: PlanRow | null;
+  tz: string | undefined;
+  text: string;
+}): string {
+  const { spine, history, plan, tz, text } = a;
+  return `${spine === null ? "" : `${spine}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
+}
+
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
 const INBOX_PEEK_CAP = 10;
 
@@ -2521,12 +2541,20 @@ export const runCockpitAgent = internalAction({
           throw new DOMException("smoke: forced agent timeout", "TimeoutError");
         },
       }) as unknown as LanguageModel;
+    // BLPR-02 SEAM 1: standing business context on EVERY turn, tool use or not. FAIL OPEN — a
+    // blueprint problem must cost context, never the turn.
+    let spine: string | null = null;
+    try {
+      spine = await ctx.runQuery(internal.blueprint.spineForTenant, { tenantId });
+    } catch {
+      spine = null;
+    }
     const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-      prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\n\nThe user says: ${text}`,
+      prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
       fallback: { model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
@@ -2565,6 +2593,34 @@ export const __invokeCockpitTool = internalAction({
       toolName,
       input,
     ),
+});
+
+/**
+ * Test-support shim (BLPR-02 SEAM 1): run runCockpitAgent's prompt-assembly path and RETURN the
+ * prompt instead of calling a model. Exists because `__runCockpitAgentWithScript` builds its own
+ * prompt and therefore cannot observe this seam, and because the assertion that matters — "the
+ * spine is present on a turn that calls no tools" — is about the prompt, not the reply.
+ * ponytail: a shim rather than making runCockpitAgent return its prompt; the production return
+ * shape is consumed by the drivers and the eval runner and must not grow a test-only field.
+ */
+export const __cockpitTurnPrompt = internalAction({
+  args: { tenantId: v.string(), planId: v.id("plans"), text: v.string() },
+  handler: async (ctx, { tenantId, planId, text }): Promise<string> => {
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    let spine: string | null = null;
+    try {
+      spine = await ctx.runQuery(internal.blueprint.spineForTenant, { tenantId });
+    } catch {
+      spine = null;
+    }
+    return buildTurnPrompt({
+      spine,
+      history: undefined,
+      plan,
+      tz: undefined,
+      text,
+    });
+  },
 });
 
 /**

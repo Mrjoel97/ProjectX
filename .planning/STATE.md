@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 5
+current_plan: 6
 status: in_progress
-stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..05 COMPLETE, next 17.1-06; this executor intentionally stopped after 17.1-05 and did not start the later seam plans. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-29T21:17:06.179Z"
+stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..06 COMPLETE, next 17.1-07; cockpit SEAM 1 is mutation-verified and plan 17.1-07 was not started. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-29T21:54:13.969Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 190
+  completed_plans: 191
 ---
 
 # Project State
@@ -25,13 +25,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 5/10 plans, waves 1-4 through synthesis done | 17.1-06 (wave 4, cockpit seam) | 17.1-06/07 were deliberately not started in the 17.1-05 executor; later seams require lane coordination |
+| — | **17.1** Business Blueprint | 6/10 plans, waves 1-4 through cockpit SEAM 1 done | 17.1-07 (wave 5, grounding seam) | 17.1-06 is complete and mutation-verified; 17.1-07 was not started and still requires lane coordination |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
 | K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-190 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+191 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -56,12 +56,27 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
-plans 01-05 through governed synthesis and stops here; 15.2 is complete bar the owner-added
-15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
+plans 01-06 through cockpit SEAM 1 and stops here; 15.2 is complete bar the owner-added 15.2-08;
+16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-05 COMPLETE: governed blueprint draft
+**PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-06 COMPLETE: standing cockpit
+business-blueprint context.** `buildTurnPrompt` is the one cockpit turn-prompt assembly: a live
+spine leads, then bounded history, plan context and the current user line; a null spine contributes
+zero bytes and preserves the pre-17.1 prompt exactly. `runCockpitAgent` reads
+`spineForTenant` only after the no-model SMOKE return path and fails open so a blueprint problem
+costs context, never the turn. `system: skill.body` is unchanged. VALIDATION item 24 drives the real
+`spineForTenant → liveForTenant → renderSpine` chain on a no-tool turn, pins no-blueprint bytes,
+tenant isolation and a dangling pointer, and comment-strips the source before requiring exactly two
+`buildTurnPrompt({` call sites. Mutation proof: replacing production's spine query assignment with
+`null` made item 24 exactly 1 RED / 4 green while the pre-existing cockpit suite stayed 24/24;
+restoring it returned 5/5 green. Gates: llmRedaction 43/43, serial backend 50 files / 761 tests,
+zero production type errors, playbook hook empty, zero plan-07 path changes, and zero changed
+`system: skill.body` lines from base. BLPR-02 remains pending until SEAM 2 and drift are complete.
+Next: 17.1-07, not started by this executor.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-05 COMPLETE: governed blueprint draft
 synthesis.** `deriveCandidates` performs exactly one registry-governed strict-schema model call
 after `preCall` and redaction, with a fail-closed skill load before the offline seam and actual
 priced spend recorded afterwards. `buildBlueprintDraft` reads the tier row before any spend,
@@ -1491,6 +1506,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.2 P01 | 35m | 4 tasks | 7 files |
 | Phase 15.2 P02 | 25m | 3 tasks | 6 files |
 | Phase 17.1 P05 | 27min | 2 tasks | 3 files |
+| Phase 17.1 P06 | 29min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1619,6 +1635,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: Reuse live derived blueprint slots only when Stage-1 drift is zero; any unincorporated document re-enables blank-field synthesis.
 - [Phase 17.1]: Zero-probe drafts carry the live source IDs so confirmation cannot erase provenance.
 - [Phase 17.1]: BLPR-01 remains pending until plan 17.1-08 implements the explicit confirmation gate.
+- [Phase 17.1]: Cockpit blueprint context rides the turn prompt; system: skill.body remains the versioned registry body.
+- [Phase 17.1]: The cockpit spine read occurs after the no-model SMOKE path and fails open so blueprint faults never cost the turn.
+- [Phase 17.1]: BLPR-02 remains phase-level pending until SEAM 2 and the drift clause are complete.
 
 ### Pending Todos
 
@@ -1650,8 +1669,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-29T21:17:06.148Z
-Stopped at: Completed 17.1-05-PLAN.md
+Last session: 2026-07-29T21:54:13.933Z
+Stopped at: Completed 17.1-06-PLAN.md
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
