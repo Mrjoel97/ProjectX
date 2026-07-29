@@ -1,5 +1,5 @@
-import { CALENDAR_EVENTS_SCOPE, CALENDAR_FREEBUSY_SCOPE, GMAIL_MODIFY_SCOPE } from "@pikar/core";
 import type { RunId } from "@convex-dev/action-retrier";
+import { CALENDAR_EVENTS_SCOPE, CALENDAR_FREEBUSY_SCOPE, GMAIL_MODIFY_SCOPE } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -270,6 +270,12 @@ const FUTURE_TOKEN_EXPIRY_MS = 4_102_444_800_000;
 
 type EventField = "eventTitle" | "eventStartMs" | "eventDurationMs" | "eventTz";
 type PlanStatus = "collecting" | "proposed" | "delivering";
+type CalendarEventFields = {
+  eventTitle?: string;
+  eventStartMs?: number;
+  eventDurationMs?: number;
+  eventTz?: string;
+};
 
 async function seedCalendarPlan(
   t: ReturnType<typeof harness>,
@@ -280,7 +286,7 @@ async function seedCalendarPlan(
     calendarRunId?: RunId;
   } = {},
 ) {
-  const eventFields: Partial<Record<EventField, string | number>> = {
+  const eventFields: CalendarEventFields = {
     eventTitle: SECRET_TITLE,
     eventStartMs: EVENT_START_MS,
     eventDurationMs: EVENT_DURATION_MS,
@@ -362,22 +368,21 @@ describe("calendar event creation terminal", () => {
     expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
   });
 
-  test.each(["collecting", "proposed"] as const)(
-    "a %s plan ignores a stale success terminal and writes nothing",
-    async (status) => {
-      const t = harness();
-      const planId = await seedCalendarPlan(t, { status });
-      await completeSuccess(t, `calendar-run-${status}` as RunId, createdReturn(planId));
+  test.each([
+    "collecting",
+    "proposed",
+  ] as const)("a %s plan ignores a stale success terminal and writes nothing", async (status) => {
+    const t = harness();
+    const planId = await seedCalendarPlan(t, { status });
+    await completeSuccess(t, `calendar-run-${status}` as RunId, createdReturn(planId));
 
-      expect(await t.run((ctx) => ctx.db.get(planId))).toMatchObject({
-        status,
-        calendarEventId: undefined,
-      });
-      expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
-      expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
-      expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toEqual([]);
-    },
-  );
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe(status);
+    expect(plan).not.toHaveProperty("calendarEventId");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toEqual([]);
+  });
 
   test("two tenants complete independently and both sides write a terminal", async () => {
     const t = harness();
@@ -428,7 +433,13 @@ describe("createEvent — idempotent governed write", () => {
     await seedCalendarGrant(t);
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "first-access-token", expires_in: 3600 }),
+      )
       .mockResolvedValueOnce(Response.json({ id: "provider-event-id" }))
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "second-access-token", expires_in: 3600 }),
+      )
       .mockResolvedValueOnce(new Response("", { status: 409 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -441,7 +452,9 @@ describe("createEvent — idempotent governed write", () => {
     const duplicate = await t.action(internal.calendar.createEvent, args);
     expect(duplicate).toMatchObject({ outcome: "created", duplicate: true });
 
-    const requestBodies = fetchMock.mock.calls.map((call) =>
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const eventCalls = fetchMock.mock.calls.filter((_, index) => index === 1 || index === 3);
+    const requestBodies = eventCalls.map((call) =>
       JSON.parse(String((call[1] as RequestInit).body)),
     );
     expect(requestBodies).toHaveLength(2);
@@ -471,17 +484,22 @@ describe("createEvent — idempotent governed write", () => {
     await seedCalendarGrant(t);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json(
-          {
-            error: {
-              errors: [{ reason: "invalid" }],
-              message: `Invalid summary: ${SECRET_TITLE}`,
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ access_token: "terminal-access-token", expires_in: 3600 }),
+        )
+        .mockResolvedValueOnce(
+          Response.json(
+            {
+              error: {
+                errors: [{ reason: "invalid" }],
+                message: `Invalid summary: ${SECRET_TITLE}`,
+              },
             },
-          },
-          { status: 400 },
+            { status: 400 },
+          ),
         ),
-      ),
     );
 
     const result = await t.action(internal.calendar.createEvent, {
@@ -489,16 +507,16 @@ describe("createEvent — idempotent governed write", () => {
       tenantId: TENANT,
       correlationId: "terminal-correlation",
     });
-    expect(result).toMatchObject({ outcome: "terminal", status: 400, reason: "invalid" });
+    expect(result).toMatchObject({ outcome: "terminal", status: 400 });
     await completeSuccess(t, "calendar-run-terminal" as RunId, result);
 
     const deadLetters = await t.run((ctx) => ctx.db.query("deadLetters").collect());
     expect(deadLetters).toHaveLength(1);
+    const audit = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(JSON.stringify({ deadLetters, audit })).not.toContain(SECRET_TITLE);
     expect(deadLetters[0]?.error).toBe("calendar_insert 400 invalid");
     expect(deadLetters[0]?.payload).toEqual({ planId, status: 400 });
-    const audit = await t.run((ctx) => ctx.db.query("audit").collect());
     expect(audit.filter((row) => row.eventType === "deadletter.written")).toHaveLength(1);
-    expect(JSON.stringify({ deadLetters, audit })).not.toContain(SECRET_TITLE);
   });
 
   test("503 throws a refs-only transient error so the retrier retries", async () => {
@@ -507,7 +525,12 @@ describe("createEvent — idempotent governed write", () => {
     await seedCalendarGrant(t);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(`provider echoed ${SECRET_TITLE}`, { status: 503 })),
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ access_token: "transient-access-token", expires_in: 3600 }),
+        )
+        .mockResolvedValueOnce(new Response(`provider echoed ${SECRET_TITLE}`, { status: 503 })),
     );
 
     await expect(
@@ -525,12 +548,17 @@ describe("createEvent — idempotent governed write", () => {
     await seedCalendarGrant(t);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json(
-          { error: { errors: [{ reason: "insufficientPermissions" }] } },
-          { status: 403 },
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ access_token: "reauth-access-token", expires_in: 3600 }),
+        )
+        .mockResolvedValueOnce(
+          Response.json(
+            { error: { errors: [{ reason: "insufficientPermissions" }] } },
+            { status: 403 },
+          ),
         ),
-      ),
     );
 
     const result = await t.action(internal.calendar.createEvent, {
@@ -606,7 +634,11 @@ describe("action-retrier failed/canceled terminals", () => {
       result: { type: "canceled" as const },
       expectedError: "canceled",
     },
-  ])("$result.type run resolves its plan by calendarRunId", async ({ runId, result, expectedError }) => {
+  ])("$result.type run resolves its plan by calendarRunId", async ({
+    runId,
+    result,
+    expectedError,
+  }) => {
     const t = harness();
     const planId = await seedCalendarPlan(t, { calendarRunId: runId });
 
@@ -621,6 +653,7 @@ describe("action-retrier failed/canceled terminals", () => {
       error: expectedError,
       status: "new",
     });
-    expect((rows[0]?.payload as Record<string, unknown>).planId).toBe(planId);
+    const payload = rows[0]?.payload as Record<string, unknown> | undefined;
+    expect(payload?.planId).toBe(planId);
   });
 });
