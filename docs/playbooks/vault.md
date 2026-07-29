@@ -16,7 +16,7 @@
 > document holding nothing reported **`ready`**. `labelled()` now binds every structural header to
 > its body — **no body, no label, no part** — and a text-free archive returns `""`, which the
 > EXISTING `empty_extraction` guard turns into the plain-language remedy that already ships. The
-> rule, found SIX times in this phase: **never let a non-empty string stand in for "we got
+> rule, found FIVE times in this phase: **never let a non-empty string stand in for "we got
 > content"; the success signal is a COUNT** (`okPages` → `okSheets` → `parts.length`). Second half:
 > `pptxText` now routes each slide's `_rels` to the chart / SmartArt / notes entries **already in
 > the same unzip result** — an ALLOW-LIST of three part types, with `diagrams/drawingN.xml` (a
@@ -1129,7 +1129,7 @@ from `@pikar/backend`**; the only production path is `@pikar/vault/xlsText`.
 
 #### INVARIANT — never let a non-empty string stand in for "we got content"
 
-**This bug shape was found SIX times in one phase.** A structural header (`Sheet 3`, `Slide 7`,
+**This bug shape was found FIVE times in one phase.** A structural header (`Sheet 3`, `Slide 7`,
 `Page 12`) is **SCAFFOLDING**. Emitted unconditionally it makes an empty extraction *non-empty*, so
 `vaultExtract.ts`'s `empty_extraction` guard never fires and a document holding nothing readable
 reports **`ready`** — a plausible failure, which is worse than a failure.
@@ -1245,11 +1245,14 @@ The live text is **byte-identical** to the offline one-shot measurement against 
 disk, and the stored 356-char BEFORE text matched the offline slide-only runs byte for byte, which
 is what identifies the row as that file.
 
-**OWNER VERDICT: ⏳ PENDING** — written before the blocking checkpoint on the 15.2-05/06/07
-precedent, because a session limit must not be able to lose the observation. What is still owed is
-the **browser** half: the extracted-text pane and the Entities & Relationships panel on
-`/dashboard/vault`, and the `pikar-false-ready-probe.pptx` upload showing `failureCopy`'s
-*"We opened this file but found no readable text."* — **`failureCopy` has never been rendered in a
-browser at any point in this phase.** The character count is Claude's evidence; the render is the
-owner's.
+**OWNER VERDICT: APPROVED.** The owner approved the complete blocking checkpoint as presented:
+the rejection figures appeared under Slides 3/4/5, the Objective/Agenda block appeared once, the
+Entities & Relationships panel was no longer empty, and the titles-only ceiling on picture-export
+Slides 6/7 was accepted. The `pikar-false-ready-probe.pptx` upload landed as **failed** and rendered
+*"We opened this file but found no readable text."* with the expected plain-language remedy and no
+raw reason code.
 
+**Evidence level:** the owner's response was `Approved` to the complete presented checkpoint. No
+individual figure values were transcribed back, and the remedy's exact words were not separately
+quoted. This closes the browser round trip and confirms that `failureCopy` rendered; it does not
+claim a value-by-value comparison against the source deck.
