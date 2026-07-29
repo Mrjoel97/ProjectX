@@ -2596,6 +2596,34 @@ export const __invokeCockpitTool = internalAction({
 });
 
 /**
+ * Test-support shim (BLPR-02 SEAM 1): run runCockpitAgent's prompt-assembly path and RETURN the
+ * prompt instead of calling a model. Exists because `__runCockpitAgentWithScript` builds its own
+ * prompt and therefore cannot observe this seam, and because the assertion that matters — "the
+ * spine is present on a turn that calls no tools" — is about the prompt, not the reply.
+ * ponytail: a shim rather than making runCockpitAgent return its prompt; the production return
+ * shape is consumed by the drivers and the eval runner and must not grow a test-only field.
+ */
+export const __cockpitTurnPrompt = internalAction({
+  args: { tenantId: v.string(), planId: v.id("plans"), text: v.string() },
+  handler: async (ctx, { tenantId, planId, text }): Promise<string> => {
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    let spine: string | null = null;
+    try {
+      spine = await ctx.runQuery(internal.blueprint.spineForTenant, { tenantId });
+    } catch {
+      spine = null;
+    }
+    return buildTurnPrompt({
+      spine,
+      history: undefined,
+      plan,
+      tz: undefined,
+      text,
+    });
+  },
+});
+
+/**
  * Test-support shim for the mock-model loop: a LanguageModel cannot ride through Convex action args,
  * so the mock is BUILT here from a serializable script of doGenerate results and handed to the SAME
  * governed loop (runAgentLoop) runCockpitAgent uses. Proves generateText runs the tools + records

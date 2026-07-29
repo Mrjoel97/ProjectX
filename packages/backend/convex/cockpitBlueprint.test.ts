@@ -176,7 +176,11 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
       code.indexOf("export const __cockpitTurnPrompt"),
       code.indexOf("export const __runCockpitAgentWithScript"),
     );
-    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{/);
-    expect(shim).toMatch(/return buildTurnPrompt\(\{/);
+    const spineRead =
+      /spine\s*=\s*await ctx\.runQuery\(internal\.blueprint\.spineForTenant,\s*\{\s*tenantId\s*\}\)/;
+    expect(production).toMatch(spineRead);
+    expect(shim).toMatch(spineRead);
+    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{\s*spine,/);
+    expect(shim).toMatch(/return buildTurnPrompt\(\{\s*spine,/);
   });
 });

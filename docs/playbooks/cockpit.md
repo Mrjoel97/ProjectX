@@ -1,6 +1,6 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-30 (17.1-06 Task 1) — the cockpit's one turn-prompt assembly now reads the confirmed business-blueprint spine after the no-model SMOKE path, prepends it above history and plan context, and fails open to the byte-identical legacy prompt when no live spine can be read. `system: skill.body` remains the versioned registry body.
+> Last verified: 2026-07-30 (17.1-06) — **the confirmed business blueprint is standing context on every model-backed cockpit turn, including turns that call no tools.** `runCockpitAgent` reads `spineForTenant` only after the no-model SMOKE return path and routes the result through the one `buildTurnPrompt`: spine first, then history, plan context, and the current user line last. The read fails open to the byte-identical legacy prompt; `system: skill.body` remains the versioned registry body. VALIDATION item 24 drives the real read/render chain and mutation-pins production plus the test shim to exactly two helper call sites. See "Phase 17.1 — standing business-blueprint turn context" below.
 
 > Last verified: 2026-07-29 (16-08) — **D11's deterministic degradation contract is mutation-verified:** retryable search errors fall back, non-retryable errors propagate, zero results are labelled insufficient evidence, contradictions survive storage, and cost/step/clock ceilings return distinct partial-result markers. The research §4 audit scan proves only the question hash and source count cross the log plane, and the lineage reconstructs from `rootRequestId`. See "Phase 16 — the research degradation contract" below.
 
@@ -235,6 +235,29 @@ when assessing blast radius). Couplings graphify cannot see:
 - **Workspace card arbitration — the work outranks the brief (3.10, UAT-A)**: the moment a plan enters active composition (candidates parked, or subject/body/recipients set, or status past `collecting`), `PlanCards` demotes the BriefingCard BELOW the plan cards — the ResolutionCard (or whichever plan card is live) is the TOP card of the PlanCards grid, so a stalled pick is visible without scrolling. The demotion is a pure render-side reorder off fields already on the `plan` row (`composing` boolean — never a new field, mutation, or query), and it is demotion, NOT destruction: the brief stays rendered and reachable below the work. The briefing-only flow (plan at `collecting`, nothing set) keeps the brief primary — and NOTHING interactive may be added inside `data-testid="briefing-card"` (SC-4). "Top card" means top of the PlanCards grid — the `<ActivityCard>` trace renders above PlanCards entirely and is not part of this arbitration. Locked offline by the demotion-order test in `cockpit-resolve.spec.ts` (picker precedes the demoted brief in DOM order; brief still attached; zero buttons/links inside it) and by `cockpit-briefing.spec.ts`'s untouched brief-primary assertions.
 - **`SMOKE::` sentinel** (`SMOKE::route=<route>::`, parsed in `llm.ts`): deterministic offline draft path used by all E2E; contains no PII and must survive redaction verbatim.
 - **Tenant wrappers only** (CLAUDE.md §2): all cockpit functions use `tenantQuery`/`tenantMutation`/`tenantAction`. Enforced by biome + `importGuard.test.ts`.
+
+## Phase 17.1 — standing business-blueprint turn context
+
+This is **SEAM 1 of 2** for BLPR-02. The live cockpit reads
+`internal.blueprint.spineForTenant({tenantId})` and prepends the rendered
+`<business_blueprint>` block to the **turn prompt** passed to `runAgentLoop`. That makes the
+business context present even for a turn such as “draft an email to Bob,” which never needs the
+`searchVault` tool.
+
+- `buildTurnPrompt` is the one assembly point: spine → bounded conversation history → plan context
+  → `The user says:` as the final line. A `null` spine contributes zero bytes, preserving the
+  pre-17.1 prompt exactly.
+- This seam is independent of SEAM 2, the later `vaultGroundHydrated.spine` return field consumed by
+  evaluations and voice-document review. The blueprint is standing context, not a retrieval hit,
+  and it is never inserted into `docIds`/`titles`/`chunks`.
+- `system: skill.body` is deliberately unchanged. It remains the versioned `cockpit-agent`
+  registry body; tenant-specific context belongs in the turn prompt, not in the skill version.
+- The spine read fails open. Missing, deleted, invalid, or cross-tenant blueprint state costs only
+  the additive context and never the cockpit turn.
+- `cockpitBlueprint.test.ts` drives the real
+  `spineForTenant → liveForTenant → renderSpine` chain for a no-tool turn, pins the no-blueprint
+  bytes, proves tenant isolation and dangling-pointer behavior, and statically requires production
+  plus `__cockpitTurnPrompt` to be the only two `buildTurnPrompt({` call sites.
 
 ## How to change safely
 
