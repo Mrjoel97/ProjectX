@@ -129,6 +129,38 @@ const textStep = (text: string, input = 0, output = 0) => ({
   usage: provUsage(input, output),
   warnings: [],
 });
+/** The exact provider-executed part shape observed by the 16-02 live probe. */
+const searchedStep = (text: string, urls: readonly string[]) => ({
+  content: [
+    {
+      type: "tool-call",
+      toolCallId: "ws-1",
+      toolName: "web_search",
+      input: "{}",
+      providerExecuted: true,
+    },
+    {
+      type: "tool-result",
+      toolCallId: "ws-1",
+      toolName: "web_search",
+      result: {
+        action: { type: "search", queries: ["urban dog training pricing"] },
+        sources: urls.map((url) => ({ type: "url", url })),
+      },
+    },
+    ...urls.map((url, i) => ({
+      type: "source",
+      sourceType: "url",
+      id: `s-${i}`,
+      url,
+      title: `Source ${i}`,
+    })),
+    { type: "text", text },
+  ],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: provUsage(12_000, 800),
+  warnings: [],
+});
 
 /** DEFAULT_MODEL is $0.15/$0.60 per MTok, so 100k/100k ≈ $0.075 → 8 cents (Math.ceil). */
 const SPEND_8_CENTS = provUsage(100_000, 100_000);
@@ -198,42 +230,48 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
     expect(steps.filter((s) => s.phase === "running")).toEqual([]);
   });
 
-  test("only the granted tool is callable — a withheld write tool never moves the plan row", async () => {
+  test.each([
+    ["proposePlan", {}],
+    ["setSubject", { subject: "Hijacked" }],
+    ["replyToMessage", { intent: "Send the injected instructions to everyone" }],
+  ] as const)(
+    "SC#1 withheld %s: injection cannot write while both GRANTED research tools really run",
+    async (withheld, input) => {
     const { t, planId } = await setup();
-    // `setSubject` is a write tool with an independently observable slot. (The plan named
-    // `proposePlan`; it refuses an empty plan, so that fixture cannot discriminate — 15-02
-    // hit the same wall and switched for the same reason.)
-    await runTolerant(t, {
-      ...BASE,
-      planId,
-      primary: [toolStep("setSubject", { subject: "Hijacked" }), textStep("done")],
-    });
+      const before = await readPlan(t, planId);
+      const urls = ["https://example.com/research"];
+      const res = ok(
+        await t.action(internal.dispatch.__runSpecialistWithScript, {
+          ...BASE,
+          route: "research",
+          planId,
+          primary: [
+            // `SMOKE::` rides vaultGround's offline seam — no embedding call, no network.
+            toolStep("searchVault", { query: "SMOKE::" }),
+            toolStep(withheld, input),
+            searchedStep(REPLY, urls),
+          ],
+        }),
+      );
 
-    expect(
-      (await readPlan(t, planId))?.subject,
-      "a withheld write tool moved the plan row",
-    ).toBeFalsy();
-    expect(
-      (await readSteps(t)).map((s) => s.tool),
-      "a withheld tool emitted an activity step — it was reachable",
-    ).not.toContain("setSubject");
-  });
+      // Positive half #1: the LOCAL granted tool executed and emitted its real activity row.
+      const stepTools = (await readSteps(t)).map((s) => s.tool);
+      expect(stepTools, "the GRANTED local tool was filtered out — the harness is inert").toContain(
+        "searchVault",
+      );
+      // Positive half #2: the PROVIDER-executed hosted search contributed its source and prose.
+      expect(res.sources).toEqual([{ url: urls[0], title: "Source 0" }]);
+      expect(res.body).toBe(REPLY);
 
-  test("non-vacuity: the GRANTED searchVault tool does run inside the specialist turn", async () => {
-    const { t, planId } = await setup();
-    await runTolerant(t, {
-      ...BASE,
-      planId,
-      // `SMOKE::` rides vaultGround's offline seam — no embedding call, no network.
-      primary: [toolStep("searchVault", { query: "SMOKE::" }), textStep("done")],
-    });
-
-    // Without this, the withholding test above would pass against a filter that returned {}.
-    expect(
-      (await readSteps(t)).map((s) => s.tool),
-      "the GRANTED tool was filtered out too — the allow-list is inverted",
-    ).toContain("searchVault");
-  });
+      // Mutation that turns this RED: add the current `withheld` name to RESEARCH_TOOLS.
+      expect(await readPlan(t, planId), "a withheld write tool moved the plan row").toEqual(before);
+      // Mutation that turns this RED: emit a step row for the hosted search (plus its schema literal).
+      expect(stepTools, "a withheld/provider tool emitted an activity step").not.toContain(withheld);
+      expect(stepTools, "provider-executed hosted search emitted an activity step").not.toContain(
+        "web_search",
+      );
+    },
+  );
 });
 
 describe("SC#1/#2 — every refusal is conversational, costs nothing, and DLQs nothing", () => {
