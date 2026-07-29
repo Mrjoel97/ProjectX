@@ -947,3 +947,76 @@ test("buildAgentContext still describes an email plan as an email (no kind ⇒ e
   expect(ctx).toContain("Current email plan:"); // the absent-kind default is unchanged
   expect(ctx).toMatch(/Send mode/); // email slots still offered
 });
+
+// ── Phase 17-03 Task 1: checkAvailability — read-only busy ranges in the governed loop ────────
+const CALENDAR_TITLE_NEEDLE = "ZZQX private event title";
+const CALENDAR_ATTENDEE_NEEDLE = "private-attendee@example.com";
+const CALENDAR_DESCRIPTION_NEEDLE = "ZZQX private event description";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const fmtCalendarInstant = (ms: number, tz = "UTC") =>
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+
+test("checkAvailability returns the busy-block count and every displayed block time, never event content", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/2 busy block/i);
+  for (const offset of [1, 2, 4, 5.5]) {
+    expect(reply).toContain(fmtCalendarInstant(PIN_CLOCK.nowMs + offset * 3_600_000));
+  }
+  expect(reply).not.toContain(CALENDAR_TITLE_NEEDLE);
+  expect(reply).not.toContain(CALENDAR_ATTENDEE_NEEDLE);
+  expect(reply).not.toContain(CALENDAR_DESCRIPTION_NEEDLE);
+});
+
+test("checkAvailability says the user is free when the selected window has zero busy blocks", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs + 8 * DAY_MS,
+  });
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/free|no busy/i);
+});
+
+test("checkAvailability turns reauth into a reconnect notification and conversational fallback", async () => {
+  const { t, planId } = await setup();
+  await t.run((ctx) =>
+    ctx.db.insert("gmailTokens", {
+      tenantId: "t1",
+      refreshToken: "refresh-token",
+      accessToken: "access-token",
+      expiresAt: PIN_CLOCK.nowMs + 3_600_000,
+      scope: "https://www.googleapis.com/auth/gmail.modify",
+      updatedAt: PIN_CLOCK.nowMs,
+    }),
+  );
+
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/calendar/i);
+  expect(reply).toMatch(/reconnect/i);
+  const notifications = await t.run((ctx) => ctx.db.query("notifications").collect());
+  expect(notifications.filter((row) => row.kind === "gmail_reconnect")).toHaveLength(1);
+});
+
+test("checkAvailability without clientContext refuses before freeBusy is called", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  const reply = await call(t, planId, "checkAvailability", { range: "today" });
+
+  expect(reply).toMatch(/local time|timezone/i);
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query("notifications").collect())).toEqual([]);
+});
