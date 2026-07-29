@@ -76,18 +76,52 @@ only. On the production deployment the ACTIVE rows are still the v1 bodies carry
 body. Phase 15's five success criteria are proven by 15-01..15-05 and none of them requires a
 rewritten body, so this blocks nothing that shipped.
 
-**What closes it** (owner, on a checkout with a live deployment):
+**What closes it** (owner, from `packages/backend` on the configured live deployment):
 
-1. `pnpm dev` (or `npm run seed`) — `npx convex dev` ALONE does not run `skills:seedSkills`.
-2. Read back the LIVE version carrying each of the three bodies. Do NOT guess: `seedSkills` writes
-   `maxVersion + 1` and optimizer dry-run candidates already occupy versions.
-3. `pnpm eval:golden --skill offer-architect@N --skill money-model-designer@N --skill lead-engine@N`
-   — ONE run, ~30 cases, budget ≈ $0.19 extrapolated from the last recorded run (27 cases /
-   $0.1686 / run `ed251c29`) plus three dispatched specialist turns.
-4. GREEN → the runner records one evidence row per pin; `activateSkill` each, then VERIFY LIVE with
-   `getActiveSkill` that the active row is the version you pinned.
-   RED / flaky / over `COST_CAP_USD` → leave them parked. Do NOT weaken a fixture, do NOT
-   hand-activate. Record the failing case(s) and the cost here.
+1. Seed exactly once with `pnpm seed` — plain `npx convex dev` does not run
+   `skills:seedSkills`.
+2. Read the versions back by **exact body equality**, never by `active + 1`. In PowerShell:
+
+   ```powershell
+   $names = @("offer-architect", "money-model-designer", "lead-engine")
+   $canonical = @{
+     "offer-architect" = Get-Content -Raw ..\contracts\skills\offer-architect.md
+     "money-model-designer" = Get-Content -Raw ..\contracts\skills\money-model-designer.md
+     "lead-engine" = Get-Content -Raw ..\contracts\skills\lead-engine.md
+   }
+   $rows = npx convex data skills --format json --limit 200 | ConvertFrom-Json
+   $matches = @($rows | Where-Object {
+     $names -contains $_.name -and $_.body -ceq $canonical[$_.name]
+   })
+   $matches | Sort-Object name | Format-Table name, version, status
+   if ($matches.Count -ne 3) { throw "Expected one exact deployed body match per specialist" }
+   ```
+
+   Record the three printed versions as `N_offer`, `N_money`, and `N_lead`. This survives optimizer
+   candidates and `seedSkills`'s `maxVersion + 1` rule; a guessed version does not.
+3. Run ONE paid gate with those exact numbers:
+   `pnpm eval:golden --skill offer-architect@N_offer --skill money-model-designer@N_money --skill lead-engine@N_lead`.
+   Budget remains ≈ $0.19 extrapolated from the last recorded run (27 cases / $0.1686 / run
+   `ed251c29`) plus three dispatched specialist turns.
+4. Only if the whole gate is GREEN, activate the exact rows:
+
+   ```powershell
+   npx convex run skills:activateSkill '{"name":"offer-architect","version":N_offer}'
+   npx convex run skills:activateSkill '{"name":"money-model-designer","version":N_money}'
+   npx convex run skills:activateSkill '{"name":"lead-engine","version":N_lead}'
+   ```
+
+5. Read each active row back:
+
+   ```powershell
+   npx convex run skills:getActiveSkill '{"name":"offer-architect"}'
+   npx convex run skills:getActiveSkill '{"name":"money-model-designer"}'
+   npx convex run skills:getActiveSkill '{"name":"lead-engine"}'
+   ```
+
+   Each result must report its pinned version and the exact canonical body above. RED, flaky,
+   over-cap, a missing exact-body match, or any mismatched readback means leave all candidates
+   parked; do not weaken a fixture, increase retries, or hand-activate.
 
 **Evidence that would close it:** the run id, case count and cost, plus a `getActiveSkill` readback
 showing each of the three at the pinned version.
