@@ -1,5 +1,10 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import {
+  SPINE_CHAR_CAP,
+  serializeBlueprint,
+  type BusinessBlueprint,
+} from "@pikar/core";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import schema from "./schema";
@@ -48,6 +53,7 @@ async function insertTenantProfile(
     docId: Id<"vaultDocuments">;
     sourceDocIds?: string[];
     confirmedAt?: number;
+    draft?: string;
   },
 ): Promise<Id<"tenantProfiles">> {
   return await t.run(async (ctx) => {
@@ -61,10 +67,52 @@ async function insertTenantProfile(
             blueprintDocId: blueprint.docId,
             blueprintSourceDocIds: blueprint.sourceDocIds ?? [],
             blueprintConfirmedAt: blueprint.confirmedAt,
+            blueprintDraft: blueprint.draft,
           }
         : {}),
     });
   });
+}
+
+const LIVE_BLUEPRINT_TEXT = serializeBlueprint({
+  name: { values: ["Acme"], origin: "stated" },
+  oneLineDescription: {
+    values: ["A tenant-scoped business"],
+    origin: "derived",
+    source: "source-a.md",
+  },
+  stage: null,
+  tier: { values: ["startup"], origin: "stated" },
+  offering: null,
+  targetCustomer: null,
+  revenueModel: null,
+  bindingConstraint: null,
+  primaryGoals: null,
+  knownConstraints: null,
+  entities: null,
+} satisfies BusinessBlueprint);
+
+async function insertLiveBlueprint(
+  t: ReturnType<typeof makeTest>,
+  tenantId: string,
+  {
+    sourceDocIds = [],
+    draft,
+    text = LIVE_BLUEPRINT_TEXT,
+  }: {
+    sourceDocIds?: string[];
+    draft?: string;
+    text?: string;
+  } = {},
+): Promise<Id<"vaultDocuments">> {
+  const docId = await insertVaultDocument(t, { tenantId, text });
+  await insertTenantProfile(t, tenantId, {
+    docId,
+    sourceDocIds,
+    confirmedAt: 1_725_000_000_000,
+    draft,
+  });
+  return docId;
 }
 
 describe("blueprint live read plane", () => {
@@ -186,5 +234,187 @@ describe("blueprint top entities", () => {
     await expect(
       t.query(internal.blueprint.topEntities, { tenantId: "tenant_empty" }),
     ).resolves.toEqual([]);
+  });
+});
+
+describe("blueprint spine and Stage-1 drift", () => {
+  test("reports exactly one unincorporated ready document, then removes it when processing", async () => {
+    const t = makeTest();
+    const incorporatedA = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "A",
+    });
+    const incorporatedB = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "B",
+    });
+    const unincorporated = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "C",
+    });
+    await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: [incorporatedA, incorporatedB],
+    });
+
+    const stale = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+    expect(stale).toContain("⚠ 1 documents");
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(unincorporated, { status: "processing" });
+    });
+    const current = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+    expect(current).not.toContain("documents have been added");
+  });
+
+  test("uses a set difference when recorded source ids are stale", async () => {
+    const t = makeTest();
+    for (const text of ["A", "B", "C"]) {
+      await insertVaultDocument(t, {
+        tenantId: "tenant_a",
+        kind: "upload",
+        text,
+      });
+    }
+    await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: ["deleted-source-a", "deleted-source-b"],
+    });
+
+    const spine = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+
+    expect(spine).toContain("⚠ 3 documents");
+    expect(spine).not.toContain("⚠ 1 documents");
+  });
+
+  test("omits staleness when every ready source document is incorporated", async () => {
+    const t = makeTest();
+    const sourceIds = await Promise.all(
+      ["A", "B", "C"].map((text) =>
+        insertVaultDocument(t, {
+          tenantId: "tenant_a",
+          kind: "upload",
+          text,
+        }),
+      ),
+    );
+    await insertLiveBlueprint(t, "tenant_a", { sourceDocIds: sourceIds });
+
+    const spine = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+
+    expect(spine).not.toContain("documents have been added");
+  });
+
+  test("keeps live staleness unchanged when a draft exists", async () => {
+    const t = makeTest();
+    const incorporatedA = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "A",
+    });
+    const incorporatedB = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "B",
+    });
+    await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "C",
+    });
+    await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: [incorporatedA, incorporatedB],
+      draft: JSON.stringify({
+        blueprint: { unrelated: true },
+        sourceDocIds: ["draft-covers-everything"],
+      }),
+    });
+
+    const spine = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+
+    expect(spine).toContain("⚠ 1 documents");
+  });
+
+  test("returns null when the tenant has no live blueprint", async () => {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+    await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "Ready but no blueprint exists",
+    });
+
+    await expect(
+      t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" }),
+    ).resolves.toBeNull();
+  });
+
+  test("renders the marked spine within the dedicated character cap", async () => {
+    const t = makeTest();
+    await insertLiveBlueprint(t, "tenant_a");
+
+    const spine = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+
+    expect(spine).toContain("[stated]");
+    expect(spine).toContain("[source: source-a.md]");
+    expect(spine?.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
+  });
+
+  test("reflects two unincorporated documents and then zero", async () => {
+    const t = makeTest();
+    const sourceA = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "A",
+    });
+    const sourceB = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "B",
+    });
+    await insertLiveBlueprint(t, "tenant_a");
+
+    const stale = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+    expect(stale).toContain("⚠ 2 documents");
+
+    await t.run(async (ctx) => {
+      const profile = await ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant_a"))
+        .unique();
+      if (profile === null) throw new Error("missing fixture profile");
+      await ctx.db.patch(profile._id, {
+        blueprintSourceDocIds: [sourceA, sourceB],
+      });
+    });
+    const current = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "tenant_a",
+    });
+    expect(current).not.toContain("documents have been added");
+  });
+
+  test("never returns another tenant's spine", async () => {
+    const t = makeTest();
+    const tenantADoc = await insertLiveBlueprint(t, "tenant_a");
+    await insertTenantProfile(t, "tenant_b", { docId: tenantADoc });
+
+    await expect(
+      t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
+    ).resolves.toBeNull();
   });
 });
