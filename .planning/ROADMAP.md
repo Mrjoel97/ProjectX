@@ -684,7 +684,7 @@ Locked owner decisions D1-D5 in spec §2.1.
 **Depends on:** Phase 17. Also sequenced AFTER 15.2 and 16 — it edits `vaultGround.ts`, which Lane R
 (Phase 16) also touches, so it is deliberately NOT a fourth concurrent lane.
 **Out of scope:** folder ingest (15.2's "Phase 2") and visual rendering/diagrams — spec §9.
-**Plans:** 6/10 plans executed
+**Plans:** 7/10 plans executed
 
 Plans:
 - [x] 17.1-01-PLAN.md — Pure blueprint core: closed field set, FIELD_SPEC totality table, stated assembly, blank-driven probes, deterministic serializer pair (Wave 1)
@@ -693,7 +693,7 @@ Plans:
 - [x] 17.1-04-PLAN.md — Backend read plane: `liveForTenant`, `topEntities`, Stage-1 drift, `spineForTenant` (Wave 3) — completed 2026-07-29
 - [x] 17.1-05-PLAN.md — Synthesis: probes -> grounding -> ONE governed model call -> draft write that refuses without a tier row (Wave 4) — completed 2026-07-29 (fail-closed registry prompt before SMOKE; both guardrail refusals return as data; strict source-index schema; ordered blank-field grounding and doc-ID dedupe; citation gate + typed-wins merge; current-live/no-drift edits cost zero model calls; `NO_TENANT_PROFILE` refusal mutation-verified; draft patches exactly two fields and never touches the vault or live source IDs; backend serial suite green)
 - [x] 17.1-06-PLAN.md — SEAM 1: the cockpit turn prompt, proven on a turn that calls no tools (Wave 4) — completed 2026-07-29 (`buildTurnPrompt` is the one spine-first assembly; null is byte-identical to the legacy prompt; `spineForTenant` runs after SMOKE and fails open; item 24 drives the real read/render chain and mutation-pins production plus the shim; backend 761/761)
-- [ ] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 5)
+- [x] 17.1-07-PLAN.md — SEAM 2: the `spine` return field + `evaluations`/`voiceDoc` consumption + the three pinned non-regressions, with ZERO `llm.ts` edits (Wave 5) — completed 2026-07-30 (spine remains outside retrieval arrays and budgets; evaluation and voice consumers preserve their existing caps; real cockpit search non-regressions mutation-proven; backend 766/766)
 - [ ] 17.1-08-PLAN.md — The confirm gate: `confirmBlueprint`, one never-ingested blueprint document, refs-only audit, four-state query (Wave 6)
 - [ ] 17.1-09-PLAN.md — The confirm surface: `BlueprintPanel` + `BlueprintDiff` (additions grouped ON, contradictions ticked OFF), brand-token styled (Wave 7)
 - [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 8, has a blocking checkpoint)
@@ -816,7 +816,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/8 | 7 waves complete; 15.2-08 planned, not executed | 2026-07-27 |
 | 16. Research Sub-Agent & Web Research | 7/9 | In Progress (waves 1-5 done; 16-07 landed the vault terminal — next 16-08) | 2026-07-27 |
 | 17. Calendar Actions | 1/4 | In Progress (Lane K — 17-01 Wave-0 freeze merged; blocked at 17-02 pending its own deployment, Google consent-screen scopes done) | 2026-07-27 |
-| 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 6/10 | In Progress (17.1-01..06 complete; cockpit SEAM 1 landed; next 17.1-07) | 2026-07-29 |
+| 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 7/10 | In Progress (17.1-01..07 complete; both Blueprint seams landed; next 17.1-08) | 2026-07-30 |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
 | 20. Media Canvas | 0/TBD | Not started | - |

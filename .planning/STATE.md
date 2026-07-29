@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 6
+current_plan: 7
 status: in_progress
-stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..06 COMPLETE, next 17.1-07; cockpit SEAM 1 is mutation-verified and plan 17.1-07 was not started. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-29T21:54:13.969Z"
+stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..07 COMPLETE, next 17.1-08; both Blueprint seams are mutation-verified. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-29T22:42:06.931Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 191
+  completed_plans: 192
 ---
 
 # Project State
@@ -25,13 +25,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 6/10 plans, waves 1-4 through cockpit SEAM 1 done | 17.1-07 (wave 5, grounding seam) | 17.1-06 is complete and mutation-verified; 17.1-07 was not started and still requires lane coordination |
+| — | **17.1** Business Blueprint | 7/10 plans, waves 1-5 through both seams done | 17.1-08 (wave 6, confirm gate) | 17.1-07 is complete, full backend 766/766, both seams mutation-verified; zero `llm.ts` edits in plan 07 |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
 | K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-191 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+192 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -56,12 +56,23 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
-plans 01-06 through cockpit SEAM 1 and stops here; 15.2 is complete bar the owner-added 15.2-08;
-16 is at 16-08; 17 is blocked on its own deployment.
+plans 01-07 through both Blueprint seams and continues at 17.1-08; 15.2 is complete bar the
+owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-06 COMPLETE: standing cockpit
+**PHASE 17.1 — Business Blueprint (Wave 5 of 8) — 17.1-07 COMPLETE: explicit grounding
+spine.** `vaultGroundHydrated` returns `{ docIds, titles, chunks, spine }`, querying the live
+blueprint only after retrieval hydration so the spine never enters the retrieval arrays or
+`TOTAL_CHAR_CAP`; blueprint read failures remain fail-open as `null`. Evaluations order profile
+seeds, blueprint, then retrieval using the real blueprint document ID, while voice prepends the
+spine above the `docRef` filter without consuming the document passage-count or character budget.
+`searchVault` and `llm.ts` remain unchanged. Mutating the spine into the retrieval arrays made four
+vault tests and two real cockpit-tool search tests red; restoration returned both suites green.
+Gates: backend 51 files / 766 tests, zero non-test TypeScript errors, playbook hook empty, and zero
+`llm.ts` edits across the plan range. BLPR-02 is complete. Next: 17.1-08.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-06 COMPLETE: standing cockpit
 business-blueprint context.** `buildTurnPrompt` is the one cockpit turn-prompt assembly: a live
 spine leads, then bounded history, plan context and the current user line; a null spine contributes
 zero bytes and preserves the pre-17.1 prompt exactly. `runCockpitAgent` reads
@@ -1507,6 +1518,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.2 P02 | 25m | 3 tasks | 6 files |
 | Phase 17.1 P05 | 27min | 2 tasks | 3 files |
 | Phase 17.1 P06 | 29min | 2 tasks | 4 files |
+| Phase 17.1 P07 | 39 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -1638,6 +1650,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: Cockpit blueprint context rides the turn prompt; system: skill.body remains the versioned registry body.
 - [Phase 17.1]: The cockpit spine read occurs after the no-model SMOKE path and fails open so blueprint faults never cost the turn.
 - [Phase 17.1]: BLPR-02 remains phase-level pending until SEAM 2 and the drift clause are complete.
+- [Phase 17.1]: Blueprint standing context stays in a separate spine field outside retrieval arrays and TOTAL_CHAR_CAP; searchVault and llm.ts require no accommodation.
+- [Phase 17.1]: Evaluation grounding order is profile seeds, then the real Blueprint document, then ordinary retrieval; voice counts document passages separately from the spine.
 
 ### Pending Todos
 
@@ -1669,8 +1683,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-29T21:54:13.933Z
-Stopped at: Completed 17.1-06-PLAN.md
+Last session: 2026-07-29T22:42:06.890Z
+Stopped at: Completed 17.1-07-PLAN.md
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
