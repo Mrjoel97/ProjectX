@@ -5,13 +5,14 @@ milestone_name: - Platform -> Private Beta
 current_phase: 17.1
 current_plan: 4
 status: in_progress
-stopped_at: "MULTI-LANE. Four phases are live in ONE shared working tree; this single frontmatter block is the tool-readable summary and the per-lane detail lives in '## Lane Status' below. 17.1 Business Blueprint: waves 1-2 COMPLETE (17.1-01/02/03), next 17.1-04 (read plane); waves 4-5 collide with Lane R on llm.ts / vaultGround.ts and must not run concurrently with it. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. HISTORY NOTE: this file previously carried SEVEN duplicate frontmatter blocks, one per lane, with mutually contradictory counters (total_phases 38 vs 40, completed_plans 170/171/172/175/176/176/177) - `gsd-tools` reads only the FIRST block, so every tool call saw one lane's stale view. Consolidated 2026-07-27 with counts recomputed from disk. Do NOT re-add a second block on merge; resolve conflicts by editing the Lane Status table instead."
-last_updated: "2026-07-27T21:30:00.000Z"
+stopped_at: "MULTI-LANE. Four phases are live in ONE shared working tree; this single frontmatter block is the tool-readable summary and the per-lane detail lives in '## Lane Status' below. 17.1 Business Blueprint: waves 1-2 COMPLETE (17.1-01/02/03), next 17.1-04 (read plane); waves 4-5 collide with Lane R on llm.ts / vaultGround.ts and must not run concurrently with it. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): 17-01/02 complete, next 17-03; owner OAuth checks M1-M3 remain non-blocking. HISTORY NOTE: this file previously carried SEVEN duplicate frontmatter blocks, one per lane, with mutually contradictory counters (total_phases 38 vs 40, completed_plans 170/171/172/175/176/176/177) - `gsd-tools` reads only the FIRST block, so every tool call saw one lane's stale view. Consolidated 2026-07-27 with counts recomputed from disk. Do NOT re-add a second block on merge; resolve conflicts by editing the Lane Status table instead."
+last_updated: "2026-07-29T22:06:52.000Z"
 progress:
   total_phases: 40
-  completed_phases: 23
+  completed_phases: 25
   total_plans: 203
-  completed_plans: 186
+  completed_plans: 190
+  percent: 94
 ---
 
 # Project State
@@ -28,10 +29,10 @@ read only the first frontmatter block.
 | — | **17.1** Business Blueprint | 3/10 plans, waves 1-2 done | 17.1-04 (wave 3, read plane) | Waves 4-5 edit `llm.ts` / `vaultGround.ts` — **shared with Lane R**, must not run concurrently |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
-| K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
+| K | **17** Calendar Actions | 2/4 plans | 17-03 | Adapter + terminal complete; owner OAuth checks M1-M3 remain non-blocking |
 
-**Counts above are recomputed from disk** (40 phase checkboxes, 23 `[x]`, 203 `*-PLAN.md`,
-186 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+**Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
+190 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -55,7 +56,7 @@ read only the first frontmatter block.
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** FOUR lanes live concurrently — see `## Lane Status` above for each one's position. 17.1 (Business Blueprint) is at wave 3 of 8; 15.2 is complete bar the owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
+**Current focus:** FOUR lanes live concurrently — see `## Lane Status` above for each one's position. 17.1 (Business Blueprint) is at wave 3 of 8; 15.2 is complete bar the owner-added 15.2-08; 16 is at 16-08; 17 is ready for 17-03.
 
 ## Current Position
 
@@ -1437,6 +1438,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 10 | 03 | 12 min | 2 | 2 |
 | 15.1 | 01 | 31 min | 3 | 7 |
 | 17.1 | 01 | 22 min | 2 | 5 |
+| 17 | 02 | 35 min | 3 | 8 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -1486,6 +1488,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
+- [Phase 17 / 17-02]: **Calendar uses one widened Google grant and a two-module terminal split.** `calendar.ts` is a Node actions-only adapter; `calendarComplete.ts` is non-Node and the sole writer of Calendar plan status, audit, reconnect notifications, and dead letters. Stored scope is checked before refresh, and deterministic event IDs make Google 409 duplicate an idempotent success. ACTN-02 stays pending until the later Phase-17 plans wire the complete action surface.
 - [Phase 17.1 / 17.1-01]: **The blueprint field set is closed and bound by ONE `as const satisfies Record<BlueprintField, FieldSpec>` table** carrying `label`/`list`/`cap`/`derivable`/`probe`. Deliberately NOT a switch — a `default` branch makes a new field silently inherit another's behaviour and makes the coverage test vacuous forever. Mutation-verified: a 12th field with no spec entry ⇒ `TS2741`. Every later 17.1 plan (diff, serializer, spine caps, candidate gate) indexes this one table rather than re-enumerating the fields.
 - [Phase 17.1 / 17.1-01]: **The stored blueprint markdown uses the plain `- <Label>: ` scalar shape and must NEVER emit `- **Persona:**`** — that exact string is the business-profile DETECTOR in `evaluations.ts` and `vault.profileSeedDocs`, so a blueprint wearing it is misread as a profile doc by both. Mutation-verified (bold marker ⇒ 4 RED). It is also byte-deterministic with no date and no document count: both are computed at READ time in the spine, and baking either in would make every rebuild "differ", breaking the drift diff and the `contentHash` dedup.
 - [Phase 17.1 / 17.1-01]: **`BLPR-01` stays PENDING until the phase actually delivers it.** Six of the phase's ten plans claim it and its text covers the confirm gate (17.1-08's), so `gsd-tools requirements mark-complete` flipping it after plan 1 of 10 was reverted. A requirement checkbox is a claim, not a progress bar.
@@ -1629,6 +1632,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-07-29T22:06:52.000Z
+Stopped at: Completed 17-02-PLAN.md (Lane K — Calendar adapter and terminal; next 17-03)
 Last session: 2026-07-27T20:35:00.000Z
 Stopped at: Completed 17.1-01-PLAN.md (the pure blueprint core, Wave 1 — Phase 17.1)
 Last session: 2026-07-27T01:04:16.127Z
