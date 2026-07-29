@@ -230,14 +230,37 @@ export const runEvaluation = internalAction({
       let docIds: string[] = [];
       let titles: string[] = [];
       let chunks: string[] = [];
+      let spine: string | null = null;
       try {
-        ({ docIds, titles, chunks } = await ctx.runAction(
+        ({ docIds, titles, chunks, spine } = await ctx.runAction(
           internal.vaultGround.vaultGroundHydrated,
           { tenantId, query: query ?? DEFAULT_QUERY },
         ));
       } catch {
         // fail open — no grounding this run; carried values still stand.
       }
+
+      // BLPR-02 SEAM 2: the confirmed blueprint, consumed EXPLICITLY (it is a separate return
+      // field, never an entry in the retrieval arrays). Placed here so the profileSeedDocs block
+      // BELOW prepends over it: the final order is [profile seeds, blueprint, retrieval].
+      let blueprintDocId: string | null = null;
+      if (spine) {
+        try {
+          const bp = await ctx.runQuery(internal.blueprint.liveForTenant, { tenantId });
+          if (bp) {
+            blueprintDocId = bp.docId;
+            docIds = [bp.docId, ...docIds];
+            titles = ["Business blueprint", ...titles];
+            chunks = [spine, ...chunks];
+          }
+        } catch {
+          // fail open — profile-seed + retrieval grounding still stands.
+        }
+      }
+      // ponytail: PROVENANCE CEILING. FINANCIAL_PATTERNS scans every chunk and fillVault records
+      // first-write-wins provenance, so a figure restated only by the Blueprint is attributed to
+      // "Business blueprint", not the source document mergeBlueprint derived it from. Upgrade
+      // path: suppress numerics in the serialized spine.
 
       // ── Authoritative seed: the user's OWN profile docs, PREPENDED ────────────────────────────
       // Similarity alone cannot answer "evaluate MY business": rag.search takes its top-K by CHUNK,
@@ -247,10 +270,24 @@ export const runEvaluation = internalAction({
       // FIRST value it sees for a path, so the user's own figures beat any book prose.
       try {
         const seeds = await ctx.runQuery(internal.vault.profileSeedDocs, { tenantId });
-        const fresh = seeds.filter((s) => !docIds.includes(s.docId));
-        docIds = [...fresh.map((s) => s.docId), ...docIds];
-        titles = [...fresh.map((s) => s.title), ...titles];
-        chunks = [...fresh.map((s) => s.text), ...chunks];
+        if (blueprintDocId) {
+          // A profile seed can already be a retrieval hit. Merely prepending `fresh` seeds would
+          // leave that hit behind the Blueprint, allowing a derived number to beat the user's own
+          // typed value. Move every seed to the front only on the Blueprint path; with no
+          // Blueprint the pre-17.1 `fresh` behavior below stays byte-identical.
+          const seedIds = new Set(seeds.map((s) => s.docId));
+          const retrieval = docIds
+            .map((docId, i) => ({ docId, title: titles[i] ?? "", chunk: chunks[i] ?? "" }))
+            .filter(({ docId }) => !seedIds.has(docId));
+          docIds = [...seeds.map((s) => s.docId), ...retrieval.map((r) => r.docId)];
+          titles = [...seeds.map((s) => s.title), ...retrieval.map((r) => r.title)];
+          chunks = [...seeds.map((s) => s.text), ...retrieval.map((r) => r.chunk)];
+        } else {
+          const fresh = seeds.filter((s) => !docIds.includes(s.docId));
+          docIds = [...fresh.map((s) => s.docId), ...docIds];
+          titles = [...fresh.map((s) => s.title), ...titles];
+          chunks = [...fresh.map((s) => s.text), ...chunks];
+        }
       } catch {
         // fail open — retrieval-only grounding still stands.
       }

@@ -1,6 +1,12 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-26 (14-09 — **PHASE 14 CLOSED. THE FLAGSHIP FLOW IS OWNER-VERIFIED ON A
+> Last verified: 2026-07-30 (17.1-07 — **THE CONFIRMED BUSINESS BLUEPRINT NOW SURVIVES THE
+> DOC-SCOPED FILTER AS EXPLICIT STANDING CONTEXT.** `voiceDoc` prepends
+> `vaultGroundHydrated.spine` before filtering retrieval arrays by `docRef`; the same number of
+> document passages still receive the full `RETRIEVAL_CHAR_CAP`. See the BLPR-02 note under
+> `voiceDoc.searchDocument`.)
+>
+> PRIOR: 2026-07-26 (14-09 — **PHASE 14 CLOSED. THE FLAGSHIP FLOW IS OWNER-VERIFIED ON A
 > REAL CALL**: the agent discussed the uploaded report, a mid-call drill-in returned a grounded
 > answer, and BOTH outcome paths landed — a memo saved to the vault and a gap turned into a plan
 > that produced an email through the ordinary Approve gate. The §4 scans are all mutation-verified.
@@ -503,6 +509,15 @@ action — `rag.search` is action-only), V8 runtime, explicit `Promise<>` return
 - **Caps:** at most `RETRIEVAL_MAX_PASSAGES` (3) passages totalling at most `RETRIEVAL_CHAR_CAP`
   (1,200) characters. Realtime input tokens are re-billed on every turn, so this is a hard total,
   not a target.
+- **Blueprint standing context (BLPR-02):** `vaultGroundHydrated.spine` is prepended explicitly
+  before the `docIds[i] !== docRef` filter. Putting it into the retrieval arrays would make that
+  filter silently discard it. A separate `documentPassageCount` preserves all three document
+  passage slots, and only document passages consume the 1,200-character retrieval budget. With
+  `spine: null`, the returned passages are byte-identical to the pre-17.1 result.
+
+**Accepted realtime-cost ceiling:** the spine rides every `search_document` call, and Realtime
+input tokens are re-billed on every turn. The upgrade path is moving standing business context to
+the session mint in `voiceToken.ts`; that is deliberately outside Phase 17.1.
 
 **Doc scoping is POST-HOC, and that ceiling is deliberate (Open Question 2, resolved 14-03).**
 `searchDocument` calls the frozen Phase-10 `internal.vaultGround.vaultGroundHydrated`, which searches

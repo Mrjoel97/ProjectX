@@ -2,6 +2,7 @@
 // 14-01 schema widening actually reached the SCHEMA-DERIVED write validator, with zero edits to
 // `insertEvaluation`. SC1 / SC2 / BETA-05 assertions land here in plans 14-03 and 14-05.
 
+import { serializeBlueprint, type BusinessBlueprint } from "@pikar/core";
 import {
   CAP_MS,
   DOC_REVIEW_FRAMEWORK,
@@ -73,6 +74,57 @@ function seedReadyDoc(
       createdAt: Date.now(),
     }),
   );
+}
+
+const VOICE_BLUEPRINT_TEXT = serializeBlueprint({
+  name: { values: ["Acme"], origin: "stated" },
+  oneLineDescription: {
+    values: ["Voice standing context"],
+    origin: "derived",
+    source: "owner-notes.md",
+  },
+  stage: null,
+  tier: { values: ["startup"], origin: "stated" },
+  offering: null,
+  targetCustomer: null,
+  revenueModel: null,
+  bindingConstraint: null,
+  primaryGoals: null,
+  knownConstraints: null,
+  entities: null,
+} satisfies BusinessBlueprint);
+
+async function seedConfirmedBlueprint(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+): Promise<Id<"vaultDocuments">> {
+  const docId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Business blueprint",
+      kind: "business_blueprint",
+      category: "business",
+      source: "blueprint",
+      mimeType: "text/markdown",
+      size: VOICE_BLUEPRINT_TEXT.length,
+      contentHash: `blueprint_${tenantId}`,
+      text: VOICE_BLUEPRINT_TEXT,
+      status: "ready",
+      createdAt: Date.now(),
+    }),
+  );
+  await t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "startup",
+      tierSource: "derived",
+      derivedAt: Date.now(),
+      blueprintDocId: docId,
+      blueprintSourceDocIds: [],
+      blueprintConfirmedAt: Date.now(),
+    }),
+  );
+  return docId;
 }
 
 /** Seed a vault row in a NON-ready lifecycle state — the picker must not offer these. */
@@ -194,6 +246,30 @@ describe("voiceDoc.searchDocument (SC1 — the mid-call drill-in)", () => {
     expect(res.passages.length).toBeGreaterThan(0);
     // An answer the agent did NOT have at connect — grounded in the report's own words.
     expect(res.passages.join("\n")).toContain("setup friction");
+  });
+
+  test("prepends the spine without changing document passages or their retrieval budget", async () => {
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await startDocSession(t, TENANT, docId);
+    const query = `SMOKE::${docId}`;
+
+    const baseline = await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, {
+      sessionId,
+      query,
+    });
+    await seedConfirmedBlueprint(t, TENANT);
+    const withBlueprint = await asTenant(t, TENANT).action(api.voiceDoc.searchDocument, {
+      sessionId,
+      query,
+    });
+
+    expect(withBlueprint.passages[0]).toContain("Voice standing context");
+    const documentPassages = withBlueprint.passages.slice(1);
+    expect(documentPassages).toEqual(baseline.passages);
+    expect(documentPassages).toHaveLength(baseline.passages.length);
+    expect(documentPassages.length).toBeLessThanOrEqual(RETRIEVAL_MAX_PASSAGES);
+    expect(documentPassages.join("").length).toBeLessThanOrEqual(RETRIEVAL_CHAR_CAP);
   });
 
   test("a hit on ANOTHER of the tenant's own documents is dropped — this report is the only source", async () => {

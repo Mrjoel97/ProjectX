@@ -8,7 +8,12 @@
 // `node` environment (15-04, the cockpitTools.test.ts / dispatch.test.ts idiom): the DISP-01
 // end-to-end block below drives `internal.dispatch.__runSpecialistWithScript`, and `dispatch.ts`
 // imports `runSpecialistTurn` from the `"use node"` llm.ts — a Convex-runtime module cannot load it.
-import { serializeProfile } from "@pikar/core";
+import {
+  serializeBlueprint,
+  serializeProfile,
+  type BusinessBlueprint,
+  type BusinessProfile,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
@@ -87,7 +92,7 @@ async function seedDoc(
   text: string,
   options: {
     title?: string;
-    kind?: "brief" | "web_research";
+    kind?: "brief" | "business_blueprint" | "business_profile" | "web_research";
   } = {},
 ): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
@@ -106,6 +111,100 @@ async function seedDoc(
     }),
   );
 }
+
+const BLUEPRINT_WITH_CONTRADICTING_CAC = serializeBlueprint({
+  name: { values: ["Acme Dog Training"], origin: "stated" },
+  oneLineDescription: null,
+  stage: null,
+  tier: { values: ["startup"], origin: "stated" },
+  offering: null,
+  targetCustomer: null,
+  revenueModel: null,
+  bindingConstraint: {
+    values: ["CAC: $999; LTGP: $4500"],
+    origin: "derived",
+    source: "derived-notes.md",
+  },
+  primaryGoals: null,
+  knownConstraints: null,
+  entities: null,
+} satisfies BusinessBlueprint);
+
+async function seedConfirmedBlueprint(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  text = BLUEPRINT_WITH_CONTRADICTING_CAC,
+): Promise<Id<"vaultDocuments">> {
+  const docId = await seedDoc(t, tenantId, text, {
+    title: "Business blueprint",
+    kind: "business_blueprint",
+  });
+  await t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "startup",
+      tierSource: "derived",
+      derivedAt: Date.now(),
+      blueprintDocId: docId,
+      blueprintSourceDocIds: [],
+      blueprintConfirmedAt: Date.now(),
+    }),
+  );
+  return docId;
+}
+
+describe("runEvaluation blueprint spine ordering (BLPR-02)", () => {
+  test("orders profile seeds before blueprint before retrieval, preserving typed value provenance", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const profileText = `${serializeProfile({
+      name: "Acme Dog Training",
+      oneLineDescription: "In-home dog training for busy urban owners.",
+      persona: "startup",
+      stage: "early-revenue",
+      offering: "6-week private obedience program",
+      targetCustomer: "urban dog owners with new puppies",
+      primaryGoals: ["more clients"],
+      knownConstraints: [],
+    } satisfies BusinessProfile)}\n\nCAC: $150\n`;
+    const profileDocId = await seedDoc(t, TENANT, profileText, {
+      title: "Owner business profile",
+      kind: "business_profile",
+    });
+    const retrievalDocId = await seedDoc(t, TENANT, "30-day cash: $200", {
+      title: "Ordinary retrieval notes",
+    });
+    const blueprintDocId = await seedConfirmedBlueprint(t, TENANT);
+
+    expect(BLUEPRINT_WITH_CONTRADICTING_CAC).not.toContain("- **Persona:**");
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: `${THREAD}_blueprint_order`,
+      query: `SMOKE::${profileDocId},${retrievalDocId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: `${THREAD}_blueprint_order`,
+    });
+    expect(row?.scorecard.financials.cac).toBe(150);
+    expect(row?.scorecard.financials.ltgp).toBe(4500);
+    expect(row?.scorecard.financials.thirtyDayCashPerCustomer).toBe(200);
+
+    const cac = row?.findings.find((finding) => finding.label.startsWith("CAC:"));
+    expect(cac?.citationDocId).toBe(profileDocId);
+    expect(cac?.citationTitle).toBe("Owner business profile");
+    expect(cac?.citationTitle).not.toBe("Business blueprint");
+
+    const distinctCitationOrder = [
+      ...new Set(
+        (row?.findings ?? [])
+          .map((finding) => finding.citationDocId)
+          .filter((docId): docId is string => docId !== undefined),
+      ),
+    ];
+    expect(distinctCitationOrder).toEqual([profileDocId, blueprintDocId, retrievalDocId]);
+  });
+});
 
 describe("runEvaluation (SC#4 — web research citations retain their retrieval date)", () => {
   test("a web research vault title becomes a dated citation, without citing an ungrounded doc", async () => {

@@ -115,9 +115,11 @@ export const vaultGround = tenantAction({
 // The HYDRATED grounding surface for the identity-less cockpit tool loop (Plan 02 calls this as
 // `internal.vaultGround.vaultGroundHydrated`). tenantId is an EXPLICIT arg — the gmail.search /
 // llm.digestInbox convention — because the tool loop and eval harnesses carry no live identity.
-// Returns three PARALLEL arrays: docIds, titles (via tenant-scoped ownedDocsMeta), and capped
-// chunk text (via getDoc). Text is returned into the LOOP only — never into any audit/DLQ payload
-// (§4; Plan 02's tool owns the refs-only `vault.searched` audit).
+// Returns three PARALLEL retrieval arrays — docIds, titles (via tenant-scoped ownedDocsMeta), and
+// capped chunk text (via getDoc) — plus a fourth `spine` field for standing blueprint context.
+// The spine is deliberately NOT entry 0: it is not a search result and must not alter no-match,
+// result-count, source-card, or retrieval-budget behavior. Text is returned into the LOOP only —
+// never into any audit/DLQ payload (§4; Plan 02's tool owns the refs-only `vault.searched` audit).
 // CHUNK-PRECISE (2026-07-25): vector seeds hydrate from the `rag.search` result `content` — the
 // passage that actually matched — and `getDoc` is reserved for graph neighbours + the SMOKE:: seam.
 // This was the `ponytail:` upgrade path noted here; it is now taken. Before, every doc hydrated
@@ -128,7 +130,7 @@ export const vaultGroundHydrated = internalAction({
   handler: async (
     ctx,
     { tenantId, query },
-  ): Promise<{ docIds: string[]; titles: string[]; chunks: string[] }> => {
+  ): Promise<{ docIds: string[]; titles: string[]; chunks: string[]; spine: string | null }> => {
     const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query);
 
     // Titles: one tenant-scoped batch read; map _id → title so titles stay parallel to docIds.
@@ -166,6 +168,20 @@ export const vaultGroundHydrated = internalAction({
       used += slice.length;
     }
 
-    return { docIds, titles, chunks };
+    // BLPR-02 SEAM 2 of 2. The spine is a SEPARATE field, never an entry in the parallel arrays.
+    // Putting it in the arrays would make `llm.ts:1364`'s `docIds.length === 0` no-match branch
+    // unreachable for every blueprint-bearing tenant (the agent loses its honest "nothing in your
+    // vault" answer), inflate every `vault.searched` resultCount, and put a "Business blueprint"
+    // chip on every search. It is not a search result, so it is not in the search results.
+    // Budgeted OUTSIDE TOTAL_CHAR_CAP: retrieval keeps the whole 8000.
+    // FAIL OPEN — no blueprint (or any read failure) ⇒ `spine: null` and the other three fields
+    // are byte-identical to pre-17.1.
+    let spine: string | null = null;
+    try {
+      spine = await ctx.runQuery(internal.blueprint.spineForTenant, { tenantId });
+    } catch {
+      spine = null;
+    }
+    return { docIds, titles, chunks, spine };
   },
 });

@@ -1,6 +1,11 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-07-29 (24) — **THE LAST LEGACY-XLS DATE CEILING IS CLOSED WITH A REAL
+> Last verified: 2026-07-30 (25) — **THE BLUEPRINT SPINE IS STANDING CONTEXT, NEVER A SEARCH
+> RESULT.** Phase 17.1 plan 07 adds it as the fourth `vaultGroundHydrated` field, outside the three
+> parallel retrieval arrays and outside `TOTAL_CHAR_CAP`; see `## Phase 17.1 — two-seam blueprint
+> grounding` at the end of this playbook.
+>
+> PRIOR (24) — **THE LAST LEGACY-XLS DATE CEILING IS CLOSED WITH A REAL
 > EXCEL-AUTHORED BIFF FILE.** `Zainab_Blowing_Operators_KPIs_Feb_2026.xls` has the OLE2 signature,
 > 31 numeric date cells, raw serial `46232`, and Excel's
 > `[$-F800]dddd\,\ mmmm\ dd\,\ yyyy` number-format record. The production `xlsText` path emitted
@@ -1268,3 +1273,38 @@ raw reason code.
 individual figure values were transcribed back, and the remedy's exact words were not separately
 quoted. This closes the browser round trip and confirms that `failureCopy` rendered; it does not
 claim a value-by-value comparison against the source deck.
+
+---
+
+## Phase 17.1 — two-seam blueprint grounding
+
+The confirmed Business Blueprint is standing business context, not a retrieval hit. It reaches
+agents through two explicit seams:
+
+1. The cockpit turn prompt carries it on every turn, whether or not the model calls `searchVault`.
+2. `vaultGroundHydrated` returns `{docIds, titles, chunks, spine}` and the evaluation and voice-doc
+   consumers read `spine` explicitly.
+
+The fourth field is load-bearing. Putting the blueprint at entry 0 of the parallel retrieval arrays
+would make `searchVault`'s `docIds.length === 0` no-match branch unreachable, inflate every
+`vault.searched.resultCount`, and render a "Business blueprint" source chip on every search.
+`spine` is therefore fetched only after the retrieval hydration loop and is budgeted outside
+`TOTAL_CHAR_CAP`; retrieval retains the full 8,000-character budget. No confirmed blueprint or any
+blueprint read failure yields `spine: null` while the three retrieval arrays stay unchanged.
+
+The Blueprint document is neither embedded nor graph-extracted. It can never appear as a
+`rag.search` hit, cannot be duplicated by retrieval plus the standing seam, and cannot feed its own
+entities back into `graphNodes` to inflate the degree ranking used by the next rebuild.
+
+Verify with `pnpm --filter @pikar/backend test vaultGround --maxWorkers=1`. The BLPR-02 cases compare
+all three arrays and their total character count before and after confirmation, retain a full-object
+empty-result equality including `spine: null`, pin cross-tenant null behavior, and keep the public
+`vaultGround` action at exactly `{context, docIds}`.
+
+`searchVault` needed **no source change** for this design. Its existing `docIds.length === 0`,
+`vault.searched.resultCount`, and `vaultSources` card logic continue to see retrieval hits only.
+`searchVaultSpine.test.ts` drives the real tool through `internal.llm.__invokeCockpitTool` and pins
+the honest Blueprint-bearing no-match at count 0 plus a matched card containing only the actual
+retrieval document. Those tests are intended to fail if anyone later "simplifies" the Blueprint
+back into the parallel arrays; the required mutation proof moves it there temporarily and confirms
+that the no-match, count, budget, full-object shape, and array-invariance guards all turn red.
