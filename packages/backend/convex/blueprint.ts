@@ -8,30 +8,35 @@ import { openai } from "@ai-sdk/openai";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
+  BLUEPRINT_FIELDS,
   deserializeBlueprint,
   deserializeProfile,
   FIELD_SPEC,
   mergeBlueprint,
   probesFor,
   renderSpine,
+  serializeBlueprint,
   statedFromProfile,
   validateCandidates,
   type BlueprintDiffRow,
   type BlueprintField,
+  type BusinessBlueprint,
   type DerivedCandidate,
 } from "@pikar/core";
 import { scanText } from "@pikar/pii";
+import { categoryFor } from "@pikar/vault";
 import { generateObject, jsonSchema, type LanguageModel } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalAction,
   internalMutation,
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
-import { tenantAction } from "./lib/functions";
+import { tenantAction, tenantMutation } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
@@ -56,6 +61,18 @@ type BuildBlueprintDraftResult =
       dropped: number;
       sourceDocCount: number;
     };
+type BlueprintDraft = {
+  blueprint: BusinessBlueprint;
+  diff: BlueprintDiffRow[];
+  sourceDocIds: string[];
+};
+type ConfirmBlueprintResult =
+  | { ok: false; reason: "no_draft" }
+  | { ok: true; docId: Id<"vaultDocuments"> };
+
+const BLUEPRINT_KIND = "business_blueprint";
+const BLUEPRINT_TITLE = "Business blueprint";
+const BLUEPRINT_FIELD_SET = new Set<string>(BLUEPRINT_FIELDS);
 
 const candidatesSchema = jsonSchema<{ candidates: DerivedCandidate[] }>({
   type: "object",
@@ -271,6 +288,87 @@ export const writeDraft = internalMutation({
       blueprintDraft: draftJson,
       blueprintDraftAt: Date.now(),
     });
+  },
+});
+
+/**
+ * D2's only promotion path: one persisted draft becomes the one live Blueprint document.
+ *
+ * DELIBERATE EXCEPTION to the vault ingest invariant: this document is written directly at
+ * `status: "ready"` and no ingest workflow is started. The Blueprint is NOT embedded and NOT
+ * graph-extracted. The standing spine already injects it unconditionally; retrieval would both
+ * duplicate it and feed its entities back into the graph that the next rebuild ranks.
+ */
+export const confirmBlueprint = tenantMutation({
+  args: { acceptedContradictions: v.array(v.string()) },
+  handler: async (
+    ctx,
+    { acceptedContradictions },
+  ): Promise<ConfirmBlueprintResult> => {
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    if (!row?.blueprintDraft) return { ok: false, reason: "no_draft" };
+
+    for (const field of acceptedContradictions) {
+      if (!BLUEPRINT_FIELD_SET.has(field)) {
+        throw new ConvexError({ code: "INVALID_BLUEPRINT_FIELD", field });
+      }
+    }
+
+    const draft = JSON.parse(row.blueprintDraft) as BlueprintDraft;
+    const accepted = new Set(acceptedContradictions);
+    const final: { -readonly [K in BlueprintField]: BusinessBlueprint[K] } = {
+      ...draft.blueprint,
+    };
+    for (const diffRow of draft.diff) {
+      if (diffRow.kind !== "contradiction") continue;
+      final[diffRow.field] = accepted.has(diffRow.field) ? diffRow.derived : diffRow.stated;
+    }
+
+    const text = serializeBlueprint(final);
+    const hash = await contentHash(text);
+    const size = new TextEncoder().encode(text).length;
+    const pointedDoc = row.blueprintDocId ? await ctx.db.get(row.blueprintDocId) : null;
+
+    let docId: Id<"vaultDocuments">;
+    if (
+      pointedDoc?.tenantId === ctx.tenantId &&
+      pointedDoc.kind === BLUEPRINT_KIND
+    ) {
+      await ctx.db.patch(pointedDoc._id, {
+        title: BLUEPRINT_TITLE,
+        text,
+        contentHash: hash,
+        size,
+        status: "ready",
+      });
+      docId = pointedDoc._id;
+    } else {
+      docId = await ctx.db.insert("vaultDocuments", {
+        tenantId: ctx.tenantId,
+        title: BLUEPRINT_TITLE,
+        kind: BLUEPRINT_KIND,
+        category: categoryFor({ source: "agent" }),
+        source: "agent",
+        mimeType: "text/markdown",
+        size,
+        contentHash: hash,
+        text,
+        status: "ready",
+        createdAt: Date.now(),
+      });
+    }
+
+    await ctx.db.patch(row._id, {
+      blueprintDocId: docId,
+      blueprintConfirmedAt: Date.now(),
+      blueprintSourceDocIds: draft.sourceDocIds,
+      blueprintDraft: undefined,
+      blueprintDraftAt: undefined,
+    });
+    return { ok: true, docId };
   },
 });
 

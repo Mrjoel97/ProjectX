@@ -1,5 +1,7 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-07-30 (26) — **THE CONFIRMED BLUEPRINT IS A DELIBERATE NON-INGESTED VAULT DOCUMENT.** Phase 17.1 plan 08 writes one `business_blueprint` row directly at `ready`, patches it in place on re-confirm, and starts no ingest workflow. It is never embedded or graph-extracted; a byte-less `ready` row is outside the extraction sweep. See the Phase 17.1 section and the explicit ingest-invariant exception below.
+>
 > Last verified: 2026-07-30 (25) — **THE BLUEPRINT SPINE IS STANDING CONTEXT, NEVER A SEARCH
 > RESULT.** Phase 17.1 plan 07 adds it as the fourth `vaultGroundHydrated` field, outside the three
 > parallel retrieval arrays and outside `TOTAL_CHAR_CAP`; see `## Phase 17.1 — two-seam blueprint
@@ -565,6 +567,13 @@ Verify with `pnpm --filter @pikar/vault test`,
 - **Pinned `rag`/`workflow` versions must not be bumped (§6)** — pre-1.0 API churn.
 - **Every package reached from a `"use node"` action is a STATIC top-level import (Pitfall 9, generalised 2026-07-27).** Never `await import(...)`. Convex bundles node actions with esbuild `platform:"node", format:"esm", splitting:true`, and across a **dynamic-import chunk boundary** esbuild cannot synthesise a CJS module's named exports — the namespace carries only `default`. **THE DISCRIMINATOR IS THE PACKAGE MANIFEST, NOT THE IMPORT FORM:** a package with **no `exports` map and no real ESM build** collapses (`pdf-lib` → 1 key, `PDFDocument` undefined, live defect 2026-07-26); one shipping `"exports": { ".": { "import": "./x.mjs" } }` survives both forms (`unpdf`; `xlsx` 0.20.3 → 19 named exports either way, measured). **So: before adding ANY dependency to a node action, read its `package.json` for an `exports` map + ESM build — that single fact predicts the failure.** **A GREEN OFFLINE SUITE IS NOT EVIDENCE** — Node and vitest recover CJS named exports via `cjs-module-lexer`, so the broken production path is invisible in the suite (proven on demand: making the SheetJS import dynamic turns the scan red while **all 10 behaviour tests stay green**). Verify by rebuilding a probe with Convex's own flags from `convex/dist/esm/bundler/debugBundle.js` **and include a known-collapsing control**, or by a deployed run. Enforced by two static scans: `pdf-lib` in `vaultExtract.test.ts`, SheetJS in `xlsText.test.ts`.
 - **An ingest run can NEVER strand a doc at `processing`.** `ingestDoc` writes a terminal status only on success (`markReady`) or a governed stop (`markFailed`); a DEAD run (step retries exhausted, backend interruption) writes neither. So every ingest MUST start via `vaultIngest.startIngest`, which attaches `onComplete: onIngestComplete` — a failed/canceled run flips a still-`processing` doc to `failed` (idempotent; success + already-terminal untouched). A bare `workflow.start(ingestDoc)` is the bug (five sites once did it → infinite "processing" spinners). Enforced by: the 4 `onIngestComplete` cases in `vault.test.ts`; recover any historical strands with `retryStuckIngests`.
+- **The confirmed `business_blueprint` is explicitly NOT an ingest run.** `confirmBlueprint`
+  writes the content-plane row directly at `status: "ready"` and deliberately starts no workflow,
+  so the “every ingest starts through `vaultIngest.startIngest`” invariant remains intact. The
+  Blueprint is neither embedded nor graph-extracted: retrieval cannot duplicate the standing
+  spine, and the document cannot feed its own entities back into the next rebuild's degree ranking.
+  `vaultSweep.sweepPendingExtraction` touches only `pending_extraction` rows that carry a
+  `storageId`; the Blueprint is `ready` and byte-less, so it is never swept.
 
 ## How to change safely
 
@@ -1295,6 +1304,13 @@ blueprint read failure yields `spine: null` while the three retrieval arrays sta
 The Blueprint document is neither embedded nor graph-extracted. It can never appear as a
 `rag.search` hit, cannot be duplicated by retrieval plus the standing seam, and cannot feed its own
 entities back into `graphNodes` to inflate the degree ranking used by the next rebuild.
+
+**Phase 17.1 Pitfall 9 — the Blueprint appears in the user's vault UI.** `listVaultDocs` has no
+kind filter, and `categoryFor({ source: "agent" })` places this row in `workspace-docs`. The card is
+therefore previewable and user-deletable through the normal vault cascade. This is intentional and
+matches the committed profile document. Deletion leaves `tenantProfiles.blueprintDocId` dangling;
+`liveForTenant` already treats a missing target as no live Blueprint and fails open to `null`, so
+the cockpit, evaluation, voice, and profile reads continue rather than crashing.
 
 Verify with `pnpm --filter @pikar/backend test vaultGround --maxWorkers=1`. The BLPR-02 cases compare
 all three arrays and their total character count before and after confirmation, retain a full-object
