@@ -70,7 +70,7 @@ this verification and were fixed (`d5814ae`, `f971613`, `b5e0f7f`+`7efa4f9`, `f5
   Workarounds explicitly ruled out by the owner: do not activate a gated skill to force the flow, do
   not hardcode agent teaching into source (§5), do not add throwaway seeding scaffolding.
 
-## Eval fixture `18-briefing-then-action` is degrading — OPEN (logged 2026-07-25)
+## Eval fixture `18-briefing-then-action` degraded — OFFLINE REPAIR PREPARED, LIVE RECHECK OPEN
 
 Post-phase regression run of `pnpm eval:golden` (run `8b43e179`, 26/27, $0.1644) after the
 chunk-precise hydration change: `18-briefing-then-action` FAILED both the first attempt and the
@@ -82,12 +82,21 @@ harness's one automatic re-run, on `briefingPresent: expected true, got false`.
 - The briefing path cannot reach the changed code: `briefInbox` calls `internal.gmail.listInbox`,
   and neither `briefings.ts` nor `gmail.ts` references `vaultGround`/`searchVault` at all (grepped).
 
-**Why it still matters:** this case was already the harness's known flake — it needed a retry in the
-PREVIOUS run (`ed251c29`, 27/27) — and it has now gone from "passes on retry" to "fails twice". The
-assertion depends on the live model actually calling `briefInbox` on a follow-up turn, so the
-fixture's turns may no longer reliably steer it there.
+**Root cause in the fixture steering (diagnosed 2026-07-29):** the first turn was only *"What's in my
+inbox today?"*. The live skill and tool contract deliberately expose TWO read-only mailbox outcomes:
+the actual panel briefing (`briefInbox`) and a lightweight sender/subject peek (`listInbox`). That
+wording did not require the former, while `briefingPresent` correctly did. A model could therefore
+choose the lighter read or answer conversationally and leave no `briefings` row. The assertion was
+not weakened: it still reads durable state and must remain `true`.
 
-**Action:** treat a green gate as 27/27, not "26/27 plus the usual flake". Before the next
-activation that depends on this gate, either tighten fixture 18's turns so the briefing call is
-unambiguous, or split the briefing assertion from the follow-up action assertion. Do NOT raise the
-retry count to paper over it — the harness's one-retry flake policy is deliberate.
+**Offline repair prepared:** turn 1 now explicitly asks for the actual today briefing in the
+workspace panel and distinguishes it from the lightweight peek; turn 2 begins only after that
+briefing and keeps the same outbound request. `briefingPresent: true`, `statusAtMost: "proposed"`,
+the zero-requests standing check, the needles, and the harness's one-retry limit are unchanged.
+`node packages/backend/scripts/run-eval-golden.mjs --self-check` validates the repaired fixture
+without a Convex call.
+
+**Remaining LIVE debt:** run the next real full golden gate with this repaired fixture. The debt is
+paid only when case 18 produces the durable briefing row and the full set is green. A pass only on
+the automatic retry must be reported as residual flake, not used to relax the fixture or increase
+the retry count.
