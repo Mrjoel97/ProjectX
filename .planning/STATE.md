@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 4
+current_plan: 5
 status: in_progress
-stopped_at: "MULTI-LANE. Four phases are live in ONE shared working tree; this single frontmatter block is the tool-readable summary and the per-lane detail lives in '## Lane Status' below. 17.1 Business Blueprint: waves 1-2 COMPLETE (17.1-01/02/03), next 17.1-04 (read plane); waves 4-5 collide with Lane R on llm.ts / vaultGround.ts and must not run concurrently with it. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. HISTORY NOTE: this file previously carried SEVEN duplicate frontmatter blocks, one per lane, with mutually contradictory counters (total_phases 38 vs 40, completed_plans 170/171/172/175/176/176/177) - `gsd-tools` reads only the FIRST block, so every tool call saw one lane's stale view. Consolidated 2026-07-27 with counts recomputed from disk. Do NOT re-add a second block on merge; resolve conflicts by editing the Lane Status table instead."
-last_updated: "2026-07-27T21:30:00.000Z"
+stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..05 COMPLETE, next 17.1-06; this executor intentionally stopped after 17.1-05 and did not start the later seam plans. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-29T21:17:06.179Z"
 progress:
   total_phases: 40
-  completed_phases: 23
+  completed_phases: 25
   total_plans: 203
-  completed_plans: 186
+  completed_plans: 190
 ---
 
 # Project State
@@ -25,13 +25,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 3/10 plans, waves 1-2 done | 17.1-04 (wave 3, read plane) | Waves 4-5 edit `llm.ts` / `vaultGround.ts` — **shared with Lane R**, must not run concurrently |
+| — | **17.1** Business Blueprint | 5/10 plans, waves 1-4 through synthesis done | 17.1-06 (wave 4, cockpit seam) | 17.1-06/07 were deliberately not started in the 17.1-05 executor; later seams require lane coordination |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
 | K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
 
-**Counts above are recomputed from disk** (40 phase checkboxes, 23 `[x]`, 203 `*-PLAN.md`,
-186 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+**Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
+190 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -55,11 +55,28 @@ read only the first frontmatter block.
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** FOUR lanes live concurrently — see `## Lane Status` above for each one's position. 17.1 (Business Blueprint) is at wave 3 of 8; 15.2 is complete bar the owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
+**Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
+plans 01-05 through governed synthesis and stops here; 15.2 is complete bar the owner-added
+15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 2 of 8) — 17.1-03 COMPLETE: the three functions that carry
+**PHASE 17.1 — Business Blueprint (Wave 4 of 8) — 17.1-05 COMPLETE: governed blueprint draft
+synthesis.** `deriveCandidates` performs exactly one registry-governed strict-schema model call
+after `preCall` and redaction, with a fail-closed skill load before the offline seam and actual
+priced spend recorded afterwards. `buildBlueprintDraft` reads the tier row before any spend,
+grounds blank derivable fields in closed-field order, dedupes index-parallel sources, citation-gates
+all candidates, merges through typed-wins precedence, and replaces one JSON draft blob. A missing
+`tenantProfiles` row throws `NO_TENANT_PROFILE`; `writeDraft` patches exactly the two draft fields,
+never invents a tier, never writes a vault document, and leaves live source IDs unchanged. A current
+live blueprint with zero Stage-1 drift makes a fully typed profile edit probe/model/spend-free; new
+documents re-enable synthesis. Mutation checks proved both traps: moving SMOKE before the skill load
+and changing the writer refusal into a hardcoded-solopreneur insert each made its test red, then
+reverted green. Gates: blueprint 23/23, llmRedaction 42/42, serial full backend suite exit 0, zero
+production type errors, playbook hook empty. BLPR-01 remains pending until 17.1-08's confirm gate.
+Next: 17.1-06, not started by this executor.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 2 of 8) — 17.1-03 COMPLETE: the three functions that carry
 this phase's guarantees.** All pure `@pikar/core` (§1), 20 → **48** tests in `blueprint.test.ts`,
 full core suite **355/355**, typecheck exit 0, ~21 min, ZERO model calls. **(1) D5 IS NOW
 STRUCTURAL.** `mergeBlueprint` has **no branch that assigns a derived entry over a stated one** —
@@ -1473,6 +1490,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 14 P04 | ~18 min | 2 tasks | 3 files |
 | Phase 15.2 P01 | 35m | 4 tasks | 7 files |
 | Phase 15.2 P02 | 25m | 3 tasks | 6 files |
+| Phase 17.1 P05 | 27min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -1598,6 +1616,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.2]: extractOfficeText dispatches on the ZIP marker ENTRY and takes ONE argument — adding mimeType back is a regression (15.2-02)
 - [Phase 15.2]: The @pikar/vault barrel rule is about DEPENDENCIES: dep-free modules (sniff.ts, rawText.ts) are barrel-safe; fflate/node:* importers (officeText.ts) stay subpath-only (15.2-02)
 - [Phase 15.2]: oleText/rtfText THROW rather than returning '' — an empty extraction that succeeds becomes a ready doc with 0 chars (15.2-02)
+- [Phase 17.1]: Reuse live derived blueprint slots only when Stage-1 drift is zero; any unincorporated document re-enables blank-field synthesis.
+- [Phase 17.1]: Zero-probe drafts carry the live source IDs so confirmation cannot erase provenance.
+- [Phase 17.1]: BLPR-01 remains pending until plan 17.1-08 implements the explicit confirmation gate.
 
 ### Pending Todos
 
@@ -1629,8 +1650,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-27T20:35:00.000Z
-Stopped at: Completed 17.1-01-PLAN.md (the pure blueprint core, Wave 1 — Phase 17.1)
+Last session: 2026-07-29T21:17:06.148Z
+Stopped at: Completed 17.1-05-PLAN.md
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z

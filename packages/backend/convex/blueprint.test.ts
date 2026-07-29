@@ -1,18 +1,56 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
+  probesFor,
+  serializeProfile,
   SPINE_CHAR_CAP,
+  statedFromProfile,
   serializeBlueprint,
+  type BusinessProfile,
   type BusinessBlueprint,
 } from "@pikar/core";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import { __collectGroundedSources } from "./blueprint";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
-const makeTest = () => convexTest(schema, modules);
+const makeTest = () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  return t;
+};
+
+async function seedBlueprintSkill(t: ReturnType<typeof makeTest>): Promise<void> {
+  await t.run(async (ctx) => {
+    await ctx.db.insert("skills", {
+      name: BUSINESS_BLUEPRINT_SKILL,
+      version: 1,
+      body: "Derive only source-backed candidates for the requested blueprint fields.",
+      status: "active",
+      createdAt: Date.now(),
+    });
+  });
+}
+
+const smokeDeriveArgs = {
+  tenantId: "tenant_a",
+  fields: ["offering"],
+  sources: [
+    {
+      title: "owner-notes.md",
+      text: "SMOKE::blueprint::offering|Spring water systems|0",
+    },
+  ],
+};
 
 async function insertVaultDocument(
   t: ReturnType<typeof makeTest>,
@@ -91,6 +129,76 @@ const LIVE_BLUEPRINT_TEXT = serializeBlueprint({
   knownConstraints: null,
   entities: null,
 } satisfies BusinessBlueprint);
+
+const TYPED_PROFILE = {
+  name: "Acme",
+  oneLineDescription: "Spring-water systems for growing hotels.",
+  persona: "startup",
+  stage: "growing",
+  offering: "Spring-water filtration systems",
+  targetCustomer: "Independent hotels",
+  primaryGoals: ["Reach 50 hotel customers"],
+  knownConstraints: ["Founder-led sales"],
+} satisfies BusinessProfile;
+
+const FULL_LIVE_BLUEPRINT_TEXT = serializeBlueprint({
+  name: { values: ["Acme"], origin: "stated" },
+  oneLineDescription: { values: ["Old description"], origin: "stated" },
+  stage: { values: ["growing"], origin: "stated" },
+  tier: { values: ["startup"], origin: "stated" },
+  offering: { values: ["Spring-water filtration systems"], origin: "stated" },
+  targetCustomer: { values: ["Independent hotels"], origin: "stated" },
+  revenueModel: {
+    values: ["Installation plus maintenance"],
+    origin: "derived",
+    source: "pricing.md",
+  },
+  bindingConstraint: {
+    values: ["Founder-led sales"],
+    origin: "derived",
+    source: "operating-plan.md",
+  },
+  primaryGoals: { values: ["Reach 50 hotel customers"], origin: "stated" },
+  knownConstraints: { values: ["Founder-led sales"], origin: "stated" },
+  entities: { values: ["Acme"], origin: "derived", source: "entity graph" },
+} satisfies BusinessBlueprint);
+
+async function insertBusinessProfile(
+  t: ReturnType<typeof makeTest>,
+  tenantId: string,
+  profile: BusinessProfile,
+): Promise<Id<"vaultDocuments">> {
+  return await insertVaultDocument(t, {
+    tenantId,
+    kind: "business_profile",
+    text: serializeProfile(profile),
+  });
+}
+
+async function rejectionData(promise: Promise<unknown>): Promise<{ code?: string }> {
+  try {
+    await promise;
+  } catch (error) {
+    return ((error as { data?: unknown }).data ?? {}) as { code?: string };
+  }
+  throw new Error("expected the call to reject");
+}
+
+const tenantRows = (t: ReturnType<typeof makeTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect(),
+  );
+
+const tenantVaultDocs = (t: ReturnType<typeof makeTest>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect(),
+  );
 
 async function insertLiveBlueprint(
   t: ReturnType<typeof makeTest>,
@@ -416,5 +524,175 @@ describe("blueprint spine and Stage-1 drift", () => {
     await expect(
       t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
     ).resolves.toBeNull();
+  });
+});
+
+describe("blueprint candidate synthesis", () => {
+  test("fails closed before the offline seam when the registry skill is unseeded", async () => {
+    const t = makeTest();
+
+    await expect(
+      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+  });
+
+  test("returns both guardrail refusals as governed stops", async () => {
+    const killSwitchTest = makeTest();
+    await seedBlueprintSkill(killSwitchTest);
+    await killSwitchTest.mutation(internal.guardrails.setKillSwitch, { on: true });
+
+    await expect(
+      killSwitchTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({ ok: false, reason: "kill_switch" });
+
+    const budgetTest = makeTest();
+    await seedBlueprintSkill(budgetTest);
+    await budgetTest.mutation(internal.guardrails.recordSpend, { costUsd: 10 });
+
+    await expect(
+      budgetTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({ ok: false, reason: "daily_budget_exhausted" });
+  });
+
+  test("returns deterministic source-indexed candidates from the offline seam without spend", async () => {
+    const t = makeTest();
+    await seedBlueprintSkill(t);
+    const before = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    await expect(
+      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
+    ).resolves.toEqual({
+      ok: true,
+      candidates: [
+        {
+          field: "offering",
+          values: ["Spring water systems"],
+          sourceIndex: 0,
+        },
+      ],
+    });
+
+    await expect(
+      t.query(internal.guardrails.remainingDailyCents, {}),
+    ).resolves.toBe(before);
+  });
+});
+
+describe("blueprint draft build", () => {
+  test("refuses a tenant with no tier row before any write or spend (item 12)", async () => {
+    const t = makeTest();
+    await insertBusinessProfile(t, "tenant_missing", TYPED_PROFILE);
+    const rowsBefore = await tenantRows(t, "tenant_missing");
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    const refused = await rejectionData(
+      t.withIdentity({ subject: "tenant_missing" }).action(api.blueprint.buildBlueprintDraft, {}),
+    );
+    const directWriteRefused = await rejectionData(
+      t.mutation(internal.blueprint.writeDraft, {
+        tenantId: "tenant_missing",
+        draftJson: "{}",
+      }),
+    );
+
+    expect(refused.code).toBe("NO_TENANT_PROFILE");
+    expect(directWriteRefused.code).toBe("NO_TENANT_PROFILE");
+    expect(await tenantRows(t, "tenant_missing")).toEqual(rowsBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+  });
+
+  test("a fully typed profile edit reuses live derived fields with no probe, model call, or vault write", async () => {
+    const t = makeTest();
+    const profileDocId = await insertBusinessProfile(t, "tenant_a", TYPED_PROFILE);
+    await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: [profileDocId],
+      text: FULL_LIVE_BLUEPRINT_TEXT,
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("graphNodes", {
+        tenantId: "tenant_a",
+        type: "organization",
+        name: "Acme",
+        normalizedName: "acme",
+        degree: 10,
+      }),
+    );
+    const vaultCountBefore = (await tenantVaultDocs(t, "tenant_a")).length;
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {}),
+    ).resolves.toEqual({
+      ok: true,
+      additions: 0,
+      contradictions: 0,
+      dropped: 0,
+      sourceDocCount: 0,
+    });
+
+    const [firstRow] = await tenantRows(t, "tenant_a");
+    expect(firstRow?.blueprintDraft).toBeTruthy();
+    expect(firstRow?.blueprintSourceDocIds).toEqual([profileDocId]);
+    expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+
+    const firstDraft = firstRow?.blueprintDraft;
+    await t.run((ctx) =>
+      ctx.db.patch(profileDocId, {
+        text: serializeProfile({
+          ...TYPED_PROFILE,
+          oneLineDescription: "A one-line edit that must stay free.",
+        }),
+      }),
+    );
+    await t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {});
+
+    const [secondRow] = await tenantRows(t, "tenant_a");
+    expect(secondRow?.blueprintDraft).not.toBe(firstDraft);
+    expect(secondRow?.blueprintSourceDocIds).toEqual([profileDocId]);
+    expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
+    const draft = JSON.parse(secondRow?.blueprintDraft ?? "{}") as {
+      blueprint?: BusinessBlueprint;
+      sourceDocIds?: string[];
+    };
+    expect(draft.blueprint?.oneLineDescription?.values).toEqual([
+      "A one-line edit that must stay free.",
+    ]);
+    expect(draft.sourceDocIds).toEqual([profileDocId]);
+  });
+
+  test("grounds sparse-profile probes in closed-field order and dedupes sources by doc id", async () => {
+    const sparse = { ...TYPED_PROFILE, offering: "", targetCustomer: "" };
+    const probes = probesFor(statedFromProfile(sparse, "startup", []));
+    const calls: string[] = [];
+
+    const sources = await __collectGroundedSources(probes, async (query) => {
+      calls.push(query);
+      return {
+        docIds: ["shared-doc", `doc-${calls.length}`],
+        titles: ["Shared source", `Source ${calls.length}`],
+        chunks: ["First stable passage", `Passage ${calls.length}`],
+      };
+    });
+
+    expect(calls).toEqual(probes.map(({ query }) => query));
+    expect(probes.map(({ field }) => field)).toEqual([
+      "offering",
+      "targetCustomer",
+      "revenueModel",
+      "bindingConstraint",
+    ]);
+    expect(sources.map(({ docId }) => docId)).toEqual([
+      "shared-doc",
+      "doc-1",
+      "doc-2",
+      "doc-3",
+      "doc-4",
+    ]);
+    expect(sources[0]).toEqual({
+      docId: "shared-doc",
+      title: "Shared source",
+      text: "First stable passage",
+    });
   });
 });
