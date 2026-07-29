@@ -1,5 +1,7 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-29 (16-08) — **D11's deterministic degradation contract is mutation-verified:** retryable search errors fall back, non-retryable errors propagate, zero results are labelled insufficient evidence, contradictions survive storage, and cost/step/clock ceilings return distinct partial-result markers. The research §4 audit scan proves only the question hash and source count cross the log plane, and the lineage reconstructs from `rootRequestId`. See "Phase 16 — the research degradation contract" below.
+
 > Last verified: 2026-07-27 (16-07) — **the findings terminal is bolted onto `runResearch`, AFTER the landing.** `persistResearchFindings` (dispatch.ts) calls `internal.research.persistFindings` once `dispatchAndLand` has returned, so the approvable card exists before the vault write is attempted; a persist failure is audited (`research.persist_failed`, code only) and swallowed, costing groundability and not the findings. A governed refusal persists nothing. `DispatchResult` gained an optional `vaultDocId`, and `__runSpecialistWithScript` a `research` flag (the `softCutoffMs` precedent — `runResearch` cannot be driven offline). See "Phase 16 — 16-07" below and `vault.md` for the document contract. PREVIOUSLY: 2026-07-27 (16-06) — **the async research dispatch seam (DISP-02).** The executive's `dispatchResearch` tool STAGES a `collecting` memo plan row, SCHEDULES `internal.dispatch.runResearch`, and RETURNS — it never runs a model, so nothing runs inside the executive turn's step budget. Findings arrive as an approvable plan card, NOT inline. A persisted `collecting`+`kind:"memo"` interlock replaces the superseded per-turn envelope closure. See "Phase 16 — the async research dispatch seam" below. PREVIOUSLY: 2026-07-27 (16-05) — the webResearch key (built only when granted), per-call search billing counted on providerExecuted, and the research route wall clock + step budget. PREVIOUSLY: 2026-07-27 (17-01) — Phase-17 Wave-0 freeze: the calendar_event action type, the STRUCTURALLY FORCED externalAction arm (a stub that throws until 17-04), two trace literals, the staged-event plans fields + by_calendar_run index, calendarFixtures, the calendar plan card, and the pure @pikar/core calendar module. Also fixes the pre-existing replyToMessage VERB gap. PREVIOUSLY: 2026-07-27 (16-01) — Phase-16 Wave-0 freeze — the dispatchResearch literal, the three widened llm.ts signatures, the amended CKPT-05 lineage note. No behaviour change. PREVIOUSLY: 2026-07-26 (live-defect fix — **`buildAgentContext` no longer describes a memo plan as an email**). Found by live UAT: after `Act on this` staged a `kind: "memo"` plan, the NEXT cockpit turn replied *"The subject is set, and the email will be sent individually to each recipient. Would you like to proceed…"*. That was **not** the router mis-routing — `buildAgentContext` (`llm.ts`) rendered EVERY plan under `"Current email plan:"` with Recipients / Send-mode / Send-time slots and never read `plan.kind`, so the model was faithfully describing an email it had been told existed. Phase 15 generalized the EXECUTOR (`ACTION_TYPES` / `actionTypeOf` / `armFor`) but left this, the model-facing half, email-only; 12-05 had already put `kind: "memo"` on the row. Fix: `buildAgentContext` branches on the SHARED reader `actionTypeOf(plan.kind)` — never on `plan.kind` directly, so a new `ACTION_TYPES` member is a compile error here rather than silently rendering as email — and returns a memo-shaped block (subject + body-drafted only) that states a memo has no recipients, no send mode and no send time. **Absent `kind` still means email, so every pre-Phase-15 row is byte-unchanged.** Two regression tests in `cockpitTools.test.ts`, mutation-checked (disabling the branch gives exactly 1 RED). **Live-verified on the same scenario after the fix** — staged the memo plan again and asked "what is the current plan?": before it answered *"the email will be sent individually to each recipient… do you need to add recipients"*, after it answers *"The current plan is a memo… finalize it for saving to your knowledge vault"* — no recipients, no send, and it names the real memo terminal. (Residual, not worth chasing: the model sometimes adds a self-contradictory *"the body is drafted, but you haven't specified the content yet"* clause even though the block says `Body drafted: yes`.) Note for whoever writes the next assertion here: the memo block deliberately contains the words "email"/"recipients" in NEGATION ("A memo is NOT an email… do not offer to add recipients"), so a naive `not.toMatch(/email/i)` forbids the very sentence doing the work — assert on the absent SLOT LINES (`^Send mode:`, `^Recipients \(`) instead.
 > Prior: 2026-07-26 (15.1-05 — the dispatched specialist's prompt now carries the tenant's TIER). `buildSpecialistPrompt` reads `internal.tenantProfile.forTenant` plus the behaviour-preset style directive and PREPENDS `tierBriefing(...)` on BOTH return paths (a tenant with no evaluation snapshot still has a tier). Prompt-shaping only — ADR-009: the offer SET is unchanged, `diagnose()` is not widened, `resolveSpecialist`/`SPECIALISTS` gain no filter layer, and **`llm.ts` is byte-unchanged** (a `git diff --exit-code` on it is a hard gate for this change). The style-directive read FAILS OPEN; the specialist BODY loader in `runSpecialistTurn` still fails CLOSED and must stay that way. See "Phase 15.1 — the tier in the specialist prompt" below.
 > Prior: 2026-07-26 (15-04 — Phase 15 Lane A, where the specialist run LANDS). `dispatchAndLand` calls `internal.evaluations.landSpecialistResult` in a `finally`, so every outcome — success, overrun, all four governed refusals, and a thrown turn — leaves the plan row `proposed`; a row parked at `collecting` renders NO card (`cards.tsx:1624`), which is also why Phase 15 makes zero `apps/web` edits after Wave 0. The attribution header and the cost-ceiling marker ride the plan BODY, never a new `plans.status` literal. A thrown turn audits `subagent.refused` with the CODE only, DLQs nothing, lands the fallback and RETHROWS — it is not a fifth governed refusal. See "Phase 15 — Lane A (dispatch core)" below.
@@ -1028,3 +1030,43 @@ same reason `softCutoffMs` exists — a `LanguageModel` is not Convex-serializab
 itself can never be driven offline, and without the flag the persist wiring would be code no test
 can reach. Absent ⇒ the gap path, byte-identical. The document's own contract lives in `vault.md`
 (`### Phase 16 — 16-07`).
+
+### Phase 16 — the research degradation contract
+
+D11 is a table of governed outcomes, not a promise that a provider usually behaves. These are the
+offline proofs an operator can run without a deployment, network, or bill:
+
+| Failure mode | Governed outcome | Proving test |
+|---|---|---|
+| Search call errors | retryable provider errors use the research fallback; non-retryable errors propagate | `search call errors: retryable failures fall back, non-retryable failures propagate` |
+| Zero results | stored findings say `insufficient evidence`, regardless of confident prose | `zero sources ⇒ 'insufficient evidence', however confident the body claims to be` |
+| Sources contradict | the contradiction section survives the storage fence intact | `sources contradict: the contradiction section survives storage intact` |
+| Cost ceiling | keep partial output, mark the card with the cost sentence, then refuse the exhausted envelope exactly | `cost ceiling: partial output lands, then the exhausted envelope refuses exactly` |
+| Step budget | stop between steps, keep partial findings, use the distinct step sentence | `step budget: partial findings land with the distinct steps marker` |
+| Wall clock | stop between steps, keep partial findings, use the distinct clock sentence; never throw `agent_timeout` | `wall clock: partial findings return and land with the distinct clock marker` |
+
+The companion guards are `three-way marker distinctness: cost, steps and clock differ on the plan
+card` and `ONE literal, not two: hosted search emits no step while local searchVault does`.
+
+Mutation-verification ledger (each mutation was applied, observed RED, and reverted):
+
+| Plan | Absence/invariant assertion | Exact mutation | RED observed |
+|---|---|---|---|
+| 16-05 | non-research turns keep their step floor | derive the soft cutoff unconditionally from the budget | yes |
+| 16-05 | only research gets the 180-second timeout | collapse `callTimeoutMsFor` to the 45-second default | yes |
+| 16-06 | a second in-flight research run is not scheduled | delete the `collecting` + memo interlock | yes |
+| 16-06 | user draft rows are not recycled | delete the `draft_in_progress` refusal | yes |
+| 16-06 | specialists cannot construct `dispatchResearch` | remove the `grantDispatch` construction gate | yes |
+| 16-06 | non-research routes do not inherit the research model pair | collapse the research model ternary | yes |
+| 16-07 | confident prose cannot erase the zero-source verdict | disable the `sources.length === 0` branch in `researchFindingsFence` | yes |
+| 16-07 | step/cost/clock markers cannot collapse into one sentence | collapse the steps marker onto cost | yes |
+| 16-07 | one tenant cannot read another tenant's findings | remove tenant scope from `vault.listVaultDocs` | yes |
+| 16-08 | withheld write tools cannot move the plan row | add `proposePlan` to `RESEARCH_TOOLS` | yes |
+| 16-08 | provider-hosted search emits no local activity row | add the `web_search` schema literal and emit a hosted-search step | yes |
+| 16-08 | the wall clock never discards partial findings | make the soft clock predicate throw instead of return `true` | yes |
+| 16-08 | clock/step markers survive the real card landing | omit `incompleteReason` from `landSpecialistResult` | yes |
+| 16-08 | audit payloads contain no question, URL/`http`, or specialist prose | add `question`, `sourceUrls`, and `specialistProse` to `research.persisted` | yes |
+
+This is the CODE proof: scripted models prove deterministic degradation and containment. Plan
+16-09 is the PROMPT proof: the eval gate measures grounded, useful, injection-resistant research
+answers. Neither proof substitutes for the other.

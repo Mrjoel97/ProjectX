@@ -24,11 +24,14 @@ import { describe, expect, test, vi } from "vitest";
 // registered". The evaluations.test.ts / runCockpitAgent.test.ts idiom, verbatim.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
 import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import { stableTenant } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -40,6 +43,14 @@ const aggregateModules = import.meta.glob(
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
 );
 
 // The loop-driving tests import `ai` + `@ai-sdk/openai` through the "use node" llm.ts inside
@@ -491,15 +502,25 @@ describe("the shared root-request cost envelope", () => {
 describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequestId)", () => {
   test("every lineage row carries the refs, the edges rebuild, and the costs sum to the root", async () => {
     const { t, planId } = await setup();
+    const urls = ["https://pricing.example/research-source"];
     const hop1 = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [searchedStep(REPLY, urls)],
+      }),
+    );
+    const hop2 = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...BASE,
         planId,
         primary: [REPLY_STEP],
+        route: "lead-engine",
+        parentAgentId: "research",
+        ancestry: ["research"],
+        envelopeCents: hop1.envelopeCents,
+        spentCents: hop1.spentCents,
       }),
-    );
-    const hop2 = ok(
-      await t.action(internal.dispatch.__runSpecialistWithScript, secondHop(hop1, planId)),
     );
 
     const lineage = await orderedLineage(t);
@@ -525,50 +546,80 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
 
     // parentAgentId is what rebuilds the EDGES: hop 2 hangs off hop 1's specialist.
     expect(lineage.map((r) => [r.payload.parentAgentId, r.payload.specialist])).toEqual([
-      ["executive", "offer-architect"],
-      ["executive", "offer-architect"],
-      ["offer-architect", "lead-engine"],
-      ["offer-architect", "lead-engine"],
+      ["executive", "research"],
+      ["executive", "research"],
+      ["research", "lead-engine"],
+      ["research", "lead-engine"],
     ]);
 
     // skillVersion rides the COMPLETED rows only — `subagent.dispatched` is written BEFORE the
     // loop, and the §5 loader resolves the active version inside runSpecialistTurn.
     const done = completedRows(lineage);
-    const active = await t.query(internal.skills.getActiveSkill, { name: "offer-architect" });
+    const active = await t.query(internal.skills.getActiveSkill, { name: "research-specialist" });
     expect(done[0]?.payload.skillVersion).toBe(active.version);
     for (const r of done) expect(r.payload.skillVersion).toBeGreaterThan(0);
 
     // Cost attribution to the ROOT is a SUM over these rows — no new table, no new index.
     const total = done.reduce((s, r) => s + (r.payload.costUsd as number), 0);
+    const rootTotal = hop1.costUsd + hop2.costUsd;
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeCloseTo(hop1.costUsd + hop2.costUsd, 10);
+    expect(total).toBeCloseTo(rootTotal, 10);
   });
 
-  test("§4 — NO audit payload value carries any of the specialist's output", async () => {
+  test("§4 — NO research audit payload value carries the question, sources, http, or prose", async () => {
     const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const urls = [
+      "https://pricing.example/chicago-session-rates",
+      "https://market.example/trainer-benchmarks",
+    ];
     await t.action(internal.dispatch.__runSpecialistWithScript, {
-      ...BASE,
+      ...RESEARCH,
       planId,
-      primary: [REPLY_STEP],
+      primary: [searchedStep(REPLY, urls)],
+      research: true,
     });
 
     // EVERY audit row written during the run, not just the lineage ones — and every VALUE of
-    // every payload, so a future field addition cannot leak without failing here.
+    // every payload recursively, so a future nested object or string[] cannot leak unnoticed.
     const rows = await t.run((ctx) => ctx.db.query("audit").collect());
     expect(rows.length, "no audit rows were written — the scan is vacuous").toBeGreaterThan(0);
+    const persisted = rows.find((row) => row.eventType === "research.persisted");
+    expect(persisted, "the research terminal audit was never written").toBeDefined();
+    expect(persisted?.payload).toMatchObject({
+      queryHash: await contentHash(QUESTION),
+      sourceCount: urls.length,
+    });
+
     const words = REPLY.split(/\W+/).filter((w) => w.length >= 5);
     expect(words.length, "the scripted reply has too few distinctive words").toBeGreaterThan(3);
+    const stringsIn = (value: unknown): string[] => {
+      if (typeof value === "string") return [value];
+      if (Array.isArray(value)) return value.flatMap(stringsIn);
+      if (value !== null && typeof value === "object") {
+        return Object.values(value).flatMap(stringsIn);
+      }
+      return [];
+    };
 
     for (const row of rows) {
-      for (const [key, value] of Object.entries(row.payload ?? {})) {
-        const text = typeof value === "string" ? value : JSON.stringify(value);
-        expect(text, `audit ${row.eventType}.${key} carries the specialist's reply`).not.toContain(
-          REPLY,
+      for (const text of stringsIn(row.payload ?? {})) {
+        // Mutation that turns every absence below RED: add `question`, `sourceUrls` and
+        // `specialistProse` to research.ts's research.persisted payload.
+        expect(text, `audit ${row.eventType} carries the research question`).not.toContain(
+          QUESTION,
+        );
+        for (const url of urls) {
+          expect(text, `audit ${row.eventType} carries source URL ${url}`).not.toContain(url);
+        }
+        expect(text.toLowerCase(), `audit ${row.eventType} carries an http fragment`).not.toContain(
+          "http",
         );
         for (const word of words) {
           expect(
             text,
-            `audit ${row.eventType}.${key} carries "${word}" from the specialist's output`,
+            `audit ${row.eventType} carries "${word}" from the specialist's output`,
           ).not.toContain(word);
         }
       }
