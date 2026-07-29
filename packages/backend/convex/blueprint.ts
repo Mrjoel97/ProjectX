@@ -9,15 +9,29 @@ import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
   deserializeBlueprint,
+  deserializeProfile,
   FIELD_SPEC,
+  mergeBlueprint,
+  probesFor,
   renderSpine,
+  statedFromProfile,
+  validateCandidates,
+  type BlueprintDiffRow,
+  type BlueprintField,
   type DerivedCandidate,
 } from "@pikar/core";
 import { scanText } from "@pikar/pii";
 import { generateObject, jsonSchema, type LanguageModel } from "ai";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalQuery, type QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  type QueryCtx,
+} from "./_generated/server";
+import { tenantAction } from "./lib/functions";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
@@ -29,6 +43,19 @@ const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\/
 type DeriveCandidatesResult =
   | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }
   | { ok: true; candidates: DerivedCandidate[] };
+
+type GroundedSource = { docId: string; title: string; text: string };
+type HydratedGround = { docIds: string[]; titles: string[]; chunks: string[] };
+type Probe = { field: BlueprintField; query: string };
+type BuildBlueprintDraftResult =
+  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }
+  | {
+      ok: true;
+      additions: number;
+      contradictions: number;
+      dropped: number;
+      sourceDocCount: number;
+    };
 
 const candidatesSchema = jsonSchema<{ candidates: DerivedCandidate[] }>({
   type: "object",
@@ -90,6 +117,41 @@ function candidatePrompt(
   return `FIELDS TO FILL:\n${fieldBlock}\n\nSOURCES:\n${sourceBlock}`;
 }
 
+/**
+ * Sequentially grounds every blank-field probe and folds the parallel arrays into one
+ * source-indexed list. Exported only so the offline test can inject a deterministic grounding
+ * function; production passes `vaultGroundHydrated` verbatim.
+ */
+export async function __collectGroundedSources(
+  probes: readonly Probe[],
+  ground: (query: string) => Promise<HydratedGround>,
+): Promise<GroundedSource[]> {
+  const sources: GroundedSource[] = [];
+  const indexByDocId = new Map<string, number>();
+
+  // ponytail: N sequential vaultGroundHydrated actions, one rag.search each (about six on this
+  // cold path). Upgrade path if latency bites: one action that accepts all N queries.
+  for (const { query } of probes) {
+    const { docIds, titles, chunks } = await ground(query);
+    for (let index = 0; index < docIds.length; index += 1) {
+      const docId = docIds[index];
+      if (!docId) continue;
+      const text = chunks[index] ?? "";
+      const existingIndex = indexByDocId.get(docId);
+      if (existingIndex !== undefined) {
+        const existing = sources[existingIndex];
+        if (existing && text && !existing.text.includes(text)) {
+          existing.text = `${existing.text}\n\n${text}`.trim();
+        }
+        continue;
+      }
+      indexByDocId.set(docId, sources.length);
+      sources.push({ docId, title: titles[index] ?? "", text });
+    }
+  }
+  return sources;
+}
+
 type LiveBlueprint = {
   docId: string;
   text: string;
@@ -146,6 +208,13 @@ export const topEntities = internalQuery({
     ).map((node) => node.name),
 });
 
+/** Cold synthesis-only read: whether a live blueprint has any ready document drift. */
+export const unincorporatedCountForTenant = internalQuery({
+  args: { tenantId: v.string(), sourceDocIds: v.array(v.string()) },
+  handler: async (ctx, { tenantId, sourceDocIds }): Promise<number> =>
+    (await unincorporatedFor(ctx, tenantId, sourceDocIds)).count,
+});
+
 /**
  * The blueprint's ONE governed model call. The skill load is deliberately first, including before
  * the offline seam: an unseeded deployment must never synthesize from a hardcoded fallback.
@@ -189,11 +258,107 @@ export const deriveCandidates = internalAction({
   },
 });
 
+/** Persist a draft on an EXISTING tier row. Never inserts, replaces, or touches live source ids. */
+export const writeDraft = internalMutation({
+  args: { tenantId: v.string(), draftJson: v.string() },
+  handler: async (ctx, { tenantId, draftJson }): Promise<void> => {
+    const existing = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (!existing) throw new ConvexError({ code: "NO_TENANT_PROFILE" });
+    await ctx.db.patch(existing._id, {
+      blueprintDraft: draftJson,
+      blueprintDraftAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * User-facing "Build blueprint" action: typed profile + graph + grounded blanks → one draft blob.
+ * Derived content is never written to the vault and therefore cannot reach an agent before confirm.
+ */
+export const buildBlueprintDraft = tenantAction({
+  args: {},
+  handler: async (ctx): Promise<BuildBlueprintDraftResult> => {
+    const tenantId = ctx.tenantId;
+    const row: Doc<"tenantProfiles"> | null = await ctx.runQuery(
+      internal.tenantProfile.forTenant,
+      { tenantId },
+    );
+    if (!row) throw new ConvexError({ code: "NO_TENANT_PROFILE" });
+
+    const profileDocs: { docId: string; title: string; text: string }[] = await ctx.runQuery(
+      internal.vault.profileSeedDocs,
+      { tenantId },
+    );
+    const profile = deserializeProfile(profileDocs[0]?.text ?? "");
+    const entities: string[] = await ctx.runQuery(internal.blueprint.topEntities, { tenantId });
+    const stated = statedFromProfile(profile, row.tier, entities);
+
+    const live: LiveBlueprint | null = await ctx.runQuery(internal.blueprint.liveForTenant, {
+      tenantId,
+    });
+    const liveBlueprint = live ? deserializeBlueprint(live.text) : null;
+
+    // A one-line typed-profile edit over a current live blueprint is free: reuse the live derived
+    // slots. If any ready document is new, probe the blanks so a user-triggered rebuild still
+    // performs Stage-2 drift detection rather than freezing yesterday's inferences.
+    const unincorporatedCount =
+      live === null
+        ? 0
+        : await ctx.runQuery(internal.blueprint.unincorporatedCountForTenant, {
+            tenantId,
+            sourceDocIds: [...live.sourceDocIds],
+          });
+    const probeBase =
+      liveBlueprint !== null && unincorporatedCount === 0
+        ? { ...liveBlueprint, ...stated }
+        : stated;
+    const probes = probesFor(probeBase);
+
+    const sources = await __collectGroundedSources(probes, async (query) =>
+      ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query }),
+    );
+
+    let derived: ReturnType<typeof validateCandidates>["derived"] = {};
+    let dropped: ReturnType<typeof validateCandidates>["dropped"] = [];
+    if (probes.length > 0) {
+      const synthesis: DeriveCandidatesResult = await ctx.runAction(
+        internal.blueprint.deriveCandidates,
+        {
+          tenantId,
+          fields: probes.map(({ field }) => field),
+          sources: sources.map(({ title, text }) => ({ title, text })),
+        },
+      );
+      if (!synthesis.ok) return synthesis;
+      ({ derived, dropped } = validateCandidates(synthesis.candidates, sources));
+    }
+
+    const { blueprint, diff } = mergeBlueprint(stated, derived, liveBlueprint);
+    const sourceDocIds =
+      sources.length > 0 ? sources.map(({ docId }) => docId) : [...(live?.sourceDocIds ?? [])];
+    await ctx.runMutation(internal.blueprint.writeDraft, {
+      tenantId,
+      draftJson: JSON.stringify({ blueprint, diff, sourceDocIds }),
+    });
+
+    return {
+      ok: true,
+      additions: diff.filter((item: BlueprintDiffRow) => item.kind === "addition").length,
+      contradictions: diff.filter((item: BlueprintDiffRow) => item.kind === "contradiction").length,
+      dropped: dropped.length,
+      sourceDocCount: sources.length,
+    };
+  },
+});
+
 /** Stage-1 drift: a pure set difference, no detector, no cron (CONTEXT: "there is no separate
  *  drift detector"). `ready` docs whose id is not in the LIVE blueprint's source set.
  *  ponytail: a PLAIN async helper, not a registered internalQuery — every caller
- *  (`spineForTenant` here, `blueprintState` in plan 08) lives in this module, so registering it
- *  would add a `ctx.runQuery` hop to the exact path this plan exists to keep cheap. */
+ *  (`spineForTenant`, synthesis's thin count query here, `blueprintState` in plan 08) lives in
+ *  this module; only the action needs a registered hop because actions cannot read `ctx.db`. */
 async function unincorporatedFor(
   ctx: QueryCtx,
   tenantId: string,

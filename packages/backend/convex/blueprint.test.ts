@@ -588,19 +588,26 @@ describe("blueprint draft build", () => {
     const refused = await rejectionData(
       t.withIdentity({ subject: "tenant_missing" }).action(api.blueprint.buildBlueprintDraft, {}),
     );
+    const directWriteRefused = await rejectionData(
+      t.mutation(internal.blueprint.writeDraft, {
+        tenantId: "tenant_missing",
+        draftJson: "{}",
+      }),
+    );
 
     expect(refused.code).toBe("NO_TENANT_PROFILE");
+    expect(directWriteRefused.code).toBe("NO_TENANT_PROFILE");
     expect(await tenantRows(t, "tenant_missing")).toEqual(rowsBefore);
     expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
   });
 
   test("a fully typed profile edit reuses live derived fields with no probe, model call, or vault write", async () => {
     const t = makeTest();
+    const profileDocId = await insertBusinessProfile(t, "tenant_a", TYPED_PROFILE);
     await insertLiveBlueprint(t, "tenant_a", {
-      sourceDocIds: ["live-source-a", "live-source-b"],
+      sourceDocIds: [profileDocId],
       text: FULL_LIVE_BLUEPRINT_TEXT,
     });
-    const profileDocId = await insertBusinessProfile(t, "tenant_a", TYPED_PROFILE);
     await t.run((ctx) =>
       ctx.db.insert("graphNodes", {
         tenantId: "tenant_a",
@@ -625,7 +632,7 @@ describe("blueprint draft build", () => {
 
     const [firstRow] = await tenantRows(t, "tenant_a");
     expect(firstRow?.blueprintDraft).toBeTruthy();
-    expect(firstRow?.blueprintSourceDocIds).toEqual(["live-source-a", "live-source-b"]);
+    expect(firstRow?.blueprintSourceDocIds).toEqual([profileDocId]);
     expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
     expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
 
@@ -642,7 +649,7 @@ describe("blueprint draft build", () => {
 
     const [secondRow] = await tenantRows(t, "tenant_a");
     expect(secondRow?.blueprintDraft).not.toBe(firstDraft);
-    expect(secondRow?.blueprintSourceDocIds).toEqual(["live-source-a", "live-source-b"]);
+    expect(secondRow?.blueprintSourceDocIds).toEqual([profileDocId]);
     expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
     const draft = JSON.parse(secondRow?.blueprintDraft ?? "{}") as {
       blueprint?: BusinessBlueprint;
@@ -651,7 +658,7 @@ describe("blueprint draft build", () => {
     expect(draft.blueprint?.oneLineDescription?.values).toEqual([
       "A one-line edit that must stay free.",
     ]);
-    expect(draft.sourceDocIds).toEqual([]);
+    expect(draft.sourceDocIds).toEqual([profileDocId]);
   });
 
   test("grounds sparse-profile probes in closed-field order and dedupes sources by doc id", async () => {
