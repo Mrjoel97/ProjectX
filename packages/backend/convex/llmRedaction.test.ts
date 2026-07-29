@@ -43,6 +43,29 @@ test("llm.ts uses ONLY skill.body as the system prompt (no hardcoded prompts)", 
   );
 });
 
+test("runCockpitAgent has one spine-first turn-prompt assembly with the exact legacy fallback", () => {
+  const src = readSource("llm.ts");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  const handler = code.slice(
+    code.indexOf("export const runCockpitAgent"),
+    code.indexOf("export const __invokeCockpitTool"),
+  );
+
+  expect(handler).toMatch(
+    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
+  );
+  expect(handler.match(/\bprompt:/g) ?? []).toHaveLength(1);
+  expect(src).not.toContain(
+    "prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\\n\\nThe user says: ${text}`",
+  );
+
+  // The helper is deliberately one expression: null contributes zero bytes, while a present spine
+  // is the first block and the current user turn remains the final line.
+  expect(code).toMatch(
+    /return `\$\{spine === null \? "" : `\$\{spine\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,
+  );
+});
+
 // ── 03.1-09: the COCKPIT content plane cannot leak raw email content to any log (§4) ─────────
 // The `plans` table + cockpit.ts hold the raw recipients/subject/body (CLAUDE.md §1). The
 // redaction invariant (SC5) is that none of that raw content reaches an audit/deadLetters/
