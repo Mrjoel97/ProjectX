@@ -815,7 +815,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/8 | 7 waves complete; 15.2-08 planned, not executed | 2026-07-27 |
 | 16. Research Sub-Agent & Web Research | 7/9 | In Progress (waves 1-5 done; 16-07 landed the vault terminal — next 16-08) | 2026-07-27 |
-| 17. Calendar Actions | 0/TBD | Not started | - |
+| 17. Calendar Actions | 1/4 | In Progress (Lane K — 17-01 Wave-0 freeze merged; blocked at 17-02 pending its own deployment, Google consent-screen scopes done) | 2026-07-27 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 3/10 | Wave 2 COMPLETE: 17.1-03 — precedence as code, the citation trust boundary, the spine renderer. Next: 17.1-04 (Wave 3) | 2026-07-27 |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |

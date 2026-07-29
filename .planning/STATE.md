@@ -2,121 +2,60 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 17
-current_plan: 5
-status: in_progress
-stopped_at: "16-01..16-07 COMPLETE. Lane R waves 1-5 DONE. 16-07 shipped the VAULT TERMINAL: `convex/research.ts` (`persistFindings`, a NON-'use node' internalMutation) writes ONE `kind: \"web_research\"` document per successful run — provenance header -> 16-03's fence -> the D10 limits footer, `retrievedAt` as a stored queryable number, ingest via `startIngest(correlationId: rootRequestId)`, and a refs-only `research.persisted` audit row. THE ORDERING IS THE CONTRACT: `persistResearchFindings` runs AFTER `dispatchAndLand` returns, so the approvable card already holds the findings and a persist failure is audited (`research.persist_failed`, reason CODE) and SWALLOWED — no retry, no DLQ; a governed refusal persists nothing. HONEST BOUNDARY, recorded in vault.md: only the FIRST chunk carries the header + inner fence; per-chunk containment is `searchVault`'s outer `<vault_context …>` fence. Gates: research.test.ts 12/12, backend 723/723 across 48 files, tsc 61 errors ALL in test files / ZERO non-test, check-playbooks exit 0, 3 mutation-checks RED-then-green. FOUR auto-fixed deviations — `INCOMPLETE_MARKER` is now EXPORTED from @pikar/core (one phrasing per stop cause, the plan's own constraint), `__runSpecialistWithScript` gained a `research` flag (runResearch cannot be driven offline — a LanguageModel is not Convex-serializable), `llmRedaction.test.ts`'s pinned dispatch audit-payload count 4->5 (a deliberate review gate, discharged by REVIEWING the new §4 site), and the wiring tests now stage through `stageResearchPlan` because `landSpecialistResult`'s CAS refuses a row that is not collecting+memo. ACTN-03 left PENDING in REQUIREMENTS.md ON PURPOSE: seven of this phase's nine plans claim it, including the unexecuted 16-08/16-09. NOT LIVE-VERIFIED — everything is offline (convex-test); `npx convex dev` DID regenerate api.d.ts for the new module, so this plan's deployment prerequisite is discharged. Next: 16-08 (D11 wall-clock via softCutoffMs:0 + the second-dispatch cost row). Lane K blocked at 17-02 (needs its own deployment; Google consent-screen scopes are DONE per owner)."
-last_updated: "2026-07-27T21:20:00.000Z"
-progress:
-  total_phases: 38
-  completed_phases: 23
-  total_plans: 179
-  completed_plans: 170
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_plan: 7 (done)
-status: in_progress
-stopped_at: Completed 15.2-03-PLAN.md
-last_updated: "2026-07-27T05:10:00.000Z"
-progress:
-  total_phases: 40
-  completed_phases: 24
-  total_plans: 179
-  completed_plans: 171
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_phase: 15.2
-current_plan: 5
-status: in_progress
-stopped_at: Completed 15.2-04-PLAN.md
-last_updated: "2026-07-27T12:40:00.000Z"
-progress:
-  total_phases: 40
-  completed_phases: 24
-  total_plans: 179
-  completed_plans: 172
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_phase: 15.2
-current_plan: 7 (done — all 7 planned waves complete; owner-created 15.2-08 still outstanding)
-status: in_progress
-stopped_at: "Completed 15.2-07-PLAN.md (Wave 7 — SC#3's XLS half, the phase's highest-risk item, verified LIVE on local-joel_feruzi-pikar_ai_50c69-1 and owner-APPROVED). Legacy .xls now reads its NUMBERS via SheetJS pinned from the vendor CDN. ALL SEVEN success criteria are now closed and all 3 Manual-Only validation rows are executed and passing. REMAINING IN THE PHASE: owner-created 15.2-08 (the parser false-ready family — officeText.ts:65/:74 emit Sheet N/Slide N unconditionally), which is NOT one of the original 7 waves. NOTE: Phases 16 (Lane R) and 17 (Lane K) merged their Wave-0 freezes into main during 15.2-03 and are still merging into this tree; this file's phase/plan counters in THIS block describe LANE V (Phase 15.2). Resolve any merge conflict here by keeping BOTH lanes' progress. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — these blocks are HAND-EDITED, do not trust the tool here. The 15.2 blocks above this one are merge artifacts left deliberately untouched: untangling three lanes' duplicated frontmatter is not this plan's job either."
-last_updated: "2026-07-27T17:05:00.000Z"
-progress:
-  total_phases: 38
-  completed_phases: 23
-  total_plans: 179
-  completed_plans: 175
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_phase: 17.1
-current_plan: 2
-status: in_progress
-stopped_at: "Completed 17.1-01-PLAN.md (Wave 1 — the pure blueprint core: closed field set + FIELD_SPEC totality table + probes + the deterministic serializer pair). 327/327 @pikar/core, typecheck exit 0, two mutation-checks confirmed applied and reverted green. Wave-1 sibling 17.1-02 (the business-blueprint skill row) was executing CONCURRENTLY in this same tree. NOTE: this block describes LANE 17.1 ONLY. The blocks above are other lanes (15.2 / 16 / 17) and are HAND-EDITED — `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the rest, so it was deliberately NOT run. Resolve any merge conflict here by keeping ALL lanes' blocks. BLPR-01 was deliberately left PENDING in REQUIREMENTS.md: six of this phase's ten plans claim it, and marking it complete after plan 1 of 10 would be a false signal."
-last_updated: "2026-07-27T20:35:00.000Z"
-progress:
-  total_phases: 38
-  completed_phases: 23
-  total_plans: 179
-  completed_plans: 176
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
-current_phase: 17.1
-current_plan: 3
-status: in_progress
-stopped_at: "Completed 17.1-02-PLAN.md (Wave 1 — the substrate). THIS BLOCK DESCRIBES LANE 17.1 ONLY; the blocks above describe Lanes V/R/K and are HAND-EDITED. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — do not trust the tool on this file. `roadmap update-plan-progress 17.1` was run and DID move the count to 2/10, but it BLANKED the table's Notes and Updated columns and did NOT tick the 17.1-02 checkbox; both were hand-repaired (memory: `gsd-tools-commit-workaround`). LANDED: 5 optional `tenantProfiles` fields (blueprintDraft / blueprintDraftAt / blueprintSourceDocIds / blueprintDocId / blueprintConfirmedAt) with NO migration entry and no existing field, index or validator touched; `graphNodes.by_tenant_degree`; `vaultDocuments.by_tenant_status` (a DECLARED second index beyond CONTEXT's `One new index`, stated in the schema comment so it never reads as silent drift). And `business-blueprint` through the FULL 5-file registry mirror, UNGATED. THE UNGATING IS THE LOAD-BEARING DECISION AND IT IS NOW ASSERTED, NOT IMPLIED: `isGatedSkill(\"business-blueprint\") === false` is a test, so a future `tidy up the gate list` edit fails loudly instead of deadlocking the skill at v1 (run-eval-golden.mjs hard-validates --skill against a closed name list it cannot extend to the synthesis path). Drift row MUTATION-VERIFIED: one-char `.md` edit ⇒ exactly 1 red, revert ⇒ 21/21. Gates: contracts 21/21, backend 47/47 files / 710/710 tests FULLY GREEN (the plan's documented `audit.test.ts` baseline red did not appear — recorded as an observation, not a claim it is fixed), backend tsc ZERO non-test errors, check-playbooks empty. ZERO deviations, ZERO auto-fixes. TRAP LEARNED THE HARD WAY: a backend suite backgrounded ACROSS my own edits went red on 6 `intake.test.ts` tests — vitest transforming a module graph that was changing underneath it — which looks exactly like a real regression; re-run undisturbed it was green. Do not background a long suite and then edit files it imports. STILL OPEN FOR THE NEXT PLANS: the row is seeded in CODE but has NEVER been seeded on a deployment (plain `npx convex dev` does not seed; `pnpm dev`/`npm run seed` does, and it will land v1 ACTIVE via the rows.length===0 bootstrap path); and the REQUIRED-FIELD TRAP is untouched and armed — `tier`/`tierSource`/`derivedAt` stay REQUIRED on `tenantProfiles`, so plan 05's draft writer MUST REFUSE for a tenant with no profile row (the `saveFacts` precedent, tenantProfile.ts:194) rather than invent a tier. Next: 17.1-03 (Wave 2 — precedence as code)."
-last_updated: "2026-07-27T20:45:00.000Z"
-progress:
-  total_phases: 40
-  completed_phases: 24
-  total_plans: 179
-  completed_plans: 176
----
-
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: - Platform -> Private Beta
 current_phase: 17.1
 current_plan: 4
 status: in_progress
-stopped_at: "Completed 17.1-03-PLAN.md (Wave 2 — precedence as code, the citation trust boundary, the spine renderer). THIS BLOCK DESCRIBES LANE 17.1 ONLY; the blocks above describe Lanes V/R/K and are HAND-EDITED. `gsd-tools state advance-plan` reads only the FIRST frontmatter block and would corrupt the others — it was deliberately NOT run. `roadmap update-plan-progress 17.1` moved the count to 3/10 but BLANKED the Notes and Updated columns and did NOT tick the 17.1-03 checkbox; all three hand-repaired (memory: `gsd-tools-commit-workaround`). @pikar/core 355/355 (was 327), blueprint file 48 tests (was 20), typecheck exit 0. THREE mutation-checks, each confirmed applied and each reverted green. `check-playbooks` blocks entirely on FOREIGN lanes and was deliberately not satisfied; `onboarding.md` is NOT in the stale list. BLPR-01 and BLPR-02 left PENDING on purpose. Next: 17.1-04 (Wave 3 — the backend read plane)."
-last_updated: "2026-07-27T18:05:00.000Z"
+stopped_at: "MULTI-LANE. Four phases are live in ONE shared working tree; this single frontmatter block is the tool-readable summary and the per-lane detail lives in '## Lane Status' below. 17.1 Business Blueprint: waves 1-2 COMPLETE (17.1-01/02/03), next 17.1-04 (read plane); waves 4-5 collide with Lane R on llm.ts / vaultGround.ts and must not run concurrently with it. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. HISTORY NOTE: this file previously carried SEVEN duplicate frontmatter blocks, one per lane, with mutually contradictory counters (total_phases 38 vs 40, completed_plans 170/171/172/175/176/176/177) - `gsd-tools` reads only the FIRST block, so every tool call saw one lane's stale view. Consolidated 2026-07-27 with counts recomputed from disk. Do NOT re-add a second block on merge; resolve conflicts by editing the Lane Status table instead."
+last_updated: "2026-07-27T21:30:00.000Z"
 progress:
   total_phases: 40
-  completed_phases: 24
-  total_plans: 179
-  completed_plans: 177
+  completed_phases: 23
+  total_plans: 203
+  completed_plans: 186
 ---
 
 # Project State
+
+## Lane Status
+
+Four phases execute concurrently in ONE working tree (they are NOT separate git worktrees). This
+table is the source of truth for per-lane position; the frontmatter above is the single
+tool-readable summary because `gsd-tools state advance-plan` and `roadmap update-plan-progress`
+read only the first frontmatter block.
+
+| Lane | Phase | Position | Next | Notes |
+|------|-------|----------|------|-------|
+| — | **17.1** Business Blueprint | 3/10 plans, waves 1-2 done | 17.1-04 (wave 3, read plane) | Waves 4-5 edit `llm.ts` / `vaultGround.ts` — **shared with Lane R**, must not run concurrently |
+| V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
+| R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
+| K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
+
+**Counts above are recomputed from disk** (40 phase checkboxes, 23 `[x]`, 203 `*-PLAN.md`,
+186 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+
+### Shared-tree discipline (learned the hard way, 2026-07-27)
+
+- **Never `git add -A`.** Use the pathspec form `git commit -m "msg" -- path1 path2`. Observed: one
+  executor's uncommitted ROADMAP edit was swept into a sibling's commit.
+- **Check `ls .git/MERGE_HEAD` before every commit.** A foreign merge in flight means STOP — the
+  owning session is usually live and will finish it. A pathspec commit failing with "cannot do a
+  partial commit during a merge" is the same signal.
+- **Never bump `Last verified` on a playbook your work does not own.** `check-playbooks` sees other
+  lanes' uncommitted code and will demand foreign playbooks; satisfying it claims verification of a
+  diff you never read.
+- **`roadmap update-plan-progress <N>` can edit the WRONG phase's section** (observed: it wrote
+  phase 16's plan count over phase 17.1's `**Plans:**` line). Always `git diff .planning/ROADMAP.md`
+  after and confirm every changed line belongs to the phase you named.
+- **Do not background a long test suite and then edit files it imports** — vitest transforms a module
+  graph changing underneath it and reports reds indistinguishable from a real regression.
+
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
-**Current focus:** Phases 14, 15 and 15.1 are CLOSED and merged to `main`. Next: `/gsd:verify-work` on Phase 15.1, then Phase 16 (Research Sub-Agent & Web Research).
+**Current focus:** FOUR lanes live concurrently — see `## Lane Status` above for each one's position. 17.1 (Business Blueprint) is at wave 3 of 8; 15.2 is complete bar the owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
@@ -1275,7 +1214,7 @@ exit 0 (Pitfall-4 tripwire), backend `tsc` +0 new errors over the 52 pre-existin
 PRIOR (13-03): Wave 3 done. BEVL-03 is now visible end to end — the cron's rows have a surface. `/dashboard/workspace` always shows a PINNED, non-closable "Weekly review" tab: `REVIEW_TAB` is seeded straight into `useState<Tab[]>([REVIEW_TAB])`, which is also what makes the `?thread=proactive-review` notification deep-link dedupe for free (`openThread` already skips ids it is showing). The tab drops both its `×` and the `has-close` class, and `closeTab` refuses the id. Selecting it renders a one-line explainer INSTEAD of `ChatPane` — the review thread is synthetic (no `plans` row), so `sendCockpitMessage` would throw `cockpit: plan row missing for thread` (cockpit.ts:93); the composer is suppressed and that backend guard was deliberately NOT loosened (it protects every real thread). The review branch precedes the gmail-status branch on purpose, so a user who never connected Gmail still sees it (SC#2 at the surface). `EvaluationCard` gained four review-ONLY branches and is still one dumb read of one `byThread` row: a pre-first-run empty state gated on the query RESOLVING to `null` (`undefined` is loading — no flash), a dated `Weekly review · MMM D ·` header prefix (the date IS the freshness signal, so no unread dot/badge), a `deltaLine()` "what changed" line off the PERSISTED `evaluation.delta` with zero terms omitted (nothing renders on an all-zero delta or an on-demand row), and a `/dashboard/profile` CTA inside the thin-data box — the one action that unblocks the one dead-end state, at `--teal-900` because BRAND §6 forbids `--teal-600` as small text. `NotificationsBanner` gained `KIND_HREF`, an OPT-IN kind→href map (absent kind ⇒ today's plain text; hrefs are code-owned constants, never row data), routing `weekly_review` over the existing VOIC-04 `?thread=` deep-link — no new route, no new component, no component library. Gates: web typecheck + `check-playbooks` exit 0, backend 494/495 unchanged (this plan touched zero backend files). PRIOR (13-02): the spine. `crons.weekly("proactive-review", monday 06:00 UTC)` → `internal.proactiveReview.runWeekly` enumerates onboarded tenants over `vaultDocuments.by_kind` (deduped — one review per tenant per week) and fans out `scheduler.runAfter(0, reviewOne, { tenantId })` so one tenant's failure cannot touch another's. `reviewOne` runs the Phase-12 engine on the STABLE per-tenant `REVIEW_THREAD_ID` with `withDelta: true`, carrying last week's `framework` forward, and notifies ONLY on change (first review ever, moved verdict, or a non-empty delta); the evaluation row is written every week regardless, so the card is always current and the bell stays quiet. A thrown review still tells the user (`weekly_review_failed`), with the REASON never reaching the notification plane (§4). `insertReviewNotification` writes `notifications` DIRECTLY — never `notifications.notify`, which schedules `notifyExternal.dispatch` → `freshAccessToken` unconditionally — so proactivity cannot break on the Google 7-day testing token (SC#2). Both kinds stay OUT of `NOTIFICATION_KINDS` as the second, independent barrier. No new audit eventType: the run rides the existing refs-only `evaluation.ran`. SC#2/SC#3 are enforced by comment-stripped static source guards (a cron has no `ctx.auth`, so `tenantQuery`/`tenantMutation` cannot enforce scoping — the guard replaces them, pinning the ONE `by_kind` cross-tenant read to exactly one occurrence). `proactiveReview.test.ts` 8/8, backend 494/495 (sole red the pre-existing `audit.test.ts` auditCounts row), `@pikar/core` 195/195, web typecheck + `check-playbooks` exit 0, backend `tsc --noEmit` +0 new errors over the 52 pre-existing test-file ones.
 **Current focus:** Phase 14 — Flagship Voice-Doc Workflow (EXECUTING, 8/9 plans, Lane C)
 
-## Current Position
+## Historical Position — Phase 14 (SUPERSEDED, kept for context)
 
 Phase: 14 of 25 (Flagship Voice-Doc Workflow) — **IN PROGRESS** (8/9 plans, 9 waves) on `lane-c/voice-doc`
 Plan: 14-08 COMPLETE (the post-call outcome); next 14-09 (wave 9, SC4 static scans + the BLOCKING human-verify)
