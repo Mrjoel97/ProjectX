@@ -4,10 +4,10 @@ import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 
-// DLVR-03 / Gmail consent (02-05). One explicit consent grants gmail.modify (read, draft,
-// send, organise — never permanent delete). The authorize URL is minted server-side with a
-// tenant-bound signed `state`; the browser only follows the link. Reconnect resets the
-// 7-day Testing-mode refresh window and resumes any awaiting_reauth delivery (backend).
+// DLVR-03 / Google consent (02-05, widened in 17-02). One explicit consent grants mail and
+// calendar access. The authorize URL is minted server-side with a tenant-bound signed `state`;
+// the browser only follows the link. Reconnect resets the 7-day Testing-mode refresh window,
+// resumes any awaiting_reauth delivery, and grants Calendar to pre-17 connections.
 export default function ConnectGmailPage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
   const connectUrl = useQuery(api.gmailAuth.gmailConnectUrl);
@@ -22,7 +22,7 @@ export default function ConnectGmailPage() {
 
   return (
     <section style={{ display: "grid", gap: "1rem", maxWidth: "40rem" }}>
-      <h1>Connect Gmail</h1>
+      <h1>Connect Google</h1>
 
       {gmailError && (
         <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: "0.5rem", padding: "1rem", color: "#991b1b" }}>
@@ -34,7 +34,7 @@ export default function ConnectGmailPage() {
         <p>Loading…</p>
       ) : status.connected ? (
         <div style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", borderRadius: "0.5rem", padding: "1rem" }}>
-          <div style={{ fontWeight: 700, color: "#166534" }}>Gmail connected</div>
+          <div style={{ fontWeight: 700, color: "#166534" }}>Google connected</div>
           {status.expiresAt && (
             <div style={{ fontSize: "0.85rem", color: "#666" }}>
               Access token expires {new Date(status.expiresAt).toLocaleString()}
@@ -46,8 +46,8 @@ export default function ConnectGmailPage() {
         </div>
       ) : (
         <p style={{ color: "#444" }}>
-          Pikar needs your consent to read, draft, and send email on your behalf. It can never
-          permanently delete your mail.
+          Pikar needs your consent to read, draft, and send email, check calendar availability,
+          and create approved calendar events. It can never permanently delete your mail.
         </p>
       )}
 
@@ -65,7 +65,7 @@ export default function ConnectGmailPage() {
             width: "fit-content",
           }}
         >
-          {status?.connected ? "Reconnect Gmail" : "Connect Gmail"}
+          {status?.connected ? "Reconnect Google" : "Connect Google"}
         </a>
       ) : (
         <p style={{ color: "#999", fontSize: "0.85rem" }}>Preparing consent link…</p>
