@@ -259,13 +259,13 @@ describe("vaultGroundHydrated spine (BLPR-02)", () => {
       query: `SMOKE::${docA}`,
     });
 
-    expect(withoutBlueprint.spine).toBeNull();
-    expect(withBlueprint.spine).toContain("A blueprint-grounded business");
-    expect(withBlueprint.spine).not.toContain("- **Persona:**");
     expect(withBlueprint.docIds).toEqual(withoutBlueprint.docIds);
     expect(withBlueprint.titles).toEqual(withoutBlueprint.titles);
     expect(withBlueprint.chunks).toEqual(withoutBlueprint.chunks);
     expect(withBlueprint.docIds).not.toContain(blueprintDocId);
+    expect(withoutBlueprint.spine).toBeNull();
+    expect(withBlueprint.spine).toContain("A blueprint-grounded business");
+    expect(withBlueprint.spine).not.toContain("- **Persona:**");
   });
 });
 

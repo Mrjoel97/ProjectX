@@ -1300,3 +1300,11 @@ Verify with `pnpm --filter @pikar/backend test vaultGround --maxWorkers=1`. The 
 all three arrays and their total character count before and after confirmation, retain a full-object
 empty-result equality including `spine: null`, pin cross-tenant null behavior, and keep the public
 `vaultGround` action at exactly `{context, docIds}`.
+
+`searchVault` needed **no source change** for this design. Its existing `docIds.length === 0`,
+`vault.searched.resultCount`, and `vaultSources` card logic continue to see retrieval hits only.
+`searchVaultSpine.test.ts` drives the real tool through `internal.llm.__invokeCockpitTool` and pins
+the honest Blueprint-bearing no-match at count 0 plus a matched card containing only the actual
+retrieval document. Those tests are intended to fail if anyone later "simplifies" the Blueprint
+back into the parallel arrays; the required mutation proof moves it there temporarily and confirms
+that the no-match, count, budget, full-object shape, and array-invariance guards all turn red.
