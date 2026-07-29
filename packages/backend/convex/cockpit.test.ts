@@ -9,6 +9,7 @@
 // pattern cockpitTools.test.ts uses for the aggregate). smoke:fanout remains the live coverage.
 import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+import retrierTest from "@convex-dev/action-retrier/test";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -34,12 +35,13 @@ const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate
 
 const TENANT = "tenant_a";
 
-/** A convex-test instance wired to run executePlan's successful (workflow.start) path. */
+/** A convex-test instance wired for both executePlan delivery arms. */
 function withDelivery() {
   const t = convexTest(schema, modules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  retrierTest.register(t);
   return t;
 }
 
@@ -71,6 +73,122 @@ async function seedPlan(
 
 const countRequests = (t: ReturnType<typeof convexTest>) =>
   t.run((ctx) => ctx.db.query("requests").collect());
+
+async function seedCalendarPlan(
+  t: ReturnType<typeof convexTest>,
+  status: "collecting" | "proposed" | "approved" | "delivering" | "done",
+  fields: { tenantId?: string; escalated?: boolean } = {},
+) {
+  return t.run((ctx) =>
+    ctx.db.insert("plans", {
+      tenantId: fields.tenantId ?? TENANT,
+      threadId: `calendar_thread_${crypto.randomUUID()}`,
+      kind: "calendar_event",
+      status,
+      eventTitle: "Governed planning review",
+      eventStartMs: Date.UTC(2026, 7, 3, 13, 0),
+      eventDurationMs: 30 * 60_000,
+      eventTz: "Africa/Dar_es_Salaam",
+      escalated: fields.escalated,
+      createdAt: Date.now(),
+    }),
+  );
+}
+
+describe("executePlan calendar arm (ACTN-02)", () => {
+  test("a proposed calendar plan starts one retrier run and records its governed delivery state", async () => {
+    const t = withDelivery();
+    const planId = await seedCalendarPlan(t, "proposed");
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).toEqual({ ok: true });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("delivering");
+    expect(plan?.calendarRunId).toEqual(expect.any(String));
+    expect(plan?.calendarRunId).not.toHaveLength(0);
+    expect(plan?.correlationId).toEqual(expect.any(String));
+  });
+
+  test.each(["collecting", "approved", "done"] as const)(
+    "a %s calendar plan starts no retrier run and creates nothing",
+    async (status) => {
+      const t = withDelivery();
+      const planId = await seedCalendarPlan(t, status);
+
+      const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+        planId,
+      });
+      await t.finishInProgressScheduledFunctions();
+
+      expect(result).toEqual({ ok: true, alreadyStarted: true });
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe(status);
+      expect(plan?.calendarRunId).toBeUndefined();
+      expect(plan?.calendarEventId).toBeUndefined();
+    },
+  );
+
+  test("two sequential approvals preserve one run id and the second is an idempotent no-op", async () => {
+    const t = withDelivery();
+    const planId = await seedCalendarPlan(t, "proposed");
+    const asTenant = t.withIdentity({ subject: TENANT });
+
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId })).toEqual({ ok: true });
+    const first = await t.run((ctx) => ctx.db.get(planId));
+    const secondResult = await asTenant.mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(secondResult).toEqual({ ok: true, alreadyStarted: true });
+    const second = await t.run((ctx) => ctx.db.get(planId));
+    expect(first?.calendarRunId).toEqual(expect.any(String));
+    expect(second?.calendarRunId).toBe(first?.calendarRunId);
+  });
+
+  test("calendar approval does not require a connected mailbox", async () => {
+    const t = withDelivery();
+    const planId = await seedCalendarPlan(t, "proposed");
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).not.toEqual({ ok: false, reason: "gmail_not_connected" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.calendarRunId).toEqual(expect.any(String));
+  });
+
+  test("calendar approval cannot reach the gmail request or workflow fan-out", async () => {
+    const t = withDelivery();
+    const planId = await seedCalendarPlan(t, "proposed");
+
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(await countRequests(t)).toHaveLength(0);
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.workflowId).toBeUndefined();
+  });
+
+  test("the existing escalated-plan guard refuses calendar before the arm starts", async () => {
+    const t = withDelivery();
+    const planId = await seedCalendarPlan(t, "proposed", { escalated: true });
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).toEqual({ ok: false, reason: "review_escalated" });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+});
 
 describe("executePlan approve-gate (SC4)", () => {
   test("idempotent: a non-proposed (already-approved) plan no-ops — double-approve sends once", async () => {
