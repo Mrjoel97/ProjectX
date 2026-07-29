@@ -35,6 +35,7 @@ import {
 } from "@pikar/contracts/skill";
 import {
   applyRecipientEdit,
+  type AvailabilityRange,
   type BriefingItem,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
@@ -831,6 +832,14 @@ export function buildCockpitTools(
     });
     return `I couldn't ${what} — the mailbox isn't reachable. Tell the user plainly and suggest they reconnect Gmail.`;
   };
+  const calendarUnavailable = async (what: string): Promise<string> => {
+    await ctx.runMutation(internal.notifications.notify, {
+      tenantId,
+      kind: "gmail_reconnect",
+      message: "I couldn't read your calendar — reconnect Google so I can check availability.",
+    });
+    return `I couldn't ${what} — the calendar isn't reachable. Tell the user plainly and suggest they reconnect Google.`;
+  };
 
   // Shared generate path for generateAttachment/regenerateAttachment (CKPT-02): scan (fail-closed)
   // → draft → render → filename → cap check → store. Returns the stored ref, or writes attachmentError
@@ -1347,6 +1356,55 @@ export function buildCockpitTools(
         if (result?.escalated)
           return "This plan has been revised too many times, so I've escalated it for review — I can't keep redrafting or send it. Please start a new plan if you still need changes.";
         return "Plan proposed — the user can now review and Approve it.";
+      },
+    }),
+    // ── Calendar availability (ACTN-02) — READ-ONLY, busy ranges only ─────────────────────────
+    checkAvailability: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Read-only: check when the user is busy, never what they are doing. " +
+        "Returns busy times only, with no event titles, descriptions, or attendees. " +
+        "It cannot create, move, or cancel calendar events.",
+      inputSchema: jsonSchema<{ range: AvailabilityRange }>({
+        type: "object",
+        properties: {
+          range: {
+            type: "string",
+            enum: ["today", "tomorrow", "week"],
+            description: "The availability window to check.",
+          },
+        },
+        required: ["range"],
+        additionalProperties: false,
+      }),
+      execute: async ({ range }): Promise<string> => {
+        // §2-D: the trusted client supplies BOTH clock and zone. Never substitute Date.now().
+        if (!clientContext)
+          return "I couldn't read your local time and timezone, so I can't check calendar availability yet.";
+        // correlationId = planId: the stable ref for the refs-only calendar availability audit.
+        const res = await ctx.runAction(internal.calendar.freeBusy, {
+          tenantId,
+          correlationId: planId,
+          range,
+          tz: clientContext.tz,
+          nowMs: clientContext.nowMs,
+        });
+        if (!res.ok) return calendarUnavailable("check calendar availability");
+        if (res.busy.length === 0)
+          return `You're free for ${range} — there are no busy blocks in that window.`;
+        // ponytail: render at most five blocks into the loop; the full count remains visible.
+        const shown = res.busy.slice(0, 5);
+        const lines = shown
+          .map(
+            (block) =>
+              `- ${fmtSendInstant(block.startMs, clientContext.tz)} to ${fmtSendInstant(block.endMs, clientContext.tz)}`,
+          )
+          .join("\n");
+        const remainder =
+          res.busy.length > shown.length
+            ? `\n${res.busy.length - shown.length} additional busy block(s) not shown.`
+            : "";
+        return `${res.busy.length} busy block(s) for ${range}:\n${lines}${remainder}`;
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
