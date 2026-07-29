@@ -47,6 +47,7 @@ const DISPATCH_POLL_MS = 3_000;
 // makes `citesVaultDoc` NON-VACUOUS: this token exists nowhere in any fixture's turns (asserted in
 // --self-check), so it can only reach a specialist's memo through a live `searchVault` result.
 const VAULT_NEEDLE = "evalgrd";
+const INSUFFICIENT_EVIDENCE_PHRASE = "insufficient evidence";
 
 // The gated skills — the only valid --skill pin targets — DERIVED from GATED_SKILLS
 // (packages/contracts/src/skill.ts), never re-listed here. The old hardcoded
@@ -140,6 +141,18 @@ const EXPECT_KEYS = new Set([
   "evaluationPresent",
   "findingsPresent",
   "gapCount",
+  // Phase 16 (ACTN-03): research is dispatched by the EXECUTIVE agent's own tool call and leaves
+  // a memo plan, but it never goes through actOnGap. Do not copy the dispatch keys' actOnGap rule:
+  // that near-match would reject every legitimate research fixture before the first spawn.
+  //   researchDocPresent    — smoke:researchCountForThread > 0. The ANTI-VACUOUS companion for
+  //     the other two keys: a reply or memo alone is not a persisted, groundable research run.
+  //   insufficientEvidence — the CODE-owned label on the stored web_research document, never a
+  //     regex over model reply prose. Meaningful only with researchDocPresent:true.
+  //   webSearchCallsAtLeast — the subagent.completed webSearchCalls COUNT, as an integer FLOOR.
+  //     Meaningful only with researchDocPresent:true; validateFixture rejects a vacuous zero.
+  "researchDocPresent",
+  "insufficientEvidence",
+  "webSearchCallsAtLeast",
   // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
   // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
   // plan row that a non-dispatching case never stages.
@@ -208,6 +221,17 @@ function validateFixture(fx, source) {
       fail(`expect.${key} requires actOnGap (nothing dispatches without the tap)`);
     }
   }
+  for (const key of ["insufficientEvidence", "webSearchCallsAtLeast"]) {
+    if (fx.expect[key] !== undefined && fx.expect.researchDocPresent !== true) {
+      fail(`expect.${key} requires researchDocPresent:true (the anti-vacuity companion)`);
+    }
+  }
+  if (
+    fx.expect.webSearchCallsAtLeast !== undefined &&
+    (!Number.isInteger(fx.expect.webSearchCallsAtLeast) || fx.expect.webSearchCallsAtLeast < 1)
+  ) {
+    fail("expect.webSearchCallsAtLeast must be an integer >= 1 (a zero floor is vacuous)");
+  }
   if (
     fx.expect.attributionRoute !== undefined &&
     !SPECIALIST_ROUTES.includes(fx.expect.attributionRoute)
@@ -217,6 +241,11 @@ function validateFixture(fx, source) {
   if (fx.turns.some((t) => t.includes(VAULT_NEEDLE))) {
     fail(
       `a turn contains the vault corpus needle "${VAULT_NEEDLE}" — that makes citesVaultDoc vacuous`,
+    );
+  }
+  if (fx.turns.some((t) => t.toLowerCase().includes(INSUFFICIENT_EVIDENCE_PHRASE))) {
+    fail(
+      `a turn contains "${INSUFFICIENT_EVIDENCE_PHRASE}" — that makes the stored verdict probe vacuous`,
     );
   }
   return fx;
@@ -276,7 +305,10 @@ const skillVersionsOf = (pins) => Object.fromEntries(pins.map((p) => [p.name, p.
  *  @param findingCount smoke:findingCountForThread, the LATEST row's findings (0 when unasked).
  *  @param gapCount smoke:gapCountForThread, the LATEST row's gaps (0 when unasked).
  *  @param vaultNeedle the token vaultSmoke:seedCorpus stamped into every seeded brief — the
- *  `citesVaultDoc` probe. "" when unasked (offline self-check), which makes the key fail closed. */
+ *  `citesVaultDoc` probe. "" when unasked (offline self-check), which makes the key fail closed.
+ *  @param researchCount smoke:researchCountForThread (0 when unasked — read skipped).
+ *  @param insufficientEvidence smoke:researchInsufficientEvidenceForThread (false when unasked).
+ *  @param webSearchCalls smoke:webSearchCallsForThread (0 when unasked — read skipped). */
 function evaluateExpect(
   expect,
   plan,
@@ -286,6 +318,9 @@ function evaluateExpect(
   findingCount = 0,
   gapCount = 0,
   vaultNeedle = "",
+  researchCount = 0,
+  insufficientEvidence = false,
+  webSearchCalls = 0,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -350,6 +385,15 @@ function evaluateExpect(
         break;
       case "gapCount":
         if (gapCount !== expected) miss(key, expected, gapCount);
+        break;
+      case "researchDocPresent":
+        if (researchCount > 0 !== expected) miss(key, expected, researchCount > 0);
+        break;
+      case "insufficientEvidence":
+        if (insufficientEvidence !== expected) miss(key, expected, insufficientEvidence);
+        break;
+      case "webSearchCallsAtLeast":
+        if (webSearchCalls < expected) miss(key, `>= ${expected}`, webSearchCalls);
         break;
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
@@ -496,6 +540,105 @@ function selfCheck() {
     "gapCount:1 MUST FAIL when the diagnosis surfaced no gap",
   );
 
+  // 2e. Phase 16: the research keys are table/audit observables, paired so neither a prose answer
+  // nor an absent run can pass. They deliberately require NO actOnGap — the executive dispatches
+  // research directly.
+  const researchExpect = {
+    researchDocPresent: true,
+    insufficientEvidence: false,
+    webSearchCallsAtLeast: 2,
+  };
+  assert.ok(
+    validateFixture({ ...base, expect: researchExpect }, "<synthetic>"),
+    "a paired executive-dispatched research fixture is accepted without actOnGap",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...base, expect: { insufficientEvidence: true } },
+        "<synthetic>",
+      ),
+    /requires researchDocPresent:true/,
+    "the verdict without a persisted research document is vacuous",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...base, expect: { webSearchCallsAtLeast: 2 } },
+        "<synthetic>",
+      ),
+    /requires researchDocPresent:true/,
+    "the hosted-search floor without a persisted research document is vacuous",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        {
+          ...base,
+          expect: { researchDocPresent: true, webSearchCallsAtLeast: 0 },
+        },
+        "<synthetic>",
+      ),
+    /integer >= 1/,
+    "a zero hosted-search floor proves nothing",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        {
+          ...base,
+          expect: { researchDocPresent: true, webSearchCallsAtLeast: 1.5 },
+        },
+        "<synthetic>",
+      ),
+    /integer >= 1/,
+    "the hosted-search floor is an integer count",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...base, turns: ["Return insufficient evidence if you cannot find it."] },
+        "<synthetic>",
+      ),
+    /verdict probe vacuous/,
+    "a turn cannot supply the phrase the durable verdict probe reads",
+  );
+  assert.equal(
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 3)
+      .length,
+    0,
+    "a stored grounded run with three searches satisfies the paired observables",
+  );
+  assert.equal(
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 0, false, 3)
+      .length,
+    1,
+    "researchDocPresent:true MUST FAIL when no research document was stored",
+  );
+  assert.equal(
+    evaluateExpect(
+      { researchDocPresent: true, insufficientEvidence: true },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      1,
+      true,
+      0,
+    ).length,
+    0,
+    "the durable insufficient-evidence label is observable",
+  );
+  assert.equal(
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 1)
+      .length,
+    1,
+    "webSearchCallsAtLeast:2 MUST FAIL on a one-shot search",
+  );
+
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   const trip = [0.4, 0.4, 0.3].reduce((sum, c) => sum + c, 0);
   assert.ok(overCap(trip), "$1.10 must trip the $1.00 cap");
@@ -604,13 +747,16 @@ function selfCheck() {
   );
   assert.deepEqual(
     SPECIALIST_ROUTES,
-    ["offer-architect", "money-model-designer", "lead-engine"],
-    "the three dispatchable routes, read off the core registry (not re-listed here)",
+    ["offer-architect", "money-model-designer", "lead-engine", "research"],
+    "all dispatchable routes, including research, are read off the core registry",
   );
   for (const route of SPECIALIST_ROUTES) {
+    // The three Phase-12 route names equal their skill names; Phase 16 deliberately names the
+    // route `research` and the registry body `research-specialist`.
+    const skillName = route === "research" ? "research-specialist" : route;
     assert.ok(
-      SKILL_NAMES.includes(route),
-      `${route} must also be GATED — a body edit rides the gate`,
+      SKILL_NAMES.includes(skillName),
+      `${skillName} must also be GATED — a body edit rides the gate`,
     );
   }
   assert.throws(
@@ -701,6 +847,24 @@ function waitForDispatch(planId) {
   }
 }
 
+/** Phase 16: the research card leaves collecting BEFORE persistResearchFindings writes the vault
+ * document, so plan status alone is an early wake-up race. Poll the durable research row too; it is
+ * the completion signal every new research observable depends on. */
+function waitForResearchLanding(planId, tenantId, threadId) {
+  const deadline = Date.now() + DISPATCH_TIMEOUT_MS;
+  for (;;) {
+    const plan = parse(must("plans:getById", { planId }));
+    const researchCount = parse(
+      must("smoke:researchCountForThread", { tenantId, threadId }),
+    );
+    if (plan && plan.status !== "collecting" && researchCount > 0) {
+      return { plan, researchCount };
+    }
+    if (Date.now() >= deadline) return null;
+    sleepSync(DISPATCH_POLL_MS);
+  }
+}
+
 function attemptCase(fixture, tenant, pins) {
   const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
   let caseCost = 0;
@@ -741,6 +905,7 @@ function attemptCase(fixture, tenant, pins) {
   // deployment's daily rail, not on this runner's COST_CAP_USD (the runner only sees runCockpitAgent's
   // costUsd); the dispatcher's own tree envelope is the ceiling there.
   let plan;
+  let landedResearchCount = 0;
   if (fixture.actOnGap !== undefined) {
     const tap = parse(
       must("evaluations:actOnGapInternal", {
@@ -764,6 +929,26 @@ function attemptCase(fixture, tenant, pins) {
         caseCost,
       };
     }
+  } else if (fixture.expect.researchDocPresent === true) {
+    // D9-REVISED: the executive returns immediately and the research run lands on the scheduler.
+    // Poll the same durable document the assertion reads; a fixed sleep would be either flaky or
+    // needlessly slow, and polling plan status alone wakes before persistResearchFindings.
+    const landed = waitForResearchLanding(planId, tenant, threadId);
+    if (!landed) {
+      return {
+        pass: false,
+        failures: [
+          {
+            key: "researchDocPresent",
+            expected: "scheduled research landed",
+            actual: "no research document before timeout",
+          },
+        ],
+        caseCost,
+      };
+    }
+    plan = landed.plan;
+    landedResearchCount = landed.researchCount;
   } else {
     // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
     // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
@@ -790,6 +975,26 @@ function attemptCase(fixture, tenant, pins) {
     fixture.expect.gapCount === undefined
       ? 0
       : parse(must("smoke:gapCountForThread", { tenantId: tenant, threadId }));
+  // Phase 16: skip every research read unless a fixture asks. The pairing rules above guarantee
+  // the verdict and call floor cannot ask without the persisted-document companion.
+  const researchCount =
+    fixture.expect.researchDocPresent === undefined
+      ? 0
+      : landedResearchCount ||
+        parse(must("smoke:researchCountForThread", { tenantId: tenant, threadId }));
+  const insufficientEvidence =
+    fixture.expect.insufficientEvidence === undefined
+      ? false
+      : parse(
+          must("smoke:researchInsufficientEvidenceForThread", {
+            tenantId: tenant,
+            threadId,
+          }),
+        );
+  const webSearchCalls =
+    fixture.expect.webSearchCallsAtLeast === undefined
+      ? 0
+      : parse(must("smoke:webSearchCallsForThread", { tenantId: tenant, threadId }));
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -799,6 +1004,9 @@ function attemptCase(fixture, tenant, pins) {
     findingCount,
     gapCount,
     VAULT_NEEDLE,
+    researchCount,
+    insufficientEvidence,
+    webSearchCalls,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {

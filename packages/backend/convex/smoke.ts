@@ -12,7 +12,12 @@ import { DOC_GAP_PLAYBOOK, DOC_GAP_ROUTE, DOC_REVIEW_FRAMEWORK, voiceDocThreadId
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  type QueryCtx,
+} from "./_generated/server";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { reviewEventValidator } from "./review";
@@ -447,6 +452,96 @@ export const gapCountForThread = internalQuery({
       .first();
     return (row?.gaps ?? []).length;
   },
+});
+
+const RESEARCH_DISPATCH_PREFIX = "dispatch:";
+const INSUFFICIENT_EVIDENCE_LABEL = "Insufficient evidence — no web sources were retrieved";
+
+/**
+ * Phase 16 eval join. `vaultDocuments` has no threadId, `audit` has no threadId, and agentSteps has
+ * no by_thread index. The governed dispatch row bridges them without a schema change:
+ * thread → agentSteps.stepKey (`dispatch:<correlationId>`) → audit.by_correlation → vault doc.
+ */
+async function researchTrailForThread(
+  ctx: QueryCtx,
+  tenantId: string,
+  threadId: string,
+): Promise<{ docs: Doc<"vaultDocuments">[]; webSearchCalls: number }> {
+  const steps = await ctx.db
+    .query("agentSteps")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const correlations = new Set(
+    steps
+      .filter(
+        (row) =>
+          row.threadId === threadId &&
+          row.tool === "dispatchResearch" &&
+          row.stepKey.startsWith(RESEARCH_DISPATCH_PREFIX),
+      )
+      .map((row) => row.stepKey.slice(RESEARCH_DISPATCH_PREFIX.length))
+      .filter((id) => id.length > 0),
+  );
+
+  const docIds = new Set<Id<"vaultDocuments">>();
+  let webSearchCalls = 0;
+  for (const correlationId of correlations) {
+    const auditRows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .collect();
+    for (const row of auditRows) {
+      // by_correlation is deliberately cross-tenant; the tenant guard keeps a synthetic collision
+      // from joining another tenant's trace.
+      if (row.tenantId !== tenantId) continue;
+      if (row.eventType === "subagent.completed") {
+        const count = row.payload?.webSearchCalls;
+        if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
+          webSearchCalls += count;
+        }
+      }
+      if (row.eventType === "research.persisted") {
+        const rawId = row.payload?.vaultDocId;
+        const docId =
+          typeof rawId === "string" ? ctx.db.normalizeId("vaultDocuments", rawId) : null;
+        if (docId) docIds.add(docId);
+      }
+    }
+  }
+
+  const docs: Doc<"vaultDocuments">[] = [];
+  for (const docId of docIds) {
+    const doc = await ctx.db.get(docId);
+    if (doc?.tenantId === tenantId && doc.kind === "web_research") docs.push(doc);
+  }
+  return { docs, webSearchCalls };
+}
+
+/** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
+ * row, not the memo plan: a prose answer or a staged card must not pass a research fixture. */
+export const researchCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    (await researchTrailForThread(ctx, tenantId, threadId)).docs.length,
+});
+
+/** Phase 16: CODE owns the zero-source verdict in the stored document. The harness reads that
+ * durable label rather than regexing model reply prose, matching the production truth source. */
+export const researchInsufficientEvidenceForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<boolean> =>
+    (await researchTrailForThread(ctx, tenantId, threadId)).docs.some((doc) =>
+      (doc.text ?? "").includes(INSUFFICIENT_EVIDENCE_LABEL),
+    ),
+});
+
+/** Phase 16 / D10 #2: sum the hosted-search COUNT already written to subagent.completed. The
+ * correlation comes from governedDispatch's own `dispatch:<rootRequestId>` step row — never the
+ * executive SDK row, whose stepKey is an unrelated toolCallId. */
+export const webSearchCallsForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    (await researchTrailForThread(ctx, tenantId, threadId)).webSearchCalls,
 });
 
 /**
