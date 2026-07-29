@@ -85,12 +85,16 @@ async function seedDoc(
   t: ReturnType<typeof convexTest>,
   tenantId: string,
   text: string,
+  options: {
+    title?: string;
+    kind?: "brief" | "web_research";
+  } = {},
 ): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
     ctx.db.insert("vaultDocuments", {
       tenantId,
-      title: "Business profile",
-      kind: "brief",
+      title: options.title ?? "Business profile",
+      kind: options.kind ?? "brief",
       category: "business",
       source: "seam",
       mimeType: "text/markdown",
@@ -102,6 +106,52 @@ async function seedDoc(
     }),
   );
 }
+
+describe("runEvaluation (SC#4 — web research citations retain their retrieval date)", () => {
+  test("a web research vault title becomes a dated citation, without citing an ungrounded doc", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const researchDocId = await seedDoc(t, TENANT, profileDocText(true), {
+      title: "Web research: dog-training unit economics (retrieved 2026-07-29)",
+      kind: "web_research",
+    });
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: `${THREAD}_web_research`,
+      query: `SMOKE::${researchDocId}`,
+    });
+
+    const grounded = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: `${THREAD}_web_research`,
+    });
+    const datedFinding = grounded?.findings.find(
+      (finding) => finding.citationDocId === researchDocId,
+    );
+    expect(datedFinding?.citationTitle).toContain("retrieved ");
+    // Deliberate non-decision: `source` stays the closed "vault" literal. Freshness rides the
+    // document title, so SC#4 needs neither an evaluations.ts edit nor a widened schema union.
+    expect(datedFinding?.source).toBe("vault");
+
+    // Use a fresh database so "no such document" is literal. Reusing the first tenant would carry
+    // its prior scorecard provenance forward by design, including the web-research citation.
+    const withoutResearchTest = newTest();
+    await withoutResearchTest.mutation(internal.skills.seedSkills, {});
+    const ordinaryDocId = await seedDoc(withoutResearchTest, TENANT, profileDocText(true));
+    await withoutResearchTest.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: `${THREAD}_without_web_research`,
+      query: `SMOKE::${ordinaryDocId}`,
+    });
+    const withoutResearch = await withoutResearchTest
+      .withIdentity({ subject: TENANT })
+      .query(api.evaluations.byThread, {
+        threadId: `${THREAD}_without_web_research`,
+      });
+    expect(withoutResearch?.findings.some((finding) => finding.citationTitle.includes("retrieved ")))
+      .toBe(false);
+  });
+});
 
 describe("runEvaluation (BEVL-01 — grounded assessment persists a cited row)", () => {
   test("a grounded run persists a row with >=1 cited finding; byThread returns it", async () => {
