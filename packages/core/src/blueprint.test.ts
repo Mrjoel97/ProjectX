@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BLUEPRINT_FIELDS,
@@ -609,5 +610,64 @@ describe("renderSpine — a blueprint with nothing in it", () => {
     expect(spine).toContain("(nothing confirmed about this business yet)");
     // Pinned: it does NOT throw, because a grounding call must never crash on a sparse tenant.
     expect(spine.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
+  });
+});
+
+// ── Profile confirmation surface — D5 interaction and BRAND source scan ──────────────────────
+//
+// This scan lives in @pikar/core because the backend vitest environment is `edge-runtime` and
+// cannot read app source. The first test is deliberately a POSITIVE non-vacuity anchor: every
+// absence rule below could otherwise pass over an empty or wrong file forever.
+describe("profile Blueprint confirmation surface source contract", () => {
+  const readUi = (name: "BlueprintPanel" | "BlueprintDiff") => {
+    try {
+      return readFileSync(
+        new URL(
+          `../../../apps/web/app/(app)/dashboard/profile/${name}.tsx`,
+          import.meta.url
+        ),
+        "utf8"
+      );
+    } catch {
+      return "";
+    }
+  };
+  const panelSource = readUi("BlueprintPanel");
+  const diffSource = readUi("BlueprintDiff");
+  const allSource = `${panelSource}\n${diffSource}`;
+
+  it("first anchors on contradiction review and the confirmation mutation", () => {
+    expect(diffSource).toMatch(/contradiction/i);
+    expect(diffSource).toMatch(/api\s*\.\s*blueprint\s*\.\s*confirmBlueprint/);
+  });
+
+  it("uses brand colour tokens without spending approval amber or hardcoded hex", () => {
+    expect(allSource).toMatch(/var\(\s*--[a-z0-9-]+\s*\)/i);
+    expect(allSource).not.toMatch(/--held(?:-text)?\b/i);
+    expect(allSource).not.toMatch(/#[0-9a-f]{6}\b/i);
+  });
+
+  it("defaults the one additions group ON", () => {
+    expect(diffSource).toMatch(
+      /const\s*\[\s*acceptAdditions\s*,\s*setAcceptAdditions\s*\]\s*=\s*useState\(\s*true\s*\)/
+    );
+    expect(diffSource).toMatch(
+      /<input[\s\S]{0,500}?name="accept-additions"[\s\S]{0,500}?checked=\{acceptAdditions\}[\s\S]{0,500}?\/>/
+    );
+  });
+
+  it("defaults every destructive contradiction checkbox OFF", () => {
+    const contradictionInput = diffSource.match(
+      /<input[\s\S]{0,700}?data-blueprint-control="contradiction"[\s\S]{0,700}?\/>/
+    )?.[0];
+    expect(contradictionInput).toMatch(
+      /checked=\{acceptedContradictions\.has\(row\.field\)\}/
+    );
+    expect(contradictionInput).not.toMatch(/defaultChecked|checked\s*=\s*\{\s*true\s*\}/);
+  });
+
+  it("labels additions and contradictions in visible words, not colour alone", () => {
+    expect(diffSource).toMatch(/>\s*Addition\s*</);
+    expect(diffSource).toMatch(/>\s*Contradiction\s*</);
   });
 });
