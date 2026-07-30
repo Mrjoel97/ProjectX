@@ -31,7 +31,7 @@ import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
 // The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
 import { persistNextStepMemo } from "./evaluations";
-import { workflow } from "./index";
+import { retrier, workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 
 // No hardcoded `instructions` prompt (CLAUDE.md §5): the reasoning prompt is the cockpit-agent
@@ -555,13 +555,33 @@ export const executePlan = tenantMutation({
         await persistNextStepMemo(ctx, plan);
         return { ok: true };
       }
-      case "externalAction":
-        // FREEZE STUB (17-01) — the real body lands in 17-04 (retrier.run →
-        // internal.calendar.createEvent, onComplete → internal.calendarComplete.onCreateComplete).
-        // UNREACHABLE today: no code path writes plans.kind = "calendar_event" until 17-03's
-        // staging tool exists. The throw is deliberate — a silent no-op here would mark a plan
-        // approved with nothing created.
-        throw new Error("calendar arm not wired (17-04)");
+      case "externalAction": {
+        // ACTN-02. ONE governed external side effect behind the human Approve gate. NOT `inline`
+        // (a Convex mutation cannot fetch, and this declaration is PINNED as a tenantMutation by
+        // dispatchGuard.test.ts:95); NOT `workflow` (that case IS the gmail fan-out below — see the
+        // _ARM_TABLE comment). The CAS above already made this exactly-once; the client-supplied
+        // event id makes the RETRY exactly-once too (a 409 duplicate MEANS success).
+        //
+        // deliverApprovedPlan.ts stays byte-unchanged: it is the workflow-backed EMAIL entry point,
+        // not a universal dispatcher. Routing Calendar through it would make the gmail fan-out
+        // reachable from a calendar action.
+        await ctx.db.patch(planId, { status: "approved" });
+        const correlationId = crypto.randomUUID(); // server-minted, never client-supplied
+        const runId = await retrier.run(
+          ctx,
+          internal.calendar.createEvent,
+          { planId, tenantId: ctx.tenantId, correlationId },
+          // The terminal lives in calendarComplete.ts, NOT calendar.ts: calendar.ts is "use node"
+          // and may hold only actions, so the completion mutation cannot live beside its action.
+          { onComplete: internal.calendarComplete.onCreateComplete },
+        );
+        await ctx.db.patch(planId, {
+          status: "delivering",
+          correlationId,
+          calendarRunId: String(runId),
+        });
+        return { ok: true };
+      }
       case "workflow":
         break; // → the existing pre-check → CAS flip → seed requests → startFanout block below
       default:
