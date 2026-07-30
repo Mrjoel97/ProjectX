@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 8
+current_plan: 9
 status: in_progress
-stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 3/4 with the in-loop read and staging tools complete; next 17-04. 17.1 Business Blueprint is 7/10 with both standing-spine seams complete and 17.1-08 executing. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-30T02:13:10.245Z"
+stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 3/4 with the final 17-04 arm executing. 17.1 Business Blueprint is 8/10 with the D2 confirmation gate and audited state complete; next 17.1-09. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-30T13:58:19.272Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 194
-  percent: 95
+  completed_plans: 195
+  percent: 96
 ---
 
 # Project State
@@ -26,13 +26,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 7/10 plans, waves 1-5 through both seams done | 17.1-08 (wave 6, confirm gate) | 17.1-07 is complete, full backend 766/766, both seams mutation-verified; zero `llm.ts` edits in plan 07 |
+| — | **17.1** Business Blueprint | 8/10 plans, waves 1-6 through the confirmation gate done | 17.1-09 (wave 7, confirm surface) | 17.1-08 is complete, full backend 775/775, D2 and both Blueprint requirements closed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | 16-09 live eval | Deterministic gates are green; awaiting a securely available `OPENAI_API_KEY` for the required model-backed golden run |
-| K | **17** Calendar Actions | 3/4 plans | 17-04 | In-loop availability + event staging complete; live trace/card observation and owner OAuth checks remain non-blocking |
+| K | **17** Calendar Actions | 3/4 plans | 17-04 in progress | In-loop availability + event staging complete; live trace/card observation and owner OAuth checks remain non-blocking |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-194 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+195 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -58,11 +58,23 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above. Phase 15.2 is complete. Phase 16 is paused at
 16-09's live model gate pending a securely available OpenAI key. Phase 17 is ready for 17-04.
-Phase 17.1 has completed both Blueprint seams and continues at 17.1-08.
+Phase 17.1 has completed the explicit confirmation gate and continues at 17.1-09.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 5 of 8) — 17.1-07 COMPLETE: explicit grounding
+**PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
+gate.** `confirmBlueprint` promotes a reviewed draft into one tenant-owned `business_blueprint`
+document at `ready`; reconfirmation patches the same `_id`, and the document never enters ingest,
+embedding, or graph extraction. Accepted contradictions select their cited derived entries while
+default confirmation preserves typed values and the user's `business_profile` bytes. The
+`blueprint.confirmed` audit payload is pinned to one ref plus four counts, `discardDraft` clears
+only draft state, and `blueprintState` derives `none`, `live`, `live_stale`, and `draft` from the
+same live/drift helpers used by the agent seams. Mutation proofs caught both an added audit value
+and forced duplicate insertion. Gates: backend 51 files / 775 tests, zero non-test TypeScript
+errors, playbook hook empty, and zero `startIngest` references in `blueprint.ts`. BLPR-01 and
+BLPR-02 are complete. Next: 17.1-09.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 5 of 8) — 17.1-07 COMPLETE: explicit grounding
 spine.** `vaultGroundHydrated` returns `{ docIds, titles, chunks, spine }`, querying the live
 blueprint only after retrieval hydration so the spine never enters the retrieval arrays or
 `TOTAL_CHAR_CAP`; blueprint read failures remain fail-open as `null`. Evaluations order profile
@@ -1522,6 +1534,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P06 | 29min | 2 tasks | 4 files |
 | Phase 17.1 P07 | 39 min | 3 tasks | 11 files |
 | Phase 17 P03 | 37 min | 2 tasks | 3 files |
+| Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1657,6 +1670,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: BLPR-02 remains phase-level pending until SEAM 2 and the drift clause are complete.
 - [Phase 17.1]: Blueprint standing context stays in a separate spine field outside retrieval arrays and TOTAL_CHAR_CAP; searchVault and llm.ts require no accommodation.
 - [Phase 17.1]: Evaluation grounding order is profile seeds, then the real Blueprint document, then ordinary retrieval; voice counts document passages separately from the spine.
+- [Phase 17.1]: Accepted contradiction rows explicitly select the cited derived entry; unaccepted rows restore the stated entry.
+- [Phase 17.1]: The confirmed business_blueprint is written directly at ready and never enters ingest, embedding, or graph extraction.
+- [Phase 17.1]: blueprintState derives all four profile states from the same live and Stage-1 drift helpers used by agent seams.
 
 ### Pending Todos
 
@@ -1688,8 +1704,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-30T02:13:10.245Z
-Stopped at: Integrated completed 17-03; 17-04 next, 17.1-08 executing, 16-09 awaiting OpenAI key
+Last session: 2026-07-30T13:58:19.272Z
+Stopped at: Integrated completed 17.1-08; 17-04 executing, 17.1-09 next, 16-09 awaiting OpenAI key
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z

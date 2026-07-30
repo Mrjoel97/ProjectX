@@ -2,14 +2,17 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
+  deserializeBlueprint,
   probesFor,
   serializeProfile,
   SPINE_CHAR_CAP,
   statedFromProfile,
   serializeBlueprint,
+  type BlueprintDiffRow,
   type BusinessProfile,
   type BusinessBlueprint,
 } from "@pikar/core";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
@@ -22,10 +25,15 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 const makeTest = () => {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 };
 
@@ -199,6 +207,88 @@ const tenantVaultDocs = (t: ReturnType<typeof makeTest>, tenantId: string) =>
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .collect(),
   );
+
+const scheduledFunctions = (t: ReturnType<typeof makeTest>) =>
+  t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+
+const blueprintConfirmedRows = (t: ReturnType<typeof makeTest>) =>
+  t.run(async (ctx) =>
+    (await ctx.db.query("audit").collect()).filter(
+      (row) => row.eventType === "blueprint.confirmed",
+    ),
+  );
+
+type DraftBlob = {
+  blueprint: BusinessBlueprint;
+  diff: BlueprintDiffRow[];
+  sourceDocIds: string[];
+};
+
+const confirmationDraft = (
+  sourceDocIds: string[],
+  derivedTargetCustomer = "Independent consultants",
+): DraftBlob => {
+  const statedTargetCustomer = {
+    values: ["Independent hotels"],
+    origin: "stated" as const,
+  };
+  const derived = {
+    values: [derivedTargetCustomer],
+    origin: "derived" as const,
+    source: "market-research.md",
+  };
+  return {
+    blueprint: {
+      name: { values: ["Acme"], origin: "stated" },
+      oneLineDescription: {
+        values: ["Spring-water systems for growing hotels."],
+        origin: "stated",
+      },
+      stage: { values: ["growing"], origin: "stated" },
+      tier: { values: ["startup"], origin: "stated" },
+      offering: {
+        values: ["Spring-water filtration systems"],
+        origin: "derived",
+        source: "product-notes.md",
+      },
+      targetCustomer: statedTargetCustomer,
+      revenueModel: null,
+      bindingConstraint: null,
+      primaryGoals: { values: ["Reach 50 hotel customers"], origin: "stated" },
+      knownConstraints: { values: ["Founder-led sales"], origin: "stated" },
+      entities: null,
+    },
+    diff: [
+      {
+        kind: "addition",
+        field: "offering",
+        derived: {
+          values: ["Spring-water filtration systems"],
+          origin: "derived",
+          source: "product-notes.md",
+        },
+      },
+      {
+        kind: "contradiction",
+        field: "targetCustomer",
+        stated: statedTargetCustomer,
+        derived,
+      },
+    ],
+    sourceDocIds,
+  };
+};
+
+async function writeDraftFixture(
+  t: ReturnType<typeof makeTest>,
+  tenantId: string,
+  draft: DraftBlob,
+): Promise<void> {
+  await t.mutation(internal.blueprint.writeDraft, {
+    tenantId,
+    draftJson: JSON.stringify(draft),
+  });
+}
 
 async function insertLiveBlueprint(
   t: ReturnType<typeof makeTest>,
@@ -694,5 +784,311 @@ describe("blueprint draft build", () => {
       title: "Shared source",
       text: "First stable passage",
     });
+  });
+});
+
+describe("blueprint confirmation gate", () => {
+  test("keeps a draft out of the spine, then confirms and re-confirms one ready non-ingested document in place", async () => {
+    const t = makeTest();
+    const profileDocId = await insertBusinessProfile(t, "tenant_a", TYPED_PROFILE);
+    const sourceA = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "Product notes",
+    });
+    const sourceB = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "Market research",
+    });
+    await insertTenantProfile(t, "tenant_a");
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant_a"))
+        .unique();
+      if (!row) throw new Error("missing tenant profile fixture");
+      await ctx.db.patch(row._id, { blueprintSourceDocIds: ["previous-live-source"] });
+    });
+    const profileTextBefore = await t.run(async (ctx) => (await ctx.db.get(profileDocId))?.text);
+    const firstDraft = confirmationDraft([sourceA, sourceB]);
+    await writeDraftFixture(t, "tenant_a", firstDraft);
+
+    await expect(
+      t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" }),
+    ).resolves.toBeNull();
+    expect((await tenantRows(t, "tenant_a"))[0]?.blueprintSourceDocIds).toEqual([
+      "previous-live-source",
+    ]);
+
+    const asTenantA = t.withIdentity({ subject: "tenant_a" });
+    const first = await asTenantA.mutation(api.blueprint.confirmBlueprint, {
+      acceptedContradictions: [],
+    });
+    expect(first.ok).toBe(true);
+
+    const rowsAfterFirst = await tenantRows(t, "tenant_a");
+    const rowAfterFirst = rowsAfterFirst[0];
+    const blueprintDocsAfterFirst = (await tenantVaultDocs(t, "tenant_a")).filter(
+      (doc) => doc.kind === "business_blueprint",
+    );
+    expect(blueprintDocsAfterFirst).toHaveLength(1);
+    const firstBlueprintDoc = blueprintDocsAfterFirst[0];
+    expect(firstBlueprintDoc?._id).toBe(first.docId);
+    expect(firstBlueprintDoc?.status).toBe("ready");
+    expect(firstBlueprintDoc?.ragEntryId).toBeUndefined();
+    expect(deserializeBlueprint(firstBlueprintDoc?.text ?? "").targetCustomer?.values).toEqual([
+      "Independent hotels",
+    ]);
+    expect(rowAfterFirst?.blueprintDocId).toBe(firstBlueprintDoc?._id);
+    expect(rowAfterFirst?.blueprintSourceDocIds).toEqual([sourceA, sourceB]);
+    expect(rowAfterFirst?.blueprintConfirmedAt).toEqual(expect.any(Number));
+    expect(rowAfterFirst?.blueprintDraft).toBeUndefined();
+    expect(rowAfterFirst?.blueprintDraftAt).toBeUndefined();
+    expect(await scheduledFunctions(t)).toHaveLength(0);
+
+    const secondDraft = confirmationDraft([sourceB], "Boutique consultancies");
+    await writeDraftFixture(t, "tenant_a", secondDraft);
+    const second = await asTenantA.mutation(api.blueprint.confirmBlueprint, {
+      acceptedContradictions: ["targetCustomer"],
+    });
+    expect(second).toEqual({ ok: true, docId: firstBlueprintDoc?._id });
+
+    const blueprintDocsAfterSecond = (await tenantVaultDocs(t, "tenant_a")).filter(
+      (doc) => doc.kind === "business_blueprint",
+    );
+    expect(blueprintDocsAfterSecond).toHaveLength(1);
+    expect(blueprintDocsAfterSecond[0]?._id).toBe(firstBlueprintDoc?._id);
+    expect(
+      deserializeBlueprint(blueprintDocsAfterSecond[0]?.text ?? "").targetCustomer,
+    ).toEqual({
+      values: ["Boutique consultancies"],
+      origin: "derived",
+      source: "market-research.md",
+    });
+    expect((await tenantRows(t, "tenant_a"))[0]?.blueprintSourceDocIds).toEqual([sourceB]);
+    expect(await t.run(async (ctx) => (await ctx.db.get(profileDocId))?.text)).toBe(
+      profileTextBefore,
+    );
+    expect(await scheduledFunctions(t)).toHaveLength(0);
+  });
+
+  test("returns a no-op refusal when no draft exists", async () => {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).mutation(api.blueprint.confirmBlueprint, {
+        acceptedContradictions: [],
+      }),
+    ).resolves.toEqual({ ok: false, reason: "no_draft" });
+    expect(await tenantVaultDocs(t, "tenant_a")).toHaveLength(0);
+  });
+
+  test("rejects an unknown accepted field without consuming the draft", async () => {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+    await writeDraftFixture(t, "tenant_a", confirmationDraft([]));
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).mutation(api.blueprint.confirmBlueprint, {
+        acceptedContradictions: ["browser-invented-field"],
+      }),
+    ).rejects.toThrow(/INVALID_BLUEPRINT_FIELD/);
+    expect((await tenantRows(t, "tenant_a"))[0]?.blueprintDraft).toBeTruthy();
+    expect(await tenantVaultDocs(t, "tenant_a")).toHaveLength(0);
+  });
+
+  test("confirming tenant B never reads or changes tenant A's draft or document", async () => {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+    await insertTenantProfile(t, "tenant_b");
+    const tenantADraft = confirmationDraft([], "Tenant A confidential audience");
+    const tenantBDraft = confirmationDraft([], "Tenant B audience");
+    await writeDraftFixture(t, "tenant_a", tenantADraft);
+    await writeDraftFixture(t, "tenant_b", tenantBDraft);
+    const tenantABefore = (await tenantRows(t, "tenant_a"))[0]?.blueprintDraft;
+
+    await t.withIdentity({ subject: "tenant_b" }).mutation(api.blueprint.confirmBlueprint, {
+      acceptedContradictions: ["targetCustomer"],
+    });
+
+    expect((await tenantRows(t, "tenant_a"))[0]?.blueprintDraft).toBe(tenantABefore);
+    expect(
+      (await tenantVaultDocs(t, "tenant_a")).filter(
+        (doc) => doc.kind === "business_blueprint",
+      ),
+    ).toHaveLength(0);
+    const tenantBDoc = (await tenantVaultDocs(t, "tenant_b")).find(
+      (doc) => doc.kind === "business_blueprint",
+    );
+    expect(deserializeBlueprint(tenantBDoc?.text ?? "").targetCustomer?.values).toEqual([
+      "Tenant B audience",
+    ]);
+  });
+});
+
+describe("blueprint confirmation audit", () => {
+  test("pins the refs/counts-only key set and exact counts (VALIDATION item 13)", async () => {
+    const t = makeTest();
+    const sourceA = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "Source A",
+    });
+    const sourceB = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "Source B",
+    });
+    await insertTenantProfile(t, "tenant_a");
+    await writeDraftFixture(
+      t,
+      "tenant_a",
+      confirmationDraft([sourceA, sourceB], "Independent consultants"),
+    );
+
+    const confirmed = await t
+      .withIdentity({ subject: "tenant_a" })
+      .mutation(api.blueprint.confirmBlueprint, {
+        acceptedContradictions: ["targetCustomer"],
+      });
+
+    const rows = await blueprintConfirmedRows(t);
+    expect(rows).toHaveLength(1);
+    const payload = rows[0]?.payload as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual([
+      "additionsApplied",
+      "contradictionsAccepted",
+      "docId",
+      "fieldCount",
+      "sourceDocCount",
+    ]);
+    expect(payload).toEqual({
+      docId: confirmed.docId,
+      sourceDocCount: 2,
+      fieldCount: 8,
+      additionsApplied: 1,
+      contradictionsAccepted: 1,
+    });
+    const payloadJson = JSON.stringify(payload);
+    expect(payloadJson).toContain("docId");
+    expect(payloadJson).not.toContain("Independent consultants");
+    expect(rows[0]?.tenantId).toBe("tenant_a");
+    expect(rows[0]?.actor).toBe("user");
+  });
+});
+
+describe("blueprint state and draft discard", () => {
+  test("returns none, live, live_stale, then draft with the persisted diff taking precedence", async () => {
+    const noneTest = makeTest();
+    await expect(
+      noneTest.withIdentity({ subject: "tenant_none" }).query(api.blueprint.blueprintState, {}),
+    ).resolves.toEqual({
+      state: "none",
+      live: null,
+      draft: null,
+      diff: [],
+      unincorporatedCount: 0,
+      confirmedAt: null,
+    });
+
+    const t = makeTest();
+    await insertLiveBlueprint(t, "tenant_a");
+    const asTenantA = t.withIdentity({ subject: "tenant_a" });
+    const live = await asTenantA.query(api.blueprint.blueprintState, {});
+    expect(live.state).toBe("live");
+    expect(live.live?.name?.values).toEqual(["Acme"]);
+    expect(live.draft).toBeNull();
+    expect(live.diff).toEqual([]);
+    expect(live.unincorporatedCount).toBe(0);
+    expect(live.confirmedAt).toBe(1_725_000_000_000);
+
+    const newSource = await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "New unincorporated evidence",
+    });
+    const stale = await asTenantA.query(api.blueprint.blueprintState, {});
+    expect(stale.state).toBe("live_stale");
+    expect(stale.unincorporatedCount).toBe(1);
+
+    const persistedDraft = confirmationDraft([newSource], "Independent consultants");
+    await writeDraftFixture(t, "tenant_a", persistedDraft);
+    const draft = await asTenantA.query(api.blueprint.blueprintState, {});
+    expect(draft.state).toBe("draft");
+    expect(draft.live?.name?.values).toEqual(["Acme"]);
+    expect(draft.draft).toEqual(persistedDraft.blueprint);
+    expect(draft.diff).toEqual(persistedDraft.diff);
+    expect(draft.unincorporatedCount).toBe(1);
+  });
+
+  test("discard clears only draft fields and returns to the underlying live state", async () => {
+    const t = makeTest();
+    const liveDocId = await insertLiveBlueprint(t, "tenant_a", {
+      sourceDocIds: ["previous-live-source"],
+    });
+    await insertVaultDocument(t, {
+      tenantId: "tenant_a",
+      kind: "upload",
+      text: "New unincorporated evidence",
+    });
+    await writeDraftFixture(t, "tenant_a", confirmationDraft(["draft-only-source"]));
+    const before = (await tenantRows(t, "tenant_a"))[0];
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).mutation(api.blueprint.discardDraft, {}),
+    ).resolves.toEqual({ ok: true });
+
+    const after = (await tenantRows(t, "tenant_a"))[0];
+    expect(after?.blueprintDraft).toBeUndefined();
+    expect(after?.blueprintDraftAt).toBeUndefined();
+    expect(after?.blueprintDocId).toBe(liveDocId);
+    expect(after?.blueprintDocId).toBe(before?.blueprintDocId);
+    expect(after?.blueprintSourceDocIds).toEqual(["previous-live-source"]);
+    expect(after?.blueprintSourceDocIds).toEqual(before?.blueprintSourceDocIds);
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).query(api.blueprint.blueprintState, {}),
+    ).resolves.toMatchObject({ state: "live_stale", draft: null, diff: [] });
+    expect(await blueprintConfirmedRows(t)).toHaveLength(0);
+  });
+
+  test("discard returns none without a live document and never throws for a missing row", async () => {
+    const t = makeTest();
+    await insertTenantProfile(t, "tenant_a");
+    await writeDraftFixture(t, "tenant_a", confirmationDraft([]));
+
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).mutation(api.blueprint.discardDraft, {}),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      t.withIdentity({ subject: "tenant_a" }).query(api.blueprint.blueprintState, {}),
+    ).resolves.toMatchObject({ state: "none", live: null, draft: null });
+    await expect(
+      t.withIdentity({ subject: "tenant_missing" }).mutation(api.blueprint.discardDraft, {}),
+    ).resolves.toEqual({ ok: false });
+  });
+
+  test("tenant B state never contains tenant A's live or draft content", async () => {
+    const t = makeTest();
+    await insertLiveBlueprint(t, "tenant_a");
+    await writeDraftFixture(
+      t,
+      "tenant_a",
+      confirmationDraft([], "Tenant A confidential audience"),
+    );
+
+    const tenantB = await t
+      .withIdentity({ subject: "tenant_b" })
+      .query(api.blueprint.blueprintState, {});
+    expect(tenantB).toEqual({
+      state: "none",
+      live: null,
+      draft: null,
+      diff: [],
+      unincorporatedCount: 0,
+      confirmedAt: null,
+    });
+    expect(JSON.stringify(tenantB)).not.toContain("Tenant A confidential audience");
   });
 });
