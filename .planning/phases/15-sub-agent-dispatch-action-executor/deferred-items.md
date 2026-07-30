@@ -72,7 +72,18 @@ commit. One line to fix whenever `apps/web` next opens.
 > `gaps` array, so 30/31 tapped a real evaluation that legitimately had nothing to act on.
 > **A timing race was considered and REFUTED:** 29's taps succeeded (it failed later, on
 > `citesVaultDoc`), and 28's two attempts show gaps 1 → 0 exactly matching its observed
-> fail-then-`PASS (retried)`, which is what validates the whole attribution.
+> fail-then-`PASS (retried)`.
+>
+> **THE FIXTURE→THREAD ATTRIBUTION IS CONTENT-CONFIRMED, not just order-inferred.** The runner
+> logged no correlation key at the time (that is what this run's runner fix adds), so the mapping was
+> first reconstructed from creation order — nine threads = 27×1 + 28×2 + 29×2 + 30×2 + 31×2, matching
+> exactly which cases retried. It was then **independently verified against row CONTENT**: each
+> evaluating fixture states a UNIQUE money figure — 27 `180`, 28 `2400`, 29 `240`, 30/31 `3200` — and
+> every thread's recorded scorecard/findings carried the figure the order-mapping predicted, with
+> zero misplacements. Beware the substring trap that briefly muddied this: a naive `240` match also
+> hits 28's `2400`; use word boundaries. **Known limit: 30 and 31 BOTH state `3200`, so content
+> cannot separate them from each other** — it does not need to, because all four of their threads
+> carry `gaps=0`, so the finding holds whichever pair is which.
 >
 > **Root cause: the scorecard was not populated, so the gates had nothing to fire on.**
 > `diagnose()` runs unconditionally (`evaluations.ts:394`) — it is NOT gated on framework — so the
