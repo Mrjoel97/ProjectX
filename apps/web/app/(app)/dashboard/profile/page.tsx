@@ -18,6 +18,7 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState } from "react";
+import { BlueprintPanel } from "./BlueprintPanel";
 
 // ONBD-02 dedicated profile page — the post-onboarding EDIT surface. Editability is a locked
 // decision: a user (especially an idea-stage one who onboarded sparse — only oneLineDescription)
@@ -44,7 +45,7 @@ import { useEffect, useRef, useState } from "react";
 // invitation to complete the facts. Never a modal, never a redirect, never a gate —
 // `onboarding.status` deliberately still returns `needsOnboarding: false` for them.
 
-const label: React.CSSProperties = {
+export const label: React.CSSProperties = {
   fontSize: "0.72rem",
   fontWeight: 700,
   letterSpacing: "0.08em",
@@ -52,7 +53,7 @@ const label: React.CSSProperties = {
   color: "var(--ink-soft)",
 };
 
-const field: React.CSSProperties = {
+export const field: React.CSSProperties = {
   width: "100%",
   padding: "0.6rem 0.75rem",
   borderRadius: "0.7rem",
@@ -72,7 +73,7 @@ const page: React.CSSProperties = {
   gap: "1.5rem",
 };
 
-const card: React.CSSProperties = {
+export const card: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--rule)",
   borderRadius: "1.1rem",
@@ -82,7 +83,7 @@ const card: React.CSSProperties = {
   gap: "1rem",
 };
 
-const primaryButton = (disabled: boolean): React.CSSProperties => ({
+export const primaryButton = (disabled: boolean): React.CSSProperties => ({
   padding: "0.65rem 1.5rem",
   borderRadius: "999px",
   border: "none",
@@ -639,6 +640,8 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      <BlueprintPanel />
     </div>
   );
 }

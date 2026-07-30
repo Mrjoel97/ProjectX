@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-07-30 — Phase 17.1 Wave 6 (plan 17.1-08, D2 confirmation gate): a draft remains invisible to `spineForTenant` until `confirmBlueprint` promotes it. Confirmation applies every non-destructive addition, opts contradictions in field-by-field, writes one `business_blueprint` vault row directly at `ready`, patches that same row on re-confirm, promotes the draft's source IDs, clears the draft, and emits the pinned refs/counts-only audit row. `blueprintState` is the profile page's one read for `none` / `live` / `live_stale` / `draft`; `discardDraft` clears only draft fields. The user's `business_profile` document is never rewritten. See "Blueprint confirmation" below.
+> Last verified: 2026-07-30 — Phase 17.1 Wave 7 (plan 17.1-09, profile confirmation surface): `/dashboard/profile` now mounts a third, self-contained Blueprint card driven by `blueprintState`. It renders `none`, `live`, `live_stale`, and draft-review states; build/rebuild owns its long-action status, uses a real disabled button, and translates governed stops into recoverable language. Live values say in words whether they are the user's own or name their source. The stale banner uses a neutral stripe and explicitly spends no approval amber. See "Blueprint confirmation" below.
 
 > Last verified: 2026-07-29 — Phase 17.1 Wave 4 (plan 17.1-05, governed draft build): `buildBlueprintDraft` refuses before spend when the required tier row is absent, composes typed profile + top entities + blank-driven grounding, calls `deriveCandidates` at most once, citation-validates and merges in code, then replaces one JSON draft blob on the existing `tenantProfiles` row. `writeDraft` patches exactly `blueprintDraft` and `blueprintDraftAt`; it never inserts a tier, writes a vault document, or changes the live `blueprintSourceDocIds`. A current live blueprint makes a fully typed profile edit probe-free and spend-free; document drift re-enables blank-field probes. See "Blueprint draft synthesis" below.
 
@@ -309,6 +309,23 @@ render the returned `diff` rather than recompute it.
 only `blueprintDraft` and `blueprintDraftAt`, writes no audit row or vault document, and never
 changes `blueprintDocId` or `blueprintSourceDocIds`. The next `blueprintState` immediately reveals
 the underlying `none`, `live`, or `live_stale` state.
+
+**The profile confirmation surface (`BlueprintPanel`, plan 17.1-09).** The third card on
+`/dashboard/profile` owns the one `blueprintState` query and the build action rather than adding
+state to either existing profile writer. Its four product states are:
+
+1. `none` explains that synthesis reads the profile and vault and costs one model call, then offers
+   **Build blueprint**.
+2. `live` renders a ruled, card-native report. Every stated value says **Your own words** and every
+   derived value names its source title; meaning never depends on colour.
+3. `live_stale` adds the Stage-1 document count and makes **Rebuild** primary. The banner is a
+   neutral stripe using `--ink-soft` / `--paper`, never approval amber (`--held`).
+4. `draft` takes precedence and hands the persisted diff to `BlueprintDiff`; it never recomputes
+   the proposal in the browser.
+
+Build and rebuild use a real `disabled` button while the action runs and announce progress/outcome
+through `role="status"`. A kill switch or exhausted daily allowance is translated into recoverable
+language and never exposes its internal reason code.
 
 ### Tier control plane — `tenantProfiles` (Phase 15.1, design §4.1)
 
