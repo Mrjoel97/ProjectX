@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 8
+current_plan: 9
 status: in_progress
-stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..08 COMPLETE, next 17.1-09; D2 confirm gate and audited four-state query landed. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment."
-last_updated: "2026-07-30T10:43:11.813Z"
+stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..09 COMPLETE, next 17.1-10; the four-state profile confirmation surface and D5-safe diff interactions landed. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment."
+last_updated: "2026-07-30T11:29:04.296Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 193
+  completed_plans: 194
 ---
 
 # Project State
@@ -25,13 +25,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 8/10 plans, waves 1-6 through the confirmation gate done | 17.1-09 (wave 7, confirm surface) | 17.1-08 is complete, full backend 775/775, D2 and both Blueprint requirements closed |
+| — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
 | K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-193 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+194 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -56,12 +56,24 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
-plans 01-08 through the explicit confirmation gate and continues at 17.1-09; 15.2 is complete bar the
+plans 01-09 through the profile confirmation surface and continues at 17.1-10; 15.2 is complete bar the
 owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
+**PHASE 17.1 — Business Blueprint (Wave 7 of 8) — 17.1-09 COMPLETE: profile confirmation
+surface.** `/dashboard/profile` now mounts one self-contained Blueprint card driven by the
+four-state query. `none` offers one governed model-call build; `live` renders a ruled report whose
+stated and derived provenance is written in words; `live_stale` adds the neutral, no-amber
+unincorporated-document banner and makes Rebuild primary; and `draft` takes precedence for review.
+Additions are one default-on group, while contradictions are native, individually default-off
+checkboxes with typed and document-derived values side by side. Confirm updates only the Blueprint;
+discard clears the proposal and never traps the user behind draft precedence. Mutation proof:
+planting `defaultChecked` made exactly 1 of 53 Blueprint tests red. Gates: core 18 files / 360 tests,
+web typecheck and production build green, both components Biome-clean with non-vacuous zero-byte
+format deltas, and the playbook hook empty. Next: 17.1-10.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
 gate.** `confirmBlueprint` promotes a reviewed draft into one tenant-owned `business_blueprint`
 document at `ready`; reconfirmation patches the same `_id`, and the document never enters ingest,
 embedding, or graph extraction. Accepted contradictions select their cited derived entries while
@@ -1532,6 +1544,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P06 | 29min | 2 tasks | 4 files |
 | Phase 17.1 P07 | 39 min | 3 tasks | 11 files |
 | Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
+| Phase 17.1 P09 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -1668,6 +1681,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: Accepted contradiction rows explicitly select the cited derived entry; unaccepted rows restore the stated entry.
 - [Phase 17.1]: The confirmed business_blueprint is written directly at ready and never enters ingest, embedding, or graph extraction.
 - [Phase 17.1]: blueprintState derives all four profile states from the same live and Stage-1 drift helpers used by agent seams.
+- [Phase 17.1]: BlueprintPanel owns its Blueprint query and build action, leaving both existing profile writers untouched.
+- [Phase 17.1]: Turning the all-additions group off blocks confirmation; discard is the backend-supported all-or-nothing rejection path.
+- [Phase 17.1]: Contradiction selections update only the confirmed Blueprint and never rewrite the narrative profile.
 
 ### Pending Todos
 
@@ -1699,8 +1715,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-30T10:43:11.779Z
-Stopped at: Completed 17.1-08-PLAN.md
+Last session: 2026-07-30T11:29:04.262Z
+Stopped at: Completed 17.1-09-PLAN.md
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
