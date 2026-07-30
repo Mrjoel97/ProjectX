@@ -3,7 +3,7 @@
 // Static-scan enforcement of Phase 15's structural invariants (DISP-01 / ACTN-01). Mirrors the
 // llmRedaction.test.ts / auditImmutability.test.ts idiom: read the source off disk, strip comments
 // (prose may NAME the forbidden thing — that is the documentation), assert on what remains.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -12,6 +12,10 @@ const convexDir = dirname(fileURLToPath(import.meta.url));
 /** Source with line comments stripped — the invariant is about the CODE surface. */
 const readCode = (file: string): string =>
   readFileSync(join(convexDir, file), "utf8").replace(/\/\/[^\n]*/g, "");
+const readExecutableCode = (file: string): string =>
+  readFileSync(join(convexDir, file), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
 
 // ── SC #2: dispatch is a SEQUENTIAL second loop, never a loop nested inside a tool ────────────
 //
@@ -74,6 +78,134 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
 // cannot be reachable from the model's tool surface). Append below this marker so the two lanes'
 // additions to this file do not collide.
 
+// ── Phase 17: Calendar writes remain unreachable from the model tool surface (ACTN-02) ─────────
+
+test("calendar write modules are absent from llm.ts while the governed freeBusy read stays wired", () => {
+  const src = readExecutableCode("llm.ts");
+  expect(
+    src,
+    "llm.ts no longer calls internal.calendar.freeBusy — deleting the Calendar tools would make " +
+      "the write-absence scan pass vacuously.",
+  ).toMatch(/\binternal\.calendar\.freeBusy\b/);
+
+  for (const ref of [
+    /\b(?:internal|api)\.calendar\.createEvent\b/,
+    /\b(?:internal|api)\.calendarComplete\.onCreateComplete\b/,
+    /\b(?:internal|api)\.calendarComplete\b/,
+  ]) {
+    expect(
+      src.match(ref) ?? [],
+      `llm.ts references ${ref.source} — mutation: add ctx.runAction(internal.calendar.createEvent, …) ` +
+        `inside proposeCalendarEvent. The model may stage an event but can never reach its write or terminal.`,
+    ).toHaveLength(0);
+  }
+});
+
+test("calendar.ts has exactly the two named POST targets and no hidden token/write endpoint", () => {
+  const src = readCode("calendar.ts");
+  const postTargets = [
+    ...src.matchAll(/fetch\(\s*([^,\s]+)\s*,\s*\{\s*method:\s*["']POST["']/g),
+  ].map((match) => match[1]);
+  expect(
+    [...postTargets].sort(),
+    "calendar.ts POST target names changed — mutation: add a third POST. Only FREEBUSY_ENDPOINT " +
+      "and EVENTS_INSERT_ENDPOINT are allowed.",
+  ).toEqual(["EVENTS_INSERT_ENDPOINT", "FREEBUSY_ENDPOINT"]);
+  expect(
+    src.match(/\bmethod:\s*["']POST["']/g) ?? [],
+    "calendar.ts has a hidden POST — mutation: add a third POST. The shared token endpoint must stay " +
+      "inside freshAccessToken in gmail.ts, not be redefined here.",
+  ).toHaveLength(2);
+});
+
+test("the Google Calendar events.insert URL exists in exactly one non-test Convex module", () => {
+  const eventsUrl = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+  const owners = readdirSync(convexDir)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .filter((file) => readFileSync(join(convexDir, file), "utf8").includes(eventsUrl));
+  expect(
+    owners.length,
+    "no Convex module owns the events.insert URL — deleting calendar.ts would make uniqueness vacuous.",
+  ).toBeGreaterThanOrEqual(1);
+  expect(
+    owners,
+    "events.insert has another outbound path — mutation: paste the Calendar events URL into a second " +
+      "Convex module. The approved retrier action must be its sole owner.",
+  ).toEqual(["calendar.ts"]);
+});
+
+test("calendar event bodies cannot address guests or configure Google invitation delivery", () => {
+  const src = readExecutableCode("calendar.ts");
+  expect(
+    src,
+    "calendar.ts no longer contains summary:, so the guest-field absence scan is not reading a real event body.",
+  ).toContain("summary:");
+  for (const forbidden of ["attendees", "sendUpdates"]) {
+    expect(
+      src,
+      `calendar.ts contains ${forbidden} — mutation: add sendUpdates: "none". events.insert guest ` +
+        `delivery is an outbound communication with no plan, requests row, audit event, DLQ, or PII scan.`,
+    ).not.toContain(forbidden);
+  }
+});
+
+test("both Calendar actions check stored scope before the shared token refresh", () => {
+  const src = readCode("calendar.ts");
+  for (const fn of ["export const freeBusy", "export const createEvent"]) {
+    const start = src.indexOf(fn);
+    expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\nexport const", 1);
+    const block = end >= 0 ? rest.slice(0, end) : rest;
+
+    const fixtureAt = block.indexOf("getCalendarFixture");
+    const scopeAt = block.indexOf("hasScope");
+    const tokenAt = block.search(/freshAccessToken\s*\(/);
+    expect(scopeAt, `${fn} never checks hasScope`).toBeGreaterThanOrEqual(0);
+    expect(tokenAt, `${fn} never CALLS freshAccessToken`).toBeGreaterThanOrEqual(0);
+    expect(
+      scopeAt,
+      `${fn} refreshes before checking scope — mutation: move createEvent's hasScope call below ` +
+        `freshAccessToken. A refresh can succeed for a grant that cannot call Calendar.`,
+    ).toBeLessThan(tokenAt);
+    if (fn.endsWith("freeBusy")) {
+      expect(fixtureAt, "freeBusy never checks the calendarFixtures seam").toBeGreaterThanOrEqual(0);
+      expect(
+        fixtureAt,
+        "freeBusy must check the fixture before scope so offline reads need no Google grant.",
+      ).toBeLessThan(scopeAt);
+    }
+  }
+});
+
+test("the externalAction arm wires only the Calendar retrier action and its non-Node terminal", () => {
+  const src = readExecutableCode("cockpit.ts");
+  const start = src.indexOf('case "externalAction"');
+  expect(start, "cockpit.ts has no externalAction case").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf('\n      case "', 1);
+  const arm = end >= 0 ? rest.slice(0, end) : rest;
+
+  for (const required of [
+    "retrier.run(",
+    "internal.calendar.createEvent",
+    "onComplete: internal.calendarComplete.onCreateComplete",
+  ]) {
+    expect(
+      arm,
+      `externalAction lacks ${required} — mutation: change onComplete to ` +
+        `internal.calendar.onCreateComplete, a Node module that structurally cannot hold a mutation.`,
+    ).toContain(required);
+  }
+  for (const forbidden of ["workflow.start", "deliverApprovedPlan"]) {
+    expect(
+      arm,
+      `externalAction contains ${forbidden} — mutation: add await workflow.start(...) inside the ` +
+        `case. Calendar must never inherit the Gmail request fan-out.`,
+    ).not.toContain(forbidden);
+  }
+});
+
 // ── SC #4: the human Approve gate is a tenantMutation, never a tool ───────────────────────────
 //
 // The standing v2.0 architecture rule: every capability is ONE of two shapes — a read-only tool
@@ -87,11 +219,6 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
 //
 // Block comments are stripped too here — the doc comments in these files legitimately NAME
 // executePlan and deliverApprovedPlan; that prose IS the documentation, not a call path.
-const readExecutableCode = (file: string): string =>
-  readFileSync(join(convexDir, file), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "");
-
 test("cockpit.ts declares executePlan as a tenantMutation (not an action, not a tool wrapper)", () => {
   expect(
     readExecutableCode("cockpit.ts"),
