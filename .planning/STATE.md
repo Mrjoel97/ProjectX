@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 7
+current_plan: 8
 status: in_progress
-stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..07 COMPLETE, next 17.1-08; both Blueprint seams are mutation-verified. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-29T22:42:06.931Z"
+stopped_at: "MULTI-LANE. Phase 17.1 Business Blueprint: 17.1-01..08 COMPLETE, next 17.1-09; D2 confirm gate and audited four-state query landed. 15.2 Vault Formats: all 7 planned waves complete and owner-approved live; owner-created 15.2-08 outstanding. 16 Research (Lane R): 16-01..16-07 complete, next 16-08. 17 Calendar (Lane K): blocked at 17-02 pending its own deployment."
+last_updated: "2026-07-30T10:43:11.813Z"
 progress:
   total_phases: 40
   completed_phases: 25
   total_plans: 203
-  completed_plans: 192
+  completed_plans: 193
 ---
 
 # Project State
@@ -25,13 +25,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 7/10 plans, waves 1-5 through both seams done | 17.1-08 (wave 6, confirm gate) | 17.1-07 is complete, full backend 766/766, both seams mutation-verified; zero `llm.ts` edits in plan 07 |
+| — | **17.1** Business Blueprint | 8/10 plans, waves 1-6 through the confirmation gate done | 17.1-09 (wave 7, confirm surface) | 17.1-08 is complete, full backend 775/775, D2 and both Blueprint requirements closed |
 | V | **15.2** Vault Formats | 7/8 plans; all 7 planned waves complete, owner-approved LIVE | 15.2-08 (owner-created, not one of the original 7) | Phase checkbox is `[x]` for the original scope; 15.2-08 is additive |
 | R | **16** Research Sub-Agent | 7/9 plans | 16-08 | Touches `llm.ts`, `vaultGround.ts`, `dispatch.ts`, `plans.ts`, `evaluations.ts` |
 | K | **17** Calendar Actions | 1/4 plans | 17-02 | Blocked pending its own deployment; Google consent-screen scopes done |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-192 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+193 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -56,12 +56,24 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above for each lane. 17.1 (Business Blueprint) has completed
-plans 01-07 through both Blueprint seams and continues at 17.1-08; 15.2 is complete bar the
+plans 01-08 through the explicit confirmation gate and continues at 17.1-09; 15.2 is complete bar the
 owner-added 15.2-08; 16 is at 16-08; 17 is blocked on its own deployment.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 5 of 8) — 17.1-07 COMPLETE: explicit grounding
+**PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
+gate.** `confirmBlueprint` promotes a reviewed draft into one tenant-owned `business_blueprint`
+document at `ready`; reconfirmation patches the same `_id`, and the document never enters ingest,
+embedding, or graph extraction. Accepted contradictions select their cited derived entries while
+default confirmation preserves typed values and the user's `business_profile` bytes. The
+`blueprint.confirmed` audit payload is pinned to one ref plus four counts, `discardDraft` clears
+only draft state, and `blueprintState` derives `none`, `live`, `live_stale`, and `draft` from the
+same live/drift helpers used by the agent seams. Mutation proofs caught both an added audit value
+and forced duplicate insertion. Gates: backend 51 files / 775 tests, zero non-test TypeScript
+errors, playbook hook empty, and zero `startIngest` references in `blueprint.ts`. BLPR-01 and
+BLPR-02 are complete. Next: 17.1-09.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 5 of 8) — 17.1-07 COMPLETE: explicit grounding
 spine.** `vaultGroundHydrated` returns `{ docIds, titles, chunks, spine }`, querying the live
 blueprint only after retrieval hydration so the spine never enters the retrieval arrays or
 `TOTAL_CHAR_CAP`; blueprint read failures remain fail-open as `null`. Evaluations order profile
@@ -1519,6 +1531,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P05 | 27min | 2 tasks | 3 files |
 | Phase 17.1 P06 | 29min | 2 tasks | 4 files |
 | Phase 17.1 P07 | 39 min | 3 tasks | 11 files |
+| Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1652,6 +1665,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: BLPR-02 remains phase-level pending until SEAM 2 and the drift clause are complete.
 - [Phase 17.1]: Blueprint standing context stays in a separate spine field outside retrieval arrays and TOTAL_CHAR_CAP; searchVault and llm.ts require no accommodation.
 - [Phase 17.1]: Evaluation grounding order is profile seeds, then the real Blueprint document, then ordinary retrieval; voice counts document passages separately from the spine.
+- [Phase 17.1]: Accepted contradiction rows explicitly select the cited derived entry; unaccepted rows restore the stated entry.
+- [Phase 17.1]: The confirmed business_blueprint is written directly at ready and never enters ingest, embedding, or graph extraction.
+- [Phase 17.1]: blueprintState derives all four profile states from the same live and Stage-1 drift helpers used by agent seams.
 
 ### Pending Todos
 
@@ -1683,8 +1699,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-29T22:42:06.890Z
-Stopped at: Completed 17.1-07-PLAN.md
+Last session: 2026-07-30T10:43:11.779Z
+Stopped at: Completed 17.1-08-PLAN.md
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
