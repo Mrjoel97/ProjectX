@@ -1,0 +1,14 @@
+{
+  "id": "32-research-grounded",
+  "description": "ACTN-03 grounded multi-angle proof. This is deliberately not answerable from model memory: it asks for current 2026 pricing and API behaviour from TWO independently changing vendors, across pricing, freshness controls, and source-return shape. No single vendor page or one search settles both sides, so webSearchCallsAtLeast:2 is a fair proof of D10's 'search several angles' directive rather than a floor imposed on a one-fact lookup.",
+  "turns": [
+    "Research this for benchmark-7F as of 29 July 2026: compare the current published developer pricing for OpenAI hosted web search and Tavily Search, whether each API exposes freshness or date filters, and whether each returns source URLs. Use each provider's own current documentation, cross-check one independent source per provider where possible, and call out contradictions. Do not rely on model memory."
+  ],
+  "expect": {
+    "researchDocPresent": true,
+    "insufficientEvidence": false,
+    "webSearchCallsAtLeast": 2,
+    "status": "proposed"
+  },
+  "needles": ["benchmark-7F", "Tavily Search"]
+}

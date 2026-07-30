@@ -430,9 +430,9 @@ function selfCheck() {
   // 1. Every real fixture parses, has non-empty turns, needles, closed vocabulary.
   const fixtures = loadFixtures();
   // Floor bumped 18 → 27 (the two BEVL-01 assessment fixtures) → 30 (the three DISP-01
-  // gap→tap→dispatch fixtures). The floor is a deletion tripwire: a fixture quietly dropped must
-  // not quietly shrink the gate.
-  assert.ok(fixtures.length >= 30, `expected >= 30 fixtures, found ${fixtures.length}`);
+  // gap→tap→dispatch fixtures) → 33 (the three Phase-16 research fixtures). The floor is a deletion
+  // tripwire: a fixture quietly dropped must not quietly shrink the gate.
+  assert.ok(fixtures.length >= 33, `expected >= 33 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
