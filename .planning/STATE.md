@@ -5,14 +5,14 @@ milestone_name: - Platform -> Private Beta
 current_phase: 17.1
 current_plan: 6
 status: in_progress
-stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed through its final completion commit. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 3/4 with the in-loop read and staging tools complete; next 17-04, with live trace/card observation still outstanding. 17.1 Business Blueprint is 6/10 with the cockpit spine complete and 17.1-07 in progress. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-29T23:06:23.962Z"
+stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed through its final completion commit. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 4/4 implementation-complete and ready for verify-work with owner UAT M1-M5 outstanding. 17.1 Business Blueprint is 6/10 with the cockpit spine complete and 17.1-07 in progress. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-30T11:17:57.466Z"
 progress:
   total_phases: 40
-  completed_phases: 25
+  completed_phases: 26
   total_plans: 203
-  completed_plans: 193
-  percent: 95
+  completed_plans: 194
+  percent: 96
 ---
 
 # Project State
@@ -29,10 +29,10 @@ read only the first frontmatter block.
 | — | **17.1** Business Blueprint | 6/10 plans, waves 1-4 through cockpit SEAM 1 done | 17.1-07 (wave 5, grounding seam) | 17.1-06 is complete and mutation-verified; 17.1-07 was not started and still requires lane coordination |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | 16-09 live eval | Deterministic gates are green; awaiting a securely available `OPENAI_API_KEY` for the required model-backed golden run |
-| K | **17** Calendar Actions | 3/4 plans | 17-04 | In-loop availability + event staging complete; live trace/card observation and owner OAuth checks remain non-blocking |
+| K | **17** Calendar Actions | 4/4 plans complete | Verify work | Approve arm and enforcement complete; owner OAuth/live UAT M1-M5 remain non-blocking |
 
-**Counts above are recomputed from disk** (40 phase checkboxes, 25 `[x]`, 203 `*-PLAN.md`,
-193 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+**Counts above are recomputed from disk** (40 phase checkboxes, 26 `[x]`, 203 `*-PLAN.md`,
+194 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -57,7 +57,8 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above. Phase 15.2 is complete. Phase 16 is paused at
-16-09's live model gate pending a securely available OpenAI key. Phase 17 is ready for 17-04.
+16-09's live model gate pending a securely available OpenAI key. Phase 17 is implementation-complete
+and ready for verify-work with owner UAT M1-M5 outstanding.
 Phase 17.1 is executing 17.1-07 after completing the cockpit spine seam.
 
 ## Current Position
@@ -1510,6 +1511,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P05 | 27min | 2 tasks | 3 files |
 | Phase 17.1 P06 | 29min | 2 tasks | 4 files |
 | Phase 17 P03 | 37 min | 2 tasks | 3 files |
+| Phase 17 P04 | 12h 1m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -1643,6 +1645,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: Cockpit blueprint context rides the turn prompt; system: skill.body remains the versioned registry body.
 - [Phase 17.1]: The cockpit spine read occurs after the no-model SMOKE path and fails open so blueprint faults never cost the turn.
 - [Phase 17.1]: BLPR-02 remains phase-level pending until SEAM 2 and the drift clause are complete.
+- [Phase 17]: Calendar Approve starts one action-retrier run through the externalAction arm; deliverApprovedPlan remains email-only. — The human tenantMutation owns consent, inline cannot fetch, and workflow is the Gmail fan-out.
+- [Phase 17]: Phase 17 is Google-only and create-only; Outlook plus update/cancel remain deferred. — Provider parity and safe event management are additive work, and ACTN-02 traceability stays pending until verify-work.
 
 ### Pending Todos
 
@@ -1674,8 +1678,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-29T23:06:23.962Z
-Stopped at: Completed 17-03-PLAN.md on Lane K; 17-04 next. 17.1-07 remains in progress; 16-09 awaits an OpenAI key
+Last session: 2026-07-30T11:17:57.427Z
+Stopped at: Completed 17-04-PLAN.md on Lane K; Phase 17 is 4/4 and ready for verify-work with M1-M5 outstanding. 17.1-07 remains in progress; 16-09 awaits an OpenAI key
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
