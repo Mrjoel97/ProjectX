@@ -3,7 +3,7 @@ import { CALENDAR_EVENTS_SCOPE, CALENDAR_FREEBUSY_SCOPE, GMAIL_MODIFY_SCOPE } fr
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { buildAuthorizeUrl } from "./gmailAuth";
 import schema from "./schema";
 
@@ -655,5 +655,162 @@ describe("action-retrier failed/canceled terminals", () => {
     });
     const payload = rows[0]?.payload as Record<string, unknown> | undefined;
     expect(payload?.planId).toBe(planId);
+  });
+});
+
+describe("calendar tenant isolation (SC#3)", () => {
+  test("two tenants approve the same staged event and both write without crossing rows", async () => {
+    const t = harness();
+    const tenantA = "calendar-isolation-a";
+    const tenantB = "calendar-isolation-b";
+    const planA = await seedCalendarPlan(t, { tenantId: tenantA, status: "proposed" });
+    const planB = await seedCalendarPlan(t, { tenantId: tenantB, status: "proposed" });
+    await seedCalendarGrant(t, tenantA);
+    await seedCalendarGrant(t, tenantB);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ id: "provider-event-a" }))
+      .mockResolvedValueOnce(Response.json({ id: "provider-event-b" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await t.withIdentity({ subject: tenantA }).mutation(api.cockpit.executePlan, { planId: planA }),
+    ).toEqual({ ok: true });
+    expect(
+      await t.withIdentity({ subject: tenantB }).mutation(api.cockpit.executePlan, { planId: planB }),
+    ).toEqual({ ok: true });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const plans = await t.run((ctx) => ctx.db.query("plans").collect());
+    const audits = await t.run((ctx) => ctx.db.query("audit").collect());
+    const aPlans = plans.filter((row) => row.tenantId === tenantA);
+    const bPlans = plans.filter((row) => row.tenantId === tenantB);
+    const aAudits = audits.filter((row) => row.tenantId === tenantA);
+    const bAudits = audits.filter((row) => row.tenantId === tenantB);
+    expect(aPlans.length, "tenant A wrote no plan rows — the isolation check is vacuous").toBeGreaterThan(
+      0,
+    );
+    expect(bPlans.length, "tenant B wrote no plan rows — the isolation check is vacuous").toBeGreaterThan(
+      0,
+    );
+    expect(aAudits.length, "tenant A wrote no audit rows — the isolation check is vacuous").toBeGreaterThan(
+      0,
+    );
+    expect(bAudits.length, "tenant B wrote no audit rows — the isolation check is vacuous").toBeGreaterThan(
+      0,
+    );
+    expect(aPlans.every((row) => row.tenantId === tenantA)).toBe(true);
+    expect(bPlans.every((row) => row.tenantId === tenantB)).toBe(true);
+    expect(aAudits.every((row) => row.tenantId === tenantA)).toBe(true);
+    expect(bAudits.every((row) => row.tenantId === tenantB)).toBe(true);
+    expect(aPlans[0]).toMatchObject({
+      status: "done",
+      eventTitle: SECRET_TITLE,
+      eventStartMs: EVENT_START_MS,
+      eventDurationMs: EVENT_DURATION_MS,
+    });
+    expect(bPlans[0]).toMatchObject({
+      status: "done",
+      eventTitle: SECRET_TITLE,
+      eventStartMs: EVENT_START_MS,
+      eventDurationMs: EVENT_DURATION_MS,
+    });
+    expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
+  });
+
+  test("each tenant can read its own plan by thread and never the other tenant's", async () => {
+    const t = harness();
+    const tenantA = "calendar-reader-a";
+    const tenantB = "calendar-reader-b";
+    const planA = await seedCalendarPlan(t, { tenantId: tenantA, status: "proposed" });
+    const planB = await seedCalendarPlan(t, { tenantId: tenantB, status: "proposed" });
+    const threadA = `calendar-thread-${tenantA}`;
+    const threadB = `calendar-thread-${tenantB}`;
+
+    expect(
+      await t.withIdentity({ subject: tenantA }).query(api.plans.byThread, { threadId: threadA }),
+    ).toMatchObject({ _id: planA, tenantId: tenantA });
+    expect(
+      await t.withIdentity({ subject: tenantB }).query(api.plans.byThread, { threadId: threadB }),
+    ).toMatchObject({ _id: planB, tenantId: tenantB });
+    expect(
+      await t.withIdentity({ subject: tenantA }).query(api.plans.byThread, { threadId: threadB }),
+    ).toBeNull();
+    expect(
+      await t.withIdentity({ subject: tenantB }).query(api.plans.byThread, { threadId: threadA }),
+    ).toBeNull();
+  });
+
+  test("createEvent rejects tenant A with tenant B's plan before token or network work", async () => {
+    const t = harness();
+    const planId = await seedCalendarPlan(t, { tenantId: "calendar-owner-b" });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await t.action(internal.calendar.createEvent, {
+        planId,
+        tenantId: "calendar-caller-a",
+        correlationId: "cross-tenant-create",
+      }),
+    ).toMatchObject({ outcome: "terminal", status: 0, reason: "tenant_mismatch" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
+  });
+
+  test("freeBusy returns each tenant's distinct fixture blocks and never the other's", async () => {
+    const t = harness();
+    const tenantA = "calendar-fixture-a";
+    const tenantB = "calendar-fixture-b";
+    await t.mutation(internal.smoke.seedCalendarFixture, { tenantId: tenantA, baseMs: BASE_MS });
+    await t.mutation(internal.smoke.seedCalendarFixture, {
+      tenantId: tenantB,
+      baseMs: BASE_MS + 60_000,
+    });
+
+    const resultA = await t.action(internal.calendar.freeBusy, {
+      ...freeBusyArgs,
+      tenantId: tenantA,
+    });
+    const resultB = await t.action(internal.calendar.freeBusy, {
+      ...freeBusyArgs,
+      tenantId: tenantB,
+    });
+
+    expect(resultA).toMatchObject({ ok: true, fixture: true });
+    expect(resultB).toMatchObject({ ok: true, fixture: true });
+    if (!resultA.ok || !resultB.ok) throw new Error("fixture reads unexpectedly failed");
+    expect(resultA.busy[0]?.startMs).toBe(BASE_MS + 3_600_000);
+    expect(resultB.busy[0]?.startMs).toBe(BASE_MS + 60_000 + 3_600_000);
+    expect(resultA.busy).not.toEqual(resultB.busy);
+  });
+
+  test("onCreateComplete resolves tenant A's run id and ignores an unowned run id", async () => {
+    const t = harness();
+    const tenantA = "calendar-run-owner-a";
+    const runA = "calendar-isolation-run-a" as RunId;
+    const planA = await seedCalendarPlan(t, { tenantId: tenantA, calendarRunId: runA });
+
+    await t.mutation(internal.calendarComplete.onCreateComplete, {
+      runId: runA,
+      result: { type: "failed", error: "calendar_insert_transient status=503" },
+    });
+    await t.mutation(internal.calendarComplete.onCreateComplete, {
+      runId: "calendar-isolation-run-unowned" as RunId,
+      result: { type: "failed", error: "must-not-write" },
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("deadLetters").collect());
+    expect(rows.length, "tenant A's run wrote no terminal row — the lookup check is vacuous").toBeGreaterThan(
+      0,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      tenantId: tenantA,
+      workflowId: runA,
+      payload: { planId: planA, runId: runA },
+    });
   });
 });
