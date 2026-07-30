@@ -867,6 +867,12 @@ function waitForResearchLanding(planId, tenantId, threadId) {
 
 function attemptCase(fixture, tenant, pins) {
   const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
+  // `seedCockpitPlan` mints `smoke-attach-<randomUUID>` SERVER-side, so a failure's rows cannot be
+  // traced back to the fixture that wrote them unless the pairing is printed here. Without this, a
+  // `gap_not_found` is unfalsifiable after the run: run 9dde13e8 left NINE evaluation threads and no
+  // way to say which belonged to 30 vs 31 except by reconstructing creation order. One line, printed
+  // for EVERY attempt (retries mint a fresh plan, so the same fixture legitimately appears twice).
+  console.log(`  · ${fixture.id} thread=${threadId} plan=${planId}`);
   let caseCost = 0;
   // UAT-E (03.10-06): accumulate {role, content} history across turns and pass it, exactly as the
   // production drivers do. The runner calls llm:runCockpitAgent DIRECTLY (never sendCockpitMessage,

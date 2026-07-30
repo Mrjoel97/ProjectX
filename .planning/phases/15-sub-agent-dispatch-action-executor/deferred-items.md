@@ -54,6 +54,55 @@ commit. One line to fix whenever `apps/web` next opens.
 
 ## UNPAID GATE — the 15-06 specialist-body eval run was never executed (BLOCKING for activation)
 
+> **RUN 2026-07-31 — GATE RED, NOTHING ACTIVATED. Diagnosis below; the three bodies stay dark.**
+> Run `9dde13e8`, 27/33, $0.2148, pins `offer-architect@2 money-model-designer@2 lead-engine@2
+> research-specialist@1` (all four resolved by exact body equality — the three specialists are v2
+> CANDIDATES, `research-specialist` has no v2 and its v1 is active via seedSkills' bootstrap path).
+>
+> **Fixtures 29/30/31 all failed, and the cause is NOT the specialist bodies** — the dispatch never
+> got far enough to exercise them:
+>
+> | Fixture | Attempt frameworks | Latest `gaps` | Reported failure |
+> |---|---|---|---|
+> | 29 | growth-os, growth-os | 1, 1 | `citesVaultDoc: expected true, got false` |
+> | 30 | **lean, swot** | 0, 0 | `actOnGap: gap_not_found` |
+> | 31 | **swot, swot** | 0, 0 | `actOnGap: gap_not_found` |
+>
+> `applyActOnGap` reads the NEWEST `evaluations` row and returns `gap_not_found` for an empty
+> `gaps` array, so 30/31 tapped a real evaluation that legitimately had nothing to act on.
+> **A timing race was considered and REFUTED:** 29's taps succeeded (it failed later, on
+> `citesVaultDoc`), and 28's two attempts show gaps 1 → 0 exactly matching its observed
+> fail-then-`PASS (retried)`, which is what validates the whole attribution.
+>
+> **Root cause: the scorecard was not populated, so the gates had nothing to fire on.**
+> `diagnose()` runs unconditionally (`evaluations.ts:394`) — it is NOT gated on framework — so the
+> lean/swot split is a SYMPTOM, not the cause: `financialsPresent` is derived from the same unfilled
+> scorecard and line 365 then falls back to `TIER_FRAMEWORK[tier]`. Do not "fix" this by forcing the
+> framework; `evaluations.ts:317` already warns against reading a framework difference as the rubric
+> being wrong.
+>
+> **It is NOT a missing-teaching problem.** The ACTIVE `cockpit-agent` is **v15** and its body
+> contains `recordScorecardAnswer`, `modelCard`, `offerTypesPresent`, `leadCard` and
+> `coreFourActive`. Note v15 was **NOT pinned** in this run — a future run of these fixtures should
+> pin it, or the body under test is uncontrolled.
+>
+> **The real finding — recording an ABSENCE is the hard case.** 29 states a POSITIVE scalar
+> ("our CAC is 240 dollars per new customer") and recorded reliably, twice. 30 and 31 state
+> NEGATIVES ("no upsell, no downsell, no recurring plan"; "we run no outreach at all") and recorded
+> unreliably — fixture 30 even derived a DIFFERENT TIER on each attempt (lean vs swot), i.e. the
+> two runs disagreed about the same business. That is model-behaviour variance on negative-fact
+> extraction, not an engine fault.
+>
+> **What must NOT be done:** lower 30/31's expectations. The legitimate moves are (a) make the
+> negative facts as explicit to record as 29's positive scalar, (b) strengthen the cockpit-agent
+> body's negative-fact guidance and re-gate it, and/or (c) pin `cockpit-agent@N` in the run. All
+> three change the INPUT or the BODY, never the assertion.
+>
+> Fixtures 32/33/34 returned NO valid signal — the deployment's bundler was broken mid-run by an
+> unrelated concurrent operation, so they failed on `Unexpected end of JSON input` at $0 recorded
+> (note `caseCost: 0` is hardcoded in the runner's catch, so that figure is not proof of no spend).
+> They must be re-run before any claim about the research body.
+
 Found during: 15-06 Task 3.
 
 15-06 rewrote all three specialist bodies (`offer-architect`, `money-model-designer`, `lead-engine`)
