@@ -1,4 +1,5 @@
 import type { RunId } from "@convex-dev/action-retrier";
+import retrierTest from "@convex-dev/action-retrier/test";
 import { CALENDAR_EVENTS_SCOPE, CALENDAR_FREEBUSY_SCOPE, GMAIL_MODIFY_SCOPE } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -23,6 +24,7 @@ const convexSources = import.meta.glob("./**/*.ts", {
 function harness() {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  retrierTest.register(t);
   return t;
 }
 
@@ -665,12 +667,16 @@ describe("calendar tenant isolation (SC#3)", () => {
     const tenantB = "calendar-isolation-b";
     const planA = await seedCalendarPlan(t, { tenantId: tenantA, status: "proposed" });
     const planB = await seedCalendarPlan(t, { tenantId: tenantB, status: "proposed" });
-    await seedCalendarGrant(t, tenantA);
-    await seedCalendarGrant(t, tenantB);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ id: "provider-event-a" }))
-      .mockResolvedValueOnce(Response.json({ id: "provider-event-b" }));
+    await t.mutation(internal.smoke.seedCalendarFixture, { tenantId: tenantA, baseMs: BASE_MS });
+    await t.mutation(internal.smoke.seedCalendarFixture, {
+      tenantId: tenantB,
+      baseMs: BASE_MS + 60_000,
+    });
+    await t.action(internal.calendar.freeBusy, { ...freeBusyArgs, tenantId: tenantA });
+    await t.action(internal.calendar.freeBusy, { ...freeBusyArgs, tenantId: tenantB });
+    const fetchMock = vi.fn(() => {
+      throw new Error("the no-token retrier path must not call Google");
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     expect(
@@ -681,7 +687,7 @@ describe("calendar tenant isolation (SC#3)", () => {
     ).toEqual({ ok: true });
     await t.finishInProgressScheduledFunctions();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalled();
     const plans = await t.run((ctx) => ctx.db.query("plans").collect());
     const audits = await t.run((ctx) => ctx.db.query("audit").collect());
     const aPlans = plans.filter((row) => row.tenantId === tenantA);
@@ -705,16 +711,18 @@ describe("calendar tenant isolation (SC#3)", () => {
     expect(aAudits.every((row) => row.tenantId === tenantA)).toBe(true);
     expect(bAudits.every((row) => row.tenantId === tenantB)).toBe(true);
     expect(aPlans[0]).toMatchObject({
-      status: "done",
+      status: "delivering",
       eventTitle: SECRET_TITLE,
       eventStartMs: EVENT_START_MS,
       eventDurationMs: EVENT_DURATION_MS,
+      calendarRunId: expect.any(String),
     });
     expect(bPlans[0]).toMatchObject({
-      status: "done",
+      status: "delivering",
       eventTitle: SECRET_TITLE,
       eventStartMs: EVENT_START_MS,
       eventDurationMs: EVENT_DURATION_MS,
+      calendarRunId: expect.any(String),
     });
     expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
   });
