@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 17.1
-current_plan: 9
+current_plan: 10
 status: in_progress
-stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 4/4 implementation-complete and ready for goal verification plus owner UAT M1-M5. 17.1 Business Blueprint is 8/10 with the profile confirmation surface executing at 17.1-09. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
-last_updated: "2026-07-30T14:23:33.793Z"
+stopped_at: "MULTI-LANE. 15.2 Vault Formats is COMPLETE at 8/8 and pushed. 16 Research is 8/9 and paused at 16-09's live OpenAI eval because no OPENAI_API_KEY is securely available. 17 Calendar is 4/4 implementation-complete with goal verification `human_needed` for owner UAT M1-M5. 17.1 Business Blueprint is 9/10 with the profile confirmation surface complete and 17.1-10's live gate next. This is the single tool-readable frontmatter block; per-lane detail lives in '## Lane Status'. Do NOT re-add a second block on merge."
+last_updated: "2026-07-30T14:44:41.2683917+03:00"
 progress:
   total_phases: 40
-completed_phases: 26
-total_plans: 203
-completed_plans: 196
-percent: 97
+  completed_phases: 26
+  total_plans: 203
+  completed_plans: 197
+  percent: 97
 ---
 
 # Project State
@@ -26,13 +26,13 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| — | **17.1** Business Blueprint | 8/10 plans, waves 1-6 through the confirmation gate done | 17.1-09 (wave 7, confirm surface) | 17.1-08 is complete, full backend 775/775, D2 and both Blueprint requirements closed |
+| — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | 16-09 live eval | Deterministic gates are green; awaiting a securely available `OPENAI_API_KEY` for the required model-backed golden run |
-| K | **17** Calendar Actions | 4/4 plans complete | Verify work | Approve arm and enforcement complete; owner OAuth/live UAT M1-M5 remain non-blocking |
+| K | **17** Calendar Actions | 4/4 plans complete | Owner UAT M1-M5 | Offline goal verification is `human_needed`; Google-only create path is implementation-complete |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 26 `[x]`, 203 `*-PLAN.md`,
-196 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+197 `*-SUMMARY.md`), not carried forward from any lane's stale block.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -58,12 +58,24 @@ See: .planning/PROJECT.md (updated 2026-07-24)
 **Core value:** A user speaks or types a goal; the system plans it, shows the plan for a single approval, executes it under governance (cost/PII/quality), and follows through to real delivery — with a full audit trail. v2.0 grows this from a governed email cockpit into a broadly-capable, business-aware AI chief-of-staff, then opens the invite-only private beta.
 **Current focus:** See `## Lane Status` above. Phase 15.2 is complete. Phase 16 is paused at
 16-09's live model gate pending a securely available OpenAI key. Phase 17 is implementation-complete
-and ready for goal verification plus owner UAT M1-M5.
-Phase 17.1 has completed the explicit confirmation gate and continues at 17.1-09.
+and goal-verified offline with status `human_needed` for owner UAT M1-M5. Phase 17.1 has completed
+plans 01-09 through the profile confirmation surface and continues at 17.1-10's live gate.
 
 ## Current Position
 
-**PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
+**PHASE 17.1 — Business Blueprint (Wave 7 of 8) — 17.1-09 COMPLETE: profile confirmation
+surface.** `/dashboard/profile` now mounts one self-contained Blueprint card driven by the
+four-state query. `none` offers one governed model-call build; `live` renders a ruled report whose
+stated and derived provenance is written in words; `live_stale` adds the neutral, no-amber
+unincorporated-document banner and makes Rebuild primary; and `draft` takes precedence for review.
+Additions are one default-on group, while contradictions are native, individually default-off
+checkboxes with typed and document-derived values side by side. Confirm updates only the Blueprint;
+discard clears the proposal and never traps the user behind draft precedence. Mutation proof:
+planting `defaultChecked` made exactly 1 of 53 Blueprint tests red. Gates: core 18 files / 360 tests,
+web typecheck and production build green, both components Biome-clean with non-vacuous zero-byte
+format deltas, and the playbook hook empty. Next: 17.1-10.
+
+PRIOR — **PHASE 17.1 — Business Blueprint (Wave 6 of 8) — 17.1-08 COMPLETE: D2 confirmation
 gate.** `confirmBlueprint` promotes a reviewed draft into one tenant-owned `business_blueprint`
 document at `ready`; reconfirmation patches the same `_id`, and the document never enters ingest,
 embedding, or graph extraction. Accepted contradictions select their cited derived entries while
@@ -1537,6 +1549,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17 P03 | 37 min | 2 tasks | 3 files |
 | Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
 | Phase 17 P04 | 12h 1m | 3 tasks | 5 files |
+| Phase 17.1 P09 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -1677,6 +1690,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: blueprintState derives all four profile states from the same live and Stage-1 drift helpers used by agent seams.
 - [Phase 17]: Calendar Approve starts one action-retrier run through the externalAction arm; deliverApprovedPlan remains email-only. — The human tenantMutation owns consent, inline cannot fetch, and workflow is the Gmail fan-out.
 - [Phase 17]: Phase 17 is Google-only and create-only; Outlook plus update/cancel remain deferred. — Provider parity and safe event management are additive work, and ACTN-02 traceability stays pending until verify-work.
+- [Phase 17.1]: BlueprintPanel owns its Blueprint query and build action, leaving both existing profile writers untouched.
+- [Phase 17.1]: Turning the all-additions group off blocks confirmation; discard is the backend-supported all-or-nothing rejection path.
+- [Phase 17.1]: Contradiction selections update only the confirmed Blueprint and never rewrite the narrative profile.
 
 ### Pending Todos
 
@@ -1708,8 +1724,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-30T14:23:33.793Z
-Stopped at: Integrated completed Phase 17 implementation; goal verification next, 17.1-09 executing, 16-09 awaiting OpenAI key
+Last session: 2026-07-30T14:44:41.2683917+03:00
+Stopped at: Phase 17 verified offline with human UAT pending; completed 17.1-09; next 17.1-10 live gate; 16-09 awaits OpenAI key
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
