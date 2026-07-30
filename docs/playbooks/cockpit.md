@@ -1,8 +1,8 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-30 (17-03) — the two Calendar tools live in the one governed cockpit loop:
-> availability returns busy ranges only, while event proposals stage all four event fields at
-> `status: "proposed"` and stop before the human Approve gate. See "Phase 17 — 17-03" below.
+> Last verified: 2026-07-30 (17-04) — Calendar creation now runs through the action retrier only
+> after the human `executePlan` gate; the model loop retains only content-free availability and
+> staging tools. See "Phase 17 — 17-04" below.
 >
 > Last verified: 2026-07-30 (17.1-06) — **the confirmed business blueprint is standing context on every model-backed cockpit turn, including turns that call no tools.** `runCockpitAgent` reads `spineForTenant` only after the no-model SMOKE return path and routes the result through the one `buildTurnPrompt`: spine first, then history, plan context, and the current user line last. The read fails open to the byte-identical legacy prompt; `system: skill.body` remains the versioned registry body. VALIDATION item 24 drives the real read/render chain and mutation-pins production plus the test shim to exactly two helper call sites. See "Phase 17.1 — standing business-blueprint turn context" below.
 > Also verified: 2026-07-29 (17-02) — the Calendar write arm is a two-module split: `calendar.ts`
@@ -836,6 +836,43 @@ writer of plan status, Calendar audit rows, and Calendar dead letters for this a
 **Invariant:** the Calendar tools stage only. `proposeCalendarEvent` writes `eventTitle`,
 `eventStartMs`, `eventDurationMs`, and `eventTz` together with `status: "proposed"` and nothing
 else; neither Calendar tool may reach the event-creation action.
+
+### Phase 17 — 17-04 (Approve-only external action enforcement)
+
+1. **The write is an action type, never a tool side effect.** `calendar_event` selects the
+   `externalAction` arm, and the event is created only after the human fires `executePlan`.
+   `llm.ts` may name `internal.calendar.freeBusy`; static enforcement forbids it from naming
+   `calendar.createEvent` or any `calendarComplete` function.
+2. **The third arm is structural.** `executePlan` remains a pinned `tenantMutation`, which cannot
+   `fetch`, so `inline` cannot create an external event. `case "workflow"` is the Gmail request
+   fan-out and would silently inherit the email terminal. Phases 18 and 19 reuse `externalAction`
+   instead of adding a fourth arm.
+3. **The arm stays split across two modules.** `calendar.ts` is `"use node"` and holds only
+   `freeBusy` and `createEvent`; `calendarComplete.ts` is non-Node and is the sole writer of plan
+   status, Calendar audit rows, and Calendar dead letters. A `"use node"` module cannot hold the
+   `onCreateComplete` mutation, so moving it beside the action breaks deployment, not just tests.
+4. **Availability remains content-free by construction.** It uses `freeBusy.query`, never
+   `events.list`, and returns only `{start, end}` busy intervals. Introducing event titles,
+   descriptions, or attendees reopens the §4/§2-D PII surface.
+5. **Persisted scope is checked before Google work in both actions.** `gmailTokens.scope` is read
+   and `hasScope` runs before `freshAccessToken`, because refresh can return `{ok:true}` for a grant
+   that still lacks Calendar permission. Fixture-backed `freeBusy` reads precede even that check.
+6. **Create retries are exactly-once.** `events.insert` receives the deterministic client-supplied
+   base32hex id; a 409 duplicate means success. `crypto.randomUUID()` is not a valid substitute
+   because Google event ids exclude hyphens and the letters `w`–`z`.
+7. **Guest-delivery fields are absent on purpose.** `calendar.ts` contains neither `attendees` nor
+   `sendUpdates`, and a mutation-verified static scan pins both absences. Otherwise Google could
+   send invitations outside the plan, audit, DLQ, redaction, and request-row spine.
+8. **Terminal payloads are refs/status/reason-code only.** A Calendar provider body may echo the
+   summary, so it never reaches audit or dead letters. An incompletely staged plan terminates as
+   `{status: 0, reason: "incomplete_stage"}` without retrying.
+9. **ACTN-02 ships Google-only and create-only.** Microsoft/Outlook remains deferred (17-01 Q7);
+   update and cancel remain deferred (17-01 Q3). The literal “schedule and manage” requirement is
+   therefore not evidence that manage shipped. Later providers and operations are additive adapters
+   and action types behind this same governed arm.
+10. **`deliverApprovedPlan.ts` remains byte-unchanged.** It is the workflow-backed email entry
+    point, not a universal dispatcher; routing Calendar through it would make Gmail fan-out
+    reachable from a Calendar action.
 
 ### Phase 16 — 16-05 (the hosted search capability)
 

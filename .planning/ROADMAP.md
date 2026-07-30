@@ -57,7 +57,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md` (completed 2026-07-26)
 - [x] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17 (completed 2026-07-27)
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
-- [ ] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
+- [x] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated) (completed 2026-07-30)
 - [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
 - [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated)
@@ -646,11 +646,11 @@ Plans:
   1. The agent reads calendar availability in-loop (like `listInbox`) and proposes a calendar event; the event is created only after the human Approve gate fires the generalized executor - never inside a tool call.
   2. Calendar actions reuse the shipped OAuth-refresh/adapter pattern and log refs/ids/counts only to audit.
   3. Calendar reads/writes are tenant-scoped and covered by an isolation assertion shipped with the surface.
-**Plans**: 3/4 plans executed (4 plans in 4 waves, serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
+**Plans**: 4/4 plans executed (4 plans in 4 waves, serial — each plan's files are the next one's contract). Research REFUTED the "likely skippable" note: `inline` cannot fetch (a mutation cannot `fetch`) and `workflow` IS the gmail fan-out, so a THIRD `Arm` literal (`externalAction`) is structurally forced.
 - [x] 17-01-PLAN.md — Stage-1 shared-union freeze (agentSteps literals, widened `plans.kind`, staged-event fields, `calendarFixtures`, VERB, watch.json) + the three arm-table compile sites + the pure `@pikar/core` calendar domain
 - [x] 17-02-PLAN.md — the Google Calendar adapter: the offline fixture seam, the widened one-URL Google grant, `freeBusy` read, `events.insert` write, and the single retrier-`onComplete` terminal handler
 - [x] 17-03-PLAN.md — the two in-loop tools in `llm.ts`: `checkAvailability` (read) and `proposeCalendarEvent` (stages onto the plan, never creates) — completed 2026-07-29
-- [ ] 17-04-PLAN.md — the real `externalAction` arm behind the Approve gate, the enforcement scans (write unreachable from `llm.ts`, POST targets by NAME, no attendees/`sendUpdates`), and the SC#3 two-tenant isolation assertion
+- [x] 17-04-PLAN.md — the real `externalAction` arm behind the Approve gate, the enforcement scans (write unreachable from `llm.ts`, POST targets by NAME, no attendees/`sendUpdates`), and the SC#3 two-tenant isolation assertion — completed 2026-07-30
 
 ### Phase 17.1: Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED)
 
@@ -815,7 +815,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 7/8 | 7 waves complete; 15.2-08 planned, not executed | 2026-07-27 |
 | 16. Research Sub-Agent & Web Research | 7/9 | In Progress (waves 1-5 done; 16-07 landed the vault terminal — next 16-08) | 2026-07-27 |
-| 17. Calendar Actions | 3/4 | In Progress (Lane K — in-loop availability and staging tools complete; next 17-04 Approve arm; live trace/card observation remains outstanding) | 2026-07-29 |
+| 17. Calendar Actions | 4/4 | Complete (offline; owner UAT M1-M5 pending) | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 8/10 | In Progress (17.1-01..08 complete; confirmation gate and audited Blueprint state landed; next 17.1-09) | 2026-07-30 |
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
