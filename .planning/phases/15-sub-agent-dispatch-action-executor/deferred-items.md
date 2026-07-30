@@ -82,20 +82,37 @@ rewritten body, so this blocks nothing that shipped.
    `skills:seedSkills`.
 2. Read the versions back by **exact body equality**, never by `active + 1`. In PowerShell:
 
+   > **CORRECTED 2026-07-31 — the version below replaces an earlier one that could NEVER match on
+   > Windows.** The stored `body` is **LF**; it originates from the generated `.ts` string literal,
+   > not from the `.md` on disk. A Windows working tree checks the `.md` out as **CRLF**, so a raw
+   > `Get-Content -Raw` comparison fails for EVERY skill. Measured on the live deployment:
+   > `research-specialist.md` reads **6441** chars from disk against **6314** stored — exactly one
+   > extra char per line break, content otherwise identical. The old script therefore printed zero
+   > matches and threw, and its own instruction on that outcome ("do NOT guess a version") sent the
+   > reader to a dead end. **The `-replace` below is the whole fix — do not remove it.**
+
    ```powershell
    $names = @("offer-architect", "money-model-designer", "lead-engine")
-   $canonical = @{
-     "offer-architect" = Get-Content -Raw ..\contracts\skills\offer-architect.md
-     "money-model-designer" = Get-Content -Raw ..\contracts\skills\money-model-designer.md
-     "lead-engine" = Get-Content -Raw ..\contracts\skills\lead-engine.md
+
+   # LF-normalize: stored bodies are LF, a Windows checkout is CRLF. Without this, zero matches.
+   $canonical = @{}
+   foreach ($n in $names) {
+     $canonical[$n] = (Get-Content -Raw "..\contracts\skills\$n.md") -replace "`r`n", "`n"
    }
-   $rows = npx convex data skills --format json --limit 200 | ConvertFrom-Json
-   $matches = @($rows | Where-Object {
+
+   $rows = npx convex data skills --format json --limit 500 | ConvertFrom-Json
+   # NOT $matches — that is a PowerShell automatic variable clobbered by any -match operator.
+   $bodyMatches = @($rows | Where-Object {
      $names -contains $_.name -and $_.body -ceq $canonical[$_.name]
    })
-   $matches | Sort-Object name | Format-Table name, version, status
-   if ($matches.Count -ne 3) { throw "Expected one exact deployed body match per specialist" }
+   $bodyMatches | Sort-Object name | Format-Table name, version, status
+   if ($bodyMatches.Count -ne $names.Count) {
+     throw "Expected one exact deployed body match per specialist, got $($bodyMatches.Count)"
+   }
    ```
+
+   If a skill still shows no match after this, the deployed body genuinely differs from the repo —
+   re-run the seed and re-read. Do not fall back to guessing a version number.
 
    Record the three printed versions as `N_offer`, `N_money`, and `N_lead`. This survives optimizer
    candidates and `seedSkills`'s `maxVersion + 1` rule; a guessed version does not.
