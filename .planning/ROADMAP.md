@@ -604,7 +604,7 @@ Plans:
   6. `markReady` clears `failureReason`/`extractionTruncated`, so a successful retry stops reporting a stale error; and `extractGraph` caps its prompt (today it is the one uncapped model call in the repo).
   7. **LIVE GATE:** the owner's stuck `.xlsm` reaches `ready` with non-zero `textChars` on the real deployment via `vaultSweep:runSweep`. Offline green does NOT close this phase (Pitfall-1 class — only the deployed run proves it).
 **Non-goal**: folders, 1–1.5 GB folder upload, the 200 MB per-file cap raise, document-identity classification and folder-level synthesis are **Phase 2 of this line of work** — the cap raise is unsafe until the fan-out bounds per-action memory (the playbook already flags large-doc extraction memory/time at the CURRENT 100 MiB cap).
-**Plans**: 7 plans in 7 waves (serial — `vaultExtract.ts` is the spine of four of them, and `execute-phase` serialises on `wave`, not on intra-wave `depends_on`)
+**Plans**: 8/8 plans executed (8 waves, serial — `vaultExtract.ts` is the spine of four of them, and `execute-phase` serialises on `wave`, not on intra-wave `depends_on`). The 8th was created BY the 15.2-05 live gate, not authored up front.
 **STATUS 2026-07-27:** **all 7 authored waves COMPLETE and ALL SEVEN success criteria CLOSED**, each of the three live-only ones executed against `local-joel_feruzi-pikar_ai_50c69-1` and owner-approved (SC#7 by 15.2-05, SC#5 by 15.2-06, SC#3-XLS by 15.2-07). `15.2-VALIDATION.md`'s three Manual-Only rows are all executed and passing, and `nyquist_compliant: true` now rests on execution evidence rather than planning-time conditions. **THE PHASE IS NOT FINISHED: 15.2-08 (below) was created BY the 15.2-05 live gate, has no PLAN.md yet, and is outstanding.** Two honest gaps carried to the verifier: **`failureCopy` has never been rendered in a browser** (SC#4's live half only partially paid, compounded by the `:3000` `next start` predating its own build), and a real **Excel-authored `.xls` with DATE cells** is unobserved (the serial-`46067` ceiling was measured only on a SheetJS-written fixture).
 
 Plans:
@@ -615,7 +615,7 @@ Plans:
 - [x] 15.2-05-PLAN.md — **LIVE GATE**: the owner's stuck `.xlsm` reaches `ready` with non-empty text on the real deployment [SC#7] (Wave 5) — **PAID 2026-07-27 on `local-joel_feruzi-pikar_ai_50c69-1`: 0 → 256,439 chars.** Owner approved but PARTIALLY OBSERVED — `failureCopy` still unverified live. Gate finding: `runSweep` is a NO-OP without `'{"reset": true}'`
 - [x] 15.2-06-PLAN.md — Per-page fan-out so scanned PDFs transcribe VERBATIM (bounded concurrency, page-ordered, per-page timeout) [SC#5] (Wave 6) — **VERIFIED LIVE + owner-APPROVED 2026-07-27: the 12-page deck went 2,161 → 7,868 chars, `Page 1`…`Page 12`, 0 `[unreadable]`, 13¢/12 calls, no OCC.** `attachment-extractor` prompt BYTE-UNCHANGED (§5 by reuse). Verdict from row data, NOT a browser (`:3000` still stale). `extractionTruncated` on long scans is now expected, not a regression
 - [x] 15.2-07-PLAN.md — SheetJS spike + legacy XLS/XLSB, sequenced LAST so its failure narrows only SC#3 [SC#3] (Wave 7) — **SPIKE PASSED + VERIFIED LIVE + owner-APPROVED 2026-07-27: a real legacy `.xls` reached `ready` with its NUMBERS visible, so SC#3 is FULLY CLOSED and all seven criteria are now closed.** `xlsx` 0.20.3 pinned EXACTLY to the vendor CDN tarball (NOT npm `xlsx@0.18.5` — CVE-2023-30533, CVE-2024-22363). Rebuilt under Convex's own esbuild flags: SheetJS carries **19 real named exports**, the `pdf-lib` **control still collapsed to 1**, so the probe provably detects a collapse. **PITFALL 9 GENERALISED — the discriminator is the missing `exports` map / ESM build, NOT the import form — and promoted into the playbook's `## Invariants`.** Approval evidence level: the owner's direct confirmation of the criterion; **no figures transcribed back, nothing diffed against Excel.** Date-serial ceiling remains open
-- [ ] 15.2-08-PLAN.md — **(NEW, added by the 15.2-05 live gate)** PPTX extracts slide TITLES ONLY (`pptxText` reads `<a:t>` from slides, never opens `ppt/charts/*`), and scaffolding-only output reports `ready` because `` `Slide ${n}` ``/`` `Sheet ${n}` `` are emitted unconditionally so `empty_extraction` never fires — a false-ready one layer below the scheduler. Both halves. Sequenced AFTER 15.2-07 (Wave 8)
+- [x] 15.2-08-PLAN.md — **(NEW, added by the 15.2-05 live gate)** — completed 2026-07-29 PPTX extracts slide TITLES ONLY (`pptxText` reads `<a:t>` from slides, never opens `ppt/charts/*`), and scaffolding-only output reports `ready` because `` `Slide ${n}` ``/`` `Sheet ${n}` `` are emitted unconditionally so `empty_extraction` never fires — a false-ready one layer below the scheduler. Both halves. Sequenced AFTER 15.2-07 (Wave 8)
 
 ### Phase 16: Research Sub-Agent & Web Research
 **Goal**: The first exemplar specialist - a Research sub-agent - is dispatched through the new framework and performs grounded, injection/SSRF-hardened web research, storing findings in the vault and unblocking credible market-fact evaluation.
@@ -626,7 +626,7 @@ Plans:
   2. The web-research tool is injection- and SSRF-hardened (retrieved page text quarantined as untrusted data; no internal/metadata endpoints reachable); findings are stored in the vault with a retrieval-date freshness stamp.
   3. Research findings and the sub-agent trace write refs/counts only to audit/telemetry (no page content, no grounded prose); an isolation assertion ships for stored findings.
   4. The evaluation engine (Phase 12) can now cite fresh web-research results with a freshness stamp for market claims instead of relying on stale model memory.
-**Plans**: 9 plans (6 waves)
+**Plans**: 8/9 plans executed (9 plans, 6 waves). 16-09 is PARTIAL: tasks 1-2 committed, task 3's three fixtures + the self-check floor bump landed 2026-07-31, but the paid `pnpm eval:golden` gate and the task-4 owner checkpoint are UNPAID — blocked on a securely available `OPENAI_API_KEY`.
 Plans:
 - [x] 16-01-PLAN.md — Wave-0 freeze: shared unions, llm.ts signature widening, watch registrations
 - [x] 16-02-PLAN.md — the OQ-2 live web-search probe (D8) and the research model + cost constants it gates
@@ -635,7 +635,7 @@ Plans:
 - [x] 16-05-PLAN.md — the hosted webSearch tool, per-call billing, SSRF scan + non-vacuity floor
 - [x] 16-06-PLAN.md — the ASYNC dispatch seam (D9-REVISED: stage -> schedule -> land), the persisted `collecting` interlock, the relocated model pin. NOT the superseded D9 in-loop seam: no per-turn envelope closure (the interlock replaces it) and NO guard-comment amendment (dispatchGuard.test.ts:16-24 predicted this shape and is left untouched, deliberately)
 - [x] 16-07-PLAN.md — the vault terminal: research.ts, the freshness stamp, cross-tenant isolation — completed 2026-07-27 (one `kind: "web_research"` vault document per successful run, written by the DISPATCHER after `dispatchAndLand` returns — so the approvable card already holds the findings and a persist failure costs groundability, not the work: audited as `research.persist_failed` with a reason CODE, swallowed, no retry/DLQ. Stored text is provenance header → 16-03's `<research_findings …>` fence → the D10 limits footer; the zero-source "insufficient evidence" verdict is CODE's, not the model's, and sits ahead of the fence. `retrievedAt` is a stored, queryable number; ingest starts through `startIngest` with `rootRequestId` as the correlation id. Honest boundary recorded in the playbook: only the FIRST chunk carries the header + inner fence — per-chunk containment is `searchVault`'s outer `<vault_context …>` fence. research.test.ts 12/12; backend 723/723 across 48 files; tsc ZERO non-test errors; 3 mutation-checks RED-then-green. 4 auto-fixed deviations, two of which make the plan's own done-criteria checkable: `INCOMPLETE_MARKER` exported from `@pikar/core` (one phrasing per stop cause) and a `research` flag on `__runSpecialistWithScript` — `runResearch` cannot be driven offline. `llmRedaction.test.ts`'s pinned audit-payload count 4→5, discharged by REVIEWING the new §4 site. NOT live-verified — offline only)
-- [ ] 16-08-PLAN.md — D11 offline: containment proven positively + the failure-mode matrix + the mutation ledger
+- [x] 16-08-PLAN.md — D11 offline: containment proven positively + the failure-mode matrix + the mutation ledger — completed 2026-07-29
 - [ ] 16-09-PLAN.md — SC#4 citation + the eval:golden gate (D11's second proof) + the phase checkpoint
 
 ### Phase 17: Calendar Actions
@@ -748,6 +748,16 @@ Plans:
   2. `optimizerConfig.setOptimizerEnabled`, `skills.activateCandidate`, and `skills.candidatesForReview` each reject a non-owner caller server-side - a non-owner cannot flip the optimizer, activate a skill, or read candidate bodies.
   3. Any new admin-ish control added from here on carries `requireOwner` from birth; the server-side guard is the trust boundary (hiding the UI is only presentation).
 **Plans**: TBD
+
+### Phase 22.1: Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 22
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 22.1 to break down)
 
 ### Phase 23: Agent-Authored Skills
 **Goal**: The agent can author skills as candidates only - structurally unable to self-activate - with activation requiring BOTH a passing eval and owner approval; the governance-heaviest self-modification capability, placed last among the capability phases.
