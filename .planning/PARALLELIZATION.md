@@ -63,9 +63,28 @@ registry, not a merge conflict a rebase fixes.**
 > optimizer dry-run candidates occupy versions too. Verify which version carries your body
 > BEFORE any eval or activate.
 
-**`STATE.md`'s "Phase 16 paused, no `OPENAI_API_KEY`" line is STALE.** The paid gate ran on the
-main deployment 2026-07-31 (~$0.46). The live blocker is the shared candidate stream above, which
-is a *worse* constraint for 18/19 than a missing key would have been. Fix that line when 16 closes.
+**`STATE.md`'s "Phase 16 paused, no `OPENAI_API_KEY`" line is STALE — verified 2026-07-31.** The
+key is provisioned on the deployment (`16-02-PLAN.md:19`) and **the gate has been run and paid for
+TWICE, both RED**: runs `9dde13e8` (27/33, $0.2148) and `c1fe054c` (26/33, $0.2228) —
+**$0.4376 total, nothing activated**, per `docs/playbooks/agent-runtime.md` and
+`16/deferred-items.md:103`. **Candidate v16 exists and is un-activated**, which is precisely the
+hazard above; `cockpit-agent@15` remains active and contains zero mentions of the research tool.
+
+Two consequences for anyone planning around this:
+
+- **Do not read "the gate ran" as "the gate passed."** Phase 16 is 8/9 and `ACTN-03` stays Pending
+  until a run id, per-case verdicts, total cost and the active `research-specialist` version are
+  recorded. `agent-runtime.md` says so in its own words: *"Anyone finding this line must not read
+  it as evidence."*
+- **Budget the remaining gate honestly.** A full 33-case run is **~$0.83 clean / ~$1.06 with one
+  research retry** — the earlier ~$0.02 figures were cheap *because nothing dispatched*. The
+  runner's reported cost **understates research fixtures by ~10×** (the specialist bills
+  asynchronously after the case is scored), and on a dispatch timeout an abandoned run's ~$0.21
+  reads as $0 while it keeps billing. Cross-check against `npx convex data audit` (free) before
+  declaring any run's cost.
+
+The live blocker is the shared candidate stream, which is a *worse* constraint for 18/19 than a
+missing key would have been. Fix the `STATE.md` line when 16 closes — it belongs to Lane R.
 
 ### Why there is no Wave-0 union freeze here
 
