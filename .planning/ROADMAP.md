@@ -727,16 +727,23 @@ Plans:
 **Plans**: TBD
 
 ### Phase 20: Media Canvas
-**Goal**: A media-creation canvas produces images and video (<=3 min) via the connected Pikar-Ai MCP service as async governed jobs with their own capped budget - generation is wrapped, not rebuilt (PROJECT.md mandate).
-**Depends on**: Phase 15 (dispatch, media specialist); reuses the scheduling/async machinery. FIRST TASK is a Pikar-Ai MCP auth + pricing spike (research flag - backend OAuth/token-exchange + per-image/per-second pricing units are unverified from the repo).
+**Goal**: A media-creation canvas produces images and short-form video as async governed jobs drawing a separate capped media budget - generation is wrapped, not rebuilt (PROJECT.md mandate).
+
+> **RE-SCOPED 2026-08-01 after the mandated spike (`20-SPIKE.md`, `20-PROVIDER-EVAL.md`). Two premises of the original wording were false and are corrected here rather than left to fail in-flight.**
+>
+> **1. Video is <=15 SECONDS, not <=3 minutes.** Not a provider limitation - a MODEL one. Across 28 video models from eight independent labs (Higgsfield, Kling, Google Veo, Bytedance Seedance, MiniMax, Wan, xAI Grok, Happy Horse) the maximum single generation is 15 s; most are 5-10 s. No provider switch changes this. Multi-minute output exists only by ASSEMBLY (concatenating clips, e.g. an explainer built from ordered blocks) or by re-cutting footage the user already has - both are different features from generation and are explicitly out of scope here.
+>
+> **2. The delivery path is NOT the Pikar-Ai MCP.** That connector is an account-level OAuth integration on the claude.ai CLIENT; it is absent from `.mcp.json` and a Convex action cannot reach it. There is no backend token-exchange to implement. Phase 20 calls a server-to-server HTTP API with an API key held as a Convex deployment secret - the `gmailAuth.ts` refresh-token machinery is NOT needed and must not be copied.
+
+**Depends on**: Phase 15 (dispatch, media specialist); reuses the scheduling/async machinery and the `@pikar/cost` price-table pattern.
 **Requirements**: MEDIA-01
 **Success Criteria** (what must be TRUE):
-  1. The first task confirms the Pikar-Ai MCP backend auth/token-exchange flow and pricing units (per-image / per-second-of-video) via a spike, BEFORE the media adapter action is written.
-  2. Media generation runs as an async background job (the request never blocks on multi-minute video); the UI tracks job status and never hangs synchronously.
-  3. Media draws a separate, capped media budget line with its own kill-switch - never folded into the token budget; an agent or injected content cannot fire generation without human approval (plan-gated by construction).
+  1. A provider is chosen against `20-PROVIDER-EVAL.md` and pinned in an ADR. The binding criterion is a STABLE PUBLISHED PER-GENERATION USD PRICE LIST (per-image / per-second-of-video), because that list is what makes SC #3 real; a credit-denominated provider whose per-model costs are not published fails this criterion.
+  2. Media generation runs as an async background job; the UI tracks job status and never hangs synchronously. (A 15 s clip still takes minutes of wall-clock to render, so this criterion survives the duration re-scope intact.)
+  3. Media draws a SEPARATE capped budget line with its own kill-switch, never folded into the token budget, enforced the same way the shipped LLM rail enforces its own: a price table in code (the `packages/cost` `chooseModel`/`estimateCostUsd` pattern) gives a PRE-FLIGHT estimate checked against a per-request cap, a named rate-limiter window gives the daily cap, and actual spend is recorded after. Fail closed on an unknown model, exactly as `chooseModel` already does. An agent or injected content cannot fire generation without human approval (plan-gated by construction).
   4. Generated assets are stored under the tenant as refs; audit logs asset id/hash + a moderation-verdict ref only (never the asset or its URL); an isolation assertion ships for media jobs/assets.
-**Plans**: TBD
-
+  5. The price table names its own ceiling. It is hand-maintained against a published list, so it CAN drift from real billing; the phase ships a documented reconciliation step (compare recorded spend against the provider's actual invoice/balance) and a `ponytail:` comment naming the upgrade path. Silent drift in a budget rail is the failure mode this criterion exists to prevent.
+**Plans**: TBD - re-plan against the corrected scope. The old SC #1 (an MCP auth/token-exchange spike) is DISCHARGED: it ran, and it refuted its own premise.
 ### Phase 21: User-Authored Skills & Routines
 **Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim. A ROUTINE is that same thing plus a trigger row: it reuses `insertCandidate` (`skills.ts:386`), `activateSkillVersion` (`skills.ts:110`) and `GATED_SKILLS` (`skill.ts:170-194`) and introduces no authoring language. **Pre-beta deliverable: a re-runnable pinned prompt** — a saved chat message re-fired at `api.cockpit.sendCockpitMessage`. NOT a `routines` table, NOT a cron, NOT an authoring canvas, NOT a graph DSL; those are post-beta and evidence-gated on someone actually re-firing a pinned prompt twice.
 **Depends on**: Phases 16-19 (real specialist capability worth authoring skills for), Phase 3.6 (eval gate). User-authored first, agent-authored (Phase 23) last.

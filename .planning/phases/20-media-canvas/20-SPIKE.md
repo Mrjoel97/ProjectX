@@ -8,6 +8,15 @@ researched: 2026-07-31
 verdict: "Phase 20 CANNOT proceed to implementation as scoped. All three premises in the roadmap's SC #1/#2/#3 are refuted. Needs an owner decision."
 ---
 
+> **CORRECTED 2026-08-01 — read `20-PROVIDER-EVAL.md` §1 before acting on Finding 3.**
+> This document concluded that the absence of a cost field BLOCKED SC #3. That was overstated.
+> The shipped LLM rail does not ask any provider for a price either — `packages/cost` encodes a
+> price TABLE and `chooseModel` does the pre-flight check. A media budget can work the same way,
+> so SC #3 is buildable. The narrower objection to Higgsfield stands: credit-denominated pricing
+> with no published per-model cost makes that table hand-sourced and prone to silent drift.
+> Findings 1, 2 and 4 (no MCP backend path; white-labelled Higgsfield; 15-second ceiling) are
+> unaffected and still hold.
+
 # Phase 20 Spike — Pikar-Ai MCP auth + pricing units
 
 Roadmap SC #1 mandates this spike **before the media adapter action is written**, flagging that
