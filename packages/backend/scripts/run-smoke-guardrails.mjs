@@ -100,7 +100,19 @@ try {
   // (NOT failed; assertBlocked's no-deadLetters check proves it never touched the DLQ).
   await pollPass("review:sendDecision", { correlationId: cidA, attempt: 0, decision: "regenerate" });
   await pollPass("smokeAssert:assertBlocked", { correlationId: cidA, reason: "daily_budget_exhausted" });
-  console.log("  ok — B blocked at prepare, A blocked mid-flight (preCall), neither dead-lettered");
+
+  // C is a DIFFERENT tenant and must sail straight past the drain — this is 22.1-02's whole
+  // point, proven end-to-end through the real pipeline rather than only at the preCall unit.
+  // Before the keying, `dailySpendCents` was one keyless bucket and C would have been blocked
+  // too. If this line ever goes red, the { key: tenantId } has been dropped somewhere.
+  const cidC = `grd-budgetC-${uid()}`;
+  const goalC = `SMOKE::route=direct_llm::cache=1:: budget probe ${uid()}`;
+  must("smoke:seedPipeline", { correlationId: cidC, route: "direct_llm", tenant: "smokeBudgetOther", goal: goalC });
+  await pollPass("smokeAssert:assertAtReview", { correlationId: cidC });
+
+  console.log(
+    "  ok — B blocked at prepare, A blocked mid-flight (preCall), C (other tenant) unaffected, none dead-lettered",
+  );
 } finally {
   must("smoke:resetDailySpend", { tenantId: "smokeBudget" });
 }
