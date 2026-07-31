@@ -78,3 +78,56 @@ minutes rather than rediscovered.
 
 Everything else in that worktree was byte-identical to `main` (fixtures 32/33/34 and
 `run-eval-golden.mjs`, line endings aside) and was lost to nothing.
+
+## 16-09 SETTLED 2026-07-31 — the research plane is built but the agent was never TOLD about it
+
+Run `442341cf`, tenant `eval-442341cf`, `--only research`, **0/3, $0.0213**, pins
+`cockpit-agent@15 research-specialist@1 offer-architect@2 money-model-designer@2 lead-engine@2`.
+
+**This supersedes the "environment problem" reading of the two earlier runs.** The deployment was
+healthy for this one and PROVEN so: started clean at 14:07:59, soaked ~5 min idle with zero retry
+storms, `vaultSmoke:seedCorpus` embedded live, and `convex-local-backend` pid 13796 was still
+listening on `0.0.0.0:3210` and serving AFTER the run. All three fixtures still failed identically
+(`researchDocPresent: no research document before timeout`), and all six plans still ended at
+`status=collecting` with `kind`/`route` unset.
+
+**The audit trail settles it.** Across all six attempts the tenant accumulated exactly THREE audit
+rows: `mailbox.searched` ×2, `vault.searched` ×1. Zero `subagent.completed`, zero
+`research.persisted`. The agent never called `dispatchResearch`, so `dispatch.runResearch` was never
+scheduled, so `landSpecialistResult`'s `finally` never ran — which is precisely why the plans sit at
+`collecting` forever.
+
+**Correction to `run-eval-golden.mjs:41`.** Its comment says a row still at `collecting` past the
+timeout "means the deployment never ran the job — an environment problem, not a case failure." The
+first clause is right and the inference is WRONG: a job can also never run because nothing ever
+SCHEDULED it. That misreading cost two paid runs ($0.4376) spent chasing the environment. The
+comment should distinguish "scheduled but never landed" (environment) from "never scheduled"
+(the agent didn't call the tool) — the audit trail is what separates them.
+
+**Cause, confirmed on both legs:**
+
+1. The tool EXISTS and was OFFERED. `dispatchResearch` is built at `convex/llm.ts:773` and is
+   conditionally constructed under `grantDispatch` (`llm.ts:2069` — `toolNames === undefined`).
+   The eval runner calls `llm:runCockpitAgent` WITHOUT `toolNames` and with a real `threadId` +
+   `rootRequestId`, so the gate evaluated true and the tool was in the record. Structural absence
+   is REFUTED.
+2. The active skill body never mentions it. `cockpit-agent@15` (active, 22,548 chars) contains
+   **ZERO** occurrences of `dispatchResearch`, `research`, `web search`, or `websearch` — while
+   mentioning `searchVault` 4× and `evaluateBusiness` 3×, which is exactly the behaviour observed.
+   `packages/contracts/skills/cockpit-agent.md` on disk has zero too, so this is not DB drift.
+
+**This is the "withheld tool" pattern this repo has already hit once and documented** — see
+`docs/playbooks/agent-runtime.md` @ 03.11-05 (RPLY-01): the reply plane shipped complete in plans
+02-04 while the skill body stayed silent, and "reply to X" looked mysteriously broken until
+`cockpit-agent@12` learned the tool existed. Phase 16 built the whole research plane (plans 01-08)
+and no plan owned the skill-body teaching. Fixtures 32/33/34 CANNOT pass until it lands.
+
+**Fix path (the 03.11-05 recipe, unchanged):** teach `dispatchResearch` in
+`packages/contracts/skills/cockpit-agent.md` (when to reach for it vs `searchVault`; that findings
+arrive later as an approvable card, not in-turn) -> `seedSkills` mints candidate v16 ->
+iterate with `--only research --skill cockpit-agent@16 …` at ~$0.02 a try -> once green, ONE full
+unfiltered 33-case gate for the evidence row -> `activateSkill` v16.
+
+**Not yet known:** whether the research plane works once invoked. Nothing downstream of the tool
+call has EVER executed — no specialist run, no persisted doc, no `webSearchCalls`. The teaching is
+necessary; it is not proven sufficient.
