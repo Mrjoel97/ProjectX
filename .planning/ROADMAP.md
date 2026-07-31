@@ -710,7 +710,17 @@ Plans:
   4. `renderAndStore`'s hardcoded `application/pdf` (`llm.ts:948`, `:952`) and `buildDocFilename`'s hardcoded `.pdf` (`documentGen.ts:173`, `:177`) are parameterized by format, so a SECOND format (a self-contained HTML page) is emitted through the SAME governed path — PII scan -> registry drafter -> cap -> `ctx.storage.store` -> ref-only return — with zero new tables and zero new routes. The vault's markup rail already sniffs `text/html` (`sniff.ts:124`), so the artifact is groundable without new extraction work.
   5. The agent authors a STRUCTURED SPEC and CODE renders the markup: a model-authored string never becomes markup. Enforced by a test, not by prompt instruction.
   6. A created artifact is SEEN: it renders in the Output card specified at `docs/design/BRAND.md:101-102` (specified today, unimplemented), not only as a silent vault row.
-**Plans**: TBD
+**Plans**: 9 plans (waves 1-7)
+Plans:
+- [ ] 18-01-PLAN.md — Pure core: DocFormat + format-parameterized `buildDocFilename` + `renderHtmlDocument`, with the SC#5 spec->markup boundary proved behaviourally AND structurally (Wave 1)
+- [ ] 18-02-PLAN.md — Schema + trace registration: the `agentSteps.tool` literal and its `cards.tsx` VERB entry together, plus `vaultDocuments.origin` and `vaultSources.role`/`snippet` — all optional, zero migration (Wave 1)
+- [ ] 18-03-PLAN.md — The `content-drafter` skill as the full 5-file mirror, DELIBERATELY UNGATED so it lands live at v1 with no eval and no paid run (Wave 1)
+- [ ] 18-04-PLAN.md — The vault write plane: `insertCreatedDoc` + `patchCreatedDoc`, the Output-card row shape, the blueprint drift exclusion, and the deliberate absence of `startIngest` that IS the retrieval exclusion (Wave 2)
+- [ ] 18-05-PLAN.md — `llm.ts` parameterization: `draftDocument`'s closed `skillName` (the reach that makes `content-drafter` live) and `renderAndStore`'s `format`, defaulted so Phase 3.3 stays byte-identical (Wave 3)
+- [ ] 18-06-PLAN.md — The `createDocument` tool: closed `form` enum, optional `replace` #index for replace-in-place revision, refs-only audit, and the SC#2 no-external-side-effect scan (Wave 4)
+- [ ] 18-07-PLAN.md — The artifact is SEEN: the BRAND-conformant Output card, the vault-grid AGENT chip, and the SC#6 e2e handle (Wave 5)
+- [ ] 18-08-PLAN.md — Teach `cockpit-agent` the tool + regenerate its one-line mirror, gated on Phase 16 closing the shared candidate stream (Wave 6, has a blocking checkpoint)
+- [ ] 18-09-PLAN.md — Playbooks, the two ROADMAP contradictions, and the NON-NEGOTIABLE live gate: 4 turns proving the surfaces no offline test can see (Wave 7, has a blocking checkpoint)
 
 ### Phase 19: Contacts, CRM & Follow-ups
 **Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
