@@ -710,16 +710,17 @@ Plans:
   4. `renderAndStore`'s hardcoded `application/pdf` (`llm.ts:948`, `:952`) and `buildDocFilename`'s hardcoded `.pdf` (`documentGen.ts:173`, `:177`) are parameterized by format, so a SECOND format (a self-contained HTML page) is emitted through the SAME governed path — PII scan -> registry drafter -> cap -> `ctx.storage.store` -> ref-only return — with zero new tables and zero new routes. The vault's markup rail already sniffs `text/html` (`sniff.ts:124`), so the artifact is groundable without new extraction work.
   5. The agent authors a STRUCTURED SPEC and CODE renders the markup: a model-authored string never becomes markup. Enforced by a test, not by prompt instruction.
   6. A created artifact is SEEN: it renders in the Output card specified at `docs/design/BRAND.md:101-102` (specified today, unimplemented), not only as a silent vault row.
-**Plans**: 9 plans (waves 1-7)
+**Plans**: 10 plans (waves 1-7). Waves 1-5 are runnable independently; **18-08 and 18-10 are PARKED** behind Phase 16 closing and `17.1-10`'s live gate respectively (independent parks, both must clear before 18-09).
 Plans:
 - [ ] 18-01-PLAN.md — Pure core: DocFormat + format-parameterized `buildDocFilename` + `renderHtmlDocument`, with the SC#5 spec->markup boundary proved behaviourally AND structurally (Wave 1)
-- [ ] 18-02-PLAN.md — Schema + trace registration: the `agentSteps.tool` literal and its `cards.tsx` VERB entry together, plus `vaultDocuments.origin` and `vaultSources.role`/`snippet` — all optional, zero migration (Wave 1)
+- [ ] 18-02-PLAN.md — Schema + trace registration: the `agentSteps.tool` literal and its `cards.tsx` VERB entry together, plus `vaultDocuments.origin` and `vaultSources.role`/`snippet`/`form` — all optional, zero migration (Wave 1)
 - [ ] 18-03-PLAN.md — The `content-drafter` skill as the full 5-file mirror, DELIBERATELY UNGATED so it lands live at v1 with no eval and no paid run (Wave 1)
-- [ ] 18-04-PLAN.md — The vault write plane: `insertCreatedDoc` + `patchCreatedDoc`, the Output-card row shape, the blueprint drift exclusion, and the deliberate absence of `startIngest` that IS the retrieval exclusion (Wave 2)
+- [ ] 18-04-PLAN.md — The vault write plane: `insertCreatedDoc` + `patchCreatedDoc`, the Output-card row shape, and the deliberate absence of `startIngest` that IS the retrieval exclusion (Wave 2)
 - [ ] 18-05-PLAN.md — `llm.ts` parameterization: `draftDocument`'s closed `skillName` (the reach that makes `content-drafter` live) and `renderAndStore`'s `format`, defaulted so Phase 3.3 stays byte-identical (Wave 3)
-- [ ] 18-06-PLAN.md — The `createDocument` tool: closed `form` enum, optional `replace` #index for replace-in-place revision, refs-only audit, and the SC#2 no-external-side-effect scan (Wave 4)
-- [ ] 18-07-PLAN.md — The artifact is SEEN: the BRAND-conformant Output card, the vault-grid AGENT chip, and the SC#6 e2e handle (Wave 5)
+- [ ] 18-06-PLAN.md — The `createDocument` tool: closed `form` enum, optional `replace` #index for replace-in-place revision, refs-only audit, the `create=` SMOKE op that is the ONLY offline e2e driver, and the SC#2 no-external-side-effect scan (Wave 4)
+- [ ] 18-07-PLAN.md — The artifact is SEEN: the BRAND-conformant Output card, the vault-grid AGENT chip, and the SC#6 e2e spec (authored here; RUN at 18-09's gate, which owns the live stack) (Wave 5)
 - [ ] 18-08-PLAN.md — Teach `cockpit-agent` the tool + regenerate its one-line mirror, gated on Phase 16 closing the shared candidate stream (Wave 6, has a blocking checkpoint)
+- [ ] 18-10-PLAN.md — The blueprint drift exclusion (one conjunct + the `BLUEPRINT_KIND` tidy), split out and PARKED because landing it before `17.1-10`'s live gate corrupts the number that gate measures (Wave 6, has a blocking checkpoint)
 - [ ] 18-09-PLAN.md — Playbooks, the two ROADMAP contradictions, and the NON-NEGOTIABLE live gate: 4 turns proving the surfaces no offline test can see (Wave 7, has a blocking checkpoint)
 
 ### Phase 19: Contacts, CRM & Follow-ups
@@ -786,7 +787,7 @@ Plans:
 ### Phase 22.1: Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED)
 
 **Goal:** Close the beta-admission blockers that are not features — the things a SECOND user's existence makes unsafe or untrue. The published privacy policy becomes true (a working Gmail disconnect that actually revokes the Google token), the daily spend cap stops being deployment-wide (per-tenant keying), and the deployment / typecheck / CI path this phase's title names runs green as a gate.
-**Requirements**: None new. This is defect closure against the shipped GRDL-03 budget guard and against a published legal claim; no existing v2.0 requirement id covers it and none is invented here (mint one via `/gsd:add-phase` if the milestone map must stay 1:1).
+**Requirements**: GOVN-03 (minted 2026-08-01 — the milestone's 1:1 requirement-to-phase map now holds). GOVN-03 covers SC1: the published privacy policy is the specification, and every user-exercisable data/connection control it promises must exist and behave as described. SC2 (per-tenant budget keying) and SC3 (the CI/typecheck gate) remain defect closure against the shipped GRDL-03 guard and carry no separate id — they are the reason this phase was inserted, not new capability.
 **Depends on:** Phase 22
 **Success Criteria** (what must be TRUE):
   1. A connected user can DISCONNECT Gmail from inside the app: the control lands on the existing `apps/web/app/(app)/connect-gmail/page.tsx`, the `gmailTokens` row is deleted, AND the token is revoked at Google (`https://oauth2.googleapis.com/revoke`), with a refs-only audit row. This makes `apps/web/app/privacy/page.tsx:312` — "You can disconnect your Google account at any time from within the application" — true; today it is a published legal claim with zero implementation (no revoke call and no token-delete mutation exist in the repo). No new route, no new NAV entry, no connections page; the hardcoded hexes on that page become `globals.css` tokens in the same pass (CLAUDE.md §10).

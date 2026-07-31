@@ -144,6 +144,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 - [ ] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
 - [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
+- [ ] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
 - [x] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
 
 *(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
@@ -257,6 +258,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GOVN-01 | Phase 22 | Pending |
 | SKILL-02 | Phase 23 | Pending |
 | GOVN-02 | Phase 24 | Pending |
+| GOVN-03 | Phase 22.1 | Pending |
 | BETA-05 | Phase 25 | Complete |
 
 **Coverage:**
@@ -265,8 +267,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Unmapped: 0 ✓
 
 **v2.0 coverage (milestone v2.0 - Platform -> Private Beta, mapped 2026-07-24):**
-- v2.0 requirements: **26 total** - 22 new (VGND-01; ONBD-01/02; BEVL-01/02/03; DOCV-01; BLPR-01/02; DISP-01/02; ACTN-01/02/03/04/05; MEDIA-01; SKILL-01/02; GOVN-01/02; BETA-05) + 4 carried-in (BETA-01, BETA-02, BETA-03, DLVR-02, repointed from the superseded Phase 9 to Phase 25)
-- Mapped to phases 10-25: 26
+- v2.0 requirements: **27 total** - 23 new (VGND-01; ONBD-01/02; BEVL-01/02/03; DOCV-01; BLPR-01/02; DISP-01/02; ACTN-01/02/03/04/05; MEDIA-01; SKILL-01/02; GOVN-01/02/03; BETA-05) + 4 carried-in (BETA-01, BETA-02, BETA-03, DLVR-02, repointed from the superseded Phase 9 to Phase 25). GOVN-03 minted 2026-08-01 for Phase 22.1, which until then carried no requirement id at all.
+- Mapped to phases 10-25: 27
 - Unmapped: 0 ✓
 - Each v2.0 requirement maps to exactly one phase; no orphans, no duplicates.
 
