@@ -1085,10 +1085,21 @@ function attemptCase(fixture, tenant, pins) {
       }),
     );
     if (res.blocked) {
+      // 22.1-02 made `dailySpendCents` KEYED per tenant, so `smoke:resetDailySpend` gained a
+      // required `tenantId` and the old argument-less hint printed a command that now dies with
+      // an ArgumentValidationError — a recovery instruction that fails is worse than none.
+      // `deployment_budget_exhausted` is a SEPARATE, KEYLESS rail (`deploymentSpendCents`,
+      // guardrails.ts:127) with no reset helper, and it is the one that actually binds here: the
+      // eval tenant is throwaway (`eval-<runId>`), so its own per-tenant window starts empty every
+      // run while the deployment ceiling carries every run of the day.
       const hint =
         res.blocked === "daily_budget_exhausted"
-          ? " — try: npx convex run smoke:resetDailySpend"
-          : "";
+          ? ` — try: npx convex run smoke:resetDailySpend '{"tenantId":"${tenant}"}'`
+          : res.blocked === "deployment_budget_exhausted"
+            ? " — the DEPLOYMENT-wide daily ceiling (keyless `deploymentSpendCents`), not this" +
+              " tenant's: it carries every run today and has no reset helper. Wait for the window" +
+              " or raise DAILY_BUDGET_CENTS."
+            : "";
       abortEnv(`environment drained (${res.blocked}) — not an eval failure${hint}`);
     }
     caseCost += res.costUsd ?? 0;

@@ -18,7 +18,11 @@ export interface Logger {
 
 export function createLogger(scope: string): Logger {
   const emit = (level: LogLevel, msg: string, fields?: LogFields): void => {
-    const line = JSON.stringify({ level, scope, msg, ts: Date.now(), ...fields });
+    // `...fields` FIRST — the four structural keys must be uncloberrable. With the spread last, a
+    // caller passing a field named `msg`/`level`/`scope`/`ts` silently rewrites the log line's own
+    // identity, and an entry whose `msg` is not the event name is unsearchable exactly when it
+    // matters. Same spread-after-explicit shape as dispatch.ts (5460a81), log plane instead of args.
+    const line = JSON.stringify({ ...fields, level, scope, msg, ts: Date.now() });
     if (level === "error") console.error(line);
     else if (level === "warn") console.warn(line);
     else console.log(line);

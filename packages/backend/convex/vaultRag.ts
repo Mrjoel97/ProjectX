@@ -44,7 +44,13 @@ const openaiEmbeddingV2 = {
     if (!apiKey) throw new Error("vault: OPENAI_API_KEY unset for embeddings");
     const res = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...headers },
+      // `...headers` FIRST: these two are TRANSPORT-level and must win over anything the caller
+      // injects. With the spread last, a caller-supplied `Authorization` key — including
+      // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
+      // that reads as though it set the auth header. `headers` is the optional bag from the
+      // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
+      // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
+      headers: { ...headers, "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: values, dimensions: EMBEDDING_DIM }),
       signal: abortSignal,
     });
