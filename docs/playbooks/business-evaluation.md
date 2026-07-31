@@ -1,6 +1,12 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-30 — 17.1-07 (BLPR-02): the confirmed Business Blueprint now enters the
+> Last verified: 2026-07-31 — 22-01 (GOVN-01), TEST-ONLY, no engine behaviour changed: the
+> lineage assertion in `evaluations.test.ts` dropped its `stableTenant(TENANT)` wrapping. That
+> call was a literal no-op (`TENANT = "tenant_a"` carries no `|sessionId` suffix, so the parser
+> returned it unchanged) and the helper was deleted from production source when identity moved
+> to the auth package's `getAuthUserId`. The assertion now compares against `TENANT` directly and
+> is byte-equivalent in meaning. Nothing in `evaluations.ts` was read or modified — see
+> `authorization.md`. PREVIOUS: 2026-07-30 — 17.1-07 (BLPR-02): the confirmed Business Blueprint now enters the
 > evaluation chunk set explicitly, after authoritative profile seeds and before ordinary retrieval.
 > A contradictory derived figure cannot beat the user's typed value or take its provenance. See
 > **"Blueprint standing context and the provenance ceiling"** below.

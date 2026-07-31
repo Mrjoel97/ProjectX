@@ -10,6 +10,29 @@ export default defineSchema({
   // Convex Auth identity tables (users, authSessions, authAccounts, ...).
   ...authTables,
 
+  // GOVN-01: `users` overrides the spread above to add ONE optional bit. Convex has no
+  // table-extend API — inlining the definition is the sanctioned way to widen an auth table
+  // (labs.convex.dev/auth/setup/schema), so every field and BOTH index names below are a
+  // verbatim mirror of `authTables.users` in the pinned @convex-dev/auth@0.0.94. CLAUDE.md §6
+  // pins that version exact; re-diff this mirror against the package if it is ever bumped.
+  //
+  // `owner` is OPTIONAL and absence means false — that is what makes this a widening with no
+  // migration and no backfill. Owner authority is this boolean and nothing else: never an
+  // email, never registration order, never SKILLOPT_OWNER_TENANT. Granted only by the
+  // idempotent `owner.bootstrapOwner` internal mutation against an exact users._id.
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    owner: v.optional(v.boolean()),
+  })
+    .index("email", ["email"])
+    .index("phone", ["phone"]),
+
   // Insert-only audit log. `payload` holds refs/hashes ONLY — never raw content
   // (redaction-safe). The audit module exposes no patch/replace/delete (see CLAUDE.md).
   audit: defineTable({

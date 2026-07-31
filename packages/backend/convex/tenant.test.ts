@@ -7,28 +7,43 @@ import schema from "./schema";
 // explicitly keeps discovery reliable inside the pnpm workspace.
 const modules = import.meta.glob("./**/*.*s");
 
-describe("tenant isolation (SC-2)", () => {
-  test("cross-tenant reads are isolated: A's write is invisible to B", async () => {
+// Convex Auth signs a subject of `<users._id>|<authSessions._id>`, so a returning user
+// arrives with a DIFFERENT subject every login. These tests insert real `users` rows and
+// build subjects from their ids, rather than asserting on a string parser, because the
+// property that matters is the one the wrapper actually gives a handler: scope that is
+// stable per USER and isolated per user. Regression guard for the per-session-scoping bug
+// (spec 2026-07-21-tenant-scope-per-session-fix-design).
+describe("tenant scope: stable per user, isolated across users (SC-2)", () => {
+  test("two sessions of ONE user share one tenant scope", async () => {
     const t = convexTest(schema, modules);
-    const asA = t.withIdentity({ subject: "user_a" });
-    const asB = t.withIdentity({ subject: "user_b" });
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
 
-    await asA.mutation(api.demo.addItem, { label: "a-secret" });
+    // Same user row, two different login sessions.
+    const sessionA = t.withIdentity({ subject: `${userId}|session_a` });
+    const sessionB = t.withIdentity({ subject: `${userId}|session_b` });
 
-    const bItems = await asB.query(api.demo.listItems, {});
-    expect(bItems).toEqual([]);
+    await sessionA.mutation(api.demo.addItem, { label: "written-in-session-a" });
+
+    // The whole point: a NEW session must not mint a new tenant.
+    const readBack = await sessionB.query(api.demo.listItems, {});
+    expect(readBack).toHaveLength(1);
+    expect(readBack[0].label).toBe("written-in-session-a");
+    expect(readBack[0].tenantId).toBe(String(userId));
   });
 
-  test("a tenant reads exactly its own items", async () => {
+  test("a second user cannot read the first user's data", async () => {
     const t = convexTest(schema, modules);
-    const asA = t.withIdentity({ subject: "user_a" });
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
 
-    await asA.mutation(api.demo.addItem, { label: "a-item" });
+    await t
+      .withIdentity({ subject: `${userA}|session_a` })
+      .mutation(api.demo.addItem, { label: "a-secret" });
 
-    const aItems = await asA.query(api.demo.listItems, {});
-    expect(aItems).toHaveLength(1);
-    expect(aItems[0].label).toBe("a-item");
-    expect(aItems[0].tenantId).toBe("user_a");
+    const bItems = await t
+      .withIdentity({ subject: `${userB}|session_a` })
+      .query(api.demo.listItems, {});
+    expect(bItems).toEqual([]);
   });
 
   test("an unauthenticated mutation throws UNAUTHENTICATED", async () => {

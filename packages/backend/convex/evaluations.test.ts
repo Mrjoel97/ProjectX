@@ -27,7 +27,6 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { stableTenant } from "./lib/functions";
 import schema from "./schema";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
@@ -927,6 +926,8 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
       "subagent.dispatched",
       "subagent.completed",
     ]);
-    for (const r of lineage) expect(r.tenantId).toBe(stableTenant(TENANT));
+    // TENANT carries no `|sessionId` suffix, so the injected tenantId is the constant
+    // itself — the old stableTenant() wrapping here was a no-op.
+    for (const r of lineage) expect(r.tenantId).toBe(TENANT);
   });
 });

@@ -30,7 +30,6 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
 import { buildCockpitTools, runSpecialistTurn } from "./llm";
-import { stableTenant } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
@@ -656,8 +655,10 @@ describe("two-tenant isolation (SC #5)", () => {
     // assertion in the next test would prove isolation of the PLAN, not of the LINEAGE rows
     // SC #5 actually names ("a sub-agent run keyed on rootRequestId is still tenant-scoped").
     const lineage = await orderedLineage(t);
-    const a = lineage.filter((r) => r.tenantId === stableTenant(TENANT));
-    const b = lineage.filter((r) => r.tenantId === stableTenant(TENANT_B));
+    // TENANT/TENANT_B carry no `|sessionId` suffix, so the tenantId the wrapper injects is
+    // the constant itself — the old stableTenant() wrapping here was a no-op.
+    const a = lineage.filter((r) => r.tenantId === TENANT);
+    const b = lineage.filter((r) => r.tenantId === TENANT_B);
 
     // NON-EMPTY on both sides first — a partition of size zero passes a naive "no leakage" check
     // vacuously, and every assertion below would then be true of nothing.

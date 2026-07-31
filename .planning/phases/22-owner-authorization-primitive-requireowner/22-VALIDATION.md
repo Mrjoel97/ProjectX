@@ -1,8 +1,8 @@
 ---
 phase: 22
 slug: owner-authorization-primitive-requireowner
-status: draft
-nyquist_compliant: false
+status: ready
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-29
 ---
@@ -48,7 +48,7 @@ created: 2026-07-29
 | 22-02-01 | 02 | 2 | GOVN-01 optimizer guard | Convex integration + mutation | `pnpm --filter @pikar/backend exec vitest run convex/optimizerConfig.test.ts convex/owner.test.ts --maxWorkers=1` | ✅ existing + ❌ W0 | ⬜ pending |
 | 22-02-02 | 02 | 2 | GOVN-01 activation/body disclosure | Convex integration + mutation | `pnpm --filter @pikar/backend exec vitest run convex/skills.test.ts convex/owner.test.ts --maxWorkers=1` | ✅ existing + ❌ W0 | ⬜ pending |
 | 22-02-03 | 02 | 2 | GOVN-01 guard coverage/eval preservation | static + regression | `pnpm --filter @pikar/backend exec vitest run convex/importGuard.test.ts convex/skills.test.ts --maxWorkers=1` | ✅ existing | ⬜ pending |
-| 22-03-01 | 03 | 3 | GOVN-01 owner-only presentation | web typecheck/build + DOM/source guard | `pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build` | ❌ W0 owner/non-owner UI proof | ⬜ pending |
+| 22-03-01 | 03 | 3 | GOVN-01 owner-only presentation | web typecheck/build + structural mount review | `pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build` | ✅ existing compile/build + live proof below | ⬜ pending |
 | 22-03-02 | 03 | 3 | GOVN-01 integrated admission gate | full suite + live UAT | full suite command, then owner/non-owner `/ops` checklist | live only | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -59,8 +59,10 @@ created: 2026-07-29
 
 - [ ] `packages/backend/convex/owner.test.ts` — stable user identity across session subjects,
   absent-owner refusal, idempotent bootstrap, exact audit payload keys, and wrapper behavior.
-- [ ] Owner/non-owner `/ops` proof — add the smallest deterministic component/source test supported
-  by the existing web harness; retain the live DOM check for final verification.
+- [ ] Owner/non-owner `/ops` proof — the existing harness has one authenticated account and no
+  component-test runner. Do not add a framework or fake security with a source-only assertion:
+  Task 22-03-03 uses controlled owner/non-owner live identities, while backend integration tests
+  prove the actual server boundary.
 - [ ] Every negative test carries an anti-vacuity assertion that the owner path actually reads or
   mutates the expected row.
 
@@ -93,12 +95,13 @@ requirements.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all missing references
+- [x] All auto tasks have `<automated>` verify; operator/live tasks have blocking checkpoints
+- [x] Sampling continuity: no 3 consecutive implementation tasks without automated verify
+- [x] Wave 0 covers the missing backend fixture; the UI proof is explicitly manual because the
+  existing harness has no two-account or component-test facility
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 180 s
 - [ ] Live owner/non-owner deployment gate recorded at its actual evidence level
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending

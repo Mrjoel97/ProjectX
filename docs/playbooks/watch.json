@@ -1,5 +1,14 @@
 {
   "_unassigned": [],
+  "authorization.md": [
+    "packages/backend/convex/lib/functions.ts",
+    "packages/backend/convex/lib/allowlist.ts",
+    "packages/backend/convex/owner.ts",
+    "packages/backend/convex/owner.test.ts",
+    "packages/backend/convex/tenant.test.ts",
+    "packages/backend/convex/importGuard.test.ts",
+    "apps/web/app/(app)/ops/"
+  ],
   "growth-diagnostic.md": [
     "packages/core/src/growth/",
     "packages/core/src/specialists.ts",

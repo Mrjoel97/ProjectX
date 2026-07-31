@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { RAW_BUILDER_ALLOWLIST } from "./lib/allowlist";
-import { stableTenant } from "./lib/functions";
 
 // Static scan: read every convex source at build time. edge-runtime has no node:fs,
 // so we inline file contents via Vite's import.meta.glob raw loader instead.
@@ -41,18 +40,40 @@ describe("import guard: raw builders are scoped-unavoidable (SC-2)", () => {
   }
 });
 
-// tenantId must be stable per USER across login sessions. Convex Auth's
-// identity.subject is `<userId>|<sessionId>`; stableTenant takes the userId
-// segment. Regression guard for the per-session-scoping bug (see spec
+// The wrapper module must derive identity from the auth package's OFFICIAL adapter, not
+// from a subject parser we maintain ourselves. This is a SOURCE guard rather than a
+// behavioural one because the behaviours (stable-per-user scope, cross-user isolation) are
+// already proven in tenant.test.ts against real `users` rows — what a behavioural test
+// CANNOT catch is someone reintroducing a hand-rolled parser that happens to agree today
+// and drifts after an auth-package bump. Complements, not replaces, the raw-builder scan
+// above. Regression guard for the per-session-scoping bug (spec
 // 2026-07-21-tenant-scope-per-session-fix-design).
-describe("stableTenant: per-user scope, not per-session", () => {
-  test("strips the |sessionId suffix", () => {
-    expect(stableTenant("user123|sess456")).toBe("user123");
+describe("wrapper identity: the official auth adapter, not a hand-rolled parser", () => {
+  const wrapperSource = sources["./lib/functions.ts"];
+  // Strip comments before the negative assertions. Without this the guard punishes its own
+  // documentation: a doc comment WARNING against a banned identity source reads exactly like
+  // using one, so the file could not explain why the rule exists without failing it.
+  const wrapperCode = (wrapperSource ?? "").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+
+  // Anti-vacuity: every assertion below is `expect(string).toContain/not.toContain`, which
+  // would pass trivially against an empty string if the glob key ever changes.
+  test("the wrapper source was actually found by the static scan", () => {
+    expect(wrapperSource).toBeTypeOf("string");
+    expect(wrapperCode).toContain("customQuery");
   });
-  test("subject with no pipe is returned unchanged", () => {
-    expect(stableTenant("user123")).toBe("user123");
+
+  test("identity comes from getAuthUserId", () => {
+    expect(wrapperCode).toContain("getAuthUserId");
+    expect(wrapperCode).toContain('from "@convex-dev/auth/server"');
   });
-  test("only the first segment is the userId", () => {
-    expect(stableTenant("user123|s1|s2")).toBe("user123");
+
+  test("no hand-written stableTenant parser survives in production source", () => {
+    expect(wrapperCode).not.toContain("stableTenant");
+  });
+
+  test("authorization never keys on the session-bearing subject or tokenIdentifier", () => {
+    // Both carry the `|<sessionId>` suffix, so either would re-scope a user on every login.
+    expect(wrapperCode).not.toContain("tokenIdentifier");
+    expect(wrapperCode).not.toContain("identity.subject");
   });
 });
