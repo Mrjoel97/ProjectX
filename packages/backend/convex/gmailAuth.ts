@@ -10,10 +10,14 @@
 import { GOOGLE_SCOPES } from "@pikar/core";
 import { isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "@pikar/core/tokenExpiry";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { tenantQuery } from "./lib/functions";
+import { tenantAction, tenantQuery } from "./lib/functions";
 
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
+// Revocation takes the token ALONE — no client_id/client_secret, unlike the refresh grant
+// (gmail.ts:41-50) and the code exchange (http.ts:39-49).
+const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 
 // ── Opaque, tamper-evident `state` (binds the tenant into the OAuth round-trip) ──
 // Never trust a raw tenant param on the callback: an attacker could forge a state for
@@ -92,6 +96,23 @@ export const store = internalMutation({
   },
 });
 
+/**
+ * Drop the tenant's grant row. The only delete surface for `gmailTokens` outside `store`'s
+ * reconnect replace above. Internal-only — like every other reader here, the token never
+ * leaves this module.
+ */
+export const deleteTokens = internalMutation({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => {
+    const row = await ctx.db
+      .query("gmailTokens")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+    return { deleted: !!row };
+  },
+});
+
 /** Read the full token row for delivery (send action, system context). Internal-only. */
 export const getTokens = internalQuery({
   args: { tenantId: v.string() },
@@ -164,9 +185,13 @@ export const getForDelivery = internalQuery({
  * "last_notified" guard if tenant count or noise ever justifies it.
  *
  * ponytail: inserts the notification row directly rather than routing through
- * `notifications.notify` — importing `internal` here creates a gmailAuth⇄internal type
- * cycle that collapses llm.ts's inference (Convex circular-type limitation, guidelines
- * §96). Route through notify once OPSG-05 adds channel dispatch and the cycle is broken.
+ * `notifications.notify`. The original reason was that importing `internal` here would trip
+ * the gmailAuth⇄internal circular-type limit (guidelines §96); `disconnectGoogle` now imports
+ * it and typecheck stays clean, so the live reason is narrower and worse: `notify`
+ * unconditionally schedules `internal.notifyExternal.dispatch`, which sends mail through
+ * `freshAccessToken` — the very grant this cron reports as expiring. Routing an
+ * expiry warning through the dying mailbox is the loop `audit-dead-letter.md` sanctions this
+ * direct insert to avoid. Route through notify only once notify can pick a non-mail channel.
  */
 export const flagExpiringTokens = internalMutation({
   args: {},
@@ -204,4 +229,64 @@ export const gmailStatus = tenantQuery({
 export const gmailConnectUrl = tenantQuery({
   args: {},
   handler: async (ctx): Promise<string> => buildAuthorizeUrl(ctx.tenantId),
+});
+
+/**
+ * Disconnect: revoke the grant AT GOOGLE, then delete the local row — in that order.
+ * This is what makes `apps/web/app/privacy/page.tsx:312` ("You can disconnect your Google
+ * account at any time from within the application") a true statement.
+ *
+ * Order matters both ways. Delete-only leaves the grant alive on the user's Google account,
+ * which is the promise this exists to keep. Revoke-only leaves the crown-jewel refresh token
+ * at rest in a DB where nothing honours it — so the delete runs even when Google refuses.
+ *
+ * We POST the REFRESH token, never the access token: Google kills the whole grant and every
+ * access token derived from it, whereas revoking an access token would expire one short-lived
+ * credential and leave the user's "Third-party access" entry standing.
+ *
+ * ONE Google grant covers mail AND calendar (see `buildAuthorizeUrl` above), so this ends
+ * inbox reads, sends, free/busy and event creation together. The confirm copy says so.
+ *
+ * `tenantAction`, not an arg-supplied tenantId: the scope comes from the caller's identity, so
+ * this can only ever revoke the caller's own grant. Explicit return type keeps the action out
+ * of the internal-graph inference cycle (guidelines §96, the `gmail.send` precedent).
+ *
+ * ponytail: rows a disconnect strands are left alone — requests held at `awaiting_reauth`,
+ * unread `gmail_reconnect` notifications, and armed future-`sendAt` schedulers. All three
+ * degrade to a non-throwing hold (`gmail.send` routes a missing token to `awaiting_reauth`
+ * without throwing), no new ones are created once the row is gone, and there is no
+ * reconnect-resume path today for any of them. Cleaning them up means building that resume
+ * sweep — which is where it belongs, not here.
+ */
+export const disconnectGoogle = tenantAction({
+  args: {},
+  handler: async (ctx): Promise<{ revoked: boolean }> => {
+    const row = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
+
+    // 200 = revoked; 400 = Google already considers it invalid. Both leave the grant in the
+    // same end state, so both count as gone — the `eventIdFor` discipline in calendar.ts,
+    // where a 409 duplicate IS success. A network throw or 5xx leaves `revoked` false.
+    let status = 0;
+    if (row) {
+      const res = await fetch(GOOGLE_REVOKE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: row.refreshToken }),
+      });
+      status = res.status;
+    }
+    const revoked = status === 200 || status === 400;
+
+    await ctx.runMutation(internal.gmailAuth.deleteTokens, { tenantId: ctx.tenantId });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: `google-disconnect:${ctx.tenantId}`,
+      eventType: "google.disconnected",
+      actor: "user",
+      // Flags and a status code ONLY. This function holds the refresh token in scope one line
+      // above; putting any of it here would make the audit log the honeypot §4 forbids.
+      payload: { revoked, status },
+    });
+    return { revoked };
+  },
 });

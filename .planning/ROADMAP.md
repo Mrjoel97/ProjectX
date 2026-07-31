@@ -59,18 +59,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [x] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated) (completed 2026-07-30)
 - [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
-- [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments
-- [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated)
+- [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments - a second output format (self-contained HTML) through the SAME governed render path; no sites table, no ActionType, no public route
+- [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated) + leads/consent/unsubscribe, with the suppression check in the SEND path and the CAN-SPAM postal address on the tenant profile
 
 **S3 - Creation & Self-Extension**
 - [ ] **Phase 20: Media Canvas** - Images + video (<=3 min) via the connected Pikar-Ai MCP as async governed jobs with a separate cost cap
-- [ ] **Phase 21: User-Authored Skills** - User authors business-adapted skills through the eval-gated registry (candidate-only)
+- [ ] **Phase 21: User-Authored Skills & Routines** - User authors business-adapted skills through the eval-gated registry (candidate-only); a routine is a skill body + a trigger row, and the pre-beta deliverable is a re-runnable pinned prompt (no routines table, no cron, no canvas)
 - [ ] **Phase 22: Owner Authorization Primitive** - `requireOwner` gates the three Phase-8 functions + admin controls (pulled EARLY - needed before Phase 23 and before multi-user)
+- [ ] **Phase 22.1: Beta Admission Readiness** (INSERTED) - Gmail disconnect + Google token revocation (the privacy policy currently promises a control that does not exist), per-tenant keying of the deployment-wide `dailySpendCents` window, and a green deployment/typecheck/CI gate
 - [ ] **Phase 23: Agent-Authored Skills** - Agent authors candidate-only skills; activation needs the eval gate PLUS owner approval
 
 **S4 - Governance & Open the Beta**
 - [ ] **Phase 24: ISO 9001 Conformance Map** - Map existing audit/skill-versioning/playbook change-control to ISO 9001:2015 clauses; fill only genuine gaps
-- [ ] **Phase 25: Private Beta Productionization** - Invite/waitlist, cross-tenant isolation test, fast onboarding, Outlook (DLVR-02), Vercel deploy - the beta opens LAST (absorbs former Phase 9, consumes `09-CONTEXT.md`)
+- [ ] **Phase 25: Private Beta Productionization** - Invite/waitlist, cross-tenant isolation test, fast onboarding, Outlook (DLVR-02) + the provider adapter Outlook forces into existence, the custom-domain decision, Vercel deploy - the beta opens LAST (absorbs former Phase 9, consumes `09-CONTEXT.md`)
 
 ## Phase Details
 
@@ -699,23 +700,30 @@ Plans:
 - [ ] 17.1-10-PLAN.md — Playbooks + the NON-NEGOTIABLE live gate L1-L7 (Wave 8, has a blocking checkpoint)
 
 ### Phase 18: Document & Content Creation
-**Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs.
+**Goal**: The agent can create standalone documents and content artifacts (beyond email attachments) as governed, vault-stored outputs. Scope decision 2026-07-31: this adds an OUTPUT FORMAT to the shipped render path, NOT a subsystem — no `sites` table, no new `ACTION_TYPES` member, no arm re-bind, no public/unauthenticated route. `packages/core/src/actionType.ts:29-31` already pre-commits Phase 18 to the existing `externalAction` arm and that pre-commitment stands. Publishing a page to a real URL is post-beta, gated on this phase's downloadable artifact proving demand and on Phase 25 settling the custom domain.
 **Depends on**: Phase 15 (dispatch + executor); reuses the shipped attachment/render pattern (`renderAndStore` + `plans.recordAttachments`)
 **Requirements**: ACTN-04
 **Success Criteria** (what must be TRUE):
   1. The agent produces a standalone document/content artifact stored under the tenant as a vault asset (ref, never raw bytes to the model), distinct from an outbound email attachment.
   2. Any external delivery of a created artifact crosses the plan -> Approve gate; creation alone has no external side effect.
   3. Artifact refs only in audit/telemetry; artifacts are tenant-scoped with an isolation assertion.
+  4. `renderAndStore`'s hardcoded `application/pdf` (`llm.ts:948`, `:952`) and `buildDocFilename`'s hardcoded `.pdf` (`documentGen.ts:173`, `:177`) are parameterized by format, so a SECOND format (a self-contained HTML page) is emitted through the SAME governed path — PII scan -> registry drafter -> cap -> `ctx.storage.store` -> ref-only return — with zero new tables and zero new routes. The vault's markup rail already sniffs `text/html` (`sniff.ts:124`), so the artifact is groundable without new extraction work.
+  5. The agent authors a STRUCTURED SPEC and CODE renders the markup: a model-authored string never becomes markup. Enforced by a test, not by prompt instruction.
+  6. A created artifact is SEEN: it renders in the Output card specified at `docs/design/BRAND.md:101-102` (specified today, unimplemented), not only as a silent vault row.
 **Plans**: TBD
 
 ### Phase 19: Contacts, CRM & Follow-ups
-**Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM.
+**Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
 **Depends on**: Phase 15 (dispatch + executor)
 **Requirements**: ACTN-05
 **Success Criteria** (what must be TRUE):
   1. The agent reads contact/CRM state in-loop to resolve people and surface follow-up context; a CRM write (add contact, log a follow-up) stages into the plan and executes only via the human Approve gate.
   2. Contact/CRM data is tenant-scoped and unreachable across tenants (isolation assertion ships with the surface).
   3. CRM reads/writes log refs/ids/counts only to audit.
+  4. A contact row carries an `origin` discriminator (mailbox-resolved / user-entered / inbound), `consentAt` + `consentSource`, and `unsubscribedAt`. The consent record is reproducible on request — the exact wording shown, the timestamp, and the capture context — and it lives in the content plane, because `audit` is refs-only (CLAUDE.md §4) and structurally cannot hold it.
+  5. **The suppression check lives in the SEND path, not in the contacts module.** `executePlan`/`startFanout` refuses every suppressed target address, checked address-by-address against `plans.recipients` (`schema.ts:189`) — a raw address array resolved from Gmail headers that never touches the contacts table. A contacts-row-only check is defeated by a user typing an unsubscribed person's name in chat, so the guard goes in the one place all sends converge, with a test that proves it there.
+  6. `tenantProfiles` gains a physical postal address field (CAN-SPAM requires one in the body of every commercial email) and the drafter cannot omit the footer that renders it.
+  7. The phase states IN WRITING — in the playbook, not only in a plan summary — why a contacts table does not violate the "no contacts cache at rest" invariant at `schema.ts:210-211`.
 **Plans**: TBD
 
 ### Phase 20: Media Canvas
@@ -729,8 +737,8 @@ Plans:
   4. Generated assets are stored under the tenant as refs; audit logs asset id/hash + a moderation-verdict ref only (never the asset or its URL); an isolation assertion ships for media jobs/assets.
 **Plans**: TBD
 
-### Phase 21: User-Authored Skills
-**Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim.
+### Phase 21: User-Authored Skills & Routines
+**Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim. A ROUTINE is that same thing plus a trigger row: it reuses `insertCandidate` (`skills.ts:386`), `activateSkillVersion` (`skills.ts:110`) and `GATED_SKILLS` (`skill.ts:170-194`) and introduces no authoring language. **Pre-beta deliverable: a re-runnable pinned prompt** — a saved chat message re-fired at `api.cockpit.sendCockpitMessage`. NOT a `routines` table, NOT a cron, NOT an authoring canvas, NOT a graph DSL; those are post-beta and evidence-gated on someone actually re-firing a pinned prompt twice.
 **Depends on**: Phases 16-19 (real specialist capability worth authoring skills for), Phase 3.6 (eval gate). User-authored first, agent-authored (Phase 23) last.
 **Requirements**: SKILL-01
 **Success Criteria** (what must be TRUE):
@@ -747,7 +755,7 @@ Plans:
   1. `requireOwner(ctx)` derives owner identity from a durable data source (a `users.owner` boolean seeded via `convex run`, NOT the `SKILLOPT_OWNER_TENANT` env hack) and lives as a sibling primitive to the tenant wrappers.
   2. `optimizerConfig.setOptimizerEnabled`, `skills.activateCandidate`, and `skills.candidatesForReview` each reject a non-owner caller server-side - a non-owner cannot flip the optimizer, activate a skill, or read candidate bodies.
   3. Any new admin-ish control added from here on carries `requireOwner` from birth; the server-side guard is the trust boundary (hiding the UI is only presentation).
-**Plans**: 3/3 code-complete (2026-07-31), phase NOT complete — two blocking owner checkpoints outstanding
+**Plans**: 3/3 complete. Live UAT 2026-08-01: owner bootstrap PASSED; the server-side trust boundary PASSED in both directions; the /ops DOM half is NOT obtained (environmental — see 22-UAT-EVIDENCE.md)
 - [x] 22-01-PLAN.md — identity + owner substrate: `getAuthUserId`, `users.owner`, `requireOwner`/`ownerQuery`/`ownerMutation`, `owner.viewer`, audited idempotent `bootstrapOwner`, new `authorization.md` (Tasks 1-2 done; **Task 3 = BLOCKING live owner bootstrap, NOT run**)
 - [x] 22-02-PLAN.md — the four global Phase-8 controls moved onto owner wrappers; closes the standing Phase-8 owner-auth blocker in `skill-registry.md`. Full backend 860/860
 - [x] 22-03-PLAN.md — `/ops` mounts its whole Optimizer section only for a confirmed owner; web typecheck + build green (Tasks 1-2 done; **Task 3 = BLOCKING two-identity live UAT, NOT run**)
@@ -760,13 +768,19 @@ Plans:
 
 ### Phase 22.1: Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Close the beta-admission blockers that are not features — the things a SECOND user's existence makes unsafe or untrue. The published privacy policy becomes true (a working Gmail disconnect that actually revokes the Google token), the daily spend cap stops being deployment-wide (per-tenant keying), and the deployment / typecheck / CI path this phase's title names runs green as a gate.
+**Requirements**: None new. This is defect closure against the shipped GRDL-03 budget guard and against a published legal claim; no existing v2.0 requirement id covers it and none is invented here (mint one via `/gsd:add-phase` if the milestone map must stay 1:1).
 **Depends on:** Phase 22
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. A connected user can DISCONNECT Gmail from inside the app: the control lands on the existing `apps/web/app/(app)/connect-gmail/page.tsx`, the `gmailTokens` row is deleted, AND the token is revoked at Google (`https://oauth2.googleapis.com/revoke`), with a refs-only audit row. This makes `apps/web/app/privacy/page.tsx:312` — "You can disconnect your Google account at any time from within the application" — true; today it is a published legal claim with zero implementation (no revoke call and no token-delete mutation exist in the repo). No new route, no new NAV entry, no connections page; the hardcoded hexes on that page become `globals.css` tokens in the same pass (CLAUDE.md §10).
+  2. `dailySpendCents` is keyed PER TENANT. It is currently a KEYLESS rate-limiter window capping the whole DEPLOYMENT (`guardrails.ts:182-185`), and `dispatch.ts:41-45`'s `ENVELOPE_FRACTION` takes its 25% from that same shared pool — so the moment a second user exists, one tenant's loop drains everyone else's day and every other tenant sees governed refusals it cannot explain. A test proves one tenant exhausting its budget does not refuse another tenant's request.
+  3. Typecheck, lint and the deployment/CI path named in this phase's title run green as an enforced gate, not as a remembered manual step.
+**Plans:** 1 of 3 complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 22.1 to break down)
+- [x] 22.1-01-PLAN.md — Disconnect Google: revoke at Google, then delete locally (SC1) — completed 2026-08-01 (`gmailAuth.disconnectGoogle` POSTs the REFRESH token to `oauth2.googleapis.com/revoke`, so the whole grant dies; 200 and 400 both mean gone and the local delete runs unconditionally; one refs-only `google.disconnected` audit row. Deliberately NOT in `gmail.ts` — `llmRedaction.test.ts` pins that module's POST set to two. Backend 863/863, typecheck at the exact 150 baseline with ZERO TS2589, refresh-token assertion mutation-verified. **OWNER LIVE-VERIFIED 2026-08-01: the grant is gone from `myaccount.google.com/permissions`.** `apps/web/app/privacy/page.tsx:312` is now a true statement)
+- [ ] 22.1-02-PLAN.md — Per-tenant keying of `dailySpendCents` (SC2), a hard prerequisite for Phase 25 multi-user
+- [ ] 22.1-03-PLAN.md — The deployment / typecheck / CI gate (SC3)
 
 ### Phase 23: Agent-Authored Skills
 **Goal**: The agent can author skills as candidates only - structurally unable to self-activate - with activation requiring BOTH a passing eval and owner approval; the governance-heaviest self-modification capability, placed last among the capability phases.
@@ -796,13 +810,14 @@ Plans:
   2. Invite redemption binds the OAuth SUBJECT (not the typed email), verifies the invited email matches, records the subject immutably, and rejects cross-subject re-redemption - tested against both Google and Microsoft subject formats.
   3. A two-user cross-tenant isolation test (BETA-05) covers every table and index added across S1-S3 and asserts a non-owner cannot reach the three owner-gated functions; grounded-prose export stays owner-gated until the `packages/pii` names-in-prose scrub ceiling is closed.
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
-  5. An approved plan can deliver via Microsoft Graph (Outlook) through the same provider-agnostic adapter that serves Gmail (connect-both, choose-per-send); deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
+  5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. The widening — a `provider` column, a `by_tenant_provider` index, and a provider lookup — is written in the SAME commit as the Microsoft Graph adapter and NOT before; an abstraction with one implementation is what CLAUDE.md §8 forbids. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
+  6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Either the domain, its DNS and its TLS are decided and recorded, or it is recorded in writing that no user-shareable URL ships until they exist.
 **Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> [9 SUPERSEDED -> Phase 25] -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23 -> 24 -> 25
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> [9 SUPERSEDED -> Phase 25] -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 22.1 -> 23 -> 24 -> 25
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -839,8 +854,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 18. Document & Content Creation | 0/TBD | Not started | - |
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
 | 20. Media Canvas | 0/TBD | Not started | - |
-| 21. User-Authored Skills | 0/TBD | Not started | - |
-| 22. Owner Authorization Primitive | 3/3 code-complete | In progress — 2 blocking owner checkpoints | - |
+| 21. User-Authored Skills & Routines | 0/TBD | Not started | - |
+| 22. Owner Authorization Primitive | 3/3 | UAT: server boundary PROVEN live; DOM half outstanding | - |
+| 22.1 Beta Admission Readiness (INSERTED) | 1/3 | In Progress (22.1-01 disconnect complete, owner live-verified 2026-08-01; per-tenant budget keying + CI gate open) | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/TBD | Not started | - |

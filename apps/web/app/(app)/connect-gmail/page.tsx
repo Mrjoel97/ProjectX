@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 
 // DLVR-03 / Google consent (02-05, widened in 17-02). One explicit consent grants mail and
@@ -20,10 +20,36 @@ export default function ConnectGmailPage() {
     setGmailError(new URLSearchParams(window.location.search).get("gmailError"));
   }, []);
 
+  // Disconnect revokes the grant at Google and drops the stored token. `gmailStatus` is a live
+  // subscription on that row, so the panel flips on its own — no refetch, no optimistic state.
+  const disconnect = useAction(api.gmailAuth.disconnectGoogle);
+  const [busy, setBusy] = useState(false);
+  const onDisconnect = async () => {
+    // ponytail: window.confirm — this app has no dialog pattern (BRAND §5 defines none) and no
+    // confirm() call anywhere yet. Native is keyboard-accessible and costs no component. Build a
+    // real dialog when a second destructive control needs one.
+    // The copy names calendar deliberately: it is ONE Google grant covering mail and calendar,
+    // so a user who reads "disconnect Gmail" would not expect their events to stop working.
+    const ok = window.confirm(
+      "Disconnect Google? Pikar will lose access to your mail AND your calendar. " +
+        "Any scheduled send will be held until you reconnect.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await disconnect();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section style={{ display: "grid", gap: "1rem", maxWidth: "40rem" }}>
       <h1>Connect Google</h1>
 
+      {/* Red stays hardcoded: BRAND defines no error token (globals.css reserves amber for the
+          approval gate alone), and globals.css hardcodes #dc2626 for the DLQ badge on the same
+          reasoning. Minting a --danger token is scope this change did not ask for. */}
       {gmailError && (
         <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: "0.5rem", padding: "1rem", color: "#991b1b" }}>
           {gmailError}
@@ -33,19 +59,37 @@ export default function ConnectGmailPage() {
       {status === undefined ? (
         <p>Loading…</p>
       ) : status.connected ? (
-        <div style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", borderRadius: "0.5rem", padding: "1rem" }}>
-          <div style={{ fontWeight: 700, color: "#166534" }}>Google connected</div>
+        <div style={{ border: "1px solid var(--released)", background: "var(--card)", borderRadius: "0.5rem", padding: "1rem" }}>
+          <div style={{ fontWeight: 700, color: "var(--released)" }}>Google connected</div>
           {status.expiresAt && (
-            <div style={{ fontSize: "0.85rem", color: "#666" }}>
+            <div style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
               Access token expires {new Date(status.expiresAt).toLocaleString()}
             </div>
           )}
-          <p style={{ fontSize: "0.9rem", color: "#444" }}>
+          <p style={{ fontSize: "0.9rem", color: "var(--ink-soft)" }}>
             Reconnect any time to refresh the connection.
           </p>
+          <button
+            type="button"
+            onClick={() => void onDisconnect()}
+            disabled={busy}
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.45rem 0.9rem",
+              borderRadius: "0.375rem",
+              border: "1px solid var(--rule)",
+              background: "transparent",
+              color: "var(--ink-soft)",
+              fontWeight: 600,
+              cursor: busy ? "default" : "pointer",
+              width: "fit-content",
+            }}
+          >
+            {busy ? "Disconnecting…" : "Disconnect Google"}
+          </button>
         </div>
       ) : (
-        <p style={{ color: "#444" }}>
+        <p style={{ color: "var(--ink-soft)" }}>
           Pikar needs your consent to read, draft, and send email, check calendar availability,
           and create approved calendar events. It can never permanently delete your mail.
         </p>
@@ -58,7 +102,7 @@ export default function ConnectGmailPage() {
             display: "inline-block",
             padding: "0.6rem 1.2rem",
             borderRadius: "0.375rem",
-            background: "#2563eb",
+            background: "var(--teal-600)",
             color: "#fff",
             textDecoration: "none",
             fontWeight: 600,
@@ -68,7 +112,7 @@ export default function ConnectGmailPage() {
           {status?.connected ? "Reconnect Google" : "Connect Google"}
         </a>
       ) : (
-        <p style={{ color: "#999", fontSize: "0.85rem" }}>Preparing consent link…</p>
+        <p style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>Preparing consent link…</p>
       )}
     </section>
   );

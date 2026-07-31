@@ -88,6 +88,62 @@ describe("one Google consent flow", () => {
   });
 });
 
+describe("disconnectGoogle — revoke at Google, then delete locally", () => {
+  // The bug this guards: a disconnect that deletes our row but never tells Google leaves the
+  // grant live on the user's account, and privacy/page.tsx:312 promises otherwise.
+  test("revokes the refresh token, deletes the row, and audits refs-only", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    await seedGoogleToken(t, String(userId), GMAIL_MODIFY_SCOPE);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const as = t.withIdentity({ subject: `${userId}|session_a` });
+    expect(await as.action(api.gmailAuth.disconnectGoogle, {})).toEqual({ revoked: true });
+
+    // 1. Google was actually told. Anti-vacuity: a delete-only regression makes this RED
+    //    rather than silently passing.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://oauth2.googleapis.com/revoke");
+    expect(init.method).toBe("POST");
+    // The REFRESH token, not the access token — revoking the access token would kill one
+    // short-lived credential and leave the grant standing.
+    expect(String(init.body)).toBe("token=refresh-token");
+
+    // 2. The row is gone and the client-facing status agrees.
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toEqual([]);
+    expect(await as.query(api.gmailAuth.gmailStatus, {})).toEqual({
+      connected: false,
+      expiresAt: null,
+    });
+
+    // 3. One audit row, flags only, and no token material anywhere in it (CLAUDE.md §4).
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const ev = rows.filter((r) => r.eventType === "google.disconnected");
+    expect(ev).toHaveLength(1);
+    expect(Object.keys(ev[0]?.payload as object).sort()).toEqual(["revoked", "status"]);
+    expect(ev[0]?.actor).toBe("user");
+    const serialized = JSON.stringify(ev[0]);
+    expect(serialized).not.toContain("refresh-token");
+    expect(serialized).not.toContain("old-access-token");
+  });
+
+  test("a 400 from Google (already revoked) still deletes the local row", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    await seedGoogleToken(t, String(userId), GMAIL_MODIFY_SCOPE);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 400 })));
+
+    // 400 means Google already considers the token invalid — same end state as 200.
+    expect(
+      await t.withIdentity({ subject: `${userId}|session_a` }).action(api.gmailAuth.disconnectGoogle, {}),
+    ).toEqual({ revoked: true });
+    // The assertion that matters: a non-200 must never leave the crown jewel at rest.
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toEqual([]);
+  });
+});
+
 async function seedGoogleToken(t: ReturnType<typeof harness>, tenantId: string, scope: string) {
   await t.run((ctx) =>
     ctx.db.insert("gmailTokens", {
