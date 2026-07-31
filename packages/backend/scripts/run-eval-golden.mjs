@@ -955,6 +955,14 @@ function attemptCase(fixture, tenant, pins) {
         threadId,
         planId,
         text,
+        // 16-09: MINT A TURN ID, exactly as the production driver does (`cockpit.ts` — "the driver
+        // mints the turnId"). This is not just trace plumbing. `dispatchResearch` is built only
+        // under `grantDispatch && threadId && rootRequestId`, and `rootRequestId` IS this value
+        // (llm.ts:2069) — so omitting it silently REMOVED the research tool from the record for
+        // every fixture. Cases 32-34 could not pass no matter what the skill body said, and the
+        // failure was invisible because the arg is optional and its documented effect ("undefined
+        // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
+        turnId: randomUUID(),
         ...(history.length ? { history } : {}),
         ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
       }),
