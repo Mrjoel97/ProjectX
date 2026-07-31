@@ -4,10 +4,176 @@ Three Claude Code sessions run in parallel, each in its own **git worktree** on 
 **branch**, integrating to `main`. This file is the shared contract — **every session reads it
 first** and stays inside its lane. Set up 2026-07-14 after Phase 3.3.
 
-> **CURRENT CONTRACT: Phases 16 + 17 — see the section directly below.** The Phases 14+15,
-> 3.x and 3.8 sections further down are kept as *precedent* (they are what proved the pattern);
-> they are not live lanes. The **shared-singleton discipline** and **rules of the road** at the
-> bottom apply to every contract, current and historical.
+> **CURRENT CONTRACT: Phases 18 + 19 — see the section directly below.** The Phases 16+17,
+> 15.2, 14+15, 3.x and 3.8 sections further down are kept as *precedent* (they are what proved
+> the pattern); they are not live lanes. The **shared-singleton discipline** and **rules of the
+> road** at the bottom apply to every contract, current and historical.
+>
+> ⚠ **The worktree model in the header above is HISTORICAL.** Lanes have shared ONE working tree
+> since 2026-07-27 (`STATE.md` line 22: *"they are NOT separate git worktrees"*). Every
+> `.worktrees/lane-*` reference below describes how a contract was *originally* written, not how
+> lanes run today. The **shared-tree discipline** in `STATE.md` — never `git add -A`, always
+> `git commit -m "msg" -- <paths>`, check `.git/MERGE_HEAD` first, never bump a foreign
+> playbook's `Last verified` — is what replaced worktree isolation, and it is mandatory.
+
+## Phases 18 + 19 — document artifacts, then people/CRM (set up 2026-07-31)
+
+**These two run SERIAL, not parallel — owner decision, 2026-07-31.** The contract exists anyway,
+because the surface it maps is real and the next planner needs it. A reader looking for a Wave-0
+freeze commit for 18 ∥ 19 must not go hunting: **there is none, deliberately** (§ *Why there is no
+freeze* below).
+
+| Lane | Phase | Name | Status |
+|------|-------|------|--------|
+| **Lane D** | 18 | **D · Document artifacts** (ACTN-04) | planning may start now (Stage 0); execution gated on Phase 16 closing |
+| **Lane P** | 19 | **P · People, CRM & follow-ups** (ACTN-05) | not started; follows 18 |
+| **Lane O** | 22 | **O · Owner authorization** | LIVE — `22-01` landed `d62c46c` |
+| **Lane R** | 16 | **R · Research sub-agent** | LIVE — 8/9, holds the gated candidate stream |
+
+`D`/`P`/`O` follow the R (research) / K (kalendar) / V (vault) first-letter convention. `C` is
+retired to the completed Phase-14 lane; do not recycle it.
+
+### Execution order: 16 → 18 → 19. The reason is a correctness hazard, not a preference.
+
+**`cockpit-agent` is a GATED skill with exactly ONE candidate stream, and Lane R is holding it.**
+
+- `COCKPIT_AGENT_SKILL` is in `GATED_SKILLS` (`packages/contracts/src/skill.ts:170`) — a new body
+  reaches `active` only through a recorded passing eval run.
+- `seedSkills` (`packages/backend/convex/skills.ts:334-352`) compares the file body against the
+  **NEWEST** row, not the active one, and mints `maxVersion+1` when they differ. The comment there
+  records why (Pitfall 1: repeated dev boots must not mint N+1, N+2).
+- Lane R has candidate **v16** in flight, un-activated (`68afb7b feat(16): teach cockpit-agent the
+  dispatchResearch tool` is the most recent commit to that body).
+
+Both Phase 18 and Phase 19 **must** edit `packages/contracts/skills/cockpit-agent.md` to teach
+their new tools — this is not optional. `docs/../16/deferred-items.md:114-127` documents the
+**withheld-tool pattern**: a tool constructed, offered, and never called because the active body
+never mentioned it. Hit at RPLY-01, hit again at 16-09 (~$0.46 of paid runs to diagnose). **A tool
+the body does not teach is a tool that does not exist.**
+
+So a Phase-18 body edit landing while R's candidate is open mints a candidate carrying **both
+lanes' prose**, and whichever lane runs its eval next certifies instructions it never tested —
+with the evidence row attached to its own phase. **That is a correctness failure inside the skill
+registry, not a merge conflict a rebase fixes.**
+
+> **THE HARD RULE, and it binds even if the serial decision is later reversed:**
+> **No lane edits `packages/contracts/skills/cockpit-agent.md` while another lane holds an
+> un-activated candidate for it.** Confirm with the live DB, not with a plan doc — per the
+> standing version-collision gotcha, plan-authored version pins are frequently wrong because
+> optimizer dry-run candidates occupy versions too. Verify which version carries your body
+> BEFORE any eval or activate.
+
+**`STATE.md`'s "Phase 16 paused, no `OPENAI_API_KEY`" line is STALE.** The paid gate ran on the
+main deployment 2026-07-31 (~$0.46). The live blocker is the shared candidate stream above, which
+is a *worse* constraint for 18/19 than a missing key would have been. Fix that line when 16 closes.
+
+### Why there is no Wave-0 union freeze here
+
+16 ∥ 17 needed one because both lanes added literals to the same closed unions concurrently.
+**18 → 19 run serially, so no two lanes ever edit a shared union at the same time — the freeze
+property that matters is serialization, not a commit** (the resolved 16/17 note below says exactly
+this). The ordering IS the freeze.
+
+Had they run in parallel, the freeze would have been narrow and specific — recorded here so a
+future parallel attempt does not re-derive it:
+
+| Would-be freeze item | Why it cannot be left to git |
+|---|---|
+| `convex/schema.ts` `tool: v.union(` — **:462-522**, 26 literals | One contiguous arg list, both lanes append at the tail. `schema.ts:486-492` records the failure mode *in the file*: a step insert for an unlisted tool **throws inside an AI-SDK callback that swallows it** — no trace row in prod, every offline test green. Bitten twice already, at `searchVault` and `evaluateBusiness`. |
+| `apps/web/.../workspace/cards.tsx` `VERB` — **:1139-1177** | `traceParity.test.ts:61-81` asserts **set equality both ways**; a half-landed lane reddens the other lane's build. (Its floor at :57-58 is `>= 22` against 26/26 — **not** a freeze item, do not bump.) |
+| `packages/contracts/skills/cockpit-agent.md` + mirror `src/skills/cockpitAgent.ts` | **The mirror is one string literal on ONE line (:8)** — concurrent edits are unmergeable by construction, and `skillBodies.test.ts` asserts byte-identity. Plus the gated-stream hazard above. |
+| `packages/backend/scripts/run-eval-golden.mjs` | `EXPECT_KEYS` is a **closed vocabulary that `fail()`s on an unknown key** (:130-195, :224); both lanes would bump the same fixture floor at :518. |
+
+### Locked decisions for Phase 18 (owner, 2026-07-31)
+
+These two answer the questions that size the phase. A planner treats them as settled input.
+
+1. **Phase 18 writes IN-LOOP. It takes no `ACTION_TYPES` member, no arm, and no `plans.kind`
+   widening.** ROADMAP:702-704 requires only that *external delivery* crosses the Approve gate —
+   *"creation alone has no external side effect."* A `vaultDocuments` insert has none. The shipped
+   template is `packages/backend/convex/research.ts:133-210` (`persistFindings`): generated
+   markdown → `vaultDocuments` row → `startIngest` → refs-only audit, **no plan, no gate, no
+   action type**.
+   > ⚠ **`packages/core/src/actionType.ts:30-32` says Phases 18 and 19 should reuse the
+   > `externalAction` arm. That comment is WRONG for both and predates either design.**
+   > `externalAction` is retrier-driven and `dispatchGuard.test.ts:181` pins it to *"only the
+   > Calendar retrier action and its non-Node terminal."* A vault insert and a contacts insert are
+   > both DB writes inside a `tenantMutation` → `inline` if gated at all. Whichever lane next
+   > touches that file corrects the comment.
+   >
+   > **Consequence:** `actionType.ts`, `cockpit.ts`'s `_ARM_TABLE`, `plans.kind`, `plans.ts`
+   > `patchPlan`/`resetPlan` and the `PlanCard` kind chain are **Lane P-only files**. If Phase 18
+   > is ever redesigned to stage behind Approve, all five become shared and this contract needs
+   > rewriting.
+
+2. **A created document is stored as a `text/markdown` row with `text` present; the PDF is a
+   derived download.** It is embedded, groundable and retrievable immediately. Storing
+   `application/pdf` instead would land the row at `pending_extraction` and round-trip it through
+   `vaultExtract` to recover the text it was rendered *from* — pure waste for content we authored.
+   `vaultDocuments.kind` is `v.string()` (`schema.ts:691`), so this needs **no new table and no
+   migration**.
+
+### Sequencing interlocks — check these before Lane D executes
+
+1. **`17.1-10`'s live gate is unrun, and a Phase-18 artifact would corrupt what it measures.**
+   `blueprint.ts:566-573` (`unincorporatedFor`) counts every `ready` tenant doc *except*
+   `kind === "business_blueprint"` as blueprint drift. A document Phase 18 creates lands at `ready`
+   and inflates the number the gate exists to read. **Either sequence 18 after `17.1-10`, or make
+   the filter fix part of 18** — note there is **no shared constant**, the string is inline at
+   `blueprint.ts:199` and `:571`.
+2. **Lane O's blocking human checkpoints must not overlap a sibling lane editing deployed source**
+   — `22-01-PLAN.md:231` (`bootstrapOwner`) and `22-03-PLAN.md:122-123` (two-identity live verify).
+3. **`docs/playbooks/cockpit.md` is contested three ways** — dirty from Lane R, claimed by the
+   unrun `17.1-10`, and forced for both 18 and 19. `check-playbooks.mjs:55-63` builds its
+   changed-set from `git diff --name-only <baseline>` over the **whole working tree plus all
+   untracked files**, not the session's own files, so a Lane D session inherits every foreign dirty
+   file. The `.git/claude-playbooks-ack.json` escape is **shared, not session-keyed**, and re-arms
+   whenever a foreign lane saves. Append inside your own `### Phase 18` subsection; **never bump a
+   foreign playbook's `Last verified`.**
+4. **`stableTenant` is DELETED** by Lane O's landed `22-01`. It was the tenant-isolation test idiom
+   at the previous HEAD (`dispatch.test.ts:659`, `evaluations.test.ts:930`). Copying that shape
+   from an older commit imports a symbol that no longer exists — write tests with plain string
+   subjects (`t.withIdentity({ subject: "tenant_a" })`), matching the 25 test files Lane O leaves
+   alone. `ctx.tenantId` itself is unchanged and call-site compatible; **nothing in ACTN-04/05 is
+   owner-gated, so neither lane needs a new wrapper.**
+5. **`importGuard.test.ts` needs no registration** for new convex modules — its
+   `import.meta.glob("./**/*.ts", { eager: true })` auto-scans them. `RAW_BUILDER_ALLOWLIST` is
+   opt-in, for raw-builder exemptions only.
+6. **Phase 19 owes an ADR before it writes schema.** It *reverses* the written **"no contacts cache
+   at rest"** invariant (the `plans.candidates` comment in `schema.ts`), which `plans.ts:282-287`
+   `clearCandidates` exists solely to enforce — reopening the PII-at-rest question that invariant
+   closed. Per CLAUDE.md §9 ADRs are superseded, never edited. Phase 19 also needs a new
+   `docs/playbooks/contacts.md` + its `watch.json` key: **no existing prefix covers contacts/crm**,
+   and `check-playbooks.mjs:125-134` blocks the turn that creates an uncovered module.
+
+### Relative size — why serial costs little
+
+| | Phase 18 (D) | Phase 19 (P) |
+|---|---|---|
+| New tables / indexes | 0 / 0 | 2 / ≥3 |
+| New action types + arms | 0 | 1 + 1 |
+| New tools | 1 | 2 |
+| New playbooks / ADRs | 0 / 0 | 1 / 1 (reverses an invariant) |
+| Staged `plans` fields | 0 | 4-6 |
+
+Roughly **1:4**. Phase 18's SC#2 is *already structurally true at zero cost*: `executePlan` is a
+`tenantMutation` unreachable by name from the tool loop (`dispatchGuard.test.ts:222-252`), the
+model's only write verb `patchPlan` deliberately cannot write a delivery handle
+(`plans.ts:200-203`), and `startFanout` (`cockpit.ts:462`) is the sole `workflow.start` site.
+SC#3 has shipped precedent on both halves. **Phase 18 is realistically one helper + one tool + one
+kind + one card + prose.** Parallelizing a 1:4 pair buys the wall-clock of the short lane and pays
+coordination cost on both.
+
+### ⚠ Gate on the typecheck DELTA — `pnpm typecheck` lies
+
+Restated here because it binds these lanes too, and the 16/17 section below carries the full
+measurement: Turbo's `typecheck` task declares no `inputs`, so its cache restores a **stale pass
+without running `tsc`**. Always `pnpm exec turbo run typecheck --filter=@pikar/backend --force`.
+The real baseline is **52 errors, ALL in `convex/*.test.ts`, ZERO in production convex source**.
+Require that your change adds no error and no error in a production file. An absolute-clean gate is
+unachievable and makes an executor either thrash or start ignoring reds wholesale. With Lane O
+mid-rewrite on `importGuard.test.ts`/`tenant.test.ts`, the backend suite is **not** a clean
+baseline for either new lane today — re-measure at the moment you start.
 
 ## Phases 16 + 17 — research sub-agent ∥ calendar actions (set up 2026-07-26)
 
