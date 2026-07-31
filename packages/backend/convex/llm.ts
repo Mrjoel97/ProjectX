@@ -195,10 +195,10 @@ const draftCache = new ActionCache(components.actionCache, {
 // The wrapper return unions: a governed preCall stop propagates as DATA (never a throw),
 // landing the pipeline in the SAME blocked terminal a prepare stop gets.
 type RouteResult =
-  | { blocked: "kill_switch" | "daily_budget_exhausted" }
+  | { blocked: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
   | { blocked: null; routing: RoutingDecision; usage: GenUsage; cacheHit: boolean };
 type DraftResult =
-  | { blocked: "kill_switch" | "daily_budget_exhausted" }
+  | { blocked: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
   | { blocked: null; subject: string; body: string; usage: GenUsage; cacheHit: boolean };
 
 /**
@@ -2014,12 +2014,13 @@ function invokeTool(
 // Pattern 4 — the rate-limiter window is global and unreadable from the eval runner).
 async function recordModelSpend(
   ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
   id: string,
   usage: { inputTokens?: number; outputTokens?: number },
 ): Promise<number> {
   const priced = priceUsage(id, usage);
   if (!priced.ok) return 0;
-  await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+  await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
   return priced.value;
 }
 
@@ -2234,7 +2235,7 @@ async function runAgentLoop(
         });
       },
     });
-    costUsd += await recordModelSpend(ctx, m.id, res.usage);
+    costUsd += await recordModelSpend(ctx, tenantId, m.id, res.usage);
     // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
     // ONLY — so without this the shared envelope under-counts exactly the capability this phase
     // adds. NOT res.sources.length: one search yields many sources.
@@ -2255,7 +2256,7 @@ async function runAgentLoop(
     // silently depend on the trace plane staying healthy.
     const declaredUnsupported = toolCalls.some((p) => p.toolName === "declareUnsupported");
     const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
-    if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: feeUsd });
+    if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
     costUsd += feeUsd;
     // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
     // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
@@ -2646,14 +2647,14 @@ export const runCockpitAgent = internalAction({
     },
   ): Promise<{
     reply: string;
-    blocked?: "kill_switch" | "daily_budget_exhausted";
+    blocked?: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
     // Per-turn priced USD (a count — §4-safe in a return value): 0 on the no-model paths, absent
     // on a governed stop (nothing spent). The eval runner sums this against its hard cost cap.
     costUsd?: number;
   }> => {
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, {});
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
@@ -2919,8 +2920,8 @@ export const route = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EXECUTIVE_ROUTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, {});
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const tStart = Date.now();
@@ -2972,8 +2973,8 @@ export const draft = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EMAIL_DRAFTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, {});
+    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const args: {
@@ -3168,7 +3169,7 @@ export const digestInbox = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
   // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
-  handler: async (ctx, { messages, skillVersion, smoke }): Promise<DigestBatch> => {
+  handler: async (ctx, { tenantId, messages, skillVersion, smoke }): Promise<DigestBatch> => {
     // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
     const skill: { body: string; version: number } =
@@ -3235,7 +3236,7 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3247,7 +3248,7 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -3275,7 +3276,7 @@ export const draftReply = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type re-trips the "use node"
   // circular-inference cliff — the digestInbox/draftCockpit precedent).
-  handler: async (ctx, { safeText, originalBody, skillVersion }): Promise<{ body: string }> => {
+  handler: async (ctx, { tenantId, safeText, originalBody, skillVersion }): Promise<{ body: string }> => {
     // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
     const skill: { body: string; version: number } =
@@ -3314,7 +3315,7 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3325,7 +3326,7 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
       return { body: text.trim() };
     }
   },
@@ -3383,7 +3384,7 @@ export const draftVoiceBrief = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
   // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
-  handler: async (ctx, { transcript, language }): Promise<string> => {
+  handler: async (ctx, { tenantId, transcript, language }): Promise<string> => {
     // Load the voice-brief skill FIRST (no hardcoded prompt — §5); fails closed (NO_ACTIVE_SKILL
     // unseeded), and the load runs BEFORE the smoke short-circuit so it is exercised offline.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -3413,7 +3414,7 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, DEFAULT_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3425,7 +3426,7 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
       return buildBriefMarkdown(object, transcript, language);
     }
   },

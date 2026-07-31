@@ -310,7 +310,7 @@ export const recordUsage = tenantMutation({
       textInTok: s.textInTok + textInTok,
       textOutTok: s.textOutTok + textOutTok,
     });
-    await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId: ctx.tenantId, costUsd: priced.value });
     return { ok: true };
   },
 });

@@ -1,6 +1,8 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-07-30 (17.1-07 — **THE CONFIRMED BUSINESS BLUEPRINT NOW SURVIVES THE
+> Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). MECHANICAL for this subsystem: `voice.recordUsage` passes `ctx.tenantId` to `recordSpend`, and `voiceDoc`'s private `modelDocReview` gained a leading `tenantId` parameter supplied by `reviewDocument`, which already had it. The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). Realtime pricing, metering and the brief/doc-review paths are otherwise untouched — but note a voice session's spend now lands on the SPEAKER's tenant rail, so a long call can exhaust that tenant's day without touching anyone else's.
+>
+> PRIOR 2026-07-30 (17.1-07 — **THE CONFIRMED BUSINESS BLUEPRINT NOW SURVIVES THE
 > DOC-SCOPED FILTER AS EXPLICIT STANDING CONTEXT.** `voiceDoc` prepends
 > `vaultGroundHydrated.spine` before filtering retrieval arrays by `docRef`; the same number of
 > document passages still receive the full `RETRIEVAL_CHAR_CAP`. See the BLPR-02 note under

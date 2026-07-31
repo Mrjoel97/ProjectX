@@ -106,6 +106,7 @@ type Extracted = { text: string; path: ExtractPath };
  */
 async function extractHosted(
   ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<string> {
@@ -121,7 +122,7 @@ async function extractHosted(
   });
   const priced = priceUsage("openai/gpt-4o-mini", usage);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
   }
   return text;
 }
@@ -244,7 +245,11 @@ export async function fanOutPages(
  * PDF: text-layer first (unpdf — free, costUsd 0, no model call), hosted OCR fallback when the
  * garbage heuristic trips (scans yield ~0 chars/page; real text layers yield hundreds).
  */
-async function extractPdf(ctx: GenericActionCtx<DataModel>, bytes: Uint8Array): Promise<Extracted> {
+async function extractPdf(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+  bytes: Uint8Array,
+): Promise<Extracted> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   // pdf.js TRANSFERS (detaches) the buffer it is handed — pass a copy so the hosted-fallback
   // slice below still sees the real bytes (caught offline: pdf-lib read a zeroed buffer).
@@ -265,7 +270,7 @@ async function extractPdf(ctx: GenericActionCtx<DataModel>, bytes: Uint8Array): 
   // `text` is already taken by the text-layer destructure above — the fan-out's own name.
   const { text: transcribed, okPages } = await fanOutPages(
     pages.length,
-    (i) => extractHosted(ctx, pages[i]!, "application/pdf"),
+    (i) => extractHosted(ctx, tenantId, pages[i]!, "application/pdf"),
     {
       batchSize: PAGE_BATCH_SIZE,
       pageTimeoutMs: PAGE_TIMEOUT_MS,
@@ -288,8 +293,8 @@ export const extractDoc = internalAction({
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason });
     try {
       // 1. Governed gate BEFORE any work — a stop is a RETURN, never a throw (vaultIngest.ts).
-      const gate: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-        await ctx.runMutation(internal.guardrails.preCall, {});
+      const gate: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+        await ctx.runMutation(internal.guardrails.preCall, { tenantId });
       if (!gate.ok) {
         await fail(gate.reason);
         return null;
@@ -325,7 +330,7 @@ export const extractDoc = internalAction({
       if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
       } else if (rail === "pdf") {
-        extracted = await extractPdf(ctx, bytes);
+        extracted = await extractPdf(ctx, tenantId, bytes);
       } else if (rail === "image") {
         // A SNIFFED image with an empty/wrong MIME must still be sent with a real mediaType, or
         // the model call is malformed — SC#1 would "work" right up to the point it silently didn't.
@@ -334,7 +339,7 @@ export const extractDoc = internalAction({
           : (({ png: "image/png", jpeg: "image/jpeg", gif: "image/gif" } as const)[
               sniffContainer(bytes) as "png" | "jpeg" | "gif"
             ] ?? "image/png");
-        extracted = { text: await extractHosted(ctx, bytes, imageMediaType), path: "hosted" };
+        extracted = { text: await extractHosted(ctx, tenantId, bytes, imageMediaType), path: "hosted" };
       } else if (rail === "zip") {
         // Every ZIP-based office format (DOCX/DOCM, XLSX/XLSM, PPTX/PPTM, ODT/ODS/ODP, EPUB) —
         // extractOfficeText dispatches on the archive's own marker entry, not on a mime type.

@@ -52,8 +52,8 @@ export const transcribeDoc = internalAction({
 
     try {
       // 1. Governed gate BEFORE any byte/model work — a stop is a visible failure, never a throw.
-      const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-        await ctx.runMutation(internal.guardrails.preCall, {});
+      const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+        await ctx.runMutation(internal.guardrails.preCall, { tenantId });
       if (!pre.ok) return fail(pre.reason);
 
       // 2. Work actually starts → flip the visible pill (honest pill).
@@ -90,7 +90,7 @@ export const transcribeDoc = internalAction({
         });
         const priced = priceTranscription(result.durationInSeconds ?? 0);
         if (priced.ok) {
-          await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+          await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
         }
         rawText = result.text;
         durationSeconds = result.durationInSeconds ?? 0;

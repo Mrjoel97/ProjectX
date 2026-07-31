@@ -196,23 +196,26 @@ export const fireReviewTimeout = internalMutation({
   },
 });
 
-// --- 03-05: rate-limiter drivers (synthetic keys / global window ONLY) --------
-// The daily-spend window is GLOBAL (keyless) — draining it blocks EVERY later
-// smoke, so resetDailySpend is mandatory finally-cleanup (03-RESEARCH Pitfall 5).
+// --- 03-05: rate-limiter drivers (synthetic keys) ----------------------------
+// 22.1-02: `dailySpendCents` is now keyed PER TENANT, so these drain/reset exactly the
+// tenant they are handed and no longer blast every later smoke. resetDailySpend stays
+// mandatory finally-cleanup anyway (03-RESEARCH Pitfall 5) — a drained tenant window
+// outlives the run. The deployment ceiling is untouched here: draining it would block
+// EVERY tenant, which is precisely the blast radius this keying removed.
 
-/** Exhaust the global daily-spend window so the next prepare/preCall fails closed. */
+/** Exhaust ONE tenant's daily-spend window so its next prepare/preCall fails closed. */
 export const drainDailySpend = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await rateLimiter.limit(ctx, "dailySpendCents", { count: DAILY_BUDGET_CENTS, reserve: true });
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => {
+    await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: DAILY_BUDGET_CENTS, reserve: true });
   },
 });
 
-/** Refill the global daily-spend window — MANDATORY cleanup after drainDailySpend. */
+/** Refill ONE tenant's daily-spend window — MANDATORY cleanup after drainDailySpend. */
 export const resetDailySpend = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await rateLimiter.reset(ctx, "dailySpendCents");
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => {
+    await rateLimiter.reset(ctx, "dailySpendCents", { key: tenantId });
   },
 });
 

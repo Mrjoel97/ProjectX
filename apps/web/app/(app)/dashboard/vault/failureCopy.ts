@@ -96,6 +96,7 @@ const COPY: Record<string, FailureCopy> = {
   },
   kill_switch: PAUSED,
   daily_budget_exhausted: PAUSED,
+  deployment_budget_exhausted: PAUSED,
   no_stored_bytes: MISSING,
   missing_blob: MISSING,
   missing_bytes: MISSING,

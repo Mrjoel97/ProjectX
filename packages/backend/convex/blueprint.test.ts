@@ -637,7 +637,7 @@ describe("blueprint candidate synthesis", () => {
 
     const budgetTest = makeTest();
     await seedBlueprintSkill(budgetTest);
-    await budgetTest.mutation(internal.guardrails.recordSpend, { costUsd: 10 });
+    await budgetTest.mutation(internal.guardrails.recordSpend, { tenantId: "tenant_a", costUsd: 10 });
 
     await expect(
       budgetTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
@@ -647,7 +647,7 @@ describe("blueprint candidate synthesis", () => {
   test("returns deterministic source-indexed candidates from the offline seam without spend", async () => {
     const t = makeTest();
     await seedBlueprintSkill(t);
-    const before = await t.query(internal.guardrails.remainingDailyCents, {});
+    const before = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
 
     await expect(
       t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
@@ -663,7 +663,7 @@ describe("blueprint candidate synthesis", () => {
     });
 
     await expect(
-      t.query(internal.guardrails.remainingDailyCents, {}),
+      t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" }),
     ).resolves.toBe(before);
   });
 });
@@ -673,7 +673,7 @@ describe("blueprint draft build", () => {
     const t = makeTest();
     await insertBusinessProfile(t, "tenant_missing", TYPED_PROFILE);
     const rowsBefore = await tenantRows(t, "tenant_missing");
-    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
 
     const refused = await rejectionData(
       t.withIdentity({ subject: "tenant_missing" }).action(api.blueprint.buildBlueprintDraft, {}),
@@ -688,7 +688,7 @@ describe("blueprint draft build", () => {
     expect(refused.code).toBe("NO_TENANT_PROFILE");
     expect(directWriteRefused.code).toBe("NO_TENANT_PROFILE");
     expect(await tenantRows(t, "tenant_missing")).toEqual(rowsBefore);
-    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(spendBefore);
   });
 
   test("a fully typed profile edit reuses live derived fields with no probe, model call, or vault write", async () => {
@@ -708,7 +708,7 @@ describe("blueprint draft build", () => {
       }),
     );
     const vaultCountBefore = (await tenantVaultDocs(t, "tenant_a")).length;
-    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {});
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
 
     await expect(
       t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {}),
@@ -724,7 +724,7 @@ describe("blueprint draft build", () => {
     expect(firstRow?.blueprintDraft).toBeTruthy();
     expect(firstRow?.blueprintSourceDocIds).toEqual([profileDocId]);
     expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
-    expect(await t.query(internal.guardrails.remainingDailyCents, {})).toBe(spendBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(spendBefore);
 
     const firstDraft = firstRow?.blueprintDraft;
     await t.run((ctx) =>

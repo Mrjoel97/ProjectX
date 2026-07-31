@@ -110,7 +110,7 @@ export const ingestDoc = workflow.define({
   handler: async (step, { vaultDocId, tenantId }): Promise<null> => {
     // (1) Governed gate BEFORE any spend. A kill-switch / daily-budget stop marks the row failed
     // and returns — the governed stop halts ingest, never a DLQ throw (kill switch stops it).
-    const gate = await step.runMutation(internal.guardrails.preCall, {});
+    const gate = await step.runMutation(internal.guardrails.preCall, { tenantId });
     if (!gate.ok) {
       await step.runMutation(internal.vault.markFailed, { vaultDocId, reason: gate.reason });
       return null;
@@ -132,6 +132,7 @@ export const ingestDoc = workflow.define({
 
     // (5) Consume the ACTUAL spend against the global daily window (embed + extract).
     await step.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
       costUsd: embed.costUsd + graph.costUsd,
     });
 

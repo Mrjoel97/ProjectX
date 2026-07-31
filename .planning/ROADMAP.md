@@ -792,11 +792,11 @@ Plans:
   1. A connected user can DISCONNECT Gmail from inside the app: the control lands on the existing `apps/web/app/(app)/connect-gmail/page.tsx`, the `gmailTokens` row is deleted, AND the token is revoked at Google (`https://oauth2.googleapis.com/revoke`), with a refs-only audit row. This makes `apps/web/app/privacy/page.tsx:312` — "You can disconnect your Google account at any time from within the application" — true; today it is a published legal claim with zero implementation (no revoke call and no token-delete mutation exist in the repo). No new route, no new NAV entry, no connections page; the hardcoded hexes on that page become `globals.css` tokens in the same pass (CLAUDE.md §10).
   2. `dailySpendCents` is keyed PER TENANT. It is currently a KEYLESS rate-limiter window capping the whole DEPLOYMENT (`guardrails.ts:182-185`), and `dispatch.ts:41-45`'s `ENVELOPE_FRACTION` takes its 25% from that same shared pool — so the moment a second user exists, one tenant's loop drains everyone else's day and every other tenant sees governed refusals it cannot explain. A test proves one tenant exhausting its budget does not refuse another tenant's request.
   3. Typecheck, lint and the deployment/CI path named in this phase's title run green as an enforced gate, not as a remembered manual step.
-**Plans:** 1 of 3 complete
+**Plans:** 2 of 3 complete
 
 Plans:
 - [x] 22.1-01-PLAN.md — Disconnect Google: revoke at Google, then delete locally (SC1) — completed 2026-08-01 (`gmailAuth.disconnectGoogle` POSTs the REFRESH token to `oauth2.googleapis.com/revoke`, so the whole grant dies; 200 and 400 both mean gone and the local delete runs unconditionally; one refs-only `google.disconnected` audit row. Deliberately NOT in `gmail.ts` — `llmRedaction.test.ts` pins that module's POST set to two. Backend 863/863, typecheck at the exact 150 baseline with ZERO TS2589, refresh-token assertion mutation-verified. **OWNER LIVE-VERIFIED 2026-08-01: the grant is gone from `myaccount.google.com/permissions`.** `apps/web/app/privacy/page.tsx:312` is now a true statement)
-- [ ] 22.1-02-PLAN.md — Per-tenant keying of `dailySpendCents` (SC2), a hard prerequisite for Phase 25 multi-user
+- [x] 22.1-02-PLAN.md — Per-tenant keying of `dailySpendCents` (SC2) — completed 2026-08-01 (TWO rails now: `dailySpendCents` keyed by tenantId, plus a deliberately KEYLESS `deploymentSpendCents` ceiling, because keying alone would trade a noisy-neighbour bug for unbounded N × budget exposure — owner decision. Both checked, both consumed, tenant checked FIRST so a tenant is never blamed for a global pause; `remainingDailyCents` returns min(tenant, deployment) with each rail clamped >= 0 before the min. 53 threading replacements across 12 modules incl. six private helpers; `recordModelSpend` threaded ONCE as the shared sink. Making `tenantId` a REQUIRED arg is what found the 10 sites where it only looked in scope. Backend 865/866 — the one red is pre-existing `onboarding.test.ts §4.2`, proven by stashing this plan and watching it fail identically — typecheck at the exact 150 baseline. Two-tenant test mutation-verified RED without the key. **Live `pnpm smoke:guardrails` still outstanding**)
 - [ ] 22.1-03-PLAN.md — The deployment / typecheck / CI gate (SC3)
 
 ### Phase 23: Agent-Authored Skills
@@ -873,7 +873,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 20. Media Canvas | 0/TBD | Not started | - |
 | 21. User-Authored Skills & Routines | 0/TBD | Not started | - |
 | 22. Owner Authorization Primitive | 3/3 | UAT: server boundary PROVEN live; DOM half outstanding | - |
-| 22.1 Beta Admission Readiness (INSERTED) | 1/3 | In Progress (22.1-01 disconnect complete, owner live-verified 2026-08-01; per-tenant budget keying + CI gate open) | - |
+| 22.1 Beta Admission Readiness (INSERTED) | 2/3 | In Progress (22.1-01 disconnect owner live-verified; 22.1-02 per-tenant budget keying complete 2026-08-01; CI/typecheck gate open) | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/TBD | Not started | - |

@@ -16,15 +16,30 @@ import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 
-// ponytail: fixed constants for the single-owner beta; per-tenant policy is the
-// upgrade path (deferred per 03-RESEARCH).
-export const DAILY_BUDGET_CENTS = 500; // ≈ $5/day — the ONE daily-budget knob.
+// TWO spend rails, and the difference between them is the whole point (22.1-02).
+//
+// `DAILY_BUDGET_CENTS` is what ONE TENANT may spend per day. It was keyless until 22.1-02 —
+// i.e. it capped the deployment, so one tenant's agent loop drained everyone else's day and
+// every other tenant saw governed refusals it could not explain. That is a blocking bug for
+// Phase 25 multi-user, and keying it by tenantId is the fix.
+//
+// `DEPLOYMENT_BUDGET_CENTS` exists because that fix alone trades a noisy-neighbour bug for a
+// cost bug: per-tenant keying makes exposure N × DAILY_BUDGET_CENTS, unbounded in N, with the
+// manual all-or-nothing kill switch as the only global stop. So the ceiling stays — deliberately
+// KEYLESS — and both windows are checked and consumed. The tighter one wins. Owner decision,
+// 2026-08-01.
+export const DAILY_BUDGET_CENTS = 500; // ≈ $5/day PER TENANT.
+export const DEPLOYMENT_BUDGET_CENTS = 5_000; // ≈ $50/day across ALL tenants — the hard cap.
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Per-tenant submit rate (keyed by tenantId): steady 20/hr with a small burst of 5.
   submitRequest: { kind: "token bucket", rate: 20, period: HOUR, capacity: 5 },
-  // Global daily spend window (keyless = one bucket for the whole deployment).
+  // Per-TENANT daily spend window — every call site MUST pass { key: tenantId }. A call without
+  // a key silently shares one bucket across tenants, which is the bug this replaced.
   dailySpendCents: { kind: "fixed window", rate: DAILY_BUDGET_CENTS, period: 24 * HOUR },
+  // Deployment-wide ceiling. KEYLESS ON PURPOSE — this is the one bucket everybody shares, and
+  // it is what stops N invited beta users from multiplying the bill.
+  deploymentSpendCents: { kind: "fixed window", rate: DEPLOYMENT_BUDGET_CENTS, period: 24 * HOUR },
 });
 
 // Default-on-read: a missing guardrailConfig row means the kill switch is OFF
@@ -73,7 +88,8 @@ export const prepare = internalMutation({
           | "pii_scan_failed"
           | "cost_estimate_failed"
           | "over_budget"
-          | "daily_budget_exhausted";
+          | "daily_budget_exhausted"
+          | "deployment_budget_exhausted";
       }
   > => {
     const req = await ctx.db.get(requestId);
@@ -99,9 +115,17 @@ export const prepare = internalMutation({
     }
     const { model, estCents } = choice.value;
 
-    // Check-before: the estimated spend must fit the remaining daily window.
-    const spend = await rateLimiter.check(ctx, "dailySpendCents", { count: estCents });
+    // Check-before: the estimated spend must fit BOTH remaining windows — this tenant's own day
+    // and the deployment ceiling. Tenant first, so a tenant that is personally out is told so
+    // rather than being blamed for a global pause. `req.tenantId` is already on the row; that is
+    // why `prepare` needs no new argument.
+    const spend = await rateLimiter.check(ctx, "dailySpendCents", {
+      key: req.tenantId,
+      count: estCents,
+    });
     if (!spend.ok) return { ok: false, reason: "daily_budget_exhausted" };
+    const deployment = await rateLimiter.check(ctx, "deploymentSpendCents", { count: estCents });
+    if (!deployment.ok) return { ok: false, reason: "deployment_budget_exhausted" };
 
     await ctx.db.patch(requestId, { safeText, safeTextHash });
     return { ok: true, model, safeTextHash, piiCounts: counts, estCents };
@@ -147,14 +171,22 @@ export const saveInstruction = internalMutation({
  *  pipeline routes the stop into the SAME `blocked` terminal a prepare stop gets
  *  (never a `failed` DLQ entry). */
 export const preCall = internalMutation({
-  args: {},
+  args: { tenantId: v.string() },
   handler: async (
     ctx,
-  ): Promise<{ ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }> => {
+    { tenantId },
+  ): Promise<
+    | { ok: true }
+    | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
+  > => {
     const cfg = await getConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
-    const spend = await rateLimiter.check(ctx, "dailySpendCents", { count: 1 });
+    // `count: 1` asks "is there ANY budget left", not "can I afford this call" — the real spend
+    // is consumed after the fact by recordSpend. Both rails must still have room.
+    const spend = await rateLimiter.check(ctx, "dailySpendCents", { key: tenantId, count: 1 });
     if (!spend.ok) return { ok: false, reason: "daily_budget_exhausted" };
+    const deployment = await rateLimiter.check(ctx, "deploymentSpendCents", { count: 1 });
+    if (!deployment.ok) return { ok: false, reason: "deployment_budget_exhausted" };
     return { ok: true };
   },
 });
@@ -164,11 +196,14 @@ export const preCall = internalMutation({
  *  under-counting — the NEXT prepare/preCall check then fails closed. Zero-cost
  *  runs (ZERO_USAGE smoke) skip, so they never drain the budget. */
 export const recordSpend = internalMutation({
-  args: { costUsd: v.number() },
-  handler: async (ctx, { costUsd }) => {
+  args: { tenantId: v.string(), costUsd: v.number() },
+  handler: async (ctx, { tenantId, costUsd }) => {
     const cents = Math.ceil(costUsd * 100);
     if (cents <= 0) return;
-    await rateLimiter.limit(ctx, "dailySpendCents", { count: cents, reserve: true });
+    // BOTH rails, always. Consuming only one would let the other be drained without seeing it —
+    // the tenant window would stop policing real spend, or the ceiling would never bind.
+    await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: cents, reserve: true });
+    await rateLimiter.limit(ctx, "deploymentSpendCents", { count: cents, reserve: true });
   },
 });
 
@@ -179,13 +214,17 @@ export const recordSpend = internalMutation({
  * under-counting, and a negative envelope is not an envelope — it would refuse everything.
  * The explicit `Promise<number>` return type is mandatory: an inferred return type collapses
  * the generated API to `any` (13-01 shipped 90 `apps/web` errors that way).
- * ponytail: this is the DEPLOYMENT's remaining budget, not the tenant's — `dailySpendCents`
- * is a KEYLESS window (:23-28), matching the "fixed constants for the single-owner beta;
- * per-tenant policy is the upgrade path" comment already at :19-20. Keying the limit by
- * tenantId is the upgrade path and is NOT required by any Phase-15 success criterion.
+ *
+ * 22.1-02: this now returns the TIGHTER of the two rails — a sub-agent envelope must not be sized
+ * off a tenant's personal allowance when the deployment ceiling is what will actually refuse it.
+ * Each rail is clamped to >= 0 BEFORE the min: `recordSpend` uses `reserve: true`, so either can
+ * go negative, and a negative deployment rail would otherwise zero every tenant's envelope.
  */
 export const remainingDailyCents = internalQuery({
-  args: {},
-  handler: async (ctx): Promise<number> =>
-    Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents")).value),
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<number> => {
+    const tenant = Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value);
+    const deployment = Math.max(0, (await rateLimiter.getValue(ctx, "deploymentSpendCents")).value);
+    return Math.min(tenant, deployment);
+  },
 });

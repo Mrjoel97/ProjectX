@@ -383,6 +383,7 @@ function withVerifiedExcerpts(raw: RawDocReview, docText: string): RawDocReview 
  *  plus the SAME bounded+fenced digest the agent was given at the mint, priced usage recorded. */
 async function modelDocReview(
   ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
   transcript: { speaker: string; text: string }[],
   doc: { title: string; text: string | undefined; extractionTruncated: boolean },
 ): Promise<RawDocReview> {
@@ -414,7 +415,7 @@ async function modelDocReview(
   // The intake.ts idiom for a model call outside the governed llm.ts loop — the priced usage is
   // charged against the same daily spend limiter, so a doc review cannot spend off-budget.
   const priced = priceUsage(DEFAULT_MODEL, usage);
-  if (priced.ok) await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+  if (priced.ok) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
   return object;
 }
 
@@ -461,7 +462,7 @@ export const reviewDocument = internalAction({
     const raw: RawDocReview =
       offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)
         ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
-        : await modelDocReview(ctx, transcript, doc);
+        : await modelDocReview(ctx, tenantId, transcript, doc);
 
     // Citations, gap route/playbook, the leverage rank, the excerpt cap and the honesty verdict all
     // land in pure tested code (14-02). Do NOT re-derive any of them here, and never pass a verdict.

@@ -46,14 +46,14 @@ const SMOKE_BLUEPRINT_PREFIX = "SMOKE::blueprint::";
 const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 type DeriveCandidatesResult =
-  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }
+  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" | "deployment_budget_exhausted" }
   | { ok: true; candidates: DerivedCandidate[] };
 
 type GroundedSource = { docId: string; title: string; text: string };
 type HydratedGround = { docIds: string[]; titles: string[]; chunks: string[] };
 type Probe = { field: BlueprintField; query: string };
 type BuildBlueprintDraftResult =
-  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" }
+  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" | "deployment_budget_exhausted" }
   | {
       ok: true;
       additions: number;
@@ -250,13 +250,13 @@ export const deriveCandidates = internalAction({
     fields: v.array(v.string()),
     sources: v.array(v.object({ title: v.string(), text: v.string() })),
   },
-  handler: async (ctx, { fields, sources }): Promise<DeriveCandidatesResult> => {
+  handler: async (ctx, { tenantId, fields, sources }): Promise<DeriveCandidatesResult> => {
     const skill: { body: string; version: number } = await ctx.runQuery(
       internal.skills.getActiveSkill,
       { name: BUSINESS_BLUEPRINT_SKILL },
     );
 
-    const gate = await ctx.runMutation(internal.guardrails.preCall, {});
+    const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!gate.ok) return { ok: false, reason: gate.reason };
 
     const scan = scanText(candidatePrompt(fields, sources));
@@ -277,7 +277,7 @@ export const deriveCandidates = internalAction({
     });
     const priced = priceUsage(DEFAULT_MODEL, usage);
     if (priced.ok) {
-      await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
     }
     return { ok: true, candidates: object.candidates };
   },

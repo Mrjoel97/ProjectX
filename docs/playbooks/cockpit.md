@@ -1,6 +1,8 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-01 (22.1-01) — **Disconnect is real, it revokes at Google before it
+> Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). For THIS subsystem: `llm.ts`'s `recordModelSpend` gained a leading `tenantId` parameter (it is the shared spend sink — seven call sites route through it, so it is threaded once there rather than seven times), `runCockpitAgent`/`route`/`draft` pass their tenantId to `preCall`, and `digestInbox`/`draftReply`/`draftVoiceBrief` now destructure the `tenantId` they already declared. `pipeline.ts` gained the `deployment_budget_exhausted` BlockReason + label. **`dispatch.ts`'s sub-agent envelope now reads the TIGHTER of the two rails** — sizing it off a tenant's personal allowance when the ceiling is what will actually refuse would over-promise the envelope. `ENVELOPE_FRACTION` still takes its 25% of whatever that min() returns.
+>
+> PRIOR 2026-08-01 (22.1-01) — **Disconnect is real, it revokes at Google before it
 > deletes locally, and the OWNER LIVE-VERIFIED it on 2026-08-01: a real connected account was
 > disconnected from inside the app and the Pikar grant is GONE from
 > `myaccount.google.com/permissions`. That is the one assertion no offline test can make — the

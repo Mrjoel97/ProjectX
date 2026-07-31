@@ -58,7 +58,11 @@ function decodeUtf8(bytes: Uint8Array): string {
  * call and NO spend (the offline path). Otherwise transcribes via the zero-retention OpenAI
  * processor and prices/records the real spend per audio-minute (priceTranscription, Plan 03).
  */
-async function transcribeAudio(ctx: GenericActionCtx<DataModel>, bytes: Uint8Array): Promise<string> {
+async function transcribeAudio(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+  bytes: Uint8Array,
+): Promise<string> {
   const sniffed = decodeUtf8(bytes);
   if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX)) return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
@@ -69,7 +73,7 @@ async function transcribeAudio(ctx: GenericActionCtx<DataModel>, bytes: Uint8Arr
   });
   const priced = priceTranscription(result.durationInSeconds ?? 0);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
   }
   return result.text;
 }
@@ -82,6 +86,7 @@ async function transcribeAudio(ctx: GenericActionCtx<DataModel>, bytes: Uint8Arr
  */
 async function extractVisual(
   ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<string> {
@@ -100,7 +105,7 @@ async function extractVisual(
   });
   const priced = priceUsage("openai/gpt-4o-mini", usage);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
   }
   return text;
 }
@@ -133,8 +138,8 @@ async function runIntake(
 
   // 1. Governed gate BEFORE any model call (kill-switch/budget) — a stop is conversational
   // data, never a throw/DLQ. NO artifact row is created past this point (no extraction ran).
-  const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" } =
-    await ctx.runMutation(internal.guardrails.preCall, {});
+  const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
+    await ctx.runMutation(internal.guardrails.preCall, { tenantId });
   if (!pre.ok) return respond(PAUSED_TEXT);
 
   // 2. Load bytes (a missing blob is a client-visible failure, not a bug — respond, don't throw).
@@ -167,9 +172,9 @@ async function runIntake(
   // 5. EXTRACTION MODEL CALL (the bounded GRDL-01 exception) -> rawText.
   let rawText: string;
   if (kind === "audio") {
-    rawText = await transcribeAudio(ctx, bytes);
+    rawText = await transcribeAudio(ctx, tenantId, bytes);
   } else if (kind === "image" || kind === "pdf") {
-    rawText = await extractVisual(ctx, bytes, mimeType);
+    rawText = await extractVisual(ctx, tenantId, bytes, mimeType);
   } else if (kind === "document") {
     rawText = decodeUtf8(bytes); // NO model, NO spend — the bytes already ARE the text.
   } else {

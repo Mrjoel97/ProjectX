@@ -98,7 +98,7 @@ test("mock loop: a scripted edit sequence drives the plan to a correct `proposed
 
   // recordSpend consumed the daily-spend window: the priced huge usage (> $5) drove it negative,
   // so the next preCall fails closed (truth #5 — recordSpend runs with the reasoning call's usage).
-  const pre = await t.mutation(internal.guardrails.preCall, {});
+  const pre = await t.mutation(internal.guardrails.preCall, { tenantId: "t1" });
   expect(pre).toEqual({ ok: false, reason: "daily_budget_exhausted" });
 });
 

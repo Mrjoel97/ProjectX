@@ -78,13 +78,15 @@ type BlockReason =
   | "pii_scan_failed"
   | "cost_estimate_failed"
   | "over_budget"
-  | "daily_budget_exhausted";
+  | "daily_budget_exhausted"
+  | "deployment_budget_exhausted";
 const LABELS: Record<BlockReason, string> = {
   kill_switch: "cost kill-switch is on",
   pii_scan_failed: "PII scan failed",
   cost_estimate_failed: "over budget",
   over_budget: "over budget",
   daily_budget_exhausted: "daily budget exhausted",
+  deployment_budget_exhausted: "service-wide daily budget exhausted",
 };
 
 export const pipelineWorkflow = workflow.define({
@@ -183,7 +185,7 @@ export const pipelineWorkflow = workflow.define({
     ) => {
       const u = toUsage(usage, model, cacheHit);
       usages.push(u);
-      await step.runMutation(internal.guardrails.recordSpend, { costUsd: u.costUsd });
+      await step.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: u.costUsd });
       if (cacheHit) {
         await step.runMutation(internal.audit.log, {
           tenantId,

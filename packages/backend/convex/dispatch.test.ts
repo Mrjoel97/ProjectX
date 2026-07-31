@@ -208,7 +208,7 @@ const readLineage = (t: T, correlationId = ROOT) =>
       .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
       .collect(),
   );
-const remaining = (t: T) => t.query(internal.guardrails.remainingDailyCents, {});
+const remaining = (t: T) => t.query(internal.guardrails.remainingDailyCents, { tenantId: TENANT });
 
 /** Drive the twin, tolerating a throw: a withheld tool name may propagate out of generateText. */
 async function runTolerant(t: T, args: Record<string, unknown>): Promise<void> {
@@ -516,7 +516,7 @@ describe("the shared root-request cost envelope", () => {
     const { t, planId } = await setup();
     // recordSpend consumes with `reserve: true`, so the window goes NEGATIVE on purpose
     // (guardrails.ts:166-173). remainingDailyCents clamps that to 0.
-    await t.mutation(internal.guardrails.recordSpend, { costUsd: 20 }); // 2000 cents vs a 500 rail
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: TENANT, costUsd: 20 }); // 2000 cents vs a 500 rail
     expect(await remaining(t)).toBe(0);
 
     const res = await t.action(internal.dispatch.__runSpecialistWithScript, {

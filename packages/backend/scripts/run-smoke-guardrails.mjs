@@ -89,7 +89,7 @@ try {
   must("smoke:seedPipeline", { correlationId: cidA, route: "direct_llm", tenant: "smokeBudget", goal: goalA });
   await pollPass("smokeAssert:assertAtReview", { correlationId: cidA });
 
-  must("smoke:drainDailySpend", {});
+  must("smoke:drainDailySpend", { tenantId: "smokeBudget" });
 
   // B is fresh → blocked at prepare's daily-spend check.
   const cidB = `grd-budgetB-${uid()}`;
@@ -102,7 +102,7 @@ try {
   await pollPass("smokeAssert:assertBlocked", { correlationId: cidA, reason: "daily_budget_exhausted" });
   console.log("  ok — B blocked at prepare, A blocked mid-flight (preCall), neither dead-lettered");
 } finally {
-  must("smoke:resetDailySpend", {});
+  must("smoke:resetDailySpend", { tenantId: "smokeBudget" });
 }
 
 console.log("[smoke:guardrails] 6/7 submit rate limiter rejects the 6th consume (GRDL-06)");

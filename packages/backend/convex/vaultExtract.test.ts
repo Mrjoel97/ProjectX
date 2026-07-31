@@ -969,9 +969,9 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     // the behavioural tests prove batching SHAPE, and shape stays green when the model digests.
     expect(src, "the per-page fan-out must be wired in").toContain("fanOutPages(");
     expect(src, "slicePdfToPageCap's output must never reach extractHosted again").not.toMatch(
-      /extractHosted\(\s*ctx\s*,\s*sliced/,
+      /extractHosted\(\s*ctx\s*,\s*tenantId\s*,\s*sliced/,
     );
-    expect(src, "the hosted call must receive ONE PAGE").toMatch(/extractHosted\(\s*ctx\s*,\s*pages\[/);
+    expect(src, "the hosted call must receive ONE PAGE").toMatch(/extractHosted\(\s*ctx\s*,\s*tenantId\s*,\s*pages\[/);
   });
 
   test("unpdf gets a COPY — pdf.js detaches the buffer the fan-out emitter then reads", () => {
