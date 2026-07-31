@@ -355,7 +355,7 @@ async function governedDispatch(
     args.envelopeCents > 0
       ? args.envelopeCents
       : Math.floor(
-          (await ctx.runQuery(internal.guardrails.remainingDailyCents, {})) * ENVELOPE_FRACTION,
+          (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId })) * ENVELOPE_FRACTION,
         );
   if (args.spentCents >= envelopeCents) return refuse("budget_exhausted", BUDGET_EXHAUSTED_REPLY);
 
@@ -548,10 +548,14 @@ export const runSpecialist = internalAction({
   handler: async (ctx, args): Promise<DispatchResult> =>
     dispatchAndLand(ctx, args, (a) =>
       runSpecialistTurn(ctx, {
+        // `...a` FIRST, explicit fields last. With the spread last, a `tenantId` key present-but-
+        // undefined on `a` (it is read as `a.tenantId` elsewhere in this file) silently CLOBBERS
+        // the good value, and the failure surfaces far away as `guardrails:recordSpend` rejecting
+        // `{costUsd: 0.0021}` for a missing tenantId — mid-dispatch, after the model was billed.
+        ...a,
         tenantId: args.tenantId,
         planId: args.planId,
         skillVersions: args.skillVersions,
-        ...a,
       }),
     ),
 });
@@ -637,10 +641,12 @@ export const runResearch = internalAction({
         args,
         (a) =>
           runSpecialistTurn(ctx, {
+            // `...a` FIRST — see the gap-dispatch runner above. This is the RESEARCH path, where
+            // the clobber was actually observed (run 3a1e37f3, fixture 34).
+            ...a,
             tenantId: args.tenantId,
             planId: args.planId,
             skillVersions: args.skillVersions,
-            ...a,
           }),
         RESEARCH_FAILED_MEMO,
       ),
@@ -676,10 +682,12 @@ export const __runSpecialistWithScript = internalAction({
       args,
       (a) =>
         runSpecialistTurn(ctx, {
+          // `...a` FIRST — same reason as the two runners above. `mockScript` stays LAST because
+          // this offline twin deliberately overrides it.
+          ...a,
           tenantId: args.tenantId,
           planId: args.planId,
           skillVersions: args.skillVersions,
-          ...a,
           mockScript: {
             primary: args.primary,
             fallback: args.fallback,
