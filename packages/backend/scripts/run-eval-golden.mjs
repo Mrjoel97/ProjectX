@@ -8,12 +8,14 @@
 // is the sole workflow.start site) and the eval tenant has no Gmail token — and
 // assertEvalCaseClean asserts it anyway.
 //
-// Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
+// Invocation (locked): pnpm eval:golden [--skill <name>@<version>] [--only <id-substring>]
 //   --skill      pin that skill version on every turn; an all-green pinned run
 //                records refs/counts-only evidence via skills:recordEvalEvidence
 //                (the EVAL_GATE input for activateSkill).
+//   --only       DIAGNOSTIC ONLY — run just the fixtures whose id contains this
+//                substring. A filtered run is NOT the gate and records NO evidence.
 //   --self-check offline validation (ZERO convex calls): fixture vocabulary,
-//                cap/pin logic — the ponytail one-runnable-check.
+//                cap/pin/filter logic — the ponytail one-runnable-check.
 //
 // Exit codes: 0 all green · 1 any case failure · 2 environment abort (governed
 // stop or cost cap — never an eval failure).
@@ -294,6 +296,41 @@ function parseSkillPins(argv) {
 /** The merged record threaded into every turn AND recorded on every evidence row: the run really
  *  did carry all of these versions, so each pin's evidence must say so. */
 const skillVersionsOf = (pins) => Object.fromEntries(pins.map((p) => [p.name, p.version]));
+
+// ── --only fixture filter (DIAGNOSTIC; never the gate) ───────────────────────
+
+/**
+ * 16-09: `--only <id-substring>` restricts the run to matching fixtures. Motivation is measured, not
+ * theoretical: fixtures 32-34 sit LAST in sorted order, so both attempts to get a verdict on them
+ * died to an environment failure (a broken dep tree, then the deployment exiting mid-run) AFTER the
+ * 30 earlier cases had already been paid for. Re-testing the tail cost a full ~$0.22 each time.
+ * Multi-occurrence like `--skill`. A filter matching NOTHING is an error, not an empty run — a typo
+ * must not silently shrink the gate to zero cases and then report "all green".
+ */
+function parseOnlyFilters(argv) {
+  const filters = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== "--only") continue;
+    const value = argv[i + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`--only requires a value (e.g. --only research)`);
+    }
+    filters.push(value);
+  }
+  return filters;
+}
+
+/** Applies the filters, rejecting any that match no fixture. Returns the FULL set when none given,
+ *  so the unfiltered path is byte-for-byte the behaviour that existed before this flag. */
+function applyOnly(fixtures, filters) {
+  if (!filters.length) return fixtures;
+  for (const s of filters) {
+    if (!fixtures.some((f) => f.id.includes(s))) {
+      throw new Error(`--only "${s}" matched no fixture (ids: ${fixtures.map((f) => f.id).join(", ")})`);
+    }
+  }
+  return fixtures.filter((f) => filters.some((s) => f.id.includes(s)));
+}
 
 // ── expect evaluation (plan/briefing STATE, never reply text) ────────────────
 
@@ -721,6 +758,38 @@ function selfCheck() {
     "a bad name anywhere in the pin list still aborts before the first spawn",
   );
 
+  // 5b. 16-09: the --only diagnostic filter. The properties worth pinning are the SAFETY ones —
+  // an unfiltered run is unchanged, a typo aborts instead of running zero cases, and (asserted at
+  // the call site's own condition below) a filtered run records no evidence.
+  assert.deepEqual(parseOnlyFilters([]), [], "no --only ⇒ no filters");
+  assert.deepEqual(parseOnlyFilters(["--only", "research", "--only", "29-"]), ["research", "29-"]);
+  assert.throws(
+    () => parseOnlyFilters(["--only", "--skill"]),
+    /--only requires a value/,
+    "a flag swallowed as a value would filter to nothing and report all-green",
+  );
+  assert.equal(
+    applyOnly(fixtures, []).length,
+    fixtures.length,
+    "no filter ⇒ the FULL set, so the gate path is untouched by this flag",
+  );
+  const onlyResearch = applyOnly(fixtures, ["research"]);
+  assert.equal(onlyResearch.length, 3, "the three Phase-16 research fixtures match `research`");
+  assert.ok(
+    onlyResearch.every((f) => f.id.includes("research")),
+    "a filtered set contains only matching ids",
+  );
+  assert.throws(
+    () => applyOnly(fixtures, ["no-such-fixture"]),
+    /matched no fixture/,
+    "a typo must abort, never shrink the run to zero cases and then claim green",
+  );
+  assert.throws(
+    () => applyOnly(fixtures, ["research", "typo-here"]),
+    /matched no fixture/,
+    "every filter must match — one good one does not excuse a bad one",
+  );
+
   // 6. 15-06: the dispatch fixture contract (actOnGap + its three observables).
   const disp = { ...base, actOnGap: 0, expect: { gapCount: 1, planKind: "memo" } };
   assert.ok(validateFixture(disp, "<synthetic>"), "a paired dispatch fixture is accepted");
@@ -815,7 +884,7 @@ function selfCheck() {
 
   console.log(
     `[eval:golden] self-check PASSED (${fixtures.length} fixtures valid, ${SKILL_NAMES.length} gated skills` +
-      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/dispatch logic proven offline)`,
+      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch logic proven offline)`,
   );
 }
 
@@ -1027,8 +1096,9 @@ function attemptCase(fixture, tenant, pins) {
   return { pass: failures.length === 0, failures, caseCost };
 }
 
-async function runLive(pins) {
-  const fixtures = loadFixtures(); // fail fast BEFORE the first spawn
+async function runLive(pins, filters = []) {
+  const allFixtures = loadFixtures(); // fail fast BEFORE the first spawn
+  const fixtures = applyOnly(allFixtures, filters); // ditto — a bad --only must not cost a seed
   const runId = randomUUID().slice(0, 8);
   const tenant = `eval-${runId}`; // throwaway — isolates every tenant-scoped table
   const retriedCases = [];
@@ -1036,7 +1106,10 @@ async function runLive(pins) {
 
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
-      (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : ""),
+      (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : "") +
+      (filters.length
+        ? `\n[eval:golden] PARTIAL RUN — --only ${filters.join(" ")} (${fixtures.length}/${allFixtures.length} fixtures). Diagnostic only: NO evidence will be recorded.`
+        : ""),
   );
 
   // 03.7-05: seed the eval tenant's inbox ONCE, before the first turn. The eval tenant has no
@@ -1119,7 +1192,14 @@ async function runLive(pins) {
   // the exact EvalEvidence shape hasPassingEvidence parses (03.6-01). 15-06: ONE row per pin off
   // the SAME run, each carrying the FULL merged skillVersions record, because that is what the run
   // actually carried on every turn.
-  if (allGreen && pins.length) {
+  // 16-09: `!filters.length` is LOAD-BEARING, not tidiness. `hasPassingEvidence` reads casesPassed/
+  // casesTotal off the row; a green 3-case `--only research` run would write `3/3 pass` and be
+  // indistinguishable from a full gate, silently certifying a skill on a tenth of the coverage.
+  // A partial run may never produce an EVAL_GATE input.
+  if (allGreen && pins.length && filters.length) {
+    console.log(`[eval:golden] evidence SUPPRESSED — partial run (--only). Re-run unfiltered to gate.`);
+  }
+  if (allGreen && pins.length && !filters.length) {
     const skillVersions = skillVersionsOf(pins);
     for (const pin of pins) {
       const evidence = JSON.stringify({
@@ -1150,7 +1230,7 @@ try {
     selfCheck();
     process.exit(0);
   }
-  await runLive(parseSkillPins(argv));
+  await runLive(parseSkillPins(argv), parseOnlyFilters(argv));
 } catch (e) {
   console.error(`[eval:golden] ${e.message}`);
   process.exit(1);
