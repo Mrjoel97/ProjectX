@@ -29,7 +29,9 @@
     "packages/backend/convex/opsSignals.test.ts",
     "packages/backend/scripts/run-eval-golden.mjs",
     "packages/backend/scripts/eval-cases/",
-    "packages/backend/scripts/run-probe-websearch.mjs"
+    "packages/backend/scripts/run-probe-websearch.mjs",
+    "packages/backend/scripts/launch-detached.ps1",
+    "packages/backend/convex/smoke.ts"
   ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",

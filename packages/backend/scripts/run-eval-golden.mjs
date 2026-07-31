@@ -36,13 +36,25 @@ const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
 // gpt-4o-mini). Cumulative costUsd beyond this ABORTS the run (exit 2).
-const COST_CAP_USD = 1.0;
+// 16-09: raised 1.0 → 2.0 BECAUSE the cap became honest, not because spending grew. Until the
+// cost-merge below, `caseCost` summed only the SYNCHRONOUS executive turn; the research specialist
+// bills asynchronously (~$0.21/case, measured) and was invisible to `overCap`. Now that the cap can
+// finally see that money, a full 33-case gate lands at ~$0.83 clean and ~$1.06 with ONE research
+// retry — so the old 1.0 would abort the very run ACTN-03 needs the evidence row from, after paying
+// for most of it. 2.0 is a real ceiling for the honest total, not a licence to spend more.
+const COST_CAP_USD = 2.0;
 
 // 15-06: how long a tapped gap's SCHEDULED specialist dispatch gets to leave `collecting`.
 // `landSpecialistResult` runs in a `finally` on every outcome (success, overrun, the four governed
 // refusals, a throw), so a row still at `collecting` past this means the deployment never ran the
 // job — an environment problem, not a case failure.
-const DISPATCH_TIMEOUT_MS = 150_000;
+// 16-09: raised 150_000 → 210_000. MEASURED: the first-ever successful research dispatch
+// (`eval-a096684d`, fixture 32) took 171,046 ms — 21s LONGER than the old timeout. At 150s every
+// research fixture would time out on attempt 1, burn its ~$0.21 of specialist spend invisibly
+// (the dispatch keeps billing after the runner stops waiting), retry on a fresh thread, and time
+// out again — doubling the bill AND failing on `researchDocPresent` for a purely harness reason.
+// 210s bounds the specialist's own hard wall (`RESEARCH_CALL_TIMEOUT_MS = 180_000`) with margin.
+const DISPATCH_TIMEOUT_MS = 210_000;
 const DISPATCH_POLL_MS = 3_000;
 
 // The needle `vaultSmoke:seedCorpus` stamps into every seeded brief's TITLE and BODY. It is what
@@ -461,6 +473,17 @@ function overCap(totalCost, cap = COST_CAP_USD) {
   return totalCost > cap;
 }
 
+/** 22.1: the printable cost. A dispatch case's money is dominated by the ASYNC specialist turn
+ *  ($0.0169 exec + $0.2085 specialist on 32-research-grounded), so hiding it inside one number
+ *  makes the run look ten times cheaper than it is. Non-dispatch cases (specialistCost 0) print
+ *  BYTE-IDENTICALLY to before — no split where there is nothing to split. */
+function formatCost(caseCost, specialistCost = 0) {
+  return specialistCost > 0
+    ? `$${(caseCost - specialistCost).toFixed(4)} exec + $${specialistCost.toFixed(4)} specialist` +
+        ` = $${caseCost.toFixed(4)}`
+    : `$${caseCost.toFixed(4)}`;
+}
+
 // ── offline self-check (ZERO convex calls; plain assert, no framework) ───────
 
 function selfCheck() {
@@ -677,11 +700,15 @@ function selfCheck() {
   );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.
-  const trip = [0.4, 0.4, 0.3].reduce((sum, c) => sum + c, 0);
-  assert.ok(overCap(trip), "$1.10 must trip the $1.00 cap");
-  const under = [0.05, 0.1].reduce((sum, c) => sum + c, 0);
-  assert.ok(!overCap(under), "$0.15 must not trip the cap");
-  assert.ok(!overCap(1.0), "exactly $1.00 does not trip (cap is strictly greater-than)");
+  // 16-09: stated as FRACTIONS OF THE CAP, never literal dollars. These previously hardcoded
+  // $1.10/$1.00, which asserted the cap's VALUE rather than its LOGIC — so raising COST_CAP_USD
+  // for a legitimate reason turned a correct change red. The behaviour under test is "a sum of
+  // per-turn costs exceeding the cap trips it", and that is true at any cap.
+  const trip = [0.4, 0.4, 0.3].reduce((sum, c) => sum + c * COST_CAP_USD, 0); // 110% of cap
+  assert.ok(overCap(trip), "110% of the cap must trip it");
+  const under = [0.05, 0.1].reduce((sum, c) => sum + c * COST_CAP_USD, 0); // 15% of cap
+  assert.ok(!overCap(under), "15% of the cap must not trip it");
+  assert.ok(!overCap(COST_CAP_USD), "exactly the cap does not trip (strictly greater-than)");
 
   // 4. --skill pin parsing.
   assert.deepEqual(parseSkillPin("cockpit-agent@3"), { name: "cockpit-agent", version: 3 });
@@ -882,9 +909,40 @@ function selfCheck() {
     "planKind MUST FAIL on a plan row with no kind (an email plan, never dispatched)",
   );
 
+  // 7. 22.1: the async-specialist cost merge. Real numbers, measured off one `subagent.completed`
+  //    row (tenant eval-a096684d): $0.0169 exec + $0.20847665 specialist on ONE research fixture.
+  const EXEC = 0.0169;
+  const SPEC = 0.20847665;
+  assert.equal(
+    formatCost(EXEC),
+    "$0.0169",
+    "a non-dispatch case must print EXACTLY as it did before the split existed",
+  );
+  assert.equal(
+    formatCost(EXEC + SPEC, SPEC),
+    "$0.0169 exec + $0.2085 specialist = $0.2254",
+    "a dispatch case must show the split the owner is meant to see",
+  );
+  // The cap must SEE the specialist money. Exec-only, thirty-three fixtures never trips $1.00 —
+  // which is exactly why the blind runner reported "$0.22" on a run that spent multiples of it.
+  // 16-09: pinned to an EXPLICIT cap rather than COST_CAP_USD. EXEC/SPEC are real MEASURED dollars,
+  // so scaling them by the production cap would be meaningless — and reading the production cap
+  // would make a legitimate cap change fail an assertion about merge logic, which is what happened.
+  const TEST_CAP = 1.0;
+  assert.equal(
+    overCap(33 * EXEC, TEST_CAP),
+    false,
+    "exec-only spend never trips the cap — the old blindness",
+  );
+  assert.equal(
+    overCap(5 * (EXEC + SPEC), TEST_CAP),
+    true,
+    "five dispatch cases DO trip the cap once the specialist bill is merged in",
+  );
+
   console.log(
     `[eval:golden] self-check PASSED (${fixtures.length} fixtures valid, ${SKILL_NAMES.length} gated skills` +
-      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch logic proven offline)`,
+      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline)`,
   );
 }
 
@@ -984,11 +1042,17 @@ function attemptCase(fixture, tenant, pins) {
   // 15-06 (DISP-01): the "Act on this" tap, between the turns and the assertions. This drives the
   // REAL user path — evaluations.actOnGap's shared implementation stages `collecting` and schedules
   // internal.dispatch.runSpecialist — through the identity-less twin, because `npx convex run`
-  // carries no auth identity. The specialist turn is a SECOND model call whose cost lands on the
-  // deployment's daily rail, not on this runner's COST_CAP_USD (the runner only sees runCockpitAgent's
-  // costUsd); the dispatcher's own tree envelope is the ceiling there.
+  // carries no auth identity. The specialist turn is a SECOND model call that bills ASYNCHRONOUSLY,
+  // after runCockpitAgent already returned — so it used to be invisible to COST_CAP_USD entirely
+  // ($0.21 of specialist money per research fixture against a $0.02 exec turn). It is now charged
+  // below, off the audit trail, the moment the dispatch poll settles.
   let plan;
   let landedResearchCount = 0;
+  let specialistCost = 0;
+  // Set the MOMENT a dispatch is actually scheduled — the money exists from then on, including on
+  // a timeout, so the failure returns below must be charged too (they used to return cost-free).
+  let dispatched = false;
+  let dispatchFailures = null;
   if (fixture.actOnGap !== undefined) {
     const tap = parse(
       must("evaluations:actOnGapInternal", {
@@ -998,44 +1062,58 @@ function attemptCase(fixture, tenant, pins) {
       }),
     );
     if (!tap.ok) {
+      // Nothing dispatched (`gap_not_found`) → no specialist money, and no read to pay for.
       return {
         pass: false,
         failures: [{ key: "actOnGap", expected: "ok", actual: tap.reason }],
         caseCost,
+        specialistCost,
       };
     }
+    dispatched = true;
     plan = waitForDispatch(tap.planId);
     if (!plan) {
-      return {
-        pass: false,
-        failures: [{ key: "actOnGap", expected: "left collecting", actual: "still collecting" }],
-        caseCost,
-      };
+      dispatchFailures = [
+        { key: "actOnGap", expected: "left collecting", actual: "still collecting" },
+      ];
     }
   } else if (fixture.expect.researchDocPresent === true) {
     // D9-REVISED: the executive returns immediately and the research run lands on the scheduler.
     // Poll the same durable document the assertion reads; a fixed sleep would be either flaky or
     // needlessly slow, and polling plan status alone wakes before persistResearchFindings.
+    dispatched = true;
     const landed = waitForResearchLanding(planId, tenant, threadId);
     if (!landed) {
-      return {
-        pass: false,
-        failures: [
-          {
-            key: "researchDocPresent",
-            expected: "scheduled research landed",
-            actual: "no research document before timeout",
-          },
-        ],
-        caseCost,
-      };
+      dispatchFailures = [
+        {
+          key: "researchDocPresent",
+          expected: "scheduled research landed",
+          actual: "no research document before timeout",
+        },
+      ];
+    } else {
+      plan = landed.plan;
+      landedResearchCount = landed.researchCount;
     }
-    plan = landed.plan;
-    landedResearchCount = landed.researchCount;
   } else {
     // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
     // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
     plan = parse(must("plans:getById", { planId }));
+  }
+  // The specialist bill, charged off the audit trail now that the dispatch poll has settled (one
+  // read, hung off the EXISTING poll — no second loop). Same skip-unless-asked discipline as every
+  // other read below: a non-dispatch case pays no extra hop and its numbers are unchanged.
+  if (dispatched) {
+    specialistCost = parse(must("smoke:specialistCostForThread", { tenantId: tenant, threadId }));
+    caseCost += specialistCost;
+    totalCost += specialistCost;
+    // The cap is a governed stop and outranks a case failure — check BEFORE returning one.
+    if (overCap(totalCost)) {
+      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
+    }
+  }
+  if (dispatchFailures) {
+    return { pass: false, failures: dispatchFailures, caseCost, specialistCost };
   }
   const briefingCount =
     fixture.expect.briefingPresent === undefined
@@ -1101,7 +1179,7 @@ function attemptCase(fixture, tenant, pins) {
       actual: e.message.split("\n")[0],
     });
   }
-  return { pass: failures.length === 0, failures, caseCost };
+  return { pass: failures.length === 0, failures, caseCost, specialistCost };
 }
 
 async function runLive(pins, filters = []) {
@@ -1152,6 +1230,7 @@ async function runLive(pins, filters = []) {
         pass: false,
         failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
         caseCost: 0,
+        specialistCost: 0,
       };
     }
     if (!outcome.pass) {
@@ -1165,19 +1244,23 @@ async function runLive(pins, filters = []) {
           pass: false,
           failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
           caseCost: 0,
+          specialistCost: 0,
         };
       }
-      if (second.pass) {
-        retriedCases.push(fixture.id);
-        outcome = { ...second, caseCost: outcome.caseCost + second.caseCost };
-      } else {
-        outcome = { ...second, caseCost: outcome.caseCost + second.caseCost };
-      }
+      // Both attempts' money is real — the specialist half of it too.
+      const merged = {
+        caseCost: outcome.caseCost + second.caseCost,
+        specialistCost: (outcome.specialistCost ?? 0) + (second.specialistCost ?? 0),
+      };
+      if (second.pass) retriedCases.push(fixture.id);
+      outcome = { ...second, ...merged };
     }
     results.push({ id: fixture.id, ...outcome, retried });
 
     const tag = outcome.pass ? (retried ? "PASS (retried)" : "PASS") : "FAIL";
-    console.log(`  ${tag.padEnd(15)} ${fixture.id}  ($${outcome.caseCost.toFixed(4)})`);
+    console.log(
+      `  ${tag.padEnd(15)} ${fixture.id}  (${formatCost(outcome.caseCost, outcome.specialistCost)})`,
+    );
     if (!outcome.pass) {
       for (const f of outcome.failures) {
         console.log(
@@ -1190,10 +1273,11 @@ async function runLive(pins, filters = []) {
   const casesPassed = results.filter((r) => r.pass).length;
   const casesTotal = results.length;
   const allGreen = casesPassed === casesTotal;
+  const totalSpecialist = results.reduce((sum, r) => sum + (r.specialistCost ?? 0), 0);
   console.log(
     `\n[eval:golden] ${casesPassed}/${casesTotal} passed` +
       (retriedCases.length ? ` (retried: ${retriedCases.join(", ")})` : "") +
-      ` — total cost $${totalCost.toFixed(4)}`,
+      ` — total cost ${formatCost(totalCost, totalSpecialist)}`,
   );
 
   // Evidence: only on an ALL-GREEN run with at least one --skill pin (refs/counts only, §4) —

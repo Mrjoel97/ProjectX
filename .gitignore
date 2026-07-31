@@ -44,3 +44,6 @@ graphify-out/20[0-9][0-9]-*/
 
 # Raw screenshot dump (deduped into docs/design/brand/)
 /Screenshots/
+
+# 16-09: detached eval run logs + pid files (launch-detached.ps1)
+packages/backend/.eval-runs/

@@ -478,7 +478,10 @@ async function researchTrailForThread(
   ctx: QueryCtx,
   tenantId: string,
   threadId: string,
-): Promise<{ docs: Doc<"vaultDocuments">[]; webSearchCalls: number }> {
+  // 22.1: `null` = EVERY governed dispatch on the thread, not just research. The cost read needs
+  // that widening — an actOnGap specialist (offer-architect, …) bills the same async money.
+  tool: Doc<"agentSteps">["tool"] | null = "dispatchResearch",
+): Promise<{ docs: Doc<"vaultDocuments">[]; webSearchCalls: number; costUsd: number }> {
   const steps = await ctx.db
     .query("agentSteps")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -488,7 +491,7 @@ async function researchTrailForThread(
       .filter(
         (row) =>
           row.threadId === threadId &&
-          row.tool === "dispatchResearch" &&
+          (tool === null || row.tool === tool) &&
           row.stepKey.startsWith(RESEARCH_DISPATCH_PREFIX),
       )
       .map((row) => row.stepKey.slice(RESEARCH_DISPATCH_PREFIX.length))
@@ -497,6 +500,7 @@ async function researchTrailForThread(
 
   const docIds = new Set<Id<"vaultDocuments">>();
   let webSearchCalls = 0;
+  let costUsd = 0;
   for (const correlationId of correlations) {
     const auditRows = await ctx.db
       .query("audit")
@@ -510,6 +514,10 @@ async function researchTrailForThread(
         const count = row.payload?.webSearchCalls;
         if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
           webSearchCalls += count;
+        }
+        const spend = row.payload?.costUsd;
+        if (typeof spend === "number" && Number.isFinite(spend) && spend >= 0) {
+          costUsd += spend;
         }
       }
       if (row.eventType === "research.persisted") {
@@ -526,7 +534,7 @@ async function researchTrailForThread(
     const doc = await ctx.db.get(docId);
     if (doc?.tenantId === tenantId && doc.kind === "web_research") docs.push(doc);
   }
-  return { docs, webSearchCalls };
+  return { docs, webSearchCalls, costUsd };
 }
 
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
@@ -554,6 +562,17 @@ export const webSearchCallsForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
   handler: async (ctx, { tenantId, threadId }): Promise<number> =>
     (await researchTrailForThread(ctx, tenantId, threadId)).webSearchCalls,
+});
+
+/** 22.1: the eval runner's specialist-spend read. The specialist turn is a SECOND model call that
+ * bills ASYNCHRONOUSLY, after runCockpitAgent already returned its own costUsd — so the runner's
+ * COST_CAP_USD was blind to the LARGEST cost in the system (one research fixture: $0.0169 exec vs
+ * $0.2085 specialist). `subagent.completed.costUsd` is already written by governedDispatch; this
+ * just sums it over the thread's dispatches (ALL routes — the `null` tool filter). */
+export const specialistCostForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    (await researchTrailForThread(ctx, tenantId, threadId, null)).costUsd,
 });
 
 /**
