@@ -1,16 +1,18 @@
 ---
 phase: 22-owner-authorization-primitive-requireowner
 plan: 03
-status: tasks-1-2-complete
-blocked_on: "Task 3 — blocking human-verify checkpoint (two-identity live UAT)"
+status: complete-server-boundary-proven-dom-half-outstanding
+uat: "Task 3 step 4 (the trust boundary) PASSED live 2026-08-01 both directions; steps 2/3/5 (DOM) not obtained — see 22-UAT-EVIDENCE.md"
 completed: 2026-07-31
 requirements: [GOVN-01]
 ---
 
 # 22-03 Summary — owner-only `/ops` presentation
 
-Tasks 1 and 2 complete, all automated gates green. **Task 3 is a blocking two-identity live UAT
-and has NOT run.**
+Tasks 1 and 2 complete, all automated gates green. **Task 3 ran live on 2026-08-01.** Its
+load-bearing step — the four direct API calls as an authenticated non-owner — **PASSED in both
+directions**. The DOM half (steps 2/3/5) was **not obtained**, blocked by environment rather than
+by a defect. Full detail in `22-UAT-EVIDENCE.md`.
 
 ## The change
 
@@ -83,16 +85,30 @@ in the 22-01 summary — not latent defects.
 | 1 | `viewer` weakened to authentication-only | **RED** — 2 failed / 8 passed (absent-owner, explicit-false). Orphan correctly stays green: a deleted row reads null either way. |
 | 2 | `candidatesForReview` → `tenantQuery` | **RED** — both the static name guard and the behavioural non-owner body test. |
 | 3 | owner check moved below `writeConfig` | **NOT SATISFIABLE.** Convex mutations are atomic; a throw after the write rolls back, so state is byte-identical to the refusal. Attempted verbatim, 11/11 still passed — correctly. Recorded in the playbook rather than faked by weakening a fixture. |
-| 4 | remove the `isOwner` mount guard | **STAGED for the live checkpoint** — the observation is "a non-owner now SEES the Optimizer heading", which needs two live identities and a rendered page. Not run offline. |
+| 4 | remove the `isOwner` mount guard | **STILL UNRUN.** Needs a rendered page and two live identities; blocked with the rest of the DOM half. |
 
 All applied mutations were reverted and re-verified green. No fixture was weakened and no mutation
 was left in the worktree.
 
-## Task 3 — BLOCKING, for the owner
+## Task 3 — RAN LIVE 2026-08-01: boundary PASS, DOM half outstanding
 
-The full checklist is in `docs/playbooks/authorization.md` under *"Live owner/non-owner checklist"*.
-Its load-bearing step is **#4**, not the DOM check: as the controlled non-owner, call all four
-public APIs directly and confirm every one rejects `OWNER_REQUIRED` with no state change. The DOM
-proves presentation; only the direct calls prove the trust boundary.
+**Step 4 (the load-bearing one) PASSED both ways.** An authenticated non-owner got
+`OWNER_REQUIRED` from all four endpoints, and a real pre-existing `optimizerConfig` row was
+left byte-unchanged by the refused write. The same account, after nothing but the `owner`
+flag flipping, read the config, flipped the kill switch, read 4 candidate BODIES, and hit
+`NO_SUCH_SKILL_VERSION` — the *skill* gate, not the owner gate. That ordering proves the
+refusals were authorization rather than breakage, and that the two gates stay independent.
 
-Do not mark GOVN-01 complete until that checkpoint is approved.
+**Steps 2/3/5 (DOM) NOT obtained.** The app force-redirects any tenant without a committed
+business profile to onboarding, so `/ops` was unreachable for a fresh account and the first
+"optimizer absent" reading was VACUOUS — discarded rather than reported as a pass. After
+clearing that gate the local backend had degraded (5.6-minute pushes, `auth:signIn` exceeding
+its 1 s limit) and neither the sign-in form nor JWT injection completed. Five approaches,
+all environmental. Mutation 4 stays unrun for the same reason.
+
+Full detail and the finish-it instructions: `22-UAT-EVIDENCE.md`, and
+`docs/playbooks/authorization.md` § "Live owner/non-owner checklist" steps 2, 3 and 5.
+
+**GOVN-01 assessment:** the server-side trust boundary — the thing the requirement is about —
+is proven live in both directions. What remains unproven is presentation, and a slip there
+could only expose the mount, never the data behind it, because the wrappers refuse regardless.

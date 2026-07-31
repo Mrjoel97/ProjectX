@@ -1,16 +1,16 @@
 ---
 phase: 22-owner-authorization-primitive-requireowner
 plan: 01
-status: tasks-1-2-complete
-blocked_on: "Task 3 — blocking human checkpoint (live owner bootstrap on the intended deployment)"
+status: complete
+uat: "Task 3 PASSED live 2026-08-01 — see 22-UAT-EVIDENCE.md"
 completed: 2026-07-31
 requirements: [GOVN-01]
 ---
 
 # 22-01 Summary — identity + owner substrate
 
-Tasks 1 and 2 are complete and green. **Task 3 is a blocking human checkpoint and has NOT run** —
-it requires the owner to confirm the intended `users._id` on the intended deployment.
+All three tasks are complete. **Task 3 ran live on 2026-08-01 and PASSED** — full evidence in
+`22-UAT-EVIDENCE.md`.
 
 ## What shipped
 
@@ -86,9 +86,11 @@ two `'event' is possibly undefined` under `noUncheckedIndexedAccess`).
 5. **No allowlist entry was needed** for `owner.ts`: the import guard's regex is case-sensitive
    and `internalMutation` never matches it.
 
-## Task 3 — BLOCKING, for the owner
+## Task 3 — RAN LIVE 2026-08-01. PASS.
 
-Not run. Requires, on the intended deployment (NOT a lane deployment — a lane has its own,
+Executed live; see 22-UAT-EVIDENCE.md.
+
+Original instructions, kept for the record — requires, on the intended deployment (NOT a lane deployment — a lane has its own,
 owner-less deployment and would prove nothing):
 
 ```powershell

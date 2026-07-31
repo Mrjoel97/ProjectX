@@ -1,6 +1,12 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-07-31 (22-03) — `/ops` now mounts its **entire** Optimizer section only for
+> Last verified: 2026-08-01 (22 UAT) — VERIFIED LIVE on the configured deployment. Owner bootstrap
+> is idempotent (changed true then false) with exactly one refs-only owner.granted row. An
+> authenticated NON-owner is refused OWNER_REQUIRED by all four endpoints and left a real existing
+> optimizerConfig row byte-unchanged; the SAME account with owner:true then read the config,
+> flipped the switch, read 4 candidate bodies, and hit the SKILL gate (NO_SUCH_SKILL_VERSION), not
+> the owner gate. The DOM half is still outstanding — see .planning/phases/22-*/22-UAT-EVIDENCE.md.
+> PREVIOUS: Last verified: 2026-07-31 (22-03) — `/ops` now mounts its **entire** Optimizer section only for
 > a confirmed owner (`api.owner.viewer`). Mounting is the security act, not styling: `OptimizerPanel`
 > owns all four owner-only hooks, so CSS/`hidden`/opacity/an early-return-inside-the-panel would each
 > still subscribe and leak through the subscription, loading state, or error boundary. Eval signals,
