@@ -34,8 +34,19 @@ seedSkills array in packages/backend/convex/skills.ts):
 Their "Creative DNA" config (Voice / Visual Identity / Content Format / Audience /
 Rules) maps to a per-tenant brand-profile document, not a file.
 
-SKIP: /generate, /assemble (image/video APIs — heavy), /trends (needs live trend
-data), /storyboard, /art-direction (video-production stages, off solopreneur path).
+SKIP: /assemble (multi-clip concatenation — ADR-011 rules it out of Phase 20),
+/trends (needs live trend data).
+
+**PARTLY SUPERSEDED 2026-08-01 (owner, Phase 20 planning).** This todo's original
+SKIP list covered the media stages as "heavy". Phase 20 reverses that for the
+MEDIA stages only: `/art-direction`, `/storyboard` and the prompt shape of
+`/generate` are claimed by Phase 20 (`20-CONTEXT.md` D6) — with the fal.ai CALL
+being ours, not koda's invocation. Corroboration: koda's `/generate` already
+targets fal.ai, which ADR-011 chose independently on price-per-clip.
+
+The four CONTENT stages below (`/brief`, `/script`, `/publish`, `/repurpose`)
+plus `/concept` remain unclaimed and stay with this todo. Phase 18's
+`content-drafter` covers documents/HTML and does NOT claim them.
 
 MIT license — keep an attribution note in each ported skill body's header.
 Do NOT clone the repo into the codebase (CLAUDE.md §5: prompts live in the
