@@ -68,9 +68,20 @@ const BUDGET_EXHAUSTED_REPLY =
 // row + an audit row per call and re-enters the diagnostic engine mid-dispatch), so it is
 // deliberately absent from the code-owned grant (ADR-007). Driver-plane synthetic string, not a
 // skill — §5 does not apply; the system prompt is still the registry row runSpecialistTurn loads.
+// "Work ONLY from the grounded facts above" used to be the first clause, and it CONTRADICTED every
+// specialist body it is concatenated with — all three open with "Before you assert anything about
+// this business, search the vault" (offer-architect.md / money-model-designer.md / lead-engine.md).
+// A driver-plane string must not countermand the §5 registry row it wraps. It still forbids the
+// only thing it ever meant to forbid — inventing what neither source states.
+// SEQUENCED, not merely permissive: across both paid runs 0 of 4 gap dispatches called
+// `searchVault` at all, so "work from … what searchVault returns" was read as an option rather
+// than a first step and every memo landed `evalgrd:false`. Says WHEN to search; deliberately does
+// NOT re-teach "cite the document title" — the three v2 specialist bodies own that (§5), and
+// duplicating registry teaching into a code-owned string is the second mechanism this repo forbids.
 const TASK_LINE =
-  "Work only from the grounded facts above. Produce the concrete next step for that one " +
-  "constraint. Say plainly where the data is thin — never invent a figure.";
+  "Search the vault first, then work from what it returns plus the grounded facts above — those " +
+  "two are your only sources. Produce the concrete next step for that one constraint. Say plainly " +
+  "where the data is thin — never invent a figure.";
 const NO_SNAPSHOT = "There is no evaluation on file for this conversation yet.";
 /** Cap the injected snapshot the way evaluateBusiness caps its synopsis: a large evaluation
  *  must not blow the specialist's context (and the loop's cost) on carried prose. */
@@ -151,6 +162,9 @@ type DispatchArgs = {
   /** 16-06: the executive's research question. Present ⇒ buildSpecialistPrompt takes the question
    *  branch instead of the evaluation snapshot. */
   question?: string;
+  /** 16-09: the eval harness's --skill pins. Without this the specialist silently ran the ACTIVE
+   *  row (v1) while the evidence row claimed v2 — a pin that certifies a body that never executed. */
+  skillVersions?: Record<string, number>;
 };
 
 /** The Convex validators for the above — shared by BOTH entry points so neither can drift. */
@@ -169,6 +183,7 @@ const dispatchArgs = {
   envelopeCents: v.number(),
   spentCents: v.number(),
   question: v.optional(v.string()),
+  skillVersions: v.optional(v.record(v.string(), v.number())),
 };
 
 /** Compile-time bind: every registered specialist's `stepTool` is a real agentSteps.tool literal.
@@ -532,7 +547,12 @@ export const runSpecialist = internalAction({
   args: dispatchArgs,
   handler: async (ctx, args): Promise<DispatchResult> =>
     dispatchAndLand(ctx, args, (a) =>
-      runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
+      runSpecialistTurn(ctx, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        skillVersions: args.skillVersions,
+        ...a,
+      }),
     ),
 });
 
@@ -615,7 +635,13 @@ export const runResearch = internalAction({
       await dispatchAndLand(
         ctx,
         args,
-        (a) => runSpecialistTurn(ctx, { tenantId: args.tenantId, planId: args.planId, ...a }),
+        (a) =>
+          runSpecialistTurn(ctx, {
+            tenantId: args.tenantId,
+            planId: args.planId,
+            skillVersions: args.skillVersions,
+            ...a,
+          }),
         RESEARCH_FAILED_MEMO,
       ),
     ),
@@ -652,6 +678,7 @@ export const __runSpecialistWithScript = internalAction({
         runSpecialistTurn(ctx, {
           tenantId: args.tenantId,
           planId: args.planId,
+          skillVersions: args.skillVersions,
           ...a,
           mockScript: {
             primary: args.primary,

@@ -139,6 +139,29 @@ describe("diagnose — top-down gate router (stop at first failing gate)", () =>
     expect(rx.playbook).toBe("01-pick-channel");
   });
 
+  // The eval fixture 31 shape, EXACTLY as the live engine can build it: no tenant profile is seeded
+  // for an eval tenant and the seeded vault briefs carry no numbers, so the ONLY paths that fill this
+  // scorecard are one grounded LTGP and `recordScorecardAnswer`. `healthy()` is far too rich to catch
+  // this — it hands gate 2 four financial inputs AND two offer types. Run c1fe054c routed this case
+  // to money-model-designer; with cac/tdc/payback/industryAvgCac all unfillable here, `offerTypeCount
+  // <= 1` is the ONLY gate-2 branch that can fire, which is what the second assertion pins.
+  test("fixture 31 shape: thin scorecard, two offer types, no channel → lead-engine/01-pick-channel", () => {
+    const sc = structuredClone(emptyScorecard);
+    sc.identity.currentOffers = ["done-for-you shipment onboarding package"];
+    sc.financials.ltgp = 3200; // the one grounded figure; cac/tdc/payback stay null
+    sc.modelCard.offerTypesPresent.attraction = true;
+    sc.modelCard.offerTypesPresent.continuity = true;
+    // coreFourActive is already all-false in emptyScorecard — gate 3 needs NO recording.
+    const rx = diagnose(sc);
+    expect(rx.gate).toBe(3);
+    expect(rx.route).toBe("lead-engine");
+    expect(rx.playbook).toBe("01-pick-channel");
+
+    // Drop ONE offer type and gate 2 preempts — the measured c1fe054c misroute, reproduced offline.
+    sc.modelCard.offerTypesPresent.continuity = false;
+    expect(diagnose(sc).route).toBe("money-model-designer");
+  });
+
   test("CONSERVATIVE: null financials at the money-model gate → ASK, never a route or metric", () => {
     const sc = healthy();
     sc.financials.cac = null;

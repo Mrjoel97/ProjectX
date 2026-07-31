@@ -305,6 +305,29 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
     });
     expect(row?.scorecard.financials.cac).toBe(150);
     expect(row?.userProvided).toContain("financials.cac");
+
+    // 16-09 REGRESSION GUARD, folded into THIS test rather than a sibling: every `newTest()` boots
+    // a fresh in-memory backend + four components, and the marginal one pushed this file's
+    // mixed-environment suite over the load threshold vitest.config.mts already documents.
+    //
+    // The cockpit tool's JSON schema types `value` as a STRING, so a boolean leaf arrived as
+    // "false" — and "false" is TRUTHY, so diagnose()'s presence counts read a known-ABSENT offer
+    // type as PRESENT (measured: run c1fe054c fixture 30 → healthy / 0 gaps / no dispatch).
+    const record = (field: string, value: string) =>
+      t
+        .withIdentity({ subject: TENANT })
+        .mutation(api.evaluations.recordScorecardAnswer, { threadId: THREAD, field, value });
+    await record("modelCard.offerTypesPresent.upsell", "false");
+    await record("financials.ltgp", "3200 dollars");
+
+    const coerced = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    // Assert the TYPE too: `toBe(false)` alone would also hold for a value that is merely falsy,
+    // and the whole defect is that the truthy STRING "false" looked stored-correctly.
+    expect(coerced?.scorecard.modelCard.offerTypesPresent.upsell).toBe(false);
+    expect(typeof coerced?.scorecard.modelCard.offerTypesPresent.upsell).toBe("boolean");
+    expect(coerced?.scorecard.financials.ltgp).toBe(3200);
   });
 });
 

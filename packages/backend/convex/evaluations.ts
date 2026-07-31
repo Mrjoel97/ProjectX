@@ -515,14 +515,50 @@ function gateOrder(g: Prescription["gate"]): number {
   return g === "scale" ? 4 : g;
 }
 
+// The cockpit tool's JSON schema types `value` as a STRING (llm.ts:1813), so a boolean leaf
+// receives "false" — and "false" is TRUTHY, so diagnose()'s filter(Boolean) presence counts read a
+// known-ABSENT offer type / channel as PRESENT. Measured: run c1fe054c fixture 30 stored
+// offerTypesPresent={attraction:"true",continuity:"false",downsell:"false",upsell:"false"} and
+// diagnose returned "scale"/healthy/0 gaps. Coerce at the one choke point every writer routes
+// through (recordScorecardAnswer + recordScorecardAnswerInternal).
+//
+// `typeof getPath(emptyScorecard, field) === "boolean"` covers every presence map with no
+// hand-maintained list (scorecard.ts:125,130 default them to real `false`); NULLABLE_BOOL adds only
+// the three whose default is `null`. `identity.currentOffers` deliberately falls through untouched
+// (`typeof [] === "object"`): `hasOffer` reads `.length > 0`, correct for a bare string too.
+const NULLABLE_BOOL = new Set([
+  "identity.marketViable",
+  "identity.commodity",
+  "modelCard.thirtyDayPayback",
+]);
+const NUMERIC =
+  /^(financials\.|identity\.headlinePrice$|position\.roadmapLevel$|modelCard\.continuityTakePct$|offerCard\.valueEquation\.)/;
+
+function coerceScorecardValue(
+  field: string,
+  value: number | string | boolean,
+): number | string | boolean {
+  if (typeof value !== "string") return value;
+  const s = value.trim();
+  if (typeof getPath(emptyScorecard, field) === "boolean" || NULLABLE_BOOL.has(field)) {
+    if (/^(true|yes)$/i.test(s)) return true;
+    if (/^(false|no|none)$/i.test(s)) return false;
+    return value; // unparseable — leave it, never guess
+  }
+  if (NUMERIC.test(field)) {
+    const n = Number(s.replace(/[$,]/g, "").replace(/\s*(dollars?|usd)$/i, ""));
+    return Number.isFinite(n) ? n : value;
+  }
+  return value;
+}
+
 /**
  * The "store" persistence path: a user's in-conversation answer to a missing figure. Writes the
  * value into the latest row's Scorecard + adds the dot-path to userProvided[] so the NEXT
  * runEvaluation carries it forward (never re-asks) and cites any finding on it "user-provided".
  * Tenant-guarded (§2). No prior row (answer before the first evaluation) → seed a minimal carrier
  * row so the figure still survives forward.
- */
-/**
+ *
  * The shared store logic — patch the latest row's Scorecard (adding the dot-path to userProvided[]),
  * or seed a minimal carrier row when the user answers before the first evaluation. Takes an explicit
  * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
@@ -535,6 +571,8 @@ async function applyScorecardAnswer(
   field: string,
   value: number | string | boolean,
 ): Promise<{ recorded: true }> {
+  // NOT named `v` — that is the convex/values validator import at module scope.
+  const coerced = coerceScorecardValue(field, value);
   const last = await db
     .query("evaluations")
     .withIndex("by_tenant_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
@@ -542,7 +580,7 @@ async function applyScorecardAnswer(
     .first();
 
   if (last) {
-    const scorecard = setPath(last.scorecard, field, value);
+    const scorecard = setPath(last.scorecard, field, coerced);
     const userProvided = last.userProvided.includes(field)
       ? last.userProvided
       : [...last.userProvided, field];
@@ -558,7 +596,7 @@ async function applyScorecardAnswer(
     findings: [],
     gaps: [],
     notEnoughData: [],
-    scorecard: setPath(emptyScorecard, field, value),
+    scorecard: setPath(emptyScorecard, field, coerced),
     userProvided: [field],
     verdict: "insufficient",
     createdAt: Date.now(),
@@ -720,6 +758,9 @@ async function applyActOnGap(
   tenantId: string,
   threadId: string,
   gapIndex: number,
+  // 16-09: the eval harness's --skill pins, forwarded to the scheduled specialist. Append-only and
+  // ABSENT on the production `actOnGap` path, which must keep running the ACTIVE row.
+  skillVersions?: Record<string, number>,
 ): Promise<ActOnGapResult> {
   const row = await ctx.db
     .query("evaluations")
@@ -792,6 +833,8 @@ async function applyActOnGap(
     ancestry: [],
     envelopeCents: 0, // the ROOT signal — 15-03 derives the real envelope from the live rail
     spentCents: 0,
+    // Without this the specialist ran the ACTIVE row while the eval evidence claimed the pin.
+    skillVersions,
   });
   // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
   // keep working untouched.
@@ -814,9 +857,16 @@ export const actOnGap = tenantMutation({
  * generated API for `apps/web`).
  */
 export const actOnGapInternal = internalMutation({
-  args: { tenantId: v.string(), threadId: v.string(), gapIndex: v.number() },
-  handler: (ctx, { tenantId, threadId, gapIndex }): Promise<ActOnGapResult> =>
-    applyActOnGap(ctx, tenantId, threadId, gapIndex),
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    gapIndex: v.number(),
+    // The harness's --skill pins. Only THIS twin takes them: `actOnGap` above is the production UI
+    // path and has none, so it keeps running the active row.
+    skillVersions: v.optional(v.record(v.string(), v.number())),
+  },
+  handler: (ctx, { tenantId, threadId, gapIndex, skillVersions }): Promise<ActOnGapResult> =>
+    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions),
 });
 
 /** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one

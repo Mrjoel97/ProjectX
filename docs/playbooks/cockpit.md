@@ -1,6 +1,45 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-07-31 (22.1b) — a SECOND value now rides the same path, for the same reason:
+> Last verified: 2026-07-31 (ACTN-03) — **A skill PIN now reaches the specialist, and `TASK_LINE`
+> sequences the search.** THE BLOCKER: `DispatchArgs`/`dispatchArgs` carried no `skillVersions`, so
+> `--skill offer-architect@2` stopped at the executive turn. `llm.ts`'s `pin` was always `undefined`
+> → `getActiveSkill` → v1 — and v1 of all three gap specialists contains ZERO vault teaching ("a
+> full build runs later"). Every `subagent.completed` payload in both paid runs reads
+> `"skillVersion":1` while the run went on to write an EVAL_GATE evidence row certifying v2: **a pin
+> that certified a body that never executed, with every test green.** `skillVersions` is now an
+> optional field on the shared `dispatchArgs` validator (so `runSpecialist`, `runResearch` and the
+> offline twin cannot drift) and is passed at all three `runSpecialistTurn` call sites; it is
+> supplied by the CALLER, never by the runner's `a` — `SpecialistRunner` is deliberately unwidened.
+> The research half rides `dispatchResearchTool`'s scheduler call, where `skillVersions` was already
+> in scope as `buildCockpitTools`' 5th arg. Regression guard: the SC#1 happy-path test now proves
+> both halves of the contrast — no pin ⇒ the ACTIVE row, a pin ⇒ that row. Second change:
+> `TASK_LINE` now SEQUENCES retrieval ("Search the vault first, then work from what it returns")
+> rather than merely permitting it — 0 of 4 gap dispatches across both paid runs called `searchVault`
+> at all. It still does NOT re-teach "cite the document title": the three v2 bodies own that (§5),
+> and duplicating registry teaching into a code-owned string is a second mechanism.
+> PREVIOUS: 2026-07-31 (fixture-29 root cause) — **`searchVault` now returns each chunk under
+> its SOURCE TITLE, and `TASK_LINE` no longer forbids the retrieval the specialist bodies mandate.**
+> Two defects, one symptom (a grounded memo that cites nothing; eval fixture
+> `29-gap-dispatch-offer-architect` failed `citesVaultDoc` on both paid runs). (1)
+> `vaultGroundHydrated` returns three PARALLEL arrays — `docIds`, `titles`, `chunks` — and the
+> `searchVault` tool passed `titles` to the `vaultSources` UI card ONLY: the model got
+> `chunks.join("\n\n")` and never saw a title. All three gap specialists' §5 bodies say "Cite the
+> document title beside every claim" (offer-architect.md:12-15, money-model-designer.md:15,
+> lead-engine.md:15), and the cockpit's own honesty rule forbids claiming grounding it did not
+> retrieve — every one of those instructions was STRUCTURALLY UNSATISFIABLE. The fenced return is now
+> `[<title>]\n<chunk>` per document (same array, same index, same tenant-scoped read — no new call,
+> no new plane, nothing added to any audit payload). (2) `dispatch.ts`'s `TASK_LINE` opened with
+> "Work ONLY from the grounded facts above", which countermanded the registry body it is
+> concatenated with ("Before you assert anything about this business, search the vault"); a
+> driver-plane synthetic string must never override the §5 row. It now names the two legitimate
+> sources (the snapshot and `searchVault`) and still forbids the only thing it ever meant to —
+> inventing a figure neither source states. Note for the next reader: findings/`citationTitle` come
+> ONLY from `provenance`, which is written when a doc FILLS a TRACKED scorecard path
+> (`evaluations.ts:299-320`), so a vault doc that states no tracked field contributes NO title to
+> the specialist prompt — the tool return is the only channel that can carry it. Verify:
+> `npx vitest run convex/cockpitTools.test.ts -t searchVault` (asserts `[Q3 Report]` in the fence).
+>
+> PREVIOUSLY: 2026-07-31 (22.1b) — a SECOND value now rides the same path, for the same reason:
 > `declaredUnsupported`, a BOOLEAN (§4-clean — the tool's `claim` argument is captured NOWHERE).
 > `DispatchResult`'s ok-branch carries it, `subagent.completed` audits it, the `ok:true` return
 > threads `turn.declaredUnsupported`, and `persistResearchFindings` hands it to

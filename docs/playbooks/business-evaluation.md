@@ -1,6 +1,22 @@
 # Playbook: Business Evaluation Engine
 
-> Last verified: 2026-07-31 — 22-01 (GOVN-01), TEST-ONLY, no engine behaviour changed: the
+> Last verified: 2026-07-31 (ACTN-03) — **`applyScorecardAnswer` now COERCES before it writes, and
+> `actOnGapInternal` forwards a skill pin.** (1) The cockpit's `recordScorecardAnswer` tool types
+> `value` as a STRING in its JSON schema, so every boolean scorecard leaf arrived as `"true"` /
+> `"false"` — and `"false"` is TRUTHY, so `diagnose()`'s presence counts scored a known-ABSENT offer
+> type or lead channel as PRESENT. Measured, not theorised: run `c1fe054c` fixture 30 stored
+> `offerTypesPresent={attraction:"true",continuity:"false",downsell:"false",upsell:"false"}` and the
+> engine returned `healthy` with zero gaps, so the "Act on this" tap had nothing to act on
+> (`gap_not_found`). `coerceScorecardValue` sits at the ONE choke point both writers route through,
+> and decides by the SHAPE OF `emptyScorecard` (`typeof getPath(emptyScorecard, field) === "boolean"`)
+> rather than a hand-maintained field list — the three nullable-boolean paths are the only names it
+> spells out. It deliberately leaves `identity.currentOffers` alone (`typeof [] === "object"`):
+> `hasOffer` reads `.length > 0`, which is correct for a bare string too. **Rule for a new scorecard
+> leaf: give it a real default in `scorecard.ts` and the coercion follows for free; a leaf that
+> defaults to `null` and means a boolean must be added to `NULLABLE_BOOL`.** (2) `applyActOnGap`
+> takes a trailing optional `skillVersions` forwarded to the scheduled `internal.dispatch.runSpecialist`
+> — the eval harness's `--skill` pins otherwise never reached the specialist. `actOnGap` (the UI
+> path) deliberately passes none and keeps running the ACTIVE row. PREVIOUS: 2026-07-31 — 22-01 (GOVN-01), TEST-ONLY, no engine behaviour changed: the
 > lineage assertion in `evaluations.test.ts` dropped its `stableTenant(TENANT)` wrapping. That
 > call was a literal no-op (`TENANT = "tenant_a"` carries no `|sessionId` suffix, so the parser
 > returned it unchanged) and the helper was deleted from production source when identity moved

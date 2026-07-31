@@ -1,6 +1,12 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
-> Last verified: 2026-07-31 (22.1b — **the refusal-to-confabulate guard is back, through a
+> Last verified: 2026-07-31 (ACTN-03 — fixture `31-gap-dispatch-lead-engine` turns STRENGTHENED, no
+> expectation touched). Its `expect.attributionRoute: "lead-engine"` stands; run `c1fe054c` returned
+> `money-model-designer` because the case never asked the agent to put its two offer types on the
+> scorecard, so `offerTypesPresent` stayed at its all-false default and gate 2 preempted gate 3. Rule
+> for any future dispatch fixture: a scorecard fact the diagnosis DEPENDS on must be stated as
+> something to record, not merely as vault context — "keep this on file" routes prose to the vault,
+> and the vault fills no boolean. PREVIOUSLY: 2026-07-31 (22.1b — **the refusal-to-confabulate guard is back, through a
 > code-validated channel instead of a counter**). 22.1 made the verdict honest but left it
 > COUNTER-BASED, and a counter cannot express a semantic judgement: a diligent search of a
 > nonexistent entity always surfaces near-misses, so `sourceCount === 0` is unreachable and the

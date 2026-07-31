@@ -246,6 +246,41 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
     const dispatchStep = steps.find((s) => s.tool === "dispatchOfferArchitect");
     expect(dispatchStep?.phase).toBe("done");
     expect(steps.filter((s) => s.phase === "running")).toEqual([]);
+
+    // 16-09 REGRESSION GUARD, folded into THIS test rather than a sibling because each `setup()`
+    // boots a fresh in-memory backend + components, and the marginal one pushed the mixed-env
+    // backend suite over the load threshold vitest.config.mts already documents. It is also the
+    // exact contrast this test already sets up: the line above proves the ACTIVE row runs when
+    // nothing is pinned; these lines prove a PIN overrides it.
+    //
+    // The defect it guards: `DispatchArgs` had no `skillVersions`, so the eval harness's
+    // `--skill offer-architect@2` never reached `runSpecialistTurn`. The specialist ran the ACTIVE
+    // row (v1 — which carries no vault teaching at all) while the run wrote an EVAL_GATE evidence
+    // row certifying v2. A pin that certifies a body that never executed, with every test green.
+    const pinned = active.version + 1;
+    // `candidate`, exactly like a real gated pin target — an `active` twin would let the assertion
+    // pass through getActiveSkill and prove nothing.
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "offer-architect",
+        version: pinned,
+        body: "PINNED CANDIDATE BODY",
+        status: "candidate" as const,
+        createdAt: Date.now(),
+      }),
+    );
+    const pinnedRes = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        primary: [REPLY_STEP],
+        // A FRESH root: the envelope is per-root and the run above already spent 8 cents of it.
+        rootRequestId: `${ROOT}-pinned`,
+        skillVersions: { "offer-architect": pinned },
+      }),
+    );
+    expect(pinnedRes.skillVersion).toBe(pinned);
+    expect(pinnedRes.skillVersion).not.toBe(active.version);
   });
 
   test.each([

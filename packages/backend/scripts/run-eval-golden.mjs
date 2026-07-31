@@ -1108,6 +1108,10 @@ function attemptCase(fixture, tenant, pins) {
         tenantId: tenant,
         threadId,
         gapIndex: fixture.actOnGap,
+        // 16-09: the pins have to ride the TAP too, exactly as they ride the turn at :1074. The
+        // dispatched specialist is a SEPARATE scheduled action, so without this every `--skill
+        // offer-architect@2` run ran the ACTIVE row (v1) and then wrote an evidence row for v2.
+        ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
       }),
     );
     if (!tap.ok) {

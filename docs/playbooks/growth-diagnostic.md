@@ -1,6 +1,24 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-07-31 (22.1b) — `evidenceVerdict` and `researchFindingsFence` both gained a
+> Last verified: 2026-07-31 (ACTN-03 green-run) — **the two checklist presence counts are now
+> `=== true`, not `filter(Boolean)`.** NO math, gate order, threshold, route literal or `SPECIALISTS`
+> entry changed. `offerTypeCount` (gate 2) and `activeChannels` (gate 3) count a leaf only when it is
+> literally `true`, so a non-boolean that slipped past the write-site coercion in `evaluations.ts`
+> degrades to the conservative "known-absent" default instead of a silently wrong diagnosis. This is
+> DEFENCE IN DEPTH and must never land alone: the write-site coercion is the real fix, and shipping
+> this line without it would regress the case where two positives arrive as the string `"true"`.
+> Measured motive: run `509373bf` stored all four `coreFourActive` channels as the STRING `"false"`,
+> counted 4 active, and made gate 3 unreachable for the fixture written to exercise it.
+> PREVIOUS: 2026-07-31 (ACTN-03 fixture-31 diagnosis) — NO math, gate order, route literal or
+> `SPECIALISTS` entry changed. Test-only: `diagnose.test.ts` gained the eval-fixture-31 shape, which
+> pins an asymmetry every gate-3 case must respect. `modelCard.offerTypesPresent` /
+> `leadCard.coreFourActive` are CHECKLISTS defaulting to all-false (`scorecard.ts`), not nullable
+> unknowns — and unlike the financials there is NO grounding path that fills them (`FINANCIAL_PATTERNS`
+> in `evaluations.ts` covers only cac / ltgp / 30-day cash / headline price). Consequence: gate 3's
+> `activeChannels === 0` is satisfied by the DEFAULT, while gate 2's `offerTypeCount <= 1`
+> (`diagnose.ts:126`) can only be survived by two affirmative `recordScorecardAnswer` writes. Any
+> scenario meant to reach the leads gate must therefore assert its offer types POSITIVELY; asserting
+> the channel negatives alone is a no-op. PREVIOUSLY: 2026-07-31 (22.1b) — `evidenceVerdict` and `researchFindingsFence` both gained a
 > REQUIRED `declaredUnsupported: boolean`, and `RESEARCH_TOOLS` gained a third member,
 > `declareUnsupported`. The middle verdict state now reads
 > `webSearchCalls > 0 && (sourceCount === 0 || declaredUnsupported)`; the outer

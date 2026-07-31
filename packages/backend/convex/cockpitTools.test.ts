@@ -884,6 +884,10 @@ test("searchVault hydrates a fenced chunk into the loop + writes a vaultSources 
   // fence there), so it proves genuine retrieval via the identity-less internalAction.
   expect(reply).toContain("<vault_context");
   expect(reply).toContain(VAULT_NEEDLE);
+  // The chunk carries its SOURCE TITLE into the loop. Every specialist body says "cite the document
+  // title beside every claim"; without this the titles reached only the UI card and that
+  // instruction was unsatisfiable — no grounded memo could ever name what it retrieved.
+  expect(reply).toContain("[Q3 Report]");
 
   // The content-plane source card exists: titles=labels-to-UI, count===1.
   const row = await t.run((ctx) => ctx.db.query("vaultSources").first());

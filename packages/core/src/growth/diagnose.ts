@@ -100,7 +100,13 @@ export function diagnose(sc: Scorecard): Prescription {
     };
   }
 
-  const offerTypeCount = Object.values(sc.modelCard.offerTypesPresent).filter(Boolean).length;
+  // `=== true`, not `filter(Boolean)`: these leaves are a CHECKLIST, and a non-boolean that slipped
+  // past the write-site coercion (evaluations.ts) — notably the string "false", which is truthy —
+  // would otherwise count a known-ABSENT offer type as PRESENT and silently skip this gate.
+  // Defence in depth: unknown ⇒ the conservative "absent" default, never a wrong diagnosis.
+  const offerTypeCount = Object.values(sc.modelCard.offerTypesPresent).filter(
+    (v) => v === true,
+  ).length;
   const ratio = ltgp && cac ? Math.round((ltgp / cac) * 100) / 100 : null;
 
   if (payback === false) {
@@ -155,7 +161,9 @@ export function diagnose(sc: Scorecard): Prescription {
       "CAC falls below 3x industry average",
     );
   }
-  const activeChannels = Object.values(sc.leadCard.coreFourActive).filter(Boolean).length;
+  // `=== true` for the same reason as offerTypeCount above — run 509373bf stored all four channels
+  // as the STRING "false", counted 4 active, and made this gate unreachable.
+  const activeChannels = Object.values(sc.leadCard.coreFourActive).filter((v) => v === true).length;
   if (activeChannels === 0) {
     return rx(
       3,
