@@ -709,6 +709,14 @@ const RESEARCH_REFUSAL_REPLY: Record<"research_in_flight" | "draft_in_progress",
     "discard it. Nothing was started. Tell the user plainly, and offer to research once the " +
     "draft is sent or discarded.",
 };
+// 22.1b. Same class of driver-plane string (the RESEARCH_UNDERWAY_REPLY precedent above) — read by
+// the MODEL, so it closes the loop it opens. It exists to kill the early-exit incentive: a model
+// that learns this call ends the work will reach for it to escape a hard question. A bare "ok"
+// would train exactly that.
+const DECLARED_UNSUPPORTED_REPLY =
+  "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
+  "findings document — what you searched, what you did establish, the near-misses and why each is " +
+  "not the thing asked about, and what would settle it.";
 
 /**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
@@ -756,6 +764,37 @@ export function buildCockpitTools(
 ) {
   // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
   const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+
+  // 22.1b: the specialist's ONE structured channel for a SEMANTIC judgement — "I searched, and what
+  // I found does not SUPPORT the claim". THE SIGNAL IS THE CALL: `runAgentLoop` reads the SDK's own
+  // tool-call record, so nothing the model writes reaches the verdict (the property f2226fe bought
+  // when it took the harness off substring-scanning the persisted document).
+  //
+  // `claim` is a DELIBERATENESS TAX: required so the model must state what it could not support
+  // before flipping the bit (the measured risk is over-declaration, which would redden fixtures 32
+  // and 34), and read by NOBODY — not returned, not persisted, not audited. Reading it would put
+  // model prose back on the verdict path, which is exactly what f2226fe removed.
+  //
+  // A LOCAL executable tool, unlike `webResearch` above — so `onToolExecutionStart` DOES fire and
+  // `schema.ts`'s `agentSteps.tool` union DOES need the `declareUnsupported` literal.
+  const declareUnsupportedTool = {
+    declareUnsupported: tool({
+      description:
+        "Declare that you searched and the sources you retrieved do NOT support the claim you were " +
+        "asked about — including when all you found were similarly-named or adjacent near-misses. " +
+        "Call it once, AFTER searching. It does not end your run and does not replace the findings " +
+        "document. Calling it without having searched records nothing.",
+      inputSchema: jsonSchema<{ claim: string }>({
+        type: "object",
+        properties: { claim: { type: "string" } },
+        required: ["claim"],
+        additionalProperties: false,
+      }),
+      // Code-owned reply (the RESEARCH_UNDERWAY_REPLY precedent). The argument is discarded HERE,
+      // which is the whole containment — there is no path from `claim` to any stored value.
+      execute: async (): Promise<string> => DECLARED_UNSUPPORTED_REPLY,
+    }),
+  };
 
   // DISP-02. D9-REVISED's async research seam: STAGE a memo plan row, SCHEDULE the governed run,
   // RETURN immediately. Nothing here runs a model, so nothing runs inside THIS turn's step budget —
@@ -1049,7 +1088,12 @@ export function buildCockpitTools(
     // a union of DIFFERING object shapes widens the inferred TOOLS into an index signature, which
     // in turn degrades ai@7's onToolExecution* event types to a variant without `toolCall`. Same
     // type, different runtime presence — which is exactly the structural-absence property we want.
-    ...(agentContext?.grantWebResearch ? webResearchTool : ({} as typeof webResearchTool)),
+    // 22.1b: ONE flag, ONE spread — granting search without the declaration channel is structurally
+    // impossible, so the two can never drift apart. `grantWebResearch` is false when
+    // `toolNames === undefined`, so the EXECUTIVE never sees `declareUnsupported` either.
+    ...(agentContext?.grantWebResearch
+      ? { ...webResearchTool, ...declareUnsupportedTool }
+      : ({} as typeof webResearchTool & typeof declareUnsupportedTool)),
     // DISP-02: present ONLY for the executive, and only when it has a turn identity to dispatch
     // under (no lineage ⇒ nothing to correlate the async run to). Same one-type-both-branches trick.
     ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
@@ -2027,6 +2071,9 @@ async function runAgentLoop(
   reply: string;
   costUsd: number;
   webSearchCalls: number;
+  /** 22.1b: did the specialist CALL `declareUnsupported`? One bit, monotone downward — it can only
+   *  move `evidenceVerdict` from `sourced` to `insufficient_evidence`, never the other way. */
+  declaredUnsupported: boolean;
   truncated: boolean;
   /** WHY it truncated. Absent when it did not. Feeds specialistMemoBody's closed reason union. */
   truncatedReason?: "steps" | "clock";
@@ -2109,6 +2156,7 @@ async function runAgentLoop(
     reply: string;
     costUsd: number;
     webSearchCalls: number;
+    declaredUnsupported: boolean;
     truncated: boolean;
     truncatedReason?: "steps" | "clock";
     sources: readonly { url: string; title: string }[];
@@ -2179,9 +2227,17 @@ async function runAgentLoop(
     // `{"toolName":"web_search","providerExecuted":true}`, NOT our record key `webResearch`. This
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
-    const webSearchCalls = res.steps
-      .flatMap((st) => st.content)
-      .filter((p) => p.type === "tool-call" && p.providerExecuted === true).length;
+    const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
+    const webSearchCalls = toolCalls.filter((p) => p.providerExecuted === true).length;
+    // 22.1b: the STRUCTURAL declaration (the semantic half of the evidence verdict). `ai` throws
+    // NoSuchToolError before `execute` on a name that is not a key of our `tools` record, so this
+    // literal can only ever match a tool we actually built. `.some()`, deliberately not a count — a
+    // count is something to inflate, and one declaration means exactly what ten would.
+    //
+    // Read off the SDK's IN-MEMORY step record, NOT the `agentSteps` table: the trace insert runs
+    // inside a callback the AI SDK swallows on failure, so a table read would make the verdict
+    // silently depend on the trace plane staying healthy.
+    const declaredUnsupported = toolCalls.some((p) => p.toolName === "declareUnsupported");
     const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
     if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { costUsd: feeUsd });
     costUsd += feeUsd;
@@ -2201,6 +2257,7 @@ async function runAgentLoop(
       reply: res.text,
       costUsd,
       webSearchCalls,
+      declaredUnsupported,
       sources,
       // The step cap is reported first when both are true: it is the more specific cause.
       truncatedReason: hitStepCap ? ("steps" as const) : hitClock ? ("clock" as const) : undefined,
@@ -2286,6 +2343,11 @@ export async function runSpecialistTurn(
   // models are already resolved. A `models?` / `maxSteps?` arg would be a second mechanism for a
   // decision with exactly one owner, and would drag dispatch.ts into model selection for no gain.
   webSearchCalls: number;
+  /** 22.1b: the SAME `truncatedReason` seam — the `{ ...res, skillVersion }` spread below ALREADY
+   *  forwards the value, so only this type widens. Without the widening `governedDispatch` cannot
+   *  see the declaration and the whole channel dead-ends one function short of the verdict, which
+   *  is exactly how `webSearchCalls` was lost before 22.1. */
+  declaredUnsupported: boolean;
   truncated: boolean;
   /** WHY it truncated — the `...res` spread already forwarded it; only this type omitted it, which
    *  made D11's three-way marker invisible to `governedDispatch` (16-06 consumes it). */

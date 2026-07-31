@@ -486,6 +486,8 @@ async function researchTrailForThread(
   webSearchCalls: number;
   costUsd: number;
   verdicts: string[];
+  /** 22.1b: the SEMANTIC act, harvested off the same `research.persisted` row as `verdicts`. */
+  declarations: boolean[];
 }> {
   const steps = await ctx.db
     .query("agentSteps")
@@ -507,6 +509,7 @@ async function researchTrailForThread(
   let webSearchCalls = 0;
   let costUsd = 0;
   const verdicts: string[] = [];
+  const declarations: boolean[] = [];
   for (const correlationId of correlations) {
     const auditRows = await ctx.db
       .query("audit")
@@ -534,6 +537,11 @@ async function researchTrailForThread(
         // 22.1: the CODE-derived evidence verdict, off the audit plane.
         const verdict = row.payload?.evidenceVerdict;
         if (typeof verdict === "string") verdicts.push(verdict);
+        // 22.1b: the SEMANTIC act, beside the verdict it helped produce. Rows written before 22.1b
+        // carry no such field and are simply skipped — the same harmless back-grading the verdict
+        // harvest already accepts (eval fixtures are re-run, never re-scored).
+        const declared = row.payload?.declaredUnsupported;
+        if (typeof declared === "boolean") declarations.push(declared);
       }
     }
   }
@@ -543,7 +551,7 @@ async function researchTrailForThread(
     const doc = await ctx.db.get(docId);
     if (doc?.tenantId === tenantId && doc.kind === "web_research") docs.push(doc);
   }
-  return { docs, webSearchCalls, costUsd, verdicts };
+  return { docs, webSearchCalls, costUsd, verdicts, declarations };
 }
 
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
@@ -580,6 +588,21 @@ export const researchInsufficientEvidenceForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
   handler: async (ctx, { tenantId, threadId }): Promise<boolean> =>
     (await researchTrailForThread(ctx, tenantId, threadId)).verdicts.includes(INSUFFICIENT),
+});
+
+/**
+ * 22.1b: the SEMANTIC act, read off the same audit plane. `insufficientEvidence` above is a
+ * DISJUNCTION (`sourceCount === 0 || declared`) — a run that searched, got zero citations back and
+ * then confabulated from memory satisfies it off the COUNTER leg without ever making a judgement.
+ * This key closes that: it is true only when the specialist actually CALLED `declareUnsupported`.
+ *
+ * The reader of a tool-call record, never of prose — a page quoting the label sentence cannot reach
+ * it, which is fixture 34's premise and the property f2226fe bought.
+ */
+export const researchDeclaredUnsupportedForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<boolean> =>
+    (await researchTrailForThread(ctx, tenantId, threadId)).declarations.some(Boolean),
 });
 
 /** Phase 16 / D10 #2: sum the hosted-search COUNT already written to subagent.completed. The

@@ -62,6 +62,10 @@ const DISPATCH_POLL_MS = 3_000;
 // --self-check), so it can only reach a specialist's memo through a live `searchVault` result.
 const VAULT_NEEDLE = "evalgrd";
 const INSUFFICIENT_EVIDENCE_PHRASE = "insufficient evidence";
+// 22.1b. A turn that NAMES the tool turns the probe into a compliance test — "did the model do the
+// thing the prompt told it to do" — which is exactly the vacuity fixture 33 exists to avoid. The
+// question must be unanswerable; reaching for the channel must be the specialist's OWN judgement.
+const DECLARE_TOOL_NAME = "declareunsupported";
 
 // The gated skills — the only valid --skill pin targets — DERIVED from GATED_SKILLS
 // (packages/contracts/src/skill.ts), never re-listed here. The old hardcoded
@@ -164,9 +168,15 @@ const EXPECT_KEYS = new Set([
   //     regex over model reply prose. Meaningful only with researchDocPresent:true.
   //   webSearchCallsAtLeast — the subagent.completed webSearchCalls COUNT, as an integer FLOOR.
   //     Meaningful only with researchDocPresent:true; validateFixture rejects a vacuous zero.
+  //   declaredUnsupported — 22.1b. smoke:researchDeclaredUnsupportedForThread: did the specialist
+  //     CALL `declareUnsupported`? The SEMANTIC half of the verdict, and the ONLY key that
+  //     separates "searched and judged the sources insufficient" from "searched, got zero
+  //     citations, and confabulated" — those satisfy `insufficientEvidence` identically. The
+  //     closed EXPECT vocabulary is extended by exactly this one key, deliberately.
   "researchDocPresent",
   "insufficientEvidence",
   "webSearchCallsAtLeast",
+  "declaredUnsupported",
   // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
   // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
   // plan row that a non-dispatching case never stages.
@@ -235,7 +245,7 @@ function validateFixture(fx, source) {
       fail(`expect.${key} requires actOnGap (nothing dispatches without the tap)`);
     }
   }
-  for (const key of ["insufficientEvidence", "webSearchCallsAtLeast"]) {
+  for (const key of ["insufficientEvidence", "webSearchCallsAtLeast", "declaredUnsupported"]) {
     if (fx.expect[key] !== undefined && fx.expect.researchDocPresent !== true) {
       fail(`expect.${key} requires researchDocPresent:true (the anti-vacuity companion)`);
     }
@@ -260,6 +270,12 @@ function validateFixture(fx, source) {
   if (fx.turns.some((t) => t.toLowerCase().includes(INSUFFICIENT_EVIDENCE_PHRASE))) {
     fail(
       `a turn contains "${INSUFFICIENT_EVIDENCE_PHRASE}" — that makes the stored verdict probe vacuous`,
+    );
+  }
+  if (fx.turns.some((t) => t.toLowerCase().includes(DECLARE_TOOL_NAME))) {
+    fail(
+      `a turn names the declareUnsupported tool — that turns the declaration probe into a ` +
+        `compliance test`,
     );
   }
   return fx;
@@ -357,7 +373,10 @@ function applyOnly(fixtures, filters) {
  *  `citesVaultDoc` probe. "" when unasked (offline self-check), which makes the key fail closed.
  *  @param researchCount smoke:researchCountForThread (0 when unasked — read skipped).
  *  @param insufficientEvidence smoke:researchInsufficientEvidenceForThread (false when unasked).
- *  @param webSearchCalls smoke:webSearchCallsForThread (0 when unasked — read skipped). */
+ *  @param webSearchCalls smoke:webSearchCallsForThread (0 when unasked — read skipped).
+ *  @param declaredUnsupported smoke:researchDeclaredUnsupportedForThread. FALSE when unasked or
+ *  unread, and false is the FAIL-CLOSED direction: an unread key must never manufacture the
+ *  honesty signal (the `vaultNeedle: ""` precedent above). */
 function evaluateExpect(
   expect,
   plan,
@@ -370,6 +389,7 @@ function evaluateExpect(
   researchCount = 0,
   insufficientEvidence = false,
   webSearchCalls = 0,
+  declaredUnsupported = false,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -443,6 +463,9 @@ function evaluateExpect(
         break;
       case "webSearchCallsAtLeast":
         if (webSearchCalls < expected) miss(key, `>= ${expected}`, webSearchCalls);
+        break;
+      case "declaredUnsupported":
+        if (declaredUnsupported !== expected) miss(key, expected, declaredUnsupported);
         break;
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
@@ -697,6 +720,32 @@ function selfCheck() {
       .length,
     1,
     "webSearchCallsAtLeast:2 MUST FAIL on a one-shot search",
+  );
+
+  // 22.1b: the SEMANTIC declaration key. Two rows — the reader must be load-bearing, and the key
+  // must inherit the anti-vacuity pairing rule.
+  assert.equal(
+    evaluateExpect(
+      { researchDocPresent: true, declaredUnsupported: true },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      1,
+      false,
+      1,
+      false,
+    ).length,
+    1,
+    "declaredUnsupported:true MUST FAIL when the audit-plane reader returns false",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { declaredUnsupported: true } }, "<synthetic>"),
+    /requires researchDocPresent:true/,
+    "the declaration without a persisted research document is vacuous",
   );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.
@@ -1156,6 +1205,17 @@ function attemptCase(fixture, tenant, pins) {
     fixture.expect.webSearchCallsAtLeast === undefined
       ? 0
       : parse(must("smoke:webSearchCallsForThread", { tenantId: tenant, threadId }));
+  // 22.1b: the SEMANTIC act, off the same audit plane. Skipped unless asked, like every research
+  // read above — the 31 non-research fixtures pay nothing and see `false`.
+  const declaredUnsupported =
+    fixture.expect.declaredUnsupported === undefined
+      ? false
+      : parse(
+          must("smoke:researchDeclaredUnsupportedForThread", {
+            tenantId: tenant,
+            threadId,
+          }),
+        );
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -1168,6 +1228,7 @@ function attemptCase(fixture, tenant, pins) {
     researchCount,
     insufficientEvidence,
     webSearchCalls,
+    declaredUnsupported,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {

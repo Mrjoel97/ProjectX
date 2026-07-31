@@ -114,6 +114,13 @@ export type DispatchResult =
        *  find anything?", and it was previously audited and then dropped one function short of the
        *  document that states the verdict. */
       webSearchCalls: number;
+      /** 22.1b: did the specialist CALL `declareUnsupported`? A BOOLEAN (§4-clean — never the
+       *  `claim` prose it was called with, which nothing in this codebase captures). It rides the
+       *  result for the same reason `webSearchCalls` does: `evidenceVerdict` needs "did what you
+       *  found actually SUPPORT it?" alongside "did you search?" and "did you find anything?" —
+       *  and a diligent search of a nonexistent entity always returns near-misses, so the two
+       *  counters alone can never reach the insufficient-evidence verdict. */
+      declaredUnsupported: boolean;
       retrievedAt: number;
       /** 16-07: the vault document the findings landed in. Present ONLY on a research run whose
        *  persist succeeded — absent on the gap path (which persists nothing here) and absent when
@@ -402,6 +409,8 @@ async function governedDispatch(
         // A COUNT (§4 clean) — the hosted-search calls this hop billed for. NEVER `sources`: an
         // array of URLs would type-check against AuditPayload, which is exactly the trap.
         webSearchCalls: turn.webSearchCalls,
+        // 22.1b: a BOOLEAN, never the `claim` string the tool was called with (§4).
+        declaredUnsupported: turn.declaredUnsupported,
       },
     });
     return {
@@ -416,6 +425,7 @@ async function governedDispatch(
       skillVersion: turn.skillVersion,
       sources: turn.sources,
       webSearchCalls: turn.webSearchCalls,
+      declaredUnsupported: turn.declaredUnsupported,
       retrievedAt: Date.now(),
       modelId: turn.modelId,
       fallbackModelId: turn.fallbackModelId,
@@ -568,6 +578,7 @@ async function persistResearchFindings(
       // Copied to a mutable array: `sources` is readonly on the result, and a validator arg is not.
       sources: res.sources.map((s) => ({ url: s.url, title: s.title })),
       webSearchCalls: res.webSearchCalls,
+      declaredUnsupported: res.declaredUnsupported,
       retrievedAt: res.retrievedAt,
       rootRequestId: args.rootRequestId,
       incomplete: res.incomplete,

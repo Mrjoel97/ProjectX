@@ -1258,6 +1258,50 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     });
   });
 
+  // 22.1b: the WHOLE mechanism, end to end, in one scripted run. It is the check the
+  // `dispatchResearch` defect never had — that tool was built, wired, scheduled and persisted, and
+  // never once CALLED, because nothing asserted its presence in the runtime tool record.
+  //
+  // Assertion (a) proves THREE things at once, which is why it is worth a trace read: a stripped
+  // `declareUnsupported` key raises NoSuchToolError (construction + the toolNames allow-list), and
+  // a missing `schema.ts` literal drops the row inside a callback the AI SDK swallows (the
+  // searchVault/evaluateBusiness pitfall). Assertion (b) is the verdict itself — the label fires
+  // DESPITE `sourceCount === 1`, which no counter-based rule could ever produce.
+  // MUTATION that turns this RED: drop `declareUnsupportedTool` from the grantWebResearch spread,
+  // or drop the `|| a.declaredUnsupported` disjunct in evidenceVerdict.
+  test("a DECLARED evidence gap reaches the stored verdict — despite a retrieved source", async () => {
+    const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [
+          toolStep("declareUnsupported", { claim: "no independent source names this entity" }),
+          searchedStep(REPLY, ["https://example.com/near-miss"]),
+        ],
+        research: true,
+      }),
+    );
+    expect(res.declaredUnsupported).toBe(true);
+    expect(res.webSearchCalls).toBe(1);
+    expect(res.sources).toHaveLength(1);
+
+    // (a) the tool was really BUILT, really allowed, and really has its schema literal.
+    expect((await readSteps(t)).map((s) => s.tool)).toContain("declareUnsupported");
+
+    // (b) a near-miss is a source, not support — the verdict is insufficient WITH sourceCount 1.
+    const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "research.persisted",
+    );
+    expect(persisted?.payload).toMatchObject({
+      declaredUnsupported: true,
+      sourceCount: 1,
+      evidenceVerdict: "insufficient_evidence",
+    });
+  });
+
   test("wall clock: partial findings return and land with the distinct clock marker", async () => {
     const { t, planId } = await setup();
     await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));

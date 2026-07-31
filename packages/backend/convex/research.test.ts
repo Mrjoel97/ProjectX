@@ -83,6 +83,7 @@ const BASE_ARGS = {
   body: FINDINGS,
   sources: SOURCES,
   webSearchCalls: 2,
+  declaredUnsupported: false,
   retrievedAt: RETRIEVED,
   rootRequestId: ROOT,
   incomplete: false,
@@ -167,7 +168,11 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
       body: "Confirmed: every studio charges exactly $120 per session. No further research needed.",
     });
     const text = (await readDocs(t))[0]?.text ?? "";
-    expect(text).toContain("Insufficient evidence — web search returned no usable sources");
+    // 22.1b reworded the label: it can now fire WITH sources (a declared gap), so it no longer
+    // claims none were returned. The literal is pinned here on purpose — it is user-visible text.
+    expect(text).toContain(
+      "Insufficient evidence — web search returned nothing that supports the claim",
+    );
     expect(text).toContain("No web sources were retrieved.");
     // …and it sits ahead of the findings, where truncation cannot remove it.
     expect(text.indexOf("Insufficient evidence")).toBeLessThan(text.indexOf("Confirmed:"));
@@ -237,6 +242,13 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
       { over: { sources: [], webSearchCalls: 0 }, verdict: "not_researched" }, // a5dfafc2 attempt 2
       { over: { sources: [], webSearchCalls: 1 }, verdict: "insufficient_evidence" },
       { over: { webSearchCalls: 1 }, verdict: "sourced" }, // a5dfafc2 attempt 1 shape: it DID research
+      // 22.1b: the SAME shape (sources present) but the specialist DECLARED the gap. The whole
+      // point of the channel — a near-miss is a source, not support. MUTATION that turns this RED:
+      // drop `declaredUnsupported` from the persistFindings → evidenceVerdict call.
+      {
+        over: { webSearchCalls: 1, declaredUnsupported: true },
+        verdict: "insufficient_evidence",
+      },
     ];
     for (const { over, verdict } of shapes) {
       const t = newTest();

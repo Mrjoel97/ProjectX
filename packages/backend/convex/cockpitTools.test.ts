@@ -5,7 +5,12 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
-import { CALENDAR_HORIZON_MS, parseSendTime, PLAN_ATTACHMENT_CAP_BYTES } from "@pikar/core";
+import {
+  CALENDAR_HORIZON_MS,
+  parseSendTime,
+  PLAN_ATTACHMENT_CAP_BYTES,
+  SPECIALISTS,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
@@ -430,6 +435,32 @@ test("buildCockpitTools registers BOTH evaluateBusiness (read) and recordScoreca
   const keys = Object.keys(buildCockpitTools(stubCtx, "t1", "plan-stub" as Id<"plans">));
   expect(keys).toContain("evaluateBusiness");
   expect(keys).toContain("recordScorecardAnswer");
+});
+
+// ── 22.1b: every tool the research grant NAMES is actually BUILT ──────────────────────────────
+//
+// The runtime-record assertion nobody wrote for `dispatchResearch`. That tool was built only under
+// a gate the eval runner silently failed to satisfy, so it was ABSENT from the record on every run
+// — nothing errored, nothing was logged, and no test noticed. `SPECIALISTS[route].tools` is the
+// allow-list `runAgentLoop` FILTERS the built record with, so a listed-but-unbuilt name is simply
+// gone; this closes that structurally rather than per-tool.
+// MUTATION that turns this RED: remove `declareUnsupportedTool` from the grantWebResearch spread
+// in llm.ts while leaving it in RESEARCH_TOOLS.
+test("every tool the research specialist is granted is actually built under its grant", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const built = Object.keys(
+    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
+      grantWebResearch: true,
+      grantDispatch: false,
+    }),
+  );
+  for (const name of SPECIALISTS.research.tools) {
+    expect(built, `research lists "${name}" but nothing builds it`).toContain(name);
+  }
+  // …and it stays OFF the executive's set: `grantWebResearch` is false whenever `toolNames` is
+  // undefined, so the cockpit agent can never reach the specialist's refusal channel.
+  expect(Object.keys(buildCockpitTools(stubCtx, "t1", planId))).not.toContain("declareUnsupported");
 });
 
 // ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────

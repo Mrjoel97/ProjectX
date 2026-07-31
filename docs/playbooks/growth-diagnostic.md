@@ -1,5 +1,16 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-07-31 (22.1b) — `evidenceVerdict` and `researchFindingsFence` both gained a
+> REQUIRED `declaredUnsupported: boolean`, and `RESEARCH_TOOLS` gained a third member,
+> `declareUnsupported`. The middle verdict state now reads
+> `webSearchCalls > 0 && (sourceCount === 0 || declaredUnsupported)`; the outer
+> `webSearchCalls === 0 ⇒ "not_researched"` check is UNCHANGED and must stay outermost, or declaring
+> instead of searching would earn the honesty label. `INSUFFICIENT_EVIDENCE_LABEL` was reworded
+> ("returned nothing that supports the claim") because the old text became false once the label
+> could fire with sources present. **The invariant to preserve: the model supplies exactly ONE bit,
+> it is monotone downward, and no `.includes()`/regex over model prose participates anywhere in this
+> verdict.** See "Phase 22.1b — the declaration channel" in `agent-runtime.md`.
+>
 > Last verified: 2026-07-31 (22.1) — `specialists.ts` gained `evidenceVerdict()` plus
 > `NOT_RESEARCHED_LABEL` / `INSUFFICIENT_EVIDENCE_LABEL`, and `researchFindingsFence` now takes a
 > REQUIRED `webSearchCalls`. The old one-branch rule (`sourceCount === 0` ⇒ "insufficient evidence")
@@ -238,12 +249,25 @@ of the old equality more precisely than the equality did:
    diagnosis can never name a route the dispatcher cannot resolve);
 2. `diagnose()` emits **no** `"research"` under any input.
 
-**The research capability grant is `["searchVault", "webResearch"]` and nothing else — this IS
-SC#1's containment.** An instruction injected into a fetched page reaches an agent structurally
-incapable of sending, writing, or moving a plan row, so at most it can influence a proposal that
-still stops at the human Approve gate. Asserted two ways: whole-registry exact equality (a write
-tool added to ANY specialist fails), plus an explicit deny-list so the intent survives a refactor.
-Mutation-verified — adding `proposePlan` to `RESEARCH_TOOLS` turns both RED.
+**The research capability grant is `["searchVault", "webResearch", "declareUnsupported"]` and
+nothing else — this IS SC#1's containment.** An instruction injected into a fetched page reaches an
+agent structurally incapable of sending, writing, or moving a plan row, so at most it can influence
+a proposal that still stops at the human Approve gate. Asserted THREE ways: whole-registry exact
+equality (a write tool added to ANY specialist fails), an explicit deny-list so the intent survives
+a refactor, and — since 22.1b — a per-route assertion that every granted tool name is actually NAMED
+in that route's canonical `packages/contracts/skills/<skillName>.md`, which closes the
+granted-but-untaught class (`dispatchResearch`, RPLY-01) generically. Mutation-verified — adding
+`proposePlan` to `RESEARCH_TOOLS` turns the first two RED, and adding any tool without teaching it
+turns the third RED.
+
+> **22.1b's third member is not a capability widening in any meaningful sense.**
+> `declareUnsupported` writes nothing, sends nothing, reads nothing, and its required `claim`
+> argument is discarded — the tool's INVOCATION is the entire signal. The only thing it moves is the
+> code-owned `evidenceVerdict`, and only DOWNWARD (`sourced` → `insufficient_evidence`). That makes
+> it strictly weaker than the `searchVault` steering residual already accepted below: an injected
+> page that induces a declaration costs a real finding a label of uncertainty (denial of utility,
+> the safe direction), and suppressing a declaration gains an attacker nothing — not calling the
+> tool is the default.
 
 > **ACCEPTED RESIDUAL:** an injected page CAN steer this specialist's `searchVault` calls. Blast
 > radius is a read of the tenant's OWN corpus whose output never leaves the tenant. Upgrade path if

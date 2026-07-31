@@ -490,6 +490,12 @@ export default defineSchema({
       // this codebase has been bitten twice already, at searchVault and evaluateBusiness).
       v.literal("checkAvailability"),
       v.literal("proposeCalendarEvent"),
+      // 22.1b (declareUnsupported): the research specialist's structured evidence-gap declaration.
+      // A LOCAL executable tool, unlike `webResearch` above — so `onToolExecutionStart` DOES fire
+      // and the insert DOES need this literal. Without it the insert throws inside a callback the
+      // AI SDK SWALLOWS → no trace row in prod while every offline test passes (Research Pitfall 4;
+      // this codebase has been bitten at searchVault and evaluateBusiness).
+      v.literal("declareUnsupported"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

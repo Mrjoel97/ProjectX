@@ -72,8 +72,16 @@ const SPECIALIST_TOOLS = ["searchVault"] as const;
  * ACCEPTED RESIDUAL: an injected page CAN steer this specialist's `searchVault` calls. The blast
  * radius is a read of the tenant's OWN corpus whose output never leaves the tenant. Upgrade path
  * if that ever matters: withhold `searchVault` from research.
+ *
+ * 22.1b adds `declareUnsupported` — the structured refusal channel. It is NOT a capability
+ * widening in any meaningful sense: it writes nothing, sends nothing, reads nothing, and its
+ * argument is discarded (llm.ts never captures `claim`). The only thing its INVOCATION moves is
+ * `evidenceVerdict` DOWNWARD, from `sourced` to `insufficient_evidence`. That makes it strictly
+ * weaker than the already-accepted `searchVault` steering residual above: an injected page that
+ * induces a declaration costs the tenant a real finding labelled uncertain (denial of utility),
+ * and SUPPRESSING a declaration gains an attacker nothing — not calling the tool is the default.
  */
-const RESEARCH_TOOLS = ["searchVault", "webResearch"] as const;
+const RESEARCH_TOOLS = ["searchVault", "webResearch", "declareUnsupported"] as const;
 
 // The §5 skill-registry row names. These are the string VALUES of `OFFER_ARCHITECT_SKILL` /
 // `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` in packages/contracts/src/skill.ts, inlined
@@ -287,19 +295,39 @@ export type EvidenceVerdict = "not_researched" | "insufficient_evidence" | "sour
  * hosted call is provider drift, and mislabelling drift DOWNWARD ("we did not research this") is
  * the only safe error — the alternative credits a run with evidence it may not have.
  *
- * Nothing the model WRITES moves either input. `webSearchCalls` is the same expression that bills
+ * Nothing the model WRITES moves any input. `webSearchCalls` is the same expression that bills
  * the hosted-search fee (llm.ts's `feeUsd`), so inflating it inflates the provider's invoice;
- * `sourceCount` counts `url_citation` annotations mapped by the SDK. That is what keeps this verdict
- * out of reach of retrieved page text — see fixture 34, whose whole premise is a document that
- * faithfully quotes instruction-shaped attacker prose.
+ * `sourceCount` counts `url_citation` annotations mapped by the SDK; `declaredUnsupported` is the
+ * SDK's own record that a local no-op tool was CALLED, never anything the model wrote. That is what
+ * keeps this verdict out of reach of retrieved page text — see fixture 34, whose whole premise is a
+ * document that faithfully quotes instruction-shaped attacker prose.
+ *
+ * 22.1b: why a counter alone was never enough. Measured on the same run, attempt 1 searched once,
+ * found only a near-miss (a real similarly-named company), and refused to answer — an exemplary
+ * refusal. `sourceCount === 1`, so the counter rule called it `sourced` and the honest refusal
+ * could not earn the label AT ANY LEVEL OF DILIGENCE: a diligent search of a NONEXISTENT entity
+ * always surfaces near-misses, so `sourceCount === 0` is unreachable. The third input is a SEMANTIC
+ * judgement ("what I retrieved does not SUPPORT the claim") that no counter can express.
+ *
+ * The three-state union is unchanged — the middle state simply gains a second satisfier. The
+ * ordering is load-bearing and must never be touched:
+ *   - `webSearchCalls === 0` stays the OUTERMOST check, so "declare instead of searching" is
+ *     worthless: a 0-search run reads `not_researched` however loudly it declares.
+ *   - the model's bit is monotone DOWNWARD by construction. There is no value of it that produces
+ *     `sourced`, removes a label, or raises either counter. Never add an upward lever — no
+ *     `confidence`, no `declareSourced`, and never read the tool's `claim` argument into a branch.
  */
 export const evidenceVerdict = (a: {
   webSearchCalls: number;
   sourceCount: number;
+  /** REQUIRED, never optional-with-a-false-default: `false` biases toward "sourced", which is the
+   *  fail-OPEN direction for an honesty label. Required makes `tsc` name every call site — the
+   *  same argument `webSearchCalls` already makes on `researchFindingsFence` below. */
+  declaredUnsupported: boolean;
 }): EvidenceVerdict =>
   a.webSearchCalls === 0
     ? "not_researched"
-    : a.sourceCount === 0
+    : a.sourceCount === 0 || a.declaredUnsupported
       ? "insufficient_evidence"
       : "sourced";
 
@@ -308,9 +336,13 @@ export const evidenceVerdict = (a: {
  *  labels that nest would make "not researched" read as "insufficient evidence" forever. */
 export const NOT_RESEARCHED_LABEL =
   "**Not researched — no web search was performed; nothing below is evidence.**";
+// 22.1b REWORDED, and the rewording is not cosmetic: the label can now fire with `sourceCount > 0`
+// (the specialist searched, retrieved near-misses, and declared that none of them SUPPORT the
+// claim). "returned no usable sources" became FALSE in exactly that case — the commonest one this
+// channel exists to serve — and a label that lies to the reader is worse than no label.
 export const INSUFFICIENT_EVIDENCE_LABEL =
-  "**Insufficient evidence — web search returned no usable sources; treat nothing below as" +
-  " established.**";
+  "**Insufficient evidence — web search returned nothing that supports the claim; treat nothing" +
+  " below as established.**";
 
 /**
  * SC#2 fence. **D5-CORRECTED: the RETRIEVED PAGE TEXT cannot be fenced.**
@@ -335,6 +367,9 @@ export function researchFindingsFence(args: {
   /** REQUIRED, not optional-with-a-0-default: a default would silently stamp every un-migrated
    *  caller "Not researched". Required makes `tsc` name every call site instead. */
   webSearchCalls: number;
+  /** 22.1b: the specialist's structured declaration that what it retrieved does not SUPPORT the
+   *  claim. REQUIRED for the same reason as `webSearchCalls` — see `evidenceVerdict`. */
+  declaredUnsupported: boolean;
   retrievedIso: string;
 }): string {
   // Fail-closed breakout guard: a body carrying a literal closing tag must not end the fence

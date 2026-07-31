@@ -1,5 +1,18 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-31 (22.1b) — a SECOND value now rides the same path, for the same reason:
+> `declaredUnsupported`, a BOOLEAN (§4-clean — the tool's `claim` argument is captured NOWHERE).
+> `DispatchResult`'s ok-branch carries it, `subagent.completed` audits it, the `ok:true` return
+> threads `turn.declaredUnsupported`, and `persistResearchFindings` hands it to
+> `internal.research.persistFindings`, where it is a REQUIRED `v.boolean()` — never `v.optional`, as
+> an optional boolean defaults to "no declaration", the fail-OPEN direction for an honesty label.
+> `research.persisted` carries it beside `evidenceVerdict`, which is what explains an
+> `insufficient_evidence` verdict with `sourceCount > 0` to a later reader. Same standing rules as
+> below: **do not make it optional anywhere, and do not re-derive the verdict at either call site.**
+> The tool is built in the SAME conditional spread as `webResearch` (one flag, one spread) so search
+> can never be granted without the declaration channel. See "Phase 22.1b — the declaration channel"
+> in `agent-runtime.md`.
+>
 > Last verified: 2026-07-31 (22.1) — the hosted-search COUNT now survives the whole research path.
 > `DispatchResult`'s ok-branch carries `webSearchCalls` (a COUNT, §4-clean — never `sources`), the
 > `ok:true` return threads `turn.webSearchCalls`, and `persistResearchFindings` hands it to

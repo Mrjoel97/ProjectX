@@ -75,6 +75,10 @@ function researchDocumentText(a: {
    *  claim "no web sources were retrieved" on a run that never looked — turning "we didn't look"
    *  into "we looked and the world is empty", which is a lie a user reads. */
   webSearchCalls: number;
+  /** 22.1b: the specialist's structured declaration. It reaches the fence's LABEL and nothing else
+   *  — deliberately NO extra header sentence: the label already says it, and a second sentence
+   *  would make two writers of one fact that can then disagree. */
+  declaredUnsupported: boolean;
   retrievedAt: number;
   incomplete: boolean;
   incompleteReason?: "cost" | "steps" | "clock";
@@ -108,6 +112,7 @@ function researchDocumentText(a: {
     body: a.body,
     sourceCount: a.sources.length,
     webSearchCalls: a.webSearchCalls,
+    declaredUnsupported: a.declaredUnsupported,
     retrievedIso,
   });
   return `${header}\n\n${fenced}\n\n${LIMITS_FOOTER}`;
@@ -134,6 +139,10 @@ export const persistFindings = internalMutation({
     sources: v.array(v.object({ url: v.string(), title: v.string() })),
     /** 22.1: the hosted-search COUNT this run billed for (§4-clean — a number, never a URL). */
     webSearchCalls: v.number(),
+    /** 22.1b: did the specialist CALL `declareUnsupported`? REQUIRED, never `v.optional` — an
+     *  optional boolean defaults to "no declaration", which is the fail-OPEN direction for an
+     *  honesty label, and it would let a caller that never wired the channel look correct. */
+    declaredUnsupported: v.boolean(),
     /** D7's freshness stamp: a STORED, QUERYABLE number, not a date mentioned inside markdown. */
     retrievedAt: v.number(),
     rootRequestId: v.string(),
@@ -153,6 +162,7 @@ export const persistFindings = internalMutation({
     const verdict = evidenceVerdict({
       webSearchCalls: a.webSearchCalls,
       sourceCount: a.sources.length,
+      declaredUnsupported: a.declaredUnsupported,
     });
     const vaultDocId = await ctx.db.insert("vaultDocuments", {
       tenantId: a.tenantId,
@@ -189,6 +199,11 @@ export const persistFindings = internalMutation({
         // the verdict. Prose leaves the verdict path entirely here.
         webSearchCalls: a.webSearchCalls,
         evidenceVerdict: verdict,
+        // 22.1b: a BOOLEAN (§4-clean — the `claim` prose is captured nowhere). It is what EXPLAINS
+        // an `insufficient_evidence` verdict with `sourceCount > 0` to whoever reads the trail
+        // later, and it is what `smoke.researchDeclaredUnsupportedForThread` reads — the SEMANTIC
+        // act, separable from the `sourceCount === 0` counter leg of the same disjunction.
+        declaredUnsupported: a.declaredUnsupported,
         retrievedAt: a.retrievedAt,
         vaultDocId: String(vaultDocId),
         incomplete: a.incomplete,

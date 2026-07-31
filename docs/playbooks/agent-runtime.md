@@ -1,5 +1,22 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-07-31 (22.1b — **the refusal-to-confabulate guard is back, through a
+> code-validated channel instead of a counter**). 22.1 made the verdict honest but left it
+> COUNTER-BASED, and a counter cannot express a semantic judgement: a diligent search of a
+> nonexistent entity always surfaces near-misses, so `sourceCount === 0` is unreachable and the
+> honest refusal could not earn the label at any level of diligence. The research specialist now has
+> a third tool, `declareUnsupported` — a LOCAL no-op whose INVOCATION is the whole signal. It writes
+> nothing, sends nothing, returns a code-owned reply, and its required `claim` argument is read by
+> NOBODY (reading it would put model prose back on the verdict path, which is exactly what f2226fe
+> removed). `runAgentLoop` reads the call off the SDK's own step record — not the `agentSteps` table,
+> so a swallowed trace-row failure cannot change a verdict — and threads `declaredUnsupported`
+> through `runSpecialistTurn` → `DispatchResult` → `persistFindings` → `evidenceVerdict` → the
+> `research.persisted` audit payload. Fixture 33 regains `insufficientEvidence: true` AND gains the
+> stronger `declaredUnsupported: true`; the closed EXPECT vocabulary is extended by exactly that one
+> key, read by the new `smoke:researchDeclaredUnsupportedForThread`. `research-specialist` is GATED,
+> so the body change (v1 → v2) mints a CANDIDATE that only a paid 33-case run can activate — pin it,
+> or the run evaluates v1 and certifies nothing. See "Phase 22.1b — the declaration channel" below.
+>
 > Last verified: 2026-07-31 (22.1 — **the zero-yield research verdict was INVERTED, and fixture 33
 > was measuring the failure mode it exists to catch**). `smoke:researchInsufficientEvidenceForThread`
 > no longer substring-scans `doc.text`; it reads the `evidenceVerdict` enum off the
@@ -330,9 +347,14 @@ derivation, two call sites: the stored document's fence and the `research.persis
 
 ```
 not_researched         webSearchCalls === 0
-insufficient_evidence  webSearchCalls > 0 && sourceCount === 0
+insufficient_evidence  webSearchCalls > 0 && (sourceCount === 0 || declaredUnsupported)
 sourced                otherwise
 ```
+
+**(22.1b amended the middle line and nothing else.** The union is still three states; the middle one
+gained a second satisfier. `webSearchCalls === 0` STAYS the outermost check — that is what makes
+"declare instead of searching" worthless. Never reorder, and never add an upward lever: no
+`confidence` argument, no `declareSourced`, and never read the tool's `claim` into a branch.)
 
 `webSearchCalls === 0` is checked FIRST and deliberately: a run with citations but no hosted call is
 provider drift, and labelling drift DOWNWARD is the only safe error. Both inputs are
@@ -363,3 +385,79 @@ research. The `needles` scan catches echo, not fabrication.
 **The code-owned principle, restated as a rule for future changes:** no `.includes()`, regex, or
 keyword scan over any model-authored string participates in this verdict, anywhere in the path. Any
 future proposal to grep the reply or the document for "insufficient" is rejected on sight.
+
+## Phase 22.1b — the declaration channel (`declareUnsupported`)
+
+**What 22.1 left open, in one sentence:** the two paragraphs above are now partly SUPERSEDED —
+"fixture 33 still does not prove non-fabrication" was true of the counter-only design and is what
+22.1b exists to fix. The mechanism had to be a semantic judgement without handing the verdict back
+to the model, and the resolution is that **the model supplies exactly one bit and that bit is
+monotone DOWNWARD by construction**: there is no value of it that produces `sourced`, removes a
+label, or raises either counter. `specialists.test.ts` asserts that monotonicity as a property over
+the whole input space, so a future satisfier cannot quietly become an upward lever.
+
+**The two legs, and why BOTH are mandatory.** `dispatchResearch` was built, wired, scheduled and
+persisted, and never once called, for two independent reasons each alone sufficient: it was
+STRUCTURALLY ABSENT from the runtime record (an optional arg the eval runner omitted gated its
+construction), and it was NOT TAUGHT (`cockpit-agent@15` contained zero mentions of it). Both legs
+are now covered by assertions instead of by remembering:
+
+- **Presence** — `cockpitTools.test.ts` walks `SPECIALISTS.research.tools` and asserts every name is
+  a key of the record `buildCockpitTools` returns under `grantWebResearch: true`, and that
+  `declareUnsupported` is ABSENT from the executive's set. `dispatch.test.ts` drives a scripted run
+  and asserts the `agentSteps` row appears — which proves construction, the `toolNames` filter and
+  the `schema.ts` literal all three at once (a stripped key raises `NoSuchToolError`; a missing
+  literal drops the row inside a callback the AI SDK swallows).
+- **Teaching** — `specialists.test.ts` asserts, for EVERY route, that each granted tool name appears
+  in that route's canonical `packages/contracts/skills/<skillName>.md`. This closes the whole
+  withheld-by-omission class (03.11-05 / RPLY-01 / `dispatchResearch`) generically.
+
+**One flag, one spread.** `declareUnsupportedTool` is merged into the SAME conditional spread as
+`webResearchTool` at `llm.ts`, so granting search without the declaration channel is structurally
+impossible. Do not split them.
+
+**`schema.ts` + `cards.tsx` are a PAIR.** `declareUnsupported` is a LOCAL executable tool, unlike
+`webResearch`, so `onToolExecutionStart` fires and the `agentSteps.tool` union needs the literal —
+and `traceParity.test.ts` asserts set-equality with the `cards.tsx` `VERB` map in BOTH directions, so
+a schema literal without a VERB entry is an instant RED.
+
+**The label was reworded, and the rewording is load-bearing.** `INSUFFICIENT_EVIDENCE_LABEL` said
+"web search returned no usable sources", which became FALSE the moment the label could fire with
+`sourceCount > 0` — the commonest case this channel serves. It now reads "returned nothing that
+supports the claim". The neither-is-a-substring-of-the-other property with `NOT_RESEARCHED_LABEL`
+still holds and is still asserted.
+
+**Calibration, and what a RED means where.** Fixture 32 (`insufficientEvidence: false`,
+`webSearchCallsAtLeast: 2`) is the guard that proves the declaration is not a reflex — a RED there is
+fixed in the skill body's "Do not call it when" bullets, NEVER in code. Fixture 34's
+`insufficientEvidence: false` silently CHANGED MEANING: nearly vacuous while the verdict was a pure
+counter, it is now a live INDUCTION probe, because a retrieved page arguing that a topic is
+unverifiable is a page making a claim to report, never an instruction to execute. A RED there is a
+correct alarm. Fixture 33's `webSearchCallsAtLeast` deliberately stays at **1** — the only measured
+honest attempt on it searched once, and ratcheting to 2 in the same paid run that introduces the
+channel would change two variables at once.
+
+**Residuals, stated plainly — do not claim the guard covers these.**
+
+1. **A FABRICATED SOURCE.** A page that simply asserts the claim suppresses the declaration *and*
+   supplies the confabulated body, with a real citation. The specialist behaves honestly with
+   respect to what it retrieved and the verdict is still wrong. No counter and no bit defends
+   against this; only the skill's `single-sourced` labelling and the fence limit the damage.
+2. **TRUNCATION BEFORE THE DECLARATION.** `stopWhen: [stepCountIs(RESEARCH_MAX_STEPS), outOfClock]`
+   stops cleanly BETWEEN steps, so a run that spends every step searching can be cut off before it
+   declares, yielding `sourced` on a run that found nothing. The skill body's "call it **before** you
+   write the findings document" clause is the only countermeasure — watch for `incomplete` and a
+   fixture-33 RED appearing together.
+3. **INJECTION CAN INDUCE a declaration** (a page arguing "nothing about X is verifiable"). Effect: a
+   real finding looks uncertain — a denial-of-utility attack, the SAFE direction, consistent with
+   "mislabelling DOWNWARD is the only safe error", and strictly weaker than the already-accepted
+   `searchVault`-steering residual. SUPPRESSION is the dangerous direction and is unreachable by the
+   mechanism: not calling the tool is the pre-existing default, so an attacker gains nothing he did
+   not already have, and the `sourceCount === 0` leg fires without the model's cooperation.
+
+**Why fixture 33 asserts BOTH verdict keys.** `declaredUnsupported: true` is the teeth — the semantic
+act. `insufficientEvidence: true` is the WIRING assertion: given `webSearchCalls > 0` the declaration
+must imply the label, so if the plumbing breaks anywhere across the six hops the two keys disagree
+and the fixture reddens at the seam instead of shipping a broken pipe green. `insufficientEvidence`
+alone would NOT close the hole: it is a disjunction, so a run that searched, got zero citations and
+then confabulated satisfies it off the counter leg without ever making a judgement.
