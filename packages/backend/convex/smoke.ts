@@ -7,6 +7,7 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
+import type { EvidenceVerdict } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import { DOC_GAP_PLAYBOOK, DOC_GAP_ROUTE, DOC_REVIEW_FRAMEWORK, voiceDocThreadId } from "@pikar/voice";
 import { v } from "convex/values";
@@ -467,7 +468,6 @@ export const gapCountForThread = internalQuery({
 });
 
 const RESEARCH_DISPATCH_PREFIX = "dispatch:";
-const INSUFFICIENT_EVIDENCE_LABEL = "Insufficient evidence — no web sources were retrieved";
 
 /**
  * Phase 16 eval join. `vaultDocuments` has no threadId, `audit` has no threadId, and agentSteps has
@@ -481,7 +481,12 @@ async function researchTrailForThread(
   // 22.1: `null` = EVERY governed dispatch on the thread, not just research. The cost read needs
   // that widening — an actOnGap specialist (offer-architect, …) bills the same async money.
   tool: Doc<"agentSteps">["tool"] | null = "dispatchResearch",
-): Promise<{ docs: Doc<"vaultDocuments">[]; webSearchCalls: number; costUsd: number }> {
+): Promise<{
+  docs: Doc<"vaultDocuments">[];
+  webSearchCalls: number;
+  costUsd: number;
+  verdicts: string[];
+}> {
   const steps = await ctx.db
     .query("agentSteps")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -501,6 +506,7 @@ async function researchTrailForThread(
   const docIds = new Set<Id<"vaultDocuments">>();
   let webSearchCalls = 0;
   let costUsd = 0;
+  const verdicts: string[] = [];
   for (const correlationId of correlations) {
     const auditRows = await ctx.db
       .query("audit")
@@ -525,6 +531,9 @@ async function researchTrailForThread(
         const docId =
           typeof rawId === "string" ? ctx.db.normalizeId("vaultDocuments", rawId) : null;
         if (docId) docIds.add(docId);
+        // 22.1: the CODE-derived evidence verdict, off the audit plane.
+        const verdict = row.payload?.evidenceVerdict;
+        if (typeof verdict === "string") verdicts.push(verdict);
       }
     }
   }
@@ -534,7 +543,7 @@ async function researchTrailForThread(
     const doc = await ctx.db.get(docId);
     if (doc?.tenantId === tenantId && doc.kind === "web_research") docs.push(doc);
   }
-  return { docs, webSearchCalls, costUsd };
+  return { docs, webSearchCalls, costUsd, verdicts };
 }
 
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
@@ -545,14 +554,32 @@ export const researchCountForThread = internalQuery({
     (await researchTrailForThread(ctx, tenantId, threadId)).docs.length,
 });
 
-/** Phase 16: CODE owns the zero-source verdict in the stored document. The harness reads that
- * durable label rather than regexing model reply prose, matching the production truth source. */
+/**
+ * Phase 16 / 22.1: CODE owns the zero-yield verdict, and the harness now reads the closed enum
+ * `research.persisted` writes to the AUDIT plane — not a substring of `doc.text`.
+ *
+ * Why the relocation is not cosmetic: `doc.text` is, by construction, model prose summarizing
+ * attacker-authored pages (fixture 34's entire premise). A page that quotes the label sentence,
+ * reported honestly, used to flip this boolean — so the claim that prose was out of the verdict
+ * path was not actually true. Now the only inputs are two provider-attested counters.
+ *
+ * "insufficient_evidence" means SEARCHED-AND-FOUND-NOTHING. A run that never searched is
+ * "not_researched" and reads FALSE here, which is the inversion 22.1 exists to fix.
+ *
+ * ponytail: rows written before 22.1 carry no `evidenceVerdict` and therefore read `false`. That is
+ * correct and harmless — the only consumers are eval fixtures, which are re-run, never back-graded.
+ */
+// 22.1: TYPE-BOUND, never a bare string. Nothing else in the repo asserts `insufficientEvidence:
+// true` any more (32 and 34 assert false; 33 dropped the key), so a typo here — or a rename of the
+// `EvidenceVerdict` member — would make this query return `false` FOREVER while every offline test,
+// the self-check, and all 33 live fixtures stayed green. Binding the literal to the exported union
+// makes `tsc` the thing that catches it, which is the only check that currently can.
+const INSUFFICIENT: EvidenceVerdict = "insufficient_evidence";
+
 export const researchInsufficientEvidenceForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
   handler: async (ctx, { tenantId, threadId }): Promise<boolean> =>
-    (await researchTrailForThread(ctx, tenantId, threadId)).docs.some((doc) =>
-      (doc.text ?? "").includes(INSUFFICIENT_EVIDENCE_LABEL),
-    ),
+    (await researchTrailForThread(ctx, tenantId, threadId)).verdicts.includes(INSUFFICIENT),
 });
 
 /** Phase 16 / D10 #2: sum the hosted-search COUNT already written to subagent.completed. The

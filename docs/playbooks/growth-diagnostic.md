@@ -1,5 +1,16 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-07-31 (22.1) — `specialists.ts` gained `evidenceVerdict()` plus
+> `NOT_RESEARCHED_LABEL` / `INSUFFICIENT_EVIDENCE_LABEL`, and `researchFindingsFence` now takes a
+> REQUIRED `webSearchCalls`. The old one-branch rule (`sourceCount === 0` ⇒ "insufficient evidence")
+> conflated "searched hard and found nothing" with "did not search at all"; the verdict is now three
+> states, `webSearchCalls === 0 ⇒ "not_researched"` checked FIRST so provider drift (citations with
+> no hosted call) labels DOWNWARD. **The invariant to preserve: both inputs are provider-attested
+> counters — `webSearchCalls` is the same expression that bills the hosted-search fee — so no string
+> the model authors participates in the verdict.** The arg is required, never optional-with-a-default,
+> so `tsc` names every call site instead of silently stamping un-migrated callers "not researched".
+> No diagnostic math, gate order, route literal, or `SPECIALISTS` entry changed.
+>
 > Last verified: 2026-07-27 (16-07) — `INCOMPLETE_MARKER` is now EXPORTED so the stored research document reuses the SAME three stop-cause sentences the memo card carries (one phrasing per cause). No math, gate order, route literal or `SPECIALISTS` entry changed. PREVIOUSLY: 2026-07-27 (16-03) — the research route joins SPECIALIST_ROUTES with its own least-privilege grant; SPECIALIST_ROUTES is now a SUPERSET of what diagnose() emits (ADR-010). Adds researchFindingsFence and the three-reason incomplete marker. PREVIOUSLY: 2026-07-26 against 15.1-05 — `specialists.ts` gained the per-tenant PROMPT BLOCK:
 > `tierBriefing({tier?, agentName?, styleDirective?})` and `PRESET_SKILL`. **No diagnostic math, gate
 > order, route literal, or `SPECIALISTS` entry changed** — this is additive and lives beside the

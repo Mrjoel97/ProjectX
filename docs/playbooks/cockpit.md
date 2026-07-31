@@ -1,5 +1,19 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-07-31 (22.1) — the hosted-search COUNT now survives the whole research path.
+> `DispatchResult`'s ok-branch carries `webSearchCalls` (a COUNT, §4-clean — never `sources`), the
+> `ok:true` return threads `turn.webSearchCalls`, and `persistResearchFindings` hands it to
+> `internal.research.persistFindings`. It was already computed, billed against and audited on
+> `subagent.completed`, then DROPPED one function short of the verdict — which is why the stored
+> document could not tell "searched and found nothing" from "never searched". `research.ts` uses it
+> twice: the provenance header no longer says "No web sources were retrieved." on a run that never
+> looked (it says "No web search was performed." instead, keyed independently of the source list so a
+> drifted 0-call/N-source run still lists its sources), and `research.persisted` now carries
+> `webSearchCalls` + `evidenceVerdict` (a count and a closed enum — no schema change). **Do not make
+> the fence's `webSearchCalls` optional, and do not re-derive the verdict at either call site: it
+> comes from `evidenceVerdict()` in `@pikar/core`, once.** See "Phase 22.1 — the evidence verdict"
+> in `agent-runtime.md` for the measured evidence.
+>
 > Last verified: 2026-07-30 (17-04) — Calendar creation now runs through the action retrier only
 > after the human `executePlan` gate; the model loop retains only content-free availability and
 > staging tools. See "Phase 17 — 17-04" below.

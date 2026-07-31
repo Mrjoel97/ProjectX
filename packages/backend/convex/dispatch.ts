@@ -109,6 +109,11 @@ export type DispatchResult =
       /** CONTENT-PLANE (§4): these feed 16-07's vault document. `sources` may NEVER reach an
        *  `audit`/`telemetry` payload — those carry `sourceCount` and `retrievedAt` (a number). */
       sources: readonly { url: string; title: string }[];
+      /** A COUNT (§4-clean), unlike `sources` — the hosted-search calls this hop billed for. It
+       *  rides the result because 22.1's evidence verdict needs "did it search?" alongside "did it
+       *  find anything?", and it was previously audited and then dropped one function short of the
+       *  document that states the verdict. */
+      webSearchCalls: number;
       retrievedAt: number;
       /** 16-07: the vault document the findings landed in. Present ONLY on a research run whose
        *  persist succeeded — absent on the gap path (which persists nothing here) and absent when
@@ -410,6 +415,7 @@ async function governedDispatch(
       envelopeCents,
       skillVersion: turn.skillVersion,
       sources: turn.sources,
+      webSearchCalls: turn.webSearchCalls,
       retrievedAt: Date.now(),
       modelId: turn.modelId,
       fallbackModelId: turn.fallbackModelId,
@@ -561,6 +567,7 @@ async function persistResearchFindings(
       body: res.body,
       // Copied to a mutable array: `sources` is readonly on the result, and a validator arg is not.
       sources: res.sources.map((s) => ({ url: s.url, title: s.title })),
+      webSearchCalls: res.webSearchCalls,
       retrievedAt: res.retrievedAt,
       rootRequestId: args.rootRequestId,
       incomplete: res.incomplete,

@@ -29,7 +29,7 @@
 // NOT a `"use node"` module, on purpose: `llm.ts` and `dispatch.ts` are the only two, and a third
 // re-triggers the TS circular-inference cliff (Pitfall 8). Every exported handler carries an
 // EXPLICIT return type for the same reason.
-import { INCOMPLETE_MARKER, researchFindingsFence } from "@pikar/core";
+import { evidenceVerdict, INCOMPLETE_MARKER, researchFindingsFence } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -71,6 +71,10 @@ const isoDate = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 function researchDocumentText(a: {
   body: string;
   sources: readonly { url: string; title: string }[];
+  /** 22.1: the provider-attested hosted-search count. Without it the header and the fence both
+   *  claim "no web sources were retrieved" on a run that never looked — turning "we didn't look"
+   *  into "we looked and the world is empty", which is a lie a user reads. */
+  webSearchCalls: number;
   retrievedAt: number;
   incomplete: boolean;
   incompleteReason?: "cost" | "steps" | "clock";
@@ -82,20 +86,28 @@ function researchDocumentText(a: {
     // never disagree about why the same run stopped. `.trim()` drops the memo body's leading
     // newline; the sentence itself is byte-identical.
     a.incomplete ? INCOMPLETE_MARKER[a.incompleteReason ?? "cost"].trim() : "",
+    // Keyed on the SEARCH count, independently of the source list below — under provider drift
+    // (0 calls but N citations) this stays cautious AND the sources still get listed.
+    a.webSearchCalls === 0 ? "No web search was performed." : "",
     a.sources.length === 0
-      ? "No web sources were retrieved."
+      ? // Only claim an empty retrieval when a search actually ran; otherwise the line above already
+        // said the true thing and this one would contradict the fence's own verdict.
+        a.webSearchCalls === 0
+        ? ""
+        : "No web sources were retrieved."
       : ["Sources:", ...a.sources.map((s) => `- ${s.title.trim() || s.url} — ${s.url}`)].join("\n"),
   ]
     .filter((line) => line !== "")
     .join("\n\n");
 
-  // The zero-source "insufficient evidence" verdict is decided by CODE inside the fence, whatever
-  // the body claims (D11) — a research agent that confabulates when search comes back empty is
-  // worse than no research agent, because Phase 12 will cite it. This is the fence's ONLY caller;
-  // do not re-implement the labelling here.
+  // The zero-yield verdict is decided by CODE inside the fence, whatever the body claims (D11) — a
+  // research agent that confabulates when search comes back empty is worse than no research agent,
+  // because Phase 12 will cite it. This is the fence's ONLY caller; do not re-implement the
+  // labelling here.
   const fenced = researchFindingsFence({
     body: a.body,
     sourceCount: a.sources.length,
+    webSearchCalls: a.webSearchCalls,
     retrievedIso,
   });
   return `${header}\n\n${fenced}\n\n${LIMITS_FOOTER}`;
@@ -120,6 +132,8 @@ export const persistFindings = internalMutation({
     question: v.string(),
     body: v.string(),
     sources: v.array(v.object({ url: v.string(), title: v.string() })),
+    /** 22.1: the hosted-search COUNT this run billed for (§4-clean — a number, never a URL). */
+    webSearchCalls: v.number(),
     /** D7's freshness stamp: a STORED, QUERYABLE number, not a date mentioned inside markdown. */
     retrievedAt: v.number(),
     rootRequestId: v.string(),
@@ -130,6 +144,16 @@ export const persistFindings = internalMutation({
   },
   handler: async (ctx, a): Promise<Id<"vaultDocuments">> => {
     const markdown = researchDocumentText(a);
+    // The SAME derivation the stored document used — one call, two consumers, so the audit plane
+    // and the document can never disagree about whether this run found anything.
+    // ponytail: an audit field, not a `vaultDocuments` column. Promote it to a stored, queryable
+    // field the first time something BRANCHES on it programmatically (Phase 12 citation gating
+    // refusing to cite a `not_researched` doc); until then a column is a schema change for a value
+    // only the eval harness reads.
+    const verdict = evidenceVerdict({
+      webSearchCalls: a.webSearchCalls,
+      sourceCount: a.sources.length,
+    });
     const vaultDocId = await ctx.db.insert("vaultDocuments", {
       tenantId: a.tenantId,
       title: researchTitle(a.question, a.retrievedAt),
@@ -159,6 +183,12 @@ export const persistFindings = internalMutation({
       payload: {
         queryHash: await contentHash(a.question),
         sourceCount: a.sources.length,
+        // A count and a closed enum — §4-clean, and the DURABLE prose-free truth source the eval
+        // harness reads (smoke.ts). It replaced a substring scan of `doc.text`, which is model
+        // prose quoting attacker-authored pages: a page that quotes the label sentence would flip
+        // the verdict. Prose leaves the verdict path entirely here.
+        webSearchCalls: a.webSearchCalls,
+        evidenceVerdict: verdict,
         retrievedAt: a.retrievedAt,
         vaultDocId: String(vaultDocId),
         incomplete: a.incomplete,

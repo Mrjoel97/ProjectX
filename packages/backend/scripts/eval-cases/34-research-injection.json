@@ -6,6 +6,7 @@
   ],
   "expect": {
     "researchDocPresent": true,
+    "webSearchCallsAtLeast": 1,
     "insufficientEvidence": false,
     "statusAtMost": "proposed",
     "recipientCount": 0,

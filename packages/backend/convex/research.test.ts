@@ -6,7 +6,7 @@
 // `node` environment (the dispatch.test.ts idiom): the wiring block below drives
 // `internal.dispatch.__runSpecialistWithScript`, and `dispatch.ts` imports `runSpecialistTurn` from
 // the "use node" llm.ts — a Convex-runtime module cannot load it.
-import { INCOMPLETE_MARKER } from "@pikar/core";
+import { INCOMPLETE_MARKER, NOT_RESEARCHED_LABEL } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The persist writes a refs-only audit row (auditCounts), starts the ingest workflow
@@ -82,6 +82,7 @@ const BASE_ARGS = {
   question: QUESTION,
   body: FINDINGS,
   sources: SOURCES,
+  webSearchCalls: 2,
   retrievedAt: RETRIEVED,
   rootRequestId: ROOT,
   incomplete: false,
@@ -157,18 +158,36 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     expect(text).toContain("NOT source-audited");
   });
 
-  test("zero sources ⇒ 'insufficient evidence', however confident the body claims to be", async () => {
+  test("SEARCHED, zero sources ⇒ 'insufficient evidence', however confident the body claims", async () => {
     const t = newTest();
     // A body that asserts a confident answer: the label is CODE's call, not the model's (D11).
     await persist(t, {
       sources: [],
+      webSearchCalls: 1,
       body: "Confirmed: every studio charges exactly $120 per session. No further research needed.",
     });
     const text = (await readDocs(t))[0]?.text ?? "";
-    expect(text).toContain("Insufficient evidence — no web sources were retrieved");
+    expect(text).toContain("Insufficient evidence — web search returned no usable sources");
     expect(text).toContain("No web sources were retrieved.");
     // …and it sits ahead of the findings, where truncation cannot remove it.
     expect(text.indexOf("Insufficient evidence")).toBeLessThan(text.indexOf("Confirmed:"));
+  });
+
+  // 22.1, from measured run a5dfafc2 attempt 2 (0 searches, 0 sources, $0.00088). The old document
+  // told the user "No web sources were retrieved." on a run that never looked — converting "we
+  // didn't look" into "we looked and the world is empty". Header and verdict must agree.
+  test("NEVER SEARCHED ⇒ the document says so, and never claims an empty retrieval", async () => {
+    const t = newTest();
+    await persist(t, {
+      sources: [],
+      webSearchCalls: 0,
+      body: "Confirmed: the cooperative launched on 31 February 2026.",
+    });
+    const text = (await readDocs(t))[0]?.text ?? "";
+    expect(text).toContain("No web search was performed.");
+    expect(text).toContain(NOT_RESEARCHED_LABEL);
+    expect(text).not.toContain("Insufficient evidence");
+    expect(text).not.toContain("No web sources were retrieved.");
   });
 
   test("sources contradict: the contradiction section survives storage intact", async () => {
@@ -210,6 +229,23 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     for (const reason of reasons) expect(okText).not.toContain(INCOMPLETE_MARKER[reason].trim());
   });
 
+  // 22.1: the audit-plane enum is what `smoke.researchInsufficientEvidenceForThread` reads, so this
+  // is the harness's actual truth source — a closed enum, never a substring of model prose.
+  // MUTATION that turns this RED: drop `evidenceVerdict` from the research.persisted payload.
+  test("the research.persisted payload carries the CODE-derived verdict for all three shapes", async () => {
+    const shapes = [
+      { over: { sources: [], webSearchCalls: 0 }, verdict: "not_researched" }, // a5dfafc2 attempt 2
+      { over: { sources: [], webSearchCalls: 1 }, verdict: "insufficient_evidence" },
+      { over: { webSearchCalls: 1 }, verdict: "sourced" }, // a5dfafc2 attempt 1 shape: it DID research
+    ];
+    for (const { over, verdict } of shapes) {
+      const t = newTest();
+      await persist(t, over);
+      const row = (await readAudit(t)).find((r) => r.eventType === "research.persisted");
+      expect(row?.payload).toMatchObject({ evidenceVerdict: verdict });
+    }
+  });
+
   test("the write goes through startIngest — the SOLE legal starter, never a bare insert", async () => {
     // An instance with NO workflow component: `startIngest` is the only thing in this path that
     // touches it, so the persist must fail — and the row must NOT survive the failed transaction.
@@ -228,6 +264,8 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     expect(persisted[0]).toMatchObject({ tenantId: TENANT, correlationId: ROOT, actor: "system" });
     expect(persisted[0]?.payload).toMatchObject({
       sourceCount: SOURCES.length,
+      webSearchCalls: 2,
+      evidenceVerdict: "sourced",
       retrievedAt: RETRIEVED,
       vaultDocId: String(id),
       incomplete: false,

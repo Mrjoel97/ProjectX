@@ -1210,6 +1210,54 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect((await readSteps(t)).map((s) => s.tool)).toContain("dispatchResearch");
   });
 
+  // 22.1: the search COUNT was computed, billed against and audited, then dropped one function
+  // short of the verdict — so the stored document could not tell "searched and found nothing" from
+  // "never searched". MUTATION that turns this RED: drop `webSearchCalls` from the ok-branch return
+  // (i.e. re-introduce the exact defect) — `persistFindings` then loses its required arg.
+  test("the hosted-search COUNT rides the result through to the findings terminal", async () => {
+    const { t, planId } = await setup();
+    // The persist runs `startIngest`, which needs the workflow component (the §4 test's idiom).
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const searched = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [searchedStep(REPLY, ["https://example.com/a"])],
+        research: true,
+      }),
+    );
+    expect(searched.webSearchCalls).toBe(1);
+
+    // The count reached the persist, not just the return: `research.persisted` is written by
+    // `persistFindings` from the arg bag `persistResearchFindings` handed it.
+    const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "research.persisted",
+    );
+    expect(persisted?.payload).toMatchObject({ webSearchCalls: 1, evidenceVerdict: "sourced" });
+
+    // …and a run that never searched is carried as such, not as an empty search.
+    const { t: t2, planId: planId2 } = await setup();
+    t2.registerComponent("workflow", workflowSchema, workflowModules);
+    t2.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const skipped = ok(
+      await t2.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId: planId2,
+        primary: [REPLY_STEP],
+        research: true,
+      }),
+    );
+    expect(skipped.webSearchCalls).toBe(0);
+    const persisted2 = (await t2.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "research.persisted",
+    );
+    expect(persisted2?.payload).toMatchObject({
+      webSearchCalls: 0,
+      evidenceVerdict: "not_researched",
+    });
+  });
+
   test("wall clock: partial findings return and land with the distinct clock marker", async () => {
     const { t, planId } = await setup();
     await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
