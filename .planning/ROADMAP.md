@@ -747,7 +747,16 @@ Plans:
   1. `requireOwner(ctx)` derives owner identity from a durable data source (a `users.owner` boolean seeded via `convex run`, NOT the `SKILLOPT_OWNER_TENANT` env hack) and lives as a sibling primitive to the tenant wrappers.
   2. `optimizerConfig.setOptimizerEnabled`, `skills.activateCandidate`, and `skills.candidatesForReview` each reject a non-owner caller server-side - a non-owner cannot flip the optimizer, activate a skill, or read candidate bodies.
   3. Any new admin-ish control added from here on carries `requireOwner` from birth; the server-side guard is the trust boundary (hiding the UI is only presentation).
-**Plans**: TBD
+**Plans**: 3/3 code-complete (2026-07-31), phase NOT complete — two blocking owner checkpoints outstanding
+- [x] 22-01-PLAN.md — identity + owner substrate: `getAuthUserId`, `users.owner`, `requireOwner`/`ownerQuery`/`ownerMutation`, `owner.viewer`, audited idempotent `bootstrapOwner`, new `authorization.md` (Tasks 1-2 done; **Task 3 = BLOCKING live owner bootstrap, NOT run**)
+- [x] 22-02-PLAN.md — the four global Phase-8 controls moved onto owner wrappers; closes the standing Phase-8 owner-auth blocker in `skill-registry.md`. Full backend 860/860
+- [x] 22-03-PLAN.md — `/ops` mounts its whole Optimizer section only for a confirmed owner; web typecheck + build green (Tasks 1-2 done; **Task 3 = BLOCKING two-identity live UAT, NOT run**)
+
+> **GOVN-01 stays Pending until both checkpoints pass.** The load-bearing one is calling all four
+> public APIs directly as a controlled non-owner and observing `OWNER_REQUIRED` with no state
+> change — the DOM check proves presentation, not the trust boundary. Checklist:
+> `docs/playbooks/authorization.md` § "Live owner/non-owner checklist".
+> Phase 22's total backend typecheck delta is ZERO (back to the exact 150 baseline).
 
 ### Phase 22.1: Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED)
 
@@ -831,7 +840,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
 | 20. Media Canvas | 0/TBD | Not started | - |
 | 21. User-Authored Skills | 0/TBD | Not started | - |
-| 22. Owner Authorization Primitive | 0/TBD | Not started | - |
+| 22. Owner Authorization Primitive | 3/3 code-complete | In progress — 2 blocking owner checkpoints | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/TBD | Not started | - |

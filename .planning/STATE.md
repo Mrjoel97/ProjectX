@@ -30,6 +30,7 @@ read only the first frontmatter block.
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | 16-09 live eval | Deterministic gates are green; awaiting a securely available `OPENAI_API_KEY` for the required model-backed golden run |
 | K | **17** Calendar Actions | 4/4 plans complete | Owner UAT M1-M5 | Offline goal verification is `human_needed`; Google-only create path is implementation-complete |
+| O | **22** Owner Authorization (GOVN-01) | 3/3 plans code-complete, serialized on `main` (d62c46c, eda6f10, 6dd86f6) | 2 BLOCKING owner checkpoints | Closes the standing Phase-8 owner-auth blocker. Full backend 860/860; backend typecheck delta ZERO (back to the exact 150 baseline). **Not complete** — needs (a) live owner bootstrap and (b) two-identity `/ops` UAT incl. four direct non-owner API calls. Checklist in `docs/playbooks/authorization.md`. Phase **21 is dependency-blocked** (needs 16-19); **22.1 deferred** — it targets the shared `tsconfig`, which `PARALLELIZATION.md` says is an owner call taken BETWEEN lanes, not during them |
 
 **Counts above are recomputed from disk** (40 phase checkboxes, 26 `[x]`, 203 `*-PLAN.md`,
 197 `*-SUMMARY.md`), not carried forward from any lane's stale block.
