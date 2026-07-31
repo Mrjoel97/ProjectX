@@ -8,7 +8,7 @@
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { tenantMutation, tenantQuery } from "./lib/functions";
+import { ownerMutation, ownerQuery } from "./lib/functions";
 
 // Default-on-read: a missing/false optimizerConfig row means the optimizer is DORMANT
 // (enabled=false, zero seed, no migration). Exported — Plan 03 eligibility and Plan 07 CI
@@ -72,18 +72,20 @@ export const setOptimizerConfig = internalMutation({
   handler: (ctx, args) => writeConfig(ctx, args),
 });
 
-/** Read the optimizer config from the ops page (IMPR-02). Public/tenant — the authenticated
- *  identity is the owner gate; the config itself is a single global row. Default-on-read: a
- *  missing row reads DORMANT (enabled=false), so the kill switch ships OFF. */
-export const getOptimizerStatus = tenantQuery({
+/** Read the optimizer config from the ops page (IMPR-02). OWNER-ONLY (GOVN-01): this row is
+ *  GLOBAL, not tenant-scoped, so a tenant wrapper would have disclosed one tenant's view of
+ *  every tenant's optimizer state. Default-on-read: a missing row reads DORMANT
+ *  (enabled=false), so the kill switch ships OFF. */
+export const getOptimizerStatus = ownerQuery({
   args: {},
   handler: (ctx) => getConfig(ctx),
 });
 
-/** Flip the optimizer kill switch from the ops page (IMPR-02). Public/tenant owner-gated
- *  wrapper over the shared upsert — maps to the SAME single-row optimizerConfig.enabled the
- *  CI job and eligibility check read. Ships dormant until an owner turns it on (Phase 9). */
-export const setOptimizerEnabled = tenantMutation({
+/** Flip the optimizer kill switch from the ops page (IMPR-02). OWNER-ONLY (GOVN-01) wrapper
+ *  over the shared upsert — maps to the SAME single-row optimizerConfig.enabled the CI job
+ *  and eligibility check read, so before this gate any signed-in tenant could disable
+ *  self-improvement for the whole deployment. Ships dormant until an owner turns it on. */
+export const setOptimizerEnabled = ownerMutation({
   args: { enabled: v.boolean() },
   handler: async (ctx, { enabled }) => {
     await writeConfig(ctx, { enabled });

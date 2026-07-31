@@ -1,8 +1,13 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-07-31 (22-01) against 25b7c98 — created with the GOVN-01 owner primitive.
-> Identity moved from a hand-written `stableTenant(subject)` parser to the auth package's
-> official `getAuthUserId`, and `users.owner` became the one durable owner authority.
+> Last verified: 2026-07-31 (22-02) — the four global Phase-8 controls moved onto the owner
+> wrappers: `getOptimizerStatus`/`setOptimizerEnabled` → `ownerQuery`/`ownerMutation`,
+> `activateCandidate`/`candidatesForReview` → `ownerMutation`/`ownerQuery`. Their source
+> comments previously said outright that *"the authenticated identity IS the owner gate"* —
+> that was the vulnerability stated in prose, and it is gone. PREVIOUS: 2026-07-31 (22-01)
+> against 25b7c98 — created with the GOVN-01 owner primitive; identity moved from a
+> hand-written `stableTenant(subject)` parser to the auth package's official `getAuthUserId`,
+> and `users.owner` became the one durable owner authority.
 > Build history: `.planning/phases/22-owner-authorization-primitive-requireowner/` · Related ADRs: none
 
 ## Purpose
@@ -81,6 +86,29 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
    only). Enforced by a sorted-key-set assertion plus a serialized-row scan for the email/name.
 8. **There is deliberately no `ownerAction`.** An action has no `ctx.db`, so it cannot read the
    row the check depends on. An owner-only action must call an owner-gated mutation/query.
+9. **Owner authorization and the skill EVAL_GATE are INDEPENDENT gates.** `requireOwner` asks
+   *may this caller act?*; EVAL_GATE asks *has this body earned activation?*. Never move
+   `requireOwner` into `activateSkillVersion` to "cover both" — that helper is also the trusted
+   path for internal eval/seeding/operator callers with no browser identity, and gating it would
+   break them while conflating two orthogonal questions. Pinned by two tests: an owner still gets
+   `EVAL_GATE` on an unevaluated candidate, and a non-owner still gets `OWNER_REQUIRED` on an
+   evidence-exempt rollback.
+10. **The four protected endpoints are pinned BY NAME** in `importGuard.test.ts`
+    (`owner-gated endpoints stay owner-gated`). Adding a fifth admin endpoint means adding a row.
+
+### Why there is no "check happens before the write" test
+
+The plan for 22-02 called for a mutation check proving the owner check precedes the write. **That
+check is structurally unsatisfiable on Convex and was NOT faked.** Convex mutations are atomic
+transactions: moving `requireOwner` below `writeConfig` and letting it throw rolls the whole
+transaction back, so the resulting DB state is byte-identical to the refusal case. It was tried —
+`setOptimizerEnabled` as a `tenantMutation` with `requireOwner` after the write — and all 11
+optimizer tests still passed, correctly.
+
+There is no window of exposure to test because Convex's transaction model removes it. The real,
+testable invariant is **un-skippability** — that the guard runs before the handler at all — and
+that is what the wrapper placement plus the static name guard pin. Do not "fix" this by weakening
+a fixture until it goes red.
 
 ## How to change safely
 

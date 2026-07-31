@@ -521,7 +521,16 @@ describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
 });
 
 describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", () => {
-  const OWNER = "owner_a";
+  // GOVN-01: authority is the `users.owner` boolean, so these fixtures insert REAL user rows.
+  // A fabricated subject string is no longer evidence of anything.
+  const identities = async (t: ReturnType<typeof convexTest>) => {
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const plainId = await t.run((ctx) => ctx.db.insert("users", {}));
+    return {
+      asOwner: t.withIdentity({ subject: `${ownerId}|session_a` }),
+      asNonOwner: t.withIdentity({ subject: `${plainId}|session_a` }),
+    };
+  };
   const insert = (
     t: ReturnType<typeof convexTest>,
     fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
@@ -556,7 +565,7 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     const t = convexTest(schema, modules);
     await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
     await insert(t, { name: "cockpit-agent", version: 2, body: "v2", status: "candidate" });
-    const asOwner = t.withIdentity({ subject: OWNER });
+    const { asOwner } = await identities(t);
 
     await expect(
       asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 }),
@@ -576,7 +585,7 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
       status: "candidate",
       evidence: passing("cockpit-agent", 2),
     });
-    const asOwner = t.withIdentity({ subject: OWNER });
+    const { asOwner } = await identities(t);
 
     const res = await asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 });
     expect(res).toEqual({ ok: true, name: "cockpit-agent", version: 2 });
@@ -608,7 +617,7 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     await insert(t, { name: "document-drafter", version: 2, body: "d2", status: "candidate" });
     // inbox-digest: only an active row → NOT listed (no candidate awaiting review).
     await insert(t, { name: "inbox-digest", version: 1, body: "i1", status: "active" });
-    const asOwner = t.withIdentity({ subject: OWNER });
+    const { asOwner } = await identities(t);
 
     const list = await asOwner.query(api.skills.candidatesForReview, {});
     const cockpit = list.find((c) => c.name === "cockpit-agent")!;
@@ -623,6 +632,98 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     expect(doc).toMatchObject({ fromVersion: 1, toVersion: 2, gatePassed: false });
     // Only skills WITH a candidate appear — inbox-digest (active-only) is absent.
     expect(list.find((c) => c.name === "inbox-digest")).toBeUndefined();
+  });
+
+  // GOVN-01 — authentication is NOT authorization. Skill rows are a GLOBAL registry, so
+  // before this gate any signed-in tenant could read every candidate prompt body in the
+  // deployment and flip any skill live.
+
+  test("a non-owner cannot read candidate BODIES", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 11, body: "OLD BODY", status: "active" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 12,
+      body: "SECRET NEW BODY",
+      status: "candidate",
+      evidence: passing("cockpit-agent", 12),
+    });
+    const { asOwner, asNonOwner } = await identities(t);
+
+    await expect(asNonOwner.query(api.skills.candidatesForReview, {})).rejects.toThrow(
+      /OWNER_REQUIRED/,
+    );
+
+    // Anti-vacuity: the refusal is the no-body boundary, so prove the fixture REALLY holds
+    // the body a non-owner just failed to read. Without this the test would pass against an
+    // empty registry.
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+    expect(list.find((c) => c.name === "cockpit-agent")?.toBody).toBe("SECRET NEW BODY");
+  });
+
+  test("a non-owner activation is refused and NO status changes", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "v2",
+      status: "candidate",
+      evidence: passing("cockpit-agent", 2),
+    });
+    const { asNonOwner } = await identities(t);
+
+    await expect(
+      asNonOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+
+    // The candidate carries PASSING evidence, so EVAL_GATE would have let this through —
+    // only the owner check stopped it. That is what makes this test about authorization
+    // rather than about the evidence gate.
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("candidate");
+  });
+
+  test("a non-owner ROLLBACK is refused — evidence-exempt does not mean auth-exempt", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "archived" });
+    await insert(t, { name: "cockpit-agent", version: 2, body: "v2", status: "active" });
+    const { asNonOwner } = await identities(t);
+
+    // v1 is `archived`, so EVAL_GATE exempts it BY STATUS (rollback must work mid-incident).
+    // Authorization is the only thing standing here — and it must still stand.
+    await expect(
+      asNonOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 1 }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("archived");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("active");
+  });
+
+  test("an OWNER still cannot bypass EVAL_GATE — the two gates are independent", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "active" });
+    await insert(t, { name: "cockpit-agent", version: 2, body: "v2", status: "candidate" });
+    const { asOwner } = await identities(t);
+
+    // Owner authority answers "may this caller act?", never "has this body earned it?".
+    await expect(
+      asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("candidate");
+  });
+
+  test("the INTERNAL activate path still works with no identity, and rollback stays evidence-exempt", async () => {
+    const t = convexTest(schema, modules);
+    await insert(t, { name: "cockpit-agent", version: 1, body: "v1", status: "archived" });
+    await insert(t, { name: "cockpit-agent", version: 2, body: "v2", status: "active" });
+
+    // The eval runner / seed path has no browser identity at all. Owner-gating the PUBLIC
+    // wrappers must not have gated this.
+    await t.mutation(internal.skills.activateSkill, { name: "cockpit-agent", version: 1 });
+
+    expect(await statusOf(t, "cockpit-agent", 1)).toBe("active");
+    expect(await statusOf(t, "cockpit-agent", 2)).toBe("archived");
   });
 });
 

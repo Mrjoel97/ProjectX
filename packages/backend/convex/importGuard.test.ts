@@ -77,3 +77,28 @@ describe("wrapper identity: the official auth adapter, not a hand-rolled parser"
     expect(wrapperCode).not.toContain("identity.subject");
   });
 });
+
+// GOVN-01: the known global controls are pinned to owner wrappers by NAME. This is a
+// deliberately dumb table, not a regex that tries to infer "admin-ish" semantics — the
+// durable rule for future endpoints lives in code review and docs/playbooks/authorization.md.
+// What this catches is a refactor silently downgrading a gated endpoint back to a tenant
+// wrapper, which the behavioural tests would also catch but only if someone remembers to
+// keep them.
+describe("owner-gated endpoints stay owner-gated", () => {
+  const PROTECTED: ReadonlyArray<[string, string, string]> = [
+    ["./optimizerConfig.ts", "getOptimizerStatus", "ownerQuery"],
+    ["./optimizerConfig.ts", "setOptimizerEnabled", "ownerMutation"],
+    ["./skills.ts", "activateCandidate", "ownerMutation"],
+    ["./skills.ts", "candidatesForReview", "ownerQuery"],
+  ];
+
+  for (const [path, name, wrapper] of PROTECTED) {
+    test(`${basename(path)}:${name} is declared with ${wrapper}`, () => {
+      const source = sources[path];
+      // Anti-vacuity: a renamed or deleted file must FAIL here, not silently pass.
+      expect(source, `${path} was not found by the static scan`).toBeTypeOf("string");
+      expect(source).toContain(`export const ${name} =`);
+      expect(source).toContain(`export const ${name} = ${wrapper}(`);
+    });
+  }
+});

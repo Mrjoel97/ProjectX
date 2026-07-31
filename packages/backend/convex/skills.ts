@@ -71,7 +71,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { tenantMutation, tenantQuery } from "./lib/functions";
+import { ownerMutation, ownerQuery } from "./lib/functions";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -160,13 +160,19 @@ export const activateSkill = internalMutation({
 });
 
 /**
- * The owner's one-click candidate activation from the ops panel (IMPR-02/03). A
- * tenantMutation — the authenticated identity IS the owner gate — routing through the
- * SAME shared EVAL_GATE as activateSkill, so an unevaluated gated candidate CANNOT go
- * live from the UI any more than from the runner. Returns the flip so the panel can
- * confirm the before→after; an EVAL_GATE / NO_SUCH_SKILL_VERSION throw surfaces inline.
+ * The owner's one-click candidate activation from the ops panel (IMPR-02/03). OWNER-ONLY
+ * (GOVN-01), routing through the SAME shared EVAL_GATE as activateSkill, so an unevaluated
+ * gated candidate CANNOT go live from the UI any more than from the runner. Returns the flip
+ * so the panel can confirm the before→after; an EVAL_GATE / NO_SUCH_SKILL_VERSION throw
+ * surfaces inline.
+ *
+ * These are TWO INDEPENDENT gates and must stay that way. `requireOwner` asks *may this
+ * caller act?*; EVAL_GATE asks *has this body earned activation?*. Never move requireOwner
+ * down into `activateSkillVersion` to "cover both" — that helper is also the trusted path
+ * for internal eval/seeding/operator callers that have no browser identity at all, and
+ * gating it would break them while conflating two orthogonal questions.
  */
-export const activateCandidate = tenantMutation({
+export const activateCandidate = ownerMutation({
   args: { name: v.string(), version: v.number() },
   handler: async (ctx, { name, version }) => {
     await activateSkillVersion(ctx, name, version);
@@ -179,9 +185,14 @@ export const activateCandidate = tenantMutation({
  * pending candidate, the newest candidate with the live (active) version as `fromVersion`
  * + both bodies (the before/after diff source), its recorded `evidence`, and whether that
  * evidence passes the gate (so the panel can pre-warn an Activate that EVAL_GATE will
- * refuse). Registry rows are global; the tenantMutation identity is just the owner gate.
+ * refuse).
+ *
+ * OWNER-ONLY (GOVN-01). This is the sharpest disclosure boundary in the file: skill rows are
+ * GLOBAL registry records and `toBody`/`fromBody` are the raw prompt bodies. Under the old
+ * tenant wrapper any signed-in user could read every candidate prompt in the deployment.
+ * The refusal IS the no-body boundary — reject before a single registry row is read.
  */
-export const candidatesForReview = tenantQuery({
+export const candidatesForReview = ownerQuery({
   args: {},
   handler: async (ctx) => {
     const out = [];
