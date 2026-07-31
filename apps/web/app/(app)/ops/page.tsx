@@ -403,6 +403,11 @@ export default function OpsPage() {
   const deadLetters = useQuery(api.deadLetters.listNew);
   const markResolved = useMutation(api.deadLetters.markResolved);
   const [busy, setBusy] = useState<string | null>(null);
+  // GOVN-01. One non-disclosing boolean; the server wrappers on the four optimizer/skill
+  // endpoints are the actual trust boundary. `undefined` is the loading state and renders
+  // NOTHING optimizer-shaped — fail closed, so a slow query cannot flash the admin surface.
+  const viewer = useQuery(api.owner.viewer, {});
+  const isOwner = viewer?.isOwner === true;
 
   return (
     <div style={{ display: "grid", gap: "1.5rem", alignContent: "start" }}>
@@ -428,13 +433,23 @@ export default function OpsPage() {
       </section>
 
       {/* Optimizer sits between the ambient eval read and the incident dead-letter read:
-          the kill switch + candidate activation are operator controls, not incidents. */}
-      <section style={{ display: "grid", gap: "0.9rem" }}>
-        <p className="caps-label" style={{ margin: 0 }}>
-          Optimizer
-        </p>
-        <OptimizerPanel />
-      </section>
+          the kill switch + candidate activation are operator controls, not incidents.
+
+          OWNER-ONLY (GOVN-01). The WHOLE section is conditional, and that is the security
+          property: OptimizerPanel owns all four owner-only hooks, so mounting it is what
+          subscribes to global config and candidate prompt BODIES. Hiding it with CSS,
+          `hidden`, opacity, or an early return INSIDE the panel would each still run those
+          hooks and leak through the subscription, the loading state, or the error boundary.
+          Only /ops's optimizer section is gated — Eval signals and Dead letters below stay
+          tenant-visible, because this page is deliberately mixed-purpose. */}
+      {isOwner && (
+        <section style={{ display: "grid", gap: "0.9rem" }}>
+          <p className="caps-label" style={{ margin: 0 }}>
+            Optimizer
+          </p>
+          <OptimizerPanel />
+        </section>
+      )}
 
       <section style={{ display: "grid", gap: "0.9rem" }}>
         <p className="caps-label" style={{ margin: 0 }}>

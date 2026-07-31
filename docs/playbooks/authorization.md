@@ -1,6 +1,13 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-07-31 (22-02) — the four global Phase-8 controls moved onto the owner
+> Last verified: 2026-07-31 (22-03) — `/ops` now mounts its **entire** Optimizer section only for
+> a confirmed owner (`api.owner.viewer`). Mounting is the security act, not styling: `OptimizerPanel`
+> owns all four owner-only hooks, so CSS/`hidden`/opacity/an early-return-inside-the-panel would each
+> still subscribe and leak through the subscription, loading state, or error boundary. Eval signals,
+> Dead letters, Compliance nav and the DLQ badge stay tenant-visible — this page is deliberately
+> mixed-purpose. Backend typecheck is back to the exact 150 baseline (Phase 22 delta = ZERO); web
+> typecheck + build green. **The two-identity live UAT is NOT run — it is a blocking owner checkpoint.**
+> PREVIOUS: 2026-07-31 (22-02) — the four global Phase-8 controls moved onto the owner
 > wrappers: `getOptimizerStatus`/`setOptimizerEnabled` → `ownerQuery`/`ownerMutation`,
 > `activateCandidate`/`candidatesForReview` → `ownerMutation`/`ownerQuery`. Their source
 > comments previously said outright that *"the authenticated identity IS the owner gate"* —
@@ -151,6 +158,37 @@ node scripts/check-playbooks.mjs
 
 **Live only** (no offline substitute): the bootstrap returning `changed:true` then `changed:false`
 on the intended deployment, and the two-identity `/ops` check.
+
+### The presentation rule (why the whole section is conditional)
+
+`OptimizerPanel` owns all four owner-only hooks. Therefore **mounting the component is what
+subscribes** to global config and candidate prompt bodies. The gate must wrap the mount:
+
+- ✅ `{isOwner && <section>…<OptimizerPanel /></section>}`
+- ❌ CSS `display:none`, the `hidden` attribute, `opacity: 0` — the hooks still run
+- ❌ an early `return null` **inside** `OptimizerPanel` — hooks run before the return
+- ❌ lifting the four hooks into `OpsPage` — they would run for every visitor
+
+`viewer === undefined` (loading) renders nothing optimizer-shaped, so a slow query cannot flash the
+admin surface. And none of this is the trust boundary — a non-owner calling the API directly is
+still refused server-side. **Hiding the UI is a courtesy; the wrapper is the gate.**
+
+### Live owner/non-owner checklist (the blocking checkpoint)
+
+Run on the INTENDED deployment — never a lane deployment, whose user set and owner state differ.
+
+1. Bootstrap the confirmed owner (`changed:true`, then `changed:false`).
+2. As **owner**: `/ops` shows the Optimizer heading, kill switch, and candidate review. Toggle the
+   switch; exercise an activation refusal/success against a known disposable candidate only. Sign
+   out and back in — controls must survive a fresh login (this is the per-session-scoping guard).
+3. As a **controlled non-owner** (`owner` absent or false): no Optimizer heading, switch, candidate
+   name/body/evidence, Activate button, optimizer loading state, or owner-only error. Eval signals,
+   Dead letters, Compliance nav and the DLQ badge remain.
+4. **As that same non-owner, call all four APIs directly** via the authenticated client/dev harness.
+   All must reject `OWNER_REQUIRED` with no state change. *The DOM check alone is insufficient —
+   this step is the actual trust-boundary proof.*
+5. UI mutation: remove the `isOwner` mount branch, rebuild, confirm the non-owner now SEES the
+   Optimizer heading (RED), then restore, rebuild, and confirm it is absent again.
 
 ## Operational notes
 
