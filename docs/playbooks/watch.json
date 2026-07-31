@@ -1,7 +1,8 @@
 {
   "_unassigned": [
     "packages/backend/uat-tmp-owner-boundary.mjs",
-    "packages/backend/uat-tmp-owner-positive.mjs"
+    "packages/backend/uat-tmp-owner-positive.mjs",
+    "packages/backend/convex/uatTmpRevoke.ts"
   ],
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
