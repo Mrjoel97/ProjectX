@@ -2,7 +2,7 @@
 phase: 20
 name: media-canvas
 type: provider-evaluation
-status: recommendation-pending-owner-decision
+status: DECIDED — fal.ai + Wan 2.5, owner decision 2026-08-01, pinned in ADR-011
 requirements: [MEDIA-01]
 researched: 2026-08-01
 supersedes_claim: "20-SPIKE.md said SC #3 was BLOCKED. That was overstated — see §1."
