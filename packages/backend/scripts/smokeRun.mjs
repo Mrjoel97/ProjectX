@@ -30,10 +30,25 @@ function invoke(fn, args) {
   return out;
 }
 
-/** Run once; on failure print the deployment's output and rethrow. */
-export function must(fn, args = {}) {
+/** Run once; on failure print the deployment's output and rethrow.
+ *
+ * `retryOnEmpty` (16-09) — retry ONCE when stdout is EMPTY and no failure banner was printed.
+ * That combination is never a real result: `convex run` prints the return value as JSON on every
+ * success. It is the Windows/Node 24 exit-teardown crash this module's header already documents,
+ * surfacing one layer later — the CLI dies after the function ran but before stdout was flushed,
+ * so the caller does `JSON.parse("")` and reports `Unexpected end of JSON input`, which reads like
+ * a case failure and is not one. Measured cost: it took a PASS away from eval run `89e5ee98`
+ * fixture 33, whose correct verdict (1 search, 0 sources, insufficient_evidence) is in the audit
+ * trail.
+ *
+ * OPT-IN, never the default, because `must` also wraps `llm:runCockpitAgent` (a retry BILLS a
+ * second model turn) and `skills:recordEvalEvidence` (a retry writes a DUPLICATE evidence row).
+ * Only pass it for pure, free, idempotent reads.
+ */
+export function must(fn, args = {}, { retryOnEmpty = false } = {}) {
   try {
-    return invoke(fn, args);
+    const out = invoke(fn, args);
+    return retryOnEmpty && out.trim() === "" ? invoke(fn, args) : out;
   } catch (e) {
     console.error(e.message);
     throw e;

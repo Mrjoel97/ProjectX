@@ -32,6 +32,11 @@ import { fileURLToPath } from "node:url";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
+
+// 16-09: every smoke:*ForThread read is a pure internalQuery — FREE and IDEMPOTENT — so one retry on
+// the empty-stdout CLI teardown crash is safe here in a way it is NOT for llm:runCockpitAgent (a
+// retry bills a second model turn) or skills:recordEvalEvidence (a duplicate evidence row).
+const RETRY_READ = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
@@ -1016,7 +1021,7 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
 function waitForDispatch(planId) {
   const deadline = Date.now() + DISPATCH_TIMEOUT_MS;
   for (;;) {
-    const plan = parse(must("plans:getById", { planId }));
+    const plan = parse(must("plans:getById", { planId }, RETRY_READ));
     if (plan && plan.status !== "collecting") return plan;
     if (Date.now() >= deadline) return null;
     sleepSync(DISPATCH_POLL_MS);
@@ -1029,9 +1034,14 @@ function waitForDispatch(planId) {
 function waitForResearchLanding(planId, tenantId, threadId) {
   const deadline = Date.now() + DISPATCH_TIMEOUT_MS;
   for (;;) {
-    const plan = parse(must("plans:getById", { planId }));
+    // 16-09: RETRY_READ matters MOST here. This loop has no try/catch and spins every
+    // DISPATCH_POLL_MS for up to DISPATCH_TIMEOUT_MS — ~70 iterations x 2 CLI calls — so it is by
+    // far the largest exposure to the empty-stdout teardown crash, and a single occurrence
+    // propagates out of attemptCase as `Unexpected end of JSON input`, scoring a behaviourally
+    // CORRECT case as FAIL. That is what happened to run 89e5ee98's fixture 33.
+    const plan = parse(must("plans:getById", { planId }, RETRY_READ));
     const researchCount = parse(
-      must("smoke:researchCountForThread", { tenantId, threadId }),
+      must("smoke:researchCountForThread", { tenantId, threadId }, RETRY_READ),
     );
     if (plan && plan.status !== "collecting" && researchCount > 0) {
       return { plan, researchCount };
@@ -1151,13 +1161,13 @@ function attemptCase(fixture, tenant, pins) {
   } else {
     // Assert on plan STATE (never on res.reply — locked). A briefing fixture adds ONE read of
     // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
-    plan = parse(must("plans:getById", { planId }));
+    plan = parse(must("plans:getById", { planId }, RETRY_READ));
   }
   // The specialist bill, charged off the audit trail now that the dispatch poll has settled (one
   // read, hung off the EXISTING poll — no second loop). Same skip-unless-asked discipline as every
   // other read below: a non-dispatch case pays no extra hop and its numbers are unchanged.
   if (dispatched) {
-    specialistCost = parse(must("smoke:specialistCostForThread", { tenantId: tenant, threadId }));
+    specialistCost = parse(must("smoke:specialistCostForThread", { tenantId: tenant, threadId }, RETRY_READ));
     caseCost += specialistCost;
     totalCost += specialistCost;
     // The cap is a governed stop and outranks a case failure — check BEFORE returning one.
@@ -1171,54 +1181,56 @@ function attemptCase(fixture, tenant, pins) {
   const briefingCount =
     fixture.expect.briefingPresent === undefined
       ? 0
-      : parse(must("smoke:briefingCountForThread", { tenantId: tenant, threadId }));
+      : parse(must("smoke:briefingCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const synopsisPresent =
     fixture.expect.ledePresent === undefined
       ? false
-      : parse(must("smoke:briefingSynopsisPresent", { tenantId: tenant, threadId }));
+      : parse(must("smoke:briefingSynopsisPresent", { tenantId: tenant, threadId }, RETRY_READ));
   // 12-06: same skip-unless-asked discipline — a non-assessment case pays no extra hop.
   const evaluationCount =
     fixture.expect.evaluationPresent === undefined
       ? 0
-      : parse(must("smoke:evaluationCountForThread", { tenantId: tenant, threadId }));
+      : parse(must("smoke:evaluationCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const findingCount =
     fixture.expect.findingsPresent === undefined
       ? 0
-      : parse(must("smoke:findingCountForThread", { tenantId: tenant, threadId }));
+      : parse(must("smoke:findingCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const gapCount =
     fixture.expect.gapCount === undefined
       ? 0
-      : parse(must("smoke:gapCountForThread", { tenantId: tenant, threadId }));
+      : parse(must("smoke:gapCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   // Phase 16: skip every research read unless a fixture asks. The pairing rules above guarantee
   // the verdict and call floor cannot ask without the persisted-document companion.
   const researchCount =
     fixture.expect.researchDocPresent === undefined
       ? 0
       : landedResearchCount ||
-        parse(must("smoke:researchCountForThread", { tenantId: tenant, threadId }));
+        parse(must("smoke:researchCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const insufficientEvidence =
     fixture.expect.insufficientEvidence === undefined
       ? false
       : parse(
-          must("smoke:researchInsufficientEvidenceForThread", {
-            tenantId: tenant,
-            threadId,
-          }),
+          must(
+            "smoke:researchInsufficientEvidenceForThread",
+            { tenantId: tenant, threadId },
+            RETRY_READ,
+          ),
         );
   const webSearchCalls =
     fixture.expect.webSearchCallsAtLeast === undefined
       ? 0
-      : parse(must("smoke:webSearchCallsForThread", { tenantId: tenant, threadId }));
+      : parse(must("smoke:webSearchCallsForThread", { tenantId: tenant, threadId }, RETRY_READ));
   // 22.1b: the SEMANTIC act, off the same audit plane. Skipped unless asked, like every research
   // read above — the 31 non-research fixtures pay nothing and see `false`.
   const declaredUnsupported =
     fixture.expect.declaredUnsupported === undefined
       ? false
       : parse(
-          must("smoke:researchDeclaredUnsupportedForThread", {
-            tenantId: tenant,
-            threadId,
-          }),
+          must(
+            "smoke:researchDeclaredUnsupportedForThread",
+            { tenantId: tenant, threadId },
+            RETRY_READ,
+          ),
         );
   const failures = evaluateExpect(
     fixture.expect,
