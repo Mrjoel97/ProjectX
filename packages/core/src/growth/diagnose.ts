@@ -57,10 +57,15 @@ export function diagnose(sc: Scorecard): Prescription {
   // --- Gate 1: Offer ---
   // An offer is "on file" when EITHER signal affirms one: the free-text list, or any
   // offerTypesPresent leaf the user affirmed (the checklist literally states "we sell an
-  // attraction offer today"). Measured live (eval run 56bff5b8, fixture 31, 4/4 attempts):
-  // the executive records the checklist booleans from prose but not the free-text list, and
-  // reading the list alone diagnosed "no offer worth buying" against a scorecard affirming
-  // two live offers — gate 1 fired before gate 2's offerTypeCount was ever consulted.
+  // attraction offer today"). Measured live (eval run 56bff5b8, fixture 31, BOTH attempts —
+  // the runner's flake policy is exactly one re-run, so a fixture runs at most twice):
+  // on that fixture's phrasing the executive recorded the checklist booleans but no free-text
+  // entry, and reading the list alone diagnosed "no offer worth buying" against a scorecard
+  // affirming two live offers — gate 1 fired before gate 2's offerTypeCount was ever consulted.
+  // NOT a general claim that the executive never records the list: fixture 30's dispatch in the
+  // same run carries an `evaluation.answered { field: "identity.currentOffers" }` row. The point
+  // is that ONE encoding of "we have an offer" must not be invisible to the gate that reads the
+  // other — gate 2's offerTypeCount already treated the checklist as authoritative.
   // `=== true` mirrors the offerTypeCount checklist rule below (defence against non-boolean leaks).
   const hasOffer =
     sc.identity.currentOffers.length > 0 ||

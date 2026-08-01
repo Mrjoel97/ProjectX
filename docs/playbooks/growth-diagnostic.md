@@ -1,5 +1,37 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-08-01 (16-09 — **gate 1 now reads BOTH encodings of “we have an offer”.**)
+> `diagnose.ts` gate 1’s `hasOffer` accepted only the free-text `identity.currentOffers` list, while
+> gate 2’s `offerTypeCount` already treated the `modelCard.offerTypesPresent` checklist as
+> authoritative — one function reading two encodings of the same fact as different facts. Measured
+> on eval run `56bff5b8`, fixture 31 (BOTH attempts; the runner’s flake policy is exactly one
+> re-run, so a fixture runs at most twice): the executive recorded the checklist booleans but no
+> free-text entry, so gate 1 fired “no offer worth buying” against a scorecard affirming two live
+> offers and preempted gate 3 before `offerTypeCount` was ever consulted. `hasOffer` now also
+> accepts any `=== true` checklist leaf.
+>
+> **Scope of the claim, corrected:** this is NOT a general finding that the executive never records
+> the free-text list — fixture 30’s dispatch in the SAME run carries an
+> `evaluation.answered { field: "identity.currentOffers" }` row. It is phrasing-dependent, which is
+> exactly why the gate must be insensitive to which encoding arrives.
+>
+> **What did NOT change:** no math, no threshold, no gate ORDER, no route literal, no `SPECIALISTS`
+> entry. The `=== true` discipline is preserved (defence against non-boolean leaks). The change is
+> MONOTONE — gate 1 can only fire LESS often than before, never more.
+>
+> **Verified, not assumed:** the current `diagnose.ts` was transpiled standalone and executed
+> against the exact scorecards run `56bff5b8` persisted. Fixture 31 → `{gate:3, route:"lead-engine",
+> playbook:"01-pick-channel"}`, gapCount 1 (was mis-routing to offer-architect). Neighbours
+> unchanged or improved: 29 → offer-architect, 30 → money-model-designer, 28-shaped → “scale”/0 gaps
+> (it previously needed a retry). `diagnose()` has exactly ONE caller (`evaluations.ts:394`), so the
+> shared-function fix leaves no sibling broken. Core suite green.
+>
+> ⚠ **Known regression surface:** fixture 29 REQUIRES gate 1 to fire. One model-inferred
+> `offerTypesPresent` leaf now routes it away from offer-architect and would redden
+> `attributionRoute` + `gapCount` — a failure mode that did not exist before this change. Its
+> recorded scorecard is all-false today, so it still routes correctly, but this is the thing to
+> check first if 29 turns red on a future run.
+>
 > Last verified: 2026-07-31 (ACTN-03 green-run) — **the two checklist presence counts are now
 > `=== true`, not `filter(Boolean)`.** NO math, gate order, threshold, route literal or `SPECIALISTS`
 > entry changed. `offerTypeCount` (gate 2) and `activeChannels` (gate 3) count a leaf only when it is

@@ -1,5 +1,51 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-01 (16-09 — **run `56bff5b8` paid, 29/33; FOUR bodies changed and NONE
+> are seeded. The “NUMBER-FREE” claim in the block below is SUPERSEDED.**)
+> Gate run `56bff5b8`: **29/33 passed, $0.3025** ($0.2290 executive + $0.0734 specialist) against a
+> $2.00 cap. Failures: **29, 31, 32 AND 34** — note 34, which an earlier note omitted because it was
+> read off a partial stream before 34 finished.
+>
+> **The block below states the search mandate “is now NUMBER-FREE”. That is no longer true.**
+> `841f668` put the numbers back: `research-specialist` now opens with an explicit at-least-two
+> floor, because removing the number cost the multi-search ceiling (fixture 32 ran ONE search
+> against its `webSearchCallsAtLeast: 2`). Do not read the paragraph below as describing HEAD.
+>
+> ⚠ **THE FIVE PINS NAMED BELOW ARE STALE — four of them point at bodies that FAILED.**
+> `841f668` + `ae38192` changed `research-specialist`, `offer-architect`, `money-model-designer`
+> and `lead-engine` in the REPO ONLY. The live registry’s highest rows are still the exact bodies
+> that failed run `56bff5b8` (`research-specialist@4`; the other three `@2`). **A re-run carrying
+> the pin list below would re-certify the failing bodies and reproduce an identical RED for ~$0.30.**
+> Re-seed, READ BACK the minted versions (`seedSkills` writes maxVersion+1 and optimizer dry-run
+> candidates occupy versions), and pin THOSE. Plan-authored version numbers are routinely wrong
+> against the live DB — that is the standing rule below, hit again.
+>
+> **Prose was tried three times and measured to fail.** `research-specialist` has now carried an
+> unconditional search mandate through three separate tunings. Run `eval-f795ede0` logged
+> `webSearchCalls` of **1, 1, 1, 0, 0, 4** across six dispatches — the “without exception” floor was
+> violated twice in six attempts. **16-09 therefore moved containment into CODE:**
+> `persistResearchFindings` (`dispatch.ts`) now refuses to write a `web_research` VAULT DOCUMENT
+> when `webSearchCalls === 0`, and audits `research.persist_skipped` with refs+counts only. The memo
+> CARD is untouched — it is landed before the persist seam and keeps its `NOT_RESEARCHED_LABEL`, so
+> the user still reads the findings and the label. Only the RETRIEVABLE artifact is withheld,
+> because `vaultSearch` returns arbitrary CHUNKS and a slice carries neither the label (which sits
+> BEFORE the fence) nor the fence itself. **This does NOT force a search and cannot turn a
+> `webSearchCallsAtLeast` fixture green** — forcing the first tool call would edit `llm.ts`, which
+> carries a zero-edit pin from 17.1-07, and is an unmade decision.
+>
+> ⚠ **Fixture 33 is exposed and was perturbed with NO measurement.** It PASSED under
+> `research-specialist@4`; `841f668` changed that body anyway, discarding the certification. Its
+> load-bearing keys are `declaredUnsupported: true` AND `insufficientEvidence: true`, and BOTH new
+> bullets are anti-declare — one says an “as of” date no page confirms “does not turn published,
+> retrieved facts into ‘no support’”, and 33’s turn pins the impossible date **31 February 2026**;
+> the other says “support in hand is support” against 33’s DESIGNED near-miss corpus. Countervailing
+> text survives (“a near-miss is a source, not support”). **If 32 goes green and 33 goes red the
+> phase is net WORSE off** — 33 is the only fixture proving refusal-to-confabulate. Check it first.
+>
+> Also: `money-model-designer` was edited although fixture 30 PASSED `citesVaultDoc` in run
+> `56bff5b8` without the new sentence — a certified green is now uncertified for no measured gain.
+>
+
 > Last verified: 2026-08-01 (ACTN-03 — **the `research-specialist` search instruction was RE-TUNED:
 > the one-search floor stopped capping the multi-search ceiling; candidate minted, NOT activated.**)
 > Commit `820c247` fixed zero-search runs by opening the search section with "issue at least ONE web
