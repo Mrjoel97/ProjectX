@@ -28,9 +28,15 @@ build. Red blocks. Nobody has to remember to run anything.
 Couplings that are not visible in the graph:
 
 - **`CONVEX_DEPLOY_KEY`** (repository *secret*) — without it `convex codegen` cannot resolve the
-  deployment and every subsequent step fails. Shared with `skillopt.yml`.
+  deployment and every subsequent step fails with
+  `✖ No CONVEX_DEPLOYMENT set, run 'npx convex dev' to configure a Convex project`.
+  **Verified ABSENT 2026-08-01** on the gate's first run (30702168095): `skillopt.yml` declares the
+  same secret but it has never been set. Set it with
+  `gh secret set CONVEX_DEPLOY_KEY` (value from the Convex dashboard → Settings → Deploy keys —
+  a deploy key, NOT the `CONVEX_DEPLOYMENT` string in `packages/backend/.env.local`).
 - **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by `next build` and declared in
-  `turbo.json`'s `globalEnv`.
+  `turbo.json`'s `globalEnv`. Also verified absent; `gh variable set NEXT_PUBLIC_CONVEX_URL`
+  (value = `CONVEX_URL` from `packages/backend/.env.local`).
 - **`convex/_generated/`** is gitignored (`.gitignore:11`, CLAUDE.md §7). It does not exist in a
   fresh checkout and must be generated inside the job.
 - **The Convex deployment is a live dependency of CI.** `convex codegen` prints
@@ -110,6 +116,27 @@ assertion, and confirm CI goes red on each for the expected reason.
   matching `skillopt.yml`.
 - If CI fails only at the codegen step, check the deployment is up before suspecting the code.
 
+## `skillopt.yml` has been passing vacuously — do not copy its pattern
+
+Found by this gate's first run and worth its own section, because it is the exact failure mode the
+gate exists to eliminate.
+
+`skillopt.yml`'s kill-switch step runs
+`OUT=$(node node_modules/convex/bin/main.js run optimizerConfig:getOptimizerConfig '{}' 2>/dev/null || true)`
+and then decides on `ENABLED=$(printf '%s' "$OUT" | jq -r '.enabled // false')`. With
+`CONVEX_DEPLOY_KEY` unset the `convex run` fails, `2>/dev/null || true` swallows both the message and
+the exit code, `$OUT` is empty, and `jq` on empty yields nothing — so the step logs
+`optimizer dormant (enabled=) — skipping` and the workflow reports **success**. Verified in run
+30247905384 (2026-07-27): the logged value is `enabled=` — empty, not `false`.
+
+It has therefore never distinguished *"the optimizer is switched off"* from *"the call did not
+happen"*, and it would report the same green if the optimizer were armed. Two consequences:
+
+- The green checkmark on `skillopt` is not evidence of anything. Do not cite it.
+- **`|| true` on a gate query converts a failure into a pass.** If a step's output decides whether
+  later steps run, that step must fail loudly. Fix (not yet applied — see gaps): drop `|| true`,
+  or branch on the empty case explicitly and exit non-zero.
+
 ## Known gaps & deferred work
 
 - **Deployment is not automated.** The gate proves the artifact *builds*; it does not deploy.
@@ -120,3 +147,10 @@ assertion, and confirm CI goes red on each for the expected reason.
   size; revisit if the job crosses ~10 minutes.
 - **The e2e suite has no gate at all.** It needs a live seeded deployment; wiring it is Phase 25's
   problem alongside the deploy pipeline.
+- **`skillopt.yml`'s swallowed-failure gates are NOT fixed.** Diagnosed above, left alone
+  deliberately: `.github/workflows/skillopt.yml` is `skill-registry.md`'s watched path and belongs to
+  a different subsystem. Fix it there, not here.
+- **The gate has not yet been proven green.** As of 2026-08-01 it fails at the codegen step for want
+  of `CONVEX_DEPLOY_KEY`, and the typecheck/lint debt behind that (150 backend type errors, 323 biome
+  errors, one red `onboarding.test.ts §4.2`) is Tasks 2-7 of `22.1-03-PLAN.md`, blocked on a
+  quiescent tree. Until a run goes green end to end, the steps after codegen are unproven.
