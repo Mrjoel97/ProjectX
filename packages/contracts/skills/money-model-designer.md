@@ -72,3 +72,8 @@ offer type to build or the sequencing move to make, why it fits this business, a
 the metric — thirty-day cash against cost to acquire and serve — that will show it
 worked. Cite the document title behind every claim; where the vault lacks the
 numbers, name what to gather rather than inventing a figure.
+
+End the memo with a `## Sources` list naming the EXACT title of every document
+`searchVault` returned, copied character for character — including the ones that turned
+out to be thin, and including when you found little. A memo without a `## Sources` list
+is incomplete. Copy the titles; do not paraphrase, shorten or tidy them.

@@ -46,6 +46,21 @@
 > `56bff5b8` without the new sentence — a certified green is now uncertified for no measured gain.
 >
 
+> Last verified: 2026-08-01 (ACTN-03 — **the three GROWTH specialist bodies gained a mandatory
+> `## Sources` list; fixtures 29/30/31 all green at run `73583564`, $0.0220.** Candidates v4, NOT
+> activated.) `citesVaultDoc` is a LITERAL substring test for the seeded corpus needle in the memo
+> body (`run-eval-golden.mjs`), and fixture 29 had failed it in three separate paid runs. Retrieval
+> was never broken — the failing memo quoted a fact that exists ONLY in the seeded brief — the memo
+> simply never echoed a document TITLE. The requirement existed but sat in conditional prose (*cite
+> the document title beside every claim*); it is now a MANDATORY OUTPUT ELEMENT (*a memo without a
+> `## Sources` list is incomplete*, titles copied character for character), which is the shape the
+> memos that DID pass had used all along. Applied to all three (`offer-architect`,
+> `money-model-designer`, `lead-engine`) because each is the target of one of 29/30/31.
+> **General rule, and this is its second instance:** when an eval key reads for a LITERAL string in
+> model output, the instruction that produces it belongs in the OUTPUT CONTRACT, not in guidance
+> prose — guidance is followed probabilistically (the measured needle rate was 3/7), an output
+> element is followed structurally. The same move fixed the research specialist's scope teaching.
+>
 > Last verified: 2026-08-01 (ACTN-03 — **`research-specialist` v7 teaches the SCOPED declaration;
 > 32/33/34 all green at run `1246bb4a`. Candidate, NOT activated** — activation still needs a full
 > unfiltered green gate.) v7 adds two things to v6's deletions: the `scope` distinction

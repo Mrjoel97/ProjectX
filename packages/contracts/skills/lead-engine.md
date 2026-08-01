@@ -75,3 +75,8 @@ A grounded next-step memo: the lead constraint in one sentence, the specific cha
 or scaling move to make, why it fits this business's time-versus-money balance, and
 the metric that will show it worked. Cite the document title behind every claim;
 where the vault is thin, name what to gather rather than inventing a figure.
+
+End the memo with a `## Sources` list naming the EXACT title of every document
+`searchVault` returned, copied character for character — including the ones that turned
+out to be thin, and including when you found little. A memo without a `## Sources` list
+is incomplete. Copy the titles; do not paraphrase, shorten or tidy them.
