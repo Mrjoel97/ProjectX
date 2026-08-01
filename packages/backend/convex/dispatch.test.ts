@@ -1275,6 +1275,17 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect(persisted?.payload).toMatchObject({ webSearchCalls: 1, evidenceVerdict: "sourced" });
 
     // …and a run that never searched is carried as such, not as an empty search.
+    //
+    // 16-09 CHANGED HOW, NOT WHETHER. This half used to assert a `research.persisted` row carrying
+    // `evidenceVerdict: "not_researched"` — persist-and-label. The structural floor in
+    // `persistResearchFindings` now refuses the VAULT DOCUMENT outright on `webSearchCalls === 0`,
+    // because the vault is a RETRIEVAL surface: `vaultSearch` returns arbitrary chunks, and a chunk
+    // sliced out of the body carries neither the label (which sits BEFORE the fence) nor the fence,
+    // so a never-searched model-memory answer could be cited by the Phase-12 engine as a grounded
+    // fact. The distinction this test exists to protect — "never searched" is not "searched and
+    // found nothing" — is therefore now carried by a DIFFERENT row, and is still asserted here.
+    // The memo card is untouched either way (it lands before the persist seam), so nothing the
+    // user can see is withheld. See `research.test.ts` for the paired non-vacuity case.
     const { t: t2, planId: planId2 } = await setup();
     t2.registerComponent("workflow", workflowSchema, workflowModules);
     t2.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
@@ -1287,12 +1298,14 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
       }),
     );
     expect(skipped.webSearchCalls).toBe(0);
-    const persisted2 = (await t2.run((ctx) => ctx.db.query("audit").collect())).find(
-      (r) => r.eventType === "research.persisted",
-    );
-    expect(persisted2?.payload).toMatchObject({
+    const rows2 = await t2.run((ctx) => ctx.db.query("audit").collect());
+    // No document, and therefore no `research.persisted` row at all.
+    expect(rows2.find((r) => r.eventType === "research.persisted")).toBeUndefined();
+    expect(skipped.vaultDocId).toBeUndefined();
+    // The refusal is recorded by CODE, with refs and counts only (§4).
+    expect(rows2.find((r) => r.eventType === "research.persist_skipped")?.payload).toMatchObject({
       webSearchCalls: 0,
-      evidenceVerdict: "not_researched",
+      reason: "not_researched",
     });
   });
 
