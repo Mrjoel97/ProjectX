@@ -46,6 +46,29 @@
 > `56bff5b8` without the new sentence — a certified green is now uncertified for no measured gain.
 >
 
+> Last verified: 2026-08-02 (22.1-03 — **`skillopt.yml`'s two gates were VACUOUS and are now
+> loud.**) Both gate steps read a `convex run` through `$(… 2>/dev/null || true)`. When that call
+> failed — no `CONVEX_DEPLOY_KEY`, unreachable deployment — `OUT` was EMPTY, `jq -r '.enabled //
+> false'` yielded the empty string, and `"" != "true"` was read as *dormant — skipping*, so the
+> job reported GREEN having verified nothing. STATE recorded the symptom (it logs `enabled=`,
+> empty rather than `false`); this is the cause and the fix.
+>
+> **The distinction the gates now make: DORMANT is not the same as COULD-NOT-TELL.** Dormant is a
+> legitimate skip and stays green; could-not-tell is a broken gate and exits 1 with a
+> `::error::`. The `// false` jq defaults are gone from the two decision fields as well — a
+> MISSING `enabled`/`eligible` is a contract break, not a dormant optimizer — and a non-boolean
+> value is refused rather than guessed. (`negativeRate`/`sampleCount` keep their `// 0` defaults:
+> they are reported numbers, not decisions.)
+>
+> **The general trap, worth carrying to any other workflow:** `|| true` on a command whose OUTPUT
+> feeds a decision converts a failure into a silent default. The step can then never fail, so its
+> green means only *it ran* — the most expensive kind of passing check, because it buys
+> confidence it has not earned. If a command's output drives a branch, its failure must be a
+> separate branch. Grep for `|| true` before trusting any gate here.
+>
+> Not yet observable in CI: `ci.yml` still fails earlier at codegen because `CONVEX_DEPLOY_KEY`
+> has never been set on this repo, so `skillopt.yml`'s first HONEST run is still owed.
+>
 > Last verified: 2026-08-02 (ACTN-03 — **`research-specialist` v8: the per-sub-question SEARCH became
 > an OUTPUT ELEMENT, and fixture 32's flaky search floor stopped being flaky.** Probe `e106bc36`:
 > 1/1 first attempt, $0.1042 specialist — a genuine multi-angle run.) Gate `3ec490ab` came back

@@ -61,11 +61,27 @@ jobs:
         id: killswitch
         working-directory: packages/backend
         run: |
-          OUT=$(node node_modules/convex/bin/main.js run optimizerConfig:getOptimizerConfig '{}' 2>/dev/null || true)
+          # The `|| true` that used to be here made this gate VACUOUS: a failed `convex run` (no
+          # CONVEX_DEPLOY_KEY, unreachable deployment) left OUT empty, `.enabled // false` then
+          # yielded the empty string, and `"" != "true"` read as "dormant — skipping", so the job
+          # reported GREEN having verified nothing. That is fail-OPEN in the reporting sense: the
+          # step could not fail, so its green meant only that it ran.
+          # "Dormant" and "could not tell" are now different outcomes. Dormant is a legitimate skip;
+          # could-not-tell is a broken gate and must be loud.
+          if ! OUT=$(node node_modules/convex/bin/main.js run optimizerConfig:getOptimizerConfig '{}' 2>err.log); then
+            echo "::error::could not read optimizerConfig — the kill-switch gate cannot be evaluated"
+            cat err.log >&2
+            exit 1
+          fi
           echo "optimizerConfig: $OUT"
-          ENABLED=$(printf '%s' "$OUT" | jq -r '.enabled // false')
+          # No `// false` default: a MISSING field is a contract break, not a dormant optimizer.
+          ENABLED=$(printf '%s' "$OUT" | jq -r '.enabled')
+          if [ "$ENABLED" != "true" ] && [ "$ENABLED" != "false" ]; then
+            echo "::error::optimizerConfig.enabled is not a boolean (got '$ENABLED') — refusing to guess"
+            exit 1
+          fi
           if [ "$ENABLED" != "true" ]; then
-            echo "optimizer dormant (enabled=$ENABLED) — skipping"
+            echo "optimizer dormant (enabled=false) — skipping"
             echo "proceed=false" >> "$GITHUB_OUTPUT"
           else
             echo "proceed=true" >> "$GITHUB_OUTPUT"
@@ -84,9 +100,19 @@ jobs:
             echo "n=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          OUT=$(node node_modules/convex/bin/main.js run optimizerEligibility:optimizerEligibility '{}' 2>/dev/null || true)
+          # Same fix as the kill-switch gate above, same reason: a swallowed failure used to read
+          # as "not eligible" and report green. An unreadable eligibility signal is a broken gate.
+          if ! OUT=$(node node_modules/convex/bin/main.js run optimizerEligibility:optimizerEligibility '{}' 2>err.log); then
+            echo "::error::could not read optimizerEligibility — the eligibility gate cannot be evaluated"
+            cat err.log >&2
+            exit 1
+          fi
           echo "optimizerEligibility: $OUT"
-          ELIGIBLE=$(printf '%s' "$OUT" | jq -r '.eligible // false')
+          ELIGIBLE=$(printf '%s' "$OUT" | jq -r '.eligible')
+          if [ "$ELIGIBLE" != "true" ] && [ "$ELIGIBLE" != "false" ]; then
+            echo "::error::optimizerEligibility.eligible is not a boolean (got '$ELIGIBLE') — refusing to guess"
+            exit 1
+          fi
           echo "neg=$(printf '%s' "$OUT" | jq -r '.negativeRate // 0')" >> "$GITHUB_OUTPUT"
           echo "n=$(printf '%s' "$OUT" | jq -r '.sampleCount // 0')" >> "$GITHUB_OUTPUT"
           if [ "$ELIGIBLE" != "true" ]; then
