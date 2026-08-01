@@ -131,3 +131,70 @@ unfiltered 33-case gate for the evidence row -> `activateSkill` v16.
 **Not yet known:** whether the research plane works once invoked. Nothing downstream of the tool
 call has EVER executed — no specialist run, no persisted doc, no `webSearchCalls`. The teaching is
 necessary; it is not proven sufficient.
+
+
+---
+
+## DEFERRED 2026-08-02 (owner) — ACTN-03 is ENGINEERING-COMPLETE and BLOCKED ON BILLING ONLY
+
+**Do not re-diagnose this. The behavioural work is done, committed and probe-verified.** What is
+missing is one paid run, and nothing else.
+
+**Status: Phase 16 stays 8/9 and `ACTN-03` stays Pending in ROADMAP/REQUIREMENTS.** It is NOT
+complete and must not be ticked. The blocker is an OpenAI balance of $0
+(`credit_balance_exhausted` on chat AND embeddings — verified directly against the key, not
+inferred from a failed run).
+
+### What was fixed (all committed, all probe-verified green)
+
+| Fixtures | Probe | Result |
+|---|---|---|
+| 29 / 30 / 31 | `73583564` | 3/3, first attempt, $0.0220 |
+| 32 / 33 / 34 | `1246bb4a` then `e106bc36` | 3/3, then 32 re-verified 1/1 |
+
+Commits: `52a421d` (the verdict conjunction + web-only research grant), `3f77378` (growth
+specialists' mandatory `## Sources` list), `d57dcce` (per-sub-question search as an output
+element). The last full gate `3ec490ab` scored **32/33**, and its only red was fixture 32's search
+count — which `d57dcce` then fixed and `e106bc36` verified.
+
+### The resume recipe — ONE command, ~$1 of credit
+
+```
+cd packages/backend && node ./scripts/run-eval-golden.mjs \
+  --skill cockpit-agent@16 --skill research-specialist@8 \
+  --skill offer-architect@4 --skill money-model-designer@4 --skill lead-engine@4
+```
+
+1. **Read the header back before walking away.** It must list all five pins and must NOT contain
+   `PARTIAL RUN` — that line means evidence is suppressed, and it is what silently wasted two
+   earlier attempts.
+2. Green ⇒ one evidence row per pin ⇒ `activateSkill` each of the five ⇒ confirm with
+   `getActiveSkill` that the ACTIVE row is the version you pinned.
+3. Then tick ACTN-03 in ROADMAP **and** REQUIREMENTS **by hand** — `gsd phase complete` silently
+   no-ops the ROADMAP checkbox and table.
+
+**Free tokens do NOT unblock this** (checked, 2026-08-02): `gpt-4o-mini` is eligible for OpenAI's
+complimentary-tokens programme, but the vault seed embeds with `text-embedding-3-small` BEFORE
+case one and embeddings bill separately, and fixtures 32/33/34 need hosted web search at
+`WEB_SEARCH_CALL_USD = $0.01` per call. Both sit outside the programme. A partial `--only` run
+cannot substitute: evidence is suppressed on filtered runs BY DESIGN.
+
+### The one consequence of deferring — READ THIS BEFORE PLANNING 18-08
+
+**18-08 is gated on Phase 16 closing, so deferring ACTN-03 also stalls Phase 18 at 7/10.** The
+gate exists because `cockpit-agent` has ONE candidate stream: Lane R holds it un-activated at v16,
+and 18-08 must teach `createDocument` in that same body, so a concurrent edit would mint a
+candidate carrying both lanes' prose and the next eval would certify instructions nobody tested.
+
+That contract assumed Phase 16 would close soon. It no longer will, so the owner has a choice to
+make DELIBERATELY rather than by drift:
+
+- **(a) Hold 18-08.** Phase 18 stays 7/10 until credits exist. Safest, costs schedule.
+- **(b) Let 18-08 edit the body to v17 and certify BOTH lanes in the same eventual gate run.**
+  `--skill` is already multi-pin, so one run can carry it. The price is that the closing gate then
+  certifies 18-08's teaching too, which means 18-08 owes its own fixtures BEFORE that run — without
+  them the gate would certify the `createDocument` teaching having never exercised it, which is the
+  exact vacuity 22.1b and this phase have spent weeks removing.
+
+Recommendation: **(b) with fixtures**, because it converts two paid gate runs into one. Do not take
+(b) without the fixtures.
