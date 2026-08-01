@@ -5,6 +5,7 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
+import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import {
   CALENDAR_HORIZON_MS,
   parseSendTime,
@@ -12,21 +13,28 @@ import {
   SPECIALISTS,
 } from "@pikar/core";
 import { convexTest } from "convex-test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
-import { buildAgentContext, buildCockpitTools, buildHistoryBlock } from "./llm";
+import { buildAgentContext, buildCockpitTools, buildHistoryBlock, parseAgentSmoke } from "./llm";
 import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
 // REAL audit path runs under convex-test instead of throwing "component not registered".
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+// runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
 
 const SMOKE = "SMOKE::route=direct_llm::";
 type T = ReturnType<typeof convexTest>;
@@ -34,6 +42,17 @@ type T = ReturnType<typeof convexTest>;
 async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await t.mutation(internal.skills.seedSkills, {});
+  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  return { t, planId };
+}
+
+// Same harness plus the rate-limiter component: runCockpitAgent (the SMOKE::agent sentinel path)
+// runs preCall/recordSpend, which the tool-level __invokeCockpitTool shim never touches.
+async function setupWithLimiter(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   await t.mutation(internal.skills.seedSkills, {});
   const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
   return { t, planId };
@@ -1222,4 +1241,187 @@ test("proposeCalendarEvent without clientContext refuses and leaves the plan unt
 
   expect(reply).toMatch(/local time|timezone/i);
   await expectCalendarStageEmpty(t, planId);
+});
+
+// ── Phase 18 (ACTN-04): the createDocument tool ───────────────────────────────
+// The surface the model actually calls. Everything before it in this phase is machinery; these
+// rows pin what the machinery is FOR: one governed artifact in the tenant's vault, a sentence back
+// (never bytes, never a URL, never a raw _id), and no external side effect anywhere in the body.
+
+const CREATE_TOPIC = `${SMOKE} Quarterly one-pager`;
+const SMOKE_TITLE = "Smoke Document"; // draftDocument's deterministic offline title
+
+const vaultDocs = (t: T) => t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+const cardRows = (t: T) => t.run((ctx) => ctx.db.query("vaultSources").collect());
+const auditRows = (t: T) => t.run((ctx) => ctx.db.query("audit").collect());
+const createdAudit = async (t: T) =>
+  (await auditRows(t)).filter((r) => r.eventType === "document.created");
+
+test("createDocument(long) saves ONE governed vault artifact with a derived PDF and returns a sentence", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+
+  const docs = await vaultDocs(t);
+  expect(docs).toHaveLength(1);
+  const doc = docs[0]!;
+  // SC1: a ref-only return — the title, never bytes, never a URL, never the raw _id.
+  expect(reply).toContain(SMOKE_TITLE);
+  expect(reply).not.toContain(String(doc._id));
+  expect(reply).not.toMatch(/https?:\/\/|%PDF|storageId/i);
+  // The artifact of record is MARKDOWN for both forms; the PDF is a derived download.
+  expect(doc.kind).toBe("created_document");
+  expect(doc.mimeType).toBe("text/markdown");
+  expect(doc.origin).toBe("agent");
+  expect(doc.status).toBe("ready");
+  expect(doc.storageId).toBeDefined(); // ⇒ PreviewModal's canDownload is true, for free
+  expect(await t.run((ctx) => ctx.storage.getUrl(doc.storageId!))).not.toBeNull();
+
+  // SC6: ONE Output-card row per turn, carrying the docId, the role, a snippet and the FORM (the
+  // badge's only data source — nothing else in this suite catches its absence).
+  const cards = await cardRows(t);
+  expect(cards).toHaveLength(1);
+  expect(cards[0]!.role).toBe("created");
+  expect(cards[0]!.form).toBe("long");
+  expect(cards[0]!.docIds).toEqual([doc._id]);
+  expect(cards[0]!.titles).toEqual([SMOKE_TITLE]);
+  expect(cards[0]!.count).toBe(1);
+  expect(cards[0]!.snippet).toBeTruthy();
+
+  // SC3: the audit row is refs/hashes/ids/enums/booleans ONLY (CLAUDE.md §4).
+  const created = await createdAudit(t);
+  expect(created).toHaveLength(1);
+  const payload = created[0]!.payload as Record<string, unknown>;
+  expect(Object.keys(payload).sort()).toEqual(["form", "hasPdf", "topicHash", "vaultDocId"]);
+  expect(payload.form).toBe("long");
+  expect(payload.hasPdf).toBe(true);
+  expect(payload.vaultDocId).toBe(String(doc._id));
+  const serialized = JSON.stringify(payload);
+  expect(serialized).not.toMatch(/Quarterly|one-pager/i); // never the topic
+  expect(serialized).not.toContain(SMOKE_TITLE); // never the prose
+});
+
+test("createDocument(short) drafts with content-drafter and stores NO storageId (no Download button)", async () => {
+  const { t, planId } = await setup();
+
+  await call(t, planId, "createDocument", { topic: `${SMOKE} a LinkedIn post`, form: "short" });
+
+  const doc = (await vaultDocs(t))[0]!;
+  expect(doc.kind).toBe("created_content");
+  expect(doc.mimeType).toBe("text/markdown"); // still markdown — the locked artifact of record
+  // "No PDF for short-form" is the structural ABSENCE of storageId, not a flag and not a mime check.
+  expect(doc.storageId).toBeUndefined();
+  expect((await cardRows(t))[0]!.form).toBe("short");
+  expect((await createdAudit(t))[0]!.payload).toMatchObject({ form: "short", hasPdf: false });
+});
+
+test("`form` selects the SKILL ROW — archiving content-drafter breaks ONLY short-form, and as a sentence", async () => {
+  const { t, planId } = await setup();
+  await t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", CONTENT_DRAFTER_SKILL).eq("status", "active"))
+      .unique();
+    await ctx.db.patch(row!._id, { status: "archived" });
+  });
+
+  // A drafter failure is a RETURNED SENTENCE, never a throw out of the governed loop.
+  const refused = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} a post`,
+    form: "short",
+  });
+  expect(refused).toMatch(/couldn't|could not/i);
+  expect(await vaultDocs(t)).toHaveLength(0); // nothing half-written
+  expect(await cardRows(t)).toHaveLength(0);
+
+  // Long-form is untouched: document-drafter is still active and still what `long` loads.
+  const ok = await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  expect(ok).toContain(SMOKE_TITLE);
+  expect(await vaultDocs(t)).toHaveLength(1);
+});
+
+test("N createDocument calls share ONE Output card carrying ALL N docIds (#index stays addressable)", async () => {
+  const { t, planId } = await setup();
+
+  await call(t, planId, "createDocument", { topic: `${SMOKE} first`, form: "long" });
+  await call(t, planId, "createDocument", { topic: `${SMOKE} second`, form: "short" });
+
+  const docs = await vaultDocs(t);
+  expect(docs).toHaveLength(2);
+  // byThread is latest-wins, so the LATEST card is what `#index` resolves against — it must carry
+  // both ids in creation order. A card carrying one id per artifact pins every #index to 1.
+  const latest = (await cardRows(t)).filter((r) => r.role === "created").at(-1)!;
+  expect(latest.docIds).toEqual(docs.map((d) => d._id));
+  expect(latest.count).toBe(2);
+  expect(latest.form).toBe("short"); // the newest artifact's badge
+});
+
+// ── Static scans over the tool body ───────────────────────────────────────────
+
+const convexSrcDir = dirname(fileURLToPath(import.meta.url));
+const readLlmSource = (): string =>
+  readFileSync(join(convexSrcDir, "llm.ts"), "utf8").replace(/\r\n/g, "\n");
+
+/** Slice the createDocument tool body: `createDocument: tool(` → the NEXT tool key in the record. */
+function createDocumentBlock(): string {
+  const full = readLlmSource();
+  const start = full.indexOf("createDocument: tool(");
+  expect(start, "createDocument tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
+  const rest = full.slice(start);
+  const end = rest.slice(1).search(/\n {4}[A-Za-z_]\w*: tool\(/);
+  expect(end, "no tool follows createDocument — the slice would run to EOF").toBeGreaterThan(0);
+  const block = rest.slice(0, end + 1);
+  // Non-vacuity floor: an anchor that moved must fail LOUDLY, not pass trivially.
+  expect(block.length, "the createDocument slice is empty").toBeGreaterThan(400);
+  return block;
+}
+
+test("the createDocument Output-card write passes role, snippet AND form (the badge's only source)", () => {
+  const block = createDocumentBlock();
+  const insert = block.match(/internal\.vaultSources\.insert,\s*\{[\s\S]*?\n {8}\}/);
+  expect(insert, "vaultSources.insert call not found in the createDocument body").not.toBeNull();
+  expect(insert![0], 'the created card omits role: "created"').toMatch(/role:\s*"created"/);
+  expect(insert![0], "the created card omits snippet").toMatch(/\bsnippet\b/);
+  expect(
+    insert![0],
+    "the created card omits `form` — every short-form turn would silently badge DOCUMENT",
+  ).toMatch(/\bform\b/);
+});
+
+test("parseAgentSmoke: create=<form>:<topic> splits on the FIRST colon, nested SMOKE prefix intact", () => {
+  // The nested SMOKE::route prefix is LOAD-BEARING and part of the TOPIC: `create=` only picks the
+  // tool, it does not keep the model out of the loop. parseSmoke is ^-anchored on the safeText
+  // draftDocument receives, so the prefix must be handed through unstripped.
+  expect(parseAgentSmoke(`SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`)).toEqual({
+    kind: "create",
+    form: "long",
+    topic: `${SMOKE} Quarterly one-pager`,
+  });
+  expect(parseAgentSmoke("SMOKE::agent::create=short:a LinkedIn post")).toEqual({
+    kind: "create",
+    form: "short",
+    topic: "a LinkedIn post",
+  });
+  // Malformed drives NOTHING — exactly like a malformed regenerate=.
+  expect(parseAgentSmoke("SMOKE::agent::create=long")).toBeNull(); // no colon
+  expect(parseAgentSmoke("SMOKE::agent::create=medium:x")).toBeNull(); // outside the closed enum
+});
+
+test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and records tool: createDocument", async () => {
+  const { t, planId } = await setupWithLimiter();
+
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    turnId: "turn1",
+    text: `SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`,
+  });
+
+  expect(res.costUsd).toBe(0); // no gateway key, no model call
+  expect(res.reply).toContain(SMOKE_TITLE);
+  // The step row reads SMOKE_OP_TOOL, so the invoke and the trace can never drift.
+  const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
+  expect(steps.map((s) => s.tool)).toEqual(["createDocument"]);
+  expect(await vaultDocs(t)).toHaveLength(1);
 });
