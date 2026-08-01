@@ -27,6 +27,7 @@ import { BUSINESS_PROFILE_SKILL, ONBOARDING_AGENT_SKILL } from "@pikar/contracts
 import {
   type BusinessProfile,
   canComplete,
+  deriveTier,
   deserializeProfile,
   FUNDING_STATES,
   missingSlots,
@@ -44,7 +45,11 @@ import { generateObject, jsonSchema, type LanguageModel } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+// `internalMutation` for the `__seedOnboardedTenant` harness seam below. Permitted by
+// `lib/allowlist.ts`: the import guard's regex matches only the lowercase public builders
+// (`query`/`mutation`/`action`) — the `internal*` variants are the sanctioned exception and need
+// no allow-list entry. The tenant wrappers cannot serve here; see the seam's own comment.
+import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
@@ -587,6 +592,109 @@ export const commitProfile = tenantMutation({
       },
     });
     return { vaultDocId };
+  },
+});
+
+/**
+ * E2E HARNESS SEED — the ONLY way to reach the cockpit without a model call.
+ *
+ * Why it has to exist. Every `apps/web/e2e` spec lives behind the `(app)` auth gate AND behind
+ * `status.needsOnboarding`, and a freshly signed-up user has neither a profile doc nor a tier row —
+ * so all 25 specs land on `/dashboard/onboarding` and fail identically (measured: 1 passed,
+ * 24 failed). The onboarding UI drives `converse`, which calls the model, so with no API credits
+ * the entire UI suite is unreachable. `commitProfile` cannot stand in for this: it is a
+ * `tenantMutation` and derives its tenant from a browser identity, which `npx convex run` does not
+ * have. Hence internal + explicit `tenantId`, the `vaultSmoke.ts` idiom.
+ *
+ * `__` prefix + `internalMutation` is this repo's test-support convention (`__runSpecialistWithScript`
+ * in dispatch.ts, `__runCockpitAgentWithScript` in llm.ts): a seam that ships in the production
+ * module, reachable only from internal callers, never from a tenant surface.
+ *
+ * IT DELIBERATELY DOES NOT CALL `writeProfileDoc`, and that is the whole design. That helper ends in
+ * `startIngest`, which embeds — a REAL OpenAI call. Without credits the ingest fails and flips the
+ * row to `status: "failed"`, which `status` reads as *not onboarded*, so the seeder would
+ * un-onboard the tenant it just seeded. The row is therefore inserted directly at `ready`, the
+ * `vaultSmoke.insertBrief` shape, with NO rag entry.
+ *
+ * CONSEQUENCE, stated so no one debugs it twice: the seeded profile is BROWSABLE but NOT
+ * RETRIEVABLE — it has no `ragEntryId`, so `searchVault` and `vaultGroundHydrated` will never
+ * return it. Specs asserting the cockpit is GROUNDED IN the profile need a real commit and real
+ * credits; specs asserting the cockpit RENDERS do not. This is also why it does not touch
+ * `startIngest`: that call-site count in `vault.ts` is a counted exclusion invariant (5), and a
+ * sixth from a seeder would corrupt the thing that count exists to protect.
+ *
+ * Idempotent: re-running patches rather than duplicating, so a re-seed cannot leave two profile
+ * docs and make `currentProfileDoc`'s pick ambiguous.
+ */
+export const __seedOnboardedTenant = internalMutation({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<{ vaultDocId: Id<"vaultDocuments">; tier: string }> => {
+    // The same fixture `extractProfile`'s SMOKE:: sentinel returns, so the seeded tenant and the
+    // offline extraction path describe the same business rather than two invented ones.
+    const profile = smokeProfileFixture();
+
+    // The five tier facts `missingSlots` requires. Chosen to satisfy REQUIRED_SLOTS exactly;
+    // `paidStaff: 0` is the solo signal and is a real ANSWER, not an absence (the SLOT_PRESENT rule).
+    const facts = {
+      headcount: 1,
+      paidStaff: 0,
+      revenueStage: "early-revenue",
+      funding: "bootstrapped",
+      yearsOperating: 2,
+    } as const;
+    // deriveTier is the ONLY writer of the tier (design §5) — never hardcode "solopreneur" here,
+    // which is defect 1d in a new costume.
+    const tier = deriveTier(facts);
+
+    const existingRow = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (existingRow) {
+      await ctx.db.patch(existingRow._id, { ...facts, tier, tierSource: "derived", derivedAt: Date.now() });
+    } else {
+      await ctx.db.insert("tenantProfiles", {
+        tenantId,
+        ...facts,
+        tier,
+        tierSource: "derived",
+        derivedAt: Date.now(),
+      });
+    }
+
+    const full: BusinessProfile = { ...profile, persona: tier };
+    const text = serializeProfile(full);
+    const hash = await contentHash(text);
+    const size = new TextEncoder().encode(text).length;
+    const title = full.name || "Business profile";
+
+    const existingDoc = await currentProfileDoc(ctx, tenantId);
+    if (existingDoc) {
+      await ctx.db.patch(existingDoc._id, {
+        title,
+        text,
+        contentHash: hash,
+        size,
+        status: "ready",
+        failureReason: undefined,
+      });
+      return { vaultDocId: existingDoc._id, tier };
+    }
+    const vaultDocId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title,
+      kind: PROFILE_KIND,
+      category: categoryFor({ source: "agent" }),
+      source: "agent",
+      mimeType: "text/markdown",
+      size,
+      contentHash: hash,
+      text,
+      // `ready`, not `processing`: nothing will ever move it on, because nothing is ingesting it.
+      status: "ready",
+      createdAt: Date.now(),
+    });
+    return { vaultDocId, tier };
   },
 });
 

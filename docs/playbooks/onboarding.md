@@ -1,5 +1,34 @@
 # Playbook: Persona Onboarding & Business Profile
-
+
+> Last verified: 2026-08-02 (16-09 side-work — **`__seedOnboardedTenant`: the only way into the
+> cockpit without a model call.**) Every `apps/web/e2e` spec sits behind the `(app)` auth gate AND
+> `status.needsOnboarding`; a freshly signed-up user has neither a profile doc nor a tier row, so
+> all 25 specs landed on `/dashboard/onboarding` — MEASURED 1 passed / 24 failed. The onboarding UI
+> drives `converse`, which calls the model, so with no API credits the whole UI suite was
+> unreachable. `commitProfile` cannot substitute: it is a `tenantMutation` and derives its tenant
+> from a browser identity that `npx convex run` does not have.
+>
+> `onboarding:__seedOnboardedTenant({ tenantId })` writes the tier row (facts → `deriveTier`, never
+> a hardcoded tier) and the `business_profile` vault doc from `smokeProfileFixture()`. Idempotent.
+> **VERIFIED red→green: `cockpit-render.spec.ts` failed before the seed and passes after it.**
+>
+> ⚠ **It deliberately does NOT call `writeProfileDoc`.** That helper ends in `startIngest`, which
+> embeds — a real OpenAI call. Without credits the ingest fails, flips the row to `status:
+> "failed"`, and `status` reads that as NOT onboarded, so the seeder would un-onboard the tenant it
+> just seeded. The row is inserted directly at `ready`, the `vaultSmoke.insertBrief` shape. It also
+> keeps the counted `startIngest` exclusion invariant in `vault.ts` at 5.
+>
+> **CONSEQUENCE — the seeded profile is BROWSABLE but NOT RETRIEVABLE.** No `ragEntryId`, so
+> `searchVault` / `vaultGroundHydrated` never return it. Specs asserting the cockpit is GROUNDED IN
+> the profile still need real credits; specs asserting it RENDERS do not.
+>
+> **A SECOND GATE REMAINS AND MUST NOT BE WEAKENED.** The composer is hidden behind
+> `gmailAuth.gmailStatus.connected` (`workspace/page.tsx:334`), so the cockpit specs still need a
+> Gmail-connected user. `cockpit-activity.spec.ts:39` says in as many words: *do not weaken the gate
+> to make this pass; run it in a live human-verify session, which has a connected user by
+> construction.* Seeding a fake token row would defeat the thing the gate protects. The e2e user
+> `e2e@pikar.test` is seeded and onboarded; connecting a mailbox is an owner action.
+>
 > Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
 > subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
 > — `// @ts-expect-error import.meta.glob …` — from watched test files (blueprint.test.ts, tenantProfile.test.ts, onboarding.test.ts).
@@ -7,6 +36,7 @@
 > types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
 > only, zero additions, no assertion, invariant or product line touched anywhere. Backend
 > typecheck 150 → 50; full suite 54/54.
+> **Re-verified 2026-08-02** (a later session, closing the ⚠ above for THIS subsystem): blueprint.test.ts + tenantProfile.test.ts run green under vitest as part of a 10-file, 212/212 pass. The sweep's claim of behaviour-freedom now has evidence here, not just a typecheck delta.
 >
 > `onboarding.test.ts` ALSO gained a real fix in the same sweep (`6136d5f`): the §4.2 test that
 > STATE carried as red was a RACE, not a logic defect — `commitProfile` → `startIngest` hands work
