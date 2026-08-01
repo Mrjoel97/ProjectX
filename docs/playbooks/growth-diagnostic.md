@@ -1,5 +1,15 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-08-01 (ACTN-03 — **`specialists.ts` touched, but NO diagnostic math, gate
+> order, threshold, route literal or prescription changed.**) This playbook watches
+> `packages/core/src/specialists.ts`, so this entry records why it moved: `RESEARCH_TOOLS` lost
+> `searchVault` — the research specialist is now web-only (measured: the free vault was
+> substituting for the billed hosted search and scoring `webSearchCalls === 0` on fixture 32; see
+> `agent-runtime.md`). The THREE GROWTH specialists' grants are UNCHANGED — `offer-architect`,
+> `money-model-designer` and `lead-engine` each still hold exactly `["searchVault"]`, which is
+> what `citesVaultDoc` on fixtures 29-31 depends on. `specialists.test.ts`'s whole-registry
+> equality was updated to match and carries the mutation note; core 56/56 green.
+>
 > Last verified: 2026-08-01 (16-09 — **gate 1 now reads BOTH encodings of “we have an offer”.**)
 > `diagnose.ts` gate 1’s `hasOffer` accepted only the free-text `identity.currentOffers` list, while
 > gate 2’s `offerTypeCount` already treated the `modelCard.offerTypesPresent` checklist as

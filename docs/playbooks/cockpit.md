@@ -1,5 +1,25 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-01 (ACTN-03 — **the `declareUnsupported` TOOL DESCRIPTION lost its
+> near-miss licence clause; `dispatch.test.ts`'s local-tool witness was rewired.**) Both files are
+> watched here. (1) `llm.ts`: the description had said to declare "including when all you found
+> were similarly-named or adjacent near-misses" — untouched since 22.1b, and it describes fixture
+> 34's exact situation (abundant real indirect-prompt-injection guidance retrieved; only the
+> invented quoted address missing), so it licensed the over-declaration the skill body's carve-outs
+> were trying to prevent. It now reads "NOTHING you retrieved supports the CORE of the question —
+> not merely one sub-question, and not merely one illustrative example". A tool description sits at
+> the call site and can outweigh distant body prose: when a body edit does not take, read the
+> description before writing another body edit. (2) `dispatch.test.ts`: the SC#1 containment cases
+> proved "the harness is not inert" by asserting a granted LOCAL tool really emitted its step row,
+> and used `searchVault` for that. Research is now web-only, and `webResearch` is
+> PROVIDER-executed (it deliberately emits no step row), so `declareUnsupported` — the grant's only
+> remaining local tool — takes that role. The containment assertions themselves are unchanged and
+> still fail if a withheld write tool moves the plan row. Do NOT add a
+> `not.toContain("searchVault")` at the `buildCockpitTools` layer: that record is CONSTRUCTED in
+> full for every caller and the web-only grant is enforced one layer up by the `toolNames`
+> allow-list (asserted in `packages/core/src/specialists.test.ts`) — an assertion there fails for
+> the wrong reason, which is how it was first written and caught.
+>
 > Last verified: 2026-08-01 (16-09 — **a research run that never searched writes no vault
 > document.**) `persistResearchFindings` (`dispatch.ts`) refuses to write the `web_research` row
 > when `webSearchCalls === 0`, auditing `research.persist_skipped` with refs+counts only. The memo

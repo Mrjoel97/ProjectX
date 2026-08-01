@@ -46,6 +46,46 @@
 > `56bff5b8` without the new sentence — a certified green is now uncertified for no measured gain.
 >
 
+> Last verified: 2026-08-01 (ACTN-03 — **`research-specialist` v7 teaches the SCOPED declaration;
+> 32/33/34 all green at run `1246bb4a`. Candidate, NOT activated** — activation still needs a full
+> unfiltered green gate.) v7 adds two things to v6's deletions: the `scope` distinction
+> (`"question"` = the core is unsupported and marks the findings; `"sub-question"` = one part came
+> back empty and the findings STAND), and an explicit statement that calling the tool is **not a
+> step in the routine** — a run that answered its question calls it NOT AT ALL. That last line
+> exists because the measured failure was a RITUAL: the model calls each tool it owns once per run.
+> **Do not read v7's green run as proof the prose worked.** It did not, on its own: at v7 the model
+> still passed `scope: "question"` on 5/5 dispatches while holding up to 10 sources. What made the
+> fixtures green was the CODE conjunction in `llm.ts` (`… AND sources.length === 0`). The body
+> teaching is kept because it is honest and costs nothing, not because it is load-bearing — see
+> `agent-runtime.md` for the measurements and the 22.1b reversal that came with it.
+>
+> Last verified: 2026-08-01 (ACTN-03 — **`research-specialist` v6: THREE DELETIONS, the first
+> version in this skill's history that SHRINKS the body (12,295 -> 11,693 chars). Candidate minted,
+> NOT activated.**) Root-caused by a 13-agent read-only investigation after two prose rewrites (v4,
+> v5) failed to stop the specialist calling `declareUnsupported` on runs holding 5, 7 and 8
+> genuinely relevant sources — which forces `insufficient_evidence` and reds fixtures 32 and 34.
+> **The body contained a DIRECT ORDER to do exactly that**, at the paragraph beginning *"The same
+> holds for a specific fact inside a findable subject…"*: if the entity is real but a specific fact
+> is in nothing you retrieved, *"that is a declaration"*. Fixture 32 asks whether two REAL vendors'
+> APIs expose freshness filters and return source URLs — real subject, specific facts, absent from
+> retrieval: the body ORDERED the declaration. That paragraph was written for fixture 33, whose
+> subject is INVENTED, so its stated condition ("the entity is real") never matched 33 and always
+> matched 32/34; 33 stays covered by the two clauses directly above it. DELETED, not qualified.
+> Also deleted: the false step-budget scarcity premise ordering the call *"before you write the
+> findings document"* (measured: max 6 of 12 steps, 48.8s of a 180s budget — never scarce; it made
+> the model declare before it could see what it had retrieved). Third deletion follows the
+> capability change below (research is web-only, so the `searchVault` teaching had to go).
+> **WHY THE TWO PRIOR PROMPT REWRITES MISSED IT** — the reusable lesson. v4 (820c247) and v5
+> (ae38192) both only APPENDED bullets to the "Do not call it when" list (it grew 5 -> 6 -> 8),
+> BELOW an unmodified positive imperative. An exception list cannot beat a direct order, and
+> neither author noticed the order was there. When a model keeps doing X after you have twice
+> written "do not do X in case Y", stop adding cases and go looking for the sentence that TELLS
+> it to do X.
+> Seeded and READ BACK on the live row before spending (v6, 11,693 chars, direct order absent,
+> "exactly two tools" present) — the step skipped when 841f668 was never seeded and a paid gate
+> then measured a body that did not contain the fix. Drift test 15/15, core 56/56, backend
+> typecheck at the exact 150 baseline, `--self-check` green.
+>
 > Last verified: 2026-08-01 (ACTN-03 — **the `research-specialist` search instruction was RE-TUNED:
 > the one-search floor stopped capping the multi-search ceiling; candidate minted, NOT activated.**)
 > Commit `820c247` fixed zero-search runs by opening the search section with "issue at least ONE web

@@ -784,14 +784,21 @@ export function buildCockpitTools(
   const declareUnsupportedTool = {
     declareUnsupported: tool({
       description:
-        "Declare that you searched and the sources you retrieved do NOT support the claim you were " +
-        "asked about — including when all you found were similarly-named or adjacent near-misses. " +
-        "Call it once, AFTER searching. It does not end your run and does not replace the findings " +
-        "document. Calling it without having searched records nothing.",
-      inputSchema: jsonSchema<{ claim: string }>({
+        "Record that a search came back without support. `scope` is what you are actually saying, " +
+        'and only one of the two values marks the findings unsupported. Use "question" when ' +
+        "NOTHING you retrieved supports the CORE of what you were asked — the run found no answer " +
+        'at all. Use "sub-question" when one part came back empty while the rest was answered; ' +
+        "that is a note for the reader and leaves the findings standing. **If what you retrieved " +
+        "answers the question that was asked, do not call this tool at all.** Call it at most " +
+        "once, after searching. It does not end your run and does not replace the findings " +
+        "document.",
+      inputSchema: jsonSchema<{ claim: string; scope: "question" | "sub-question" }>({
         type: "object",
-        properties: { claim: { type: "string" } },
-        required: ["claim"],
+        properties: {
+          claim: { type: "string" },
+          scope: { type: "string", enum: ["question", "sub-question"] },
+        },
+        required: ["claim", "scope"],
         additionalProperties: false,
       }),
       // Code-owned reply (the RESEARCH_UNDERWAY_REPLY precedent). The argument is discarded HERE,
@@ -2418,7 +2425,47 @@ async function runAgentLoop(
     // Read off the SDK's IN-MEMORY step record, NOT the `agentSteps` table: the trace insert runs
     // inside a callback the AI SDK swallows on failure, so a table read would make the verdict
     // silently depend on the trace plane staying healthy.
-    const declaredUnsupported = toolCalls.some((p) => p.toolName === "declareUnsupported");
+    // ACTN-03: the declaration is now SCOPED, and only a `question`-scope call moves the verdict.
+    // MEASURED (probe 7faf396c, v6): the specialist called this tool on 5 of 5 dispatches while
+    // holding 0, 3, 4, 6 and 8 sources — it declares as a reflex, not as a judgement, so an
+    // unscoped "was it called" bit reports "we found nothing" about runs that plainly found
+    // something. The mismatch is structural, not a wording problem: this is ONE run-level boolean
+    // while the specialist is mandated to decompose and therefore judges PER SUB-QUESTION. The
+    // enum lets it say which it means. Reading `scope` does NOT put model PROSE on the verdict
+    // path (the thing f2226fe removed): it is a two-value closed enum, and the INVOCATION was
+    // already a model-authored bit — this refines that same bit from 1 to 2 values, `claim` stays
+    // read by nobody.
+    // Absent/unparseable/`sub-question` ⇒ FALSE, deliberately: only an EXPLICIT question-scope
+    // declaration is one the code will act on. Fixture 33 asserts `declaredUnsupported: true`, so
+    // the model's ability to say it explicitly is what that fixture now proves.
+    // ...AND the run must actually have come back empty. MEASURED TWICE, and this is why the enum
+    // alone is not enough: at v7 the specialist passed `scope: "question"` on 5 of 5 dispatches
+    // while holding 6, 10, 0, 9 and 8 sources — one of them after THREE searches. The reflex
+    // survives every instrument the model itself authors (three body rewrites, a tool-description
+    // rewrite, and this enum), so the last word belongs to something it cannot author: whether the
+    // provider returned any source at all. `sources` is built below from the SDK's `url_citation`
+    // annotations, never from model prose.
+    // The two signals are ANDed, not swapped: the enum still carries the SEMANTIC half (22.1b's
+    // channel is intact, and a `sub-question` note still leaves findings standing), while the
+    // counter makes it honest. A declaration now means "I searched, I retrieved nothing, and I am
+    // telling you the whole question is unsupported" — which is what fixture 33 is, and what
+    // fixtures 32 and 34 are not.
+    const declaredQuestionScope = toolCalls.some((p) => {
+      if (p.toolName !== "declareUnsupported") return false;
+      // ai@7 exposes the PARSED object on `steps[].content`, while the LanguageModelV2 mocks in
+      // dispatch.test.ts emit the raw provider shape where `input` is still a JSON string. Accept
+      // both rather than trust one — a mis-read here silently flips an honesty verdict.
+      const raw: unknown = (p as { input?: unknown }).input;
+      let args: unknown = raw;
+      if (typeof raw === "string") {
+        try {
+          args = JSON.parse(raw);
+        } catch {
+          return false;
+        }
+      }
+      return (args as { scope?: unknown } | null)?.scope === "question";
+    });
     const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
     if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
     costUsd += feeUsd;
@@ -2432,6 +2479,10 @@ async function runAgentLoop(
     const sources = (res.sources ?? [])
       .filter((src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url")
       .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
+    // because `sources` is only built two lines up — and `sources`, not the model, is the half
+    // of this conjunction that cannot be talked into anything.
+    const declaredUnsupported = declaredQuestionScope && sources.length === 0;
     const hitStepCap = res.steps.length >= stepBudget && res.finishReason !== "stop";
     const hitClock = outOfClock() && res.finishReason !== "stop";
     return {

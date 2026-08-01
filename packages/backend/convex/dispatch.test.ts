@@ -299,8 +299,10 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
           route: "research",
           planId,
           primary: [
-            // `SMOKE::` rides vaultGround's offline seam — no embedding call, no network.
-            toolStep("searchVault", { query: "SMOKE::" }),
+            // ACTN-03: `declareUnsupported` is now the grant's ONLY local tool (searchVault left
+            // the grant — see specialists.ts), and a local tool is what makes this harness
+            // non-inert: `webResearch` is provider-executed and deliberately emits no step row.
+            toolStep("declareUnsupported", { claim: "the harness needs one local tool to run" }),
             toolStep(withheld, input),
             searchedStep(REPLY, urls),
           ],
@@ -310,7 +312,7 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
       // Positive half #1: the LOCAL granted tool executed and emitted its real activity row.
       const stepTools = (await readSteps(t)).map((s) => s.tool);
       expect(stepTools, "the GRANTED local tool was filtered out — the harness is inert").toContain(
-        "searchVault",
+        "declareUnsupported",
       );
       // Positive half #2: the PROVIDER-executed hosted search contributed its source and prose.
       expect(res.sources).toEqual([{ url: urls[0], title: "Source 0" }]);
@@ -1126,7 +1128,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
           tenantId: TENANT,
           planId,
           skillName: "research-specialist",
-          toolNames: ["searchVault", "webResearch"],
+          toolNames: ["webResearch", "declareUnsupported"],
           prompt: QUESTION,
           mockScript: {
             primary: primary as never,
@@ -1305,7 +1307,20 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
   // DESPITE `sourceCount === 1`, which no counter-based rule could ever produce.
   // MUTATION that turns this RED: drop `declareUnsupportedTool` from the grantWebResearch spread,
   // or drop the `|| a.declaredUnsupported` disjunct in evidenceVerdict.
-  test("a DECLARED evidence gap reaches the stored verdict — despite a retrieved source", async () => {
+  // ACTN-03 REVERSAL, recorded deliberately — this test's ORIGINAL premise no longer holds and the
+  // change is a real loss, not a free win. 22.1b asserted that a declaration made while holding a
+  // NEAR-MISS source (sourceCount 1) still reads `insufficient_evidence`: "a near-miss is a source,
+  // not support". That semantic requires a specialist that declares JUDICIOUSLY. Measured across
+  // three probes it does not exist: the model declared on 5/5 dispatches at v6 (0,3,4,6,8 sources)
+  // and, once given an explicit enum, passed `scope: "question"` on 5/5 at v7 (6,10,0,9,8 sources)
+  // — including after three searches over ten sources. An always-on bit carries no information, so
+  // the near-miss distinction was never actually being delivered; gating it on `sourceCount === 0`
+  // gives up a capability that has never worked, in exchange for a verdict that is true.
+  // WHAT IS LOST, stated plainly so a future reader can price it: a genuinely honest refusal that
+  // DID retrieve a near-miss now reads `sourced`. If the specialist ever becomes judicious (a
+  // stronger RESEARCH_MODEL is the likely route), revisit this — the enum is already in place to
+  // carry the semantic half on its own.
+  test("a DECLARED evidence gap reaches the stored verdict — when the run came back EMPTY", async () => {
     const { t, planId } = await setup();
     t.registerComponent("workflow", workflowSchema, workflowModules);
     t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
@@ -1314,27 +1329,100 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
         ...RESEARCH,
         planId,
         primary: [
-          toolStep("declareUnsupported", { claim: "no independent source names this entity" }),
-          searchedStep(REPLY, ["https://example.com/near-miss"]),
+          toolStep("declareUnsupported", {
+            claim: "no independent source names this entity",
+            scope: "question",
+          }),
+          // A run that searched and genuinely retrieved NOTHING — fixture 33's measured shape
+          // (every one of its dispatches across v2-v7 came back with sourceCount 0).
+          searchedStep(REPLY, []),
         ],
         research: true,
       }),
     );
     expect(res.declaredUnsupported).toBe(true);
     expect(res.webSearchCalls).toBe(1);
-    expect(res.sources).toHaveLength(1);
+    expect(res.sources).toHaveLength(0);
 
     // (a) the tool was really BUILT, really allowed, and really has its schema literal.
     expect((await readSteps(t)).map((s) => s.tool)).toContain("declareUnsupported");
 
-    // (b) a near-miss is a source, not support — the verdict is insufficient WITH sourceCount 1.
+    // (b) the verdict carries the declaration through to the stored findings.
     const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
       (r) => r.eventType === "research.persisted",
     );
     expect(persisted?.payload).toMatchObject({
       declaredUnsupported: true,
-      sourceCount: 1,
+      sourceCount: 0,
       evidenceVerdict: "insufficient_evidence",
+    });
+  });
+
+  // The reversal above, pinned as its own assertion so it can never regress silently: the ONLY
+  // thing that now separates this from the test above is the retrieved source.
+  // MUTATION that turns this RED: drop `&& sources.length === 0` in llm.ts.
+  test("a question-scope declaration made while HOLDING sources does not mark findings unsupported", async () => {
+    const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [
+          toolStep("declareUnsupported", { claim: "reflex", scope: "question" }),
+          searchedStep(REPLY, ["https://example.com/a", "https://example.com/b"]),
+        ],
+        research: true,
+      }),
+    );
+    expect(res.sources).toHaveLength(2);
+    expect(res.declaredUnsupported, "the reflex must not outvote the retrieved sources").toBe(false);
+    const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "research.persisted",
+    );
+    expect(persisted?.payload).toMatchObject({ sourceCount: 2, evidenceVerdict: "sourced" });
+  });
+
+  // ACTN-03: the OTHER half of the scoped declaration, and the whole reason the enum exists.
+  // MEASURED (probe 7faf396c): the specialist called `declareUnsupported` on 5 of 5 dispatches
+  // while holding 0, 3, 4, 6 and 8 sources — a reflex, not a judgement — so an unscoped bit
+  // reported "we found nothing" about runs that plainly found something, and reddened fixtures 32
+  // and 34 no matter how the skill body was worded (three rewrites failed). A `sub-question` scope
+  // is a note to the reader: the findings STAND.
+  // MUTATION that turns this RED: drop the `?.scope === "question"` check in llm.ts and go back to
+  // `toolCalls.some((p) => p.toolName === "declareUnsupported")`.
+  test("a SUB-QUESTION declaration leaves the findings standing — the verdict stays sourced", async () => {
+    const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        primary: [
+          toolStep("declareUnsupported", {
+            claim: "one vendor's freshness-filter behaviour was not documented anywhere",
+            scope: "sub-question",
+          }),
+          searchedStep(REPLY, ["https://example.com/answered"]),
+        ],
+        research: true,
+      }),
+    );
+    expect(res.declaredUnsupported, "a sub-question note must not read as a refusal").toBe(false);
+
+    // Non-vacuity: the call really happened and really traced — this is not passing because the
+    // tool was absent, which is the trap the 22.1b sibling test above exists to catch.
+    expect((await readSteps(t)).map((s) => s.tool)).toContain("declareUnsupported");
+
+    const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "research.persisted",
+    );
+    expect(persisted?.payload).toMatchObject({
+      declaredUnsupported: false,
+      sourceCount: 1,
+      evidenceVerdict: "sourced",
     });
   });
 
@@ -1352,8 +1440,8 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
           primary: [
             textToolStep(
               "Partial findings from four good sources.",
-              "searchVault",
-              { query: "SMOKE::" },
+              "declareUnsupported",
+              { claim: "partial" },
               "clock-local",
             ),
             REPLY_STEP,
@@ -1376,7 +1464,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect(card).not.toContain(INCOMPLETE_MARKER.steps.trim());
 
     // Non-vacuity: the granted local tool ran before the clock stopped.
-    expect((await readSteps(t)).map((s) => s.tool)).toContain("searchVault");
+    expect((await readSteps(t)).map((s) => s.tool)).toContain("declareUnsupported");
   });
 
   test("cost ceiling: partial output lands, then the exhausted envelope refuses exactly", async () => {
@@ -1425,8 +1513,8 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     const steps = Array.from({ length: 12 }, (_, i) =>
       textToolStep(
         `Partial angle ${i + 1}.`,
-        "searchVault",
-        { query: "SMOKE::" },
+        "declareUnsupported",
+        { claim: `angle ${i + 1}` },
         `step-cap-${i}`,
       ),
     );
@@ -1454,21 +1542,21 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect(INCOMPLETE_MARKER.steps).not.toBe(INCOMPLETE_MARKER.clock);
   });
 
-  test("ONE literal, not two: hosted search emits no step while local searchVault does", async () => {
+  test("ONE literal, not two: hosted search emits no step while a local tool does", async () => {
     const { t, planId } = await setup();
     const res = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...RESEARCH,
         planId,
         primary: [
-          toolStep("searchVault", { query: "SMOKE::" }, "one-literal-local"),
+          toolStep("declareUnsupported", { claim: "local" }, "one-literal-local"),
           searchedStep(REPLY, ["https://example.com/hosted"]),
         ],
       }),
     );
     expect(res.sources).toHaveLength(1);
     const tools = (await readSteps(t)).map((s) => s.tool);
-    expect(tools).toContain("searchVault");
+    expect(tools).toContain("declareUnsupported");
     // Mutation that turns this RED: emit a hosted-search row and add its schema literal.
     expect(tools).not.toContain("web_search");
   });
@@ -1628,8 +1716,12 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
       rootRequestId: ROOT,
     });
     // POSITIVE half first, so this cannot pass against an empty record.
-    expect(specialist).toContain("searchVault");
     expect(specialist).toContain("webResearch");
+    expect(specialist).toContain("declareUnsupported");
+    // NOTE: no `not.toContain("searchVault")` here. `buildCockpitTools` CONSTRUCTS the full record
+    // for every caller; research's web-only grant (ACTN-03) is enforced one layer up by the
+    // `toolNames` allow-list off RESEARCH_TOOLS — asserted as an equality in
+    // packages/core/src/specialists.test.ts. Asserting it here would test the wrong layer and fail.
     // A withheld-but-constructed closure would still be reachable via invokeTool, and this tool
     // hardcodes depth 1 / ancestry [] — a re-entry there would bypass MAX_DEPTH and wouldCycle.
     expect(specialist, "a specialist can construct a dispatch").not.toContain("dispatchResearch");

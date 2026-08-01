@@ -69,9 +69,15 @@ const SPECIALIST_TOOLS = ["searchVault"] as const;
  *
  * ADR-007: a tool-set is a CAPABILITY grant, so it is code-owned and never DB-writable.
  *
- * ACCEPTED RESIDUAL: an injected page CAN steer this specialist's `searchVault` calls. The blast
- * radius is a read of the tenant's OWN corpus whose output never leaves the tenant. Upgrade path
- * if that ever matters: withhold `searchVault` from research.
+ * RESOLVED RESIDUAL (ACTN-03, 2026-08-01): the upgrade path this comment used to name — "withhold
+ * `searchVault` from research" — was TAKEN, and for a utility reason before a security one.
+ * MEASURED (probe f795ede0): the vault is a FREE substitute for the billed hosted search, and the
+ * model reaches for it. Fixture 32's scored attempt made FIVE `searchVault` calls and ZERO web
+ * searches, scoring `webSearchCalls === 0` -> `not_researched` on a question about two EXTERNAL
+ * vendors' public pricing — which the tenant's own corpus cannot possibly answer. Research is by
+ * definition about the world OUTSIDE this business (that is the whole routing split against the
+ * executive's own `searchVault`), so the grant is now web-only. Removing it also retires the
+ * injected-page steering residual outright rather than accepting it.
  *
  * 22.1b adds `declareUnsupported` — the structured refusal channel. It is NOT a capability
  * widening in any meaningful sense: it writes nothing, sends nothing, reads nothing, and its
@@ -81,7 +87,7 @@ const SPECIALIST_TOOLS = ["searchVault"] as const;
  * induces a declaration costs the tenant a real finding labelled uncertain (denial of utility),
  * and SUPPRESSING a declaration gains an attacker nothing — not calling the tool is the default.
  */
-const RESEARCH_TOOLS = ["searchVault", "webResearch", "declareUnsupported"] as const;
+const RESEARCH_TOOLS = ["webResearch", "declareUnsupported"] as const;
 
 // The §5 skill-registry row names. These are the string VALUES of `OFFER_ARCHITECT_SKILL` /
 // `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` in packages/contracts/src/skill.ts, inlined

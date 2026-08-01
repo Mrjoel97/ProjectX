@@ -76,11 +76,16 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       ["offer-architect", ["searchVault"]],
       ["money-model-designer", ["searchVault"]],
       ["lead-engine", ["searchVault"]],
-      // Phase 16 (SC#1): research reads the web AND the tenant's own corpus. Still nothing that
-      // writes, sends, or moves a plan row — 22.1b's `declareUnsupported` writes nothing, sends
-      // nothing, reads nothing and discards its argument; the only thing it moves is the
-      // code-owned evidence verdict, downward.
-      ["research", ["searchVault", "webResearch", "declareUnsupported"]],
+      // Phase 16 (SC#1): research reads the WEB ONLY. Still nothing that writes, sends, or moves
+      // a plan row — 22.1b's `declareUnsupported` writes nothing, sends nothing, reads nothing and
+      // discards its argument; the only thing it moves is the code-owned evidence verdict, downward.
+      // ACTN-03 (2026-08-01): `searchVault` was REMOVED from this grant. It is not a security
+      // tightening dressed as a fix — it is the fix. The vault is FREE while the hosted search is
+      // billed, so the model substituted it: fixture 32's scored attempt made five `searchVault`
+      // calls and ZERO web searches on a question about two EXTERNAL vendors' public pricing.
+      // MUTATION that must turn this RED: put "searchVault" back — fixture 32 can then score
+      // `webSearchCalls === 0` again while every other test stays green.
+      ["research", ["webResearch", "declareUnsupported"]],
     ]);
   });
 
@@ -133,7 +138,9 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
     // Non-vacuity: the deny-list is only meaningful if the grant is non-empty and real.
     // 22.1b adds `declareUnsupported` — the deny-list above is UNCHANGED, deliberately: the new
     // tool is in neither list's spirit, it writes/sends/moves nothing at all.
-    expect(granted).toEqual(["searchVault", "webResearch", "declareUnsupported"]);
+    // ACTN-03: `searchVault` left the grant (see the equality test above for why), which also
+    // retires the injected-page steering residual `specialists.ts` used to accept.
+    expect(granted).toEqual(["webResearch", "declareUnsupported"]);
   });
 
   test("research resolves to its own skill body and trace literal", () => {

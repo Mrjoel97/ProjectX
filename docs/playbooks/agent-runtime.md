@@ -9,6 +9,86 @@ into compile errors instead of silent mis-billing, four of them handlers that DE
 in `args` and never destructured it. Note `recordSpend` now takes `tenantId` and `guardrails.ts`'s
 limiter block moved, so any plan citing the old `:23-28` line numbers needs re-reading first.
 >
+> Last verified: 2026-08-01 (ACTN-03 — **FIXTURES 32, 33 AND 34 ARE GREEN — 3/3, first attempt
+> each, run `1246bb4a`, $0.0076 exec + $0.2322 specialist.** Fixture 34 had NEVER passed in the
+> project's history; 32 had passed once, at @2.) The verdict input is now a CONJUNCTION of a
+> model-authored signal and a provider-authored one, and both halves were needed:
+>
+> ```
+> declaredUnsupported = (a declareUnsupported call with scope: "question") AND sources.length === 0
+> ```
+>
+> **Why the enum alone was not enough — measured, not reasoned.** `declareUnsupported` gained a
+> required `scope: "question" | "sub-question"` so a run-level boolean could finally express what
+> the specialist actually judges (it is mandated to DECOMPOSE, so it judges per sub-question). The
+> model then passed `scope: "question"` on 5 of 5 dispatches while holding 6, 10, 0, 9 and 8
+> sources — one of them after THREE searches over TEN sources (probe `fea23519`). One version
+> earlier it had declared on 5 of 5 while holding 0, 3, 4, 6 and 8 (probe `7faf396c`). **The
+> declaration is a reflex, not a judgement**: the model calls each tool it owns once per run. Every
+> instrument the model itself authors was therefore spent — three skill-body rewrites, a
+> tool-description rewrite, and the enum — before the last word was given to `sources`, built from
+> the SDK's `url_citation` annotations and impossible for the model to talk into anything.
+>
+> **THE REUSABLE LESSON (this cost four paid attempts): when a model does X on every single run
+> regardless of input, stop writing instructions.** An always-on bit carries no information, so no
+> wording of any string — body, tool description, or enum value it authors — can make it
+> informative. Reach for a signal from OUTSIDE the model. The tell is uniformity in the data: 1
+> search then declare, 5/5, whatever the evidence. A judgement varies with its input; a reflex does
+> not.
+>
+> **THE 22.1b REVERSAL, priced honestly.** 22.1b held that a declaration made while holding a
+> NEAR-MISS source still reads `insufficient_evidence` ("a near-miss is a source, not support").
+> That is now false: a declaration with any source reads `sourced`. The capability given up has
+> never actually worked — delivering it needs a specialist that declares judiciously, and across
+> three probes no such specialist exists at `RESEARCH_MODEL`. The `scope` enum remains in place
+> and carries the semantic half on its own, so if a stronger research model ever declares
+> judiciously, the AND is the single line to revisit (`llm.ts`, "the AND described above").
+> `dispatch.test.ts` pins both directions: an EMPTY run + question scope ⇒ `insufficient_evidence`,
+> and the same declaration + 2 sources ⇒ `sourced`, each with its mutation note.
+>
+> **Fixture 32 also cleared `webSearchCallsAtLeast: 2` for the first time** — that came from the
+> `searchVault` removal below, not from this change: its scored run cost $0.2080 of specialist
+> spend, i.e. a genuine multi-angle research run rather than the $0.005 one-shot it used to be.
+> **NOT YET CLOSED:** this was `--only 32- 33- 34-`, which suppresses evidence by design. ACTN-03
+> needs one green UNFILTERED 33-case run; fixtures 29 and 31 are the known remaining risks.
+>
+> PRIOR 2026-08-01 (ACTN-03 — **the research specialist is now WEB-ONLY, and it is a UTILITY fix
+> before a security one**). `searchVault` was REMOVED from `RESEARCH_TOOLS`
+> (`packages/core/src/specialists.ts`), taking the upgrade path that file's own ACCEPTED RESIDUAL
+> comment had named since Phase 16. The motive is measured, not theoretical: **the vault is FREE
+> while the hosted web search is BILLED, so the model substitutes it.** Fixture 32's SCORED attempt
+> in probe f795ede0 made FIVE `searchVault` calls and ZERO web searches — on a question about two
+> EXTERNAL vendors' published pricing, which the tenant's own corpus cannot possibly answer — and
+> scored `webSearchCalls === 0` -> `not_researched` -> `webSearchCallsAtLeast: 2` RED. Research
+> is by definition about the world OUTSIDE the business (that is the whole routing split against
+> the executive's own `searchVault`), so the grant is now web-only; the injected-page steering
+> residual is retired outright rather than accepted. **A HARNESS FACT worth knowing before reading
+> any RED:** `run-eval-golden.mjs:1344` scores `outcome = { ...second, ...merged }` — the SECOND
+> attempt's verdict wins UNCONDITIONALLY, so a reported failure describes the RETRY, not attempt 1.
+> Attempt 1 of that same fixture ran 4 searches over 8 sources; diagnosing the printed failure alone
+> would have chased the wrong run. **Tests rewired, not weakened:** `dispatch.test.ts` used
+> `searchVault` as its "a granted LOCAL tool really ran" witness (the harness-is-not-inert half of
+> the SC#1 containment cases) — `declareUnsupported` is now the grant's only local tool and takes
+> that role; `webResearch` is provider-executed and deliberately emits no step row. The
+> `buildCockpitTools` record still CONSTRUCTS `searchVault` for every caller — the web-only grant
+> is enforced one layer up by the `toolNames` allow-list, asserted as a whole-registry equality in
+> `packages/core/src/specialists.test.ts`, so do not assert its absence at the build layer.
+> ALSO the declareUnsupported TOOL DESCRIPTION (`llm.ts`) lost its licence clause "including when
+> all you found were similarly-named or adjacent near-misses" — that clause describes fixture 34's
+> exact situation (abundant real injection guidance retrieved, only the invented quoted address
+> missing) and had never been touched since 22.1b. It now reads "NOTHING you retrieved supports the
+> CORE of the question — not merely one sub-question, and not merely one illustrative example".
+> **WHY THE TWO PRIOR PROMPT REWRITES MISSED IT** — the reusable lesson. v4 (820c247) and v5
+> (ae38192) both only APPENDED bullets to the "Do not call it when" list (it grew 5 -> 6 -> 8),
+> BELOW an unmodified positive imperative. An exception list cannot beat a direct order, and
+> neither author noticed the order was there. When a model keeps doing X after you have twice
+> written "do not do X in case Y", stop adding cases and go looking for the sentence that TELLS
+> it to do X.
+> **PRE-EXISTING RED, not caused by this change (verified by stashing the change and re-running):**
+> `dispatch.test.ts` > "the hosted-search COUNT rides the result through to the findings terminal"
+> fails on the untouched tree too (`persisted2?.payload` undefined — the `research.persisted` row
+> is absent on the not_researched half). Unowned; do not attribute it to ACTN-03.
+>
 > PRIOR 2026-07-31 (ACTN-03 — fixture `31-gap-dispatch-lead-engine` turns STRENGTHENED, no
 > expectation touched). Its `expect.attributionRoute: "lead-engine"` stands; run `c1fe054c` returned
 > `money-model-designer` because the case never asked the agent to put its two offer types on the
