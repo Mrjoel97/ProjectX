@@ -314,6 +314,61 @@ FAILURE keep them — they are the debugging evidence, and failures are rare. `p
 on-success is the whole retention policy; no TTL, no cron. Upgrade path if failed-render debris
 accumulates: a scheduled sweep of `mediaJobs` older than N days."*
 
+### D13 — LongCat-Video: evaluated, DECLINED for now, settled at the live gate (owner, 2026-08-01)
+
+The owner asked whether Meituan's open-source **LongCat-Video** (`github.com/meituan-longcat/
+LongCat-Video`) could make the pipeline more sophisticated. A 9-agent evaluation ran it against four
+stated motivations. **Three were refuted; the fourth inverted into something more interesting.**
+
+| Motivation | Verdict |
+|---|---|
+| Longer, coherent video | **REFUTED.** `run_demo_long_video.py` hardcodes `num_segments = 11` and chains 11 continuation + 12 refinement passes — it IS clip concatenation, moved inside the sampler. Max demonstrated anywhere is 1 minute; face drift is open issue #38. **fal caps `num_frames` at 961 ≈ 32 s.** D8's `/assemble` stage stands. |
+| Better quality | **REFUTED.** Ranks **last of four** on I2V overall quality (3.17) on the vendor's own benchmark, behind Wan 2.2, on image alignment and motion. Distillation makes it worse. |
+| Own the stack | **REFUSED ON ECONOMICS**, before SC#1 even applies. Self-hosted is $0.40–0.83 per 10 s 720p clip (Modal / Replicate / RunPod, incl. cold start and realistic duty cycle) vs **$0.10** on fal's own hosted distilled endpoint — a wash at best, 8× worse at worst, plus an 83 GB image and an undocumented VRAM floor (48 GB A6000 OOM'd, issue #7, no maintainer reply). Fly GPU is shut down. |
+| Lower cost | **REAL (5–10×) but NOT BINDING.** At ~2 reels/day against $10/day nothing is being refused, so the savings buy nothing — **except one thing.** |
+
+**The inversion, and the only live question:** Phase 20 ships 480p solely because D10's $3.50 cap
+refuses Wan at 720p ($6.00/reel). **LongCat distilled at 720p costs $0.60** — a fifth of what we pay
+for 480p today. So the trade is *softer motion at higher resolution* vs *better motion at lower
+resolution*, and **no benchmark can rank that.**
+
+**Decision: do not touch the plan set.** Ship `20-01`→`20-17` on Wan 2.5 @ 480p. The rail is
+model-agnostic by construction — the price table, batch reserve, adapter switch and webhook do not
+care which model they carry, which is exactly why swapping later is a table row and not a rewrite.
+**The trigger is already scheduled:** plan `20-11` Task 4 step 10b renders the same storyboard on
+distilled-LongCat-720p for ~$0.30 extra and the owner looks at both. Ponytail rung 1 — right now this
+does not need to exist.
+
+**Licensing, recorded so nobody re-researches it:** weights and code are **plain MIT, ungated**, no
+user threshold, no acceptable-use policy, no field-of-use limit, no output-ownership claim; bundled
+Wan2.1 VAE and google/umt5-xxl are Apache-2.0. Both adversarial passes tried to refute this and
+failed. **But the license only matters if we self-host, and we will not** — via fal we are a
+customer, not a licensee.
+
+**Explicitly closed, not revisitable at this scale:** self-hosting LongCat, and long-form
+single-pass video.
+
+### D14 — SC #1's wording was wrong and is corrected (2026-08-01)
+
+The LongCat evaluation caught a defect in a success criterion written earlier the same day. SC #1
+said *"Every media line item MUST be priced per SUBMITTED INPUT… a model billed per generated output
+duration… is refused by construction."*
+
+**That refuses Wan 2.5, our own default.** Wan is billed per second of OUTPUT video; it passes only
+because `duration` is a pinned request enum (5 or 10). The real invariant is:
+
+> **A media line item's cost must be COMPUTABLE PRE-SUBMIT AND BOUNDED ABOVE from the request's own
+> parameters.** A model whose price is knowable only after generation — billed per COMPUTE SECOND, or
+> per an output length the request does not pin — cannot be reserved and is refused.
+
+The test is pre-flight computability, not the billing unit's name. ROADMAP SC #1 is corrected;
+`20-01`'s price-table plan and `docs/playbooks/media.md` must state the invariant this way.
+
+**Also unverified and load-bearing:** fal's billed-seconds divisor (720p appears to count at 30 fps,
+480p at 15 fps — a fixed per-tier fps, not the request's `fps` field). **fal returned HTTP 429 to
+every automated fetch, so this was never read first-hand.** Wrong divisor = every reservation off by
+2×. Read it at implementation time before pricing anything.
+
 ### D5 — Reconciliation (Claude's discretion, per ponytail §8)
 
 Roadmap SC #5 requires a documented reconciliation step, not an automated one. The laziest
