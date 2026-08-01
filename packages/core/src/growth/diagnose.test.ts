@@ -52,13 +52,27 @@ describe("diagnose — top-down gate router (stop at first failing gate)", () =>
     expect(rx.ask).toBeUndefined();
   });
 
-  test("Gate 1: no offer → offer-architect/02-build-offer", () => {
+  test("Gate 1: no offer anywhere (empty list AND all-false checklist) → offer-architect/02-build-offer", () => {
     const sc = healthy();
     sc.identity.currentOffers = [];
+    // Both signals must be absent: the checklist affirming an offer type IS an offer on file.
+    sc.modelCard.offerTypesPresent = {
+      attraction: false,
+      upsell: false,
+      downsell: false,
+      continuity: false,
+    };
     const rx = diagnose(sc);
     expect(rx.gate).toBe(1);
     expect(rx.route).toBe("offer-architect");
     expect(rx.playbook).toBe("02-build-offer");
+  });
+
+  test("Gate 1 does NOT fire on an empty free-text list when the checklist affirms offers (run 56bff5b8 fixture 31 regression)", () => {
+    const sc = healthy();
+    sc.identity.currentOffers = []; // the executive recorded the checklist, not the list
+    const rx = diagnose(sc);
+    expect(rx.playbook).not.toBe("02-build-offer"); // must pass gate 1 and diagnose downstream
   });
 
   test("Gate 1: commodity offer → offer-architect/03-enhance-offer", () => {

@@ -55,7 +55,16 @@ export function diagnose(sc: Scorecard): Prescription {
   }
 
   // --- Gate 1: Offer ---
-  const hasOffer = sc.identity.currentOffers.length > 0;
+  // An offer is "on file" when EITHER signal affirms one: the free-text list, or any
+  // offerTypesPresent leaf the user affirmed (the checklist literally states "we sell an
+  // attraction offer today"). Measured live (eval run 56bff5b8, fixture 31, 4/4 attempts):
+  // the executive records the checklist booleans from prose but not the free-text list, and
+  // reading the list alone diagnosed "no offer worth buying" against a scorecard affirming
+  // two live offers — gate 1 fired before gate 2's offerTypeCount was ever consulted.
+  // `=== true` mirrors the offerTypeCount checklist rule below (defence against non-boolean leaks).
+  const hasOffer =
+    sc.identity.currentOffers.length > 0 ||
+    Object.values(sc.modelCard.offerTypesPresent).some((v) => v === true);
   const veScores = Object.values(sc.offerCard.valueEquation).filter(
     (v): v is number => typeof v === "number",
   );
