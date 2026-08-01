@@ -617,6 +617,64 @@ export const ingestFromAttachment = internalMutation({
   },
 });
 
+// ── Phase-18 (ACTN-04): the created-artifact write plane ─────────────────────
+// Mirrors ingestFromAttachment above — explicit tenantId, internal-only, refs in, one row out.
+// The "use node" cockpit action cannot ctx.db.insert, so the tool (plan 18-06) runs through here.
+
+/**
+ * Insert ONE agent-authored artifact as a tenant-scoped vault row (SC1).
+ *
+ * ⛔ THIS MUTATION DELIBERATELY DOES NOT CALL `startIngest`, AND THE ABSENCE *IS* THE FEATURE.
+ * A row with no rag entry and no graph nodes is structurally unreachable by BOTH halves of
+ * `runVaultGround` (vector search joined on `entry.metadata.vaultDocId`, then the hop-capped graph
+ * expand) — so the locked retrieval exclusion needs no filter anywhere, and there is nothing to
+ * forget to apply at a future call site. Do NOT "fix" this omission. The shipped precedent is
+ * `blueprint.ts` confirmBlueprint, which likewise inserts at `status: "ready"` without ingest.
+ * Promotion later = patch `origin` to "agent_promoted" + call the already-exported `startIngest`:
+ * a UI addition, not a migration — which is why both literals already exist in the schema.
+ *
+ * ponytail: the honest cost is that created docs are also invisible to the vault UI's SEARCH box
+ * (`vault.vaultSearch` is the same rag primitive), though they DO appear in the browse grid for
+ * free — `listVaultDocs` collects the tenant partition with no kind/status/origin filter. Accepted
+ * for beta; upgrade path is a ~3-line title-substring fallback in DocGrid's filter. Owner question,
+ * raised in plan 18-09's gate.
+ *
+ * Renders NOTHING: `storageId` (the derived PDF, long-form only) is written STRAIGHT THROUGH from
+ * args. The PDF is produced in the tool — pdf-lib is not usable from a non-"use node" mutation.
+ */
+export const insertCreatedDoc = internalMutation({
+  args: {
+    tenantId: v.string(),
+    title: v.string(),
+    form: v.union(v.literal("short"), v.literal("long")),
+    markdown: v.string(),
+    contentHash: v.string(),
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (
+    ctx,
+    { tenantId, title, form, markdown, contentHash: hash, storageId },
+  ): Promise<Id<"vaultDocuments">> =>
+    await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title,
+      // Free-string `kind`. NOT "document" — smoke.ts seedVoiceDocSession already writes that.
+      kind: form === "long" ? "created_document" : "created_content",
+      category: categoryFor({ source: "agent" }), // → workspace-docs, like every generated doc
+      source: "agent",
+      // LOCKED: markdown is the artifact of record for BOTH forms. "application/pdf" would land the
+      // row at pending_extraction and round-trip it through vaultExtract to recover text we wrote.
+      mimeType: "text/markdown",
+      size: byteLen(markdown),
+      contentHash: hash,
+      text: markdown,
+      storageId, // absent ⇒ PreviewModal's canDownload is false ⇒ no Download button, for free
+      origin: "agent", // the provenance + deferred-promotion discriminator
+      status: "ready", // ready WITHOUT ingest — see the block comment above
+      createdAt: Date.now(),
+    }),
+});
+
 export const ingestExtractedText = internalMutation({
   args: {
     docId: v.id("vaultDocuments"),
