@@ -22,9 +22,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const migrationsModules = import.meta.glob(
   "../node_modules/@convex-dev/migrations/src/component/**/!(*.test).ts",
 );

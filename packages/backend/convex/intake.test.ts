@@ -24,17 +24,11 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
 
 const TENANT = "tenant_intake";

@@ -29,9 +29,7 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 // runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
 // NO @ts-expect-error on this one, unlike the three above: tsconfig.json includes vitest.config.mts,
 // which pulls Vite's global types in, so import.meta.glob typechecks and the directive is DEAD

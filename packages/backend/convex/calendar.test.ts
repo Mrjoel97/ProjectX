@@ -8,13 +8,10 @@ import { api, internal } from "./_generated/api";
 import { buildAuthorizeUrl } from "./gmailAuth";
 import schema from "./schema";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const convexSources = import.meta.glob("./**/*.ts", {
   query: "?raw",
   import: "default",

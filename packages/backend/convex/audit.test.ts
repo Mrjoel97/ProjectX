@@ -10,7 +10,6 @@ import schema from "./schema";
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
 // *.test.ts so the harness does not try to load the test files themselves.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );

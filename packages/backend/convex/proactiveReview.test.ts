@@ -14,9 +14,7 @@ import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
@@ -213,7 +211,6 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
 // The behaviour tests above prove the review WORKS; these prove it cannot QUIETLY grow a mailbox
 // dependency or an unscoped read. Raw-source scan (the importGuard.test.ts idiom) — edge-runtime
 // has no node:fs, so file contents ride in through Vite's raw loader.
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const sources = import.meta.glob("./**/*.ts", {
   query: "?raw",
   import: "default",

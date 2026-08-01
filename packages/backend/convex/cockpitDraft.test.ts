@@ -13,7 +13,6 @@ import schema from "./schema";
 // convex-test discovers Convex modules (and auto-registers components declared in
 // convex.config.ts) via import.meta.glob; exclude the tests. Same form as audit.test.ts
 // so the auditCounts aggregate component the draft's llm.called write touches is registered.
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 
 const SMOKE = "SMOKE::route=direct_llm::";

@@ -26,13 +26,9 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
 
 // A SMOKE:: body-intent survives redaction and short-circuits draftCockpit offline (no gateway).

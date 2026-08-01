@@ -5,12 +5,10 @@ import { internal } from "./_generated/api";
 import schema from "./schema";
 
 // convex-test discovers Convex modules via import.meta.glob; exclude *.test.ts.
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // The escalate terminal's review.escalated audit hits the auditCounts aggregate; register
 // the component so the REAL audit path runs (gmail.test.ts / cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );

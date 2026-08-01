@@ -12,9 +12,7 @@ import { buildMime, pickPlainText } from "./gmail";
 // under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
 
 /** convex-test instance with the audit aggregate registered (every listInbox test audits). */
