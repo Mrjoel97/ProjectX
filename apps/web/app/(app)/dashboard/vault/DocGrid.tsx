@@ -81,6 +81,28 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+/** PROVENANCE (ACTN-04): agent-authored vs user-uploaded, at a glance. Same markup and geometry as
+ *  StatusChip so the two read as one row of chips; the LABEL carries the meaning, never the colour
+ *  (BRAND §6). Teal tint + --ink text rather than --teal-600 text (~2.9:1, banned for small text by
+ *  §6), and never --held — amber is the approval gate's alone (§2). Covers both `agent` and
+ *  `agent_promoted`, which is why the gate is `origin !== undefined` and not an equality test. */
+function OriginChip() {
+  return (
+    <span
+      style={{
+        background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+        color: "var(--ink)",
+        padding: "0.1rem 0.5rem",
+        borderRadius: "0.375rem",
+        fontSize: "0.72rem",
+        fontWeight: 700,
+      }}
+    >
+      AGENT
+    </span>
+  );
+}
+
 export function DocGrid({
   docs,
   category,
@@ -123,6 +145,13 @@ export function DocGrid({
   }
 
   // The rows to show: all category docs, or (when a search ran) only its hits — full metadata kept.
+  // ponytail: KNOWN CEILING — agent-CREATED documents (origin set) BROWSE here for free, because
+  //  listVaultDocs collects the tenant partition with no kind/status/origin filter, but they will
+  //  NEVER appear in this search box: vault.vaultSearch is the same rag primitive as grounding and
+  //  created artifacts are deliberately never ingested (that absence IS the retrieval exclusion,
+  //  vault.ts insertCreatedDoc). Upgrade path: a ~3-line title-substring fallback right here,
+  //  unioned into hitIds. Accepted for beta — do NOT "fix" it by ingesting. Owner question, open in
+  //  plan 18-09's gate.
   const rows = useMemo(
     () => (hitIds ? docs.filter((d) => hitIds.has(d._id)) : docs),
     [docs, hitIds],
@@ -307,7 +336,10 @@ export function DocGrid({
                     </span>
                   )}
                 </span>
-                <StatusChip status={doc.status} />
+                <span style={{ display: "inline-flex", gap: "0.35rem", flex: "none" }}>
+                  {doc.origin !== undefined && <OriginChip />}
+                  <StatusChip status={doc.status} />
+                </span>
               </button>
               {/* "Discuss by voice" (DOCV-01). A SIBLING of the card button, never nested inside it —
                   the card itself is a <button>, so a nested link/button is invalid HTML and wrecks
