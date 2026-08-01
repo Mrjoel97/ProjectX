@@ -162,6 +162,56 @@ test("generateAttachment renders a stored PDF ref on the plan (scan→draft→re
   expect(url).toBeTruthy();
 });
 
+// SC4 (Phase 18 / ACTN-04): the SECOND output format rides the SAME governed chain — scan →
+// registry drafter → cap → ctx.storage.store → ref-only return. No new tool, no new route.
+// SC4b is the test above: an argument-less (three-arg) call is still a PDF, byte-identical.
+test("generateAttachment({ format: 'html' }) stores a text/html page through the same chain (SC4)", async () => {
+  const { t, planId } = await setup();
+  const res = await call(t, planId, "generateAttachment", {
+    topic: `${ATTACH} launch note`,
+    format: "html",
+  });
+
+  expect(res).toMatch(/\.html/); // a filename label, never a URL/bytes
+  expect(res).not.toMatch(/http:|https:/i);
+  const att = (await readPlan(t, planId))!.attachments![0]!;
+  expect(att.mimeType).toBe("text/html");
+  expect(att.filename).toMatch(/\.html$/);
+  expect(att.size).toBeGreaterThan(0);
+
+  // The stored bytes are renderHtmlDocument's page, NOT the raw markdown.
+  const blob = await t.run((ctx) => ctx.storage.get(att.storageId));
+  const text = await blob!.text();
+  expect(text).toContain("<!doctype html>");
+  expect(text).toContain("<h1>Smoke Document</h1>");
+  expect(text).not.toMatch(/^# Smoke Document/m); // markdown never stored verbatim
+});
+
+test("the html branch shares the render-fail seam and the byte cap (one governed path, SC4)", async () => {
+  const { t, planId } = await setup();
+  const fail = await call(t, planId, "generateAttachment", {
+    topic: "SMOKE::route=direct_llm::render=fail:: broken",
+    format: "html",
+  });
+  expect(fail).toMatch(/couldn't|render|failed|try again/i);
+  expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
+
+  // Same 8 MiB PLAN_ATTACHMENT_CAP_BYTES ceiling — deliberately NOT a second per-format constant.
+  const sid = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+  await t.mutation(internal.plans.recordAttachments, {
+    planId,
+    attachments: [
+      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+    ],
+  });
+  const capped = await call(t, planId, "generateAttachment", {
+    topic: `${ATTACH} another`,
+    format: "html",
+  });
+  expect(capped).toMatch(/size|large|limit/i);
+  expect((await readPlan(t, planId))?.attachments?.length).toBe(1);
+});
+
 test("regenerateAttachment supersedes in place and deletes the OLD bytes (O3, no orphan)", async () => {
   const { t, planId } = await setup();
   await call(t, planId, "generateAttachment", { topic: `${ATTACH} first` });
