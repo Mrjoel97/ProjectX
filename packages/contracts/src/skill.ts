@@ -43,6 +43,20 @@ export const COCKPIT_AGENT_SKILL = "cockpit-agent" as const;
 /** Registry name of the document drafter skill (CKPT-02 — attachment generation). */
 export const DOCUMENT_DRAFTER_SKILL = "document-drafter" as const;
 
+/**
+ * Registry name of the short-form content drafter skill (Phase 18, ACTN-04 — LinkedIn posts,
+ * ad headlines, email copy). Long-form keeps `document-drafter`, whose body Phase 18 does not
+ * touch; this is a NEW row, so seedSkills' `rows.length === 0` branch lands it at v1 `active`
+ * with no eval cycle and no paid run.
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (Phase 18, ACTN-04, 2026-08-01).
+ * `run-eval-golden.mjs`'s SKILL_NAMES is DERIVED from GATED_SKILLS, so gating this row makes it
+ * pinnable — but there is NO golden fixture that reaches `createDocument`, so the first body edit
+ * would mint a candidate no eval run can certify. That is the exact deadlock recorded for
+ * `business-blueprint` below. Revisit when a fixture exists.
+ */
+export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;
+
 /** Registry name of the attachment extractor OCR/extraction skill (INTK-02). */
 export const ATTACHMENT_EXTRACTOR_SKILL = "attachment-extractor" as const;
 
