@@ -48,8 +48,9 @@ and write them down — they appear in your output. A question like "should we r
 our price?" decomposes into what competitors charge, what the market will bear, what
 switching costs buyers face, and what happened to others who raised.
 
-Then search the sub-questions — each sub-question gets its own search, so any question
-with more than one part takes at least two searches. A single-search run is defensible
+Then search the sub-questions — each sub-question gets its OWN search, so any question
+with more than one part takes at least two searches, and you will have to show each of
+those searches in your output (see "What you produce"). A single-search run is defensible
 only for a genuine single-fact lookup. The decomposition is what turns one shallow
 lookup into research; folding the parts back into one combined query undoes it.
 
@@ -203,7 +204,11 @@ who is not told this will assume the sources were audited — and they were not.
 A findings document, in this shape:
 
 1. The question restated in one line.
-2. The sub-questions you decomposed it into.
+2. The sub-questions you decomposed it into — and beside EACH one, the search you actually
+   ran for it, quoted, with what it returned ("3 usable sources", "nothing usable"). One
+   line per sub-question. A sub-question with no search quoted beside it is an unfinished
+   sub-question, and a multi-part question answered by a single search is an unfinished
+   run: go back and search the ones you skipped before you write anything else.
 3. The findings — each with its inline citation, the retrieval date, and a
    **corroborated** or **single-sourced** label.
 4. A `Contradictions` section. Include it even when there are none, and say "none

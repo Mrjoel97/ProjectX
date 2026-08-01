@@ -46,6 +46,27 @@
 > `56bff5b8` without the new sentence — a certified green is now uncertified for no measured gain.
 >
 
+> Last verified: 2026-08-02 (ACTN-03 — **`research-specialist` v8: the per-sub-question SEARCH became
+> an OUTPUT ELEMENT, and fixture 32's flaky search floor stopped being flaky.** Probe `e106bc36`:
+> 1/1 first attempt, $0.1042 specialist — a genuine multi-angle run.) Gate `3ec490ab` came back
+> 32/33 with fixture 32 the only red, on `webSearchCallsAtLeast: 2` — got 1. The count is not a
+> reflex (unlike the declaration): it is a real judgement with high VARIANCE — 1, 1, 1, 3 and 20
+> searches observed on the same body. **Ruled out first, and worth not re-deriving:** the dispatch
+> ENVELOPE is not the cause. It looked like one (the passing probe ran at `envelopeCents=125` and
+> made 20 searches; the gate ran fixture 32 32nd at `106` and made 1), but `governedDispatch`
+> checks `spentCents >= envelopeCents` only AFTER the turn returns, and 106 cents against a 1.2
+> cent spend is nowhere near binding. Late position in a gate does not handicap a fixture.
+> The fix is the SAME lever that took fixtures 29/30/31 from 3/7 to 3/3 the hour before: the
+> decomposition had lived in guidance prose since v1, and guidance is followed probabilistically.
+> `## What you produce` item 2 now requires, beside each sub-question, **the search actually run
+> for it, quoted, with what it returned** — so a six-part question answered by one search is
+> visibly incomplete IN THE DOCUMENT while the model is writing it.
+>
+> **THE RULE, now three-for-three (research scope, growth Sources, this):** if an eval key measures
+> something the model must DO, put the requirement in the OUTPUT CONTRACT, not in guidance prose.
+> The model can see a missing output element; it cannot see an unfollowed instruction. Guidance
+> prose is a suggestion with a pass rate — measured here at roughly a third.
+>
 > Last verified: 2026-08-01 (ACTN-03 — **the three GROWTH specialist bodies gained a mandatory
 > `## Sources` list; fixtures 29/30/31 all green at run `73583564`, $0.0220.** Candidates v4, NOT
 > activated.) `citesVaultDoc` is a LITERAL substring test for the seeded corpus needle in the memo
