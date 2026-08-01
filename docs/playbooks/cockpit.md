@@ -1,5 +1,78 @@
 # Playbook: Email Chat Cockpit
-
+
+> Last verified: 2026-08-02 (18-07 — **the Output card: the created artifact is SEEN in the
+> conversation.** Documenting shipped surface that landed WITHOUT a playbook bump; `check-playbooks`
+> was green only because foreign lanes kept touching this file, so a green hook was never the
+> obligation being discharged.)
+>
+> `OutputCard` (`cards.tsx:1340`) is `SourceCard`’s dumb self-querying shape with ONE extra arg on
+> the SAME `byThread` query — `role: "created"` (`:1343`). Zero new tables, zero new queries, zero
+> new routes, zero new dependencies, no component library. It returns `null` on a turn that created
+> nothing, which is why the diff was 91 added lines and ZERO removed and the shipped grounding
+> `useQuery` call is byte-unchanged.
+>
+> **`vaultSources` IS DUAL-PURPOSE — never bare-`.first()` it.** No-role now means
+> `role === undefined`, so `SourceCard` cannot start rendering created rows. Any Output-card read
+> MUST filter `role === "created"`.
+>
+> **THE CARD ACCUMULATES; IT IS NOT PER-TURN.** There is no turn identity inside a tool closure and
+> `buildCockpitTools` is rebuilt per invocation, so the tool READS the thread’s latest
+> `role: "created"` row and APPENDS. The index is monotone over the whole conversation — which is
+> what the tool description promises — so `#2`/`#3` stay addressable across turns. That needed one
+> additive `internal.vaultSources.latestCreated`, because `byThread` is a `tenantQuery`
+> (auth-derived) and the tool plane passes `tenantId` EXPLICITLY.
+>
+> **ONE `vaultSources` row per turn carries ALL N `docIds`.** That is what makes `replace: 2`
+> addressable via `docIds[index-1]`. Do not split it into N rows later.
+>
+> **THE PLAN’S `titles[0]` HEADING WAS NOT IMPLEMENTABLE.** The row accumulates and a `replace: 2`
+> revise lands the newest title in slot 2 — nothing on the row records WHICH slot moved, so any
+> single-title heading is wrong after the first revision. The `#N` prefixes replaced it and double
+> as the affordance for the `replace` grammar the tool teaches.
+>
+> **BRAND §6 BEAT THE IN-FILE PRECEDENT — do NOT “restore” teal text.** `ConfChip` in this same file
+> sets `--teal-600` as 0.62rem TEXT, which §6 bans at ~2.9:1. The badge and the vault chip therefore
+> put the teal in the FILL (`color-mix(in srgb, var(--teal-400) 30%, var(--card))`) and keep `--ink`
+> for the label. Shipped copy, now the thing to match: `✍️ Created` / `✍️ Created · N` (capsTeal),
+> an UPPERCASE `DOCUMENT`/`POST` badge read off the row’s own `form` (absent ⇒ DOCUMENT), titles as
+> `/dashboard/vault` links, the subline **`Saved to your vault. Nothing was sent.`**, and `snippet`
+> as the preview. Tokens only — zero hex added, and ZERO `--held` (its 3 occurrences are comments
+> forbidding it).
+>
+> The badge reads `vaultSources.form`, written on every create AND every revise; FOUR tests go red
+> if it stops being.
+>
+> ⚠ **THE SC#6 E2E SPEC HAS NEVER RUN.** It is authored and `--list`-discoverable, which is not a
+> green run, and its own header says so. Two things are still owed: the Playwright RUN, and the
+> BRAND conformance JUDGEMENT — the card has never been rendered in a browser. Status 2026-08-02:
+> the onboarding half of that blocker is now CLEARED (`onboarding:__seedOnboardedTenant`, see
+> `onboarding.md`), and `cockpit-render.spec.ts` passes. The REMAINING gate is
+> `gmailAuth.gmailStatus.connected`, which hides the composer — `cockpit-activity.spec.ts:39` says
+> plainly: do NOT weaken that gate, run these in a live human-verify session with a connected user.
+>
+> **The spec MUST send `SMOKE::agent::create=long:SMOKE::route=direct_llm:: Quarterly one-pager`.**
+> The NESTED route prefix is part of the TOPIC and is load-bearing: `create=` only picks the tool,
+> it does NOT keep the model out of the loop. Without the prefix `generateObject` fires for real,
+> throws with no key, and NO vault row is written at all.
+>
+> Last verified: 2026-08-02 (**the reconnect banner is now clearable — by reconnecting, and by
+> hand.**) Reported live: the user reconnected Gmail and the banner stayed up with no way out.
+> Both of its triggers (`ReconnectBanner.tsx`) outlived the fix — a request parked at
+> `awaiting_reauth`, and an unread `gmail_reconnect` notification — because nothing retired
+> either on consent. (1) `gmailAuth.store` (the mutation `/gmail/callback` calls on every fresh
+> consent) now patches the tenant's unread `gmail_reconnect` notifications to `read: true`,
+> scoped by the `by_tenant_read` index. It writes the row directly rather than through
+> `notifications.markRead`, mirroring `flagExpiringTokens`' direct insert — same table, and the
+> notify path is a tenant surface. Held `awaiting_reauth` requests are deliberately NOT touched:
+> the reconnect-RESUME sweep still does not exist (see the 22.1 disconnect entry below), so
+> clearing them would claim a send that never happens. (2) The banner gained a ✕: it marks the
+> unread `gmail_reconnect` rows read (`notifications.markRead`, the `NotificationsBanner` idiom)
+> and files the visible hold ids in a `pikar:reconnectHoldsSeen` localStorage seen-set (the
+> `AbnormalBriefBanner` idiom — no schema change, and a NEW hold or a NEW expiry warning
+> re-surfaces the banner, so dismissing silences today's prompt and never tomorrow's). Guard:
+> `calendar.test.ts` "store — a fresh consent retires the reconnect prompt" pins the kind and
+> tenant scoping (other kinds and other tenants stay unread); 33/33 green.
+
 > Last verified: 2026-08-01 (ACTN-03 — **the `declareUnsupported` TOOL DESCRIPTION lost its
 > near-miss licence clause; `dispatch.test.ts`'s local-tool witness was rewired.**) Both files are
 > watched here. (1) `llm.ts`: the description had said to declare "including when all you found

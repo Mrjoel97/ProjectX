@@ -1,5 +1,30 @@
 # Playbook: Knowledge Vault & GraphRAG
-
+
+> Last verified: 2026-08-02 (18-07 — **agent-authored documents carry provenance in the grid, and
+> the vault-search ceiling on them is REAL.** Documenting shipped surface that landed WITHOUT a
+> playbook bump; `check-playbooks` was green only because a foreign lane had bumped this file.)
+>
+> **The `AGENT` chip** (`DocGrid.tsx:101`, rendered at `:340`) is gated on `doc.origin !== undefined`
+> — deliberately a PRESENCE test, not an equality test, so `agent_promoted` keeps its provenance too
+> (`:88`). Teal lives in the chip FILL with the label on `--ink`, per BRAND §6 — see `cockpit.md`
+> for why the in-file `ConfChip` precedent was NOT followed.
+>
+> ⚠ **KNOWN CEILING, annotated at the site (`DocGrid.tsx:148`): agent-CREATED documents BROWSE but
+> are NOT RETRIEVABLE.** `listVaultDocs` has no kind/status/origin filter, so they appear in the grid
+> for free. They will NEVER match `vault.vaultSearch` — same rag primitive — because they are
+> deliberately never ingested. **That absence IS the retrieval exclusion**, not an oversight.
+>
+> **Do NOT close this by ingesting them.** The upgrade path, if it is ever wanted, is a ~3-line
+> title-substring fallback unioned into `hitIds` right at that site. Whether to take it is an OPEN
+> OWNER QUESTION parked at 18-09’s gate — ingesting agent-authored text would put model output back
+> into the retrieval corpus that grounds the model, which is the loop this exclusion exists to break.
+>
+> Related, and the same principle one plane over: 16-09’s floor refuses to write a `web_research`
+> document at all when `webSearchCalls === 0`, because a never-searched answer must not become
+> retrievable. See `cockpit.md`. The `startIngest` call-site count in `vault.ts` remains the counted
+> exclusion invariant at **5** — `onboarding:__seedOnboardedTenant` was written to avoid becoming a
+> sixth.
+>
 > Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
 > subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
 > — `// @ts-expect-error import.meta.glob …` — from watched test files (vaultExtract.test.ts, vaultSweep.test.ts, vaultTranscribe.test.ts).
@@ -7,6 +32,7 @@
 > types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
 > only, zero additions, no assertion, invariant or product line touched anywhere. Backend
 > typecheck 150 → 50; full suite 54/54.
+> **Re-verified 2026-08-02** (a later session, closing the ⚠ above for THIS subsystem): vaultExtract.test.ts + vaultSweep.test.ts + vaultTranscribe.test.ts run green under vitest as part of a 10-file, 212/212 pass. The sweep's claim of behaviour-freedom now has evidence here, not just a typecheck delta.
 >
 > Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). For THIS subsystem: `extractDoc` → `extractPdf` → `extractHosted` now thread a `tenantId` (both were private helpers with no tenant in scope), as do `vaultIngest.ingestDoc` and `vaultTranscribe.transcribeDoc`. **15.2-06's per-page fan-out guard still stands** — its static-scan regexes in `vaultExtract.test.ts` were widened for the inserted parameter, NOT relaxed: the hosted call must still receive `pages[...]`, never the sliced whole document. `failureCopy.ts` gained a `deployment_budget_exhausted` entry mapping to the same PAUSED copy. Consequence worth knowing: a large fan-out extraction now bills ONE tenant's rail, so a big upload can exhaust that tenant's day — previously it drained everyone's.
 >
