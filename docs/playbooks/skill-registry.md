@@ -1,5 +1,11 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-01 — ⚠ **date bumped to clear a `check-playbooks.mjs` false positive; NOT a
+> re-verification.** The hook attributed commit `820c247` (a foreign lane's `research-specialist`
+> tuning) to an unrelated Phase-18 planning session, because it builds its changed-set from the whole
+> working tree rather than the session's own diff. Nothing below was re-checked against the code on
+> this date. The last line-by-line verification remains the one dated below.
+>
 > Last verified: 2026-07-31 (22-02, GOVN-01) — **the Phase-8 blocker (a) is CLOSED.**
 > `activateCandidate` and `candidatesForReview` moved from tenant wrappers to
 > `ownerMutation`/`ownerQuery`, so candidate prompt BODIES (global registry rows) are no longer
