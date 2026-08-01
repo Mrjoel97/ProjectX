@@ -11,7 +11,10 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+// NOTE: no `@ts-expect-error` above this line, unlike its 37 siblings. tsconfig.json includes
+// `vitest.config.mts`, which pulls Vite's global types in, so `import.meta.glob` typechecks and the
+// directive is DEAD — tsc reports TS2578 for it. That one dead directive is 100 of the backend's
+// 151 typecheck errors and 22.1-03 is sweeping them; do not add a 101st here.
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 
 const asTenant = (t: ReturnType<typeof convexTest>, tenantId: string) =>
