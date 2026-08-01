@@ -348,6 +348,21 @@ export default defineSchema({
     docIds: v.array(v.id("vaultDocuments")), // stable refs — PreviewModal click-through target (Plan 03)
     titles: v.array(v.string()), // doc titles = labels-to-UI (§4: never reach the audit payload)
     count: v.number(), // grounded-in-N — the card masthead
+    // Phase-18 (ACTN-04): this table now carries TWO card kinds. ABSENT ⇒ a grounding SOURCE
+    // row (every row that exists today, zero backfill); "created" ⇒ the Output card for
+    // artifacts the agent authored this turn. Same refs+labels discipline: titles/snippet are
+    // labels-to-UI and NEVER reach an audit payload (CLAUDE.md §4 — this module writes no
+    // log-plane row).
+    role: v.optional(v.literal("created")),
+    snippet: v.optional(v.string()), // first ~240 chars of the artifact — the card's preview
+    // The Output card's UPPERCASE type badge (DOCUMENT / POST) reads THIS. It cannot be derived
+    // from anything else the card has: `byThread` returns a `vaultSources` row, and the only
+    // short/long discriminator otherwise lives on `vaultDocuments.kind`, which this row never
+    // reads. Carrying it here keeps plan 18-07 at ZERO new Convex queries.
+    // ponytail: one form per row. If a single turn ever mixes forms, the row records the LAST
+    // call's form and the badge follows it — upgrade path is a parallel `forms: string[]`
+    // beside `titles`, not a second table.
+    form: v.optional(v.union(v.literal("short"), v.literal("long"))),
     createdAt: v.number(),
   }).index("by_thread", ["tenantId", "threadId"]),
 
@@ -722,6 +737,15 @@ export default defineSchema({
     // ponytail: no dedicated index — `by_tenant` + a `kind === "web_research"` filter is the
     // read. Upgrade path if freshness ever needs ranking at scale: a `by_tenant_kind` index.
     retrievedAt: v.optional(v.number()),
+    // Phase-18 (ACTN-04). ABSENT ⇒ user-supplied (every row that exists today; ZERO backfill).
+    // "agent" ⇒ agent-authored: excluded from vault retrieval (structurally — it is never
+    // ingested) and from the blueprint drift signal. "agent_promoted" ⇒ the user promoted it to
+    // reference material. BOTH literals are declared NOW so the DEFERRED promote control is a
+    // patch + a button, never a schema change.
+    // Why not infer from (source, kind): `source` is v.string() and vault.ts:126 casts a PUBLIC
+    // arg to it unchecked; 4 of 11 insert sites already store out-of-union values; `kind` grows
+    // every phase. Provenance needs its own discriminator.
+    origin: v.optional(v.union(v.literal("agent"), v.literal("agent_promoted"))),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse
