@@ -10,6 +10,18 @@
 //
 // ponytail: line-based md tokenizer; swap to marked tokens if inline/nested md needed.
 
+/** The output formats renderAndStore can emit. `pdf` is the Phase-3.3 default — callers that
+ *  omit `format` are byte-identical to today. */
+export type DocFormat = "pdf" | "html";
+
+const FORMAT: Record<DocFormat, { ext: string; mimeType: string }> = {
+  pdf: { ext: "pdf", mimeType: "application/pdf" },
+  html: { ext: "html", mimeType: "text/html" },
+};
+
+/** ext + MIME for a format — the ONE place either literal is written. */
+export const formatSpec = (f: DocFormat): { ext: string; mimeType: string } => FORMAT[f];
+
 /** A rendered block. Headings/para/bullet/ordered carry raw `text` (the renderer applies
  * `inlineRuns` for bold); a table carries its parsed header + body cells. */
 export type DocToken =
@@ -156,13 +168,15 @@ export function toWinAnsi(s: string): string {
 /**
  * Deterministic, LLM-free safe filename from a topic + ISO date. Lowercases, strips every
  * non-[a-z0-9] run to a single dash, appends the date, and disambiguates against `existing`
- * with a `-N` suffix. Always ends in `.pdf`.
+ * with a `-N` suffix. The extension follows `format`, defaulting to `pdf`.
  */
 export function buildDocFilename(
   topic: string,
   date: string,
   existing: readonly string[] = [],
+  format: DocFormat = "pdf",
 ): string {
+  const { ext } = FORMAT[format];
   const slug =
     topic
       .toLowerCase()
@@ -170,10 +184,10 @@ export function buildDocFilename(
       .replace(/^-+|-+$/g, "") || "document";
   const base = `${slug}-${date}`;
   const taken = new Set(existing);
-  let name = `${base}.pdf`;
+  let name = `${base}.${ext}`;
   let n = 1;
   while (taken.has(name)) {
-    name = `${base}-${n}.pdf`;
+    name = `${base}-${n}.${ext}`;
     n++;
   }
   return name;
