@@ -675,6 +675,66 @@ export const insertCreatedDoc = internalMutation({
     }),
 });
 
+/**
+ * Revise a created artifact IN PLACE (SC7) — the locked contract: ONE row, latest content wins,
+ * patching the SAME `_id`. No version history, no second row, no `versions` field.
+ *
+ * The `#index → docId` resolution happens INSIDE the mutation, off the per-thread Output-card row,
+ * so no raw `_id` ever reaches the model and no extra internalQuery is needed. The model addresses
+ * "#1" — it cannot address another tenant's row even by guessing.
+ *
+ * Refuses with `{ ok: false }`; it never throws. The caller turns a refusal into a sentence.
+ * Returns `oldStorageId` so the tool can delete the SUPERSEDED PDF *after* this patch persists
+ * (the regenerateAttachment ordering — never orphan a live ref).
+ */
+export const patchCreatedDoc = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    index: v.number(), // 1-based, straight off the tool arg
+    title: v.string(),
+    form: v.union(v.literal("short"), v.literal("long")),
+    markdown: v.string(),
+    contentHash: v.string(),
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, a): Promise<{ ok: false } | { ok: true; oldStorageId?: Id<"_storage"> }> => {
+    // ⚠ THE role FILTER IS LOAD-BEARING — do NOT simplify it back to .first(). vaultSources is
+    // DUAL-PURPOSE: a grounding row has no `role`, a created row carries role: "created". The table
+    // is append-only per thread and by_thread is latest-wins, so a bare .first() returns whatever
+    // the LAST turn wrote — one searchVault turn between a create and a revise and docIds[index-1]
+    // resolves to a USER-UPLOADED doc, the origin guard below correctly refuses, and the locked
+    // "make that one shorter" silently stops working. It fails safe, but it fails.
+    const card = (
+      await ctx.db
+        .query("vaultSources")
+        .withIndex("by_thread", (q) => q.eq("tenantId", a.tenantId).eq("threadId", a.threadId))
+        .order("desc")
+        // ponytail: 20-row window; raise only if a thread can exceed 20 turns between revises.
+        .take(20)
+    ).find((r) => r.role === "created");
+
+    const docId = card?.docIds[a.index - 1];
+    if (!docId) return { ok: false }; // no such #index → the tool returns a sentence
+
+    const doc = await ctx.db.get(docId);
+    // BOTH guards, not one: tenant (isolation) AND origin (never let a revise overwrite an UPLOAD,
+    // and never silently rewrite a doc the user PROMOTED to reference material).
+    if (!doc || doc.tenantId !== a.tenantId || doc.origin !== "agent") return { ok: false };
+
+    const oldStorageId = doc.storageId;
+    await ctx.db.patch(docId, {
+      title: a.title,
+      kind: a.form === "long" ? "created_document" : "created_content",
+      text: a.markdown,
+      size: byteLen(a.markdown),
+      contentHash: a.contentHash,
+      storageId: a.storageId, // undefined REMOVES it ⇒ long→short drops the Download button
+    });
+    return { ok: true, oldStorageId };
+  },
+});
+
 export const ingestExtractedText = internalMutation({
   args: {
     docId: v.id("vaultDocuments"),
