@@ -24,6 +24,12 @@ import { expect, test } from "vitest";
 // (audit.log aggregate) + workflow/workpool (startIngest → ingestDoc). Relative specifiers because
 // the packages block the deep component path.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+// 22.1-03: `rateLimiter` joins the set because `startIngest`'s workpool WORKER reaches the spend
+// rail, and that worker fires ASYNCHRONOUSLY after the mutation returns. Unregistered, it threw
+// `Component "rateLimiter" is not registered` from a scheduled job — which surfaced as a test
+// failure or not depending on whether the job landed before the file finished. That is why §4.2
+// was red alone and green in a full-suite run: a race, not a logic defect.
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
@@ -40,6 +46,9 @@ const workflowModules = import.meta.glob(
 const workpoolModules = import.meta.glob(
   "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
 );
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_onb";
 const FAKE_KEY = "sk-onboarding-test-key";
@@ -53,6 +62,7 @@ function setup(): TestConvex<typeof schema> {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   return t;
 }
 
