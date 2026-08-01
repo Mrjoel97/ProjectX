@@ -22,9 +22,19 @@ const parse = (out) => JSON.parse(out);
 // Same goal string across tenants → same safeText → same safeTextHash → ISOLATED
 // cache entries keyed by (tenantId, safeTextHash). Carries email + SSN so redaction
 // + the no-raw-PII scan have real needles. cache=1 routes THROUGH preCall + the cache.
+//
+// The trailing per-RUN uid is load-bearing — do NOT "simplify" it back to a constant.
+// `assertLlmCalledCount` counts rows in `audit`, which is INSERT-ONLY by design
+// (CLAUDE.md §3) and can never be reset. With a constant goal the safeTextHash is
+// constant too, so case 2's absolute counts accumulate across runs forever: 1 on the
+// first ever run, then 2, 3, 4… This script was silently unrunnable from 2026-07-12
+// (its previous run) until 2026-08-01 for exactly that reason. A fresh hash per run
+// makes the counts start from zero, while the goal stays IDENTICAL within the run —
+// which is what cases 1/2/5 actually depend on (cross-tenant isolation and the
+// same-tenant cache hit). Case 5 already used this trailing-uid idiom.
 const RAW_EMAIL = "jane.doe@example.com";
 const RAW_SSN = "123-45-6789";
-const PII_GOAL = `SMOKE::route=direct_llm::cache=1:: email ${RAW_EMAIL} about SSN ${RAW_SSN}`;
+const PII_GOAL = `SMOKE::route=direct_llm::cache=1:: email ${RAW_EMAIL} about SSN ${RAW_SSN} (run ${uid()})`;
 
 /** Seed one request and wait until its review gate is armed, then reject to close it.
  *  All assertions read persisted append-only/content-plane rows that survive the
