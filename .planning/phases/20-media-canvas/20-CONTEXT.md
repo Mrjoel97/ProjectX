@@ -272,6 +272,48 @@ At 480p/10 s Wan 2.5 = $0.50 per block: 3 blocks (30 s) = $1.50 PASS · 6 blocks
 - The per-tenant keying and the `deploymentMediaSpendCents` ceiling from the first planning pass
   both still apply, re-sized to these numbers.
 
+### D11 — The renderer runs in `apps/web`, token-free (LOCKED, owner, 2026-08-01)
+
+Vercel Sandbox's recommended OIDC auth is minted **for a Vercel deployment**. A Convex action is not
+one, so a Convex-hosted runner would need a `VERCEL_TOKEN` — and a Vercel personal access token is
+scoped to a **team, not a capability**: it can deploy, delete projects, and read every project
+environment variable. That is a strictly more powerful credential than anything this codebase holds,
+and it would falsify ADR-011's cleanest property (*"an API key in a deployment secret is the whole
+auth story"*), which is true of `FAL_KEY` precisely because `FAL_KEY` can only generate media.
+
+**Decision: the runner is a Next.js route handler — `apps/web/app/api/media/render/route.ts` —
+where OIDC is automatic and NO Vercel access token exists anywhere in the system.** A Convex action
+calls it with a shared bearer secret.
+
+- **Reuse, don't invent:** this is the shipped `/skillopt/export` pattern (`http.ts:84-97`) run in
+  the opposite direction, fail-closed 401 included. Read it before writing the route (ponytail §8).
+- The route is a **trust boundary in both directions**: it authenticates the caller (bearer, timing-
+  safe compare, fail closed on an unset secret) and validates everything the sandbox returns.
+- **Never pass a fal URL or any API key into the sandbox** (D9).
+- The binding duration ceiling is now the **Vercel function's**, not Convex's 10-minute action limit.
+  Research measured a 6-block 480p render at 60–150 s, so there is margin either way — but the plan
+  must state which ceiling applies and assert against it.
+- Rejected alternative, recorded for the ADR: `VERCEL_TOKEN` + `VERCEL_TEAM_ID` + `VERCEL_PROJECT_ID`
+  in Convex on a dedicated render-only Vercel team. Lazier by one hop, but it adds three secrets and
+  a team-wide credential to avoid one route file. Not worth it.
+
+### D12 — Two corrections the re-scope forces (from `20-RESEARCH-DELTA.md`)
+
+**a) Floor the cents ONCE, on the batch total — never per line item.** `chooseModel:134`'s
+fail-closed bias is `Math.max(1, Math.ceil(usd * 100))`. Applied per line item, a 6-block reel's
+$0.012 voice cost reserves $0.06 — a **5× over-reservation** that compounds on longer decks.
+`estimateBatchUsd` sums in fractional **USD**; `chooseMediaBatch` floors once. `mediaJobs` stores its
+estimate as USD/micro-dollars, not floored cents. **A unit test must pin it:** a 6-line batch of
+$0.002 items reserves **1 cent, not 6.**
+
+**b) Delete-on-success retention.** A job produces ~55 MB (6 clips ≈30 MB + 6 voice takes ≈5 MB +
+`final.mp4` ≈10 MB + captioned cut ≈10 MB). At D10's 2 jobs/day that is **3.3 GB/month** against a
+Convex Free/Starter allowance of **1 GB total**. Rule: on a successful render with a valid sidecar,
+`ctx.storage.delete()` the intermediate clip and voice ids and null those fields on `mediaJobs`. On
+FAILURE keep them — they are the debugging evidence, and failures are rare. `ponytail:` — *"delete-
+on-success is the whole retention policy; no TTL, no cron. Upgrade path if failed-render debris
+accumulates: a scheduled sweep of `mediaJobs` older than N days."*
+
 ### D5 — Reconciliation (Claude's discretion, per ponytail §8)
 
 Roadmap SC #5 requires a documented reconciliation step, not an automated one. The laziest
