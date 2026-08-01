@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildDocFilename,
@@ -5,6 +6,7 @@ import {
   formatSpec,
   inlineRuns,
   PLAN_ATTACHMENT_CAP_BYTES,
+  renderHtmlDocument,
   tokenizeMarkdown,
   toWinAnsi,
 } from "./documentGen";
@@ -143,6 +145,52 @@ describe("formatSpec", () => {
   it("is the one place the extension + MIME literals are written", () => {
     expect(formatSpec("pdf")).toEqual({ ext: "pdf", mimeType: "application/pdf" });
     expect(formatSpec("html")).toEqual({ ext: "html", mimeType: "text/html" });
+  });
+});
+
+describe("renderHtmlDocument", () => {
+  it("emits a self-contained page titled from the caller's title", () => {
+    const html = renderHtmlDocument("T", "# H\n\npara");
+    expect(html.startsWith("<!doctype html>")).toBe(true);
+    expect(html).toContain("<title>T</title>");
+  });
+
+  // (a) BEHAVIOURAL — hostile model prose renders as TEXT in every token slot.
+  it("renders hostile model prose as text, never as markup", () => {
+    const X = `<script>alert(1)</script><img src=x onerror="alert(1)">`;
+    const md = `# ${X}\n\n${X}\n\n- ${X}\n\n1. ${X}\n\n| ${X} |\n|---|\n| ${X} |`;
+    const html = renderHtmlDocument(X, md);
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/onerror/i);
+    expect(html).not.toMatch(/<img/i);
+    // Non-vacuity floor (house rule): prove the hostile string REACHED every slot, escaped —
+    // title + h1 + para + bullet + ordered + table-header + table-cell.
+    expect((html.match(/&lt;script&gt;/g) ?? []).length).toBeGreaterThanOrEqual(7);
+  });
+
+  // (b) STRUCTURAL — "enforced by a TEST, not by prompt instruction". A future edit that
+  // interpolates a raw model string into markup fails here even if it happens to be harmless today.
+  it("no model-authored string reaches markup: every interpolation in renderHtmlDocument is escaped", () => {
+    // CRLF-normalized: core.autocrlf=true means a fresh checkout has \r\n and the `\n}\n` anchor
+    // would silently miss, slicing the rest of the file instead of the function body.
+    const src = readFileSync(new URL("./documentGen.ts", import.meta.url), "utf8").replace(
+      /\r\n/g,
+      "\n",
+    );
+    const start = src.indexOf("export function renderHtmlDocument(");
+    expect(start).toBeGreaterThan(-1); // anchor floor
+    const end = src.indexOf("\n}\n", start);
+    expect(end).toBeGreaterThan(start); // the body really was delimited
+    const body = src.slice(start, end);
+    const interps = [...body.matchAll(/\$\{([^{}]*)\}/g)].map((m) => m[1]!.trim());
+    expect(interps.length).toBeGreaterThanOrEqual(4); // non-vacuity floor
+    const raw = interps.filter(
+      (x) => !/^esc\(/.test(x) && !/Html$/.test(x) && !/^HTML_[A-Z]+$/.test(x),
+    );
+    expect(
+      raw,
+      `raw interpolations in renderHtmlDocument (escape them or name them *Html): ${raw.join(", ")}`,
+    ).toEqual([]);
   });
 });
 
