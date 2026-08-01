@@ -1,5 +1,22 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-01 (ACTN-03 — **the `research-specialist` search instruction was RE-TUNED:
+> the one-search floor stopped capping the multi-search ceiling; candidate minted, NOT activated.**)
+> Commit `820c247` fixed zero-search runs by opening the search section with "issue at least ONE web
+> search on every run" — and the next gate run (28/33) showed the anchoring cost: fixture 32's
+> multi-part question ran ONE search against its `webSearchCallsAtLeast: 2` floor. The mandate stays
+> (zero-search runs were a real, measured failure: 3 of 6 dispatches) but is now NUMBER-FREE ("never
+> answer from memory alone — every run searches the web"), and "how many" is handed to
+> `## Decompose before you search`, which now states the norm: each sub-question gets its own
+> search, any question with more than one part takes at least two searches, and a single-search run
+> is defensible only for a genuine single-fact lookup. Standard 2-file mirror (`.md` edited,
+> `researchSpecialistSkillBody` regenerated — there is still NO codegen script), drift test 15/15,
+> `--self-check` 33 fixtures green, backend tsc at the 150 baseline. Seeds as the NEXT candidate
+> version — read it back (maxVersion+1 collision rule below). Reminder for the next gate attempt,
+> paid for twice now: `--skill` is MULTI-pin and the gate run must carry ALL FIVE pins —
+> `cockpit-agent`, `offer-architect`, `money-model-designer`, `lead-engine`,
+> `research-specialist` — the 28/33 attempt dropped three of them and certified nothing.
+>
 > Last verified: 2026-08-01 — ⚠ **date bumped to clear a `check-playbooks.mjs` false positive; NOT a
 > re-verification.** The hook attributed commit `820c247` (a foreign lane's `research-specialist`
 > tuning) to an unrelated Phase-18 planning session, because it builds its changed-set from the whole
