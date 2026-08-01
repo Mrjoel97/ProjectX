@@ -1174,6 +1174,9 @@ const VERB: Record<string, [running: string, done: string]> = {
   // 22.1b: the research specialist declaring that what it retrieved does not SUPPORT the claim.
   // MANDATORY beside the schema literal — traceParity.test.ts asserts set equality BOTH ways.
   declareUnsupported: ["Weighing the evidence…", "Reported an evidence gap"],
+  // Phase-18 (ACTN-04): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED.
+  createDocument: ["Writing it up…", "Saved it to your vault"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

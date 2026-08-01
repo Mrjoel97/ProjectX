@@ -519,6 +519,14 @@ export default defineSchema({
       // AI SDK SWALLOWS → no trace row in prod while every offline test passes (Research Pitfall 4;
       // this codebase has been bitten at searchVault and evaluateBusiness).
       v.literal("declareUnsupported"),
+      // Phase-18 (ACTN-04): the in-loop artifact-creation tool. Same swallow trap as every
+      // literal above — without it the step insert throws inside an AI-SDK callback and is
+      // silently swallowed, so prod has no trace row while every offline test stays green.
+      // ponytail: two live tools — resetPlan and recordScorecardAnswer (bare names DELIBERATELY,
+      // never spelled in this file's own v.literal idiom: traceParity.test.ts regexes this whole
+      // slice, comments included, so the idiomatic spelling would inject phantom literals) — are
+      // still trace-less here. Deliberately NOT fixed by Phase 18; see 18-RESEARCH.md Pitfall 2.
+      v.literal("createDocument"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
