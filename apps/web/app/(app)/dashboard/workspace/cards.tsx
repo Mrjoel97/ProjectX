@@ -1287,6 +1287,94 @@ function SourceCard({ threadId }: { threadId?: string }) {
   );
 }
 
+// ---------- OUTPUT CARD (ACTN-04) ----------
+
+// BRAND §5 specifies an "Output card": a titled card with an UPPERCASE type badge pill, a subline
+// and the rendered artifact. This is SourceCard's shape with one extra arg on the SAME query
+// (`role: "created"`) — zero new Convex surface, zero new tables, and it returns null on a turn
+// that created nothing, exactly like SourceCard. The dual-purpose vaultSources table makes the
+// role filter load-bearing: a bare read would hand this card a GROUNDING row.
+//
+// The row ACCUMULATES over the conversation (18-06): `titles`/`docIds` carry every artifact this
+// thread has created, while `snippet` and `form` belong to the MOST RECENT write. So the titles
+// render as the #index list that createDocument's `replace` grammar addresses ("make the second
+// one shorter"), and the badge + preview describe the newest artifact only.
+// ⛔ No amber anywhere: --held is the approval gate's ALONE (BRAND §2). A created artifact is not held.
+
+/** `form` → the UPPERCASE badge word. `form` is the row's own field (written on every create AND
+ *  every revise) and is the ONLY thing this card can read for the type: byThread returns a
+ *  vaultSources row, and the short/long discriminator otherwise lives on vaultDocuments.kind,
+ *  which this card deliberately never queries. */
+const FORM_LABEL = { long: "DOCUMENT", short: "POST" } as const;
+
+// The type badge pill. Token-only (the DocGrid icon-badge tint + --ink text): --teal-600 on white
+// is ~2.9:1 and BRAND §6 bans it for small text, so the teal lives in the FILL and the label stays
+// --ink. Never --held.
+const typeBadge = {
+  flex: "none",
+  fontSize: "0.62rem",
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  padding: "0.1rem 0.5rem",
+  borderRadius: "1rem",
+  color: "var(--ink)",
+  background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+  border: "1px solid var(--teal-400)",
+} as const;
+
+// The rendered artifact: the newest write's stored markdown, first ~240 chars as written by the
+// tool. A PREVIEW, not a renderer — the vault owns the full document (CONTEXT lock: do not invent
+// a second way to display an artifact). Neutral --canvas sheet, the insufficientBox idiom below.
+const snippetSheet = {
+  margin: "0.7rem 0 0",
+  border: "1px solid var(--rule)",
+  borderRadius: "0.6rem",
+  background: "var(--canvas)",
+  padding: "0.7rem 0.85rem",
+  color: "var(--ink-soft)",
+  fontSize: "0.85rem",
+  whiteSpace: "pre-wrap" as const,
+  overflowWrap: "anywhere" as const,
+} as const;
+
+function OutputCard({ threadId }: { threadId?: string }) {
+  const created: VaultSources | null | undefined = useQuery(
+    api.vaultSources.byThread,
+    threadId ? { threadId, role: "created" } : "skip",
+  );
+  if (!created || created.count === 0) return null;
+  // Absent `form` ⇒ DOCUMENT: rows written before this phase carry no form, and guessing from
+  // `count` would be a heuristic where a stored closed enum already exists.
+  const kind = FORM_LABEL[created.form ?? "long"];
+  const many = created.count > 1;
+  return (
+    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="output-card">
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        {/* BRAND §3 tracked-caps section label; count-aware because one turn may create several. */}
+        <p style={capsTeal}>✍️ Created{many ? ` · ${created.count}` : ""}</p>
+        <span style={typeBadge}>{kind}</span>
+      </div>
+      <ul style={{ listStyle: "none", margin: "0.7rem 0 0", padding: 0, display: "grid", gap: "0.4rem" }}>
+        {created.titles.map((title, i) => (
+          // ponytail: doc-level link to /dashboard/vault — the SAME context-sanctioned click-through
+          // SourceCard uses, and the inline-PreviewModal upgrade is deferred with SourceCard's.
+          <li key={created.docIds[i] ?? title} style={{ ...traceText, fontWeight: 600 }}>
+            {many && <span style={{ color: "var(--ink-soft)", fontWeight: 500 }}>#{i + 1} </span>}
+            <Link href="/dashboard/vault" data-testid="output-title" style={{ color: "var(--teal-600)" }}>
+              {title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {/* Honest about what happened (BRAND §1): createDocument SAVES, it never sends. */}
+      <p style={{ margin: "0.55rem 0 0", fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+        Saved to your vault. Nothing was sent.
+      </p>
+      {created.snippet && <div style={snippetSheet}>{created.snippet}</div>}
+    </div>
+  );
+}
+
 // ── EVALUATION card (BEVL-01) ───────────────────────────────────────────────────────────────────
 type Evaluation = NonNullable<FunctionReturnType<typeof api.evaluations.byThread>>;
 
@@ -1699,6 +1787,9 @@ export function CardList({
       {/* Renders above the plan-status branches like the trace — grounding happens on pure advice
           turns with no plan row, so it must not sit under any plan-status gate. Self-reads its data. */}
       <SourceCard threadId={threadId} />
+      {/* Same footing as SourceCard (ACTN-04 SC#6): createDocument saves and never sends, so a
+          creating turn carries no plan row at all — the Output card must not sit under a plan gate. */}
+      <OutputCard threadId={threadId} />
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />
