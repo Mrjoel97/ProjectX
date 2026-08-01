@@ -312,8 +312,48 @@ const provUsage = (input: number, output: number) => ({
   inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
   outputTokens: { total: output, text: output, reasoning: 0 },
 });
-const REPLY_STEP = {
+/** A step that never searched. `webSearchCalls` counts provider-executed tool calls
+ *  (`llm.ts:2412`), so a pure-text step reports ZERO — which since 16-09's structural floor means
+ *  the dispatcher writes no vault document. Kept as the NEGATIVE fixture only. */
+const UNSEARCHED_STEP = {
   content: [{ type: "text", text: FINDINGS }],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: provUsage(100_000, 100_000), // ≈ 8 cents on DEFAULT_MODEL — inside the envelope
+  warnings: [],
+};
+
+/** The exact provider-executed part shape observed by the 16-02 live probe (the `searchedStep`
+ *  helper in `dispatch.test.ts`, kept in sync by hand — there is no shared test barrel). This is
+ *  what a REAL research run looks like, and the default for every positive case here: before
+ *  16-09 these tests ran on a step that made no search at all, which the floor now correctly
+ *  refuses to persist. */
+const REPLY_STEP = {
+  content: [
+    {
+      type: "tool-call",
+      toolCallId: "ws-1",
+      toolName: "web_search",
+      input: "{}",
+      providerExecuted: true,
+    },
+    {
+      type: "tool-result",
+      toolCallId: "ws-1",
+      toolName: "web_search",
+      result: {
+        action: { type: "search", queries: ["ziggurat metro session pricing"] },
+        sources: [{ type: "url", url: "https://example.test/pricing" }],
+      },
+    },
+    {
+      type: "source",
+      sourceType: "url",
+      id: "s-0",
+      url: "https://example.test/pricing",
+      title: "Source 0",
+    },
+    { type: "text", text: FINDINGS },
+  ],
   finishReason: { unified: "stop", raw: "stop" },
   usage: provUsage(100_000, 100_000), // ≈ 8 cents on DEFAULT_MODEL — inside the envelope
   warnings: [],
@@ -366,6 +406,59 @@ describe("the dispatcher — not the specialist — writes the findings", () => 
     expect(plan?.status).toBe("proposed");
     expect(plan?.kind).toBe("memo");
     expect(plan?.body).toContain(FINDINGS);
+  });
+
+  // ── 16-09's structural floor ────────────────────────────────────────────────────────────────
+  //
+  // Measured, not hypothetical: run 56bff5b8 fixture 34 declared the question unsupported having
+  // made ZERO searches, and run eval-f795ede0 logged webSearchCalls of 1,1,1,0,0,4 across six
+  // dispatches. The skill body has said "every run searches the web, without exception" through
+  // three separate tunings and the model violated it anyway — so containment is CODE.
+  test("a run that never searched writes NO vault document — it is not research", async () => {
+    const t = newTest();
+    const planId = await stagedPlan(t);
+    const res = await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      dispatchArgs(planId, { primary: [UNSEARCHED_STEP] }),
+    );
+
+    // The RUN still succeeds and still costs money — this is not a refusal.
+    expect(res.ok).toBe(true);
+    expect(res.ok && res.webSearchCalls).toBe(0);
+    // ...but nothing retrievable was created. The vault is a RETRIEVAL surface: `vaultSearch`
+    // returns arbitrary CHUNKS, so a slice of this body would carry neither NOT_RESEARCHED_LABEL
+    // (which sits BEFORE the fence) nor the fence, and the Phase-12 engine would cite a
+    // model-memory answer as a grounded market fact.
+    expect((await readDocs(t)).filter((d) => d.kind === "web_research")).toHaveLength(0);
+    expect(res.ok && res.vaultDocId).toBeUndefined();
+
+    // NOTHING VISIBLE IS WITHHELD. The memo card is landed by `dispatchAndLand` BEFORE the
+    // persist seam, so the user still reads the findings AND the honest label. Withholding the
+    // card too would hide the failure instead of containing it.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.body).toContain(FINDINGS);
+
+    // The skip is auditable by CODE, with refs and counts only (§4) — never the body.
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const skipped = rows.filter((r) => r.eventType === "research.persist_skipped");
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]?.payload).toMatchObject({ reason: "not_researched", webSearchCalls: 0 });
+    expect(JSON.stringify(skipped[0]?.payload)).not.toContain(FINDINGS);
+  });
+
+  // NON-VACUITY for the case above: the SAME dispatch, differing ONLY in whether the step made a
+  // provider-executed search, DOES persist. Without this the assertion above would pass on a
+  // dispatcher that never writes a document at all.
+  test("the same dispatch WITH a search does persist — the floor is the only difference", async () => {
+    const t = newTest();
+    const planId = await stagedPlan(t);
+    const res = await t.action(internal.dispatch.__runSpecialistWithScript, dispatchArgs(planId));
+
+    expect(res.ok && res.webSearchCalls).toBeGreaterThan(0);
+    expect((await readDocs(t)).filter((d) => d.kind === "web_research")).toHaveLength(1);
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(rows.filter((r) => r.eventType === "research.persist_skipped")).toHaveLength(0);
   });
 
   test("a governed refusal writes NO vault document — a paused conversation is not a finding", async () => {

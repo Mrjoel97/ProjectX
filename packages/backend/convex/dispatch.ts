@@ -594,6 +594,43 @@ async function persistResearchFindings(
   // SUCCESS PATH ONLY. A governed refusal is a paused conversation, not a finding — it writes no
   // vault document at all (its reply is already on the card via `fallbackBody`).
   if (!res.ok) return res;
+  // STRUCTURAL FLOOR (16-09): a run that never searched is not research, so it does not earn a
+  // RETRIEVABLE artifact. `evidenceVerdict` already reads `webSearchCalls === 0` as
+  // `not_researched` and `researchFindingsFence` already stamps NOT_RESEARCHED_LABEL on the stored
+  // body — that labelling is deliberate and stays exactly as it is ON THE MEMO CARD, which is
+  // landed by `dispatchAndLand` BEFORE this function runs. So the user still reads the findings
+  // and still reads the label; nothing visible is withheld. What is withheld is the VAULT
+  // DOCUMENT, and only because the vault is a RETRIEVAL surface: `vaultSearch` returns arbitrary
+  // CHUNKS, and a chunk sliced out of the body carries neither the label (which sits BEFORE the
+  // fence) nor the fence itself, so a never-searched model-memory answer could re-enter a model
+  // context stripped of every warning and be cited by the Phase-12 engine as a grounded market
+  // fact. The label contains it for a HUMAN reader of the card; only not-writing-it contains it
+  // for a RETRIEVAL reader.
+  //
+  // Measured, not speculative: run 56bff5b8 fixture 34 declared the question unsupported having
+  // made ZERO searches, and run eval-f795ede0 logged webSearchCalls of 1,1,1,0,0,4 across six
+  // dispatches — the prose mandate ("every run searches the web, without exception") was violated
+  // twice in six attempts, which is why this is code and not another sentence in the body.
+  //
+  // This does NOT force a search and cannot make a `webSearchCallsAtLeast` fixture pass — it only
+  // stops the bad artifact. Forcing the first tool call is a separate, unmade decision (it would
+  // edit llm.ts, which carries a zero-edit pin from 17.1-07).
+  //
+  // ponytail: refusal only, no retry. A re-dispatch on 0 searches would raise the search rate but
+  // costs a second wall clock against DISPATCH_TIMEOUT_MS (210s) — and clock exhaustion is already
+  // a live failure mode (run 56bff5b8 fixture 34 attempt 1 returned `incomplete: true`). Upgrade
+  // path if the zero-search rate stays material: retry ONCE inside the existing soft-cutoff budget.
+  if (res.webSearchCalls === 0) {
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "research.persist_skipped",
+      actor: "system",
+      // Refs and COUNTS only (§4) — never the body, never the question.
+      payload: { ...lineageRefs(args), reason: "not_researched", webSearchCalls: 0 },
+    });
+    return res;
+  }
   try {
     const vaultDocId = await ctx.runMutation(internal.research.persistFindings, {
       tenantId: args.tenantId,

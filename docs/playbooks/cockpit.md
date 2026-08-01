@@ -1,5 +1,20 @@
 # Playbook: Email Chat Cockpit
-
+
+> Last verified: 2026-08-01 (16-09 — **a research run that never searched writes no vault
+> document.**) `persistResearchFindings` (`dispatch.ts`) refuses to write the `web_research` row
+> when `webSearchCalls === 0`, auditing `research.persist_skipped` with refs+counts only. The memo
+> CARD is deliberately untouched — it lands before the persist seam and keeps its
+> `NOT_RESEARCHED_LABEL`, so nothing the user can see is withheld. Only the RETRIEVABLE artifact is,
+> because `vaultSearch` returns arbitrary CHUNKS and a slice carries neither the label (which sits
+> BEFORE the fence) nor the fence. Mutation-verified: disabling the guard turned exactly 1 of 17
+> `research.test.ts` tests RED; restoring it returned 17/17. Backend typecheck 150, delta 0, zero
+> non-test. Does NOT force a search — see `skill-registry.md` for that separate lever.
+>
+> ⚠ SCOPE OF THIS BUMP: it covers `dispatch.ts` + `research.test.ts` ONLY. A CONCURRENT session’s
+> uncommitted edits to `llm.ts`, `specialists.ts`, `specialists.test.ts` and the
+> `research-specialist` body sat in the same working tree when the hook computed its changed-set
+> (the hook reads the whole tree, not this session’s diff). Those are NOT verified here and this
+> line makes no claim about them.
 > Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). For THIS subsystem: `llm.ts`'s `recordModelSpend` gained a leading `tenantId` parameter (it is the shared spend sink — seven call sites route through it, so it is threaded once there rather than seven times), `runCockpitAgent`/`route`/`draft` pass their tenantId to `preCall`, and `digestInbox`/`draftReply`/`draftVoiceBrief` now destructure the `tenantId` they already declared. `pipeline.ts` gained the `deployment_budget_exhausted` BlockReason + label. **`dispatch.ts`'s sub-agent envelope now reads the TIGHTER of the two rails** — sizing it off a tenant's personal allowance when the ceiling is what will actually refuse would over-promise the envelope. `ENVELOPE_FRACTION` still takes its 25% of whatever that min() returns.
 >
 > PRIOR 2026-08-01 (22.1-01) — **Disconnect is real, it revokes at Google before it
