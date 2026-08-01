@@ -1,9 +1,9 @@
 ---
 phase: 20
 slug: media-canvas
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: planned
+nyquist_compliant: true
+wave_0_complete: false  # 20-01 + 20-04 create the missing test files
 created: 2026-08-01
 ---
 
@@ -45,9 +45,46 @@ created: 2026-08-01
 
 *Filled by the planner once plans exist. Every row must trace to an SC below.*
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | | | MEDIA-01 | | | | ⬜ pending |
+| Task ID | Plan | Wave | SC | Test Type | Automated Command | File Exists | Status |
+|---------|------|------|----|-----------|-------------------|-------------|--------|
+| 01-T1 | 20-01 | 1 | SC5 | playbook gate | `node scripts/check-playbooks.mjs` | ❌ create | ⬜ pending |
+| 01-T2 | 20-01 | 1 | SC3 | pure unit, $0 | `pnpm --filter @pikar/core test -- storyboard` | ❌ create | ⬜ pending |
+| 01-T3 | 20-01 | 1 | SC3, SC5 | pure unit + static scan | `pnpm --filter @pikar/cost test` | ❌ create | ⬜ pending |
+| 02-T1 | 20-02 | 1 | SC4 | schema | `pnpm --filter @pikar/backend test -- schema` | ✅ exists | ⬜ pending |
+| 02-T2 | 20-02 | 1 | Surface | static scan | `pnpm --filter @pikar/backend test -- traceParity` | ✅ exists (goes RED until both land) | ⬜ pending |
+| 02-T3 | 20-02 | 1 | SC4 | unit | `pnpm --filter @pikar/backend test -- plans` | ✅ exists | ⬜ pending |
+| 03-T1 | 20-03 | 2 | Surface | round trip | `pnpm --filter @pikar/core test -- storyboard` | ❌ extend | ⬜ pending |
+| 03-T2 | 20-03 | 2 | Surface | unit (md↔ts drift + UNGATED) | `pnpm --filter @pikar/contracts test` | ✅ add rows | ⬜ pending |
+| 03-T3 | 20-03 | 2 | Surface | round trip | `pnpm --filter @pikar/core test -- storyboard` | ❌ extend | ⬜ pending |
+| 04-T1 | 20-04 | 2 | SC3 | convex-test, $0 | `pnpm --filter @pikar/backend test -- guardrails` | ✅ exists | ⬜ pending |
+| 04-T2 | 20-04 | 2 | SC3 | convex-test, $0 | `pnpm --filter @pikar/backend test -- media` | ❌ Wave 0 → created here | ⬜ pending |
+| 04-T3 | 20-04 | 2 | SC3 | convex-test concurrency + mutation check | `pnpm --filter @pikar/backend test -- media` | ❌ created here | ⬜ pending |
+| 05-T1 | 20-05 | 3 | SC1 | unit, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 05-T2 | 20-05 | 3 | SC1, SC2 | unit + static scan | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 05-T3 | 20-05 | 3 | SC5 | playbook gate | `node scripts/check-playbooks.mjs` | ✅ exists | ⬜ pending |
+| 06-T1 | 20-06 | 4 | SC1 | convex-test http, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 06-T2 | 20-06 | 4 | SC4 | convex-test, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 06-T3 | 20-06 | 4 | SC2, SC4 | static scan | `pnpm --filter @pikar/backend test -- llmRedaction` | ✅ add cases | ⬜ pending |
+| 07-T1 | 20-07 | 5 | SC3 | unit + typecheck delta | `pnpm --filter @pikar/core test -- actionType` | ✅ exists | ⬜ pending |
+| 07-T2 | 20-07 | 5 | SC3 | convex-test, $0 | `pnpm --filter @pikar/backend test -- cockpitTools` | ✅ exists | ⬜ pending |
+| 07-T3 | 20-07 | 5 | SC3 | regression, $0 | `pnpm --filter @pikar/backend test -- cockpitTools` | ✅ exists | ⬜ pending |
+| 08-T1 | 20-08 | 6 | Surface | unit | `pnpm --filter @pikar/core test -- specialists` | ✅ extend | ⬜ pending |
+| 08-T2 | 20-08 | 6 | SC3, Surface | unit + static scan | `pnpm --filter @pikar/core test -- specialists` | ✅ extend | ⬜ pending |
+| 08-T3 | 20-08 | 6 | SC2 | convex-test, $0 | `pnpm --filter @pikar/backend test -- dispatch` | ✅ exists | ⬜ pending |
+| 09-T1 | 20-09 | 6 | SC2, SC4 | convex-test, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 09-T2 | 20-09 | 6 | SC3 | convex-test, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 09-T3 | 20-09 | 6 | SC4 | convex-test isolation, $0 | `pnpm --filter @pikar/backend test -- media` | ✅ exists | ⬜ pending |
+| 10-T1 | 20-10 | 7 | SC2 | web build | `pnpm --filter @pikar/web build` | n/a | ⬜ pending |
+| 10-T2 | 20-10 | 7 | SC2, SC4 | web build + static scan | `pnpm --filter @pikar/web build` | n/a | ⬜ pending |
+| 10-T3 | 20-10 | 7 | SC3 | web build | `pnpm --filter @pikar/web build` | n/a | ⬜ pending |
+| 11-T1 | 20-11 | 8 | SC1, SC5 | doc + playbook gate | `node scripts/check-playbooks.mjs` | ❌ create ADR-012 | ⬜ pending |
+| 11-T2 | 20-11 | 8 | SC5 | doc + playbook gate | `node scripts/check-playbooks.mjs` | ✅ exists | ⬜ pending |
+| 11-T3 | 20-11 | 8 | SC1, SC5 | **MANUAL — owner live gate ≈$0.26** | manual (see Manual-Only table) | n/a | ⬜ pending |
+| 12-T1 | 20-12 | 9 | Surface | **MANUAL — blocking decision checkpoint** | manual (Phase-16 stream check) | n/a | ⬜ pending |
+| 12-T2 | 20-12 | 9 | Surface | unit (md↔ts drift) | `pnpm --filter @pikar/contracts test` | ✅ exists | ⬜ pending |
+
+> Every row above is MEDIA-01. All 12 plans carry `requirements: [MEDIA-01]`.
+> **Offline cost of every automated row: $0.** The only spend in this phase is 11-T3.
 
 ### Success-Criteria → Test Map (settled by research)
 
