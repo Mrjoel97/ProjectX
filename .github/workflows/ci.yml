@@ -1,0 +1,81 @@
+# ci — the enforced typecheck / lint / test / build gate (Phase 22.1 SC3).
+#
+# Before this file existed, "typecheck is at the exact 150 baseline" was a number a human carried
+# between sessions and compared by eye. That works for one contributor on one machine and fails the
+# moment it matters. This workflow is the machine that carries it instead.
+#
+# ORDERING IS LOAD-BEARING: `convex codegen` MUST run before `pnpm typecheck`. `convex/_generated/`
+# is gitignored (CLAUDE.md §7, .gitignore:11), so a checkout has no generated API/DataModel types.
+# Typechecking without codegen does not pass vacuously — every Convex import fails loudly — but the
+# tempting "fix" for that noise is to exclude `convex/**` from typecheck, which WOULD be vacuous.
+# Do not. See docs/playbooks/ci-gate.md.
+#
+# `convex codegen` is NOT hermetic: it contacts the deployment ("Downloading current deployment
+# state... Uploading functions to Convex"). The CLI documents this as not modifying deployed code,
+# and skillopt.yml already runs `convex run` against the same deployment, so this is precedent
+# rather than new exposure — but it does mean a deployment outage reads here as a CI failure.
+#
+# Secrets / variables (owner's own deployment):
+#   CONVEX_DEPLOY_KEY       — secret; without it codegen cannot resolve the deployment
+#   NEXT_PUBLIC_CONVEX_URL  — repository VARIABLE; `next build` bakes it into the client bundle
+
+name: ci
+
+# Quoted so YAML keeps the string key `on` (unquoted `on` parses to boolean true) — matches skillopt.yml.
+"on":
+  push:
+    branches: [main]
+  pull_request:
+
+# One run per ref. A superseded push is cancelled rather than queued — the only run that matters is
+# the one for the current tip.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # corepack before setup-node so `cache: pnpm` can find the pnpm binary pinned by
+      # packageManager in the root package.json.
+      - name: Enable corepack (pins pnpm from packageManager)
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      # --typecheck disable: codegen's own bundled `tsc --noEmit` would run a second, differently
+      # configured typecheck and mask which step actually failed. The real one is the next step.
+      - name: Codegen (convex/_generated is gitignored — must exist before typecheck)
+        working-directory: packages/backend
+        run: node node_modules/convex/bin/main.js codegen --typecheck disable
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # `biome ci` = formatter + organizeImports + linter, no writes. Errors block; warnings do not.
+      # Do NOT add --error-on-warnings: 134 pre-existing noNonNullAssertion warnings would redden the
+      # gate on day one and the pressure would be to weaken the rule set rather than fix anything.
+      - name: Lint
+        run: pnpm lint
+
+      # Unit tests only (vitest). apps/web's Playwright suite is `test:e2e` and is deliberately NOT
+      # part of this gate — it needs a live deployment and a seeded tenant.
+      - name: Test
+        run: pnpm test
+
+      # The deployment half of SC3: prove the artifact a deploy would ship actually builds. Actual
+      # Vercel deployment automation belongs to Phase 25, which owns the custom-domain/deploy call.
+      - name: Build
+        run: pnpm build

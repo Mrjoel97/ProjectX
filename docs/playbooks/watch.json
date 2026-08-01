@@ -1,5 +1,12 @@
 {
   "_unassigned": [],
+  "ci-gate.md": [
+    ".github/workflows/ci.yml",
+    "package.json",
+    "turbo.json",
+    "biome.json",
+    "tsconfig.base.json"
+  ],
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
     "packages/backend/convex/lib/allowlist.ts",

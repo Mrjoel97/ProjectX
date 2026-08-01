@@ -11,6 +11,8 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @pikar/web test:e2e",
     "eval:golden": "pnpm --filter @pikar/backend eval:golden",
