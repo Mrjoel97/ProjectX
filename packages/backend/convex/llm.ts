@@ -1775,6 +1775,154 @@ export function buildCockpitTools(
         );
       },
     }),
+    // ── createDocument (ACTN-04) — the standalone-artifact tool ────────────────────────────────────
+    // A SIBLING closure of renderAndStore, deliberately NOT a caller of it: renderAndStore captures
+    // `planId` and writes plans.recordAttachments on failure, which is the EMAIL-attachment plane.
+    // A created artifact has no plan, no recipient and no delivery — it is SAVED, never sent, and
+    // that absence is the whole of SC2 (there is no send/dispatch/workflow reference in this body).
+    //
+    // markdown is the artifact of record for BOTH forms (locked). Long-form additionally renders a
+    // DERIVED PDF whose storageId is the ONLY signal the Download button reads; short-form simply
+    // does not have one. No flag, no mime check — a structural absence.
+    createDocument: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      // The trigger rule rides the closing clause (the generateAttachment precedent) — there is no
+      // `confirmed` argument, because a model-supplied confirmation flag is the model grading its
+      // own trigger. It is verified by live UAT, never by a code branch.
+      description:
+        "Create a standalone document or piece of content and save it to the user's vault. " +
+        "Use `long` for proposals, one-pagers and reports; `short` for posts, ad copy or headlines. " +
+        "Pass `replace` to rewrite a document created earlier in this conversation in place. " +
+        "It saves only — it never sends anything. " +
+        "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
+        "would write and wait for a yes.",
+      inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
+        type: "object",
+        properties: {
+          topic: { type: "string", description: "What to write, in plain language." },
+          // CLOSED enum — the setMode precedent. It deterministically selects BOTH the skill row
+          // and the PDF branch, which keeps the short/long split in code rather than a heuristic.
+          form: {
+            type: "string",
+            enum: ["short", "long"],
+            description: "long = proposal, one-pager, report. short = post, ad copy, headline.",
+          },
+          // The locked replace-in-place revision. 1-based #index over what this conversation has
+          // already created — the regenerateAttachment idiom. NEVER a raw id: the index resolves
+          // inside patchCreatedDoc, so no _id ever enters the model's context.
+          replace: {
+            type: "number",
+            description:
+              "1-based #index of a document already created in this conversation to rewrite in place.",
+          },
+        },
+        required: ["topic", "form"], // `replace` stays OPTIONAL — create is the default shape
+        additionalProperties: false,
+      }),
+      execute: async ({ topic, form, replace }): Promise<string> => {
+        const plan = await readPlan(); // threadId + the cross-tenant guard — NEVER from the model
+        const scan = scanText(topic);
+        // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
+        // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
+        if (!scan.ok)
+          return "I couldn't write that — the topic couldn't be checked for personal data. Tell the user plainly and ask them to rephrase it.";
+        const safeText = scan.value.safeText;
+        // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
+        // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
+        // is CORRECT — it is deliberately outside GATED_SKILLS, so the active row is the intent.
+        const skillName = form === "short" ? CONTENT_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
+        let draft: { title: string; markdown: string };
+        let storageId: Id<"_storage"> | undefined;
+        try {
+          draft = await ctx.runAction(internal.llm.draftDocument, {
+            tenantId,
+            safeText,
+            safeTextHash: await contentHash(safeText),
+            skillName,
+            skillVersion: skillVersions?.[skillName],
+          });
+          if (form === "long") {
+            // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
+            // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
+            const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
+            storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+          }
+        } catch {
+          return "I couldn't create that document — drafting or rendering it failed. Tell the user and offer to try again.";
+        }
+        const hash = await contentHash(draft.markdown);
+        const docArgs = {
+          tenantId,
+          title: draft.title,
+          form,
+          markdown: draft.markdown,
+          contentHash: hash,
+          storageId,
+        };
+        // The Output card this thread already has (latest-wins, role-filtered). A create APPENDS to
+        // it and a revise refreshes one slot, so ONE row always carries ALL N docIds — which is
+        // exactly what makes `replace: 2` resolvable (patchCreatedDoc reads docIds[index - 1]).
+        const card = await ctx.runQuery(internal.vaultSources.latestCreated, {
+          tenantId,
+          threadId: plan.threadId,
+        });
+        let docIds = card?.docIds ?? [];
+        let titles = card?.titles ?? [];
+        if (replace === undefined) {
+          const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, docArgs);
+          docIds = [...docIds, docId];
+          titles = [...titles, draft.title];
+        } else {
+          const res = await ctx.runMutation(internal.vault.patchCreatedDoc, {
+            ...docArgs,
+            threadId: plan.threadId,
+            index: replace,
+          });
+          // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
+          // never throws, and neither does this.
+          if (!res.ok)
+            return `There's no document #${replace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+          // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
+          // superseded (the regenerateAttachment ordering — never orphan a live ref).
+          if (res.oldStorageId && res.oldStorageId !== storageId)
+            await ctx.storage.delete(res.oldStorageId);
+          titles = titles.map((t, j) => (j === replace - 1 ? draft.title : t));
+        }
+        const vaultDocId = docIds[replace === undefined ? docIds.length - 1 : replace - 1];
+        // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
+        // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: planId,
+          eventType: "document.created",
+          actor: "system",
+          payload: {
+            topicHash: await contentHash(topic),
+            form,
+            vaultDocId: String(vaultDocId),
+            hasPdf: storageId !== undefined,
+          },
+        });
+        // Append-only content-plane card: titles=labels-to-UI, docIds=PreviewModal targets, and
+        // `form` — the ONLY thing the Output card's UPPERCASE type badge can read (byThread returns
+        // this row, and the short/long discriminator otherwise lives on vaultDocuments.kind).
+        await ctx.runMutation(internal.vaultSources.insert, {
+          tenantId,
+          threadId: plan.threadId,
+          docIds,
+          titles,
+          count: docIds.length,
+          role: "created",
+          snippet: draft.markdown.slice(0, 240),
+          form,
+          createdAt: Date.now(),
+        });
+        // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
+        // URL, never an _id.
+        const saved = replace === undefined ? "saved to your vault" : `rewritten as #${replace}`;
+        return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
+      },
+    }),
     // ── evaluateBusiness (BEVL-01) — the read-only business-assessment tool ─────────────────────────
     // Mirrors searchVault's shape (shape-1 of the two-shapes rule): validated args → readPlan()
     // cross-tenant guard → the internal.* engine action → a CAPPED synopsis into the loop (the card
@@ -2456,7 +2604,7 @@ export async function runSpecialistTurn(
 //                | body=<intent> | remove=<1-based index> | propose
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
 //                | personalize=<1-based index>:<intent> | sendTime=<natural-language time>
-//                | brief=today|yesterday|week
+//                | brief=today|yesterday|week | create=<short|long>:<topic>
 // SMOKE_NOW_MS pins the clock so a `sendTime=in N hours` op resolves deterministically offline (the
 // model never supplies "now"/tz, §2-D) — the send-time analogue of the 1970-01-01 attachment pinning.
 // It is ALSO the baseMs the inbox fixture is seeded at (smoke.seedInboxFixture), so a `brief=today`
@@ -2476,9 +2624,12 @@ type AgentSmokeOp =
   | { kind: "personalize"; index: number; instructions: string }
   | { kind: "sendTime"; text: string }
   | { kind: "brief"; range: "today" | "yesterday" | "week" }
-  | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" };
+  | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" }
+  | { kind: "create"; form: "short" | "long"; topic: string };
 
-function parseAgentSmoke(text: string): AgentSmokeOp | null {
+// Exported for the round-trip test only (the callTimeoutMsFor precedent): the `create=` grammar is
+// what plan 18-07's e2e depends on, and asserting it against the real parser beats re-typing it.
+export function parseAgentSmoke(text: string): AgentSmokeOp | null {
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
   if (!m?.[1]) return null;
   const spec = m[1].trim();
@@ -2539,6 +2690,16 @@ function parseAgentSmoke(text: string): AgentSmokeOp | null {
       if (c < 0) return null;
       return { kind: "personalize", index: Number(val.slice(0, c)), instructions: val.slice(c + 1) };
     }
+    case "create": {
+      // <short|long>:<topic> — split on the FIRST colon. The topic MUST keep its own nested
+      // SMOKE::route=direct_llm:: prefix (create= picks the tool, it does not keep the model out of
+      // the loop), so the remainder is handed through unstripped.
+      const c = val.indexOf(":");
+      if (c < 0) return null;
+      const f = val.slice(0, c).trim();
+      if (f !== "short" && f !== "long") return null; // the SAME closed enum the inputSchema enforces
+      return { kind: "create", form: f, topic: val.slice(c + 1) };
+    }
     default:
       return null;
   }
@@ -2563,6 +2724,7 @@ const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
   brief: "briefInbox",
   personalize: "personalizeRecipient",
   evaluate: "evaluateBusiness",
+  create: "createDocument",
 };
 
 function runAgentSmokeOp(
@@ -2600,6 +2762,8 @@ function runAgentSmokeOp(
       return invokeTool(tools, name, { index: op.index, instructions: op.instructions });
     case "evaluate":
       return invokeTool(tools, name, { framework: op.framework });
+    case "create":
+      return invokeTool(tools, name, { topic: op.topic, form: op.form });
   }
 }
 

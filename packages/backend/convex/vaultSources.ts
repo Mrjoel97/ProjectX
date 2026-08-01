@@ -8,7 +8,7 @@
 // so the browser subscribes and the SOURCE card fills live, guarded on ctx.tenantId.
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
 /**
@@ -54,6 +54,30 @@ export const insert = internalMutation({
  * Explicit return type (Convex guidelines §96): inferred through the generated api it would
  * collapse sibling functions to `any`.
  */
+/**
+ * The thread's LATEST created-artifact card, for the ACTING plane (llm.ts's createDocument tool).
+ *
+ * `byThread` below cannot serve this: it is a `tenantQuery` and derives the tenant from auth, while
+ * the cockpit tool plane passes `tenantId` EXPLICITLY (the gmail.search / vaultGround convention) —
+ * an action has no user identity to derive from. Same 20-row window and same load-bearing `role`
+ * filter; only the tenant source differs.
+ *
+ * The tool reads it to APPEND: a new artifact's card carries the previous card's docIds plus the
+ * new one, so `#index` stays stable and addressable across the whole conversation. Without this
+ * read every card would carry a single id and `replace: 2` would be unreachable.
+ */
+export const latestCreated = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<Doc<"vaultSources"> | null> =>
+    (
+      await ctx.db
+        .query("vaultSources")
+        .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+        .order("desc")
+        .take(20)
+    ).find((r) => r.role === "created") ?? null,
+});
+
 export const byThread = tenantQuery({
   args: { threadId: v.string(), role: v.optional(v.literal("created")) },
   handler: async (ctx, { threadId, role }): Promise<Doc<"vaultSources"> | null> =>
