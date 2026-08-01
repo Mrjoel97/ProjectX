@@ -47,7 +47,9 @@ import {
   buildRecipientView,
   type DigestBatch,
   type DigestItem,
+  type DocFormat,
   exceedsByteCap,
+  formatSpec,
   type InboxMessageMeta,
   type InlineRun,
   inlineRuns,
@@ -58,6 +60,7 @@ import {
   parseSendTime,
   type RecipientEdit,
   rankCandidates,
+  renderHtmlDocument,
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
@@ -895,6 +898,10 @@ export function buildCockpitTools(
     topic: string,
     existing: Att[],
     replaceIndex: number | null,
+    // Phase-18 (ACTN-04): the output format. DEFAULTED, so every shipped three-arg caller is
+    // byte-identical to Phase 3.3 — the scan, the drafter, the 8 MiB cap and the ref-only return
+    // are SHARED by both formats, which is exactly what a second format is supposed to cost.
+    format: DocFormat = "pdf",
   ): Promise<{ ok: true; att: Att } | { ok: false; message: string }> => {
     const scan = scanText(topic);
     if (!scan.ok) throw new Error("cockpit: attachment-topic scan failed"); // redact-then-write §4
@@ -923,7 +930,10 @@ export function buildCockpitTools(
       // ponytail: render=fail:: is a per-request offline hook (mirrors fail=primary::) to exercise
       // block-on-render-fail without provoking a real pdf-lib throw. Remove with the SMOKE seam.
       if (safeText.includes("render=fail::")) throw new Error("smoke: forced render failure");
-      bytes = await markdownToPdf(draft.title, draft.markdown);
+      bytes =
+        format === "pdf"
+          ? await markdownToPdf(draft.title, draft.markdown)
+          : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
     } catch {
       return setError(
         "I couldn't generate the attachment — the document failed to render. Tell the user and offer to try again.",
@@ -936,6 +946,7 @@ export function buildCockpitTools(
       topic,
       today,
       others.map((a) => a.filename),
+      format,
     );
     const total = others.reduce((s, a) => s + a.size, 0) + bytes.byteLength;
     if (exceedsByteCap(total)) {
@@ -945,12 +956,11 @@ export function buildCockpitTools(
     }
     // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
     // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
-    const storageId = await ctx.storage.store(
-      new Blob([bytes as BlobPart], { type: "application/pdf" }),
-    );
+    const { mimeType } = formatSpec(format); // the ONE place either MIME literal is written
+    const storageId = await ctx.storage.store(new Blob([bytes as BlobPart], { type: mimeType }));
     return {
       ok: true,
-      att: { storageId, filename, mimeType: "application/pdf", size: bytes.byteLength },
+      att: { storageId, filename, mimeType, size: bytes.byteLength },
     };
   };
 
@@ -1275,19 +1285,24 @@ export function buildCockpitTools(
     }),
     generateAttachment: tool({
       description:
-        "Generate a PDF document on the given topic and attach it to the plan. Only after the user asks for (or confirms) an attachment. A render or size failure blocks approval until fixed.",
-      inputSchema: jsonSchema<{ topic: string }>({
+        "Generate a document on the given topic and attach it to the plan. Only after the user asks for (or confirms) an attachment. A render or size failure blocks approval until fixed.",
+      inputSchema: jsonSchema<{ topic: string; format?: DocFormat }>({
         type: "object",
         properties: {
           topic: { type: "string", description: "What the document should be about, in plain language." },
+          format: {
+            type: "string",
+            enum: ["pdf", "html"],
+            description: "Output format. Omit for a PDF; use html only when the user asks for a web page.",
+          },
         },
         required: ["topic"],
         additionalProperties: false,
       }),
-      execute: async ({ topic }): Promise<string> => {
+      execute: async ({ topic, format }): Promise<string> => {
         const plan = await readPlan();
         const existing = plan.attachments ?? [];
-        const res = await renderAndStore(topic, existing, null);
+        const res = await renderAndStore(topic, existing, null, format);
         if (!res.ok) return res.message;
         // Append the new ref + CLEAR any prior error (a clean generate makes the plan proposable again).
         await ctx.runMutation(internal.plans.recordAttachments, {

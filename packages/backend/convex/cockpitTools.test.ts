@@ -180,8 +180,8 @@ test("generateAttachment({ format: 'html' }) stores a text/html page through the
   expect(att.size).toBeGreaterThan(0);
 
   // The stored bytes are renderHtmlDocument's page, NOT the raw markdown.
-  const blob = await t.run((ctx) => ctx.storage.get(att.storageId));
-  const text = await blob!.text();
+  // Read the text INSIDE t.run — a Blob is not a Convex value and cannot cross that boundary.
+  const text = await t.run(async (ctx) => (await ctx.storage.get(att.storageId))!.text());
   expect(text).toContain("<!doctype html>");
   expect(text).toContain("<h1>Smoke Document</h1>");
   expect(text).not.toMatch(/^# Smoke Document/m); // markdown never stored verbatim
