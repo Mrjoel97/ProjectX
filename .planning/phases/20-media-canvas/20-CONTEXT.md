@@ -1,9 +1,26 @@
 # Phase 20: Media Canvas - Context
 
 **Gathered:** 2026-08-01
-**Status:** Ready for planning
+**Status:** RE-SCOPED 2026-08-01 — see D8/D9/D10. Ready for re-planning.
 **Source:** Owner decisions taken at `/gsd:plan-phase 20`, on top of the discharged spike
 (`20-SPIKE.md`), the provider evaluation (`20-PROVIDER-EVAL.md`) and ADR-011.
+
+> ## ⚠ RE-SCOPE 2026-08-01 (owner, explicit, after the first 12 plans were committed)
+>
+> **Phase 20 now ships a FINISHED REEL, not a set of assets.** The owner was shown the trade-offs
+> — a render worker outside Convex, a new ADR superseding ADR-011's ≤15 s line, re-derived caps,
+> and re-derivation of the batch-reserve / refs-only-audit / webhook-sole-writer invariants — and
+> chose the production spine anyway.
+>
+> **This supersedes, in this document:** the `/assemble` OUT rows in D6, the D4 cap numbers, and
+> the "Out of scope" video-length line in the Phase Boundary. Those are struck through below rather
+> than deleted, so the next reader sees what changed and why. **D1, D2, D3, D7 are UNCHANGED.**
+>
+> The 12 plans committed at `4010e10` are **not discarded**. Their generation half — price table,
+> batch-reserve mutation, fal adapter, HMAC webhook, `media` route, canvas — survives, because a
+> reel is still built from N generated clips that each need pricing, capping and safe landing.
+> What changes is the output contract, the cap arithmetic, and four stages appended after
+> generation. **Revise, do not restart.**
 
 <domain>
 ## Phase Boundary
@@ -178,6 +195,83 @@ hex (CLAUDE.md §10). The app has no component library; do not add one.
   capped *as a batch* against the daily window, and what the canvas shows the user before they
   commit. This is the sharpest new risk D6 introduces.
 
+### D8 — Scope: the PRODUCTION SPINE (LOCKED, owner, 2026-08-01 re-scope)
+
+The deliverable is ONE finished video file, not a set of assets.
+
+**Stages, in order:**
+
+| # | Stage | Cost | Gate |
+|---|---|---|---|
+| 1 | `script` | tokens | none (proposal) |
+| 2 | `art-direction` | tokens | none (proposal) |
+| 3 | `storyboard` → N blocks | tokens | none (proposal) |
+| 4 | `generate` — N clips via fal | **fal $** | **batch reserve + Approve** |
+| 5 | `voiceover` — one TTS take per block | **TTS $** | same reservation |
+| 6 | `assemble` — ffmpeg → ONE mp4 | sandbox compute | post-Approve only |
+| 7 | `captions` — burned AFTER assembly | compute | post-Approve only |
+
+**Still OUT** (koda + the roadmap): `/brief`, `/concept`, `/trends`, `/publish`, `/repurpose`.
+They follow later, per the 2026-07-16 todo. `/script` moves IN (it was previously left to that todo)
+because voiceover has nothing to say without it.
+
+**The reference implementation is the Higgsfield `faceless-channel-video` workflow v2.0**, read from
+the Pikar-Ai MCP catalog on 2026-08-01. Its `scripts/assemble_final.sh` (27 KB) is battle-tested
+ffmpeg with the failure modes recorded in its own comments. Harvest its CONTRACT — do not clone the
+repo (CLAUDE.md §5) and do not depend on the MCP at runtime (it is client-side only and unreachable
+from a Convex action; that finding is the whole reason ADR-011 exists).
+
+Contract properties worth inheriting verbatim, because each encodes a real failure:
+- **Fixed-length blocks — N × `clip-seconds`, default 10.** This is exactly Wan 2.5's ceiling
+  (5 or 10 s), so generation and assembly agree by construction. A clip shorter than its window is
+  a HARD ERROR, never a held still frame.
+- **No time-stretch, ever.** A voice line longer than its window is a hard error → rewrite and
+  regenerate upstream. No `atempo`, no trimming speech.
+- **Speech-centred, not file-centred.** Leading/trailing TTS silence is measured and ignored.
+- **Narration-per-window assert** before any music bed can mask a silent block.
+- **`assembly.json` sidecar** — block count, per-block speech/freeze metrics, the gate list.
+  Refs-and-counts only, zero content: it drops into CLAUDE.md §4's audit contract unmodified.
+  The script's own words: *"a final video without one was hand-assembled."* Treat presence of a
+  valid sidecar as the proof-of-governed-render.
+- **Captions are a SEPARATE step run AFTER assembly**, on the clean voice takes plus the sidecar's
+  `speech_abs_s` / `lead_silence_s`. Their in-assembler Whisper path was removed on 2026-07-29 for
+  transcribing MIXED audio and swallowing words. Do not re-merge these two stages.
+
+### D9 — The renderer: Vercel Sandbox (LOCKED, owner, 2026-08-01)
+
+Convex cannot encode video. `assemble_final.sh` needs `ffmpeg`, `ffprobe` and `awk` — a POSIX shell.
+
+**Chosen: Vercel Sandbox** (ephemeral Firecracker microVMs). Rejected: a persistent Fly/Cloud Run
+worker (a whole new deploy target, secret plane and monthly floor — the first infrastructure outside
+Vercel + Convex); and `ffmpeg.wasm` in the browser (the tab must stay open for minutes, OOMs on
+multi-block 1080p, and — decisively — assembly would run client-side where it cannot be audited and
+the sidecar would be self-reported by the browser rather than produced by a trusted runner).
+
+- Zero new vendors, zero always-on cost, and the bundled bash runs near-verbatim.
+- A post-Approve Convex action starts the sandbox, streams clips + voice takes in, runs the script,
+  and pulls `final.mp4` + `final.mp4.assembly.json` back to `ctx.storage`.
+- **The sandbox is a trust boundary.** It receives tenant content. Nothing it returns is trusted
+  without validation, and no fal URL or API key is ever passed into it.
+- `vercel:vercel-sandbox` is an available skill — read it before writing the runner (ponytail §8).
+
+### D10 — Caps for an assembled job (LOCKED, owner, 2026-08-01 — SUPERSEDES D4's numbers)
+
+| Constant | Value | Rationale |
+|---|---|---|
+| `MEDIA_JOB_CAP_USD` | **$3.50** | A 60 s / 6-block 480p video is $3.00 of clips, plus TTS. Fits with headroom. |
+| `MEDIA_DAILY_CENTS` | **1000 ($10.00/day)** | ~2 full 60 s videos per day. |
+
+At 480p/10 s Wan 2.5 = $0.50 per block: 3 blocks (30 s) = $1.50 PASS · 6 blocks (60 s) = $3.00 PASS ·
+12 blocks (2 min) = $6.00 REFUSED · 6 blocks at 720p = $6.00 REFUSED.
+
+- **The whole JOB is the priced and reserved unit** — clips AND voice takes together, in the one
+  transactional mutation. This is D4's batch finding, widened: it now has strictly more line items,
+  so the TOCTOU argument that killed the check-then-record-later shape is stronger, not weaker.
+- **Sandbox compute is a cost line too.** Estimate it, or record deliberately that it is unmetered
+  and why. Do not leave it unstated — that is how a rail fails open.
+- The per-tenant keying and the `deploymentMediaSpendCents` ceiling from the first planning pass
+  both still apply, re-sized to these numbers.
+
 ### D5 — Reconciliation (Claude's discretion, per ponytail §8)
 
 Roadmap SC #5 requires a documented reconciliation step, not an automated one. The laziest
@@ -221,6 +315,17 @@ upgrade path. No cron, no `/ops` panel, no reconciliation table unless evidence 
 3. **Price-table drift cadence** and where the `ponytail:` ceiling comment lives.
 4. Live fal rates (see D3).
 5. **NEW (D4):** batch estimation and capping for an N-shot storyboard.
+6. **NEW (D8/D10) — the TTS provider and its price.** Voiceover is now a priced line item and there
+   is NO decision on it yet. Does fal serve a TTS model whose per-character/per-second USD is
+   published, so it joins the same price table? If not, what does? **Do not plan voiceover against
+   an unpriced provider** — that reintroduces exactly the credit-denominated opacity ADR-011
+   rejected Higgsfield for.
+7. **NEW (D9) — Vercel Sandbox mechanics.** Cold-start time, max duration against a multi-block
+   render, how bytes get in and out, whether ffmpeg is installable or must be layered, and what the
+   compute actually costs. Read the `vercel:vercel-sandbox` skill first.
+8. **NEW (D8) — the captions step.** `burn_caps_clean.sh` + `audio_to_captions.py` imply a Python
+   runtime and an STT model in the sandbox alongside ffmpeg. Confirm what that pulls in, and whether
+   STT is a further priced line item.
 
 **Governance constraints that bind this phase:**
 - CLAUDE.md §2 — no raw `query`/`mutation`/`action` imports; use the tenant wrappers.
@@ -236,11 +341,13 @@ upgrade path. No cron, no `/ops` panel, no reconciliation table unless evidence 
 <deferred>
 ## Deferred Ideas
 
-- **koda `/assemble` — the reel from shots + voiceover.** This is the natural finale of the koda
-  pipeline and the single most likely scope creep in this phase. ADR-011 puts assembly out of
-  scope: multi-minute output is concatenation, a different feature from generation. Revisit only
-  after single-shot generation has shipped and been used.
-- **Multi-minute video by assembly**, and **re-cutting footage the user already has** — same line.
+- ~~**koda `/assemble` — the reel from shots + voiceover.**~~ **PROMOTED INTO SCOPE by the
+  2026-08-01 re-scope — see D8.** Left visible rather than deleted so the reversal is legible.
+- **Re-cutting footage the user already has** — still OUT. Phase 20 assembles what it generated;
+  it does not ingest and re-cut user footage. That remains a different feature.
+- **Music beds and sung tracks.** `assemble_final.sh` supports `--music` (ducked bed) and `--song`
+  (kids music-video mode). Neither is in D8's stage list. Ship without them; the flags stay
+  available if evidence asks for them.
 - **koda content stages** (`/brief`, `/concept`, `/script`, `/publish`, `/repurpose`) and
   `/trends` — stay with the pending 2026-07-16 todo for a later content phase.
 - **A premium model default (Veo 3 / Seedance).** Reversible later as a price-table entry behind a
