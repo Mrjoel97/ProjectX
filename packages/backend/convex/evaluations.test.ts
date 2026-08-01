@@ -14,7 +14,7 @@ import {
   type BusinessBlueprint,
   type BusinessProfile,
 } from "@pikar/core";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
@@ -52,7 +52,7 @@ const TENANT = "tenant_a";
 const THREAD = "thread_1";
 
 /** convex-test instance with every component the engine + the dispatch terminal touch. */
-function newTest(): ReturnType<typeof convexTest> {
+function newTest(): TestConvex<typeof schema> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
@@ -81,7 +81,7 @@ function profileDocText(withFinancials: boolean, withOffering = true): string {
 
 /** Seed a groundable vault doc; return its id (the SMOKE:: seed). */
 async function seedDoc(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   tenantId: string,
   text: string,
   options: {
@@ -125,7 +125,7 @@ const BLUEPRINT_WITH_CONTRADICTING_CAC = serializeBlueprint({
 } satisfies BusinessBlueprint);
 
 async function seedConfirmedBlueprint(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   tenantId: string,
   text = BLUEPRINT_WITH_CONTRADICTING_CAC,
 ): Promise<Id<"vaultDocuments">> {
@@ -601,7 +601,7 @@ describe("fillVault treats an empty array as unset (offer gate is reachable)", (
  * READS, not how it was derived — and design §10's `legacy` row legitimately carries no facts at all.
  */
 async function seedTier(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   tenantId: string,
   tier: "solopreneur" | "startup" | "sme" | "enterprise",
 ): Promise<void> {
@@ -628,7 +628,7 @@ const MALFORMED_PERSONA_DOC = profileDocText(false).replace(
 const MALFORMED_WITH_FINANCIALS = `${MALFORMED_PERSONA_DOC}\n\nCAC: $150\nLTGP: $4500\n30-day cash: $200\n`;
 
 /** Run the engine over `text` and return the persisted row's framework, asserting nothing queued. */
-async function frameworkFor(t: ReturnType<typeof convexTest>, text: string): Promise<string> {
+async function frameworkFor(t: TestConvex<typeof schema>, text: string): Promise<string> {
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t, TENANT, text);
   await t.action(internal.evaluations.runEvaluation, {
@@ -696,7 +696,7 @@ describe("the framework auto-pick reads the tier table (SC#2b)", () => {
 // no new status literal, no UI change.
 
 /** A grounded evaluation whose single gap routes at a REGISTERED specialist (money-model-designer). */
-async function seedGapEvaluation(t: ReturnType<typeof convexTest>): Promise<void> {
+async function seedGapEvaluation(t: TestConvex<typeof schema>): Promise<void> {
   await t.mutation(internal.skills.seedSkills, {});
   const docId = await seedDoc(t, TENANT, profileDocText(true));
   await t.action(internal.evaluations.runEvaluation, {
@@ -710,7 +710,7 @@ type ScheduledRow = { _id: Id<"_scheduled_functions">; name: string; args: unkno
 /** The pending scheduler queue. `_scheduled_functions` is a SYSTEM table — read it through
  *  `ctx.db.system`, which is the only way to prove "exactly one dispatch was queued" BEFORE
  *  anything runs it. */
-async function readScheduled(t: ReturnType<typeof convexTest>): Promise<ScheduledRow[]> {
+async function readScheduled(t: TestConvex<typeof schema>): Promise<ScheduledRow[]> {
   return (await t.run(async (ctx) =>
     ctx.db.system.query("_scheduled_functions").collect(),
   )) as unknown as ScheduledRow[];
@@ -721,7 +721,7 @@ const dispatchArgsOf = (row: ScheduledRow): Record<string, unknown> =>
  *  and convex-test flushes due scheduled work in the background — leaving a job queued would make
  *  these tests depend on whether OPENAI_API_KEY happens to be set on the machine. Every test below
  *  asserts the QUEUE and then clears it; the run itself is driven through the scripted twin. */
-async function cancelQueued(t: ReturnType<typeof convexTest>): Promise<void> {
+async function cancelQueued(t: TestConvex<typeof schema>): Promise<void> {
   for (const row of await readScheduled(t)) await t.run((ctx) => ctx.scheduler.cancel(row._id));
 }
 

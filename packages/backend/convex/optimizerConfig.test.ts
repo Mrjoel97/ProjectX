@@ -42,7 +42,7 @@ test("setOptimizerConfig: a second write PATCHES the same row (never a second ro
 
   const rows = await t.run(async (ctx) => await ctx.db.query("optimizerConfig").collect());
   expect(rows).toHaveLength(1);
-  expect(rows[0].enabled).toBe(false);
+  expect(rows[0]!.enabled).toBe(false);
 });
 
 test("setOptimizerConfig: can set lastRunAt (the cooldown anchor)", async () => {

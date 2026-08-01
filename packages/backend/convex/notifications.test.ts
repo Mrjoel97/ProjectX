@@ -1,4 +1,4 @@
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { notificationMessage } from "@pikar/core";
 import { internal } from "./_generated/api";
@@ -9,7 +9,7 @@ const modules = import.meta.glob("./**/*.*s");
 
 const TENANT = "user_notify";
 
-const notifications = (t: ReturnType<typeof convexTest>) =>
+const notifications = (t: TestConvex<typeof schema>) =>
   t.run((ctx) =>
     ctx.db
       .query("notifications")
@@ -17,7 +17,7 @@ const notifications = (t: ReturnType<typeof convexTest>) =>
       .collect(),
   );
 
-const listScheduled = (t: ReturnType<typeof convexTest>) =>
+const listScheduled = (t: TestConvex<typeof schema>) =>
   t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
 
 describe("notify choke point (OPSG-05 — in-app insert + best-effort external dispatch)", () => {

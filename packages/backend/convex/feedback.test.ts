@@ -4,7 +4,7 @@
 // resolvable skillVersion is rejected (unattributable feedback is never stored — the Pitfall-1
 // warning sign), and a cross-tenant requestId is "not found" (the tenant guard).
 import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -16,7 +16,7 @@ const TENANT = "tenant_a";
 
 /** Seed a delivered request row (optionally attributed to a skill version). */
 function seedRequest(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex<typeof schema>,
   { tenantId = TENANT, skillVersion }: { tenantId?: string; skillVersion?: number },
 ) {
   return t.run((ctx) =>
@@ -33,7 +33,7 @@ function seedRequest(
   );
 }
 
-const rowsFor = (t: ReturnType<typeof convexTest>, requestId: Id<"requests">) =>
+const rowsFor = (t: TestConvex<typeof schema>, requestId: Id<"requests">) =>
   t.run((ctx) =>
     ctx.db
       .query("feedback")

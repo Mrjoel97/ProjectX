@@ -14,7 +14,7 @@ import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
@@ -170,7 +170,7 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
   type SkillStatus = "active" | "candidate" | "rolled_back" | "archived";
 
   const insertSkill = (
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex<typeof schema>,
     fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
@@ -189,7 +189,7 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
       ...overrides,
     });
 
-  const statusOf = (t: ReturnType<typeof convexTest>, name: string, version: number) =>
+  const statusOf = (t: TestConvex<typeof schema>, name: string, version: number) =>
     t.run(async (ctx) => {
       const row = await ctx.db
         .query("skills")
@@ -359,7 +359,7 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
 });
 
 describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", () => {
-  const cockpitRows = (t: ReturnType<typeof convexTest>, name: string) =>
+  const cockpitRows = (t: TestConvex<typeof schema>, name: string) =>
     t.run((ctx) =>
       ctx.db
         .query("skills")
@@ -468,11 +468,11 @@ describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", (
 
 describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
   const insert = (
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex<typeof schema>,
     fields: { name: string; version: number; body: string; status: "active" | "candidate" | "archived" },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
-  const rowsOf = (t: ReturnType<typeof convexTest>, name: string) =>
+  const rowsOf = (t: TestConvex<typeof schema>, name: string) =>
     t.run((ctx) =>
       ctx.db
         .query("skills")
@@ -536,7 +536,7 @@ describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
 describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", () => {
   // GOVN-01: authority is the `users.owner` boolean, so these fixtures insert REAL user rows.
   // A fabricated subject string is no longer evidence of anything.
-  const identities = async (t: ReturnType<typeof convexTest>) => {
+  const identities = async (t: TestConvex<typeof schema>) => {
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     const plainId = await t.run((ctx) => ctx.db.insert("users", {}));
     return {
@@ -545,7 +545,7 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     };
   };
   const insert = (
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex<typeof schema>,
     fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
@@ -565,7 +565,7 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
       ts: 0,
     });
 
-  const statusOf = (t: ReturnType<typeof convexTest>, name: string, version: number) =>
+  const statusOf = (t: TestConvex<typeof schema>, name: string, version: number) =>
     t.run(async (ctx) => {
       const row = await ctx.db
         .query("skills")

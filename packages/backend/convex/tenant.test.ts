@@ -27,8 +27,11 @@ describe("tenant scope: stable per user, isolated across users (SC-2)", () => {
     // The whole point: a NEW session must not mint a new tenant.
     const readBack = await sessionB.query(api.demo.listItems, {});
     expect(readBack).toHaveLength(1);
-    expect(readBack[0].label).toBe("written-in-session-a");
-    expect(readBack[0].tenantId).toBe(String(userId));
+    // `!` earned by the length assertion above (`noUncheckedIndexedAccess` makes an index read
+    // `T | undefined`, and TS cannot see that the assertion already failed the test).
+    const item = readBack[0]!;
+    expect(item.label).toBe("written-in-session-a");
+    expect(item.tenantId).toBe(String(userId));
   });
 
   test("a second user cannot read the first user's data", async () => {

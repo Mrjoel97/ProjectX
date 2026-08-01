@@ -34,7 +34,10 @@ test("audit.log inserts exactly one row that round-trips", async () => {
   const rows = await t.run(async (ctx) => await ctx.db.query("audit").collect());
 
   expect(rows).toHaveLength(1);
-  const row = rows[0];
+  // `!` is earned by the assertion directly above, not assumed: under
+  // `noUncheckedIndexedAccess` an index read is `T | undefined`, and TS cannot see that
+  // `toHaveLength(1)` already failed the test if the row were missing.
+  const row = rows[0]!;
   expect(row.tenantId).toBe(args.tenantId);
   expect(row.correlationId).toBe(args.correlationId);
   expect(row.eventType).toBe(args.eventType);

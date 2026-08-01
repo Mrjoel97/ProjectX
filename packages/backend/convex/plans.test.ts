@@ -318,13 +318,19 @@ describe("reportForPlan attachment extension (per-recipient delivered attachment
       .query(api.plans.reportForPlan, { planId });
 
     const byRecipient = Object.fromEntries(report.map((r) => [r.recipient, r]));
+    // Bound once each: under `noUncheckedIndexedAccess` a Record lookup is `T | undefined`, and
+    // repeating the subscript per assertion repeated the error too. Same assertions, same
+    // strictness — `!` here says "the report must contain this recipient", which is exactly what
+    // the test is claiming anyway and what the toMatchObject below would fail on if it did not.
+    const a = byRecipient["a@example.com"]!;
+    const b = byRecipient["b@example.com"]!;
     // existing fields untouched
-    expect(byRecipient["a@example.com"]).toMatchObject({ status: "sent", correlationId: "cid_a" });
+    expect(a).toMatchObject({ status: "sent", correlationId: "cid_a" });
     // new attachments field: filename + a resolved url
-    expect(byRecipient["a@example.com"].attachments).toHaveLength(1);
-    expect(byRecipient["a@example.com"].attachments[0]).toMatchObject({ filename: "invoice.pdf" });
-    expect(byRecipient["a@example.com"].attachments[0].url).toBeTruthy();
+    expect(a.attachments).toHaveLength(1);
+    expect(a.attachments[0]).toMatchObject({ filename: "invoice.pdf" });
+    expect(a.attachments[0]!.url).toBeTruthy();
     // no-attachment recipient → empty array
-    expect(byRecipient["b@example.com"].attachments).toEqual([]);
+    expect(b.attachments).toEqual([]);
   });
 });

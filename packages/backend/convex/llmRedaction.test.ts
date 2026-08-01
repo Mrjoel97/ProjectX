@@ -98,7 +98,7 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
       new RegExp(`eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`),
     );
     expect(m, `${eventType} audit payload not found`).not.toBeNull();
-    const payload = m![1].replace(/\/\/[^\n]*/g, "");
+    const payload = m![1]!.replace(/\/\/[^\n]*/g, "");
     expect(payload, `${eventType} payload must be refs-only: ${m![1]}`).not.toMatch(
       /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
     );
@@ -295,7 +295,8 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
       }
       const requiredMatch = /required:\s*\[([^\]]*)\]/.exec(block.slice(i));
       if (keys.length === 0 || !requiredMatch) continue;
-      const required = [...requiredMatch[1].matchAll(/["'](\w+)["']/g)].map((r) => r[1]);
+      // Group 1 exists whenever the regex matched, which `!requiredMatch` above already guarded.
+      const required = [...requiredMatch[1]!.matchAll(/["'](\w+)["']/g)].map((r) => r[1]);
       const missing = keys.filter((k) => !required.includes(k));
       expect(
         missing,
