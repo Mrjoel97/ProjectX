@@ -1,5 +1,24 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
+> subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
+> — `// @ts-expect-error import.meta.glob …` — from watched test files (blueprint.test.ts, tenantProfile.test.ts, onboarding.test.ts).
+> It suppressed nothing: `tsconfig.json` includes `vitest.config.mts`, which pulls Vite's global
+> types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
+> only, zero additions, no assertion, invariant or product line touched anywhere. Backend
+> typecheck 150 → 50; full suite 54/54.
+>
+> `onboarding.test.ts` ALSO gained a real fix in the same sweep (`6136d5f`): the §4.2 test that
+> STATE carried as red was a RACE, not a logic defect — `commitProfile` → `startIngest` hands work
+> to a workpool WORKER that reaches the spend rail in the `rateLimiter` component, and that worker
+> fires ASYNCHRONOUSLY after the mutation returns. The component was unregistered, so the
+> scheduled job threw and whether that surfaced depended on whether it landed before the file
+> finished — which is exactly why the test was red ALONE and green in a full-suite run. Fixed by
+> registering the component (the idiom `blueprint`/`cockpitTools`/`dispatch` tests already use);
+> no product code touched and no assertion weakened. **Diagnostic worth reusing: a test that is
+> red alone and green in a suite — or the reverse — is an async-registration or ordering race, so
+> look for a scheduled job touching an unregistered component before you touch the assertion.**
+>
 > Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). MECHANICAL for this subsystem, no behaviour change: `blueprint.deriveCandidates` already DECLARED `tenantId` in its args but never destructured it; it now does, and passes it to `guardrails.preCall` / `recordSpend`. The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). Nothing about blueprint derivation, confirmation or the spine changed.
 >
 > PRIOR 2026-07-30 — Phase 17.1 Wave 7 (plan 17.1-09, profile confirmation surface): `/dashboard/profile` now mounts a third, self-contained Blueprint card driven by `blueprintState`. It renders `none`, `live`, `live_stale`, and draft-review states; build/rebuild owns its long-action status, uses a real disabled button, and translates governed stops into recoverable language. Live values say in words whether they are the user's own or name their source. The stale banner uses a neutral stripe and explicitly spends no approval amber. Draft additions are one default-on group; contradictions are individually default-off, side-by-side, source-labelled checkboxes. Confirm and discard are both real backend writes. See "Blueprint confirmation" below.

@@ -1,5 +1,13 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
+> subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
+> — `// @ts-expect-error import.meta.glob …` — from watched test files (evaluations.test.ts, proactiveReview.test.ts).
+> It suppressed nothing: `tsconfig.json` includes `vitest.config.mts`, which pulls Vite's global
+> types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
+> only, zero additions, no assertion, invariant or product line touched anywhere. Backend
+> typecheck 150 → 50; full suite 54/54.
+>
 > Last verified: 2026-07-31 (ACTN-03) — **`applyScorecardAnswer` now COERCES before it writes, and
 > `actOnGapInternal` forwards a skill pin.** (1) The cockpit's `recordScorecardAnswer` tool types
 > `value` as a STRING in its JSON schema, so every boolean scorecard leaf arrived as `"true"` /

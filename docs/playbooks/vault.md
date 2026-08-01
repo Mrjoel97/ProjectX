@@ -1,5 +1,13 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
+> subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
+> — `// @ts-expect-error import.meta.glob …` — from watched test files (vaultExtract.test.ts, vaultSweep.test.ts, vaultTranscribe.test.ts).
+> It suppressed nothing: `tsconfig.json` includes `vitest.config.mts`, which pulls Vite's global
+> types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
+> only, zero additions, no assertion, invariant or product line touched anywhere. Backend
+> typecheck 150 → 50; full suite 54/54.
+>
 > Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). For THIS subsystem: `extractDoc` → `extractPdf` → `extractHosted` now thread a `tenantId` (both were private helpers with no tenant in scope), as do `vaultIngest.ingestDoc` and `vaultTranscribe.transcribeDoc`. **15.2-06's per-page fan-out guard still stands** — its static-scan regexes in `vaultExtract.test.ts` were widened for the inserted parameter, NOT relaxed: the hosted call must still receive `pages[...]`, never the sliced whole document. `failureCopy.ts` gained a `deployment_budget_exhausted` entry mapping to the same PAUSED copy. Consequence worth knowing: a large fan-out extraction now bills ONE tenant's rail, so a big upload can exhaust that tenant's day — previously it drained everyone's.
 >
 > PRIOR 2026-07-30 (26) — **THE CONFIRMED BLUEPRINT IS A DELIBERATE NON-INGESTED VAULT DOCUMENT.** Phase 17.1 plan 08 writes one `business_blueprint` row directly at `ready`, patches it in place on re-confirm, and starts no ingest workflow. It is never embedded or graph-extracted; a byte-less `ready` row is outside the extraction sweep. See the Phase 17.1 section and the explicit ingest-invariant exception below.
