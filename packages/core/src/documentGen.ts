@@ -5,7 +5,8 @@
 //   - tokenizeMarkdown: a line-based markdown → block-token list (headings/bullets/paragraphs).
 //   - toWinAnsi: sanitize LLM prose to a WinAnsi-safe string so pdf-lib Standard-14 drawText can
 //     NEVER throw on smart punctuation / astral glyphs (V2 — no silent corruption).
-//   - buildDocFilename: a deterministic, LLM-free safe filename from a topic + date.
+//   - buildDocFilename: a deterministic, LLM-free safe filename from a topic + date + format.
+//   - renderHtmlDocument: the second output format — DocToken[] → escaped, self-contained HTML.
 //   - exceedsByteCap / PLAN_ATTACHMENT_CAP_BYTES: the attachment size guard.
 //
 // ponytail: line-based md tokenizer; swap to marked tokens if inline/nested md needed.
@@ -123,6 +124,65 @@ export function inlineRuns(text: string): InlineRun[] {
   }
   if (last < text.length) runs.push({ text: clean(text.slice(last)), bold: false });
   return runs.filter((r) => r.text.length > 0);
+}
+
+/** HTML-escape. There is NO escaper anywhere in this repo (verified) and no dependency is
+ *  warranted for five replacements. */
+const esc = (s: string): string =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+// Code-owned CSS. ZERO interpolation, by construction — nothing model-authored may reach it.
+const HTML_STYLE =
+  "body{font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;color:#111;max-width:44rem;" +
+  "margin:2rem auto;padding:0 1rem}h1{font-size:1.75rem}h2{font-size:1.35rem}h3{font-size:1.1rem}" +
+  "table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4d4d4;padding:.4rem .6rem;" +
+  "text-align:left}th{background:#f5f5f5}";
+
+/**
+ * A self-contained HTML page rendered from the drafter's markdown. THE SC#5 BOUNDARY: this
+ * function is the ONLY producer of stored HTML bytes, it renders from `tokenizeMarkdown`'s
+ * DocToken[] (never from the raw string), and EVERY value that came from the model passes through
+ * `esc()`. CONVENTION (asserted by documentGen.test.ts): inside this function, a template
+ * interpolation is either an `esc(...)` call or a local whose name ends in `Html` (already-rendered,
+ * already-escaped markup). A future edit that interpolates a raw model string turns that test RED.
+ */
+export function renderHtmlDocument(title: string, markdown: string): string {
+  const runsHtml = (t: string): string =>
+    inlineRuns(t)
+      .map((r) => (r.bold ? `<strong>${esc(r.text)}</strong>` : esc(r.text)))
+      .join("");
+  const bodyHtml = tokenizeMarkdown(markdown)
+    .map((token) => {
+      if (token.kind === "table") {
+        const headHtml = token.header.map((c) => `<th>${esc(c)}</th>`).join("");
+        const rowsHtml = token.rows
+          .map((r) => {
+            const cellsHtml = r.map((c) => `<td>${esc(c)}</td>`).join("");
+            return `<tr>${cellsHtml}</tr>`;
+          })
+          .join("");
+        return `<table><thead><tr>${headHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
+      }
+      const textHtml = runsHtml(token.text);
+      if (token.kind === "h1") return `<h1>${textHtml}</h1>`;
+      if (token.kind === "h2") return `<h2>${textHtml}</h2>`;
+      if (token.kind === "h3") return `<h3>${textHtml}</h3>`;
+      if (token.kind === "bullet") return `<ul><li>${textHtml}</li></ul>`;
+      if (token.kind === "ordered")
+        return `<ol start="${esc(String(token.num))}"><li>${textHtml}</li></ol>`;
+      return `<p>${textHtml}</p>`;
+    })
+    .join("\n");
+  return (
+    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8">` +
+    `<title>${esc(title)}</title><style>${HTML_STYLE}</style></head>` +
+    `<body><h1>${esc(title)}</h1>\n${bodyHtml}\n</body></html>\n`
+  );
 }
 
 // The LLM-prose offenders (RESEARCH §1): curly quotes, en/em-dash, ellipsis, nbsp. Mapped to

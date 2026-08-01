@@ -131,9 +131,9 @@ describe("buildDocFilename", () => {
   });
 
   it("suffixes collisions per-format", () => {
-    expect(
-      buildDocFilename("Q3 plan", "2026-08-01", ["q3-plan-2026-08-01.html"], "html"),
-    ).toBe("q3-plan-2026-08-01-1.html");
+    expect(buildDocFilename("Q3 plan", "2026-08-01", ["q3-plan-2026-08-01.html"], "html")).toBe(
+      "q3-plan-2026-08-01-1.html",
+    );
     // a .pdf already taken does not push the .html name along, and vice versa
     expect(buildDocFilename("Q3 plan", "2026-08-01", ["q3-plan-2026-08-01.pdf"], "html")).toBe(
       "q3-plan-2026-08-01.html",
@@ -161,8 +161,15 @@ describe("renderHtmlDocument", () => {
     const md = `# ${X}\n\n${X}\n\n- ${X}\n\n1. ${X}\n\n| ${X} |\n|---|\n| ${X} |`;
     const html = renderHtmlDocument(X, md);
     expect(html).not.toMatch(/<script/i);
-    expect(html).not.toMatch(/onerror/i);
     expect(html).not.toMatch(/<img/i);
+    // `onerror` survives as INERT TEXT (`onerror=&quot;`) and must — escaping it away would mangle
+    // visible prose. What must never survive is the quote that would make it an attribute.
+    expect(html).not.toMatch(/onerror\s*=\s*["']/i);
+    // THE LOAD-BEARING ONE: strip the code-owned tag literals and no angle bracket may remain, so
+    // every `<` in the output is provably one this file wrote — not one the model did.
+    const CODE_OWNED_TAG =
+      /<!doctype html>|<html lang="en">|<meta charset="utf-8">|<ol start="\d+">|<\/?(?:html|head|title|style|body|h1|h2|h3|p|ul|ol|li|strong|table|thead|tbody|tr|th|td)>/g;
+    expect(html.replace(CODE_OWNED_TAG, "")).not.toContain("<");
     // Non-vacuity floor (house rule): prove the hostile string REACHED every slot, escaped —
     // title + h1 + para + bullet + ordered + table-header + table-cell.
     expect((html.match(/&lt;script&gt;/g) ?? []).length).toBeGreaterThanOrEqual(7);
