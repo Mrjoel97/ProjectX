@@ -1425,3 +1425,101 @@ test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and record
   expect(steps.map((s) => s.tool)).toEqual(["createDocument"]);
   expect(await vaultDocs(t)).toHaveLength(1);
 });
+
+// ── SC7: the replace #index revision path ─────────────────────────────────────
+
+test("createDocument(replace: 1) rewrites the SAME row in place and drops the superseded PDF", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+  const oldStorage = before.storageId!;
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} same thing, shorter`,
+    form: "short",
+    replace: 1,
+  });
+  expect(reply).toMatch(/#1/);
+  expect(reply).not.toContain(String(before._id)); // still never a raw id
+
+  // ONE row, latest content wins — no second row, no version history.
+  const after = await vaultDocs(t);
+  expect(after).toHaveLength(1);
+  expect(after[0]!._id).toBe(before._id);
+  expect(after[0]!.kind).toBe("created_content");
+  expect(after[0]!.origin).toBe("agent"); // a revise never re-provenances the row
+  // long → short removes storageId ⇒ the Download button disappears, for free.
+  expect(after[0]!.storageId).toBeUndefined();
+  // …and the superseded bytes are GONE, deleted only after the patch persisted.
+  expect(await t.run((ctx) => ctx.storage.getUrl(oldStorage))).toBeNull();
+
+  // The card refreshes with a NEW append-only row: same docIds, fresh form/snippet.
+  const cards = (await cardRows(t)).filter((r) => r.role === "created");
+  expect(cards).toHaveLength(2);
+  expect(cards[1]!.docIds).toEqual([before._id]);
+  expect(cards[1]!.form).toBe("short");
+  expect(cards[1]!.count).toBe(1);
+
+  const audits = await createdAudit(t);
+  expect(audits).toHaveLength(2);
+  expect(audits[1]!.payload).toMatchObject({
+    form: "short",
+    hasPdf: false,
+    vaultDocId: String(before._id),
+  });
+});
+
+test("createDocument(replace: <bad index>) returns a sentence and changes NOTHING", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} rewrite the fifth one`,
+    form: "long",
+    replace: 5,
+  });
+
+  // A refusal is a returned sentence, never a throw — and nothing is half-written.
+  expect(reply).toMatch(/no document #5|nothing was changed/i);
+  const after = await vaultDocs(t);
+  expect(after).toHaveLength(1);
+  expect(after[0]!.contentHash).toBe(before.contentHash);
+  expect(after[0]!.storageId).toBe(before.storageId);
+  expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1); // no new card
+  expect(await createdAudit(t)).toHaveLength(1); // no audit for work not done
+});
+
+// ── SC2 + the renderer-bypass guard (static) ──────────────────────────────────
+
+test("SC2: the createDocument tool body has NO external side effect", () => {
+  // Creation SAVES. Delivery still crosses the shipped Approve gate through the untouched
+  // attachment path — and this scan is what keeps that a structural fact rather than a habit.
+  // Comments are stripped: the invariant is about the CODE surface.
+  const block = createDocumentBlock().replace(/\/\/[^\n]*/g, "");
+  // Non-vacuity floor: the slice must really be the tool body, or the scan proves nothing.
+  expect(block, "the createDocument slice lost its vault write — the scan is vacuous").toMatch(
+    /internal\.vault\.(insert|patch)CreatedDoc/,
+  );
+  expect(block, "createDocument reaches a mail surface").not.toMatch(/gmail/i);
+  expect(block, "createDocument starts a workflow").not.toMatch(/workflow\.start/);
+  expect(block, "createDocument dispatches back into cockpit.ts").not.toMatch(/internal\.cockpit\./);
+});
+
+test("renderAndStore's html branch renders through renderHtmlDocument — never raw markdown bytes", () => {
+  const src = readLlmSource();
+  const start = src.indexOf("const renderAndStore = async (");
+  expect(start, "renderAndStore not found — did it get renamed or extracted?").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\n  };\n");
+  expect(end, "the renderAndStore close was not found — the slice is unbounded").toBeGreaterThan(0);
+  const block = rest.slice(0, end);
+  expect(block.length, "the renderAndStore slice is empty").toBeGreaterThan(400);
+  // The spec → markup boundary: html bytes come from the renderer, never from the markdown source.
+  expect(block, "the html branch no longer calls renderHtmlDocument").toMatch(
+    /renderHtmlDocument\(draft\.title, draft\.markdown\)/,
+  );
+  expect(src, "raw markdown is being encoded as document bytes somewhere in llm.ts").not.toMatch(
+    /encode\(draft\.markdown\)/,
+  );
+});
