@@ -12,6 +12,7 @@ import {
   BUSINESS_BLUEPRINT_SKILL,
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
+  CONTENT_DRAFTER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
@@ -44,6 +45,7 @@ import { bmcSkillBody } from "@pikar/contracts/skills/bmc";
 import { businessBlueprintSkillBody } from "@pikar/contracts/skills/businessBlueprint";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
+import { contentDrafterSkillBody } from "@pikar/contracts/skills/contentDrafter";
 import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalyst";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
@@ -328,6 +330,13 @@ export const seedSkills = internalMutation({
       // runner hard-validates --skill against a closed name list it cannot extend to the synthesis
       // path, so gating would deadlock this skill at v1 on its first body edit.
       { name: BUSINESS_BLUEPRINT_SKILL, body: businessBlueprintSkillBody },
+      // UNGATED (18-03, ACTN-04): the short-form drafter (hook / length / platform voice).
+      // This row is WHY Phase 18 added a new skill instead of editing `document-drafter`: a name
+      // with no prior rows takes the `rows.length === 0` branch below and is inserted at v1
+      // `status: "active"` — no eval cycle, no paid run. `document-drafter` IS in GATED_SKILLS, so
+      // editing its body would have minted a candidate needing a passing eval first, and no golden
+      // fixture reaches the drafting path to clear it. Its body stays byte-unchanged.
+      { name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody },
     ];
 
     for (const { name, body } of seeds) {
