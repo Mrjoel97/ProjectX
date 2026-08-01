@@ -66,25 +66,30 @@ updated: 2026-08-01
 | 18-03-02 | 03 | 1 | ACTN-04 | REG2 (rows 9-10) | unit (drift byte-identity, mutation-verified) | `pnpm --filter @pikar/backend exec vitest run convex/skills.test.ts` | ✅ `convex/skills.test.ts` | ⬜ pending |
 | 18-04-01 | 04 | 2 | ACTN-04 | SC1, SC1b, SC3 | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts` | ❌ **created by this task** (Wave 0 gap, see below) | ⬜ pending |
 | 18-04-02 | 04 | 2 | ACTN-04 | SC7 | convex-test integration (mutation-verified) | `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts` | ❌ → ✅ after 18-04-01 | ⬜ pending |
-| 18-04-03 | 04 | 2 | ACTN-04 | SC1b (drift half) | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts convex/blueprint.test.ts` | ❌ → ✅ after 18-04-01; `blueprint.test.ts` ✅ | ⬜ pending |
+| *(moved)* | ~~04~~ → **10** | ~~2~~ → **6** | ACTN-04 | SC1b (drift half) | — | *the blueprint drift edit moved to plan 18-10, wave 6 — it is PARKED behind `17.1-10`'s unrun live gate and cannot sit inside an `autonomous: true` wave-2 plan* | — | — |
 | 18-05-01 | 05 | 3 | ACTN-04 | SC7b | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/documentDraft.test.ts convex/runCockpitAgent.test.ts` | ✅ both exist — **extend** | ⬜ pending |
 | 18-05-02 | 05 | 3 | ACTN-04 | SC4, SC4b | convex-test integration (offline `SMOKE::` / `render=fail::` seams) | `pnpm --filter @pikar/backend exec vitest run convex/documentDraft.test.ts convex/cockpitTools.test.ts` | ✅ both exist — **extend** | ⬜ pending |
 | 18-06-01 | 06 | 4 | ACTN-04 | SC1, SC3b | convex-test + existing redaction pin | `pnpm --filter @pikar/backend exec vitest run convex/cockpitTools.test.ts convex/llmRedaction.test.ts` | ✅ both exist (⚠ `llmRedaction.test.ts:77-107` pins `cockpit.ts`'s audit call-site count at **exactly 2** — do not change it) | ⬜ pending |
 | 18-06-02 | 06 | 4 | ACTN-04 | SC2, SC7 | source scan (node pragma) + convex-test, mutation-verified | `pnpm --filter @pikar/backend exec vitest run convex/cockpitTools.test.ts convex/createdDocs.test.ts convex/dispatchGuard.test.ts` | ✅ `cockpitTools.test.ts` already carries `// @vitest-environment node`; `dispatchGuard.test.ts:222-252` already pins `executePlan` | ⬜ pending |
 | 18-07-01 | 07 | 5 | ACTN-04 | SC6 (partial) | web typecheck + Biome | `pnpm --filter @pikar/web exec tsc --noEmit` | ✅ | ⬜ pending |
 | 18-07-02 | 07 | 5 | ACTN-04 | provenance UI | web typecheck + Biome | `pnpm --filter @pikar/web exec tsc --noEmit` | ✅ | ⬜ pending |
-| 18-07-03 | 07 | 5 | ACTN-04 | SC6 (partial) | e2e | `pnpm --filter @pikar/web exec playwright test e2e/cockpit-created-document.spec.ts --reporter=line` | ❌ **created by this task** (Wave 0 gap) | ⬜ pending |
+| 18-07-03 | 07 | 5 | ACTN-04 | SC6 (partial) | e2e **authoring** (the RUN is 18-09's precondition 6) | `pnpm --filter @pikar/web exec playwright test e2e/cockpit-created-document.spec.ts --list && pnpm --filter @pikar/web exec tsc --noEmit && grep -c "output-card" apps/web/e2e/cockpit-created-document.spec.ts` | ❌ **created by this task** (Wave 0 gap) | ⬜ pending |
 | 18-08-01 | 08 | 6 | ACTN-04 | REG (row 15 precondition) | **MANUAL** — live Convex `skills` table read | *(none — see Manual-Only)* | n/a | ⬜ pending |
 | 18-08-02 | 08 | 6 | ACTN-04 | REG2 (rows 11-12) | unit (byte-identity) | `pnpm --filter @pikar/backend exec vitest run convex/skills.test.ts && pnpm --filter @pikar/contracts exec tsc --noEmit` | ✅ | ⬜ pending |
 | 18-09-01 | 09 | 7 | ACTN-04 | §9 DoD | hook | `node scripts/check-playbooks.mjs` | ✅ | ⬜ pending |
 | 18-09-02 | 09 | 7 | ACTN-04 | doc correctness | grep assertion | `grep -n "groundable without new extraction\|pre-commitment stands" .planning/ROADMAP.md` (must return NOTHING) | ✅ | ⬜ pending |
-| 18-09-03 | 09 | 7 | ACTN-04 | SC6 (human half), REG #3, REG #11/#15, U4 | **MANUAL** — live phase gate, 4 turns | *(none — see Manual-Only)* | n/a | ⬜ pending |
+| 18-10-01 | 10 | 6 | ACTN-04 | sequencing gate | **MANUAL** — is `17.1-10`'s live gate run? | *(none — see Manual-Only)* | n/a | ⬜ pending |
+| 18-10-02 | 10 | 6 | ACTN-04 | SC1b (drift half) | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts convex/blueprint.test.ts` | ✅ after 18-04-01; `blueprint.test.ts` ✅ | ⬜ pending |
+| 18-09-03 | 09 | 7 | ACTN-04 | SC6 (human half + the e2e RUN), REG #3, REG #11/#15, U4 | **MANUAL** — live phase gate, 4 turns, plus the Playwright run 18-07 could not do | *(none — see Manual-Only)* | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-**Sampling continuity check:** no 3 consecutive tasks lack an `<automated>` command. The only two
-manual-only tasks are `18-08-01` (a precondition gate, immediately followed by the automated
-`18-08-02`) and `18-09-03` (the terminal phase gate, preceded by two automated tasks).
+**Sampling continuity check:** no 3 consecutive tasks lack an `<automated>` command. `18-07-03`'s
+command is an offline *authoring* check (`--list` + `tsc` + an assertion grep) — the live Playwright
+RUN needs `convex dev`, `:3111` and seeded `E2E_USER_*` credentials an executor cannot mint, so it is
+plan 18-09's precondition 6. The three manual-only tasks are `18-08-01` and `18-10-01` (precondition
+gates, each immediately followed by an automated task in the same plan) and `18-09-03` (the terminal
+phase gate, preceded by two automated tasks).
 
 ---
 
@@ -100,6 +105,10 @@ plan, which is why there is no separate Wave 0 plan:
       SC3, SC7 and the drift exclusion). A new convex test file needs **no `watch.json` entry** and
       **no `importGuard.test.ts` registration** (`import.meta.glob` auto-scans).
 - [ ] `apps/web/e2e/cockpit-created-document.spec.ts` — created by task **18-07-03** (SC6 partial).
+      ⚠ Its offline driver is the `SMOKE::agent::create=…` op, a **CLOSED four-site registration in
+      `llm.ts`** that does NOT exist at HEAD. It is Registration Checklist **row 16**, owned by plan
+      **18-06** (wave 4). Without it the spec can never make an Output card appear — e2e runs with
+      no gateway key.
 
 Every other command in the map above points at a file that exists at HEAD and is **extended**, never
 replaced: `documentGen.test.ts`, `documentDraft.test.ts`, `cockpitTools.test.ts`, `skills.test.ts`,
@@ -124,8 +133,8 @@ replaced: `documentGen.test.ts`, `documentDraft.test.ts`, `cockpitTools.test.ts`
   changing underneath it and reports reds indistinguishable from a real regression (STATE.md, 17.1-02).
 - **Every new test needs a non-vacuity floor.** Source-scan tests must assert the anchor was found and
   the slice is non-empty; escape tests must assert the hostile string actually reached every slot.
-  Three tasks (18-01-02, 18-03-02, 18-04-02, 18-06-02) carry a **mandatory mutation check** whose
-  result must be recorded in the plan SUMMARY.
+  **Four** tasks — 18-01-02, 18-03-02, 18-04-02, 18-06-02 — carry a **mandatory mutation check**
+  whose result must be recorded in the plan SUMMARY.
 
 ---
 
@@ -134,6 +143,7 @@ replaced: `documentGen.test.ts`, `documentDraft.test.ts`, `cockpitTools.test.ts`
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | **The `cockpit-agent` candidate stream is free before Phase 18 edits it** | ACTN-04 | The contested state is in the **live Convex `skills` table**, not the working tree — `cockpit-agent.md` is CLEAN at HEAD (last touched `68afb7b`), so `git status` shows nothing. | Plan **18-08 Task 1**. Read the live `skills` rows for `name = "cockpit-agent"`: report the ACTIVE version and whether ANY row is `status: "candidate"`. Confirm Phase 16 closed with a recorded PASSING eval run. Proceed only if both hold. |
+| **`17.1-10`'s live gate has already run** | ACTN-04 | Whether another lane's live gate was EXECUTED is a project-state fact, not a working-tree fact. Landing Phase 18's `blueprint.ts` drift conjunct first silently corrupts the number that gate exists to measure, and the corruption is invisible afterwards. | Plan **18-10 Task 1**. Read `.planning/STATE.md`'s Lane 17.1 row and check for `17.1-10-SUMMARY.md`. Proceed only if closed with the gate recorded as run. |
 | **The trace row actually appears in a live turn** (REG #3) | ACTN-04 | **Structurally unprovable offline.** A tool name missing from the closed `agentSteps.tool` union makes `internal.agentSteps.record` throw *inside* the AI-SDK `onToolExecutionStart` callback, which the SDK **swallows** — no trace row in prod, every offline test green. Bitten twice (`searchVault`, `evaluateBusiness`). `traceParity.test.ts` is the best proxy and only covers schema↔VERB. | Plan **18-09 Task 3, turn 1**: *"Write me a one-pager on X."* Open the workspace trace and confirm a row renders with the new VERB copy. |
 | **The ACTIVE `cockpit-agent` body teaches the tool and the model calls it** (REG #11/#15) | ACTN-04 | Offline tests cannot see the live `skills` row. The `.md` edit only mints a **candidate**; the tool is invisible until an eval activates it — the **withheld-tool pattern** (hit at RPLY-01, again at 16-09 for ~$0.46). | Plan **18-09 Task 3**, preconditions 3-4 (deploy → `seedSkills` → activate the candidate through its eval gate, recording run id / verdicts / cost cross-checked against `npx convex data audit`), then turn 1 must actually call the tool. |
 | **`content-drafter` was the body actually loaded for short-form** | ACTN-04 | No offline assertion can tell which registry body produced given prose. | Plan **18-09 Task 3, turn 2**: *"Give me three LinkedIn post options."* Three short vault rows, **no Download button**, and bodies that read like posts rather than like a proposal. |

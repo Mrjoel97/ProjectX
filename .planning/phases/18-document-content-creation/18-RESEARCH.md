@@ -102,7 +102,7 @@
 
 | ID | Description | Research Support |
 |----|-------------|-----------------|
-| ACTN-04 | The agent can create standalone documents/content artifacts (beyond email attachments) | §Architecture Pattern 1 (the `vault.ts insertCreatedDoc` internalMutation, copying `ingestFromAttachment`), Pattern 2 (the `createDocument` cockpit tool), Pattern 3 (`origin` provenance field), Pattern 4 (structural retrieval exclusion), Pattern 5 (format parameterization + `renderHtmlDocument`), Pattern 6 (the Output card off `vaultSources`), §Registration Checklist, §Validation Architecture |
+| ACTN-04 | The agent can create standalone documents/content artifacts (beyond email attachments) | §Architecture Pattern 1 (the `vault.ts insertCreatedDoc` internalMutation, copying `ingestFromAttachment`), Pattern 2 (the `createDocument` cockpit tool), Pattern 3 (`origin` provenance field), Pattern 4 (structural retrieval exclusion), Pattern 5 (format parameterization + `renderHtmlDocument`), Pattern 6 (the Output card off `vaultSources`), Pattern 2b (the revision surface), Pattern 7a (the `skillName` reach that makes `content-drafter` live), §Registration Checklist, §Validation Architecture |
 </phase_requirements>
 
 ---
@@ -140,9 +140,14 @@ The three findings that most change the plan versus CONTEXT.md:
 **Primary recommendation:** one `format` parameter threaded through `buildDocFilename` +
 `renderAndStore`; one pure `renderHtmlDocument` in `packages/core/src/documentGen.ts` rendering
 `DocToken[]` with a source-scanned escape boundary; one `origin: v.optional(v.union("agent","agent_promoted"))`
-field on `vaultDocuments`; one `internalMutation` in `vault.ts`; one `createDocument` tool with a
-closed `form: "short"|"long"` enum; one ungated `content-drafter` skill row; one Output card off two
-new optional fields on `vaultSources`. Sequence **after `17.1-10`** and **after Phase 16 closes**.
+field on `vaultDocuments`; **two** `internalMutation`s in `vault.ts` (`insertCreatedDoc` +
+`patchCreatedDoc`); **one** `createDocument` tool with a closed `form: "short"|"long"` enum **and an
+optional `replace` #index that carries the locked replace-in-place revision** (Pattern 2b — no second
+tool, no second registration surface); **one closed `skillName` argument on `draftDocument`, which is
+the ONLY thing that makes the new skill row reachable** (Pattern 7a); one ungated `content-drafter`
+skill row; one Output card off two new optional fields on `vaultSources`. Every registration surface
+is enumerated once in **§Registration Checklist** — work it top to bottom in one commit.
+Sequence **after `17.1-10`** and **after Phase 16 closes**.
 
 ---
 
@@ -161,7 +166,7 @@ new optional fields on `vaultSources`. Sequence **after `17.1-10`** and **after 
 
 | Module | Location | Purpose | When to Use |
 |--------|----------|---------|-------------|
-| `tokenizeMarkdown` / `inlineRuns` / `DocToken` | `packages/core/src/documentGen.ts:44-115` | markdown string → typed block list (**the structured spec of SC#5**) | Both renderers consume this; never re-parse markdown elsewhere |
+| `tokenizeMarkdown` / `inlineRuns` / `DocToken` | `packages/core/src/documentGen.ts:41-114` | markdown string → typed block list (**the structured spec of SC#5**) | Both renderers consume this; never re-parse markdown elsewhere |
 | `buildDocFilename` / `exceedsByteCap` | `packages/core/src/documentGen.ts:161-191` | Deterministic filename + the 8 MiB plan-attachment cap | Parameterize by format (§Pattern 5) |
 | `startIngest` | `packages/backend/convex/vaultIngest.ts:30-46` | The SOLE legal ingest start | **Do NOT call it this phase.** Deliberate omission = the retrieval exclusion. Do NOT edit the file (trips `vault.md`) |
 | `categoryFor` / `isSearchable` | `packages/vault/src/categories.ts:30-49` | `source → category`; the searchable-MIME set | `categoryFor({ source: "agent" })` → `"workspace-docs"`, matching all four agent writers |
@@ -194,6 +199,7 @@ packages/core/src/
 packages/backend/convex/
 ├── schema.ts                 # + vaultDocuments.origin  |  + agentSteps.tool literal  |  + 2 vaultSources fields
 ├── llm.ts                    # renderAndStore(+format) | generateAttachment(+format arg) | createDocument tool
+│                             # + draftDocument(+skillName)  ← THE reach to content-drafter (Pattern 7a)
 ├── vault.ts                  # + insertCreatedDoc / patchCreatedDoc internalMutations
 ├── vaultSources.ts           # byThread gains a `role` arg
 ├── blueprint.ts              # :571 drift filter += origin  (+ swap :199/:571 to BLUEPRINT_KIND)
@@ -205,7 +211,12 @@ packages/contracts/
 ├── skills/content-drafter.md            # NEW body
 ├── src/skills/contentDrafter.ts         # NEW one-line mirror (HAND-written, no generator exists)
 ├── src/skill.ts                         # + CONTENT_DRAFTER_SKILL const (NOT in GATED_SKILLS — see Pattern 7)
-└── skills/cockpit-agent.md              # + one `##` section teaching createDocument  ← GATED, see Pitfall 1
+├── skills/cockpit-agent.md              # + one `##` section: createDocument, the form choice, the
+│                                        #   confirm-when-SUGGESTED rule, and revise-by-#index
+│                                        #   ← GATED, see Pitfall 1
+└── src/skills/cockpitAgent.ts           # :8 — REGENERATE the one-line mirror in the SAME commit.
+                                         #   skills.test.ts:735 asserts byte-identity; editing the
+                                         #   .md alone turns that drift row RED (§Registration Checklist)
 
 apps/web/app/(app)/dashboard/
 ├── workspace/cards.tsx       # + VERB entry  |  + OutputCard component
@@ -258,9 +269,12 @@ export const insertCreatedDoc = internalMutation({
 ⚠ **`kind` values:** use `"created_document"` / `"created_content"`. Do **not** use `"document"` —
 `smoke.ts:819 seedVoiceDocSession` already writes it.
 
-**Revision (replace-in-place, locked):** a sibling `patchCreatedDoc` that re-reads the row, asserts
-`doc.tenantId === tenantId && doc.origin === "agent"`, then `ctx.db.patch(id, { title, text, size,
-contentHash, storageId })` — the `blueprint.ts:346-356 confirmBlueprint` patch branch verbatim.
+**Revision (replace-in-place, locked):** a sibling `patchCreatedDoc` — the
+`blueprint.ts:346-356 confirmBlueprint` patch branch verbatim, plus a `#index → docId` resolution so
+no raw `_id` ever reaches the model. **Its invoking surface is the `replace` argument on the SAME
+`createDocument` tool — full signature, guards and delete-ordering in Pattern 2b.** A
+`patchCreatedDoc` with no caller is exactly the withheld-tool failure this phase exists to avoid;
+Pattern 2b is what makes it reachable.
 
 **Audit (CLAUDE.md §4):** one refs-only `internal.audit.log` from the **tool**, modelled on
 `research.ts:188-211` (`{ topicHash, form, vaultDocId: String(id), hasPdf: boolean }`) —
@@ -287,18 +301,26 @@ Exact shape contract, read off `generateAttachment` (llm.ts:1275-1298):
         "Create a standalone document or piece of content and save it to the user's vault. " +
         "Use `long` for proposals/one-pagers/reports and `short` for posts, ad copy or headlines. " +
         "It saves only — it never sends anything.",
-      inputSchema: jsonSchema<{ topic: string; form: "short" | "long" }>({
+      inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
         type: "object",
         properties: {
           topic: { type: "string", description: "What to write, in plain language." },
           form: { type: "string", enum: ["short", "long"] }, // CLOSED — the setMode precedent
+          // REVISION (locked: replace-in-place, one row, no history). 1-based #index over the
+          // documents this conversation already created — the regenerateAttachment idiom
+          // (llm.ts:1300-1330), NEVER a raw _id. See Pattern 2b.
+          replace: {
+            type: "number",
+            description: "1-based #index of a document already created in this conversation to rewrite in place.",
+          },
         },
-        required: ["topic", "form"],
+        required: ["topic", "form"],   // `replace` stays OPTIONAL — create is the default shape
         additionalProperties: false,
       }),
-      execute: async ({ topic, form }): Promise<string> => {
-        // …scan → draft → (long: render+store PDF) → runMutation(insertCreatedDoc) → runMutation(audit.log)
-        //   → runMutation(vaultSources.insert, { role: "created", … })
+      execute: async ({ topic, form, replace }): Promise<string> => {
+        // …scan → draft(skillName by form) → (long: render+store PDF)
+        //   → runMutation(replace === undefined ? insertCreatedDoc : patchCreatedDoc)
+        //   → runMutation(audit.log) → runMutation(vaultSources.insert, { role: "created", … })
         return `Created "${title}" — saved to your vault${pdf ? " with a PDF download" : ""}.`;
       },
     }),
@@ -312,6 +334,112 @@ Invariants this shape carries (all verified at HEAD):
   (llm.ts:2208-2222 / :2223-2235). A new tool needs only the schema literal + the VERB entry.
 - **Spend:** nothing to add. The loop's `preCall`/`recordSpend` already govern the turn (the
   `renderAndStore` ponytail comment at llm.ts:887-892 says so explicitly).
+- **`threadId` comes from `readPlan()`**, never from the model — `searchVault` reads
+  `plan.threadId` exactly this way at llm.ts:1700/:1732. That single call is both the cross-tenant
+  guard and the key the Output card and the revision index are scoped by.
+
+**The locked trigger rule lands in PROSE, not in code (U4).** *"Explicitly asked → create directly;
+agent-suggested → confirm first"* is model behaviour, and CLAUDE.md §5 puts model behaviour in the
+registry. It is assigned to **two** places and nowhere else:
+1. the new `##` section of `packages/contracts/skills/cockpit-agent.md` — one sentence, imperative:
+   *"When the user asks for a document, call `createDocument`. When creating one is YOUR idea, say
+   what you would write and wait for a yes."*
+2. the tool `description`'s closing clause — the `generateAttachment` precedent, which carries the
+   same rule inline today (*"Only after the user asks for (or confirms) an attachment"*,
+   llm.ts:1277).
+
+There is **no code branch and no offline test** for it: the tool cannot see whether the idea was the
+user's. It is verified by the **live-turn UAT** only (added to the phase gate below). Do not let a
+plan invent a `confirmed: boolean` argument — a model-supplied confirmation flag is the model
+grading its own trigger, which is worse than the prose.
+
+---
+
+### Pattern 2b — Revision: the SAME tool, one optional `replace` #index (the locked replace-in-place)
+
+CONTEXT.md locks *"revisable in conversation … revision REPLACES in place, patching the same `_id`,
+no version history."* That needs an **invoking surface**, and the laziest one that works is the
+optional `replace` argument on `createDocument` above — **not** a second tool.
+
+**Why one tool, not two.** A second tool key costs a second `agentSteps.tool` literal, a second VERB
+entry, a second `##` teaching block in the contested `cockpit-agent.md`, and a second registration
+row that can silently rot (§Registration Checklist). An optional property on a schema the phase is
+already writing costs **zero** registration surface. The repo precedent is exact:
+`regenerateAttachment` (llm.ts:1300-1330) revises **from a new topic at a 1-based #index**, which is
+the same interaction ("make it shorter" → the model re-issues the topic with the instruction folded
+in) — so the model already has this shape in its training of this codebase's own tools.
+
+**How the agent knows WHICH document.** Never a raw `_id`. The index resolves against the
+**per-thread `vaultSources` row this phase already writes** (Pattern 8 / Open Question 3): one
+append-only row per turn carrying all N `docIds` + `titles`, `byThread` reading the latest. `#1` is
+the first document of the most recent creating turn. `_id`s therefore never enter the model's
+context, and the model cannot address another tenant's row even by guessing.
+
+**The resolution happens INSIDE the mutation, not in the action.** One round trip, no new
+internalQuery, and the raw id never leaves the DB plane:
+
+```ts
+// packages/backend/convex/vault.ts — sibling of insertCreatedDoc. The blueprint.ts:346-356
+// confirmBlueprint patch branch verbatim, plus the index→docId resolution.
+export const patchCreatedDoc = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    index: v.number(),            // 1-based, straight off the tool arg
+    title: v.string(),
+    form: v.union(v.literal("short"), v.literal("long")),
+    markdown: v.string(),
+    contentHash: v.string(),
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, a): Promise<{ ok: false } | { ok: true; oldStorageId?: Id<"_storage"> }> => {
+    // ⚠ THE role FILTER IS LOAD-BEARING — do NOT simplify it back to .first(). Pattern 8 makes
+    // vaultSources DUAL-PURPOSE: a grounding row has no `role`, a created row carries
+    // role: "created". The table is append-only per thread and by_thread is latest-wins, so a bare
+    // .first() returns whatever the LAST turn wrote — one searchVault turn between a create and a
+    // revise and `docIds[index-1]` resolves to a USER-UPLOADED doc, the origin guard below
+    // correctly refuses, and the locked "make that one shorter" silently stops working. It fails
+    // safe, but it fails. Same shape as vaultSources.byThread's filtered read (Pattern 8).
+    const card = (
+      await ctx.db
+        .query("vaultSources")
+        .withIndex("by_thread", (q) => q.eq("tenantId", a.tenantId).eq("threadId", a.threadId))
+        .order("desc")
+        .take(20) // ponytail: 20-row window; raise only if a thread can exceed 20 turns between revises
+    ).find((r) => r.role === "created");
+    const docId = card?.docIds[a.index - 1];
+    if (!docId) return { ok: false };                       // no such #index → the tool returns a sentence
+    const doc = await ctx.db.get(docId);
+    // BOTH guards, not one: tenant (isolation) AND origin (never let a revise overwrite an UPLOAD).
+    if (!doc || doc.tenantId !== a.tenantId || doc.origin !== "agent") return { ok: false };
+    const old = doc.storageId;
+    await ctx.db.patch(docId, {
+      title: a.title,
+      kind: a.form === "long" ? "created_document" : "created_content",
+      text: a.markdown,
+      size: new TextEncoder().encode(a.markdown).length,
+      contentHash: a.contentHash,
+      storageId: a.storageId,   // undefined REMOVES the field ⇒ long→short drops the Download button
+    });
+    return { ok: true, oldStorageId: old };
+  },
+});
+```
+
+**Three consequences to carry into the plan:**
+- **Delete the superseded PDF bytes AFTER the patch persists** — `ctx.storage.delete(oldStorageId)`
+  in the tool, the `regenerateAttachment` ordering at llm.ts:1327 (*"delete AFTER the new ref
+  persists — no orphan/dangling ref"*). Only when `oldStorageId !== a.storageId`.
+- **A revise writes a NEW `vaultSources` row**, same `docIds`, new `titles`/`snippet`. That table is
+  append-only by design (`vaultSources.ts:16-18`) and `byThread` reads the latest, so the Output
+  card refreshes with **zero new code** — it is the identical `internal.vaultSources.insert` call the
+  create path makes.
+- **`origin` stays `"agent"`** on a revise. A promoted doc (`origin: "agent_promoted"`) fails the
+  guard and cannot be silently rewritten — deliberate, and it is what the guard is for.
+
+**Registration cost of revision: ZERO.** Same tool key, same `agentSteps.tool` literal, same VERB
+entry, same teaching section. Only the `description` gains a clause. The test that proves it is
+**SC7** in the Validation Architecture map.
 
 ---
 
@@ -422,6 +550,22 @@ new step literal, no new VERB entry, no new schema union member.
 **`gmail.ts` needs zero changes** — `buildMime` emits `Content-Type: ${a.mimeType}` generically
 (gmail.ts:131), so an HTML part rides the existing MIME builder.
 
+⚠ **PLANNER NOTE — the second format is reachable ONLY through the EMAIL attachment path, and that
+is correct.** `renderHtmlDocument` is called from `renderAndStore`'s html branch, and
+`renderAndStore` is reached only by `generateAttachment` / `regenerateAttachment` (Phase 3.3).
+**Pattern 7's created-document flow never calls it** — it emits markdown plus an optional derived
+PDF, because CONTEXT.md locks *markdown is the artifact of record*. So the phase's own headline
+artifact (the created document) does not exercise the second format at all.
+🚫 **Do NOT "fix" that asymmetry by storing HTML as the created document's artifact of record.** That
+breaks the lock, and `isSearchable("text/html")`-style reasoning does not save it: a non-markdown
+vault row lands at `pending_extraction` and round-trips through `vaultExtract` to recover text we
+rendered *from* (see §Anti-Patterns and vault.ts:196-216).
+**SC#4 is therefore demonstrated on the attachment path, not the created-document path:** the
+offline pins (`buildDocFilename(…, "html")` → `.html`; the `renderAndStore` html branch → a
+`text/html` blob through the same PII → drafter → cap → store chain — SC4 / SC4b in §Validation
+Architecture) plus one live turn asking for an **emailed attachment** in HTML. A planner who finds
+no HTML anywhere in the createDocument flow is looking at the design, not at a gap.
+
 **Two ceilings, don't confuse them:** `PLAN_ATTACHMENT_CAP_BYTES` = **8 MiB**
 (`packages/core/src/documentGen.ts:183`, total across a plan's attachments, what `renderAndStore`
 enforces) vs `VAULT_FILE_CAP_BYTES` = **100 MiB** (`packages/vault/src/constants.ts:2`, enforced at
@@ -444,8 +588,8 @@ export type InlineRun = { text: string; bold: boolean };
 ```
 
 `draftDocument` (llm.ts:3029-3088) returns `{ title, markdown }` via `generateObject` — a
-**model-authored string**. `tokenizeMarkdown` (:44-115) turns it into `DocToken[]`; `inlineRuns`
-(:96-115) resolves `**bold**` and *strips every other inline marker*. `markdownToPdf` already draws
+**model-authored string**. `tokenizeMarkdown` (:41-93) turns it into `DocToken[]`; `inlineRuns`
+(:101-114) resolves `**bold**` and *strips every other inline marker*. `markdownToPdf` already draws
 from tokens. **The boundary is: string → `tokenizeMarkdown` → `DocToken[]` → renderer.** The new
 HTML renderer sits on the same boundary; `document-drafter` stays byte-unchanged, as locked.
 
@@ -522,12 +666,13 @@ that the file contains no `encode(draft.markdown)` — pinning that the tool can
 
 ---
 
-### Pattern 7 — Short-form vs long-form: three agreeing structural signals
+### Pattern 7 — Short-form vs long-form: four agreeing structural signals (and the one that reaches the skill)
 
 | Signal | short | long |
 |---|---|---|
 | Tool arg | `form: "short"` | `form: "long"` |
 | Skill row | `CONTENT_DRAFTER_SKILL` (**new**, v1) | `DOCUMENT_DRAFTER_SKILL` (**unchanged**, locked) |
+| Loaded by | `draftDocument({ skillName })` — Pattern 7a | `draftDocument()` (default, byte-identical to today) |
 | `vaultDocuments.kind` | `"created_content"` | `"created_document"` |
 | **`storageId`** | **absent** | **present** (the derived PDF) |
 
@@ -542,6 +687,79 @@ Long-form flow: draft → `markdownToPdf(draft.title, draft.markdown)` → `ctx.
 Blob([bytes], { type: "application/pdf" }))` → pass `storageId` to `insertCreatedDoc`. (Reuse
 `renderAndStore` only if it is refactored out of its closure — see Pitfall 6; the two-line direct
 call is cheaper.)
+
+---
+
+### Pattern 7a — THE BLOCKER, RESOLVED: `draftDocument` gains a closed `skillName` argument
+
+**The problem, verified at HEAD.** `draftDocument` (`packages/backend/convex/llm.ts:3029-3088`) is
+the ONLY drafting seam, and it **hardcodes** `DOCUMENT_DRAFTER_SKILL` at *both* lookup branches —
+`:3048` (`internal.skills.getSkillVersion`) and `:3051` (`internal.skills.getActiveSkill`) — and
+exposes no skill-name argument. Its args today are exactly
+`{ tenantId, safeText, safeTextHash, skillVersion? }` (`:3030-3037`). **Ship the 5-file
+`content-drafter` mirror without changing this and the skill row is dead weight nothing ever
+loads** — the withheld-tool pattern the phase is already paying Phase-16 rent to avoid.
+
+**The fix (this is the ONE resolution; there is no alternative in this document).** `draftDocument`
+gains an optional, CLOSED `skillName`, defaulted to today's value. Two lines of args, one line of
+handler:
+
+```ts
+// packages/backend/convex/llm.ts — draftDocument args, appended after `skillVersion` (:3036).
+    // Phase-18 (ACTN-04): WHICH drafter body to load. CLOSED union, not v.string(): this action is
+    // internal-only and model-unreachable, but an open name would let any caller point the drafter
+    // at any registry row. Absent = document-drafter, so every shipped caller stays byte-identical
+    // and `document-drafter`'s BODY is untouched (CONTEXT.md's "REUSED UNCHANGED" lock holds — this
+    // changes who is ASKED for, never what it says).
+    skillName: v.optional(
+      v.union(v.literal(DOCUMENT_DRAFTER_SKILL), v.literal(CONTENT_DRAFTER_SKILL)),
+    ),
+```
+
+```ts
+// handler destructure (:3038-3041) gains skillName; then the ONE name, used by BOTH branches:
+    const name = skillName ?? DOCUMENT_DRAFTER_SKILL;
+    const skill: { body: string; version: number } =
+      skillVersion !== undefined
+        ? await ctx.runQuery(internal.skills.getSkillVersion, { name, version: skillVersion })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name });
+```
+
+**`internal.skills.{getActiveSkill,getSkillVersion}` need ZERO change** — both already take
+`name: v.string()` (`skills.ts:98-101`, `:249-251`). The fail-closed contract is inherited verbatim:
+`NO_ACTIVE_SKILL` unseeded, `NO_SUCH_SKILL_VERSION` on a bad pin, and the lookup still runs BEFORE
+the SMOKE short-circuit (`:3052`) so it is exercised offline.
+
+**The exact call sites after the change — all three:**
+
+| Call site | Passes | Effect |
+|---|---|---|
+| `renderAndStore` (llm.ts:901-910) | *nothing new* | default → `document-drafter`, byte-identical to today |
+| `createDocument`, `form: "long"` | `skillName: DOCUMENT_DRAFTER_SKILL` (explicit, for readability) | the locked, unchanged long-form drafter |
+| `createDocument`, `form: "short"` | `skillName: CONTENT_DRAFTER_SKILL` | **the reach that makes the new skill row live** |
+
+**`skillVersions` plumbing (the EVAL-01 pin).** `buildCockpitTools` captures
+`skillVersions?: Record<string, number>` as its append-only 5th arg (`llm.ts:734-737`);
+`renderAndStore` reads `skillVersions?.[DOCUMENT_DRAFTER_SKILL]` at `:908`. The record is **keyed by
+skill name**, so the second drafter needs no new plumbing at all — the tool passes:
+
+```ts
+const skillName = form === "short" ? CONTENT_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
+// … skillName, skillVersion: skillVersions?.[skillName],
+```
+
+`skillVersions?.[CONTENT_DRAFTER_SKILL]` is **always `undefined` today**, and that is correct, not a
+gap: `run-eval-golden.mjs`'s `SKILL_NAMES` — the only writer of that record — is **derived from
+`GATED_SKILLS`** (`run-eval-golden.mjs:70-77`, reading `packages/contracts/src/skill.ts` off disk),
+and `content-drafter` is deliberately NOT gated (below). So the pin resolves to the active row,
+which is the whole intent. If a later phase gates `content-drafter`, it becomes pinnable **with no
+further code change** — the keyed lookup already handles it.
+
+**Test rows this adds** (both in `documentDraft.test.ts`, which already pins the fail-closed
+behaviour at `:18-40`): a `skillName: CONTENT_DRAFTER_SKILL` call loads the content-drafter body,
+and fails closed unseeded. The three existing `draftDocument` assertions
+(`documentDraft.test.ts:18/:32/:43`, `runCockpitAgent.test.ts:592-608`) pass **unchanged** — that is
+what the default buys.
 
 **The `content-drafter` skill — the 5-file mirror** (PARALLELIZATION singleton rule #2):
 
@@ -561,7 +779,7 @@ call is cheaper.)
 **Do NOT add `CONTENT_DRAFTER_SKILL` to `GATED_SKILLS`.** `run-eval-golden.mjs`'s `SKILL_NAMES` is
 **derived** from `GATED_SKILLS` (:70-74), so gating makes it pinnable — but there is **no golden
 fixture that reaches `createDocument`**, so the first body edit would mint a candidate that no eval
-run can certify. That is the exact deadlock recorded for `business-blueprint` in `skill.ts:155-159`.
+run can certify. That is the exact deadlock recorded for `business-blueprint` in `skill.ts:112-128`.
 Copy that comment's rationale into the new const. Revisit when a fixture exists.
 
 ---
@@ -650,12 +868,63 @@ the edit is not an option — a created doc lands at `status: "ready"` and infla
 
 ---
 
+## Registration Checklist
+
+> ⚠ **THE TRAP, first, because it is silent.** `schema.ts:485-487` and `:489-491` record the failure
+> mode **in the file**: a step insert for a tool name that is not a literal in the closed
+> `agentSteps.tool` union throws **inside** the AI-SDK `onToolExecutionStart` callback, and the SDK
+> **swallows it**. Result: *no trace row in production, every offline test green.* This codebase has
+> been bitten at `searchVault` and again at `evaluateBusiness`. The same class of silence covers the
+> skill surfaces: a `.md` edited without its mirror regenerated, or a mirror seeded without a live
+> `seedSkills` run, produces a tool the model was never taught — the **withheld-tool pattern** (hit
+> at RPLY-01, hit again at 16-09 for ~$0.46 of paid diagnosis). **Neither failure is visible from a
+> green test run.** Work this table top to bottom, in ONE commit.
+
+| # | Surface | File (verified at HEAD) | The exact edit | Guarded by |
+|---|---|---|---|---|
+| 1 | Step-trace union | `packages/backend/convex/schema.ts` — `tool: v.union(` **:462-521** | append `v.literal("createDocument"),` after `v.literal("declareUnsupported"),` (**:521**) | `traceParity.test.ts` (set equality **both ways**) |
+| 2 | Trace verb | `apps/web/app/(app)/dashboard/workspace/cards.tsx` — `VERB` **:1139-1178** | one entry: `createDocument: ["Writing it up…", "Saved it to your vault"],` | same test — **#1 without #2 is RED, and so is #2 without #1** |
+| 3 | Tool key | `packages/backend/convex/llm.ts` — tool record **:1015-1965** | `createDocument: tool({ … })` (Pattern 2) | nothing automatic — see #10/#12 |
+| 4 | **Drafter reach** | `packages/backend/convex/llm.ts` — `draftDocument` **:3029-3088** | the closed `skillName` arg + `const name = skillName ?? DOCUMENT_DRAFTER_SKILL` at **both** lookup branches (**:3049**, **:3052**) — **Pattern 7a** | `documentDraft.test.ts` (add a `content-drafter` row) |
+| 5 | Vault writes | `packages/backend/convex/vault.ts` | `insertCreatedDoc` (Pattern 1) **and** `patchCreatedDoc` (Pattern 2b) | `createdDocs.test.ts` (NEW) |
+| 6 | Skill const | `packages/contracts/src/skill.ts` | `export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;` — **NOT** added to `GATED_SKILLS` (**:170-176**); copy the deliberately-ungated rationale comment from **:112** | — |
+| 7 | Skill body | `packages/contracts/skills/content-drafter.md` | NEW file (hook, length, platform voice) | #9 |
+| 8 | Skill mirror | `packages/contracts/src/skills/contentDrafter.ts` | HAND-write the one-line escaped literal `export const contentDrafterSkillBody = "…";` — **no generator script exists** (verified: none in `scripts/`, none in any `package.json`). Copy the 5-line "AUTO-DERIVED" header from `cockpitAgent.ts:1-5` | #9 |
+| 9 | Drift row | `packages/backend/convex/skills.test.ts` — the `test.each` table **:730-746** | `["content-drafter.md", contentDrafterSkillBody],` | itself (LF-normalized byte-identity) |
+| 10 | Seed row | `packages/backend/convex/skills.ts` — the `seeds` array ~**:320** | `{ name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody }` → `rows.length === 0` inserts **v1 `active`**, no eval, no paid run | — |
+| 11 | **Cockpit body** | `packages/contracts/skills/cockpit-agent.md` | one `##` section: what `createDocument` is, `short` vs `long`, **the confirm-when-SUGGESTED rule (U4)**, and revise-by-`replace` #index | ⚠ **GATED** — see Pitfall 1 |
+| 12 | **Cockpit mirror** | `packages/contracts/src/skills/cockpitAgent.ts` — the single literal on **:8** | REGENERATE by hand in the SAME commit | `skills.test.ts:735` — `["cockpit-agent.md", cockpitAgentSkillBody]` asserts **byte-identity**. **Editing #11 without #12 turns that row RED.** This is the surface most often forgotten |
+| 13 | Card fields | `packages/backend/convex/schema.ts` `vaultSources` **:345-352** + `vaultSources.ts byThread` | `role` + `snippet` (Pattern 8) | `createdDocs.test.ts` |
+| 14 | Provenance | `packages/backend/convex/schema.ts` `vaultDocuments` | `origin` (Pattern 3) | `createdDocs.test.ts` |
+| 16 | **Offline E2E driver** | `packages/backend/convex/llm.ts` — the SMOKE agent grammar, a **CLOSED FOUR-SITE** registration: `AgentSmokeOp` **:2449-2463**, `parseAgentSmoke` **:2465-2528**, `SMOKE_OP_TOOL` **:2534-2549**, `runAgentSmokeOp` **:2551-2586** | add a `create=<short\|long>:<topic>` op at all four sites (`SMOKE_OP_TOOL.create = "createDocument"`). **Without it no e2e can ever produce a created document** — `apps/web/e2e/` runs with no gateway key, which is why `cockpit-attachment.spec.ts` drives everything through `SMOKE::agent::attach=…`. Owned by plan 18-06 | `SMOKE_OP_TOOL` is typed as a TOTAL `Record<AgentSmokeOp["kind"], StepTool>`, so a new op **cannot compile** without naming its tool — plus a `parseAgentSmoke` round-trip test in `cockpitTools.test.ts` |
+| 15 | **Live registry** | the deployed Convex `skills` table | run `seedSkills` after deploy. `content-drafter` lands **active v1**. `cockpit-agent` is in `GATED_SKILLS`, so the #11 edit publishes a **CANDIDATE** (`maxVersion+1`) that needs a green eval before it is active — **the tool is invisible to the model until that flip** | **nothing offline** — verify by reading the live table |
+
+**Explicitly NOT a registration surface — do not edit:**
+
+- `packages/backend/convex/traceParity.test.ts` — it derives both sets automatically; it is the
+  *guard*, not a registration site. Its `>= 22` floor (**:57-58**) is a non-vacuity floor, **not** a
+  count. Do not bump it.
+- `packages/backend/convex/importGuard.test.ts` — `import.meta.glob` auto-scans; a new module needs
+  no entry.
+- `packages/contracts/src/skills/skillBodies.test.ts` — its 13-entry table contains **neither**
+  `cockpit-agent` **nor** `document-drafter`. It is *not* the guard for #12; `skills.test.ts` is.
+  (CONTEXT.md misattributes this.)
+- `docs/playbooks/watch.json` — needed only if a NEW module lands under `packages/`. Pattern 1's
+  "no new convex module" rule is what keeps this at zero (`check-playbooks.mjs:125-134` **blocks the
+  turn** otherwise).
+
+**The two surfaces with no automated guard at all** are **#3** (a tool key nothing cross-checks) and
+**#11/#15** (whether the *active* body teaches the tool). Both are covered only by the mandatory
+live turn in §Validation Architecture → Sampling Rate → Phase gate. Do not close the phase without it.
+
+---
+
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---|---|---|---|
-| markdown → structured blocks | a second parser / `marked` | `tokenizeMarkdown` (documentGen.ts:44) | Handles headings, bullets, ordered, GFM pipe tables, paragraph joining; already unit-tested |
-| inline emphasis | a regex in the renderer | `inlineRuns` (documentGen.ts:96) | Also *strips* stray `*`/`` ` ``/`_` so raw syntax never reaches the page |
+| markdown → structured blocks | a second parser / `marked` | `tokenizeMarkdown` (documentGen.ts:41) | Handles headings, bullets, ordered, GFM pipe tables, paragraph joining; already unit-tested |
+| inline emphasis | a regex in the renderer | `inlineRuns` (documentGen.ts:101) | Also *strips* stray `*`/`` ` ``/`_` so raw syntax never reaches the page |
 | PDF rendering | anything | `markdownToPdf` (llm.ts:3527) + `toWinAnsi` | Standard-14 WinAnsi encoding failures are the #1 pdf-lib throw; already sanitize-or-drop |
 | Filename safety / collisions | ad-hoc slug + counter | `buildDocFilename` (documentGen.ts:161) | LLM-free, deterministic, collision-suffixed |
 | Size guarding | a new constant | `exceedsByteCap` / `PLAN_ATTACHMENT_CAP_BYTES` | 8 MiB plan-attachment total; distinct from the 100 MiB vault cap |
@@ -689,13 +958,15 @@ RED** ($0.4376 spent, nothing activated).
 **Warning signs:** a plan step that says "edit cockpit-agent.md" with no preceding live-DB check.
 
 ### Pitfall 2 — The swallowed step-insert (bitten TWICE, and there are TWO live instances right now)
-**What goes wrong:** a tool whose name is not a literal in `agentSteps.tool` (schema.ts:461-521)
+**What goes wrong:** a tool whose name is not a literal in `agentSteps.tool` (schema.ts:462-521)
 makes `internal.agentSteps.record` throw **inside** the AI-SDK `onToolExecutionStart` callback
 (llm.ts:2208-2222), which swallows it. **No trace row in prod; every offline test green.**
 **Why it happens:** `StepTool` is `Doc<"agentSteps">["tool"]` (llm.ts:1987) — the `as StepTool` cast
 turns a missing literal into a *runtime* validator throw.
-**How to avoid:** add the literal in the same commit as the tool key. Note `schema.ts` is watched by
-**no** playbook, so the Stop hook will not prompt you.
+**How to avoid:** add the literal in the same commit as the tool key — **§Registration Checklist
+rows 1 and 2, which must land together** (`traceParity.test.ts` asserts set equality BOTH ways, so
+either one alone is RED). Note `schema.ts` is watched by **no** playbook, so the Stop hook will not
+prompt you.
 **⚠ Pre-existing:** `resetPlan` (llm.ts:1171) and `recordScorecardAnswer` (llm.ts:1810) are live
 tools with **no** schema literal — they are silently trace-less today. `traceParity.test.ts` cannot
 see this (it compares schema↔VERB, never schema↔llm.ts tool keys). **Decide deliberately** whether
@@ -728,12 +999,20 @@ session-keyed**, and re-arms whenever a foreign lane saves.
 **Phase 18's forced playbooks** (all four already cover every path; **no `watch.json` edit needed**
 if you follow Pattern 1's "no new convex module" rule):
 
-| Playbook | Triggered by |
-|---|---|
-| `cockpit.md` | `llm.ts`, `cards.tsx`, `documentGen.ts`, `vaultSources.ts`, `traceParity.test.ts`, `plans.ts` |
-| `skill-registry.md` | `contracts/skills/*`, `contracts/src/skills/*`, `contracts/src/skill.ts`, `skills.ts` |
-| `vault.md` | `vault.ts`, `packages/vault/`, `apps/web/.../dashboard/vault/` |
-| `onboarding.md` | `blueprint.ts` (Pattern 9) |
+⚠ **Read the two columns as DIFFERENT things.** "Files Phase 18 EDITS" is the phase's actual
+edit-set — those are what force the playbook. "Also on the watch list" is everything *else* the
+playbook watches: Phase 18 does **not** touch them, and a planner who reads them as permission has
+drifted.
+
+| Playbook | Files Phase 18 EDITS (these force it) | Also on the watch list — **WATCH-ONLY, do not edit** |
+|---|---|---|
+| `cockpit.md` | `llm.ts`, `cards.tsx`, `documentGen.ts`, `vaultSources.ts` | `plans.ts` ⛔ (`patchPlan`/`resetPlan` are on CONTEXT.md's **explicit NOT-Phase-18** list — the locked drift tripwire), `traceParity.test.ts` (guard, **"no edit"** per §Registration Checklist), `actionType.ts` ⛔, `cockpit.ts` ⛔, `dispatchGuard.test.ts`, `gmail.ts`, `research.ts`, `calendar*.ts` |
+| `skill-registry.md` | `contracts/skills/*`, `contracts/src/skills/*`, `contracts/src/skill.ts`, `skills.ts`, `skills.test.ts` | — |
+| `vault.md` | `vault.ts`, `apps/web/.../dashboard/vault/DocGrid.tsx` | `vaultIngest.ts` ⛔ (Pattern 4 — **not calling** `startIngest` is the mechanism; editing it trips the playbook for no gain), `packages/vault/` |
+| `onboarding.md` | `blueprint.ts` (Pattern 9, one line) | the rest of the onboarding surface |
+
+⛔ = **if you find yourself editing this, the design has drifted — stop and re-read
+`<user_constraints>` § *Architecture shape*.**
 
 **How to avoid:** append inside your own `### Phase 18` subsection; **never bump a foreign
 playbook's `Last verified`.** ⚠ If you *do* add a new module under `packages/`, `check-playbooks.mjs:125-134`
@@ -746,21 +1025,40 @@ grep "confirms" whatever it hoped to find by returning nothing.
 
 ### Pitfall 6 — `renderAndStore` is a closure, not an exported function
 **What goes wrong:** a plan that assumes the new tool can "just call `renderAndStore`" for the vault
-path. It is an inner closure (llm.ts:893) capturing `tenantId`, `planId`, `skillVersions` and `ctx`
-from `buildCockpitTools`; it also writes `plans.recordAttachments` on failure, which is wrong for a
-vault artifact.
+path. It is an inner closure (llm.ts:893-954) capturing `tenantId`, `planId`, `skillVersions` and
+`ctx` from `buildCockpitTools`; it also writes `plans.recordAttachments` on failure, which is wrong
+for a vault artifact — and it is hardwired to the long-form drafter (`:908`).
 **How to avoid:** the `createDocument` tool is a **sibling** closure in the same builder, reusing
 `scanText` → `internal.llm.draftDocument` → `markdownToPdf` directly. Do not refactor
 `renderAndStore` out of the closure — that is a large diff in the file this repo's contracts exist
 to protect.
+**⚠ The `draftDocument` call is NOT argument-identical to `renderAndStore`'s.** The tool passes
+`skillName` (and `skillVersion: skillVersions?.[skillName]`) — that argument is the ONLY thing that
+reaches the `content-drafter` body, and it does not exist at HEAD. **Pattern 7a is mandatory
+reading before writing this tool**; a plan that copies `renderAndStore:901-910` verbatim ships a
+short-form path silently drafted by `document-drafter`.
 
-### Pitfall 7 — ROADMAP.md contradicts the locked decision
-**What goes wrong:** `ROADMAP.md:704` says `actionType.ts` "already pre-commits Phase 18 to the
-existing `externalAction` arm **and that pre-commitment stands**." CONTEXT.md and
+### Pitfall 7 — ROADMAP.md contradicts the locked decision in TWO places
+**What goes wrong (a — the arm):** `ROADMAP.md:704` says `actionType.ts` "already pre-commits Phase
+18 to the existing `externalAction` arm **and that pre-commitment stands**." CONTEXT.md and
 PARALLELIZATION.md:110-126 (the owner decision, 2026-07-31) say the opposite: **no arm, no action
 type**. The owner decision is the tiebreaker.
-**How to avoid:** correct `ROADMAP.md:702-712` in the same commit, or the next planner re-derives the
-wrong arm from it. Note ROADMAP also has `actionType.ts`'s range off by one (it is **:30-32**) and
+
+**What goes wrong (b — GROUNDING, and this one is easier to miss):** `ROADMAP.md:710`, the closing
+clause of SC#4, reads *"The vault's markup rail already sniffs `text/html` (`sniff.ts:124`), so the
+artifact **is groundable without new extraction work**."* That is the **direct opposite** of
+CONTEXT.md's locked *"created documents are EXCLUDED from vault retrieval by default"* and of
+Pattern 4's entire don't-call-`startIngest` mechanism. Leave it and the next planner derives an
+ingest call straight out of the success criterion — the exact failure this pitfall exists to
+prevent. (The `sniff.ts` citation is also off by one: `text/html` is **:125**.)
+
+**How to avoid:** correct **`ROADMAP.md:702-712` as one edit, in-commit — BOTH clauses**:
+- `:704` → the locked no-arm/no-action-type shape.
+- `:710` → replace "so the artifact is groundable without new extraction work" with *"and created
+  artifacts are deliberately NOT ingested, so they are visible and downloadable but excluded from
+  vault retrieval and from the blueprint drift signal (Phase 18 CONTEXT, locked)."*
+
+Note ROADMAP also has `actionType.ts`'s range off by one (it is **:30-32**, verified at HEAD) and
 `documentGen.ts`'s second `.pdf` off by one (it is **:176**, not `:177`, which is `n++`).
 
 ### Pitfall 8 — Line-number drift in CONTEXT.md
@@ -856,6 +1154,10 @@ await ctx.runMutation(internal.audit.log, {
    `vaultSources.byThread` returns the *latest* row. Recommendation: the tool writes **one** row per
    turn carrying all N `docIds`/`titles` (the existing `count` field already means "N") — not one row
    per artifact. Verify against the intended UX during planning.
+   ⚠ **This is no longer only a card question — it is now load-bearing.** Pattern 2b resolves the
+   revision `#index` against that same row's `docIds`, so "one row per turn carrying N" is what makes
+   *"make the second one shorter"* addressable at all. One-row-per-artifact would make `#2`
+   unreachable. Decide it once, here.
 
 4. **`content-drafter` gating revisit.** Ungated is correct today (no fixture can reach it). If a
    later phase adds a golden fixture for `createDocument`, gating becomes free and should be done.
@@ -893,10 +1195,13 @@ already — put source-scan tests there when possible.
 | **SC4b** | Phase-3.3 attachment callers are byte-identical (default `pdf`) | unit | `pnpm --filter @pikar/core test` | ✅ `documentGen.test.ts` — existing `buildDocFilename` cases must pass **unchanged** |
 | **SC5** | A model-authored string never becomes markup — behavioural + structural | unit | `pnpm --filter @pikar/core test` | ✅ `packages/core/src/documentGen.test.ts` — **add the two tests in Pattern 6** |
 | **SC6** | The artifact is SEEN in the Output card | e2e (`data-testid`) + **manual UAT** | `pnpm test:e2e` | ⚠ partial — `apps/web/e2e/` exists; the BRAND-conformance judgement is human |
-| **REG** | The new tool literal has a VERB and vice-versa | unit (existing, automatic) | `pnpm --filter @pikar/backend exec vitest run convex/traceParity.test.ts` | ✅ exists — no edit needed |
-| **REG2** | `cockpit-agent.md` ↔ `cockpitAgent.ts:8` byte-identity; `content-drafter` drift row | unit | `pnpm --filter @pikar/backend exec vitest run convex/skills.test.ts` | ✅ exists — **add the `content-drafter` row** |
+| **SC7** | **Revision replaces in place** (Pattern 2b): `createDocument({ replace: 1 })` patches the SAME `_id` — one row before, one row after, new `text`, no second row, no version history; a bad `#index` and a foreign-tenant row both return `{ ok: false }` and change nothing | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts` | ❌ Wave 0 |
+| **SC7b** | **The short-form path actually reaches `content-drafter`** (Pattern 7a): `draftDocument({ skillName: CONTENT_DRAFTER_SKILL })` loads that body and fails closed unseeded; the three existing `draftDocument` assertions pass **unchanged** | convex-test integration | `pnpm --filter @pikar/backend exec vitest run convex/documentDraft.test.ts` | ✅ `documentDraft.test.ts:18-40` — **extend** |
+| **REG** | The new tool literal has a VERB and vice-versa | unit (existing, automatic) | `pnpm --filter @pikar/backend exec vitest run convex/traceParity.test.ts` | ✅ exists — **no edit** (it is the guard, not a registration site) |
+| **REG2** | `cockpit-agent.md` ↔ `cockpitAgent.ts:8` byte-identity; `content-drafter` drift row | unit | `pnpm --filter @pikar/backend exec vitest run convex/skills.test.ts` | ✅ exists — **add the `content-drafter` row**, and REGENERATE `cockpitAgent.ts:8` when `cockpit-agent.md` changes or this goes RED (§Registration Checklist #12) |
 
-**Provable by automated test:** SC1, SC1b, SC2, SC3, SC3b, SC4, SC4b, SC5, plus all registration guards.
+**Provable by automated test:** SC1, SC1b, SC2, SC3, SC3b, SC4, SC4b, SC5, SC7, SC7b, plus all
+registration guards that have one (§Registration Checklist columns 5).
 **Requires human UAT:**
 - **SC6** — that the Output card *looks* like BRAND §5's Output card (title, UPPERCASE type badge,
   subline, rendered artifact) and reads well. An e2e can assert the testid exists; it cannot assert
@@ -907,6 +1212,12 @@ already — put source-scan tests there when possible.
   schema↔VERB. **One live turn with the workspace trace open is mandatory before the phase closes.**
 - **The withheld-tool check** — that the *active* `cockpit-agent` body actually mentions
   `createDocument` and the model calls it. Offline tests cannot see the live `skills` row.
+- **The locked trigger rule (U4)** — *"explicitly asked → create directly; agent-suggested → confirm
+  first."* It lives in the `cockpit-agent.md` prose and the tool description (Pattern 2), and it is
+  **structurally unprovable offline**: the tool cannot see whose idea the document was. Two live
+  turns settle it — one explicit ask (must create with no confirmation round-trip) and one turn
+  where the agent *proposes* a document (must ask first). Do not accept a `confirmed: boolean`
+  argument as a substitute.
 
 ### Tenant-isolation assertion for SC#3 — COPYABLE, compiles at HEAD
 
@@ -948,6 +1259,11 @@ test("a created artifact is invisible to another tenant", async () => {
   expect(row.mimeType).toBe("text/markdown");
   expect(row.status).toBe("ready");
   expect(row.ragEntryId).toBeUndefined();   // never ingested ⇒ never retrievable
+  // 🛑 CORRECTION (plan-check, 2026-08-01): as written this line is RED. The call above passes NO
+  // `storageId`, and Pattern 1's handler writes `storageId` STRAIGHT THROUGH from args — the PDF is
+  // rendered in the TOOL (plan 18-06), never in the mutation. Either store a blob first
+  // (`await t.run(async (ctx) => ctx.storage.store(new Blob(["%PDF-1.4"])))`) and pass its id, or
+  // move this assertion to plan 18-06's tool test. See 18-04-PLAN.md Task 1.
   expect(row.storageId).toBeDefined();      // long-form ⇒ a derived PDF ⇒ a Download button
 });
 ```
@@ -958,9 +1274,16 @@ Companion (same file) for the drift exclusion, which needs `< 100` ready docs to
 ```ts
 test("a created artifact does not inflate the blueprint drift count", async () => {
   const t = convexTest(schema, modules);
-  const before = await t.query(internal.blueprint.unincorporatedCountForTenant, { tenantId: "tenant_a" });
+  // ⚠ `sourceDocIds` is REQUIRED, not optional — the real signature is
+  // `{ tenantId: v.string(), sourceDocIds: v.array(v.string()) }` (blueprint.ts:237-239). Omitting
+  // it throws ArgumentValidationError. It is the set of docs ALREADY cited as blueprint sources,
+  // which unincorporatedFor subtracts (`!sourceSet.has(doc._id)`, blueprint.ts:558/:571). Pass []
+  // so that path excludes NOTHING — then `origin !== "agent"` is the only predicate that can keep
+  // the created row out of the count, which is exactly what this test asserts.
+  const args = { tenantId: "tenant_a", sourceDocIds: [] as string[] };
+  const before = await t.query(internal.blueprint.unincorporatedCountForTenant, args);
   await t.mutation(internal.vault.insertCreatedDoc, { /* …as above… */ });
-  const after = await t.query(internal.blueprint.unincorporatedCountForTenant, { tenantId: "tenant_a" });
+  const after = await t.query(internal.blueprint.unincorporatedCountForTenant, args);
   expect(after).toBe(before);
 });
 ```
@@ -973,14 +1296,21 @@ test("a created artifact does not inflate the blueprint drift count", async () =
   (assert **delta == 0** vs. the number measured at phase start, and **zero** errors in a production
   `convex/*.ts` file) **+** `node scripts/check-playbooks.mjs`.
 - **Phase gate (before `/gsd:verify-work`):** full suite green + typecheck delta 0 + **one live
-  cockpit turn** ("write me a one-pager on X" and "give me three LinkedIn post options") verifying:
-  the trace row renders with the new VERB, the Output card appears, the vault grid shows the AGENT
-  chip, the long-form Download works, the short-form has no Download button, and
-  `npx convex data audit` shows a refs-only `document.created` row.
+  cockpit turns** verifying every surface with no offline guard:
+  1. *"write me a one-pager on X"* → creates with **no confirmation round-trip** (U4, explicit ask);
+     the trace row renders with the new VERB; the Output card appears; the vault grid shows the AGENT
+     chip; Download works; `npx convex data audit` shows a refs-only `document.created` row.
+  2. *"give me three LinkedIn post options"* → three short rows, **no Download button**, and the
+     bodies read like posts, not like a proposal — the only proof `content-drafter` was the body
+     loaded (Pattern 7a / §Registration Checklist #4).
+  3. *"make the second one shorter"* → the SAME vault row is rewritten in place, and the row count
+     is unchanged (SC7 live).
+  4. a turn where the agent **suggests** a document → it must **ask first** (U4, the suggested half).
 
 ### Wave 0 Gaps
 
-- [ ] `packages/backend/convex/createdDocs.test.ts` — covers SC1, SC1b, SC3, drift exclusion (NEW file; tests need no `watch.json` entry)
+- [ ] `packages/backend/convex/createdDocs.test.ts` — covers SC1, SC1b, SC3, **SC7 (revision)**, drift exclusion (NEW file; tests need no `watch.json` entry)
+- [ ] `packages/backend/convex/documentDraft.test.ts` — **extend**: SC7b, the `skillName: CONTENT_DRAFTER_SKILL` row (Pattern 7a)
 - [ ] `packages/core/src/documentGen.test.ts` — **extend**: `renderHtmlDocument` escape tests (SC5) + `buildDocFilename(…, "html")` (SC4)
 - [ ] `packages/backend/convex/documentDraft.test.ts` — **extend**: `renderAndStore` html branch (SC4), driven offline by the existing `SMOKE::` / `render=fail::` seams
 - [ ] `packages/backend/convex/cockpitTools.test.ts` — **extend**: the SC2 no-external-side-effect scan (needs `// @vitest-environment node` if it does a source read; the file already carries it)
@@ -993,9 +1323,17 @@ test("a created artifact does not inflate the blueprint drift count", async () =
 ## Sources
 
 ### Primary (HIGH confidence — read at HEAD, 2026-08-01)
-- `packages/backend/convex/llm.ts` — `renderAndStore` :893-954, `generateAttachment` :1275-1298, `searchVault` :1682-1760, `draftDocument` :3029-3088, `markdownToPdf` :3527, tool record :1015-1965, step callbacks :2208-2235
+- `packages/backend/convex/llm.ts` — `buildCockpitTools` signature :726-764 (`skillVersions` is the append-only 5th arg, :734-737), `renderAndStore` :893-954 (the `skillVersions?.[DOCUMENT_DRAFTER_SKILL]` pin at :908), `generateAttachment` :1275-1298, `regenerateAttachment` :1300-1330 (the `#index` revise idiom + delete-after-persist at :1327), `searchVault` :1682-1760 (`plan.threadId` at :1700/:1732), `draftDocument` :3029-3088 (**`DOCUMENT_DRAFTER_SKILL` hardcoded at :3048 AND :3051 — the U1 blocker**), `markdownToPdf` :3527, tool record :1015-1965, step callbacks :2208-2235
+- `packages/backend/convex/skills.ts` — `getActiveSkill` :98-101 and `getSkillVersion` :249-264, **both `name: v.string()`** (so Pattern 7a needs zero change here)
+- `packages/backend/convex/skills.test.ts` — the drift `test.each` table :731-744 (`cockpit-agent.md` at :735); `packages/contracts/src/skills/cockpitAgent.ts` :1-8
+- `packages/backend/convex/documentDraft.test.ts` :1-45; `runCockpitAgent.test.ts` :592-608 (the existing `draftDocument` pin assertions)
+- `packages/backend/convex/vaultSources.ts` (full — append-only insert, `byThread` latest-wins)
+- `packages/backend/scripts/run-eval-golden.mjs` :70-77 — `SKILL_NAMES` **derived from `GATED_SKILLS`** off disk
+- `packages/core/src/actionType.ts` :20-33 — the Phase-18/19 arm comment is at **:30-32**
+- `docs/playbooks/watch.json` — `cockpit.md`'s 36-path watch list (`plans.ts` and `traceParity.test.ts` are on it and are **not** Phase-18 edits)
+- `.planning/ROADMAP.md` :700-712 — SC#4's *"groundable without new extraction work"* clause at :710
 - `packages/core/src/documentGen.ts` (full) + `documentGen.test.ts` (head)
-- `packages/backend/convex/schema.ts` — `agentSteps.tool` :461-521, `vaultSources` :345-352, `vaultDocuments` :688-733
+- `packages/backend/convex/schema.ts` — `agentSteps.tool` :462-521 (the in-file swallow warning at :485-487 and :489-491), `vaultSources` :345-352, `vaultDocuments` :688-733
 - `packages/backend/convex/vault.ts` — caps :170-174, `vaultUpload` :156-216, `listVaultDocs` :270-279, `vaultDownloadUrl` :318, `ingestFromAttachment` :571-615
 - `packages/backend/convex/vaultGround.ts` :1-100, `vaultIngest.ts` :1-60, `vaultSources.ts` (full), `blueprint.ts` :190-210/:340-370/:545-590
 - `packages/backend/convex/skills.ts` :320-360, `skills.test.ts` :720-760, `traceParity.test.ts` (full), `vaultGround.test.ts` :1-50
@@ -1027,7 +1365,9 @@ test("a created artifact does not inflate the blueprint drift count", async () =
 - Provenance field (must-resolve 3): **HIGH** — 11-site insert census verified; migration-free by the shipped `retrievedAt` precedent
 - Retrieval + drift exclusion (must-resolve 4): **HIGH** on the mechanism and the exact sites; the vault-UI-search consequence is flagged as Open Question 1
 - Short-form/long-form + skills (must-resolve 5): **HIGH** — `seedSkills` v1 path, `SKILL_NAMES` derivation and `PreviewModal`'s `canDownload` all read at HEAD
-- Registration completeness (must-resolve 6): **HIGH** — every surface enumerated and the two live silent-failure instances found
+- Registration completeness (must-resolve 6): **HIGH** — all 16 surfaces enumerated in one place (§Registration Checklist), each with its exact literal and its guard-or-none; the two live silent-failure instances found
+- Skill reach (Pattern 7a): **HIGH** — `draftDocument`'s hardcoded name read at HEAD at both branches; both registry queries confirmed `name: v.string()`; the `skillVersions` record confirmed name-keyed and derived from `GATED_SKILLS`
+- Revision surface (Pattern 2b): **HIGH** on the mechanism (the `regenerateAttachment` `#index` idiom and `vaultSources` append-only latest-wins are both read at HEAD); **MEDIUM** on one-tool-vs-two — it is the zero-registration-cost answer, and Open Question 3 must be settled the same way for the index to resolve
 - Pitfalls: **HIGH** — every one is either code-documented in-file or measured
 - Card shape (Pattern 8): **MEDIUM** — explicitly Claude's discretion; the `vaultSources` reuse is the zero-new-table answer but the two optional fields deserve owner assent
 
