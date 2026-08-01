@@ -25,6 +25,7 @@ import { draftSchema } from "@pikar/contracts/drafting";
 import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
   COCKPIT_AGENT_SKILL,
+  CONTENT_DRAFTER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
@@ -3035,21 +3036,26 @@ export const draftDocument = internalAction({
     // EVAL-01 version pin (internal-only): the eval runner evaluates a pinned drafter CANDIDATE.
     // A missing (name, version) FAILS CLOSED — never silently falls back to the active row.
     skillVersion: v.optional(v.number()),
+    // Phase-18 (ACTN-04): WHICH drafter body to load. CLOSED union, not v.string(): this action is
+    // internal-only and model-unreachable, but an open name would let any caller point the drafter
+    // at any registry row. Absent = document-drafter, so every shipped caller stays byte-identical
+    // and `document-drafter`'s BODY is untouched — this changes who is ASKED for, never what it says.
+    skillName: v.optional(
+      v.union(v.literal(DOCUMENT_DRAFTER_SKILL), v.literal(CONTENT_DRAFTER_SKILL)),
+    ),
   },
   handler: async (
     ctx,
-    { safeText, safeTextHash, skillVersion },
+    { safeText, safeTextHash, skillVersion, skillName },
   ): Promise<{ title: string; markdown: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL
     // unseeded / NO_SUCH_SKILL_VERSION on a missing pin), so a hardcoded fallback can never sneak
     // in — and the pinned lookup runs BEFORE the smoke short-circuit, so it is exercised offline.
+    const name = skillName ?? DOCUMENT_DRAFTER_SKILL;
     const skill: { body: string; version: number } =
       skillVersion !== undefined
-        ? await ctx.runQuery(internal.skills.getSkillVersion, {
-            name: DOCUMENT_DRAFTER_SKILL,
-            version: skillVersion,
-          })
-        : await ctx.runQuery(internal.skills.getActiveSkill, { name: DOCUMENT_DRAFTER_SKILL });
+        ? await ctx.runQuery(internal.skills.getSkillVersion, { name, version: skillVersion })
+        : await ctx.runQuery(internal.skills.getActiveSkill, { name });
     const smoke = parseSmoke(safeText);
 
     try {
