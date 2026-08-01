@@ -10,9 +10,9 @@ last_updated: "2026-07-30T14:44:41.2683917+03:00"
 progress:
   total_phases: 40
   completed_phases: 26
-  total_plans: 203
-  completed_plans: 197
-  percent: 97
+  total_plans: 230
+  completed_plans: 204
+  percent: 89
 ---
 
 # Project State
@@ -32,10 +32,12 @@ read only the first frontmatter block.
 | K | **17** Calendar Actions | 4/4 plans complete | Owner UAT M1-M5 | Offline goal verification is `human_needed`; Google-only create path is implementation-complete |
 | O | **22** Owner Authorization (GOVN-01) | 3/3 plans code-complete, serialized on `main` (d62c46c, eda6f10, 6dd86f6) | 2 BLOCKING owner checkpoints | Closes the standing Phase-8 owner-auth blocker. Full backend 860/860; backend typecheck delta ZERO (back to the exact 150 baseline). **Not complete** — needs (a) live owner bootstrap and (b) two-identity `/ops` UAT incl. four direct non-owner API calls. Checklist in `docs/playbooks/authorization.md`. Phase **21 is dependency-blocked** (needs 16-19); **22.1 PARTLY OPEN** — 22.1-01 (Gmail disconnect + Google revoke) is COMPLETE and OWNER LIVE-VERIFIED 2026-08-01 (the grant is gone from myaccount.google.com/permissions; `privacy/page.tsx:312` is now a true statement). 22.1-02 (per-tenant budget keying) is also COMPLETE 2026-08-01 — `dailySpendCents` is keyed by tenantId and a deliberately keyless `deploymentSpendCents` ceiling sits behind it, so one tenant can no longer drain everyone (the Phase 25 multi-user blocker) without trading that for unbounded N × budget exposure. ONE item remains: the CI/typecheck gate, which still targets the shared `tsconfig` and so remains an owner call taken BETWEEN lanes, not during them. 22.1-02 is LIVE-VERIFIED: `pnpm smoke:guardrails` 7/7 PASSED 2026-08-01, incl. 5/6 "C (other tenant) unaffected". That run also fixed a 19-day-old non-idempotency in the smoke itself (case 2/6 counted rows in the INSERT-ONLY audit table keyed on a constant goal hash, so it accumulated across runs — unrunnable since 2026-07-12; the goal now carries a per-run uid) |
 
-| D | **18** Document & Content Creation (ACTN-04) | CONTEXT captured (`a066ee5`); 0 plans | `/gsd:plan-phase 18` | **Planning only — EXECUTION IS GATED ON PHASE 16 CLOSING.** `cockpit-agent` is a GATED skill with ONE candidate stream and Lane R holds it un-activated at v16; Phase 18 must teach its new tool in that same body, so a concurrent edit would mint a candidate carrying both lanes' prose and the next eval would certify untested instructions. Contract: `PARALLELIZATION.md` § *Phases 18 + 19*. **18 → 19 run SERIAL, not parallel** (owner, 2026-07-31) |
+| D | **18** Document & Content Creation (ACTN-04) | 10 plans authored; **18-03 COMPLETE** (`8f94e4e`, `d056941`, `67e2d4c`) — the ungated `content-drafter` row at v1 active, zero eval spend; **18-01 COMPLETE with SUMMARY** (`9e54550`, `8a83d12`, `21c2165`, `dc990a5`) — `formatSpec`/`DocFormat` + a 4th defaulted `format` param on `buildDocFilename` (both `.pdf` literals gone, the two shipped 3-arg call sites byte-identical) and `renderHtmlDocument`, pure `packages/core`, zero new deps; 18-02 concurrent | 18-04 (Wave 2) | 18-03's row is **DEAD WEIGHT until 18-05** lands `draftDocument`'s `skillName` argument — nothing loads that body yet. `document-drafter` + `cockpit-agent` bodies are byte-unchanged. **ONLY 18-08 (the `cockpit-agent` body edit) IS GATED ON PHASE 16 CLOSING** — the rest of Wave 1-5 is runnable. `cockpit-agent` is a GATED skill with ONE candidate stream and Lane R holds it un-activated at v16; Phase 18 must teach its new tool in that same body, so a concurrent edit would mint a candidate carrying both lanes' prose and the next eval would certify untested instructions. Contract: `PARALLELIZATION.md` § *Phases 18 + 19*. **18 → 19 run SERIAL, not parallel** (owner, 2026-07-31) |
 
-**Counts above are recomputed from disk** (40 phase checkboxes, 26 `[x]`, 203 `*-PLAN.md`,
-197 `*-SUMMARY.md`), not carried forward from any lane's stale block.
+**Counts above are recomputed from disk** (40 phase checkboxes, 26 `[x]`, 230 `*-PLAN.md`,
+204 `*-SUMMARY.md`), not carried forward from any lane's stale block. Recounted 2026-08-01 by
+18-03's executor — the previous 203/197 predated Phases 18, 19 and 22.1 being planned, so the
+frontmatter `percent` DROPPED (97 → 89) without anything regressing: the denominator grew.
 
 ### Shared-tree discipline (learned the hard way, 2026-07-27)
 
@@ -1510,6 +1512,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 15.1 | 01 | 31 min | 3 | 7 |
 | 17.1 | 01 | 22 min | 2 | 5 |
 | 17 | 02 | 35 min | 3 | 8 |
+| 18 | 01 | 23 min | 2 | 2 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
