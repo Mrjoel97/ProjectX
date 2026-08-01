@@ -767,8 +767,14 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // is the second exception-fed site and was REVIEWED against this rule when the count moved —
   // it carries `{...lineageRefs(args), reason: "persist_error"}`, a CODE and refs, never the caught
   // error. A SIXTH is a new §4 surface and must be reviewed the same way, not renumbered.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(5);
-  // All five SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
+  // 16-09 adds that SIXTH: the zero-search early return (`a research run that never searched
+  // writes no vault document`). REVIEWED against this rule before the count moved, which is what
+  // the sentence above demands — it carries `{...lineageRefs(args), reason: "not_researched",
+  // webSearchCalls: 0}`: refs, a CODE literal from the closed reason set, and a COUNT. No reply,
+  // body, text or output, and nothing derived from one. §4-clean. A SEVENTH gets the same
+  // treatment — review the payload, then move the number and say here what you reviewed.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(6);
+  // All six SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.
   const refs = src.match(/const lineageRefs = \([^)]*\) => \(?(\{[^}]*\})/);
