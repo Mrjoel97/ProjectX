@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { CONTENT_DRAFTER_SKILL, isGatedSkill } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
+import { contentDrafterSkillBody } from "@pikar/contracts/skills/contentDrafter";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/executiveAgentClassifier";
@@ -51,6 +53,18 @@ describe("skills registry loader + activation", () => {
     const loaded = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
     expect(loaded.version).toBe(1);
     expect(loaded.body.length).toBeGreaterThan(0);
+  });
+
+  // Phase 18 (ACTN-04). The whole reason short-form got its OWN row rather than an edit to the
+  // GATED `document-drafter`: a brand-new name hits seedSkills' `rows.length === 0` branch and
+  // lands at v1 ACTIVE with no eval cycle and no paid run.
+  test("seedSkills seeds content-drafter as an active v1 body (ungated, no eval cycle)", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    const loaded = await t.run((ctx) => loadSkill(ctx, CONTENT_DRAFTER_SKILL));
+    expect(loaded.version).toBe(1);
+    expect(loaded.body).toBe(lf(contentDrafterSkillBody));
   });
 
   test("loadSkill fails closed (throws) when no active skill exists", async () => {
@@ -741,6 +755,9 @@ describe("no hardcoded agent prompts in convex/", () => {
     ["voice-session.md", voiceSessionSkillBody],
     ["voice-brief.md", voiceBriefSkillBody],
     ["business-profile.md", businessProfileSkillBody],
+    // Phase 18 (ACTN-04): the short-form drafter. `skillBodies.test.ts` is a CLOSED enumeration of
+    // the Phase-12/14/15.1/16/17.1 bodies — this table is content-drafter's only drift guard.
+    ["content-drafter.md", contentDrafterSkillBody],
   ])("%s seed constant equals its canonical markdown (no drift)", (file, body) => {
     const mdPath = fileURLToPath(new URL(`../../contracts/skills/${file}`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
@@ -785,5 +802,16 @@ describe("no hardcoded agent prompts in convex/", () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+// Phase 18 (ACTN-04). Not a style preference — gating `content-drafter` DEADLOCKS it at v1.
+// `run-eval-golden.mjs`'s SKILL_NAMES is DERIVED from GATED_SKILLS, so gating makes the row
+// pinnable, but no golden fixture reaches `createDocument`: the first body edit would mint a
+// candidate no eval run can certify. Same deadlock recorded for `business-blueprint` (17.1-02).
+// A future "tidy up the gate list" edit must fail HERE rather than in production.
+describe("content-drafter gating (18-03)", () => {
+  test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
+    expect(isGatedSkill(CONTENT_DRAFTER_SKILL)).toBe(false);
   });
 });
