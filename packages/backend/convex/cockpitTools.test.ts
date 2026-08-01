@@ -33,7 +33,9 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 // @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
-// @ts-expect-error import.meta.glob is provided by Vite/vitest at runtime.
+// NO @ts-expect-error on this one, unlike the three above: tsconfig.json includes vitest.config.mts,
+// which pulls Vite's global types in, so import.meta.glob typechecks and the directive is DEAD
+// (TS2578 — a real +1 on the backend's error count). Do not "restore" the sibling idiom here.
 const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
 
 const SMOKE = "SMOKE::route=direct_llm::";
@@ -1317,12 +1319,10 @@ test("createDocument(short) drafts with content-drafter and stores NO storageId 
 
 test("`form` selects the SKILL ROW — archiving content-drafter breaks ONLY short-form, and as a sentence", async () => {
   const { t, planId } = await setup();
-  await t.run(async (ctx) => {
-    const row = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", CONTENT_DRAFTER_SKILL).eq("status", "active"))
-      .unique();
-    await ctx.db.patch(row!._id, { status: "archived" });
+  // The shipped retirement path (skills.ts:455) — a hand-rolled t.run patch would also have to
+  // re-declare the schema type this file's `T` deliberately leaves generic.
+  expect(await t.mutation(internal.skills.archiveSkill, { name: CONTENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
   });
 
   // A drafter failure is a RETURNED SENTENCE, never a throw out of the governed loop.
