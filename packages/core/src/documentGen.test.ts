@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDocFilename,
   exceedsByteCap,
+  formatSpec,
   inlineRuns,
   PLAN_ATTACHMENT_CAP_BYTES,
   tokenizeMarkdown,
@@ -118,6 +119,30 @@ describe("buildDocFilename", () => {
 
   it("falls back to 'document' when the topic slug is empty", () => {
     expect(buildDocFilename("!!!", "2026-07-13", [])).toBe("document-2026-07-13.pdf");
+  });
+
+  // SC4b: the 3-arg call sites above are byte-identical in behaviour; SC4: a second format is
+  // reachable by naming it, and collision suffixing follows the format rather than the .pdf literal.
+  it("takes the extension from the format, defaulting to pdf", () => {
+    expect(buildDocFilename("Q3 plan", "2026-08-01")).toBe("q3-plan-2026-08-01.pdf");
+    expect(buildDocFilename("Q3 plan", "2026-08-01", [], "html")).toBe("q3-plan-2026-08-01.html");
+  });
+
+  it("suffixes collisions per-format", () => {
+    expect(
+      buildDocFilename("Q3 plan", "2026-08-01", ["q3-plan-2026-08-01.html"], "html"),
+    ).toBe("q3-plan-2026-08-01-1.html");
+    // a .pdf already taken does not push the .html name along, and vice versa
+    expect(buildDocFilename("Q3 plan", "2026-08-01", ["q3-plan-2026-08-01.pdf"], "html")).toBe(
+      "q3-plan-2026-08-01.html",
+    );
+  });
+});
+
+describe("formatSpec", () => {
+  it("is the one place the extension + MIME literals are written", () => {
+    expect(formatSpec("pdf")).toEqual({ ext: "pdf", mimeType: "application/pdf" });
+    expect(formatSpec("html")).toEqual({ ext: "html", mimeType: "text/html" });
   });
 });
 
