@@ -141,14 +141,12 @@ function smokeProfileFixture(): ProfileInput {
  */
 export const status = tenantQuery({
   args: {},
-  handler: async (ctx): Promise<{ needsOnboarding: boolean }> => {
-    const docs = await ctx.db
-      .query("vaultDocuments")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
-    const hasProfile = docs.some((d) => d.kind === PROFILE_KIND && d.status !== "failed");
-    return { needsOnboarding: !hasProfile };
-  },
+  handler: async (ctx): Promise<{ needsOnboarding: boolean }> => ({
+    // Same predicate as `currentProfileDoc` (newest non-failed profile doc), so it IS that read
+    // rather than a second copy of it. This runs on every authenticated page render — see the
+    // `by_tenant_kind` note in schema.ts for why it must never widen to the whole vault again.
+    needsOnboarding: !(await currentProfileDoc(ctx, ctx.tenantId)),
+  }),
 });
 
 /**
@@ -521,20 +519,25 @@ const currentTierRow = (
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
     .unique();
 
-// The tenant's current committed profile doc (newest non-failed), or null. The edit target + the
-// re-commit guard.
+// The tenant's current committed profile doc (newest non-failed), or null. The edit target, the
+// re-commit guard, AND the `status` first-run gate — every profile read in this module lands here.
+//
+// Reads `by_tenant_kind`, NOT `by_tenant`. The old shape collected the tenant's ENTIRE vault
+// (every row, `text` blob included) to find at most a handful of profile rows, and timed out the
+// 1s query budget on `status` once a vault grew. blueprint.ts:212 forbids cloning that shape;
+// this is the site it was pointing at.
 async function currentProfileDoc(
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
-  const docs = await ctx.db
+  const profiles = await ctx.db
     .query("vaultDocuments")
-    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND))
     .collect();
-  const profiles = docs
-    .filter((d) => d.kind === PROFILE_KIND && d.status !== "failed")
+  const newest = profiles
+    .filter((d) => d.status !== "failed")
     .sort((a, b) => b.createdAt - a.createdAt);
-  return profiles[0] ?? null;
+  return newest[0] ?? null;
 }
 
 /**
