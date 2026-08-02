@@ -1177,6 +1177,11 @@ const VERB: Record<string, [running: string, done: string]> = {
   // Phase-18 (ACTN-04): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED.
   createDocument: ["Writing it up…", "Saved it to your vault"],
+  // Phase-20 (MEDIA-01): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The copy is the done-state PROMISE: the media
+  // specialist PROPOSES — it does not generate, does not voice and does not render (D2) — so this
+  // must never read "Generated" or "Reel ready".
+  dispatchMedia: ["Writing the script and art direction…", "Storyboard ready"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

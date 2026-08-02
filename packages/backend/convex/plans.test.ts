@@ -269,6 +269,79 @@ describe("patchPlan reply threading + resetPlan clears it (03.11 RPLY-01, Pitfal
   });
 });
 
+describe("resetPlan clears the media deck AND the render plane (20-02 MEDIA-01)", () => {
+  const DECK_AND_RENDER = [
+    "shots",
+    "artDirection",
+    "script",
+    "clipSeconds",
+    "renderStatus",
+    "renderStorageId",
+    "sidecarStorageId",
+    "sidecarHash",
+    "renderReason",
+    "renderedAt",
+  ] as const;
+
+  test("a staged deck and a finished reel never survive a reset", async () => {
+    const t = convexTest(schema, modules);
+    const storageId = await storeBlob(t);
+    const planId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_media",
+        status: "collecting",
+        recipients: [],
+        createdAt: Date.now(),
+      });
+      // Direct patch ON PURPOSE: none of these are `patchPlan` args, and that absence is the
+      // guarantee. Production writes them the same way — persistStoryboard (20-08), the canvas
+      // editor (20-09) and the render terminal (20-16) all go straight to ctx.db.patch.
+      await ctx.db.patch(id, {
+        clipSeconds: 10,
+        script: "A narration script for the whole reel.",
+        artDirection: {
+          palette: ["#0B0B0C"],
+          mood: "assured",
+          lighting: "warm golden light from camera left at 45 degrees",
+          composition: "centered",
+          environment: "a home office at dawn",
+          texture: "film grain",
+          references: ["Gregory Crewdson"],
+          avoid: "stock-photo smiles",
+        },
+        shots: [
+          {
+            index: 0,
+            type: "VIDEO",
+            seconds: 10,
+            windowStartMs: 0,
+            description: "Founder at a desk",
+            prompt: "Wide editorial shot, 35mm",
+            narration: "Most teams lose an hour a day to inbox triage.",
+          },
+        ],
+        renderStatus: "rendered",
+        renderStorageId: storageId,
+        sidecarStorageId: storageId,
+        sidecarHash: "sha256:deadbeef",
+        renderReason: "ok",
+        renderedAt: Date.now(),
+      });
+      return id;
+    });
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const plan = await t.query(internal.plans.getById, { planId });
+    // A deck surviving would re-stage onto the NEXT plan; a surviving renderStorageId would show
+    // the previous thread's reel under a brand-new proposal — a lie the user can watch.
+    for (const field of DECK_AND_RENDER) {
+      expect(plan?.[field], `${field} survived resetPlan`).toBeUndefined();
+    }
+  });
+});
+
 describe("reportForPlan attachment extension (per-recipient delivered attachment url)", () => {
   test("each report row gains attachments derived from the request's attachmentRefs", async () => {
     const t = convexTest(schema, modules);

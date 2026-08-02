@@ -285,6 +285,71 @@ export default defineSchema({
     calendarEventId: v.optional(v.string()), // the Google event ref, set on success. A ref, not content.
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
+    // ── Phase-20 (MEDIA-01) media canvas: the BLOCK DECK and the RENDER PLANE ──────────────
+    // All optional → no migration, no backfill (the sendAt/attachments precedent). CONTENT-PLANE
+    // ONLY: the block prompts and the narration lines are user-facing creative text and are NEVER
+    // audited (§4). `resetPlan` wipes every field below — a deck surviving a reset would re-stage
+    // onto the NEXT plan (the `eventTitle` rule above), and a surviving render would show the
+    // previous thread's reel under a brand-new proposal, which is worse: it is a lie the user can
+    // watch. None of them are `patchPlan` args; see plans.ts for why that absence is the guarantee.
+    /** koda's fixed 9-field art-direction block, parsed. */
+    artDirection: v.optional(
+      v.object({
+        palette: v.array(v.string()),
+        mood: v.string(),
+        lighting: v.string(),
+        composition: v.string(),
+        environment: v.string(),
+        texture: v.string(),
+        typography: v.optional(v.string()),
+        references: v.array(v.string()),
+        avoid: v.string(),
+      }),
+    ),
+    /** The narration script for the whole reel (D8 — voiceover has nothing to say without it). */
+    script: v.optional(v.string()),
+    /** D8: block length, UNIFORM across the deck, ∈ {5,10} (Wan 2.5 accepts nothing else). */
+    clipSeconds: v.optional(v.number()),
+    /** The deck, INLINE rather than a `mediaShots` table: `plans.by_thread` is `.unique()`, so
+     *  there is exactly one plan row per thread, and the canvas editor's reorder / delete / edit
+     *  is then ONE array patch instead of N row writes plus an ordering column. There is no
+     *  `mediaAssets` table either — a job produces at most one asset and its storage id lives on
+     *  the job row. `type` is a ShotType value; @pikar/core/storyboard owns the closed set. */
+    shots: v.optional(
+      v.array(
+        v.object({
+          index: v.number(),
+          type: v.string(),
+          seconds: v.number(),
+          windowStartMs: v.number(),
+          description: v.string(),
+          overlay: v.optional(v.string()),
+          prompt: v.string(),
+          narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
+        }),
+      ),
+    ),
+    // The RENDER PLANE — fields on the plan row, NOT a second table. A reel is one artifact per
+    // PLAN (delta §6.3), so a `mediaRenders` table would hold at most one row per plan forever.
+    renderStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("rendering"),
+        v.literal("rendered"),
+        v.literal("failed"),
+      ),
+    ),
+    /** final.mp4. A reel is publishable ONLY when `sidecarStorageId` is also set and its sidecar
+     *  has validated. The script's own words: "a final video without one was hand-assembled."
+     *  Presence of a VALID sidecar IS the proof-of-governed-render — never treat this id alone as
+     *  a publishable artifact. */
+    renderStorageId: v.optional(v.id("_storage")),
+    sidecarStorageId: v.optional(v.id("_storage")), // final.mp4.assembly.json
+    sidecarHash: v.optional(v.string()),
+    /** A reasonCode, NEVER ffmpeg's stderr — `drawtext`, `subtitles=` and the error paths all echo
+     *  file names and can echo narration text straight into a stored field (§4). */
+    renderReason: v.optional(v.string()),
+    renderedAt: v.optional(v.number()),
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
@@ -542,6 +607,11 @@ export default defineSchema({
       // slice, comments included, so the idiomatic spelling would inject phantom literals) — are
       // still trace-less here. Deliberately NOT fixed by Phase 18; see 18-RESEARCH.md Pitfall 2.
       v.literal("createDocument"),
+      // Phase-20 (MEDIA-01): the media specialist's dispatch step. ONE literal, no text field —
+      // §4 on this path stays enforced by the ABSENCE of anywhere to put a block description, a
+      // prompt or a narration line. Without it the step insert throws inside a callback the AI SDK
+      // SWALLOWS → no trace row in prod while every offline test passes (Research Pitfall 4).
+      v.literal("dispatchMedia"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -661,6 +731,11 @@ export default defineSchema({
   guardrailConfig: defineTable({
     killSwitch: v.boolean(),
     budgetUsdPerRequest: v.number(),
+    // Phase-20 (MEDIA-01): the media-only kill switch. OPTIONAL so a missing row still reads OFF
+    // via the same default-on-read the main switch uses — zero seed, zero migration. Separate from
+    // `killSwitch` on purpose: pausing paid generation must not also pause the email cockpit.
+    // Plan 20-04 adds the DEFAULT_CONFIG entry and the setter.
+    mediaKillSwitch: v.optional(v.boolean()),
     updatedAt: v.number(),
   }),
 
@@ -939,4 +1014,85 @@ export default defineSchema({
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
   }).index("by_tenant", ["tenantId"]),
+
+  // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
+  // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
+  // `mediaAssets` table would be a 1:1 join forever. A new table needs no migration.
+  //
+  // THERE IS NO URL FIELD ON THIS TABLE, DELIBERATELY. The webhook downloads fal's bytes and
+  // stores them via `ctx.storage`; the signed fal URL is never persisted anywhere. A signed URL in
+  // a row is both a content leak and a live credential.
+  //
+  // `promptHash`, NOT the prompt. Prompt and narration text are content-plane and live on
+  // `plans.shots` — this table carries refs, hashes, ids and counts only (§4).
+  //
+  // DELIBERATE DEVIATION from research §5.2: no stored `callbackHash` and no `by_callback` index.
+  // The webhook path segment is `${jobId}.${hmacHex(jobId, FAL_WEBHOOK_SECRET)}`; plan 20-06
+  // resolves the row with `ctx.db.normalizeId("mediaJobs", raw)` and RE-DERIVES the HMAC — exactly
+  // what `gmailAuth.verifyState` already does for the OAuth `state`, in an httpAction, in
+  // production today. Storing the digest buys nothing and costs a field plus an index.
+  // `normalizeId` returning null for a malformed or foreign-table id is the fail-closed shape.
+  mediaJobs: defineTable({
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    batchId: v.string(), // server-minted crypto.randomUUID(); groups ONE reservation
+    blockIndex: v.number(), // index into plans.shots; -1 for a job that belongs to the whole deck (stt)
+    provider: v.literal("fal"), // closed literal — a second provider is a deliberate schema edit
+    // FOUR kinds, closed. A fifth member is a deliberate schema edit, the `provider` precedent.
+    kind: v.union(
+      v.literal("video"),
+      v.literal("image"),
+      v.literal("tts"),
+      v.literal("stt"),
+    ),
+    model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
+    // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
+    // spec that omits its resolution is an estimate 3x below the invoice.
+    spec: v.union(
+      v.object({ kind: v.literal("video"), resolution: v.string(), seconds: v.number() }),
+      v.object({ kind: v.literal("image"), width: v.number(), height: v.number() }),
+      v.object({
+        kind: v.literal("tts"),
+        characters: v.number(),
+        voice: v.string(),
+        sampleRateHertz: v.number(),
+      }),
+      v.object({ kind: v.literal("stt"), audioMinutes: v.number() }),
+    ),
+    promptHash: v.string(),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("submitted"),
+      v.literal("succeeded"),
+      v.literal("failed"),
+      v.literal("blocked"),
+    ),
+    falRequestId: v.optional(v.string()),
+    /** D12(a) — FRACTIONAL USD, never floored cents. The batch's reservation is the only thing
+     *  expressed in cents and it is floored ONCE, in `chooseMediaBatch`. Storing floored cents per
+     *  line re-creates the 5x over-reservation this field exists to prevent: six voice lines of
+     *  $0.002 are 2 cents together and 6 cents apart. */
+    estUsd: v.number(),
+    actualCents: v.optional(v.number()),
+    /** FOUR values, and `none_reported` means the provider reported NOTHING — it is NOT "clean".
+     *  Every Wan 2.5 video and every TTS take lands here; neither publishes a per-output
+     *  moderation field. Never render it as a pass. */
+    verdict: v.optional(
+      v.union(
+        v.literal("provider_blocked"),
+        v.literal("checker_flagged"),
+        v.literal("checker_clear"),
+        v.literal("none_reported"),
+      ),
+    ),
+    assetStorageId: v.optional(v.id("_storage")),
+    assetHash: v.optional(v.string()), // contentHash(bytes) — lib/hash.ts
+    mimeType: v.optional(v.string()),
+    bytes: v.optional(v.number()),
+    failureReason: v.optional(v.string()), // a CODE only (the calendar.ts reasonCode idiom) — never provider prose
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_plan", ["tenantId", "planId"])
+    .index("by_batch", ["tenantId", "batchId"]),
 });

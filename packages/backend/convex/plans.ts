@@ -205,6 +205,14 @@ export const patchPlan = internalMutation({
     eventStartMs: v.optional(v.number()),
     eventDurationMs: v.optional(v.number()),
     eventTz: v.optional(v.string()),
+    // 20-02 MEDIA-01: `shots`, `artDirection`, `script`, `clipSeconds` and the six render-plane
+    // fields are deliberately NOT args here, and that ABSENCE is the guarantee — the
+    // `calendarEventId`/`calendarRunId` rule above, verbatim. The deck is written only by 20-08's
+    // `persistStoryboard` (server-side, from the PARSED specialist output) and by 20-09's canvas
+    // editor mutations; the render plane only by 20-16's render terminal. All direct ctx.db.patch.
+    // Nothing reachable from the MODEL may write a block prompt or a narration line that later
+    // becomes a paid generation, and nothing reachable from the model may claim a render happened.
+    // Do not add them here speculatively.
   },
   handler: async (ctx, { planId, ...patch }) => {
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
@@ -331,6 +339,19 @@ export const resetPlan = internalMutation({
       eventTz: undefined,
       calendarEventId: undefined,
       calendarRunId: undefined,
+      // 20-02 MEDIA-01: the block deck AND the render plane, explicitly. Same Pitfall-6 class as
+      // the staged event above, one rung worse for the render: a surviving `renderStorageId` would
+      // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.
+      artDirection: undefined,
+      script: undefined,
+      clipSeconds: undefined,
+      shots: undefined,
+      renderStatus: undefined,
+      renderStorageId: undefined,
+      sidecarStorageId: undefined,
+      sidecarHash: undefined,
+      renderReason: undefined,
+      renderedAt: undefined,
     });
   },
 });
