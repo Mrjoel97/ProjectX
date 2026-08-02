@@ -2,33 +2,17 @@
 
 import { api } from "@pikar/backend/api";
 import {
-  BLUEPRINT_FIELDS,
-  type BlueprintField,
+  BLUEPRINT_SEGMENTS,
+  type BlueprintSegment,
   type BusinessBlueprint,
   FIELD_SPEC,
+  segmentFill,
+  segmentHeadline,
 } from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { BlueprintDiff } from "./BlueprintDiff";
 import { card, label, primaryButton } from "./styles";
-
-const REPORT_SECTIONS = [
-  {
-    title: "Identity",
-    fields: ["name", "oneLineDescription", "stage", "tier"],
-  },
-  {
-    title: "Business model",
-    fields: ["offering", "targetCustomer", "revenueModel", "bindingConstraint"],
-  },
-  {
-    title: "Direction",
-    fields: ["primaryGoals", "knownConstraints", "entities"],
-  },
-] as const satisfies ReadonlyArray<{
-  title: string;
-  fields: readonly BlueprintField[];
-}>;
 
 const secondaryButton = (disabled: boolean): React.CSSProperties => ({
   padding: "0.6rem 1.1rem",
@@ -118,52 +102,14 @@ export function BlueprintPanel() {
           <div>{buildButton("Build blueprint", true)}</div>
         </>
       ) : (
-        <>
-          {blueprintState.state === "live_stale" && (
-            <p
-              style={{
-                margin: 0,
-                padding: "0.75rem 0.9rem",
-                borderLeft: "3px solid var(--ink-soft)",
-                background: "var(--paper)",
-                color: "var(--ink-soft)",
-                fontWeight: 600,
-                fontSize: "0.9rem",
-              }}
-            >
-              {blueprintState.unincorporatedCount}{" "}
-              {blueprintState.unincorporatedCount === 1 ? "document has" : "documents have"} been
-              added since this blueprint was confirmed.
-            </p>
-          )}
-
-          <BlueprintReport blueprint={liveBlueprint} />
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-              paddingTop: "0.25rem",
-            }}
-          >
-            <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}>
-              {blueprintState.confirmedAt === null ? (
-                "Confirmed"
-              ) : (
-                <>
-                  Confirmed{" "}
-                  <time dateTime={new Date(blueprintState.confirmedAt).toISOString()}>
-                    {formatConfirmedAt(blueprintState.confirmedAt)}
-                  </time>
-                </>
-              )}
-            </p>
-            {buildButton("Rebuild", blueprintState.state === "live_stale")}
-          </div>
-        </>
+        <BlueprintReport
+          blueprint={liveBlueprint}
+          confirmedAt={blueprintState.confirmedAt}
+          unincorporatedCount={
+            blueprintState.state === "live_stale" ? blueprintState.unincorporatedCount : 0
+          }
+          rebuild={buildButton("Rebuild", blueprintState.state === "live_stale")}
+        />
       )}
 
       {buildStatus && (
@@ -179,67 +125,208 @@ export function BlueprintPanel() {
   );
 }
 
-function BlueprintReport({ blueprint }: { blueprint: BusinessBlueprint }) {
-  const populated = new Set(
-    BLUEPRINT_FIELDS.filter((blueprintField) => blueprint[blueprintField] !== null),
-  );
-
-  if (populated.size === 0) {
-    return (
-      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-        This confirmed blueprint does not have any populated fields yet.
-      </p>
-    );
-  }
+function BlueprintReport({
+  blueprint,
+  confirmedAt,
+  unincorporatedCount,
+  rebuild,
+}: {
+  blueprint: BusinessBlueprint;
+  confirmedAt: number | null;
+  unincorporatedCount: number;
+  rebuild: React.ReactNode;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
 
   return (
-    <div style={{ display: "grid", gap: "1rem" }}>
-      {REPORT_SECTIONS.map((section) => {
-        const fields = section.fields.filter((blueprintField) => populated.has(blueprintField));
-        if (fields.length === 0) return null;
+    <div style={{ display: "grid", gap: "0.85rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+          gap: "0.75rem",
+        }}
+      >
+        {BLUEPRINT_SEGMENTS.map((segment) => (
+          <SegmentTile
+            key={segment.id}
+            segment={segment}
+            blueprint={blueprint}
+            open={open === segment.id}
+            onToggle={() => setOpen(open === segment.id ? null : segment.id)}
+          />
+        ))}
+        <StatusTile
+          confirmedAt={confirmedAt}
+          unincorporatedCount={unincorporatedCount}
+          rebuild={rebuild}
+        />
+      </div>
+
+      {openSegment && <SegmentDetail segment={openSegment} blueprint={blueprint} />}
+    </div>
+  );
+}
+
+function SegmentTile({
+  segment,
+  blueprint,
+  open,
+  onToggle,
+}: {
+  segment: BlueprintSegment;
+  blueprint: BusinessBlueprint;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const { filled, total } = segmentFill(blueprint, segment);
+  const headline = segmentHeadline(blueprint, segment);
+  const complete = total > 0 && filled === total;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls="segment-detail"
+      style={{
+        appearance: "none",
+        font: "inherit",
+        textAlign: "left",
+        cursor: "pointer",
+        display: "grid",
+        gap: "0.5rem",
+        alignContent: "start",
+        padding: "0.9rem 1rem",
+        borderRadius: "1rem",
+        background: "var(--card)",
+        border: `1px solid ${open ? "var(--teal-600)" : "var(--rule)"}`,
+        color: "var(--ink)",
+      }}
+    >
+      <span style={{ ...label, fontSize: "0.68rem" }}>{segment.label}</span>
+
+      {/* BRAND §5 stat tile. `total === 0` shows words, NEVER a ratio — the denominator would be
+          invented (spec §4). */}
+      <span style={{ fontSize: total === 0 ? "0.95rem" : "1.5rem", fontWeight: 700, lineHeight: 1.1 }}>
+        {total === 0 ? "Not tracked yet" : `${filled} / ${total}`}
+      </span>
+
+      {/* The meter repeats what the numerals already say — never colour alone (BRAND §6). */}
+      <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--rule)" }}>
+        <span
+          style={{
+            display: "block",
+            height: "100%",
+            borderRadius: 999,
+            width: total === 0 ? "0%" : `${(filled / total) * 100}%`,
+            background: complete ? "var(--teal-600)" : "var(--held)",
+          }}
+        />
+      </span>
+
+      <span
+        style={{
+          fontSize: "0.8rem",
+          color: "var(--ink-soft)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {headline ?? "Nothing here yet"}
+      </span>
+    </button>
+  );
+}
+
+function StatusTile({
+  confirmedAt,
+  unincorporatedCount,
+  rebuild,
+}: {
+  confirmedAt: number | null;
+  unincorporatedCount: number;
+  rebuild: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "0.5rem",
+        alignContent: "start",
+        padding: "0.9rem 1rem",
+        borderRadius: "1rem",
+        background: "var(--card)",
+        border: "1px solid var(--rule)",
+      }}
+    >
+      <span style={{ ...label, fontSize: "0.68rem" }}>Confirmed</span>
+      <span style={{ fontSize: "1.1rem", fontWeight: 700, lineHeight: 1.1 }}>
+        {confirmedAt === null ? (
+          "—"
+        ) : (
+          <time dateTime={new Date(confirmedAt).toISOString()}>{formatConfirmedAt(confirmedAt)}</time>
+        )}
+      </span>
+      <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+        {unincorporatedCount === 0
+          ? "Up to date with your documents"
+          : `${unincorporatedCount} ${unincorporatedCount === 1 ? "document" : "documents"} added since`}
+      </span>
+      <span>{rebuild}</span>
+    </div>
+  );
+}
+
+function SegmentDetail({
+  segment,
+  blueprint,
+}: {
+  segment: BlueprintSegment;
+  blueprint: BusinessBlueprint;
+}) {
+  const populated = segment.fields.filter((f) => blueprint[f] !== null);
+
+  return (
+    <section id="segment-detail" style={{ display: "grid", gap: "0.65rem", paddingTop: "0.85rem", borderTop: "1px solid var(--rule)" }}>
+      <h3 style={{ ...label, margin: 0 }}>{segment.label}</h3>
+
+      {populated.length === 0 && (
+        <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
+          Nothing here yet. Add documents to your vault and rebuild, and anything they say about
+          this part of the business will land here.
+        </p>
+      )}
+
+      {populated.map((blueprintField) => {
+        const entry = blueprint[blueprintField];
+        if (entry === null) return null;
         return (
-          <section
-            key={section.title}
+          <div
+            key={blueprintField}
             style={{
               display: "grid",
-              gap: "0.65rem",
-              paddingTop: "0.85rem",
-              borderTop: "1px solid var(--rule)",
+              gridTemplateColumns: "minmax(8rem, 0.75fr) minmax(0, 1.5fr)",
+              gap: "0.75rem",
+              alignItems: "start",
             }}
           >
-            <h3 style={{ ...label, margin: 0 }}>{section.title}</h3>
-            {fields.map((blueprintField) => {
-              const entry = blueprint[blueprintField];
-              if (entry === null) return null;
-              return (
-                <div
-                  key={blueprintField}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(8rem, 0.75fr) minmax(0, 1.5fr)",
-                    gap: "0.75rem",
-                    alignItems: "start",
-                  }}
-                >
-                  <span style={{ color: "var(--ink-soft)", fontSize: "0.85rem", fontWeight: 600 }}>
-                    {FIELD_SPEC[blueprintField].label}
-                  </span>
-                  <div style={{ display: "grid", gap: "0.2rem", minWidth: 0 }}>
-                    <span style={{ color: "var(--ink)", fontSize: "0.92rem" }}>
-                      {entry.values.join(" · ")}
-                    </span>
-                    <span style={{ color: "var(--ink-soft)", fontSize: "0.78rem" }}>
-                      {entry.origin === "stated"
-                        ? "Your own words"
-                        : `From ${entry.source ?? "a vault document"}`}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </section>
+            <span style={{ color: "var(--ink-soft)", fontSize: "0.85rem", fontWeight: 600 }}>
+              {FIELD_SPEC[blueprintField].label}
+            </span>
+            <div style={{ display: "grid", gap: "0.2rem", minWidth: 0 }}>
+              <span style={{ color: "var(--ink)", fontSize: "0.92rem" }}>
+                {entry.values.join(" · ")}
+              </span>
+              <span style={{ color: "var(--ink-soft)", fontSize: "0.78rem" }}>
+                {entry.origin === "stated" ? "Your own words" : `From ${entry.source ?? "a vault document"}`}
+              </span>
+            </div>
+          </div>
         );
       })}
-    </div>
+    </section>
   );
 }

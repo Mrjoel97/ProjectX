@@ -8,6 +8,8 @@
 > `page.tsx` split into `ShapePanel` / `NarrativePanel` / `BlueprintPanel`; both writers unchanged.
 > Three `role="tab"` panels, all mounted and toggled with `hidden`; `?tab=` read via
 > `window.location.search` (the repo idiom — never `useSearchParams`).
+> `BlueprintPanel` is now an overview grid of six segment tiles plus a status tile; the flat
+> `REPORT_SECTIONS` grouping is gone. `total === 0` renders "Not tracked yet", never a ratio.
 >
 > Last verified: 2026-08-02 (16-09 side-work — **`__seedOnboardedTenant`: the only way into the
 > cockpit without a model call.**) Every `apps/web/e2e` spec sits behind the `(app)` auth gate AND
