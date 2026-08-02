@@ -116,6 +116,26 @@ export const LEAD_ENGINE_SKILL = "lead-engine" as const;
  *  asserts a matching exported constant for every `SPECIALISTS[route].skillName`. */
 export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
 
+/**
+ * Registry name of the media-director specialist (Phase 20, MEDIA-01) — script, art direction,
+ * block deck and block prompts, produced in ONE turn.
+ *
+ * DELIBERATELY UNGATED — do NOT add to `GATED_SKILLS`.
+ *
+ * MECHANICAL reason, the `document-analyst` mechanism exactly: `run-eval-golden.mjs`
+ * hard-validates `--skill` against a closed name list and drives `runCockpitAgent` over TEXT
+ * fixtures. It structurally cannot drive a script/art-direction/storyboard turn, so gating this
+ * would DEADLOCK it at v1 — the first body edit mints a candidate no runner could ever certify.
+ *
+ * SUBSTANTIVE reason: the guarantee that matters here is CODE, not prose. The specialist is
+ * granted `searchVault` and nothing else, so it structurally cannot spend a cent (D2); the
+ * narration character band is enforced by `@pikar/core/storyboard`'s parser whatever the body
+ * says; the model is chosen from a price table the body cannot name into; and the budget rail is
+ * code. Unlike `inbox-digest` / `reply-drafter` / `research-specialist`, this skill ingests no
+ * untrusted third-party content — only the tenant's own profile, blueprint and vault.
+ */
+export const MEDIA_DIRECTOR_SKILL = "media-director" as const;
+
 /** Registry name of the conversational onboarding system prompt (ONBD-01 / 15.1, design §6). */
 export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
 

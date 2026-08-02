@@ -13,6 +13,7 @@ import {
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
+  DOCUMENT_ANALYST_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
@@ -23,16 +24,16 @@ import {
   INBOX_DIGEST_SKILL,
   isGatedSkill,
   LEAD_ENGINE_SKILL,
-  RESEARCH_SPECIALIST_SKILL,
   LEAN_CANVAS_SKILL,
-  DOCUMENT_ANALYST_SKILL,
   type LoadedSkill,
+  MEDIA_DIRECTOR_SKILL,
   MONEY_MODEL_DESIGNER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
   OFFER_ARCHITECT_SKILL,
   ONBOARDING_AGENT_SKILL,
   REPLY_DRAFTER_SKILL,
+  RESEARCH_SPECIALIST_SKILL,
   STYLE_COACHING_SKILL,
   STYLE_CONCISE_SKILL,
   STYLE_DIRECT_SKILL,
@@ -54,12 +55,13 @@ import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor"
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { leadEngineSkillBody } from "@pikar/contracts/skills/leadEngine";
-import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
+import { mediaDirectorSkillBody } from "@pikar/contracts/skills/mediaDirector";
 import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
 import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
 import { onboardingAgentSkillBody } from "@pikar/contracts/skills/onboardingAgent";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
 import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
@@ -337,6 +339,16 @@ export const seedSkills = internalMutation({
       // editing its body would have minted a candidate needing a passing eval first, and no golden
       // fixture reaches the drafting path to clear it. Its body stays byte-unchanged.
       { name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody },
+      // UNGATED (20-03, MEDIA-01): the media specialist. Same deadlock as document-analyst — the
+      // golden runner drives runCockpitAgent over TEXT fixtures and cannot exercise a
+      // script/art-direction/storyboard turn, so gating would strand this at v1 on its first body
+      // edit. The guarantees that matter are CODE: searchVault is its only grant, so it cannot
+      // spend a cent; the narration band is enforced by the parser; the model comes from a price
+      // table the body cannot name into.
+      // There is deliberately NO assembler-script entry here, and there must never be one — the
+      // ffmpeg assembler is a repo file, and a runtime-mutable shell script executed in a VM is
+      // remote code execution (llmRedaction.test.ts scans for exactly that).
+      { name: MEDIA_DIRECTOR_SKILL, body: mediaDirectorSkillBody },
     ];
 
     for (const { name, body } of seeds) {

@@ -1,3 +1,6 @@
+// @vitest-environment node
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CLIP_SECONDS,
@@ -279,5 +282,75 @@ describe("narrationChars", () => {
 describe("the constants themselves", () => {
   it("DEFAULT_CLIP_SECONDS is a member of CLIP_SECONDS", () => {
     expect(CLIP_SECONDS).toContain(DEFAULT_CLIP_SECONDS);
+  });
+});
+
+// ── The round trip: the SKILL BODY's own worked example must parse ───────────────────────────
+//
+// The body owns the output format and this parser owns the input format. Nothing else pins them
+// together, and the failure mode is silent: a drifted table produces an EMPTY deck, which reads to
+// the user as "the specialist proposed nothing" rather than as a bug.
+//
+// The .md is read off DISK by relative path rather than imported: @pikar/core does not depend on
+// @pikar/contracts and must not start to (specialists.test.ts reads contracts/src/skill.ts the
+// same way, for the same reason).
+describe("media-director.md round trip — the body's example survives its own rules", () => {
+  const body = readFileSync(
+    fileURLToPath(new URL("../../contracts/skills/media-director.md", import.meta.url)),
+    "utf8",
+  );
+  const r = parseBlockDeck(body);
+
+  it("parses to a deck of at least 2 blocks, in index order", () => {
+    expect(r.ok, `the body's BLOCK DECK did not parse: ${r.ok ? "" : r.reason}`).toBe(true);
+    if (!r.ok) return;
+    expect(r.blocks.length).toBeGreaterThanOrEqual(2);
+    expect(r.blocks.map((b) => b.index)).toEqual(r.blocks.map((_, i) => i));
+  });
+
+  it("every type is a member of the closed SHOT_TYPES set", () => {
+    if (!r.ok) throw new Error("expected ok");
+    for (const b of r.blocks) expect(SHOT_TYPES).toContain(b.type);
+  });
+
+  it("the deck's clipSeconds is legal and EVERY block matches it", () => {
+    if (!r.ok) throw new Error("expected ok");
+    expect(CLIP_SECONDS).toContain(r.clipSeconds);
+    for (const b of r.blocks) expect(b.seconds).toBe(r.clipSeconds);
+  });
+
+  it("every narration in the worked example obeys the band the body TEACHES", () => {
+    // A worked example that violates its own rule is how a model learns the rule is optional.
+    if (!r.ok) throw new Error("expected ok");
+    for (const b of r.blocks) {
+      expect(b.narration.length, `block ${b.index} narration`).toBeGreaterThanOrEqual(
+        minCharsFor(r.clipSeconds),
+      );
+      expect(b.narration.length, `block ${b.index} narration`).toBeLessThanOrEqual(
+        maxCharsFor(r.clipSeconds),
+      );
+    }
+  });
+
+  it("windowStartMs is strictly increasing and derived", () => {
+    if (!r.ok) throw new Error("expected ok");
+    for (const b of r.blocks) expect(b.windowStartMs).toBe(b.index * r.clipSeconds * 1000);
+    const starts = r.blocks.map((b) => b.windowStartMs);
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+    expect(new Set(starts).size).toBe(starts.length);
+  });
+
+  it("the BLOCK PROMPTS section is actually reached — a prompt differs from its description", () => {
+    // Without this the body could drop section 4 entirely and every prompt would silently
+    // degrade to the block's visual description, which is not a parse failure and not a lie
+    // anyone would notice until the images came back generic.
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.blocks.some((b) => b.prompt !== b.description)).toBe(true);
+  });
+
+  it("the body teaches the character band it is held to, and names its only tool", () => {
+    expect(body).toContain(String(maxCharsFor(10)));
+    expect(body).toContain(String(minCharsFor(10)));
+    expect(body).toContain("searchVault");
   });
 });

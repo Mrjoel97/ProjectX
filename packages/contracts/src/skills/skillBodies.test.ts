@@ -1,17 +1,18 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { BUSINESS_BLUEPRINT_SKILL, isGatedSkill } from "../skill";
+import { BUSINESS_BLUEPRINT_SKILL, isGatedSkill, MEDIA_DIRECTOR_SKILL } from "../skill";
 import { bmcSkillBody } from "./bmc";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
-import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { leanCanvasSkillBody } from "./leanCanvas";
+import { mediaDirectorSkillBody } from "./mediaDirector";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
 import { onboardingAgentSkillBody } from "./onboardingAgent";
+import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
 import { styleDirectSkillBody } from "./styleDirect";
@@ -34,6 +35,10 @@ const bodies: [string, string][] = [
   ["lead-engine", leadEngineSkillBody],
   // Phase 16 (DISP-02/ACTN-03): the research specialist body.
   ["research-specialist", researchSpecialistSkillBody],
+  // Phase 20 (MEDIA-01): the media specialist body. The drift row matters here because the .md
+  // carries a WORKED EXAMPLE that storyboard.test.ts parses — a stale .ts would ship a body whose
+  // example no longer matches the parser the round-trip test certified.
+  ["media-director", mediaDirectorSkillBody],
   // 15.1-05 (design §7): the three UNGATED behaviour-preset style overlays. Same mirror, same
   // reason — the `.md` is what a human edits, the `.ts` is what the Convex runtime ships, and a
   // half-applied mirror would silently seed a stale overlay.
@@ -53,7 +58,9 @@ const bodies: [string, string][] = [
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {
-  test.each(bodies)("%s.md === its derived constant (byte-identical, LF-normalized)", (base, body) => {
+  test.each(
+    bodies,
+  )("%s.md === its derived constant (byte-identical, LF-normalized)", (base, body) => {
     const mdPath = fileURLToPath(new URL(`../../skills/${base}.md`, import.meta.url));
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
   });
@@ -66,5 +73,17 @@ describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", 
 describe("business-blueprint gating (17.1-02)", () => {
   test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
     expect(isGatedSkill(BUSINESS_BLUEPRINT_SKILL)).toBe(false);
+  });
+});
+
+// Phase 20 (MEDIA-01). Same mechanism, same deadlock: the golden runner drives runCockpitAgent over
+// TEXT fixtures and structurally cannot exercise a script/art-direction/storyboard turn, so gating
+// media-director would strand it at v1 on its first body edit. And the guarantees that matter are
+// CODE, not prose — searchVault is its only grant, the narration band is enforced by the parser,
+// and the model comes from a price table the body cannot name into. A future "tidy up the gate
+// list" edit must fail HERE, not in production.
+describe("media-director gating (20-03)", () => {
+  test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
+    expect(isGatedSkill(MEDIA_DIRECTOR_SKILL)).toBe(false);
   });
 });

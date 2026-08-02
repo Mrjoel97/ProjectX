@@ -1,11 +1,34 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Re-checked 2026-08-02 by the Phase-20 lane (20-01): `packages/contracts/skills/cockpit-agent.md`
-> and `packages/contracts/src/skills/cockpitAgent.ts` show as modified in the shared working tree
-> but their diff against HEAD is **EMPTY** — stat-dirty only (mtime/EOL refresh), no body change,
-> so no registry version and no gate state moved. Nothing below is amended. The `media-director`
-> row that Phase 20 does add is plan 20-03's, and it is not in the tree yet.
+> Last verified: 2026-08-02 (20-03 — **`media-director` added, DELIBERATELY UNGATED, live at v1.**)
 >
+> **`media-director`** is the Phase-20 media specialist: script → art direction → block deck →
+> block prompts, all four produced in ONE turn (one row, not four — a `SpecialistSpec.skillName` is
+> ONE string, and a composing dispatcher does not exist in this repo).
+>
+> **UNGATED, and it is not a style preference.** MECHANICALLY, gating it deadlocks it at v1: the
+> golden runner hard-validates `--skill` against a closed name list and drives `runCockpitAgent`
+> over TEXT fixtures, so it structurally cannot exercise a storyboard turn and no run could ever
+> certify the first body edit. That is the `document-analyst` mechanism exactly. SUBSTANTIVELY, the
+> guarantees are CODE: `searchVault` is its only grant so it cannot spend a cent; the narration
+> character band is enforced by `@pikar/core/storyboard`'s parser whatever the body says; the model
+> is chosen from a price table the body cannot name into. And unlike `inbox-digest` /
+> `reply-drafter` / `research-specialist`, it ingests no untrusted third-party content — only the
+> tenant's own profile, blueprint and vault. `skillBodies.test.ts` asserts the ungated state, so a
+> "tidy up the gate list" edit fails there rather than in production.
+>
+> **Its `.md` carries a WORKED EXAMPLE that a test parses.** `storyboard.test.ts` feeds the body's
+> own BLOCK DECK to `parseBlockDeck` and asserts every narration line sits inside the character band
+> the body teaches. A body edit that drifts off the table shape, or that writes an example line
+> violating its own rule, is RED — which matters because the silent failure mode is an EMPTY deck
+> that reads as "the specialist proposed nothing" rather than as a bug.
+>
+> **There is no `assemble` row and there must never be one.** The ffmpeg assembler is a repo file
+> with a byte-identity mirror; a registry row is mutable by a database write, and a runtime-mutable
+> shell script executed in a VM is remote code execution. `llmRedaction.test.ts` scans `skills.ts`
+> for it.
+>
+> PREVIOUSLY:
 > Last verified: 2026-08-01 (16-09 — **run `56bff5b8` paid, 29/33; FOUR bodies changed and NONE
 > are seeded. The “NUMBER-FREE” claim in the block below is SUPERSEDED.**)
 > Gate run `56bff5b8`: **29/33 passed, $0.3025** ($0.2290 executive + $0.0734 specialist) against a
