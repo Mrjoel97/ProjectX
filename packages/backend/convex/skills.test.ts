@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CONTENT_DRAFTER_SKILL, isGatedSkill } from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
@@ -762,6 +762,32 @@ describe("no hardcoded agent prompts in convex/", () => {
     expect(lf(body)).toBe(lf(readFileSync(mdPath, "utf8")));
   });
 
+  /**
+   * The ONE exemption from the long-inline-string scan below, and it is deliberately narrow: an
+   * exact path, not a directory and not a raised threshold.
+   *
+   * `render/assembleScript.ts` is a bundler-safe mirror of `render/assemble_final.sh` — it is
+   * **CODE, not a prompt.** CLAUDE.md §5 makes PROMPTS versioned `skills` rows; generalising that
+   * to this file would be remote code execution, because a registry row is mutable by a database
+   * write and this string is executed as a shell script in a VM holding tenant media. The file's
+   * own header says so, and `llmRedaction.test.ts` proves no `render/`-sourced body ever reaches
+   * a `skills.ts` seed.
+   *
+   * Raising MAX_INLINE_STRING instead would have blinded this guard for every file at once, which
+   * is the opposite of what one legitimate exception warrants. Found RED on `main` by plan 20-04
+   * (2026-08-02) — the scan and 20-13's mirror landed in different plans and never met.
+   */
+  const ASSEMBLER_MIRROR = "/render/assembleScript.ts";
+
+  test("the assembler-mirror exemption is REAL and still guarded elsewhere", () => {
+    // Anti-vacuity. A skip keyed on a path becomes a silent hole the moment that path moves, and
+    // it is only defensible while the two guards that make it safe are still in place.
+    const at = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+    expect(existsSync(at(`.${ASSEMBLER_MIRROR}`))).toBe(true); // the exempted file
+    expect(existsSync(at("./render/assemble_final.sh"))).toBe(true); // its canonical source
+    expect(existsSync(at("./render/assembleScript.test.ts"))).toBe(true); // the byte-identity drift test
+  });
+
   test("no long inline prompt string literals live in convex/ source", () => {
     const convexDir = fileURLToPath(new URL(".", import.meta.url));
     const MAX_INLINE_STRING = 200;
@@ -777,6 +803,7 @@ describe("no hardcoded agent prompts in convex/", () => {
         }
         if (!entry.endsWith(".ts")) continue;
         if (entry.endsWith(".test.ts")) continue;
+        if (full.endsWith(ASSEMBLER_MIRROR)) continue; // the ONE exemption — see below
         sourceFiles.push(full);
       }
     };

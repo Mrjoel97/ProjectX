@@ -110,6 +110,23 @@ byte-identical, and the suite is green.
    gate, and an unknown shot type must be a boundary rejection rather than a block that silently
    estimates to zero because `isPaidBlock` found no `PAID` entry for it.
 
+## FOLLOW-UP, SAME DAY (2026-08-02) — everything below was CLOSED
+
+The two sections that follow were written when 20-04 committed. An owner pass immediately after
+closed all of it; they are kept verbatim as the record of what was found, with the resolution noted
+inline. **Current state: backend suite 930/930 across 56 files, backend typecheck 13 (delta 0),
+`check-playbooks` satisfied for every playbook this work owns.**
+
+| Finding | Resolution |
+|---|---|
+| `skills.test.ts:803` RED on `main` | **FIXED.** One narrow path exemption for `render/assembleScript.ts` + an anti-vacuity test that its two safety guards still exist. Observed RED with the exemption removed. Suite 930/930 |
+| `media:spendForPeriod` unowned | **PLANNED as 20-18** (Wave 6), authored not built |
+| vendor price/endpoint drift unowned | **PLANNED as 20-19** (Wave 14), authored not built — found during the same pass; the fixture test compares our table to our own fixture and cannot see vendor drift |
+| `internal.media` missing from `_generated` | **FIXED.** `npx convex codegen` run against the local backend; typecheck delta is now exactly 0 |
+| `STATE.md`'s 150 typecheck baseline | **CORRECTED** in place to 13, with the re-measure warning and the codegen caveat |
+| `guardrails.ts` in no playbook's watch prefix | **FIXED.** New `docs/playbooks/guardrails.md` owns the guard subsystem (both rails, both switches, the check-vs-limit distinction) and is registered in `watch.json` |
+| ROADMAP drift (5 plans unticked, `0/TBD | Not started`) | **FIXED.** 20-01/02/03/04/13 ticked, row now `5/19 | In Progress`, both new plans registered |
+
 ## TWO PRE-EXISTING REDS FOUND, NEITHER FIXED HERE — both need an owner
 
 1. **`skills.test.ts:803` is RED on `main`, and it is 20-13's.** The `MAX_INLINE_STRING` scan (the

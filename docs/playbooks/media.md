@@ -285,6 +285,13 @@ reads to a user as a broken feature.
 **Detection is free:** one unauthenticated `GET https://fal.ai/api/models?keywords=…` returns
 `deprecated` / `removed` / `status` per model. Replicate is ADR-011's recorded fallback.
 
+⚠️ **Nothing runs that check on a schedule yet — it is plan 20-19 (Wave 14).** The shipped fixture
+test compares our table to our OWN committed fixture, so it catches a table edit that forgot the
+fixture and **cannot** catch vendor drift; both sides of that comparison are ours. Until 20-19
+lands, a price change or a `-preview` retirement is discovered by a user hitting `unknown_model`, or
+by an invoice. 20-19 makes it a weekly job with three outcomes — agree, drift, and *could not
+check*, which must never be reported as green.
+
 ## Reconciliation
 
 The D5 procedure. Two bullets, both runnable, both $0. Cadence: **at each phase close, and any time
@@ -302,14 +309,16 @@ Compare the returned `actualCents` total against fal's billing page for the same
 means the table is wrong, not that the meter is wrong — the meter records what the provider
 reported.
 
-> ⚠️ **`media:spendForPeriod` DOES NOT EXIST, and no plan owns it (found 2026-08-02 by 20-04).**
-> This paragraph said it "lands with plan 20-04". It does not: 20-04 ships only `reserveJob` +
-> `reserveJobInner`, and a grep across all seventeen Phase-20 plans finds no plan that authors this
-> query or `media:listJobs` either. `mediaJobs.actualCents` is written by the webhook path (20-06),
-> so **the reader is the missing half of the D5 procedure**. The natural home is 20-11, whose
-> owner-run live gate this playbook already calls "this procedure's first run" — but that is an
-> assignment nobody has made. Until then, reconcile by reading rows directly in the dashboard or via
-> `npx convex run` against a `by_plan`/`by_batch` index query.
+> ⚠️ **`media:spendForPeriod` DOES NOT EXIST YET — it is plan 20-18 (Wave 6).** This paragraph
+> said it "lands with plan 20-04"; it does not, and when 20-04 shipped, a grep across all seventeen
+> Phase-20 plans found NO plan authoring this query or `media:listJobs` either, while
+> `mediaJobs.actualCents` (written by 20-06) was read by nobody. **20-18 was authored on 2026-08-02
+> to close that half of D5.** Until it lands, reconcile by reading rows directly in the dashboard.
+>
+> When it does land, three caveats travel with the number and 20-18 puts them in the payload:
+> the reserved total is **not** `Σ estUsd` (the render line has no row and the cents floor was
+> applied once, per batch); a `tts` row's `estUsd` is **double** by design (the rewrite allowance);
+> and `unlanded > 0` means the period is not final.
 
 **(b) Is the price table still the vendor's price?** Re-read fal's catalog API and diff it against
 the committed fixture:
@@ -341,10 +350,16 @@ includes an image generation resolves it.
 
 Exactly **ONE plan per wave** may bump this file, so concurrent waves never contend for it:
 
-20-01 (W1) · 20-13 (W2) · 20-04 (W3) · 20-05 (W4) · 20-06 (W5) · [W6 none — 20-07 owns `cockpit.md`] ·
-20-14 (W7) · 20-15 (W8) · 20-09 (W9) · 20-16 (W10) · 20-10 (W11) · 20-17 (W12) · 20-11 (W13).
+20-01 (W1) · 20-13 (W2) · 20-04 (W3) · 20-05 (W4) · 20-06 (W5) · **20-18 (W6)** · 20-14 (W7) ·
+20-15 (W8) · 20-09 (W9) · 20-16 (W10) · 20-10 (W11) · 20-17 (W12) · 20-11 (W13) · **20-19 (W14)**.
 
 This is why the wave graph is longer than the dependency graph alone requires.
+
+W6 and W14 were the only waves with no owner (20-07 owns `cockpit.md`, 20-12 owns
+`skill-registry.md`), which is why the two plans added on 2026-08-02 took them. **20-19 depends only
+on 20-01 and is technically runnable from W2** — it sits at W14 solely because every wave in between
+was already claimed. If the wave graph is ever re-cut, pull it earlier: it protects every paid plan
+downstream of it.
 
 <!-- ponytail: watch.json registers PRODUCTION paths only, deliberately NOT the `.test.ts` siblings.
      Test files are exempt from check-playbooks' creation gap, and registering them would force every
