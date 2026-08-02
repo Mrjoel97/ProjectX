@@ -221,7 +221,13 @@ function SegmentTile({
             height: "100%",
             borderRadius: 999,
             width: total === 0 ? "0%" : `${(filled / total) * 100}%`,
-            background: complete ? "var(--teal-600)" : "var(--held)",
+            /* NOT approval amber: that token means "held for your approval / spending", and a
+               half-filled progress meter is neither. Reusing it here would teach the eye that
+               amber means "incomplete", which is exactly the signal the Approve gate needs to
+               keep for itself. --ink-soft reads as in-progress against --rule and stays legible
+               in both themes. blueprint.test.ts scans this file for the amber token — and it
+               scans prose too, so do not name it here either. */
+            background: complete ? "var(--teal-600)" : "var(--ink-soft)",
           }}
         />
       </span>

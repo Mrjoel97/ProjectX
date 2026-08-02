@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   BEHAVIOR_PRESETS,
@@ -554,13 +554,27 @@ describe("sanitizeAgentName (design §7 — a user string that rides into a mode
 // rejects (a broken UI), and a server can accept a write no page offers (a latent hole).
 describe("no tier control", () => {
   const PAGE_NAMES = ["profile", "onboarding"] as const;
-  const pages = PAGE_NAMES.map((p) => ({
-    name: p,
-    src: readFileSync(
-      new URL(`../../../apps/web/app/(app)/dashboard/${p}/page.tsx`, import.meta.url),
-      "utf8",
-    ),
-  }));
+
+  /**
+   * The scanned unit is the SURFACE — `page.tsx` plus every sibling component in its route folder
+   * — not one file. The profile route was a single page when this scan was written; it has since
+   * been split into `ShapePanel` / `NarrativePanel` / `BlueprintPanel`, which moved
+   * `BEHAVIOR_PRESETS.map(` and `api.tenantProfile.get` out of `page.tsx` and turned two rows here
+   * RED without anything about the GUARANTEE changing.
+   *
+   * Reading the folder is the fix rather than naming the three panels, because naming them would
+   * put this scan one refactor behind again. A widget that moves into a new sibling file is still
+   * on the surface, which is the only thing these assertions ever meant.
+   */
+  const surfaceOf = (page: string) => {
+    const dir = new URL(`../../../apps/web/app/(app)/dashboard/${page}/`, import.meta.url);
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".tsx"))
+      .sort()
+      .map((f) => readFileSync(new URL(f, dir), "utf8"))
+      .join("\n");
+  };
+  const pages = PAGE_NAMES.map((p) => ({ name: p, src: surfaceOf(p) }));
 
   /**
    * Per-page non-vacuity anchors, RE-ARMED in 15.1-07 when both pages were rewritten.
