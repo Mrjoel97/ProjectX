@@ -1,4 +1,11 @@
 # Playbook: Knowledge Vault & GraphRAG
+
+> Last verified: 2026-08-03 (15.3-01 — **the vault schema is now folder-aware, and every byte of
+> it is inert.** `vaultFolders` + six optional `vaultDocuments` fields + two indexes + the
+> `folder_digest` origin literal landed as a PURE WIDENING: no behaviour, no backfill, no
+> migration, no test result changed. See `## Phase 15.3 — vault folders` at the END of this file
+> — in particular the INERT-LITERAL warning, which is the single most misreadable fact in the
+> phase.)
 
 > Last verified: 2026-08-02 (18-07 — **agent-authored documents carry provenance in the grid, and
 > the vault-search ceiling on them is REAL.** Documenting shipped surface that landed WITHOUT a
@@ -1360,3 +1367,69 @@ the honest Blueprint-bearing no-match at count 0 plus a matched card containing 
 retrieval document. Those tests are intended to fail if anyone later "simplifies" the Blueprint
 back into the parallel arrays; the required mutation proof moves it there temporarily and confirms
 that the no-match, count, budget, full-object shape, and array-invariance guards all turn red.
+
+## Phase 15.3 — vault folders
+
+One container section for the phase. Each plan appends ONLY its own `### 15.3-0N` subsection
+below and bumps `Last verified`; nobody rewrites another plan's subsection. On merge conflict,
+keep both. Same append-only shared-singleton rule as `## Phase 15.2` above.
+
+### 15.3-01 — schema
+
+Every schema change the phase needs, landed in ONE plan before any behaviour, so no later wave
+edits `schema.ts` and no two plans can race on the repo's highest-collision file. Every addition
+is a new table or an optional field, so this is a **pure widening**: it ships and sits inert, with
+zero backfill, zero migration and no test result changed.
+
+**`vaultFolders`** (`schema.ts`, directly after `vaultDocuments`) — tenant-scoped folder row:
+`source` (`upload` | `drive`), `status`, the `memberCount`/`terminalCount`/`failedCount` counters,
+`reservedCents`/`spentCents`/`reservedAt`, the `digestDocId`/`digestSourceDocIds`/`digestBuiltAt`
+trio, and a `by_tenant` index. A NEW TABLE needs no migration (the `convex-migration-helper` skill
+lists it under *When Not to Use*).
+
+**There is no `cancelled` status, deliberately.** Cancel DELETES the row. The seal is read THROUGH
+the folder row, so a folder merely *marked* cancelled would keep its members sealed forever —
+inverting the locked decision that cancelled documents become groundable immediately. The
+consequence, which is also deliberate: members keep a dangling `folderId` that resolves to nothing,
+so **every folder read must treat an unresolvable id as "no folder"** (a lenient join), never as a
+missing one. Deleting the row is also what keeps cancel migration-free — actively clearing
+`folderId` on 400 rows does not fit one mutation, because a patch rewrites the whole document,
+`text` blob included.
+
+**The widening on `vaultDocuments`** — `folderId`, `docType`, `identityLine`, `identityUserSet`,
+`driveFileId`, `driveModifiedTime`, all `v.optional`. **`folderId` ABSENT ⇒ folder-less ⇒ exactly
+today's behaviour** for every row that exists: no shipped read changes, nothing is backfilled.
+`docType` is a `v.union` and NOT `v.string()` on purpose — `category` next door is `v.string()` and
+the table's own comment records that 4 of 11 insert sites already store out-of-union values; every
+future member costing a schema edit IS the point. `identityUserSet: true` means the user typed the
+identity and **no code path may ever overwrite it** (the label feeds the digest and grounding, so a
+wrong guess left standing is a permanent lie in the grounding corpus); there is deliberately no
+`docTypeSource` union, because one boolean is the whole decision.
+
+**⚠ THE INERT-LITERAL WARNING — the single most misreadable fact in this phase.** The `origin`
+union gained `folder_digest`, and **it excludes nothing and includes nothing.** There is ZERO
+`origin` predicate anywhere in retrieval: the `origin: "agent"` exclusion is the ABSENT
+`startIngest` call (`vault.ts:627-634`), not a filter. **A digest is groundable ONLY because its
+insert calls `startIngest`.** Forget that call and the digest is silently ungroundable while every
+test asserting `origin === "folder_digest"` still passes — so **the observable check is
+`ragEntryId != null`, never the literal.** Do NOT add an origin-based filter anywhere; the literal
+is provenance only. The one consumer, `patchCreatedDoc`'s `doc.origin !== "agent"` guard
+(`vault.ts:723`), already refuses non-`"agent"` and therefore correctly makes a digest
+un-revisable — that is right as it stands, do not "fix" it.
+
+**`by_tenant_folder` read discipline.** The index serves BOTH the drill-in listing and the digest's
+stale set-difference (there is no `by_tenant_folder_status`: completion is counted on the folder
+row, never by a status query). **NEVER `.collect()` on it.** Rows carry `text` up to 400k chars, so
+~40 max-size rows exhaust the 16 MiB per-transaction read cap — the same defect class that already
+breaks `listVaultDocs`/`vaultStats` at folder scale. Use a bounded `.take()` and project `text`
+away; `ownedDocsMeta` (`vault.ts:438`) is the shipped refs-only precedent. `by_tenant_driveFileId`
+is the Drive re-import primary key, added here for the same reason: so no later wave touches this
+file.
+
+`watch.json` gained `vaultFolders.ts`, `vaultDigest.ts` and `vaultDrive.ts` under this playbook in
+wave 1 — a plan blocked at its own Stop hook cannot commit, and doing it once here keeps every
+later plan off a shared file.
+
+Verify with `npx convex codegen` + `npx tsc --noEmit -p tsconfig.json` from `packages/backend`
+(errors must stay confined to `convex/*.test.ts`, zero in `schema.ts`), and by confirming there is
+still no `origin` predicate in any retrieval path.
