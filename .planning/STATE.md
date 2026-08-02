@@ -2,6 +2,21 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_plan: 7 (done)
+status: in_progress
+stopped_at: Phase 15.3 context gathered
+last_updated: "2026-08-02T16:52:41.708Z"
+progress:
+  total_phases: 42
+  completed_phases: 28
+  total_plans: 238
+  completed_plans: 223
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 17.1
 current_plan: 10
 status: in_progress
@@ -1609,6 +1624,33 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 ### Roadmap Evolution
 
+- Phase 15.3 inserted after Phase 15.2: Vault Folders — Folder Ingest, Synthesis & Drill-In
+  (2026-08-02). **Not new scope — a slot for scope that already existed and was homeless.** Phase
+  15.2 carved this out as "Phase 2 of this line of work" at `15.2-CONTEXT.md:170-184` and sequenced
+  it AFTER itself because the per-file cap raise to 200 MB was unsafe until the extraction fan-out
+  bounded per-action memory. 15.2 shipped that fan-out on 2026-07-27, clearing the blocker, and the
+  work then sat in no phase for six days. Surfaced 2026-08-02 by the owner asking where the folder
+  and file UI changes had gone: the FILE half had shipped (`DocGrid`, `PreviewModal`, `CategoryTabs`,
+  `Dropzone`, `VaultStats` all live under `apps/web/app/(app)/dashboard/vault/`), while the FOLDER
+  half had zero code — `folderId` and `vaultFolders` return zero hits across `schema.ts` and the
+  whole vault UI. That asymmetry is why the deferral was cheap: the drill-in was always specified as
+  "reusing `PreviewModal`", and `PreviewModal` already exists.
+  Scope is the five carve-out items verbatim: `vaultFolders` + optional `folderId` (zero-migration
+  optional widening), 1–1.5 GB folder upload + the 200 MB cap raise, folder-level synthesis where
+  **the digest IS ITSELF a vault document** so it embeds and grounds through the existing rails,
+  the folder-scoped drill-in, and a per-folder budget estimate + reservation.
+  **The reservation is the load-bearing item, not polish.** Every ingest opens with
+  `guardrails.preCall`; a large folder can trip the daily budget mid-run and leave half its
+  documents `failed`, and a half-ingested folder is WORSE than a refused one because the agent
+  grounds on it confidently without knowing what is absent. Estimate and reserve the whole folder
+  before the first document, or refuse it intact.
+  **Unblocks Phase 17.1**, whose Stage-2 blueprint drift is specified to fire on bulk/folder-ingest
+  completion and degrades to the Stage-1 one-click rebuild banner until this exists
+  (`17.1-RESEARCH.md:114-115`, `17.1-CONTEXT.md:201-207`). Placed at 15.3 rather than later so it
+  precedes 17.1 in roadmap order.
+  ⚠ `gsd-tools phase insert` wrote the Phase Details section but NOT the top-level checklist line —
+  the known silent-no-op gotcha. The checklist entry and the Goal block were hand-written.
+
 - Phase 22.1 inserted after Phase 22: Beta Admission Readiness — legal/deployment readiness,
   reliable CI/typechecking, and identity-boundary hardening (URGENT, 2026-07-29). This is the
   explicit admission gate the owner requested before a second beta user. It stays separate from
@@ -1785,10 +1827,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-07-30T14:44:41.2683917+03:00
-Stopped at: Phase 17 verified offline with human UAT pending; completed 17.1-09; next 17.1-10 live gate; 16-09 awaits OpenAI key
+Last session: 2026-08-02T16:52:41.616Z
+Stopped at: Phase 15.3 context gathered
 Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: None
+Resume file: .planning/phases/15.3-vault-folders-folder-ingest-synthesis-and-drill-in/15.3-CONTEXT.md
