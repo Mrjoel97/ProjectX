@@ -1,0 +1,60 @@
+# fal-catalog — scheduled vendor price + endpoint-health drift detection (MEDIA-01, plan 20-19).
+#
+# `packages/cost/src/media.ts` is a hand-maintained price table. The shipped fixture test proves the
+# table agrees with `media.fixtures.json` — i.e. that a table edit did not forget the fixture. It
+# CANNOT detect that fal changed a price, because both sides of that comparison are ours. This job
+# is the only thing that reads the vendor.
+#
+# It is also the detector for the `-preview` retirement risk: `fal-ai/wan-25-preview/*` is a preview
+# endpoint, and a rename turns every generation into `unknown_model` — the correct failure, but one
+# a user would otherwise report to us.
+#
+# THIS IS NOT A MERGE GATE. It runs on a schedule, not on pull_request: a vendor price change is a
+# task for a human, not a reason to block someone's unrelated PR. See docs/playbooks/ci-gate.md.
+#
+# NO SECRETS. The catalog endpoint is unauthenticated, so unlike `ci.yml` this job cannot fail for
+# want of a `CONVEX_DEPLOY_KEY`, and unlike `skillopt.yml` it has nothing to swallow.
+#
+# ⚠️ NO `|| true`, NO `continue-on-error`, NO `if: always()` on the check step. `skillopt.yml` has
+# been passing VACUOUSLY since it was written because a `|| true` swallows its failing step — a
+# monitoring job nobody has ever seen fail is indistinguishable from no monitoring job. Plan 20-19
+# required this one be OBSERVED red on a seeded drift before it was trusted; those observations are
+# recorded in docs/playbooks/media.md § Reconciliation.
+
+name: fal-catalog
+
+# Quoted so YAML keeps the string key `on` (unquoted `on` parses to boolean true) — matches ci.yml.
+"on":
+  schedule:
+    # Mondays 06:17 UTC. Off the hour on purpose: GitHub delays cron runs that pile up on :00.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: fal-catalog
+  cancel-in-progress: true
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # corepack before setup-node so `cache: pnpm` can find the pnpm binary pinned by
+      # packageManager in the root package.json. Same ordering as ci.yml, same reason.
+      - name: Enable corepack (pins pnpm from packageManager)
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      # Exit 0 = agree · 1 = drift · 2 = could not reach the catalog.
+      # Both 1 and 2 fail the job, and they say WHICH in the log — "I could not check" must never be
+      # reported as green, and must not be confused with "the price changed".
+      - name: Check fal catalog against the committed fixture
+        run: pnpm --filter @pikar/backend check:fal-catalog

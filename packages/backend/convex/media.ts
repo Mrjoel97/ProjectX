@@ -34,7 +34,7 @@ import {
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { getGuardrailConfig, rateLimiter } from "./guardrails";
 import { contentHash } from "./lib/hash";
 
@@ -289,4 +289,158 @@ export const reserveJob = internalMutation({
     withCaptions: v.boolean(),
   },
   handler: async (ctx, a): Promise<ReserveResult> => reserveJobInner(ctx, a),
+});
+
+// ── The D5 reconciliation READERS (plan 20-18) ─────────────────────────────────────────
+//
+// `docs/playbooks/media.md`'s D5 procedure asks two questions. These answer the first —
+// *did the provider charge what we estimated?* — against real rows, in one command.
+//
+// Both are pure READS: no patch, no re-pricing of a stored row, no rate-limiter call. That is what
+// makes them safe to run against production at any time, including mid-batch.
+
+/** One `mediaJobs` row's kind, as the aggregate buckets it. */
+type KindTotals = { estCents: number; actualCents: number; rowCount: number };
+
+/**
+ * The D5(a) aggregate. Operator:
+ * `npx convex run media:spendForPeriod '{"tenantId":"…","sinceMs":…,"untilMs":…}'`
+ * — then compare `actualCents` against fal's own billing page for the same window. A gap means the
+ * price table is wrong, not that the meter is wrong: the meter records what the provider reported.
+ *
+ * THREE THINGS THAT WOULD OTHERWISE MAKE THIS NUMBER LIE, all handled here and all disclosed in
+ * the payload rather than only in this comment:
+ *
+ *  1. **`estCents` is NOT the reserved amount.** The reservation was `chooseMediaBatch` over the
+ *     whole batch INCLUDING the `render` line, floored to cents ONCE. The render line has no row.
+ *     So reserved > Σ rows, by construction — hence `notes.reservedTotalNotDerivable`.
+ *  2. **A `tts` row's `estUsd` is DOUBLE** (20-04 reserves voice at 2× so one rewrite round is
+ *     pre-paid). est/actual ≈ 2 on voice is HEALTHY; without `notes.ttsReservedAt2x` that reads as
+ *     a 100% overcharge.
+ *  3. **`actualCents` is absent until a row lands**, and stays absent if it failed. Σ over the
+ *     rows that have one therefore UNDER-reports unless the rest are counted — `unlanded` is that
+ *     count, and a period with `unlanded > 0` is not final.
+ *
+ * Note `byKind` subtotals are each rounded once, so they may differ from `estCents` by a cent or
+ * two. The TOTAL is the authoritative figure; the breakdown exists because a drift in ONE table row
+ * is invisible in a single total.
+ */
+export const spendForPeriod = internalQuery({
+  args: { tenantId: v.string(), sinceMs: v.number(), untilMs: v.number() },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<{
+    estCents: number;
+    actualCents: number;
+    rowCount: number;
+    unlanded: number;
+    byKind: Record<string, KindTotals>;
+    notes: { ttsReservedAt2x: boolean; reservedTotalNotDerivable: true };
+  }> => {
+    // The index PREFIX is the tenant boundary — never a full-table scan, never a cross-tenant read.
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId))
+      .collect();
+
+    // HALF-OPEN [sinceMs, untilMs) so two adjacent periods never double-count a boundary row.
+    const inPeriod = rows.filter((r) => r.createdAt >= a.sinceMs && r.createdAt < a.untilMs);
+
+    const usdByKind = new Map<string, number>();
+    const totals = new Map<string, { actualCents: number; rowCount: number }>();
+    let estUsd = 0;
+    let actualCents = 0;
+    let unlanded = 0;
+
+    for (const r of inPeriod) {
+      estUsd += r.estUsd;
+      usdByKind.set(r.kind, (usdByKind.get(r.kind) ?? 0) + r.estUsd);
+      const bucket = totals.get(r.kind) ?? { actualCents: 0, rowCount: 0 };
+      bucket.rowCount += 1;
+      if (r.actualCents === undefined) {
+        unlanded += 1; // in flight or failed — NOT free
+      } else {
+        actualCents += r.actualCents;
+        bucket.actualCents += r.actualCents;
+      }
+      totals.set(r.kind, bucket);
+    }
+
+    const byKind: Record<string, KindTotals> = {};
+    for (const [kind, bucket] of totals) {
+      byKind[kind] = {
+        estCents: Math.round((usdByKind.get(kind) ?? 0) * 100),
+        actualCents: bucket.actualCents,
+        rowCount: bucket.rowCount,
+      };
+    }
+
+    return {
+      // Rounded ONCE, on the total — the D12(a) discipline, at the reader this time.
+      estCents: Math.round(estUsd * 100),
+      actualCents,
+      rowCount: inPeriod.length,
+      unlanded,
+      byKind,
+      notes: {
+        ttsReservedAt2x: inPeriod.some((r) => r.kind === "tts"),
+        reservedTotalNotDerivable: true,
+      },
+    };
+  },
+});
+
+/**
+ * The D5 per-plan detail. Operator:
+ * `npx convex run media:listJobs '{"tenantId":"…","planId":"<id>"}'`.
+ *
+ * A PROJECTION, not the raw row. `assetStorageId`, `assetHash`, `mimeType` and `bytes` are
+ * deliberately omitted: an operator reconciling money has no use for storage handles, and a reader
+ * that returns them is the easiest accidental route to a URL (§4 — no fal URL on any row or
+ * payload, ever). `promptHash` stays: it is a redaction-safe ref and it is how a row is matched
+ * back to its block.
+ *
+ * `actualCents` / `verdict` / `failureReason` are `| null` rather than optional so a JSON CLI dump
+ * shows the ABSENCE explicitly instead of dropping the key. That absence is `unlanded` at row level.
+ */
+export const listJobs = internalQuery({
+  args: { tenantId: v.string(), planId: v.id("plans") },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<
+    Array<{
+      batchId: string;
+      blockIndex: number;
+      kind: string;
+      model: string;
+      status: string;
+      estUsd: number;
+      actualCents: number | null;
+      verdict: string | null;
+      failureReason: string | null;
+      promptHash: string;
+    }>
+  > => {
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+      .collect();
+
+    return rows
+      .sort((x, y) => x.blockIndex - y.blockIndex || x.kind.localeCompare(y.kind))
+      .map((r) => ({
+        batchId: r.batchId,
+        blockIndex: r.blockIndex,
+        kind: r.kind,
+        model: r.model,
+        status: r.status,
+        estUsd: r.estUsd,
+        actualCents: r.actualCents ?? null,
+        verdict: r.verdict ?? null,
+        failureReason: r.failureReason ?? null,
+        promptHash: r.promptHash,
+      }));
+  },
 });

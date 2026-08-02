@@ -592,3 +592,246 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   // ...and the loser wrote nothing.
   expect(await rows(t)).toHaveLength(3 * JOB_41_LINES);
 });
+
+// ── plan 20-18: the D5 reconciliation readers ──────────────────────────────────────
+//
+// These seed `mediaJobs` rows DIRECTLY rather than going through `reserveJob`, because the point
+// is to control `createdAt` and `actualCents` — the two fields the reader's honesty turns on, and
+// neither of which a reservation lets a test choose. `actualCents` is written by 20-06's webhook,
+// which does not exist yet; the schema field does (20-02), so the reader is fully provable now.
+
+const T0 = 1_754_000_000_000; // a fixed epoch — no Date.now() in an assertion about time windows
+
+type SeedRow = {
+  kind: "video" | "image" | "tts" | "stt";
+  estUsd: number;
+  createdAt: number;
+  actualCents?: number;
+  tenantId?: string;
+  blockIndex?: number;
+};
+
+async function seedJobs(t: T, planId: Id<"plans">, seeds: SeedRow[], batchId = "batch_1") {
+  await t.run(async (ctx) => {
+    for (const [i, s] of seeds.entries()) {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: s.tenantId ?? A,
+        planId,
+        batchId,
+        blockIndex: s.blockIndex ?? i,
+        provider: "fal",
+        kind: s.kind,
+        model: s.kind === "video" ? MEDIA_DEFAULT_VIDEO.model : "fal-ai/inworld-tts",
+        spec:
+          s.kind === "video"
+            ? { kind: "video", resolution: "480p", seconds: 10 }
+            : s.kind === "tts"
+              ? { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 }
+              : s.kind === "stt"
+                ? { kind: "stt", audioMinutes: 1 }
+                : { kind: "image", width: 1080, height: 1920 },
+        promptHash: "0".repeat(64),
+        status: s.actualCents === undefined ? "queued" : "succeeded",
+        ...(s.actualCents === undefined ? {} : { actualCents: s.actualCents }),
+        estUsd: s.estUsd,
+        createdAt: s.createdAt,
+        updatedAt: s.createdAt,
+      });
+    }
+  });
+}
+
+const spend = (t: T, sinceMs = T0, untilMs = T0 + 1000, tenantId = A) =>
+  t.query(internal.media.spendForPeriod, { tenantId, sinceMs, untilMs });
+
+describe("spendForPeriod: the D5(a) aggregate, and the three things that would make it lie", () => {
+  test("an empty period is all zeros — never a throw, never a null", async () => {
+    const t = harness();
+    const res = await spend(t);
+    expect(res).toEqual({
+      estCents: 0,
+      actualCents: 0,
+      rowCount: 0,
+      unlanded: 0,
+      byKind: {},
+      notes: { ttsReservedAt2x: false, reservedTotalNotDerivable: true },
+    });
+  });
+
+  test("the window is HALF-OPEN — a row at untilMs belongs to the NEXT period, not both", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [
+      { kind: "video", estUsd: 0.5, createdAt: T0 - 1 }, // before   → out
+      { kind: "video", estUsd: 0.5, createdAt: T0 }, // at since → IN
+      { kind: "video", estUsd: 0.5, createdAt: T0 + 999 }, // inside   → in
+      { kind: "video", estUsd: 0.5, createdAt: T0 + 1000 }, // at until → OUT (next period owns it)
+    ]);
+
+    expect((await spend(t)).rowCount).toBe(2);
+    // Adjacent periods partition the rows exactly once — the property half-open buys.
+    const next = await spend(t, T0 + 1000, T0 + 2000);
+    expect(next.rowCount).toBe(1);
+  });
+
+  test("estCents is rounded ONCE on the total, not per row", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    // Six sub-cent voice lines: $0.0028 each = $0.0168 → 2 cents once. Per row it would be 6.
+    await seedJobs(
+      t,
+      planId,
+      Array.from({ length: 6 }, () => ({ kind: "tts" as const, estUsd: 0.0028, createdAt: T0 })),
+    );
+    expect((await spend(t)).estCents).toBe(2);
+  });
+
+  test("UNLANDED rows are COUNTED, never silently dropped from the total", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "video", estUsd: 0.5, createdAt: T0 }, // still queued
+      { kind: "video", estUsd: 0.5, createdAt: T0 }, // still queued
+    ]);
+
+    const res = await spend(t);
+    expect(res.rowCount).toBe(5);
+    expect(res.unlanded).toBe(2); // ← the whole point: the period is NOT final
+    expect(res.actualCents).toBe(150); // only what actually landed
+    expect(res.estCents).toBe(250); // estimated for all five
+    // A reader that reported 150 with no `unlanded` would say this period cost $1.50 when the
+    // estimate is $2.50 and two lines have not reported. That is the lie this counter prevents.
+    expect(res.actualCents).toBeLessThan(res.estCents);
+  });
+
+  test("byKind breaks it down — a drift in ONE table row is invisible in a single total", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "tts", estUsd: 0.0028, createdAt: T0, actualCents: 1 },
+      { kind: "stt", estUsd: 0.008, createdAt: T0, actualCents: 1 },
+    ]);
+
+    const res = await spend(t);
+    expect(res.byKind.video).toEqual({ estCents: 100, actualCents: 100, rowCount: 2 });
+    expect(res.byKind.tts).toEqual({ estCents: 0, actualCents: 1, rowCount: 1 });
+    expect(res.byKind.stt).toEqual({ estCents: 1, actualCents: 1, rowCount: 1 });
+    expect(res.byKind.image).toBeUndefined(); // absent kinds are absent, not zero-filled
+  });
+
+  test("the 2x voice reservation is DISCLOSED, so a healthy 2:1 ratio is not read as an overcharge", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    // A voice line estimated at 2x (280 chars reserved for a 140-char narration) that lands at its
+    // TRUE cost. est/actual = 2 and nothing is wrong.
+    await seedJobs(t, planId, [{ kind: "tts", estUsd: 0.0028, createdAt: T0, actualCents: 1 }]);
+    expect((await spend(t)).notes.ttsReservedAt2x).toBe(true);
+
+    const t2 = harness();
+    const p2 = await seedPlan(t2);
+    await seedJobs(t2, p2, [{ kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 }]);
+    expect((await spend(t2)).notes.ttsReservedAt2x).toBe(false); // not vacuous
+  });
+
+  test("the reserved total is declared NOT derivable — the render line has no row", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: JOB_41(),
+      clipSeconds: 10,
+      withCaptions: true,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    const now = Date.now();
+    const agg = await t.query(internal.media.spendForPeriod, {
+      tenantId: A,
+      sinceMs: now - 60_000,
+      untilMs: now + 60_000,
+    });
+    // The reservation moved the window by 305; the ROWS account for less, because the $0.02 render
+    // line was reserved and has no row, and the batch floor was applied once.
+    expect(agg.estCents).toBeLessThan(res.estCents);
+    expect(agg.notes.reservedTotalNotDerivable).toBe(true);
+  });
+
+  test("a tenant sees ONLY its own rows", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [
+      { kind: "video", estUsd: 0.5, createdAt: T0, actualCents: 50 },
+      { kind: "video", estUsd: 9.0, createdAt: T0, actualCents: 900, tenantId: B },
+    ]);
+    expect((await spend(t)).actualCents).toBe(50);
+    expect((await spend(t, T0, T0 + 1000, B)).actualCents).toBe(900);
+  });
+
+  test("it is a READER — the rows are byte-identical after it runs", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [{ kind: "video", estUsd: 0.5, createdAt: T0 }]);
+    const before = await rows(t);
+    await spend(t);
+    expect(await rows(t)).toEqual(before);
+  });
+});
+
+describe("listJobs: the per-plan detail, as a projection", () => {
+  test("returns the projection in blockIndex order, with absences EXPLICIT", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [
+      { kind: "video", estUsd: 0.5, createdAt: T0, blockIndex: 2, actualCents: 50 },
+      { kind: "stt", estUsd: 0.008, createdAt: T0, blockIndex: -1 },
+      { kind: "video", estUsd: 0.5, createdAt: T0, blockIndex: 0, actualCents: 50 },
+    ]);
+
+    const list = await t.query(internal.media.listJobs, { tenantId: A, planId });
+    expect(list.map((r) => r.blockIndex)).toEqual([-1, 0, 2]); // deck-wide stt first
+    // An unlanded row shows its absence rather than dropping the key.
+    expect(list[0]?.actualCents).toBeNull();
+    expect(list[0]?.verdict).toBeNull();
+    expect(list[1]?.actualCents).toBe(50);
+  });
+
+  test("NO storage handle can escape through this reader", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [{ kind: "video", estUsd: 0.5, createdAt: T0 }]);
+
+    const list = await t.query(internal.media.listJobs, { tenantId: A, planId });
+    // Key-set equality, not an eyeball: a field added to the row must not appear here by accident.
+    expect(Object.keys(list[0] ?? {}).sort()).toEqual(
+      [
+        "actualCents",
+        "batchId",
+        "blockIndex",
+        "estUsd",
+        "failureReason",
+        "kind",
+        "model",
+        "promptHash",
+        "status",
+        "verdict",
+      ].sort(),
+    );
+    for (const banned of ["assetStorageId", "assetHash", "mimeType", "bytes"]) {
+      expect(list[0]).not.toHaveProperty(banned);
+    }
+  });
+
+  test("a cross-tenant call returns empty, never another tenant's plan", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await seedJobs(t, planId, [{ kind: "video", estUsd: 0.5, createdAt: T0 }]);
+    expect(await t.query(internal.media.listJobs, { tenantId: B, planId })).toEqual([]);
+  });
+});

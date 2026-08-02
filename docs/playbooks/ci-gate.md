@@ -1,6 +1,7 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified: 2026-08-01 against cc05d21
+> Last verified: 2026-08-02 (20-19 — `fal-catalog.yml`, the scheduled vendor-drift detector; the first workflow written after the `skillopt.yml` vacuity lesson and deliberately not a merge gate)
+> PREVIOUSLY: 2026-08-01 against cc05d21
 > Build history: `.planning/phases/22.1-beta-admission-readiness-legal-deployment-ci-typechecking-and-identity-boundary-hardening/` · Related ADRs: none
 
 ## Purpose
@@ -16,6 +17,8 @@ build. Red blocks. Nobody has to remember to run anything.
 - `.github/workflows/ci.yml` — the gate itself; the only workflow that verifies the codebase.
 - `.github/workflows/skillopt.yml` — unrelated; the dormant skill optimizer (IMPR-02). Do not
   merge the two: it is schedule/dispatch-driven and gated on a kill switch.
+- `.github/workflows/fal-catalog.yml` — unrelated to the gate; a scheduled vendor-price/endpoint
+  drift **detector**, not a merge gate (plan 20-19). Needs no secrets. See its section below.
 - `package.json` — `typecheck` / `lint` / `format` / `test` / `build` scripts. **CI runs these
   exact scripts**, so `pnpm lint` locally and `pnpm lint` in CI cannot disagree.
 - `turbo.json` — task graph; `typecheck` and `test` both `dependsOn: ["^build"]`.
@@ -136,6 +139,32 @@ happen"*, and it would report the same green if the optimizer were armed. Two co
 - **`|| true` on a gate query converts a failure into a pass.** If a step's output decides whether
   later steps run, that step must fail loudly. Fix (not yet applied — see gaps): drop `|| true`,
   or branch on the empty case explicitly and exit non-zero.
+
+## `fal-catalog.yml` — the scheduled detector (plan 20-19, 2026-08-02)
+
+The repo's second workflow, and the first one written **after** the `skillopt.yml` lesson above —
+which is why it carries no `|| true`, no `continue-on-error` and no `if: always()`, and why a grep
+asserting their absence is part of its plan's verification.
+
+**It is NOT a merge gate.** It runs on `schedule` + `workflow_dispatch`, never on `pull_request`: a
+vendor price change is a task for a human, not a reason to block someone's unrelated PR. Red here
+means *go look*, not *you broke the build*.
+
+It needs **no secrets** — fal's catalog endpoint is unauthenticated — so unlike `ci.yml` it cannot
+fail for want of a `CONVEX_DEPLOY_KEY`.
+
+| Exit | Meaning | What the operator does |
+|---|---|---|
+| `0` | AGREE — every pinned id live, public, priced as the fixture records | nothing |
+| `1` | DRIFT — a price string changed, a flag flipped, or a pinned id vanished | the printed diff IS the patch: update `packages/cost/src/media.ts` **and** `media.fixtures.json` together, re-run |
+| `2` | UNREACHABLE — the catalog could not be read | **not a price verdict.** Re-run. Never treat as green |
+
+The three-way split is the point. A monitor that reports green when it could not reach the thing it
+monitors manufactures confidence — the same defect as `skillopt.yml`, arrived at by a different
+route. All three outcomes were observed on 2026-08-02 before the workflow was trusted; the
+observations are recorded in `docs/playbooks/media.md § Reconciliation`.
+
+Run it by hand any time: `cd packages/backend && pnpm check:fal-catalog`.
 
 ## Known gaps & deferred work
 

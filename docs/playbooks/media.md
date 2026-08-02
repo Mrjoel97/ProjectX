@@ -1,6 +1,21 @@
 # Playbook: Media Canvas (finished reel)
 
-> Last verified: 2026-08-02 (20-04 — **the second budget rail and the transactional job
+> Registration note, 2026-08-02: `check-fal-catalog.mjs` was first registered here by a foreign
+> session (profile-tabs) that hit the §9 creation gap on it while it was still untracked, and
+> classified it without reading or running it. **The media lane has since authored, run and
+> verified it — see `## Reconciliation` bullet (b) and plan 20-19.** The registration it made was
+> the correct one and is kept.
+
+> Last verified: 2026-08-02 (20-19 — **D5(b) is automated.** `pnpm check:fal-catalog` +
+> a weekly `fal-catalog.yml`: verbatim vendor-string diffing, endpoint-health flags, and THREE
+> outcomes so "could not check" can never report green. All three observed before it was trusted.)
+>
+> PREVIOUSLY: 2026-08-02 (20-18 — **the D5 reconciliation readers.** `media.spendForPeriod` +
+> `media.listJobs`, so `mediaJobs.actualCents` stops being a write-only field and the procedure in
+> `## Reconciliation` names commands that exist. The three caveats that would otherwise make the
+> number lie are in the payload, not just on this page.)
+>
+> PREVIOUSLY: 2026-08-02 (20-04 — **the second budget rail and the transactional job
 > reservation.** `mediaSpendCents` + `deploymentMediaSpendCents` at the D10 numbers, the media kill
 > switch, and `media.reserveJob` — the ONE money gate. See `## The budget rail` below.)
 >
@@ -285,49 +300,101 @@ reads to a user as a broken feature.
 **Detection is free:** one unauthenticated `GET https://fal.ai/api/models?keywords=…` returns
 `deprecated` / `removed` / `status` per model. Replicate is ADR-011's recorded fallback.
 
-⚠️ **Nothing runs that check on a schedule yet — it is plan 20-19 (Wave 14).** The shipped fixture
-test compares our table to our OWN committed fixture, so it catches a table edit that forgot the
-fixture and **cannot** catch vendor drift; both sides of that comparison are ours. Until 20-19
-lands, a price change or a `-preview` retirement is discovered by a user hitting `unknown_model`, or
-by an invoice. 20-19 makes it a weekly job with three outcomes — agree, drift, and *could not
-check*, which must never be reported as green.
+**That check now runs weekly, unattended** — `.github/workflows/fal-catalog.yml` (plan 20-19), or
+`pnpm check:fal-catalog` on demand. It is a **detector, not a merge gate**: it runs on a schedule,
+never on `pull_request`, because a vendor price change is a task for a human rather than a reason to
+block someone's unrelated PR. The shipped fixture test cannot do this job — it compares our table to
+our OWN committed fixture, so both sides are ours. See `## Reconciliation` (b) for the three exit
+codes and the dated proof that each one fires.
 
 ## Reconciliation
 
 The D5 procedure. Two bullets, both runnable, both $0. Cadence: **at each phase close, and any time
 a price row is edited.** **Plan 20-11's owner-run live gate IS this procedure's first run.**
 
-**(a) Did we charge what we reserved?** Sum `mediaJobs.actualCents` for a period and compare against
-fal's own dashboard balance delta for the same period:
+**(a) Did the provider charge what we ESTIMATED?** (Not *what we reserved* — see caveat 1.) Sum
+`mediaJobs.actualCents` for a period and compare against fal's own dashboard balance delta:
 
 ```bash
 # from packages/backend — the convex CLI only resolves the deployment from there
-npx convex run media:spendForPeriod '{"sinceMs": 1754006400000, "untilMs": 1754611200000}'
+npx convex run media:spendForPeriod \
+  '{"tenantId":"<tenant>","sinceMs":1754006400000,"untilMs":1754611200000}'
 ```
+
+`tenantId` is REQUIRED and is the tenant boundary — this reader is per-tenant by construction, so a
+deployment-wide figure is the sum of per-tenant runs, never one unscoped query. The window is
+**half-open** `[sinceMs, untilMs)`, so consecutive periods partition rows exactly once.
 
 Compare the returned `actualCents` total against fal's billing page for the same window. A gap
 means the table is wrong, not that the meter is wrong — the meter records what the provider
 reported.
 
-> ⚠️ **`media:spendForPeriod` DOES NOT EXIST YET — it is plan 20-18 (Wave 6).** This paragraph
-> said it "lands with plan 20-04"; it does not, and when 20-04 shipped, a grep across all seventeen
-> Phase-20 plans found NO plan authoring this query or `media:listJobs` either, while
-> `mediaJobs.actualCents` (written by 20-06) was read by nobody. **20-18 was authored on 2026-08-02
-> to close that half of D5.** Until it lands, reconcile by reading rows directly in the dashboard.
->
-> When it does land, three caveats travel with the number and 20-18 puts them in the payload:
-> the reserved total is **not** `Σ estUsd` (the render line has no row and the cents floor was
-> applied once, per batch); a `tts` row's `estUsd` is **double** by design (the rewrite allowance);
-> and `unlanded > 0` means the period is not final.
+**THREE CAVEATS TRAVEL WITH THAT NUMBER, and `spendForPeriod` puts each one in its own payload
+rather than relying on you to remember this page:**
 
-**(b) Is the price table still the vendor's price?** Re-read fal's catalog API and diff it against
-the committed fixture:
+1. **`estCents` is NOT what was reserved** (`notes.reservedTotalNotDerivable: true`). The
+   reservation priced the whole batch **including the `render` line** and floored it to cents
+   **once**; the render line has no row. Reserved is therefore always a little more than `Σ rows`.
+   Do not "fix" the gap by adding a render row.
+2. **A `tts` row's `estUsd` is DOUBLE by design** (`notes.ttsReservedAt2x: true` whenever any voice
+   line is in range). 20-04 reserves voice at 2× so one rewrite round is pre-paid, so est/actual ≈ 2
+   on voice is **healthy**. Without the flag it reads as a 100% overcharge.
+3. **`unlanded > 0` means the period is NOT FINAL.** `actualCents` is absent until a row lands and
+   stays absent if it failed, so the total covers only what reported. Re-run after the batch
+   settles. A reader that summed silently would report an in-flight period as *cheaper*, which is
+   the one failure mode a reconciliation tool must not have.
+
+`byKind` subtotals are each rounded once, so they can differ from `estCents` by a cent or two — the
+total is authoritative, and the breakdown exists because a drift in ONE table row is invisible in a
+single number.
+
+For per-plan detail: `npx convex run media:listJobs '{"tenantId":"…","planId":"<id>"}'` — a
+projection, deliberately without `assetStorageId` / `assetHash` / `mimeType` / `bytes`. An operator
+reconciling money has no use for storage handles, and a reader that returned them would be the
+easiest accidental route to a URL (§4).
+
+**(b) Is the price table still the vendor's price?** **Automated since 2026-08-02 (plan 20-19)** —
+one command, and a weekly `fal-catalog.yml` run that does it unattended:
+
+```bash
+cd packages/backend && pnpm check:fal-catalog
+```
+
+It reads fal's catalog for all four keywords and diffs the **verbatim** `pricingInfoOverride` /
+`billingMessage` strings against `packages/cost/src/media.fixtures.json`, plus
+`status`/`deprecated`/`removed`. **THREE outcomes, and the third is the point:**
+
+| Exit | Meaning | Do |
+|---|---|---|
+| `0` | AGREE | nothing |
+| `1` | DRIFT — a string changed, a flag flipped, or a pinned id is GONE | the printed diff IS the patch: edit `media.ts` **and** the fixture together, re-run |
+| `2` | UNREACHABLE | **not a price verdict.** Re-run later. Never read as green |
+
+It diffs the STRING, never a parsed number, on purpose: a regex that extracts `$0.05` silently
+passes a vendor edit that changes the *unit* — "per second" → "per generated second" is exactly the
+class of change ADR-011 exists to refuse, and it moves no number at all.
+
+FLUX schnell needs no special case. The general rule is *an entry with no pinned price string is
+checked for flags and presence only* — and if the vendor ever **starts** publishing one, that is a
+drift, because the MEDIUM confidence then becomes resolvable.
+
+**Anti-vacuous proof — all three outcomes OBSERVED 2026-08-02, before the workflow was trusted:**
+
+| Seeded | Observed |
+|---|---|
+| nothing (live catalog) | **exit 0**, four `OK` lines; FLUX schnell still publishes no price string, so it is still MEDIUM |
+| one character changed in `inworld-tts`'s pinned string (`per 1000 character` → `characters`) | **exit 1**, `DRIFT fal-ai/inworld-tts`, printing fixture and vendor strings on adjacent lines. Fixture restored byte-identical |
+| `FAL_CATALOG_BASE` pointed at an unroutable host | **exit 2**, *"UNREACHABLE — could not read fal's catalog. This is NOT a price verdict"*. Not 0, and not 1 |
+
+That third row is why the check exists in this shape: `skillopt.yml` has been reporting green for a
+year because a `|| true` swallows its failing step, and a monitor nobody has seen fail is
+indistinguishable from no monitor. The old manual recipe is kept below for a machine without the
+repo checked out:
 
 ```bash
 curl -s "https://fal.ai/api/models?keywords=wan-25&page=1" \
   | node -e "const j=JSON.parse(require('fs').readFileSync(0));for(const m of j.items)console.log(m.id,'|',m.status,'| deprecated:',m.deprecated,'| removed:',m.removed,'|',m.pricingInfoOverride)"
 # repeat for keywords=inworld, keywords=scribe, keywords=schnell
-# then diff the printed strings against packages/cost/src/media.fixtures.json
 ```
 
 This is unauthenticated and free, and it is **also the endpoint-health check**: the same response

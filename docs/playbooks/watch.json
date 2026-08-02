@@ -167,7 +167,8 @@
     "packages/backend/convex/mediaComplete.ts",
     "packages/backend/convex/render/",
     "apps/web/app/api/media/",
-    "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx"
+    "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
+    "packages/backend/scripts/check-fal-catalog.mjs"
   ],
   "guardrails.md": [
     "packages/backend/convex/guardrails.ts",
