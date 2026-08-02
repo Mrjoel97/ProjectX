@@ -42,6 +42,16 @@ const page: React.CSSProperties = {
   gap: "1.5rem",
 };
 
+const TABS = [
+  { id: "shape", label: "Business shape" },
+  { id: "business", label: "What the business is" },
+  { id: "blueprint", label: "Blueprint" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const isTabId = (v: string | null): v is TabId => TABS.some((t) => t.id === v);
+
 export default function ProfilePage() {
   const current = useQuery(api.onboarding.getProfile);
 
@@ -52,7 +62,31 @@ export default function ProfilePage() {
     if (current) setProfile(current);
   }, [current]);
 
-  if (current === undefined || (current && !profile)) {
+  // `?tab=` read ONCE on mount, `window.location.search` deliberately — see
+  // dashboard/voice/page.tsx:23-30. `useSearchParams` needs a Suspense boundary that typecheck
+  // cannot see is missing; it either errors at prerender or silently deopts the page to CSR.
+  // null = not read yet: the page is already showing its loading branch at that point, so the
+  // resolved tab is never late enough to flash.
+  const [tab, setTab] = useState<TabId | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    setTab(isTabId(requested) ? requested : "shape");
+  }, []);
+
+  // `replaceState`, not a router push: switching tabs is not a navigation, and a push would add a
+  // history entry per click and re-run the page's queries.
+  function selectTab(next: TabId) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  }
+
+  const blueprintState = useQuery(api.blueprint.blueprintState);
+  const staleCount =
+    blueprintState?.state === "live_stale" ? blueprintState.unincorporatedCount : 0;
+
+  if (current === undefined || tab === null || (current && !profile)) {
     return (
       <div style={page}>
         <p role="status" aria-live="polite" style={{ color: "var(--ink-soft)" }}>
@@ -102,9 +136,80 @@ export default function ProfilePage() {
         </p>
       </header>
 
-      <ShapePanel oneLineDescription={profile.oneLineDescription} />
-      <NarrativePanel profile={profile} setProfile={setProfile} />
-      <BlueprintPanel />
+      <div
+        role="tablist"
+        aria-label="Business profile sections"
+        style={{ display: "flex", gap: "0.35rem", borderBottom: "1px solid var(--rule)" }}
+        onKeyDown={(e) => {
+          const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+          if (delta === 0) return;
+          e.preventDefault();
+          const i = TABS.findIndex((t) => t.id === tab);
+          const next = TABS[(i + delta + TABS.length) % TABS.length];
+          if (next) selectTab(next.id);
+        }}
+      >
+        {TABS.map((t) => {
+          const active = t.id === tab;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={active}
+              aria-controls={`panel-${t.id}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => selectTab(t.id)}
+              style={{
+                appearance: "none",
+                border: "none",
+                background: "none",
+                font: "inherit",
+                cursor: "pointer",
+                padding: "0.55rem 0.9rem",
+                marginBottom: "-1px",
+                fontWeight: 600,
+                fontSize: "0.92rem",
+                color: active ? "var(--ink)" : "var(--ink-soft)",
+                borderBottom: `2px solid ${active ? "var(--teal-600)" : "transparent"}`,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+        <span style={{ flex: 1 }} />
+        {staleCount > 0 && (
+          <span
+            style={{
+              alignSelf: "center",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              /* --held-text, NOT --held: amber on light paper is 1.9:1 and fails WCAG (BRAND §2). */
+              color: "var(--held-text)",
+              background: "color-mix(in srgb, var(--held) 16%, transparent)",
+              padding: "0.2rem 0.55rem",
+              borderRadius: "999px",
+            }}
+          >
+            {staleCount} new {staleCount === 1 ? "document" : "documents"}
+          </span>
+        )}
+      </div>
+
+      {/* All three stay MOUNTED and are toggled with `hidden`. That is what makes a half-typed
+          narrative survive a trip to the Blueprint tab and back — no state lifting needed. The
+          wrapper carries no `display` style, because an inline `display` would defeat `hidden`. */}
+      <div role="tabpanel" id="panel-shape" aria-labelledby="tab-shape" hidden={tab !== "shape"}>
+        <ShapePanel oneLineDescription={profile.oneLineDescription} />
+      </div>
+      <div role="tabpanel" id="panel-business" aria-labelledby="tab-business" hidden={tab !== "business"}>
+        <NarrativePanel profile={profile} setProfile={setProfile} />
+      </div>
+      <div role="tabpanel" id="panel-blueprint" aria-labelledby="tab-blueprint" hidden={tab !== "blueprint"}>
+        <BlueprintPanel />
+      </div>
     </div>
   );
 }
