@@ -10,7 +10,9 @@ import {
   maxCharsFor,
   minCharsFor,
   narrationChars,
+  parseArtDirection,
   parseBlockDeck,
+  parseScript,
   SHOT_TYPES,
 } from "./storyboard";
 
@@ -352,5 +354,98 @@ describe("media-director.md round trip — the body's example survives its own r
     expect(body).toContain(String(maxCharsFor(10)));
     expect(body).toContain(String(minCharsFor(10)));
     expect(body).toContain("searchVault");
+  });
+});
+
+// ── 20-08: the two remaining §-parsers ────────────────────────────────────────────────
+//
+// `parseBlockDeck` is what the money depends on and is tested above. These two feed the plan row's
+// display fields, so their failure mode is a worse-looking reel rather than a wrong charge — which
+// is exactly why `parseArtDirection` returns `null` instead of a half-filled object.
+
+/** The shape the `media-director` skill body actually asks for (§1 and §2 of the body). */
+const PROSE = [
+  "Here is the reel.",
+  "",
+  "## 1. SCRIPT",
+  "",
+  "Six weeks, start to finish. That is how long it took.",
+  "Nobody believed it could be done that fast.",
+  "",
+  "## 2. ART DIRECTION",
+  "",
+  "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`, `#1A1A1A ink`",
+  "- **Mood** — Quietly confident, never triumphant.",
+  "- **Lighting** — Warm golden light from camera left at 45 degrees, soft shadow falloff.",
+  "- **Composition** — Subject slightly off-centre right, camera locked off.",
+  "- **Environment** — A working studio, mid-afternoon.",
+  "- **Texture** — 35mm film grain over matte paper.",
+  "- **Typography** — A humanist sans with a tall x-height.",
+  "- **References** — Gregory Crewdson; the film Locke; Apple's Shot on iPhone",
+  "- **Do NOT** — No stock-footage handshakes, no drone establishing shots.",
+  "",
+  "## 3. BLOCK DECK",
+].join("\n");
+
+describe("parseScript", () => {
+  it("takes the SCRIPT section verbatim and stops at the next heading", () => {
+    const out = parseScript(PROSE);
+    expect(out).toContain("Six weeks, start to finish.");
+    expect(out).toContain("Nobody believed it could be done that fast.");
+    // The section ENDS at `## 2.` — an art direction leaking into the script would be voiced.
+    expect(out).not.toMatch(/ART DIRECTION|Palette/);
+    expect(out).not.toContain("Here is the reel.");
+  });
+
+  it("is empty when the specialist wrote no script section", () => {
+    expect(parseScript("just some prose with no headings at all")).toBe("");
+  });
+});
+
+describe("parseArtDirection", () => {
+  it("reads all nine fields, splitting palette and references into lists", () => {
+    const art = parseArtDirection(PROSE);
+    expect(art).not.toBeNull();
+    expect(art?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone", "#1A1A1A ink"]);
+    expect(art?.mood).toBe("Quietly confident, never triumphant.");
+    expect(art?.lighting).toContain("45 degrees");
+    expect(art?.composition).toContain("off-centre right");
+    expect(art?.environment).toBe("A working studio, mid-afternoon.");
+    expect(art?.texture).toBe("35mm film grain over matte paper.");
+    expect(art?.typography).toContain("humanist sans");
+    expect(art?.references).toEqual(["Gregory Crewdson", "the film Locke", "Apple's Shot on iPhone"]);
+    expect(art?.avoid).toContain("No stock-footage handshakes");
+  });
+
+  it("is NULL when a required field is missing — never a half-filled object", () => {
+    // A 9-key schema object with empty strings in it renders as an art direction the specialist
+    // never wrote. Dropping `Texture` is enough.
+    const missing = PROSE.replace(/^- \*\*Texture\*\*.*$/m, "");
+    expect(parseArtDirection(missing)).toBeNull();
+    expect(parseArtDirection("no art direction section here")).toBeNull();
+  });
+
+  it("keeps `typography` OPTIONAL — the one field the schema allows to be absent", () => {
+    const art = parseArtDirection(PROSE.replace(/^- \*\*Typography\*\*.*$/m, ""));
+    expect(art).not.toBeNull();
+    expect(art?.typography).toBeUndefined();
+    expect(art?.mood).toBe("Quietly confident, never triumphant."); // the rest survived
+  });
+
+  it("accepts the label variants a model actually produces", () => {
+    // Bare labels, a colon instead of an em-dash, `*` bullets, and `Avoid` for `Do NOT`. Failing a
+    // whole art direction over a synonym would be a hard refusal caused by punctuation.
+    const variant = PROSE.replace("- **Do NOT** —", "* Avoid:").replace("- **Mood** —", "Mood:");
+    const art = parseArtDirection(variant);
+    expect(art).not.toBeNull();
+    expect(art?.mood).toBe("Quietly confident, never triumphant.");
+    expect(art?.avoid).toContain("No stock-footage handshakes");
+  });
+
+  it("does NOT enforce the hex-palette rule — that is the skill body's job, not the parser's", () => {
+    // A parser that refused `warm tones` would turn a soft quality problem into a hard refusal at
+    // the Approve gate, where a human is already reading the proposal and is the better judge.
+    const vague = PROSE.replace(/^- \*\*Palette\*\*.*$/m, "- **Palette** — warm tones");
+    expect(parseArtDirection(vague)?.palette).toEqual(["warm tones"]);
   });
 });

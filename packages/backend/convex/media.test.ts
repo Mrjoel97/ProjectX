@@ -10,7 +10,9 @@ import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
+  MEDIA_DEFAULT_VOICE,
   MEDIA_JOB_CAP_USD,
   MEDIA_SANDBOX_USD_PER_RENDER,
   MEDIA_VIDEO_PRICING,
@@ -849,11 +851,11 @@ describe("listJobs: the per-plan detail, as a projection", () => {
 // ── plan 20-05: the fal SUBMIT adapter ─────────────────────────────────────────────
 //
 // COMPILE-TIME NOTE, and it is half the point of this plan: `buildSubmitBody` takes
-// `SubmittableSpec = Extract<MediaSpec, {kind:"video"|"image"}>`, and its switch ends in
-// `const _never: never = spec`. Deleting the `image` case is a `tsc` error here, not a runtime
-// fallthrough. Plan 20-14 widens that alias with `"tts"` and plan 20-17 with `"stt"` — the moment
-// either does, the `never` arm goes RED until the matching case is written. A `default: return {}`
-// would let a `tts` spec inherit the video arm's body, which is the money bug in a new costume.
+// `SubmittableSpec`, and its switch ends in `const _never: never = spec`. Deleting the `image` case
+// is a `tsc` error here, not a runtime fallthrough. Plan 20-14 widened that alias with `"tts"` and
+// plan 20-17 widens it with `"stt"` — the moment it does, the `never` arm goes RED until the
+// matching case is written. A `default: return {}` would let a `tts` spec inherit the video arm's
+// body, which is the money bug in a new costume.
 //
 // Everything below is $0: `fetch` is a spy in every test, and `FAL_FIXTURE` covers the rest.
 
@@ -874,6 +876,13 @@ const VIDEO: SubmittableSpec = {
   model: MEDIA_DEFAULT_VIDEO.model,
   resolution: MEDIA_DEFAULT_VIDEO.resolution,
   seconds: 10,
+};
+const TTS: SubmittableSpec = {
+  kind: "tts",
+  model: MEDIA_DEFAULT_VOICE.model,
+  characters: 140,
+  voice: MEDIA_DEFAULT_VOICE.voice,
+  sampleRateHertz: MEDIA_DEFAULT_VOICE.sampleRateHertz,
 };
 const HOOK = "https://example.convex.site/fal/callback/abc.def";
 
@@ -955,6 +964,48 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
   test("the switch ends in a `never` binding, and no `default` returns a body", () => {
     expect(mediaCode).toMatch(/const\s+_never\s*:\s*never\s*=\s*spec/);
     expect(mediaCode).not.toMatch(/default:\s*\n?\s*return\s*\{/);
+  });
+
+  // ── 20-14: the voiceover arm ──────────────────────────────────────────────────
+
+  test("the tts body's key set is EXACTLY {text, voice, sample_rate_hertz}, 24000 pinned", () => {
+    // Exact equality, not a property spot-check: this single assertion is what makes the two
+    // mutation checks below fire, and it is the only thing standing between D8 and a `speed` knob.
+    expect(buildSubmitBody(TTS, "Six weeks, start to finish.")).toEqual({
+      text: "Six weeks, start to finish.",
+      voice: "Evelyn (en)",
+      // The vendor default is 48000. Unpinned it doubles the bytes reaching the render sandbox and
+      // makes the resample step non-deterministic.
+      sample_rate_hertz: 24000,
+    });
+  });
+
+  test("NO time-stretch knob is submitted, under any name — delta pitfall 15's tripwire", () => {
+    // `fal-ai/inworld-tts` has no `speed`/`rate` field at all, so D8's no-time-stretch rule is
+    // enforced by the PROVIDER rather than by our discipline. This asserts we never start sending
+    // one anyway — e.g. after a swap to `fal-ai/kokoro/*`, which exposes `speed: 0.1-5.0`.
+    const keys = Object.keys(buildSubmitBody(TTS, "p"));
+    expect(keys.filter((k) => /speed|rate|tempo|setpts|stretch|pace/i.test(k))).toEqual([
+      "sample_rate_hertz", // the SAMPLE rate — a format field, not a pace field
+    ]);
+  });
+
+  test("the narration is submitted VERBATIM — never truncated, never re-wrapped", () => {
+    // A silent truncation ships a voiceover missing its last words, with no error anywhere and a
+    // clip that still renders. The submitted text is the text that was priced.
+    const long = `${"y".repeat(139)}.`;
+    expect(buildSubmitBody(TTS, long).text).toBe(long);
+    const wrapped = "one.\n  two.\ttrailing space ";
+    expect(buildSubmitBody(TTS, wrapped).text).toBe(wrapped);
+  });
+
+  test("the pinned fields track the SPEC, not a constant — a re-voiced row travels", () => {
+    // Not vacuous: were `voice`/`sample_rate_hertz` read from MEDIA_DEFAULT_VOICE at the arm, the
+    // assertions above would still pass and a row reserved under one voice could submit under
+    // another after a constant bump. The row is the record of what was priced.
+    const body = buildSubmitBody({ ...TTS, voice: "Hank (en)", sampleRateHertz: 48000 }, "p");
+    expect(body.voice).toBe("Hank (en)");
+    expect(body.sample_rate_hertz).toBe(48000);
   });
 });
 
@@ -1122,7 +1173,7 @@ async function seedPlanWithShots(t: T, blocks: Block[], tenantId = A): Promise<I
   );
 }
 
-/** A reserved 2-block batch: 2 video lines (submittable now) + 2 tts lines (plan 20-14's). */
+/** A reserved 2-block batch: 2 video lines + 2 tts lines, all four submittable as of plan 20-14. */
 async function reservedBatch(t: T) {
   const blocks = deck(2);
   const planId = await seedPlanWithShots(t, blocks);
@@ -1146,17 +1197,17 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     const { batchId } = await reservedBatch(t);
 
     const first = await t.action(internal.media.submitBatch, { tenantId: A, batchId });
-    // 2 video submitted; the 2 tts lines are NOT wired yet and were never claimed.
-    expect(first).toEqual({ submitted: 2, blocked: 0, failed: 0, skipped: 2 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // 2 video + 2 tts, all four through the SAME loop, the SAME claim and the SAME secret.
+    expect(first).toEqual({ submitted: 4, blocked: 0, failed: 0, skipped: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
 
     const second = await t.action(internal.media.submitBatch, { tenantId: A, batchId });
     expect(second).toEqual({ submitted: 0, blocked: 0, failed: 0, skipped: 4 });
-    // Mutation check: delete the `claimLine` call from the loop and this line reads 4.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Mutation check: delete the `claimLine` call from the loop and this line reads 8.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  test("the rows after a submit: video claimed + ticketed, tts untouched at queued", async () => {
+  test("the rows after a submit: video AND voice claimed + ticketed, off one reservation", async () => {
     const t = harness();
     vi.stubGlobal("fetch", acceptFetch());
     stubMediaEnv();
@@ -1168,9 +1219,46 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     const video = all.filter((r) => r.kind === "video");
     const tts = all.filter((r) => r.kind === "tts");
     expect(video.every((r) => r.status === "submitted")).toBe(true);
-    expect(video.map((r) => r.falRequestId).sort()).toEqual(["req_1", "req_2"]);
-    // Plan 20-14 inherits these EXACTLY as the reservation left them.
-    expect(tts.every((r) => r.status === "queued" && r.falRequestId === undefined)).toBe(true);
+    expect(tts.every((r) => r.status === "submitted")).toBe(true);
+    // Four DISTINCT tickets — no line reused another's, and the voice lines are real submissions.
+    expect(new Set(all.map((r) => r.falRequestId)).size).toBe(4);
+    expect(all.every((r) => r.falRequestId !== undefined)).toBe(true);
+  });
+
+  test("A VOICE LINE SUBMITS `narration`, NEVER `prompt` — the copy-paste this test exists for", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    // `deck()` gives every block a prompt (`prompt 0`) that DIFFERS from its narration ("x"*140),
+    // so an arm that copied the video branch would voice the shot description over the clip —
+    // fluent, plausible, and completely wrong, with nothing else going red.
+    // Distinct narrations per block (still inside the 103-140 band at 10 s), so this also proves
+    // the read is INDEXED by block rather than "some narration off the deck".
+    const blocks = deck(2).map((b) => ({ ...b, narration: `${"x".repeat(139)}${b.index}` }));
+    const planId = await seedPlanWithShots(t, blocks);
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks,
+      clipSeconds: 10,
+      withCaptions: false,
+    });
+    if (!res.ok) throw new Error(`reserve failed: ${res.reason}`);
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+
+    const bodies = (fetchMock.mock.calls as Array<[string, RequestInit]>).map(
+      ([, init]) => JSON.parse(String(init.body)) as Record<string, unknown>,
+    );
+    const voice = bodies.filter((b) => "text" in b);
+    const clips = bodies.filter((b) => "prompt" in b);
+    expect(voice).toHaveLength(2); // not vacuous — both kinds really were submitted
+    expect(clips).toHaveLength(2);
+
+    expect(voice.map((b) => b.text).sort()).toEqual(blocks.map((b) => b.narration).sort());
+    expect(clips.map((b) => b.prompt).sort()).toEqual(["prompt 0", "prompt 1"]);
+    // THE assertion: no voice take carries a shot description.
+    expect(voice.some((b) => String(b.text).startsWith("prompt "))).toBe(false);
   });
 
   test("the webhook segment is the buildAuthorizeUrl construction, per JOB ROW", async () => {
@@ -1216,11 +1304,13 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     stubMediaEnv();
     const { batchId } = await reservedBatch(t);
 
+    // Line 1 (video block 0) is accepted; every later line 422s — including the voice lines, which
+    // now ride the same loop. The point is unchanged: a blocked line does not touch its sibling.
     expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
       submitted: 1,
-      blocked: 1,
+      blocked: 3,
       failed: 0,
-      skipped: 2,
+      skipped: 0,
     });
 
     const video = (await rows(t)).filter((r) => r.kind === "video");
@@ -1235,7 +1325,7 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     });
   });
 
-  test("a 5xx fails ONE line with a code, and the retrier may re-run the action for free", async () => {
+  test("a 5xx fails the line with a code, and the retrier may re-run the action for free", async () => {
     const t = harness();
     const fetchMock = vi
       .fn()
@@ -1247,14 +1337,14 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
       submitted: 0,
       blocked: 0,
-      failed: 2,
-      skipped: 2,
+      failed: 4,
+      skipped: 0,
     });
-    expect((await rows(t)).filter((r) => r.status === "failed")).toHaveLength(2);
+    expect((await rows(t)).filter((r) => r.status === "failed")).toHaveLength(4);
     // The claim already happened, so the retrier's re-run POSTs nothing — the failure is recorded
     // once and does NOT buy a second attempt at the provider's expense.
     await t.action(internal.media.submitBatch, { tenantId: A, batchId });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   test("a batch whose plan has no shots fails the line with a code, never an empty prompt", async () => {
@@ -1275,12 +1365,16 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
 
     expect(
       await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId }),
-    ).toEqual({ submitted: 0, blocked: 0, failed: 1, skipped: 1 });
+    ).toEqual({ submitted: 0, blocked: 0, failed: 2, skipped: 0 });
     expect(fetchMock).toHaveBeenCalledTimes(0);
-    expect((await rows(t)).find((r) => r.kind === "video")).toMatchObject({
-      status: "failed",
-      failureReason: "missing_shot",
-    });
+    // BOTH kinds refuse the same way. A voice line with no block to read is the sharper case: an
+    // empty `text` is a valid request that bills for nothing and returns silence.
+    for (const kind of ["video", "tts"] as const) {
+      expect((await rows(t)).find((r) => r.kind === kind), kind).toMatchObject({
+        status: "failed",
+        failureReason: "missing_shot",
+      });
+    }
   });
 
   test("a missing FAL_WEBHOOK_SECRET refuses the batch BEFORE line 1 is claimed", async () => {
@@ -1308,17 +1402,14 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     const { batchId } = await reservedBatch(t);
 
     expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
-      submitted: 2,
+      submitted: 4,
       blocked: 0,
       failed: 0,
-      skipped: 2,
+      skipped: 0,
     });
     expect(fetchMock).toHaveBeenCalledTimes(0);
-    expect(
-      (await rows(t))
-        .filter((r) => r.kind === "video")
-        .every((r) => r.falRequestId?.startsWith("fixture-")),
-    ).toBe(true);
+    // The voice lines take the SAME $0 seam as the clips — no second fixture branch was added.
+    expect((await rows(t)).every((r) => r.falRequestId?.startsWith("fixture-"))).toBe(true);
   });
 
   test("a cross-tenant batchId submits NOTHING", async () => {
@@ -1356,14 +1447,20 @@ const ASSET = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]);
 async function seedLandable(
   t: T,
   opts: {
-    kind?: "video" | "image" | "tts";
+    kind?: "video" | "image" | "tts" | "stt";
     spec?: Doc<"mediaJobs">["spec"];
     estUsd?: number;
     tenantId?: string;
+    clipSeconds?: number;
   } = {},
 ) {
   const kind = opts.kind ?? "video";
   const planId = await seedPlan(t, opts.tenantId ?? A);
+  // 20-14's overrun net measures against the plan's own block length, and SKIPS when there is none.
+  // Left unset by default so every pre-existing landing test keeps the shape it was written against.
+  if (opts.clipSeconds !== undefined) {
+    await t.run(async (ctx) => await ctx.db.patch(planId, { clipSeconds: opts.clipSeconds }));
+  }
   const jobId = await t.run(
     async (ctx) =>
       await ctx.db.insert("mediaJobs", {
@@ -1378,7 +1475,9 @@ async function seedLandable(
             ? MEDIA_DEFAULT_VIDEO.model
             : kind === "image"
               ? MEDIA_DEFAULT_IMAGE.model
-              : "fal-ai/inworld-tts",
+              : kind === "stt"
+                ? MEDIA_DEFAULT_STT.model
+                : MEDIA_DEFAULT_VOICE.model,
         spec:
           opts.spec ??
           (kind === "video"
@@ -1602,14 +1701,19 @@ describe("the happy path: the bytes land, the URL does not", () => {
     const fetchMock = assetFetch();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    // A tts row (plan 20-14's arm). The body deliberately CARRIES a findable url.
-    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028 });
+    // An `stt` row — plan 20-17's arm, and the only kind left without one now that 20-14 wired
+    // `tts`. The body deliberately CARRIES a findable url.
+    const { jobId } = await seedLandable(t, {
+      kind: "stt",
+      spec: { kind: "stt", audioMinutes: 1 },
+      estUsd: 0.008,
+    });
 
     expect(
       (
         await post(t, await signed(jobId), {
           status: "OK",
-          payload: { audio: { url: "https://v3.fal.media/files/panda/take.mp3" } },
+          payload: { text: "a transcript", url: "https://v3.fal.media/files/panda/t.json" },
         })
       ).status,
     ).toBe(200);
@@ -1666,6 +1770,149 @@ describe("the happy path: the bytes land, the URL does not", () => {
     expect(await mediaLeft(t)).toBe(left); // the window did not move a second time
     expect(await auditRows(t)).toHaveLength(1); // and no second log line
     expect(fetchMock).toHaveBeenCalledTimes(1); // and no second download
+  });
+
+  // ── 20-14: the voice take lands through the SAME code, and that is the claim ──────
+
+  const AUDIO_OK = {
+    status: "OK",
+    payload: {
+      audio: {
+        url: "https://v3.fal.media/files/panda/take.wav",
+        content_type: "audio/wav",
+        file_name: "take.wav",
+        file_size: 8,
+      },
+    },
+  };
+
+  test("an AUDIO take lands exactly like a video one — the generic path really is generic", async () => {
+    const t = harness();
+    const fetchMock = assetFetch("audio/wav");
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+    const before = await mediaLeft(t);
+
+    expect((await post(t, await signed(jobId), AUDIO_OK)).status).toBe(200);
+
+    const row = await jobRow(t, jobId);
+    expect(row).toMatchObject({
+      status: "succeeded",
+      // inworld-tts publishes NO moderation field either. "Audio is obviously fine" is exactly the
+      // reasoning that would put a compliance claim fal never made onto a row.
+      verdict: "none_reported",
+      mimeType: "audio/wav",
+      bytes: ASSET.byteLength,
+    });
+    expect(row?.assetHash).toBe(await contentHash(ASSET));
+    expect(row?.assetStorageId).toBeDefined();
+    // The URL dies at the route here too.
+    expect(JSON.stringify(row)).not.toMatch(/fal\.media|https?:/);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://v3.fal.media/files/panda/take.wav");
+
+    // Spend is EXACT by construction (`EXACT_SPEND_KINDS`) — the response carries no duration and
+    // no character count, so there is nothing to reconcile and both windows move by exactly 0.
+    expect(row?.actualCents).toBe(Math.round(0.0028 * 100));
+    expect(await mediaLeft(t)).toBe(before);
+    const payload = (await auditRows(t))[0]?.payload as Record<string, unknown>;
+    expect(payload.reconciled).toBe("exact_by_construction");
+  });
+
+  test("a re-delivered AUDIO callback is idempotent — no second store, no second spend", async () => {
+    const t = harness();
+    const fetchMock = assetFetch("audio/wav");
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+    const segment = await signed(jobId);
+
+    expect((await post(t, segment, AUDIO_OK)).status).toBe(200);
+    const after = await jobRow(t, jobId);
+    const left = await mediaLeft(t);
+
+    expect((await post(t, segment, AUDIO_OK)).status).toBe(200);
+    expect(await jobRow(t, jobId)).toEqual(after);
+    expect(await mediaLeft(t)).toBe(left);
+    expect(await auditRows(t)).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("a grossly over-long take is take_too_long and does NOT mark the block ready", async () => {
+    const t = harness();
+    // 24 kHz mono 16-bit PCM is ~48 KB/s, so 12 s of budget (10 + 2 grace) is ~576,000 bytes.
+    // 900,000 implies ~18.75 s — an overrun no ffprobe has run yet to catch.
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(new Uint8Array(900_000), {
+              status: 200,
+              headers: { "content-type": "audio/wav" },
+            }),
+          ),
+        ),
+    );
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+
+    expect((await post(t, await signed(jobId), AUDIO_OK)).status).toBe(200);
+
+    const row = await jobRow(t, jobId);
+    expect(row).toMatchObject({ status: "failed", failureReason: "take_too_long" });
+    // The reel is left UN-RENDERABLE rather than rendering with a word cut off — D8's hard-error
+    // direction. Nothing is marked ready and no verdict is claimed.
+    expect(row?.verdict).toBeUndefined();
+    expect(row?.actualCents).toBeUndefined();
+  });
+
+  test("a take INSIDE its window is untouched by the heuristic — it is not a blanket refusal", async () => {
+    const t = harness();
+    // ~500,000 bytes is ~10.4 s, inside 10 + 2. Not vacuous against the test above: the ONLY
+    // difference between the two is the byte count.
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(new Uint8Array(500_000), {
+              status: 200,
+              headers: { "content-type": "audio/wav" },
+            }),
+          ),
+        ),
+    );
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+
+    expect((await post(t, await signed(jobId), AUDIO_OK)).status).toBe(200);
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "succeeded", verdict: "none_reported" });
+  });
+
+  test("a plan with NO clipSeconds SKIPS the net — never 'zero seconds, therefore too long'", async () => {
+    const t = harness();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(new Uint8Array(900_000), {
+              status: 200,
+              headers: { "content-type": "audio/wav" },
+            }),
+          ),
+        ),
+    );
+    stubMediaEnv();
+    // No `clipSeconds` — there is no window to measure against, so there is nothing to compare.
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028 });
+
+    expect((await post(t, await signed(jobId), AUDIO_OK)).status).toBe(200);
+    expect((await jobRow(t, jobId))?.status).toBe("succeeded");
   });
 });
 

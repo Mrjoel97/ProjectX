@@ -463,14 +463,22 @@ function requireEnvMedia(name: string): string {
 }
 
 /**
- * The kinds this adapter can POST **today**. Plan 20-14 adds `"tts"` here and plan 20-17 adds
- * `"stt"`; widening this alias is what turns the `never` arm in `buildSubmitBody` red until the
- * matching case is written. That is the whole mechanism — the compiler, not a code review.
+ * The kinds this adapter can POST **today**. Plan 20-14 added `"tts"`; plan 20-17 adds `"stt"`, and
+ * until it does `"stt"` stays OUT of this alias — widening it is what turns the `never` arm in
+ * `buildSubmitBody` red until the matching case is written. That is the whole mechanism — the
+ * compiler, not a code review.
  *
  * It is deliberately NOT `MediaSpec`: `"render"` (the flat sandbox constant) and `"free"` (an
  * unpaid block) have no provider request at all, so an arm for them would be a lie.
+ *
+ * The `tts` member carries TWO fields the price table has no opinion about — `voice` and
+ * `sampleRateHertz`. They are not priced dimensions, but they ARE pinned wire fields (see the arm),
+ * so they ride on the submittable spec rather than being reached for at the POST. `characters` stays
+ * because it is the priced dimension, exactly as `resolution` is for video.
  */
-export type SubmittableSpec = Extract<MediaSpec, { kind: "video" | "image" }>;
+export type SubmittableSpec =
+  | Extract<MediaSpec, { kind: "video" | "image" }>
+  | (Extract<MediaSpec, { kind: "tts" }> & { voice: string; sampleRateHertz: number });
 
 /**
  * The request body, as a pure function of the PRICED spec — pitfall 1, the money bug.
@@ -511,6 +519,24 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
         image_size: { width: spec.width, height: spec.height },
         // Defaults to 1 and is a STRAIGHT price multiplier — pinned, same rule as `resolution`.
         num_images: 1,
+      };
+    case "tts":
+      return {
+        text,
+        // `voice` and `sample_rate_hertz` are PINNED, never defaulted — the same rule `resolution`
+        // is pinned by, for the same reason. The vendor default is 48000 Hz, which doubles the bytes
+        // that have to reach the render sandbox and makes the ffmpeg resample step non-deterministic.
+        //
+        // And note what is NOT here: there is no `speed` / `rate` field on this endpoint, and that
+        // is a FEATURE. D8 forbids time-stretch, and the obvious "fix" for a voice line that overruns
+        // its window is to speed it up. `fal-ai/inworld-tts` makes that structurally impossible. If
+        // this model is ever swapped, re-read this comment first: the `fal-ai/kokoro` family exposes
+        // `speed: 0.1-5.0` and swapping to it would re-open the hole. (Spelled without a trailing
+        // glob on purpose: a literal slash-star inside a LINE comment opens a block comment as far
+        // as `media.test.ts`'s comment-stripping scans are concerned, and silently eats the code
+        // between here and the next star-slash — including the `never` guard below.)
+        voice: spec.voice,
+        sample_rate_hertz: spec.sampleRateHertz,
       };
     default: {
       const _never: never = spec;
@@ -612,8 +638,35 @@ function toSubmittable(line: SubmitLine): SubmittableSpec | null {
   if (line.spec.kind === "image") {
     return { kind: "image", model: line.model, width: line.spec.width, height: line.spec.height };
   }
-  return null; // "tts" (plan 20-14) and "stt" (plan 20-17) are not wired yet — left at `queued`
+  if (line.spec.kind === "tts") {
+    // `voice` and `sampleRateHertz` come off the ROW, which is what the reservation wrote — not off
+    // MEDIA_DEFAULT_VOICE. Reading the constant here would mean a row reserved under one voice could
+    // be submitted under another after a constant bump, and the row is the record of what was priced.
+    return {
+      kind: "tts",
+      model: line.model,
+      characters: line.spec.characters,
+      voice: line.spec.voice,
+      sampleRateHertz: line.spec.sampleRateHertz,
+    };
+  }
+  return null; // "stt" (plan 20-17) is not wired yet — left at `queued`
 }
+
+/**
+ * Which field of the block a kind SUBMITS. A table, not an `if`-chain: plan 20-17's `stt` line reads
+ * NEITHER (it is keyed to the whole deck at `blockIndex: -1`), so a missing key here has to stay a
+ * governed `missing_shot` rather than a silent fall-through to `prompt`.
+ *
+ * A `tts` line submitting `prompt` would voice the SHOT DESCRIPTION over the clip — fluent, plausible
+ * and completely wrong, with nothing going red. That is why the fixture behind this has a prompt and
+ * a narration that differ.
+ */
+const SUBMIT_TEXT: Record<string, (s: { prompt: string; narration: string }) => string> = {
+  video: (s) => s.prompt,
+  image: (s) => s.prompt,
+  tts: (s) => s.narration,
+};
 
 /** The batch's rows AND the plan's shots in ONE read. Deliberately UNFILTERED by status: `claimLine`
  *  is the sole idempotency gate, and filtering here would mask its removal from the retry test. */
@@ -734,10 +787,11 @@ export const submitBatch = internalAction({
       // already-finished job. Nothing is stored — plan 20-06 re-derives this exact string.
       const webhookUrl = `${siteUrl}/fal/callback/${line.jobId}.${await hmacHex(line.jobId, secret)}`;
 
-      // The content plane, by kind: a video/image line submits the block's PROMPT. It goes to fal
-      // and to nothing else — never an audit row, never a log, never onto the job row (only its
-      // `promptHash` lives there). A `tts` line submits `narration` instead; plan 20-14 wires it.
-      const text = shots.find((s) => s.index === line.blockIndex)?.prompt;
+      // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
+      // NARRATION. Either way the text goes to fal and to nothing else — never an audit row, never a
+      // log, never onto the job row (only its `promptHash` lives there).
+      const shot = shots.find((s) => s.index === line.blockIndex);
+      const text = shot && SUBMIT_TEXT[spec.kind]?.(shot);
       if (text === undefined) {
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,

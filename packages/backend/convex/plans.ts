@@ -119,6 +119,11 @@ const hasDraftContent = (p: Doc<"plans">): boolean =>
  * ponytail: REFUSING rather than staging a second row. The real fix is more than one plan row per
  * thread, and `plans.by_thread` is `.unique()` with `schema.ts` frozen after 16-01 — upgrade path,
  * not this phase.
+ *
+ * 20-08 added `stageMediaPlan` below as a SECOND copy of this shape rather than a shared helper,
+ * for the reason this comment already gives: it protects an in-flight REEL (paid-for `mediaJobs`
+ * rows, a running sandbox) rather than a `collecting` memo row, and reel liveness is not readable
+ * from `plan.status` at all. Read them together before changing either.
  */
 export const stageResearchPlan = internalMutation({
   args: { tenantId: v.string(), threadId: v.string(), subject: v.string() },
@@ -162,6 +167,180 @@ export const stageResearchPlan = internalMutation({
       status: "collecting", // ← not approvable until landSpecialistResult flips it
     });
     return { ok: true, planId };
+  },
+});
+
+/** A media job row that is still in flight. Mirrors `mediaComplete.TERMINAL` from the other side:
+ *  a line that has not reached one of those four states is one the provider may still call back
+ *  about, and the reservation for it has already been consumed. */
+const LIVE_JOB_STATUS: ReadonlySet<Doc<"mediaJobs">["status"]> = new Set([
+  "queued",
+  "submitted",
+] as const);
+
+/** A render that has been started and not finished. `rendered`/`failed` are both finished. */
+const LIVE_RENDER_STATUS: ReadonlySet<string> = new Set(["pending", "rendering"] as const);
+
+/**
+ * Stage the `collecting` row a scheduled media run will land on (20-08 / MEDIA-01).
+ *
+ * `stageResearchPlan`'s shape, COPIED rather than shared. That function's own `ponytail:` forbids
+ * the extraction in as many words — *"a knob for two callers that disagree is the abstraction §8
+ * forbids"* — and these two callers genuinely disagree: research protects a `collecting` MEMO row,
+ * media protects an IN-FLIGHT REEL, and the reel's liveness is not readable from the plan row's
+ * status at all. Cross-referenced in both directions so the divergence reads as chosen.
+ *
+ * The media-specific rule, and why it is not just "is the status collecting":
+ *
+ *  - a plan with **non-terminal `mediaJobs` rows** is refused as `reel_in_flight`. Those lines are
+ *    already PAID FOR: the whole job was reserved in one transaction before a single request
+ *    existed (20-04), and fal will call back to `/fal/callback/*` whichever plan row the thread
+ *    happens to point at afterwards. Recycling the row would strand a landing on a plan that has
+ *    since become something else, and the money is gone either way.
+ *  - a plan with a **live `renderStatus`** is refused for the same reason one step later: a sandbox
+ *    is running, and its terminal will write `renderStorageId` onto whatever this row has become.
+ *  - the two are checked SEPARATELY because they fail at different times — every job can be
+ *    terminal while the render is still going (that is precisely when the render starts).
+ *  - `hasDraftContent` still applies: the MODEL is deciding here, and destroying a half-composed
+ *    email because someone asked for a reel is not a trade the user agreed to.
+ *
+ * ponytail: REFUSING rather than staging a second row — `plans.by_thread` is `.unique()`, so a
+ * thread has exactly one plan. The real fix is more than one plan row per thread, and it is the
+ * same upgrade path `stageResearchPlan` names. A user who wants a second reel starts a new chat.
+ */
+export const stageMediaPlan = internalMutation({
+  args: { tenantId: v.string(), threadId: v.string(), subject: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId, subject },
+  ): Promise<
+    | { ok: true; planId: Id<"plans"> }
+    | { ok: false; reason: "reel_in_flight" | "render_in_flight" | "draft_in_progress" }
+  > => {
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .unique();
+
+    let planId: Id<"plans">;
+    if (plan) {
+      if (plan.kind === "media") {
+        // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
+        const jobs = await ctx.db
+          .query("mediaJobs")
+          .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", plan._id))
+          .collect();
+        if (jobs.some((j) => LIVE_JOB_STATUS.has(j.status))) {
+          return { ok: false, reason: "reel_in_flight" };
+        }
+        if (plan.renderStatus !== undefined && LIVE_RENDER_STATUS.has(plan.renderStatus)) {
+          return { ok: false, reason: "render_in_flight" };
+        }
+      }
+      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
+      // A media row holds a PREVIOUS reel's deck, and a canceled row is one the user halted —
+      // neither is work in progress. Anything else with content in it is.
+      const userWork = plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
+      if (userWork) return { ok: false, reason: "draft_in_progress" };
+      planId = plan._id;
+      // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot.
+      // For media that is load-bearing twice over — resetPlan is what wipes the previous deck AND
+      // the previous render plane, either of which surviving would show under a brand-new proposal.
+      await ctx.runMutation(internal.plans.resetPlan, { planId });
+    } else {
+      planId = await ctx.runMutation(internal.plans.insertPlan, { tenantId, threadId });
+    }
+    await ctx.runMutation(internal.plans.patchPlan, {
+      planId,
+      // NOT `kind: "media"` yet — `persistStoryboard` sets that when a deck actually parses. A row
+      // that says `media` with no `shots` is an empty canvas wearing a successful proposal's
+      // clothes, which is the exact failure `dispatch.ts` refuses to write.
+      kind: "memo",
+      recipients: [], // a reel has no recipients — it is not an email
+      subject,
+      body: "",
+      status: "collecting", // ← not approvable until the dispatch lands
+    });
+    return { ok: true, planId };
+  },
+});
+
+/**
+ * The deck onto the plan row (20-08). **Deliberately NOT `patchPlan` args** — `patchPlan` has no
+ * deck args and no render args, and that absence IS the guarantee (20-02): nothing reachable from
+ * the MODEL may write a block prompt or a narration line that later becomes a paid generation. This
+ * mutation is called only by `dispatch.persistStoryboard`, which is reached only from the scheduled
+ * `runMedia` action.
+ *
+ * `shots` is written as ONE array patch, which is the whole reason the deck is inline on the plan
+ * row rather than in a `mediaShots` table (schema.ts).
+ *
+ * `status: "proposed"` is set HERE and only here on this path — the row is not approvable until a
+ * deck actually parsed. `kind: "media"` moves at the same instant, so a `media` row without `shots`
+ * is not a state this function can produce.
+ */
+export const persistDeck = internalMutation({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    script: v.string(),
+    artDirection: v.union(
+      v.null(),
+      v.object({
+        palette: v.array(v.string()),
+        mood: v.string(),
+        lighting: v.string(),
+        composition: v.string(),
+        environment: v.string(),
+        texture: v.string(),
+        typography: v.optional(v.string()),
+        references: v.array(v.string()),
+        avoid: v.string(),
+      }),
+    ),
+    clipSeconds: v.number(),
+    shots: v.array(
+      v.object({
+        index: v.number(),
+        type: v.string(),
+        seconds: v.number(),
+        windowStartMs: v.number(),
+        description: v.string(),
+        overlay: v.optional(v.string()),
+        prompt: v.string(),
+        narration: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, a): Promise<null> => {
+    const plan = await ctx.db.get(a.planId);
+    if (!plan || plan.tenantId !== a.tenantId) return null; // no cross-tenant write, ever
+    // Refusing an empty deck HERE as well as at the caller. `dispatch.ts` already never calls with
+    // one, and this is the second lock on the same door: an empty canvas that says `kind: "media"`
+    // is the one shape that looks like a successful proposal and is not.
+    if (a.shots.length === 0) return null;
+    await ctx.db.patch(a.planId, {
+      kind: "media",
+      script: a.script,
+      ...(a.artDirection === null ? {} : { artDirection: a.artDirection }),
+      clipSeconds: a.clipSeconds,
+      shots: a.shots,
+      status: "proposed",
+    });
+    return null;
+  },
+});
+
+/** A media run that produced prose but no usable deck. It lands as a MEMO — `kind` is left at what
+ *  `stageMediaPlan` set, so nothing downstream reads this row as a reel — with the lever named in
+ *  the body. The user sees WHY and what to ask for; they never see an empty canvas. */
+export const landStoryboardRefusal = internalMutation({
+  args: { tenantId: v.string(), planId: v.id("plans"), body: v.string() },
+  handler: async (ctx, { tenantId, planId, body }): Promise<null> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== tenantId) return null;
+    await ctx.db.patch(planId, { body, status: "proposed" });
+    return null;
   },
 });
 

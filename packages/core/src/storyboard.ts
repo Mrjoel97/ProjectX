@@ -154,6 +154,120 @@ function parsePrompts(section: string): Map<number, string> {
   return out;
 }
 
+/**
+ * A section's body: from its heading to the start of the next one, or `""`.
+ *
+ * `parseBlockDeck`'s heading idiom, generalised in two ways that both matter because the SPECIALIST
+ * writes this, not us:
+ *  - the heading matches with or without `#`s and with or without a `N.` prefix. The skill body
+ *    uses `## 2. ART DIRECTION` for its own instructions but shows the model a BARE `BLOCK DECK`
+ *    token in its example, and both shapes come back in real output.
+ *  - a section therefore ends at the next `#` heading **or at the next known section token**. With
+ *    a `#`-only terminator, a model that emits bare tokens would have ART DIRECTION run to EOF and
+ *    swallow the whole deck — `avoid` would come back carrying table rows, on a plan row the user
+ *    reads at the Approve gate.
+ */
+const SECTION_TOKENS = ["SCRIPT", "ART DIRECTION", "BLOCK DECK", "BLOCK PROMPTS"];
+
+function sectionOf(body: string, heading: string): string {
+  const at = new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?${heading}\\b.*$`, "im").exec(body);
+  if (!at) return "";
+  const after = body.slice(at.index + at[0].length);
+  const others = SECTION_TOKENS.filter((t) => t !== heading).join("|");
+  const next = new RegExp(
+    `^[ \\t]*(?:#{1,6}[ \\t]*\\S|#*[ \\t]*(?:\\d+\\.[ \\t]*)?(?:${others})\\b)`,
+    "im",
+  ).exec(after);
+  return (next ? after.slice(0, next.index) : after).trim();
+}
+
+/**
+ * The reel's narration script (skill §1) — the whole section, verbatim.
+ *
+ * Deliberately NOT re-wrapped, re-punctuated or length-checked here: the per-block narration is
+ * what gets SUBMITTED and `parseBlockDeck` already enforces the band on it. This string is the
+ * reel's script of record, shown to the human at the Approve gate.
+ */
+export const parseScript = (body: string): string => sectionOf(body, "SCRIPT");
+
+/** koda's fixed 9-field art direction. `typography` is the ONE optional field (schema.ts). */
+export type ArtDirection = {
+  palette: string[];
+  mood: string;
+  lighting: string;
+  composition: string;
+  environment: string;
+  texture: string;
+  typography?: string;
+  references: string[];
+  avoid: string;
+};
+
+/** `- **Palette** — 3-5 colours…` → the text after the label. Tolerates `-`/`*` bullets, bold or
+ *  bare labels, and either an em-dash or a colon as the separator, because a model will produce
+ *  all of them and none of the differences mean anything. */
+function fieldOf(section: string, label: string): string {
+  const re = new RegExp(
+    `^[ \\t]*[*-]?[ \\t]*(?:\\*\\*)?${label}(?:\\*\\*)?[ \\t]*(?:[—:-])[ \\t]*(.+)$`,
+    "im",
+  );
+  return (re.exec(section)?.[1] ?? "").trim();
+}
+
+/** A comma/semicolon/backtick-separated list into trimmed entries. */
+const listOf = (s: string): string[] =>
+  s
+    .split(/[;,]/)
+    .map((e) => e.replace(/`/g, "").trim())
+    .filter((e) => e !== "");
+
+/**
+ * Parse the art-direction block, or `null` when the REQUIRED fields are not all there.
+ *
+ * `null` rather than a partial object with empty strings: the schema field is a 9-key object and a
+ * half-filled one would render as an art direction the specialist never wrote. `typography` is the
+ * only field allowed to be absent — it is the only optional key on the schema object.
+ *
+ * The palette rule ("hex, never a vague colour word") is the SKILL BODY's to teach, not this
+ * parser's to enforce. A parser that rejected `warm tones` would turn a soft quality problem into a
+ * hard refusal at the Approve gate, and the human reading the proposal is the better judge.
+ */
+export function parseArtDirection(body: string): ArtDirection | null {
+  const section = sectionOf(body, "ART DIRECTION");
+  if (section === "") return null;
+
+  const palette = listOf(fieldOf(section, "Palette"));
+  const mood = fieldOf(section, "Mood");
+  const lighting = fieldOf(section, "Lighting");
+  const composition = fieldOf(section, "Composition");
+  const environment = fieldOf(section, "Environment");
+  const texture = fieldOf(section, "Texture");
+  const typography = fieldOf(section, "Typography");
+  const references = listOf(fieldOf(section, "References"));
+  // The skill body writes this one as `Do NOT`; `Avoid` is accepted because it is the obvious
+  // paraphrase and rejecting it would fail the whole block over a synonym.
+  const avoid = fieldOf(section, "Do NOT") || fieldOf(section, "Avoid");
+
+  if (
+    palette.length === 0 ||
+    references.length === 0 ||
+    [mood, lighting, composition, environment, texture, avoid].some((f) => f === "")
+  ) {
+    return null;
+  }
+  return {
+    palette,
+    mood,
+    lighting,
+    composition,
+    environment,
+    texture,
+    ...(typography === "" ? {} : { typography }),
+    references,
+    avoid,
+  };
+}
+
 export function parseBlockDeck(body: string): ParsedDeck {
   const deckAt = /^[ \t]*#*[ \t]*BLOCK DECK\b.*$/im.exec(body);
   if (!deckAt) return fail("no_deck");

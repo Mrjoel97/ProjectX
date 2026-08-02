@@ -4,6 +4,54 @@
 >
 > Prior: 2026-08-02 (connections-tab Task 1 — **the Google disconnect control has one writer.** The confirm copy and the partial-revoke branch (`revoked: false` → point the user at `myaccount.google.com/permissions`) moved out of `connect-gmail/page.tsx` into `apps/web/app/(app)/_components/DisconnectGoogle.tsx`; `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` and no longer calls `api.gmailAuth.disconnectGoogle` itself. No backend behaviour changed.)
 >
+> Prior: 2026-08-02 (20-08 + 20-14 — **the media DISPATCH route, and the voiceover arm's
+> one line in `http.ts`.** ONE bump covering both plans of Wave 7; the wave rule allows one plan per
+> playbook and this lane executed both.)
+>
+> **20-08 — `dispatchMedia` joins the executive's tool set.** `dispatchResearchTool`'s shape
+> verbatim: stage the plan row, schedule, **return immediately**. The proposal does not arrive in
+> this turn. It is gated by the SAME `grantDispatch` + `threadId` + `rootRequestId` condition, in
+> the SAME spread — `{ ...dispatchResearchTool, ...dispatchMediaTool }` — so media can never become
+> reachable in a context where research is not. One flag, one spread, the
+> `webResearch`/`declareUnsupported` precedent.
+>
+> **The tool description carries one sentence research's does not need, and it is load-bearing:**
+> the proposal is FREE and the generation is not. A model that implied the reel was being made would
+> be describing a charge that has not happened. `MEDIA_UNDERWAY_REPLY` closes its own loop the way
+> `RESEARCH_UNDERWAY_REPLY` does (do not wait, do not claim it, do not ask again) and adds *"Nothing
+> has been generated and nothing has been charged"*.
+>
+> **`stageMediaPlan` is a COPY of `stageResearchPlan`, not a shared helper**, and `plans.ts`'s own
+> `ponytail:` forbids the extraction in as many words. The callers genuinely disagree: research
+> protects a `collecting` MEMO row; media protects an IN-FLIGHT REEL, whose liveness is not readable
+> from `plan.status` at all. Three refusals: `reel_in_flight` (non-terminal `mediaJobs` rows — those
+> clips are ALREADY PAID FOR and fal will call back regardless), `render_in_flight` (a live
+> `renderStatus`), and `draft_in_progress`. **The first two are checked SEPARATELY because they fail
+> at different times** — every job can be terminal while the render is still going, which is
+> precisely when the render starts.
+>
+> **A dispatched media run spends TOKENS ONLY**, and there is a test that says so by absence: zero
+> `mediaJobs` rows, `renderStatus` never set, and the token rail provably moved (so the zero is
+> containment, not an inert run). The paid calls fire from `EXTERNAL_TARGETS.media` after the human
+> Approve gate and from nowhere else.
+>
+> **`persistStoryboard` NEVER writes `shots: []`.** An empty deck that says `kind: "media"` is an
+> empty canvas wearing a successful proposal's clothes — the user approves it, the reservation
+> prices zero blocks, and nothing ever explains why. A body that does not parse lands as a MEMO with
+> the lever named (`no_deck`, `narration_too_long` + block + count, …). There are TWO locks: the
+> caller never calls with an empty deck, and `plans.persistDeck` refuses one anyway
+> (**both mutation-verified RED**). It writes via `ctx.db.patch`, **not `patchPlan`** — `patchPlan`
+> has no deck args and that absence IS the guarantee (20-02).
+>
+> **20-14 — `http.ts` gained ONE line**, `ASSET_PATH.tts` reading `payload.audio.url`. Everything
+> downstream of it is the code a video take already walked; that sameness is the plan's whole
+> argument. Full mechanism in `docs/playbooks/media.md` § *The voiceover stage*.
+>
+> ⚠ SCOPE: this entry covers `llm.ts`, `dispatch.ts`, `plans.ts` and `http.ts` as changed by 20-08
+> and 20-14 ONLY. `check-playbooks` also names `calendar.test.ts` and `gmailAuth.ts` in the same
+> demand — those are the **reconnect-banner lane's uncommitted work** and this entry makes no claim
+> about them.
+>
 > Prior: 2026-08-02 (20-07 — **the `externalAction` arm has TWO occupants and is no longer
 > calendar's.** `media` joined `ACTION_TYPES`; the arm body became `EXTERNAL_TARGETS` (one thunk per
 > type) plus a per-type pre-step; approving a media plan reserves the WHOLE reel in the same

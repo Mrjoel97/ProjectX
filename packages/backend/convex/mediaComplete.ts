@@ -95,6 +95,13 @@ export const resolveJob = internalQuery({
  */
 export const EXACT_SPEND_KINDS = new Set<string>(["tts", "stt"]);
 
+/** 24 kHz mono 16-bit PCM. The submit arm PINS `sample_rate_hertz` to 24000 precisely so this
+ *  constant can be a constant — if that pin is ever removed, this number is wrong. */
+const TTS_BYTES_PER_SECOND = 48_000;
+/** A voice take may run slightly past its clip; the render ducks and pads. Two seconds is slack for
+ *  a trailing consonant, not a licence to overrun a block. */
+const TAKE_OVERRUN_GRACE_S = 2;
+
 /** What fal said it actually produced. Every field OPTIONAL because absence is the normal case —
  *  Wan 2.5's success payload carries `{url, content_type, file_name, file_size}` and no dimensions
  *  at all, and an absent field means the submitted spec stands, never a zero. */
@@ -200,10 +207,35 @@ export const landResult = internalMutation({
         },
       });
 
-    if (!outcome.ok) {
-      await ctx.db.patch(jobId, { status: "failed", failureReason: outcome.code, updatedAt });
-      await audit({ failureReason: outcome.code });
+    const landFailure = async (code: string) => {
+      await ctx.db.patch(jobId, { status: "failed", failureReason: code, updatedAt });
+      await audit({ failureReason: code });
       return null;
+    };
+
+    if (!outcome.ok) return await landFailure(outcome.code);
+
+    // 20-14 — the SECOND net under an over-long voice take, and only the second.
+    //
+    // ponytail: a byte-count heuristic, not a measurement. 24 kHz mono 16-bit PCM is ~48 KB/s, so
+    // bytes / TTS_BYTES_PER_SECOND is a duration ESTIMATE. It catches a grossly over-long take before
+    // the sandbox ever sees it, at the cost of one division. It does NOT replace the 140-character
+    // pre-flight ceiling, which is the only check that runs BEFORE money moves — by the time this
+    // runs the take is already paid for. A compressed container reads far smaller per second and
+    // will simply not trip it, which is the safe direction for a heuristic. Upgrade path if it ever
+    // fires falsely: read the WAV header's byte rate instead of assuming it.
+    //
+    // Failing the line leaves the reel un-renderable rather than producing a reel with a word cut
+    // off — D8's hard-error direction.
+    if (row.spec.kind === "tts") {
+      // No `clipSeconds` means no window to measure against, so there is NOTHING to compare and the
+      // net is skipped — never "0 seconds, therefore too long", which would fail every take on a
+      // plan shape this phase did not write.
+      const clipSeconds = (await ctx.db.get(row.planId))?.clipSeconds;
+      const budgetSeconds = clipSeconds === undefined ? null : clipSeconds + TAKE_OVERRUN_GRACE_S;
+      if (budgetSeconds !== null && outcome.bytes / TTS_BYTES_PER_SECOND > budgetSeconds) {
+        return await landFailure("take_too_long");
+      }
     }
 
     const verdict =

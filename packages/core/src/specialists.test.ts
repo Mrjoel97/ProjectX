@@ -20,7 +20,7 @@ import {
 //   (a) the FAIL-CLOSED half 15-01 pinned — it must keep holding now that routes exist,
 //   (b) the CAPABILITY half — the tool-set is code-owned, so a widening edit must fail a test.
 describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
-  test("the registry is the three growth specialists plus research", () => {
+  test("the registry is the three growth specialists plus research and media", () => {
     expect(SPECIALIST_ROUTES).toEqual([
       "offer-architect",
       "money-model-designer",
@@ -28,6 +28,9 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // Phase 16 (D3/ADR-010): dispatchable but NOT emitted by diagnose() — see the
       // diagnose()-subset assertion below, which is what keeps that distinction honest.
       "research",
+      // Phase 20 (20-08): the SECOND instance of that same pattern. A reel is not a remedy for a
+      // business constraint, so diagnose() never prescribes it — see the companion assertion.
+      "media",
     ]);
     expect(Object.keys(SPECIALISTS).sort()).toEqual([...SPECIALIST_ROUTES].sort());
   });
@@ -52,6 +55,8 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // Phase 16. 16-04 (wave 2) creates this constant; registering the route before it exists
       // would redden THIS test, which 16-03 does not own. That ordering is why 16-04 is wave 2.
       "research-specialist": "RESEARCH_SPECIALIST_SKILL",
+      // Phase 20. 20-03 (wave 3) created this constant and the body; 20-08 registers the route.
+      "media-director": "MEDIA_DIRECTOR_SKILL",
     };
     for (const route of SPECIALIST_ROUTES) {
       const name = SPECIALISTS[route].skillName;
@@ -86,7 +91,19 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // MUTATION that must turn this RED: put "searchVault" back — fixture 32 can then score
       // `webSearchCalls === 0` again while every other test stays green.
       ["research", ["webResearch", "declareUnsupported"]],
+      // Phase 20 (20-08): `SPECIALIST_TOOLS` VERBATIM — read the tenant's corpus, return prose and
+      // a block deck, spend nothing but tokens. There are FOUR paid capabilities in this phase
+      // (clip generation, TTS, captions STT, the sandbox render) and none is granted here.
+      // MUTATION that must turn this RED: add a generate/voice/render tool to SPECIALISTS.media —
+      // and the "every granted tool is TAUGHT" assertion below fails with it.
+      ["media", ["searchVault"]],
     ]);
+  });
+
+  // The grant is the SAME OBJECT the growth specialists use, not an equal copy. There is no media
+  // grant to widen — which is a stronger statement than "the media grant happens to be small".
+  test("media's grant is SPECIALIST_TOOLS by identity — there is no separate media grant", () => {
+    expect(SPECIALISTS.media.tools).toBe(SPECIALISTS["offer-architect"].tools);
   });
 
   // 22.1b — the GENERALIZED anti-withheld-tool guard, closing the 03.11-05 / RPLY-01 /
@@ -266,6 +283,61 @@ describe("coverage bind: every route diagnose() emits resolves", () => {
         resolveSpecialist(route).ok,
         `diagnose() can emit "${route}" but nothing resolves it`,
       ).toBe(true);
+    }
+  });
+
+  // ADR-010's companion, now at its SECOND instance — which is what keeps it a decided pattern
+  // rather than a one-off exception for `research`. `media` is reachable by DISPATCH (the user asks
+  // for a reel) and never by PRESCRIPTION: a reel is not a remedy for a business constraint, and
+  // diagnose() emitting one would mean the diagnostic engine proposing a paid pipeline unasked.
+  // Widening diagnose() is ADR-009 territory and needs its own ADR.
+  test("diagnose() emits neither `research` nor `media` — dispatch-only routes stay dispatch-only", () => {
+    const literals = diagnoseRouteLiterals();
+    expect(literals.length, "found no route literals — did the scan break?").toBeGreaterThan(5);
+    for (const dispatchOnly of ["research", "media"] as const) {
+      expect(
+        literals,
+        `diagnose() emits "${dispatchOnly}", which is dispatch-only (ADR-010)`,
+      ).not.toContain(dispatchOnly);
+      // Non-vacuous: the route really IS registered, so the absence above is a decision rather
+      // than a route that simply does not exist yet.
+      expect(resolveSpecialist(dispatchOnly).ok).toBe(true);
+    }
+  });
+
+  /**
+   * Roadmap SC #3, STATIC and now FOUR-WAY: **no specialist grant names anything that reaches a
+   * paid capability.** The re-scope introduced four of them, so the scan is written over a LIST of
+   * forbidden reach targets rather than as four copy-pasted scans — plan 20-17 appends one string
+   * (`uploadAudioToFal`), not a fifth copy.
+   *
+   * `renderReel` is seeded NOW even though plan 20-15 lands it: a scan asserting "`renderReel` is
+   * never referenced from a specialist grant" passes whether or not the function exists yet, and
+   * seeding it means 20-15 cannot land a reachable render without this going red.
+   *
+   * It lives HERE rather than in `llmRedaction.test.ts` because it is a statement about the
+   * CAPABILITY GRANT, and this file is where grants are policed.
+   */
+  test("SC#3: no granted tool names ANY of the four paid entry points", () => {
+    const PAID_ENTRY_POINTS = ["submitBatch", "renderReel"];
+    // A future "clean-up" that empties the list must fail loudly instead of passing vacuously.
+    expect(PAID_ENTRY_POINTS.length, "the forbidden-reach list is empty").toBeGreaterThan(0);
+
+    const everyGrantedTool = SPECIALIST_ROUTES.flatMap((r) => [...SPECIALISTS[r].tools]);
+    expect(everyGrantedTool.length, "no grants to scan").toBeGreaterThan(0);
+    for (const tool of everyGrantedTool) {
+      for (const paid of PAID_ENTRY_POINTS) {
+        expect(
+          tool.toLowerCase(),
+          `a specialist is granted "${tool}", which names the paid entry point "${paid}"`,
+        ).not.toContain(paid.toLowerCase());
+      }
+    }
+    // ...and the grants as a whole name nothing generative. `searchVault` is a READ.
+    for (const tool of everyGrantedTool) {
+      expect(tool, `"${tool}" looks like a paid capability`).not.toMatch(
+        /generate|render|submit|voice|speak|tts|stt|caption|fal/i,
+      );
     }
   });
 });

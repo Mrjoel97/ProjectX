@@ -1784,3 +1784,326 @@ describe("the activity trace always terminalizes", () => {
     expect(steps[0]?.phase, "a thrown specialist turn left its step spinning").toBe("error");
   });
 });
+
+// ── 20-08: the media route ────────────────────────────────────────────────────────────────────
+//
+// Driven through `__runSpecialistWithScript` with `media: true` — the twin calls the SAME
+// `dispatchAndLand` and the SAME `persistStoryboard` the scheduled `runMedia` does. $0: the model
+// is a script.
+
+/** A body in the exact shape the `media-director` skill body asks for. Narration lines sit inside
+ *  the 103-140 band a 10-second window admits, or `parseBlockDeck` refuses them before payment. */
+const MEDIA_BODY = [
+  "## 1. SCRIPT",
+  "",
+  "Six weeks, start to finish. Nobody believed it could be done that fast.",
+  "",
+  "## 2. ART DIRECTION",
+  "",
+  "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`",
+  "- **Mood** — Quietly confident, never triumphant.",
+  "- **Lighting** — Warm golden light from camera left at 45 degrees.",
+  "- **Composition** — Subject off-centre right, camera locked off.",
+  "- **Environment** — A working studio, mid-afternoon.",
+  "- **Texture** — 35mm film grain over matte paper.",
+  "- **References** — Gregory Crewdson; the film Locke",
+  "- **Do NOT** — No stock-footage handshakes.",
+  "",
+  "BLOCK DECK",
+  "Clip seconds: 10",
+  "",
+  "| # | Type | Description | Narration |",
+  "|---|------|-------------|-----------|",
+  "| 1 | AI | Founder at a desk | Most teams lose a full hour every day to inbox triage, and not one of them ever chose to spend it that way. |",
+  "| 2 | AI | Mail icons collapsing | Pikar reads the whole thread once, drafts the reply in your voice, and hands it back before the coffee cools. |",
+  "",
+  "BLOCK PROMPTS",
+  "",
+  "Block 1",
+  "Prompt: A founder at a desk in warm 45-degree light, 35mm grain",
+  "Block 2",
+  "Prompt: Abstract mail icons collapsing into a single card, bone background",
+].join("\n");
+
+const mediaArgs = (planId: Id<"plans">, over: Record<string, unknown> = {}) => ({
+  ...BASE,
+  planId,
+  route: "media",
+  question: "a 20-second reel about the launch",
+  media: true,
+  primary: [{ ...textStep(MEDIA_BODY), usage: SPEND_8_CENTS }],
+  ...over,
+});
+
+/** The row a media dispatch actually runs against — staged through `stageMediaPlan`, not a bare
+ *  `insertPlan`: `landSpecialistResult`'s CAS refuses anything that is not `collecting` + `memo`. */
+async function stagedMediaPlan(t: T): Promise<Id<"plans">> {
+  const staged = await t.mutation(internal.plans.stageMediaPlan, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    subject: "Reel",
+  });
+  if (!staged.ok) throw new Error(`staging refused: ${staged.reason}`);
+  return staged.planId;
+}
+
+const readJobs = (t: T) => t.run((ctx) => ctx.db.query("mediaJobs").collect());
+
+describe("20-08 — a media dispatch proposes a deck and spends nothing but tokens", () => {
+  test("the deck lands on the plan row: script, art direction, blocks with narration", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const res = ok(await t.action(internal.dispatch.__runSpecialistWithScript, mediaArgs(planId)));
+    expect(res.route).toBe("media");
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.clipSeconds).toBe(10);
+    expect(plan?.script).toContain("Six weeks, start to finish.");
+    expect(plan?.artDirection?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone"]);
+    expect(plan?.artDirection?.avoid).toContain("stock-footage handshakes");
+
+    expect(plan?.shots).toHaveLength(2);
+    expect(plan?.shots?.map((s) => s.index)).toEqual([0, 1]);
+    expect(plan?.shots?.map((s) => s.windowStartMs)).toEqual([0, 10_000]);
+    // Every block has a narration line — the voiceover has nothing to say without one.
+    expect(plan?.shots?.every((s) => s.narration.length > 0)).toBe(true);
+    // ...and the per-block PROMPT came from §4, not from a fallback to the description.
+    expect(plan?.shots?.[0]?.prompt).toContain("45-degree light");
+    expect(plan?.shots?.[1]?.prompt).toContain("bone background");
+  });
+
+  test("SC#3: the dispatched run inserts ZERO mediaJobs rows and never sets a render", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const before = await remaining(t);
+    await t.action(internal.dispatch.__runSpecialistWithScript, mediaArgs(planId));
+
+    // THE containment, stated as an absence. The specialist's grant is `searchVault` and there is
+    // no code path from here to a fal POST or a sandbox — the paid calls fire from cockpit.ts's
+    // `EXTERNAL_TARGETS.media` after the human Approve gate, and from nowhere else.
+    expect(await readJobs(t)).toHaveLength(0);
+    const plan = await readPlan(t, planId);
+    expect(plan?.renderStatus).toBeUndefined();
+    expect(plan?.renderStorageId).toBeUndefined();
+    // Tokens only — and the run DID spend, so the zero above is containment, not an inert run.
+    expect(await remaining(t)).toBeLessThan(before);
+  });
+
+  test("an unparseable body lands a REFUSAL naming the lever — never an empty deck", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const res = ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, {
+          primary: [
+            { ...textStep("I wrote some prose and forgot the table."), usage: SPEND_8_CENTS },
+          ],
+        }),
+      ),
+    );
+    expect(res.ok).toBe(true); // the RUN succeeded; only the deck did not parse
+
+    const plan = await readPlan(t, planId);
+    // An empty canvas that says `kind: "media"` is the one shape that looks like a successful
+    // proposal and is not. The row stays a memo and the body names the lever.
+    expect(plan?.kind).not.toBe("media");
+    expect(plan?.shots).toBeUndefined();
+    expect(plan?.body).toContain("never wrote a block deck");
+    expect(plan?.body).toContain("no_deck");
+
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_refused");
+    expect(audit).toHaveLength(1);
+    const payload = audit[0]?.payload as Record<string, unknown> | undefined;
+    expect(payload?.reason).toBe("no_deck");
+  });
+
+  test("an OVER-LENGTH narration is refused with the block and the count, and the text never leaks", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const long = "x".repeat(186);
+    const body = MEDIA_BODY.replace(
+      "Pikar reads the whole thread once, drafts the reply in your voice, and hands it back before the coffee cools.",
+      long,
+    );
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.shots).toBeUndefined();
+    expect(plan?.body).toContain("too long");
+    expect(plan?.body).toContain("Block 2"); // 1-based for the human, from a 0-based blockIndex
+
+    // Refs and COUNTS only (§4): the reason code, the block index and the character count. The
+    // narration text itself must appear NOWHERE in the audit plane.
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_refused");
+    const payload = audit[0]?.payload as Record<string, unknown>;
+    expect(payload.reason).toBe("narration_too_long");
+    expect(payload.blockIndex).toBe(1);
+    expect(payload.chars).toBe(186);
+    expect(JSON.stringify(await readLineage(t))).not.toContain(long);
+  });
+
+  test("persistDeck REFUSES an empty deck outright — the second lock on the same door", async () => {
+    // `dispatch.ts` never calls with an empty deck, and this proves the mutation would refuse one
+    // anyway. Without this the no-empty-deck property is only testable through the parser, and a
+    // future caller could write `shots: []` with nothing going red.
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const before = await readPlan(t, planId);
+
+    await t.mutation(internal.plans.persistDeck, {
+      tenantId: TENANT,
+      planId,
+      script: "s",
+      artDirection: null,
+      clipSeconds: 10,
+      shots: [],
+    });
+
+    expect(await readPlan(t, planId)).toEqual(before); // byte-identical row
+    expect((await readPlan(t, planId))?.kind).not.toBe("media");
+  });
+
+  test("persistDeck refuses a CROSS-TENANT write", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const before = await readPlan(t, planId);
+    await t.mutation(internal.plans.persistDeck, {
+      tenantId: "tenant_other",
+      planId,
+      script: "s",
+      artDirection: null,
+      clipSeconds: 10,
+      shots: [
+        {
+          index: 0,
+          type: "AI",
+          seconds: 10,
+          windowStartMs: 0,
+          description: "d",
+          prompt: "p",
+          narration: "n",
+        },
+      ],
+    });
+    expect(await readPlan(t, planId)).toEqual(before);
+  });
+
+  test("a body with no art direction still gets its DECK — a worse reel, not an unusable one", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = MEDIA_BODY.replace("- **Texture** — 35mm film grain over matte paper.", "");
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.shots).toHaveLength(2);
+    expect(plan?.artDirection).toBeUndefined();
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_persisted");
+    const payload = audit[0]?.payload as Record<string, unknown>;
+    expect(payload.hasArtDirection).toBe(false);
+    // COUNTS only — the two numbers a later mediaJobs batch is reconciled against.
+    expect(payload.blocks).toBe(2);
+    expect(payload.clipSeconds).toBe(10);
+  });
+});
+
+describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight reel", () => {
+  const restage = (t: T) =>
+    t.mutation(internal.plans.stageMediaPlan, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      subject: "Reel 2",
+    });
+
+  const seedJob = (t: T, planId: Id<"plans">, status: "submitted" | "succeeded") =>
+    t.run((ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: TENANT,
+        planId,
+        batchId: "b1",
+        blockIndex: 0,
+        provider: "fal" as const,
+        kind: "video" as const,
+        model: "fal-ai/wan-25-preview/text-to-video",
+        spec: { kind: "video" as const, resolution: "480p", seconds: 10 },
+        promptHash: "0".repeat(64),
+        status,
+        estUsd: 0.5,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    );
+
+  test("a plan with a LIVE media job is reel_in_flight — those clips are already paid for", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "media" }));
+    await seedJob(t, planId, "submitted"); // non-terminal: fal may still call back
+
+    const again = await restage(t);
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.reason).toBe("reel_in_flight");
+  });
+
+  test("a LIVE render is its OWN refusal — every job can be terminal while the sandbox runs", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // No mediaJobs rows at all: this is exactly the window the second check exists for.
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "media", renderStatus: "rendering" }));
+
+    const again = await restage(t);
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.reason).toBe("render_in_flight");
+  });
+
+  test("a FINISHED reel recycles — a terminal job and a rendered reel are not work in progress", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        kind: "media",
+        status: "proposed",
+        renderStatus: "rendered",
+        clipSeconds: 10,
+      }),
+    );
+    await seedJob(t, planId, "succeeded");
+
+    const again = await restage(t);
+    expect(again.ok).toBe(true);
+    // resetPlan ran: the previous deck AND the previous render plane are gone, either of which
+    // surviving would show under a brand-new proposal.
+    const plan = await readPlan(t, planId);
+    expect(plan?.clipSeconds).toBeUndefined();
+    expect(plan?.renderStatus).toBeUndefined();
+  });
+
+  test("the USER'S OWN email draft is protected — the MODEL is deciding here, not the user", async () => {
+    // `setup()` already inserts THIS thread's plan row, and `plans.by_thread` is `.unique()` —
+    // inserting a second one throws before the assertion can run.
+    const { t, planId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        recipients: ["sam@example.test"],
+        subject: "Half-written note to a client",
+        body: "Hi Sam,",
+      }),
+    );
+
+    const staged = await t.mutation(internal.plans.stageMediaPlan, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      subject: "Reel",
+    });
+    expect(staged.ok).toBe(false);
+    if (!staged.ok) expect(staged.reason).toBe("draft_in_progress");
+  });
+});
