@@ -1,6 +1,8 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-02 (20-07 — **the `externalAction` arm has TWO occupants and is no longer
+> Last verified: 2026-08-02 (connections-tab Task 1 — **the Google disconnect control has one writer.** The confirm copy and the partial-revoke branch (`revoked: false` → point the user at `myaccount.google.com/permissions`) moved out of `connect-gmail/page.tsx` into `apps/web/app/(app)/_components/DisconnectGoogle.tsx`; `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` and no longer calls `api.gmailAuth.disconnectGoogle` itself. No backend behaviour changed.)
+>
+> Prior: 2026-08-02 (20-07 — **the `externalAction` arm has TWO occupants and is no longer
 > calendar's.** `media` joined `ACTION_TYPES`; the arm body became `EXTERNAL_TARGETS` (one thunk per
 > type) plus a per-type pre-step; approving a media plan reserves the WHOLE reel in the same
 > transaction as the CAS. **The calendar path is behaviourally unchanged and there is a test that
