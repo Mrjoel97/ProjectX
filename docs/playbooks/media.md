@@ -1,7 +1,8 @@
 # Playbook: Media Canvas (finished reel)
 
-> Last verified: 2026-08-01 (20-01 — created. Rates re-read VENDOR-DIRECT from fal's own catalog
-> API on 2026-08-02; see `## Rate observation`.)
+> Last verified: 2026-08-02 (20-01 tasks 2+3 — `storyboard.ts` and `media.ts` shipped; the price
+> figures were re-read VENDOR-DIRECT from fal's catalog API the same day and are unchanged; the
+> `## Reconciliation` procedure below is now runnable, not a stub.)
 
 ## What this subsystem is
 
@@ -103,9 +104,40 @@ reads to a user as a broken feature.
 
 ## Reconciliation
 
-*(stub — 20-01 task 3 fills this with the runnable D5 procedure: the `convex run` command that sums
-`mediaJobs.actualCents` for a period against fal's invoice delta, plus the catalog-API diff against
-`media.fixtures.json`. Plan 20-11's owner-run live gate IS this procedure's first run.)*
+The D5 procedure. Two bullets, both runnable, both $0. Cadence: **at each phase close, and any time
+a price row is edited.** **Plan 20-11's owner-run live gate IS this procedure's first run.**
+
+**(a) Did we charge what we reserved?** Sum `mediaJobs.actualCents` for a period and compare against
+fal's own dashboard balance delta for the same period:
+
+```bash
+# from packages/backend — the convex CLI only resolves the deployment from there
+npx convex run media:spendForPeriod '{"sinceMs": 1754006400000, "untilMs": 1754611200000}'
+```
+
+Compare the returned `actualCents` total against fal's billing page for the same window. A gap
+means the table is wrong, not that the meter is wrong — the meter records what the provider
+reported. *(The query lands with plan 20-04; until then, read the rows directly:
+`npx convex run media:listJobs '{"planId": "<id>"}'`.)*
+
+**(b) Is the price table still the vendor's price?** Re-read fal's catalog API and diff it against
+the committed fixture:
+
+```bash
+curl -s "https://fal.ai/api/models?keywords=wan-25&page=1" \
+  | node -e "const j=JSON.parse(require('fs').readFileSync(0));for(const m of j.items)console.log(m.id,'|',m.status,'| deprecated:',m.deprecated,'| removed:',m.removed,'|',m.pricingInfoOverride)"
+# repeat for keywords=inworld, keywords=scribe, keywords=schnell
+# then diff the printed strings against packages/cost/src/media.fixtures.json
+```
+
+This is unauthenticated and free, and it is **also the endpoint-health check**: the same response
+carries `deprecated` / `removed` / `status`, which is the detection mechanism for the `-preview`
+rename risk below. Any change is a one-line table edit plus a fixture update — and
+`media.test.ts` fails until the two agree, so the edit cannot land half-done.
+
+**Known open item from the 2026-08-02 read:** FLUX schnell's **$0.003/megapixel is MEDIUM
+confidence** — the vendor publishes the rounding rule but no price string. The first invoice that
+includes an image generation resolves it.
 
 ## How to change this safely
 

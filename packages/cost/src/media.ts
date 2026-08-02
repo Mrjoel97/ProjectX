@@ -1,0 +1,199 @@
+/**
+ * @pikar/cost/media — the media JOB estimator (MEDIA-01). Pure TS, Convex-free (CLAUDE.md §1).
+ *
+ * Mirrors cost.ts shape for shape: every function returns Result, so an unknown model, an
+ * unpriceable duration or an over-cap job surfaces as Err (never NaN/undefined/throw) and the
+ * adapter stops the request before a cent moves.
+ *
+ * THE UNIT IS THE JOB, not the shot and not the clip. A whole reel — clips + voice + captions STT
+ * + the render — is priced and reserved as ONE number, because the reservation has to exist before
+ * any provider request does.
+ *
+ * Three containment rules this module exists to enforce:
+ *  1. Every table is keyed by the billing unit the vendor ACTUALLY charges on (submitted
+ *     characters, whole megapixels, video-seconds, input audio minutes). A model billed per
+ *     GENERATED output duration or per COMPUTE second cannot be reserved and is therefore refused
+ *     by construction — not by preference. `fal-ai/whisper` is out for that reason alone.
+ *  2. A resolution missing from a model's row is `unknown_model`, NEVER a fallback to another
+ *     tier. fal's Wan 2.5 default is 1080p, so a 480p estimate against a submit that omitted the
+ *     resolution under-reports by 3x.
+ *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
+ */
+import { err, ok, type Result } from "@pikar/core/result";
+import { CLIP_SECONDS } from "@pikar/core/storyboard";
+
+export type VideoRes = "480p" | "720p" | "1080p";
+
+/* ponytail: hand-maintained tables, sourced from fal's own catalog API on 2026-08-02
+ * (`https://fal.ai/api/models?keywords=…` — unauthenticated and machine-readable).
+ * `media.fixtures.json` pins those verbatim vendor strings and media.test.ts asserts these tables
+ * agree with them, so drift shows up as a diff rather than as a surprise invoice. Reconciliation is
+ * the manual procedure in docs/playbooks/media.md. Upgrade path if fal ever publishes a stable
+ * versioned price endpoint: fetch + cache it, and keep these tables as the fail-closed fallback. */
+
+/** USD per video-second, per resolution. */
+export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number>>> = {
+  "fal-ai/wan-25-preview/text-to-video": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
+};
+
+/** USD per WHOLE megapixel, rounded UP (the vendor's own billing rule). */
+export const MEDIA_IMAGE_PRICING: Record<string, number> = {
+  "fal-ai/flux/schnell": 0.003,
+};
+
+/** USD per 1000 SUBMITTED characters. Character billing is the REQUIREMENT, not a preference: the
+ *  job is reserved before any request exists, so a per-generated-second model cannot be priced. It
+ *  is also why `fal-ai/inworld-tts` wins over `fal-ai/kokoro/*` — kokoro exposes a 0.1–5.0 pace
+ *  knob, and a time-stretch lever is a live violation of D8's no-stretch rule that no test would
+ *  catch (delta pitfall 15). */
+export const MEDIA_TTS_PRICING: Record<string, number> = {
+  "fal-ai/inworld-tts": 0.01,
+};
+
+/** USD per INPUT audio MINUTE — estimable pre-flight because WE generated the audio and know its
+ *  window count. `fal-ai/whisper` is compute-second-billed and is therefore refused by
+ *  construction; "cheap in practice" is exactly the reasoning ADR-011 exists to forbid. */
+export const MEDIA_STT_PRICING: Record<string, number> = {
+  "fal-ai/elevenlabs/speech-to-text/scribe-v2": 0.008,
+};
+
+/** D10 — the ceiling on the WHOLE job: clips + voice + STT + render. Supersedes D4's
+ *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
+export const MEDIA_JOB_CAP_USD = 3.5;
+
+/* ponytail: a flat estimate, not metered per-render. Vercel does not expose per-sandbox billing at
+ * request time. The ceiling is that a pathological render could cost more than this constant; the
+ * upgrade path is `sandbox.usage` on the returned session object, reconciled in the manual D5
+ * procedure in docs/playbooks/media.md. */
+export const MEDIA_SANDBOX_USD_PER_RENDER = 0.02;
+
+/** 480p is pinned DELIBERATELY: never omit `resolution` on submit — fal defaults to 1080p and the
+ *  estimate would be 3x low. D10's cap arithmetic also REFUSES six blocks at 720p ($6.00+), so the
+ *  budget rail is simultaneously the render-duration rail: the sandbox never sees a resolution
+ *  whose encode time would change delta §2.4's numbers. */
+export const MEDIA_DEFAULT_VIDEO = {
+  model: "fal-ai/wan-25-preview/text-to-video",
+  resolution: "480p",
+  seconds: 10,
+} as const;
+
+export const MEDIA_DEFAULT_IMAGE = {
+  model: "fal-ai/flux/schnell",
+  width: 1080,
+  height: 1920,
+} as const;
+
+/** Voice and sample size are PINNED here, never left to a provider default: the vendor default is
+ *  48000 Hz, and 24000 halves the bytes that have to reach the render sandbox. The voice is a
+ *  member of the endpoint's closed enum. No pace/stretch parameter is submitted, ever. */
+export const MEDIA_DEFAULT_VOICE = {
+  model: "fal-ai/inworld-tts",
+  voice: "Evelyn (en)",
+  sampleRateHertz: 24000,
+} as const;
+
+export const MEDIA_DEFAULT_STT = {
+  model: "fal-ai/elevenlabs/speech-to-text/scribe-v2",
+} as const;
+
+export type MediaSpec =
+  | { kind: "video"; model: string; resolution: VideoRes; seconds: number }
+  | { kind: "image"; model: string; width: number; height: number }
+  | { kind: "tts"; model: string; characters: number }
+  | { kind: "stt"; model: string; audioMinutes: number }
+  | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
+  | { kind: "free" }; // SCREEN REC / TEXT — a block that costs nothing
+
+/** Three DISTINCT codes, because they send the user to three different levers:
+ *  - `unknown_model`     — nothing in the table prices this model+resolution. Fail closed.
+ *  - `over_job_cap`      — priced fine, but the reel is too big. Cut blocks or drop resolution.
+ *  - `illegal_duration`  — a submitted dimension that cannot be priced at all: a clip length
+ *                          outside {5,10}, or a non-finite/negative count. Collapsing this into
+ *                          `unknown_model` would lie about a model we price perfectly well. */
+export type MediaCostError = { code: "unknown_model" | "over_job_cap" | "illegal_duration" };
+
+const CLIP_SET = new Set<number>(CLIP_SECONDS);
+const counted = (...ns: number[]) => ns.every((n) => Number.isFinite(n) && n >= 0);
+
+/** Prices ONE line item in FRACTIONAL USD. Never floors, never rounds to cents — that happens
+ *  once, in chooseMediaBatch. */
+export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError> {
+  switch (spec.kind) {
+    case "video": {
+      const row = MEDIA_VIDEO_PRICING[spec.model];
+      if (!row) return err({ code: "unknown_model" });
+      if (!CLIP_SET.has(spec.seconds)) return err({ code: "illegal_duration" });
+      const perSecond = row[spec.resolution];
+      // A missing resolution is unknown_model — never a fallback to a cheaper tier.
+      if (perSecond === undefined) return err({ code: "unknown_model" });
+      return ok(perSecond * spec.seconds);
+    }
+    case "image": {
+      const perMegapixel = MEDIA_IMAGE_PRICING[spec.model];
+      if (perMegapixel === undefined) return err({ code: "unknown_model" });
+      if (!counted(spec.width, spec.height)) return err({ code: "illegal_duration" });
+      // Whole megapixels, rounded UP — the vendor's own billing rule, not our bias.
+      const megapixels = Math.ceil((spec.width * spec.height) / 1_000_000);
+      return ok(megapixels * perMegapixel);
+    }
+    case "tts": {
+      const perThousand = MEDIA_TTS_PRICING[spec.model];
+      if (perThousand === undefined) return err({ code: "unknown_model" });
+      if (!counted(spec.characters)) return err({ code: "illegal_duration" });
+      // NO rounding of the thousands: the vendor bills submitted characters, and rounding 1,200
+      // chars up to 2,000 would inflate every deck's voice line by ~66%.
+      return ok((spec.characters / 1000) * perThousand);
+    }
+    case "stt": {
+      const perMinute = MEDIA_STT_PRICING[spec.model];
+      if (perMinute === undefined) return err({ code: "unknown_model" });
+      if (!counted(spec.audioMinutes)) return err({ code: "illegal_duration" });
+      // Whole INPUT minutes, rounded up — the vendor's unit is a minute, so a 30-second reel still
+      // buys one. Fail-closed bias, and it is bounded: a whole extra minute is $0.008, 0.2% of the
+      // job cap. Deliberate deviation from the plan, which pinned only the exact 1-minute case.
+      return ok(Math.ceil(spec.audioMinutes) * perMinute);
+    }
+    case "render":
+      return ok(MEDIA_SANDBOX_USD_PER_RENDER);
+    case "free":
+      return ok(0);
+  }
+}
+
+/** Sums N line items in FRACTIONAL USD. Never floors. Never rounds. ANY member's Err propagates —
+ *  a job with one unpriceable line is not a cheaper job, it is a refused job. */
+export function estimateBatchUsd(specs: readonly MediaSpec[]): Result<number, MediaCostError> {
+  let usd = 0;
+  for (const spec of specs) {
+    const one = estimateMediaUsd(spec);
+    if (!one.ok) return one; // fail closed
+    usd += one.value;
+  }
+  return ok(usd);
+}
+
+/**
+ * The ONLY place cents are floored, and it happens ONCE, on the total.
+ *
+ * D12(a), and it is the point of this module. `chooseModel:134`'s `Math.max(1, Math.ceil(usd *
+ * 100))` is the right fail-closed bias for ONE line item and the WRONG one applied per item across
+ * a batch: six voice lines of $0.002 are $0.012 — 2 cents — but floored per line they reserve
+ * 6 cents. A 5x over-reservation on the cheapest part of the job, compounding with deck length and
+ * again when captions add a thirteenth line.
+ *
+ * Returns BOTH numbers because they live in different places: `mediaJobs.estUsd` stores the
+ * per-line estimate in fractional USD (plan 20-02), and only the batch's RESERVATION is expressed
+ * in cents (plan 20-04).
+ */
+export function chooseMediaBatch(
+  specs: readonly MediaSpec[],
+  capUsd: number,
+): Result<{ estUsd: number; estCents: number }, MediaCostError> {
+  const est = estimateBatchUsd(specs);
+  if (!est.ok) return est;
+  if (!Number.isFinite(capUsd) || capUsd <= 0 || est.value > capUsd) {
+    return err({ code: "over_job_cap" });
+  }
+  // Integer cents, fail-closed bias: a sub-cent job still costs 1 cent of budget. ONCE.
+  return ok({ estUsd: est.value, estCents: Math.max(1, Math.ceil(est.value * 100)) });
+}
