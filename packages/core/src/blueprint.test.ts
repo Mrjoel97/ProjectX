@@ -670,4 +670,17 @@ describe("profile Blueprint confirmation surface source contract", () => {
     expect(diffSource).toMatch(/>\s*Addition\s*</);
     expect(diffSource).toMatch(/>\s*Contradiction\s*</);
   });
+
+  // page.tsx (the stale-count badge) is NOT part of allSource above and legitimately uses
+  // --held for its color-mix background tint and --held-text for its text colour. This guard
+  // only stops --held itself from being spent as a text colour there (1.9:1 on light paper,
+  // fails WCAG — BRAND §2). It must NOT flag the color-mix background usage.
+  it("page.tsx never spends --held itself as a text colour (background tint via color-mix is fine)", () => {
+    const pageSource = readFileSync(
+      new URL("../../../apps/web/app/(app)/dashboard/profile/page.tsx", import.meta.url),
+      "utf8"
+    );
+    expect(pageSource.length).toBeGreaterThan(0);
+    expect(pageSource).not.toMatch(/color:\s*["']?var\(\s*--held\s*\)/i);
+  });
 });

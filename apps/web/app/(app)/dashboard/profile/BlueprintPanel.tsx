@@ -299,11 +299,18 @@ function SegmentDetail({
     <section id={`segment-detail-${segment.id}`} style={{ display: "grid", gap: "0.65rem", paddingTop: "0.85rem", borderTop: "1px solid var(--rule)" }}>
       <h3 style={{ ...label, margin: 0 }}>{segment.label}</h3>
 
-      {populated.length === 0 && (
+      {segment.fields.length === 0 ? (
         <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-          Nothing here yet. Add documents to your vault and rebuild, and anything they say about
-          this part of the business will land here.
+          Not tracked yet. This part of the business isn't wired into the blueprint, so rebuilding
+          won't change what's shown here.
         </p>
+      ) : (
+        populated.length === 0 && (
+          <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
+            Nothing here yet. Add documents to your vault and rebuild, and anything they say about
+            this part of the business will land here.
+          </p>
+        )
       )}
 
       {populated.map((blueprintField) => {
