@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { type BusinessProfile } from "@pikar/core";
 import { useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlueprintPanel } from "./BlueprintPanel";
 import { NarrativePanel } from "./NarrativePanel";
 import { ShapePanel } from "./ShapePanel";
@@ -86,6 +86,13 @@ export default function ProfilePage() {
   const staleCount =
     blueprintState?.state === "live_stale" ? blueprintState.unincorporatedCount : 0;
 
+  // Roving-tabindex fix: changing a button's `tabIndex` to -1 does not move DOM focus off it, so
+  // arrow-key navigation must move focus itself or a subsequent Tab press exits the tablist instead
+  // of landing in the new panel. Click already focuses the clicked button natively, so this ref is
+  // only consulted on the keyboard path. The map is a ref (not state) so re-renders never lose the
+  // button elements it points at.
+  const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement>>>({});
+
   if (current === undefined || tab === null || (current && !profile)) {
     return (
       <div style={page}>
@@ -146,7 +153,9 @@ export default function ProfilePage() {
           e.preventDefault();
           const i = TABS.findIndex((t) => t.id === tab);
           const next = TABS[(i + delta + TABS.length) % TABS.length];
-          if (next) selectTab(next.id);
+          if (!next) return;
+          selectTab(next.id);
+          tabRefs.current[next.id]?.focus();
         }}
       >
         {TABS.map((t) => {
@@ -154,6 +163,9 @@ export default function ProfilePage() {
           return (
             <button
               key={t.id}
+              ref={(el) => {
+                if (el) tabRefs.current[t.id] = el;
+              }}
               type="button"
               role="tab"
               id={`tab-${t.id}`}
