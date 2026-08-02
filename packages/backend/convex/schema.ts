@@ -867,7 +867,66 @@ export default defineSchema({
     // Why not infer from (source, kind): `source` is v.string() and vault.ts:126 casts a PUBLIC
     // arg to it unchecked; 4 of 11 insert sites already store out-of-union values; `kind` grows
     // every phase. Provenance needs its own discriminator.
-    origin: v.optional(v.union(v.literal("agent"), v.literal("agent_promoted"))),
+    // Phase-15.3 (VALT-09): "folder_digest" ⇒ the synthesised folder-level digest.
+    // ⚠ THIS LITERAL IS INERT. It excludes nothing and it includes nothing. There is ZERO `origin`
+    // predicate anywhere in retrieval — the `origin: "agent"` exclusion above is the ABSENT
+    // `startIngest` call (`vault.ts:627-634`), not a filter. A digest is groundable ONLY because
+    // its insert calls `startIngest`; forget that call and the digest is silently ungroundable
+    // while every test asserting `origin === "folder_digest"` still passes. THE OBSERVABLE CHECK
+    // IS `ragEntryId != null`, never the literal. Do NOT add an origin-based filter anywhere.
+    // The one consumer, `patchCreatedDoc`'s `doc.origin !== "agent"` guard (`vault.ts:723`),
+    // already refuses non-"agent" and therefore correctly makes a digest un-revisable — that is
+    // right as it stands; do not "fix" it.
+    origin: v.optional(
+      v.union(v.literal("agent"), v.literal("agent_promoted"), v.literal("folder_digest")),
+    ),
+    // Phase-15.3 (VALT-05, VALT-07, VALT-11). ABSENT ⇒ folder-less ⇒ EXACTLY today's behaviour:
+    // zero backfill, zero migration, and every shipped read is unchanged for every existing row.
+    // Cancel DELETES the `vaultFolders` row (see that table's decision 1), so this id can dangle —
+    // an unresolvable folderId means "no folder", never "missing folder", at every read site.
+    // ⚠ NEVER `.collect()` ON `by_tenant_folder`. Rows carry `text` up to 400k chars, so ~40
+    // max-size rows exhaust the 16 MiB per-transaction read cap. Drill-in and the stale
+    // set-difference use a bounded `.take()` and project `text` away — `ownedDocsMeta`
+    // (`vault.ts:438`) is the shipped refs-only precedent.
+    folderId: v.optional(v.id("vaultFolders")),
+    // Phase-15.3 (VALT-12): the machine-derived document type. A `v.union` AND NOT `v.string()`
+    // ON PURPOSE — `category` next door is `v.string()` and the table's own comment records that 4
+    // of 11 insert sites already store out-of-union values. A `v.string()` docType inherits that
+    // rot and reintroduces the string-matching defect class Phase 15.1 was built to eliminate.
+    // Every future member costing a schema edit IS THE POINT, not a problem. Literals are kept
+    // identical to `DOC_TYPES` in `@pikar/core`; the compile bridge that makes drift a typecheck
+    // failure lives beside the classifier. `unclassified` is the explicit no-match member — a
+    // document matching nothing is never forced to a nearest match. ABSENT ⇒ never classified
+    // (every pre-15.3 row), which is distinct from `"unclassified"` ⇒ classified and unplaceable.
+    docType: v.optional(
+      v.union(
+        v.literal("pnl"),
+        v.literal("balance_sheet"),
+        v.literal("cash_flow"),
+        v.literal("invoice"),
+        v.literal("contract"),
+        v.literal("policy"),
+        v.literal("deck"),
+        v.literal("report"),
+        v.literal("plan"),
+        v.literal("correspondence"),
+        v.literal("spreadsheet_other"),
+        v.literal("unclassified"),
+      ),
+    ),
+    // The human-readable identity line — "2025 P&L", not "a spreadsheet". Free text, displayed by
+    // the grid and the preview; the closed `docType` above is what anything downstream filters on.
+    identityLine: v.optional(v.string()),
+    // ABSENT/false ⇒ machine-set. true ⇒ THE USER TYPED IT, and NO CODE PATH MAY EVER OVERWRITE
+    // `docType`/`identityLine` on that row — the label feeds the digest and grounding, so a wrong
+    // guess left standing is a permanent lie in the grounding corpus. There is deliberately no
+    // `docTypeSource` union: one boolean is the whole decision, and a union invites a third state
+    // nobody defined.
+    identityUserSet: v.optional(v.boolean()),
+    // Phase-15.3 (VALT-13): the Drive rail's re-import primary key + change detection. Only the
+    // Drive import writes them; every other insert site leaves both absent.
+    driveFileId: v.optional(v.string()),
+    driveModifiedTime: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse
@@ -886,6 +945,14 @@ export default defineSchema({
     // `text` blob — which blew the 1s query budget once a tenant's vault grew past a handful of
     // documents. Narrowing to (tenantId, kind) turns it into a read of the profile docs alone.
     .index("by_tenant_kind", ["tenantId", "kind"])
+    // Phase-15.3. Serves BOTH the drill-in listing and the digest's stale set-difference, which is
+    // why there is no separate `by_tenant_folder_status` — completion is counted on the folder row
+    // (§2.5), never by a status query. ⚠ Read it with a bounded `.take()` and project `text` away;
+    // see the `folderId` comment above for why a `.collect()` here is a 16 MiB read-cap fault.
+    .index("by_tenant_folder", ["tenantId", "folderId"])
+    // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
+    // this tenant?" — answered without scanning the partition.
+    .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
