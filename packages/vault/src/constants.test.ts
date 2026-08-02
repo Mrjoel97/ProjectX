@@ -1,6 +1,11 @@
-// The graph-extraction input cap. Pure — no convex-test, no fixtures.
+// The graph-extraction input cap + the vault read bound. Pure — no convex-test, no fixtures.
 import { describe, expect, test } from "vitest";
-import { capGraphText, GRAPH_EXTRACT_CHAR_CAP } from "./constants";
+import {
+  capGraphText,
+  GRAPH_EXTRACT_CHAR_CAP,
+  VAULT_GRID_PAGE,
+  VAULT_GRID_READ_BUDGET_BYTES,
+} from "./constants";
 import { VAULT_EXTRACT_CHAR_CAP } from "./extractKind";
 
 describe("GRAPH_EXTRACT_CHAR_CAP", () => {
@@ -35,5 +40,22 @@ describe("capGraphText", () => {
 
   test("empty text stays empty", () => {
     expect(capGraphText("")).toBe("");
+  });
+});
+
+// The 15.3-02 read bound. Again the RELATIONSHIP is the point: a vaultDocuments row carries up to
+// VAULT_EXTRACT_CHAR_CAP chars of `text`, Convex has no projection, and the per-transaction read
+// cap is 16 MiB. So the byte budget must leave room for at least one max-size row to land on top
+// of it, and it must be the bound that bites first on large documents — a row cap alone would let
+// VAULT_GRID_PAGE × VAULT_EXTRACT_CHAR_CAP (~80 MB) through, which IS the defect this replaced.
+describe("the vault read bound", () => {
+  const READ_CAP_BYTES = 16 * 1024 * 1024;
+
+  test("the byte budget plus one max-size row still fits the 16 MiB transaction read cap", () => {
+    expect(VAULT_GRID_READ_BUDGET_BYTES + VAULT_EXTRACT_CHAR_CAP).toBeLessThan(READ_CAP_BYTES);
+  });
+
+  test("a row cap alone would NOT bound the read — which is why the byte budget exists", () => {
+    expect(VAULT_GRID_PAGE * VAULT_EXTRACT_CHAR_CAP).toBeGreaterThan(READ_CAP_BYTES);
   });
 });

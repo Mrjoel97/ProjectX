@@ -37,10 +37,30 @@ describe("isSearchable — Phase-5 searchable format set", () => {
 });
 
 describe("constants", () => {
-  it("VAULT_FILE_CAP_BYTES is a positive integer; GRAPH_HOP_CAP === 2", async () => {
+  // "a positive integer" was the whole assertion here until 15.3-02 — which meant the
+  // 100 MiB → 200 MB raise would have broken nothing and been silently unverified. A cap that
+  // nothing pins is a cap nothing notices changing.
+  it("VAULT_FILE_CAP_BYTES is exactly 200 MB (decimal — the way the copy reads it)", async () => {
     const { VAULT_FILE_CAP_BYTES, GRAPH_HOP_CAP } = await import("./constants");
-    expect(Number.isInteger(VAULT_FILE_CAP_BYTES)).toBe(true);
-    expect(VAULT_FILE_CAP_BYTES).toBeGreaterThan(0);
+    expect(VAULT_FILE_CAP_BYTES).toBe(200 * 1000 * 1000);
     expect(GRAPH_HOP_CAP).toBe(2);
+  });
+
+  // THE RELATIONSHIP, not either number. VAULT_VIDEO_CAP_BYTES is bounded by the transcription
+  // API's hard 25 MB limit (vaultTranscribe.ts:43) — NOT by our storage — so it must NOT track the
+  // file cap. Anyone raising the file cap and "tidying" the video cap up to match breaks every
+  // video upload at the API, not here.
+  it("the video cap stays strictly BELOW the file cap (it is the API's number, not ours)", async () => {
+    const { VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } = await import("./constants");
+    expect(VAULT_VIDEO_CAP_BYTES).toBe(25 * 1000 * 1000);
+    expect(VAULT_VIDEO_CAP_BYTES).toBeLessThan(VAULT_FILE_CAP_BYTES);
+  });
+
+  // The formatter has to agree with the constants, or the product says 190.7 MB where the cap
+  // says 200 MB — the exact class of drift this phase deleted five copies of.
+  it("capMB renders each cap the way the product speaks it", async () => {
+    const { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } = await import("./constants");
+    expect(capMB(VAULT_FILE_CAP_BYTES)).toBe("200 MB");
+    expect(capMB(VAULT_VIDEO_CAP_BYTES)).toBe("25 MB");
   });
 });
