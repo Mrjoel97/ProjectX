@@ -21,6 +21,7 @@ import { estimateMediaUsd } from "@pikar/cost/media";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
 import { rateLimiter } from "./guardrails";
@@ -159,6 +160,60 @@ function resolutionRef(row: Doc<"mediaJobs">, actual: Actual | undefined): strin
  * moderation field. Rendering it as a pass would be a compliance claim fal never made. Do not add a
  * fifth value meaning "probably fine".
  */
+/**
+ * THE RENDER TRIGGER (plan 20-16) — and it is a deliberate REFUSAL of the delta's chain design.
+ *
+ * Delta §6.7 N4 described *"a post-approve chain: reserve → submit → wait-for-all-landed → render"*,
+ * and plan 20-07 left a hand-off to re-point `EXTERNAL_TARGETS.media` at a chain entry action.
+ * **There is no chain.** `landResult` already runs on every arrival, already holds the batch id, and
+ * already runs inside a serializable mutation — so "wait for all" is this function, and the
+ * `pending → rendering` transition IS the once-only guard. Two concurrent last-landings cannot both
+ * observe `pending`, so they cannot both schedule a render, and a double render is a double sandbox.
+ *
+ * `stt` is deliberately NOT renderable: captions are a POST-assembly step (D8) submitted after
+ * `final.mp4` exists (20-17), so a pending STT line must not hold the reel hostage.
+ *
+ * ponytail: an O(batch) read on every landing — 13 rows, indexed, once per arrival. The ceiling is a
+ * reel with hundreds of blocks, which D10's job cap refuses long before it matters. Upgrade path if
+ * that ever changes: a landed-count on the plan row, incremented in the same mutation.
+ */
+async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
+  const plan = await ctx.db.get(row.planId);
+  // The GUARD. Anything other than `pending` means either the render has already been started by a
+  // sibling landing, or this batch was never approved for one.
+  if (plan?.renderStatus !== "pending") return;
+
+  const siblings = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_batch", (q) => q.eq("tenantId", row.tenantId).eq("batchId", row.batchId))
+    .collect();
+  const renderable = siblings.filter(
+    (s) => s.kind === "video" || s.kind === "image" || s.kind === "tts",
+  );
+  if (renderable.length === 0) return;
+  // Still in flight — this is not the LAST landing.
+  if (renderable.some((s) => s.status === "queued" || s.status === "submitted")) return;
+
+  if (renderable.every((s) => s.status === "succeeded")) {
+    await ctx.db.patch(row.planId, { renderStatus: "rendering" });
+    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
+      tenantId: row.tenantId,
+      batchId: row.batchId,
+    });
+    return;
+  }
+
+  // A sibling failed or was blocked and nothing is still in flight. **Do not start a render that
+  // will produce a reel with a missing block** — D8's fixed-window contract makes a missing clip a
+  // HARD ERROR, so this render is already known to fail, and finding that out in the sandbox costs
+  // a sandbox. The canvas can say `incomplete_batch` in words instead.
+  await ctx.db.patch(row.planId, {
+    renderStatus: "failed",
+    renderReason: "incomplete_batch",
+    renderedAt: Date.now(),
+  });
+}
+
 export const landResult = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -210,6 +265,7 @@ export const landResult = internalMutation({
     const landFailure = async (code: string) => {
       await ctx.db.patch(jobId, { status: "failed", failureReason: code, updatedAt });
       await audit({ failureReason: code });
+      await maybeStartRender(ctx, row);
       return null;
     };
 
@@ -288,6 +344,7 @@ export const landResult = internalMutation({
     // of a depth-tracking parser — the code bends to make the guard cheap, not the other way round.
     const resolution = resolutionRef(row, outcome.actual);
     await audit({ assetHash: outcome.assetHash, verdict, actualCents, reconciled, resolution });
+    await maybeStartRender(ctx, row);
     return null;
   },
 });

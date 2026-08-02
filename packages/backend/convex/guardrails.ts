@@ -293,17 +293,26 @@ export const remainingDailyCents = internalQuery({
  * Explicit `Promise<number>` return type is mandatory — an inferred one collapses the generated
  * API to `any` (13-01 shipped 90 `apps/web` errors that way).
  */
+/** The plain-function face, so a `tenantQuery` can read it — a Convex query cannot `runQuery`, and
+ *  plan 20-09's `jobEstimate` must show today's remaining budget beside the estimate. The
+ *  `reserveJobInner` / `reserveJob` split, for the same reason. */
+export async function mediaRemainingCentsInner(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<number> {
+  const tenant = Math.max(
+    0,
+    (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
+  );
+  const deployment = Math.max(
+    0,
+    (await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value,
+  );
+  return Math.min(tenant, deployment);
+}
+
 export const mediaRemainingCents = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (ctx, { tenantId }): Promise<number> => {
-    const tenant = Math.max(
-      0,
-      (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
-    );
-    const deployment = Math.max(
-      0,
-      (await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value,
-    );
-    return Math.min(tenant, deployment);
-  },
+  handler: async (ctx, { tenantId }): Promise<number> =>
+    await mediaRemainingCentsInner(ctx, tenantId),
 });

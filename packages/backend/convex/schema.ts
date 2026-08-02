@@ -356,6 +356,19 @@ export default defineSchema({
      *  file names and can echo narration text straight into a stored field (§4). */
     renderReason: v.optional(v.string()),
     renderedAt: v.optional(v.number()),
+    /** The sidecar's own facts, parsed ONCE at the render terminal and persisted (20-09). The
+     *  canvas needs the duration and the gate list to say in words what was proven, and a query
+     *  cannot read a blob — `ctx.storage` in a query is a `StorageReader` with `getUrl` and
+     *  nothing else. Writing it here also means the sidecar is parsed once per render rather than
+     *  once per canvas subscription tick. Set ONLY on the success arm, beside the two storage ids,
+     *  so its presence carries the same guarantee they do. */
+    renderSummary: v.optional(
+      v.object({
+        durationS: v.number(),
+        blockCount: v.number(),
+        gates: v.array(v.string()),
+      }),
+    ),
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).

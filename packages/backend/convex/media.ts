@@ -20,8 +20,15 @@
  * precedent). The tenant-facing canvas surface is plan 20-09's and uses the lib/functions.ts
  * wrappers (CLAUDE.md §2).
  */
-import type { Block } from "@pikar/core/storyboard";
-import { CLIP_SECONDS, isPaidBlock, maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
+import type { Block, ShotType } from "@pikar/core/storyboard";
+import {
+  CLIP_SECONDS,
+  isPaidBlock,
+  MAX_CHARS_PER_BLOCK,
+  maxCharsFor,
+  minCharsFor,
+  SHOT_TYPES,
+} from "@pikar/core/storyboard";
 import type { MediaSpec } from "@pikar/cost/media";
 import {
   chooseMediaBatch,
@@ -34,10 +41,11 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
-import { getGuardrailConfig, rateLimiter } from "./guardrails";
+import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
 /** Every way a job can be refused BEFORE a cent moves. Distinct codes because they send the user
@@ -47,6 +55,7 @@ export type ReserveRefusal =
   | "unknown_model"
   | "over_job_cap"
   | "illegal_duration"
+  | "unrenderable_block"
   | "narration_too_long"
   | "narration_too_short"
   | "media_daily_exhausted"
@@ -108,6 +117,29 @@ export async function reserveJobInner(
   const minChars = minCharsFor(a.clipSeconds);
   const maxChars = maxCharsFor(a.clipSeconds);
   for (const block of a.blocks) {
+    // 3a. CAN THIS DECK EVEN BECOME A REEL? An unpaid block gets NO video line (see the
+    //     `isPaidBlock` branch below), so nothing ever writes its `blockNN.mp4` — and
+    //     `assemble_final.sh` discovers inputs BY INDEX and hard-errors on a missing clip. A deck
+    //     containing one would sail through this gate, spend real money on its AI blocks, and then
+    //     be unable to assemble anything at all.
+    //
+    //     **That is why this check is HERE and not at the render.** `renderReel.batchToRender`
+    //     also refuses it (`incomplete_blocks`), but by then the clips are bought. This is the
+    //     same rule the narration band below is placed by: a condition that makes a render
+    //     impossible must be caught UPSTREAM of the reservation, never downstream of it.
+    //
+    //     `storyboard.ts`'s PAID table calls TEXT "rendered by the assembler" and SCREEN REC "an
+    //     instruction to the human". Neither is true of the assembler this repo actually harvested
+    //     (20-13), which has no title-card path and no upload path. Until one exists, the honest
+    //     behaviour is a free, loud refusal rather than a promise the renderer cannot keep.
+    //
+    //     ponytail: refuse, rather than build a title card. The ceiling is that a deck mixing an
+    //     AI block with a TEXT card cannot be made at all; the upgrade path is a `drawtext` branch
+    //     in `assemble_final.sh` for a clipless index (the font is ALREADY baked into the sandbox
+    //     snapshot for 20-17), plus a regenerated mirror and its byte-identity drift test — at
+    //     which point THIS guard narrows to "unpaid AND no overlay text" instead of disappearing.
+    if (!isPaidBlock(block)) return { ok: false, reason: "unrenderable_block" };
+
     if (block.narration.length < minChars) return { ok: false, reason: "narration_too_short" };
     if (block.narration.length > maxChars) return { ok: false, reason: "narration_too_long" };
   }
@@ -456,7 +488,7 @@ export const listJobs = internalQuery({
 /** The `gmailAuth.requireEnv` IDIOM with a media-worded message — a "Gmail OAuth env not
  *  configured" throw on a fal submit sends an operator to the wrong runbook. Both media secrets are
  *  DEPLOYMENT env vars (`npx convex env set`), never `.env.local`. */
-function requireEnvMedia(name: string): string {
+export function requireEnvMedia(name: string): string {
   const val = process.env[name];
   if (!val) throw new Error(`Media env not configured: ${name}`);
   return val;
@@ -813,5 +845,555 @@ export const submitBatch = internalAction({
       else tally.failed += 1;
     }
     return tally;
+  },
+});
+
+// ── The CANVAS plane (plan 20-09) ──────────────────────────────────────────────────────────────
+//
+// What the canvas reads, what it may spend, and what it may edit for free.
+//
+// D7's binding rule — *"the editor must not offer a control that can spend money without showing
+// the estimate first"* — is a BACKEND requirement before it is a UI one, which is why `jobEstimate`
+// lives here and itemises. A UI that computed its own total and a rail that computed another is
+// exactly the drift this phase exists to prevent, so `jobEstimate` builds the SAME spec list
+// `reserveJobInner` builds, from the SAME price table, and a test asserts the two numbers are equal
+// rather than eyeballing them.
+//
+// CLAUDE.md §2: every function below is a `tenantQuery`/`tenantMutation` from `lib/functions.ts`.
+// READS return `[]`/null for a foreign tenant; WRITES throw (`cockpit.ts:531`'s rule).
+
+/** The owning plan, or null when the caller is not its tenant. ONE guard, so a new canvas function
+ *  cannot accidentally ship without it. */
+async function ownedPlan(
+  ctx: QueryCtx,
+  planId: Id<"plans">,
+  tenantId: string,
+): Promise<Doc<"plans"> | null> {
+  const plan = await ctx.db.get(planId);
+  return plan && plan.tenantId === tenantId ? plan : null;
+}
+
+/** The write-side face of the same guard. Writes THROW where reads return empty — the
+ *  `cockpit.ts:531` no-cross-tenant rule, verbatim, including the message. */
+async function ownedPlanOrThrow(
+  ctx: MutationCtx,
+  planId: Id<"plans">,
+  tenantId: string,
+): Promise<Doc<"plans">> {
+  const plan = await ctx.db.get(planId);
+  if (!plan || plan.tenantId !== tenantId) throw new Error("plan not found");
+  return plan;
+}
+
+/**
+ * CLEAR THE RENDER. **One helper, six callers**, and that is deliberate: six copies of a four-field
+ * unset is exactly how one of them ends up missing a field, and the guarantee it enforces — a
+ * canvas can never show a stale `final.mp4` beside a block that has since changed — is the kind of
+ * lie a user would only discover by watching the whole reel.
+ *
+ * Convex unsets a field by patching it to `undefined`.
+ */
+async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void> {
+  await ctx.db.patch(planId, {
+    renderStatus: "pending",
+    renderStorageId: undefined,
+    sidecarStorageId: undefined,
+    sidecarHash: undefined,
+    renderReason: undefined,
+    renderedAt: undefined,
+    // Added when `renderSummary` was — and the test for this helper caught its absence, which is
+    // the exact "six copies, one of them missing a field" failure the helper exists to prevent.
+    renderSummary: undefined,
+  });
+}
+
+/** The deck as `reserveJobInner` wants it, or null when the plan carries nothing reservable. The
+ *  `cockpit.ts:668` boundary check verbatim — a money gate does not assume its writer was correct. */
+function deckOf(plan: Doc<"plans">): readonly Block[] | null {
+  const shots = plan.shots ?? [];
+  if (shots.length === 0 || plan.clipSeconds === undefined) return null;
+  if (!shots.every((s) => (SHOT_TYPES as readonly string[]).includes(s.type))) return null;
+  return shots.map((s) => ({ ...s, type: s.type as ShotType }));
+}
+
+/** One `mediaJobs` row reduced to what a tile shows. NO url — that is `assetUrls`' job alone. */
+type JobFace = {
+  status: string;
+  verdict: string | null;
+  model: string;
+  estUsd: number;
+  actualCents: number | null;
+};
+
+const faceOf = (row: Doc<"mediaJobs"> | undefined): JobFace | null =>
+  row
+    ? {
+        status: row.status,
+        verdict: row.verdict ?? null,
+        model: row.model,
+        estUsd: row.estUsd,
+        actualCents: row.actualCents ?? null,
+      }
+    : null;
+
+/**
+ * One entry PER BLOCK, carrying TWO INDEPENDENT STATES.
+ *
+ * A block whose voice has landed but whose clip has not must be distinguishable from one where the
+ * reverse is true — a single merged status cannot express that, and the two arrive minutes apart
+ * through two different providers' webhooks. The tile shows both.
+ *
+ * No URL here by construction: `assetUrls` is the only read that mints a bearer capability, and a
+ * query that mints one should be the smallest possible surface.
+ */
+export const byPlan = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return [];
+
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
+      .collect();
+
+    const maxChars = plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
+    return (plan.shots ?? []).map((shot) => {
+      // The job's OWN blockIndex is authoritative, never the array position — see the reorder
+      // ceiling on `reorderBlocks`.
+      const mine = rows.filter((r) => r.blockIndex === shot.index);
+      return {
+        blockIndex: shot.index,
+        type: shot.type,
+        description: shot.description,
+        overlay: shot.overlay ?? null,
+        prompt: shot.prompt,
+        narration: shot.narration,
+        narrationChars: shot.narration.length,
+        maxChars,
+        overCharLimit: shot.narration.length > maxChars,
+        clip: faceOf(mine.find((r) => r.kind === "video")),
+        voice: faceOf(mine.find((r) => r.kind === "tts")),
+      };
+    });
+  },
+});
+
+/**
+ * The per-asset signed URLs.
+ *
+ * **A storage URL is a BEARER CAPABILITY**, so it is ONLY ever returned from this tenant-guarded
+ * query and NEVER logged (CLAUDE.md §4) — `plans.attachmentUrls`' header comment, carried across
+ * because the rule is the reason this query exists. A caller whose identity ≠ `plan.tenantId` gets
+ * an empty array, never another tenant's signed URL.
+ *
+ * A line with no asset yet yields a NULL url rather than an omitted row: the canvas needs to render
+ * a pending tile, and an absent row and a pending one are different things.
+ */
+export const assetUrls = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return [];
+
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
+      .collect();
+
+    return await Promise.all(
+      rows.map(async (r) => ({
+        blockIndex: r.blockIndex,
+        kind: r.kind,
+        mimeType: r.mimeType ?? null,
+        status: r.status,
+        verdict: r.verdict ?? null,
+        url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
+      })),
+    );
+  },
+});
+
+/**
+ * The finished reel.
+ *
+ * **A `url` is non-null ONLY when the sidecar validated.** That is the guarantee this query exists
+ * to make: D8's rule is *"a final video without an assembly.json was hand-assembled"*, so a render
+ * that produced no valid governance record produces no reel here either — even if
+ * `renderStorageId` is set.
+ *
+ * `gates` and `durationS` come back as DATA, not prose. The wording lives in the canvas (20-10),
+ * because BRAND copy is a UI concern; what lives here is the guarantee about the url.
+ */
+export const reel = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const empty = {
+      status: null as string | null,
+      url: null as string | null,
+      durationS: null as number | null,
+      blockCount: null as number | null,
+      gates: [] as string[],
+      reason: null as string | null,
+    };
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return empty;
+
+    const base = { ...empty, status: plan.renderStatus ?? null, reason: plan.renderReason ?? null };
+
+    // **THE URL GUARANTEE, and where it actually comes from.** `renderSummary` is written by
+    // `recordRender` ONLY on the success arm, in the same patch as the two storage ids, and ONLY
+    // after `parseAssemblySidecar` accepted the bytes that landed in our storage. So requiring all
+    // four here is requiring the sidecar to have validated — the check is at the WRITE, which is
+    // the only place it can be, because `ctx.storage` in a query is a `StorageReader` with `getUrl`
+    // and no way to read a blob at all.
+    if (
+      plan.renderStatus !== "rendered" ||
+      !plan.renderStorageId ||
+      !plan.sidecarStorageId ||
+      !plan.renderSummary
+    ) {
+      return base;
+    }
+
+    return {
+      ...base,
+      url: await ctx.storage.getUrl(plan.renderStorageId),
+      durationS: plan.renderSummary.durationS,
+      blockCount: plan.renderSummary.blockCount,
+      gates: [...plan.renderSummary.gates],
+    };
+  },
+});
+
+/** One itemised cost line, as the canvas prints it. */
+type EstimateLine = { label: string; qty: number; unit: string; cents: number };
+
+/**
+ * THE ITEMISED ESTIMATE — four labelled lines, not one total.
+ *
+ * D7 says the estimate must be on screen before the button is clickable; the re-scope makes that a
+ * harder requirement, because the thing being bought is no longer "N clips" but a reel with four
+ * cost lines. **A single total is not enough: the user must be able to see WHICH line is the
+ * expensive one before deciding to cut a block.**
+ *
+ * It reuses `chooseMediaBatch` and builds the SAME spec list `reserveJobInner` builds — including
+ * the 2× voice multiplier and the flat render constant — so the number on screen and the number
+ * the rail consumes cannot drift. `media.test.ts` asserts they are equal for the same deck.
+ *
+ * **This query consumes NOTHING.** It is a query and cannot.
+ */
+export const jobEstimate = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<{
+    lines: EstimateLine[];
+    totalCents: number;
+    capCents: number;
+    remainingCents: number;
+    refusal: { reason: ReserveRefusal; blockIndex?: number; chars?: number } | null;
+  }> => {
+    const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
+    const remainingCents = await mediaRemainingCentsInner(ctx, ctx.tenantId);
+    const empty = { lines: [], totalCents: 0, capCents, remainingCents, refusal: null };
+
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return empty;
+    const blocks = deckOf(plan);
+    const clipSeconds = plan.clipSeconds;
+    if (!blocks || clipSeconds === undefined) return empty;
+
+    // The SAME pre-flight refusals `reserveJobInner` applies, in the same order, so the canvas can
+    // name the lever BEFORE the button is pressed rather than after.
+    if (!CLIP_SECONDS_SET.has(clipSeconds)) {
+      return { ...empty, refusal: { reason: "illegal_duration" } };
+    }
+    for (const b of blocks) {
+      if (!isPaidBlock(b)) {
+        return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: b.index } };
+      }
+      if (b.narration.length > maxCharsFor(clipSeconds)) {
+        return {
+          ...empty,
+          refusal: {
+            reason: "narration_too_long",
+            blockIndex: b.index,
+            chars: b.narration.length,
+          },
+        };
+      }
+      if (b.narration.length < minCharsFor(clipSeconds)) {
+        return {
+          ...empty,
+          refusal: {
+            reason: "narration_too_short",
+            blockIndex: b.index,
+            chars: b.narration.length,
+          },
+        };
+      }
+    }
+
+    const specs: MediaSpec[] = [];
+    let clipCount = 0;
+    let voiceChars = 0;
+    for (const b of blocks) {
+      if (isPaidBlock(b)) {
+        clipCount += 1;
+        specs.push({
+          kind: "video",
+          model: MEDIA_DEFAULT_VIDEO.model,
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: clipSeconds,
+        });
+      }
+      const characters = b.narration.length * 2; // the 2x rewrite allowance, as reserved
+      voiceChars += characters;
+      specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
+    }
+    const audioMinutes = (blocks.length * clipSeconds) / 60;
+    specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+    specs.push({ kind: "render" });
+
+    const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+    if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
+
+    /** A line's own subtotal, rounded ONCE for display. The authoritative number is `totalCents`
+     *  (the batch total, rounded once by `chooseMediaBatch`), so the four lines may differ from it
+     *  by a cent — the canvas prints the total, not the sum of the lines. */
+    const subtotal = (of: MediaSpec[]): number =>
+      Math.round(
+        of.reduce((n, s) => {
+          const p = estimateMediaUsd(s);
+          return n + (p.ok ? p.value : 0);
+        }, 0) * 100,
+      );
+
+    const lines: EstimateLine[] = [
+      {
+        label: "clips",
+        qty: clipCount,
+        unit: `${clipSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
+        cents: subtotal(specs.filter((s) => s.kind === "video")),
+      },
+      {
+        label: "voice",
+        qty: blocks.length,
+        unit: `${voiceChars} chars`,
+        cents: subtotal(specs.filter((s) => s.kind === "tts")),
+      },
+      {
+        label: "captions",
+        qty: 1,
+        unit: `${audioMinutes.toFixed(2)} min`,
+        cents: subtotal(specs.filter((s) => s.kind === "stt")),
+      },
+      {
+        label: "render",
+        qty: 1,
+        unit: "sandbox",
+        cents: subtotal(specs.filter((s) => s.kind === "render")),
+      },
+    ];
+
+    return { lines, totalCents: priced.value.estCents, capCents, remainingCents, refusal: null };
+  },
+});
+
+/** Reserve + schedule, shared by the two paid entry points. Returns the governed refusal rather
+ *  than throwing — a refusal is an answer, not an error. */
+async function reserveAndSchedule(
+  ctx: MutationCtx,
+  a: { tenantId: string; planId: Id<"plans">; blocks: readonly Block[]; clipSeconds: number },
+): Promise<{ ok: true; batchId: string; estCents: number } | { ok: false; reason: ReserveRefusal }> {
+  const reserved = await reserveJobInner(ctx, {
+    tenantId: a.tenantId,
+    planId: a.planId,
+    blocks: a.blocks,
+    clipSeconds: a.clipSeconds,
+    // PINNED true, the `cockpit.ts:681` reasoning verbatim: the fail-closed direction is
+    // over-reserving, and an unused STT line costs $0.008 while an unreserved one that IS used is
+    // spend outside the rail.
+    withCaptions: true,
+  });
+  if (!reserved.ok) return { ok: false, reason: reserved.reason }; // nothing scheduled, zero rows
+
+  // The render-clear rides in the SAME mutation as the reservation, so there is no scheduler tick
+  // during which a published reel coexists with the blocks that have just been re-bought.
+  await clearRender(ctx, a.planId);
+  await ctx.scheduler.runAfter(0, internal.media.submitBatch, {
+    tenantId: a.tenantId,
+    batchId: reserved.batchId,
+  });
+  return { ok: true, batchId: reserved.batchId, estCents: reserved.estCents };
+}
+
+/** Generate the WHOLE reel — the canvas's paid entry point, through the identical money gate the
+ *  approve arm uses. No second rail, no second cap, no bypass. */
+export const generateReel = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const blocks = deckOf(plan);
+    if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
+    return await reserveAndSchedule(ctx, {
+      tenantId: ctx.tenantId,
+      planId,
+      blocks,
+      clipSeconds: plan.clipSeconds,
+    });
+  },
+});
+
+/**
+ * Regenerate ONE block.
+ *
+ * **A job of one block — clip, voice and render.** No second rail, no second cap, no bypass: the
+ * job cap and the daily window are the same two numbers whether the reel is 1 block or 6. And it
+ * reserves a RENDER, because a changed block means the published mp4 is stale and the reel must be
+ * assembled again — a regenerate that skipped the render line would be cheaper and wrong.
+ *
+ * The previous rows and their stored assets are LEFT ALONE. This is history, not mutation.
+ */
+export const regenerateBlock = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number() },
+  handler: async (ctx, { planId, blockIndex }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const blocks = deckOf(plan);
+    if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
+    const one = blocks.find((b) => b.index === blockIndex);
+    if (!one) return { ok: false as const, reason: "no_deck" };
+    return await reserveAndSchedule(ctx, {
+      tenantId: ctx.tenantId,
+      planId,
+      blocks: [one],
+      clipSeconds: plan.clipSeconds,
+    });
+  },
+});
+
+// ── The FREE editor. Five affordances, and that is D7's floor AND its ceiling ──────────────────
+//
+// Edit a prompt, edit a narration line, regenerate one block, reorder, delete. **Nothing else.** No
+// timeline, transitions, filters, layers, masking, music, or client-side rendering. If a reviewer
+// asks for one, it is a deferred idea and not a small addition.
+//
+// None of these touches `mediaJobs` or any budget window. All of them CLEAR THE RENDER, through the
+// one shared helper: a reel assembled from a different block order — or from a line that has since
+// been rewritten — is not the reel on screen.
+
+/** Patch one element of `plans.shots`, renumber, and clear the render. The single write path the
+ *  five editor mutations share. */
+async function patchShots(
+  ctx: MutationCtx,
+  planId: Id<"plans">,
+  plan: Doc<"plans">,
+  next: NonNullable<Doc<"plans">["shots"]>,
+): Promise<void> {
+  const clipMs = (plan.clipSeconds ?? 0) * 1000;
+  await ctx.db.patch(planId, {
+    shots: next.map((s, i) => ({ ...s, index: i, windowStartMs: i * clipMs })),
+  });
+  await clearRender(ctx, planId);
+}
+
+export const editBlockPrompt = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number(), prompt: v.string() },
+  handler: async (ctx, { planId, blockIndex, prompt }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+    await patchShots(
+      ctx,
+      planId,
+      plan,
+      shots.map((s) => (s.index === blockIndex ? { ...s, prompt } : s)),
+    );
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Edit the block's SPOKEN line.
+ *
+ * **This is the UI half of the pre-payment guard, not scope creep.** `reserveJobInner` refuses a
+ * deck whose narration falls outside the band — and without this mutation that refusal has no cure:
+ * a user told *"block 4's line is 186 characters"* with no way to shorten it is stuck.
+ *
+ * It refuses an over-length line with the SAME reason and the SAME count the rail would return, so
+ * the two never disagree about what is too long.
+ */
+export const editBlockNarration = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number(), narration: v.string() },
+  handler: async (ctx, { planId, blockIndex, narration }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+
+    const maxChars =
+      plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
+    if (narration.length > maxChars) {
+      return { ok: false as const, reason: "narration_too_long", chars: narration.length, maxChars };
+    }
+    await patchShots(
+      ctx,
+      planId,
+      plan,
+      shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
+    );
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Permute the deck.
+ *
+ * ponytail: a reorder after submit leaves in-flight jobs pointing at their ORIGINAL index —
+ * `mediaJobs.blockIndex` is a snapshot taken at reserve time, and `byPlan` renders a job under the
+ * block it was reserved for. That is deliberate: the alternative is re-pointing a landed asset at a
+ * different block's tile, which is worse. Upgrade path if it ever confuses anyone: a stable
+ * per-block id instead of an array index — a schema change, not a UI one.
+ */
+export const reorderBlocks = tenantMutation({
+  args: { planId: v.id("plans"), order: v.array(v.number()) },
+  handler: async (ctx, { planId, order }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+
+    // A PERMUTATION of the existing indices, or nothing. Anything else would silently drop or
+    // duplicate a block, and a deck with a hole hard-errors at the assembler.
+    const existing = [...shots.map((s) => s.index)].sort((x, y) => x - y);
+    const asked = [...order].sort((x, y) => x - y);
+    if (
+      order.length !== shots.length ||
+      existing.some((v, i) => v !== asked[i]) ||
+      new Set(order).size !== order.length
+    ) {
+      return { ok: false as const, reason: "not_a_permutation" };
+    }
+
+    const byIndex = new Map(shots.map((s) => [s.index, s]));
+    const next = order.map((i) => byIndex.get(i)).filter((s) => s !== undefined);
+    await patchShots(ctx, planId, plan, next);
+    return { ok: true as const };
+  },
+});
+
+export const deleteBlock = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number() },
+  handler: async (ctx, { planId, blockIndex }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+    if (shots.length === 1) return { ok: false as const, reason: "last_block" };
+    await patchShots(
+      ctx,
+      planId,
+      plan,
+      shots.filter((s) => s.index !== blockIndex),
+    );
+    return { ok: true as const };
   },
 });

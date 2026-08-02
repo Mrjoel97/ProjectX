@@ -545,6 +545,13 @@ type ExternalActionType = {
  * chain lands, 20-16 re-points this ONE thunk at the chain entry (which itself calls `submitBatch`
  * first). That is deliberately one line in one place — the arm shape does not move again, and
  * **20-16 is the only plan permitted to change it.**
+ *
+ * **20-16 EVALUATED THAT AND DECLINED IT. This target stays `submitBatch`, permanently.** The
+ * landing plane already knows when a batch is complete — `mediaComplete.landResult` runs on every
+ * arrival, holds the batch id, and runs inside a serializable mutation — so the render trigger is
+ * four lines there (`maybeStartRender`) and the `pending → rendering` transition is its own
+ * once-only guard. A chain entry action would be a SECOND mechanism doing what the landing plane
+ * does for free, with its own failure modes and its own retry semantics. There is no chain.
  */
 const EXTERNAL_TARGETS = {
   calendar_event: (ctx: MutationCtx, a: ExternalArgs) =>

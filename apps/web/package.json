@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "bake:sandbox": "node scripts/bake-sandbox-snapshot.mjs"
   },
   "dependencies": {
     "@auth/core": "0.41.2",
@@ -18,6 +19,7 @@
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
     "@pikar/voice": "workspace:*",
+    "@vercel/sandbox": "2.9.2",
     "convex": "1.42.1",
     "next": "16.2.10",
     "react": "^19.2.7",

@@ -1176,7 +1176,11 @@ test("the voice-doc UI never turns a finding excerpt into a log field", () => {
 // Every scan below asserts its target is PRESENT before asserting anything about it, so a rename
 // fails loudly rather than passing vacuously.
 
-const MEDIA_MODULES = ["media.ts", "mediaComplete.ts"] as const;
+// 20-15 added `render/renderReel.ts`. It had to be added HERE and not merely counted: the audit
+// site it introduces lives OUTSIDE the two-module set, so without this line the "exactly N audit
+// sites" pin below would not have seen the render payload at all and would have kept passing at 1
+// — a scan that silently stops covering the thing it was written for.
+const MEDIA_MODULES = ["media.ts", "mediaComplete.ts", "render/renderReel.ts"] as const;
 const stripCode = (src: string): string =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
 
@@ -1203,6 +1207,16 @@ const MEDIA_AUDIT_ALLOWED = new Set([
   "actualCents",
   "reconciled",
   "failureReason",
+  // 20-15, the render terminal. All four are counts or hashes: `renderMs` is a duration,
+  // `gatesPassed` is the LENGTH of the sidecar's gate list (never the gate names), `sidecarHash`
+  // is a content hash and `blockCount` is a count. No filename, no narration, no URL, no stderr.
+  "renderMs",
+  "gatesPassed",
+  "sidecarHash",
+  "blockCount",
+  // 20-16's render DEAD LETTER. A code, not ffmpeg's prose — `reasonCodeFor` is the only thing
+  // that ever reads stderr and it returns a member of a closed union.
+  "reasonCode",
 ]);
 
 /** Top-level keys of an object literal. A plain comma split is enough BECAUSE `mediaComplete.ts`
@@ -1233,7 +1247,10 @@ function mediaAuditLiterals(): Array<[string, string]> {
 test("media audit payloads are refs-only — every key is on the allow-list", () => {
   const literals = mediaAuditLiterals();
   // A file-wide scan over zero payloads passes vacuously and proves nothing.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(3);
+  // 3 -> 4 at 20-15 (the render terminal's audit) -> 5 at 20-16 (the render dead letter, whose
+  // payload is scanned by the SAME allow-list on purpose: a dead letter is a log-plane row and §4
+  // applies to it identically).
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(5);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1263,27 +1280,36 @@ test("no prompt text and no narration text reaches the media log plane — only 
         /\bprompt\b(?!Hash)|narration/,
       );
     }
-    // ...and no other log-plane sink exists in these modules at all.
-    expect(code, `${file} writes a deadLetters row`).not.toMatch(
-      /\.insert\(\s*["']deadLetters["']/,
-    );
+    // ...and no other log-plane sink exists in these modules at all — EXCEPT the render
+    // terminal's single dead letter, which 20-16 requires: a failed render does not retry, so the
+    // dead letter is the only durable record that it happened. Its keys are pinned by
+    // MEDIA_AUDIT_ALLOWED above AND by an exact-key assertion in media.test.ts, so it is governed
+    // rather than exempt. The ban still holds absolutely for the submit and landing planes.
+    if (file !== "render/renderReel.ts") {
+      expect(code, `${file} writes a deadLetters row`).not.toMatch(
+        /\.insert\(\s*["']deadLetters["']/,
+      );
+    }
     expect(code, `${file} writes a telemetry row`).not.toMatch(/\.insert\(\s*["']telemetry["']/);
   }
 });
 
-test("the media log-plane surface is PINNED: exactly 1 audit site across both modules", () => {
-  // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-14 (voice), 20-16 (render/retention) and
-  // 20-17 (captions) EACH add audit sites and must EACH bump this number deliberately, having
-  // checked the new payload against MEDIA_AUDIT_ALLOWED above.
+test("the media log-plane surface is PINNED: exactly 2 audit sites across the three modules", () => {
+  // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-16 (retention) and 20-17 (captions) EACH add
+  // audit sites and must EACH bump this number deliberately, having checked the new payload
+  // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal.
   const sites = MEDIA_MODULES.map(
     (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
   );
   expect(
     sites.reduce((a, b) => a + b, 0),
-    "media audit call-site count changed - is the new payload refs-only? (20-09/20-14/20-16/20-17 each bump this)",
-  ).toBe(1);
-  // And WHERE it lives: the landing terminal, not the submit path.
+    "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17 each bump this)",
+  ).toBe(2);
+  // And WHERE they live: the two TERMINALS — the fal landing and the render — never the submit
+  // path and never the render's own pre-flight.
   expect(sites[0], "media.ts grew an audit site").toBe(0);
+  expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
+  expect(sites[2], "render/renderReel.ts is the render terminal").toBe(1);
 });
 
 test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and succeeded is mediaComplete's alone", () => {
@@ -1332,4 +1358,180 @@ test("storage.getUrl is only ever called inside a tenantQuery", () => {
     }
   }
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
+});
+
+// ── 20-15 (MEDIA-01 / D11): the render stage's structural guarantees ──────────────────────────
+//
+// The sandbox is a trust boundary in BOTH directions, and the type system can express neither
+// direction. These scans are what make the guarantees structural rather than a promise in a
+// playbook. Each asserts its target is PRESENT before asserting anything about it, so a rename
+// fails loudly rather than passing vacuously.
+
+const webRoot = join(convexDir, "../../../apps/web");
+const renderRoute = join(webRoot, "app/api/media/render/route.ts");
+const bakeScript = join(webRoot, "scripts/bake-sandbox-snapshot.mjs");
+const coreRender = join(convexDir, "../../core/src/render.ts");
+const readAt = (path: string): string => readFileSync(path, "utf8");
+
+test("NOTHING FORBIDDEN crosses into the sandbox — not a key, not a tenant, not a URL", () => {
+  // The request body `renderReel` constructs IS the complete list of what reaches the runner, and
+  // the runner writes only that plus the assemble script into the VM. Scan the literal itself
+  // rather than the file: the handler legitimately HAS a `tenantId` arg (it is what scopes the
+  // query), and it must simply never travel.
+  const src = stripCode(readSource("render/renderReel.ts"));
+  const body = src.match(/body:\s*JSON\.stringify\(([\s\S]*?)\n\s{6}\}\)/)?.[1];
+  expect(body, "the render request body literal was not found - the scan is vacuous").toBeTruthy();
+
+  for (const banned of [
+    "FAL_KEY",
+    "OPENAI_API_KEY",
+    "VERCEL_TOKEN",
+    "SKILLOPT_TOKEN",
+    "FAL_WEBHOOK_SECRET",
+    "tenantId",
+    "getUrl",
+    "narration",
+    "prompt",
+  ]) {
+    expect(body, `the render request body carries ${banned}`).not.toMatch(
+      new RegExp(`\\b${banned}\\b`),
+    );
+  }
+  // And no URL of any kind: the runner is handed opaque job ids and builds every blob URL itself
+  // from OUR derived origin. The two `uploadUrls` are the deliberate exception and are named.
+  expect(body).toMatch(/uploadUrls/);
+  expect(body?.replace(/uploadUrls/g, ""), "a URL other than the upload pair crosses in").not.toMatch(
+    /url|href|http/i,
+  );
+});
+
+test("NO VERCEL ACCESS TOKEN EXISTS ANYWHERE — D11's headline property, asserted not asserted-about", () => {
+  // A Vercel access token is scoped to a TEAM, not a capability: it can deploy, delete projects
+  // and read every project environment variable. That is strictly more powerful than anything
+  // else this codebase holds, and it would falsify ADR-011's cleanest property — "an API key in a
+  // deployment secret is the whole auth story", true of FAL_KEY precisely because FAL_KEY can only
+  // generate media. D11 chose a route handler over a Convex-hosted runner SPECIFICALLY so that
+  // none exists. This is the assertion that keeps it true.
+  //
+  // Comments are stripped first (the file-wide idiom): the route and the bake script both NAME
+  // these variables while explaining why they are absent. Prose may; CODE may not.
+  const sources: Array<[string, string]> = [
+    ...allConvexSources(),
+    ["apps/web/.../route.ts", readAt(renderRoute)],
+    ["apps/web/scripts/bake-sandbox-snapshot.mjs", readAt(bakeScript)],
+    ["packages/core/src/render.ts", readAt(coreRender)],
+  ];
+  let scanned = 0;
+  for (const [rel, raw] of sources) {
+    scanned++;
+    const code = stripCode(raw);
+    for (const banned of ["VERCEL_TOKEN", "VERCEL_TEAM_ID", "VERCEL_PROJECT_ID"]) {
+      expect(code, `${rel} references ${banned} in CODE`).not.toMatch(new RegExp(banned));
+    }
+  }
+  expect(scanned, "no sources were scanned - the pin is vacuous").toBeGreaterThan(3);
+  // Non-vacuity floor for the two hand-added files: they must actually be readable and non-empty.
+  expect(readAt(renderRoute)).toMatch(/Sandbox\.create/);
+  expect(readAt(bakeScript)).toMatch(/snapshot/);
+});
+
+test("Sandbox.create appears TWICE and the render one is never an inline literal", () => {
+  // Two, not one: the render route, and the OWNER-RUN bake script (egress open, zero tenant
+  // bytes, run by hand). Any third occurrence is a new VM nobody reviewed.
+  const all = [
+    ...allConvexSources().map(([rel, code]) => [rel, code] as const),
+    ["route.ts", stripCode(readAt(renderRoute))] as const,
+    ["bake-sandbox-snapshot.mjs", stripCode(readAt(bakeScript))] as const,
+  ];
+  const sites = all.filter(([, code]) => /Sandbox\.create/.test(code)).map(([rel]) => rel);
+  expect(sites.sort()).toEqual(["bake-sandbox-snapshot.mjs", "route.ts"]);
+
+  // THE ONE THAT MATTERS: the render route's argument is `buildSandboxOptions(...)`, never an
+  // object literal. That is precisely what makes `persistent: false` and `networkPolicy:
+  // "deny-all"` assertable without a real VM — an inline literal could only be tested by booting
+  // one. Deleting either field is a mutation check in packages/core's render.test.ts.
+  expect(stripCode(readAt(renderRoute))).toMatch(/Sandbox\.create\(options\)/);
+  expect(stripCode(readAt(renderRoute)), "the route builds its own sandbox options inline").not.toMatch(
+    /Sandbox\.create\(\s*\{/,
+  );
+});
+
+test("no `name:` and no `persistent: true` anywhere in the render diff", () => {
+  // A NAMED sandbox is resumable BY NAME, which is the whole persistence mechanism — and
+  // persistence means tenant A's clips survive into the VM that renders tenant B's reel. Both are
+  // cross-tenant leaks created by an option, not by a bug.
+  for (const [rel, path] of [
+    ["core/render.ts", coreRender],
+    ["route.ts", renderRoute],
+    ["bake-sandbox-snapshot.mjs", bakeScript],
+  ] as const) {
+    const code = stripCode(readAt(path));
+    expect(code, `${rel} sets persistent: true`).not.toMatch(/persistent:\s*true/);
+    expect(code, `${rel} names a sandbox`).not.toMatch(/\bname:\s*["'`]/);
+  }
+  // Non-vacuity: the option that MUST be there, is.
+  expect(stripCode(readAt(coreRender))).toMatch(/persistent:\s*false/);
+  expect(stripCode(readAt(coreRender))).toMatch(/networkPolicy:\s*"deny-all"/);
+});
+
+test("ffmpeg's stderr is READ exactly once, and on the same line it becomes a code", () => {
+  // ffmpeg's stderr contains file paths and, on a caption burn, narration text. It is §4 content
+  // and must never be persisted. `reasonCodeFor` returns a value from a closed union, so the
+  // input cannot appear in the output BY CONSTRUCTION — but only if nothing else ever reads the
+  // string. This is that guarantee.
+  const code = stripCode(readAt(coreRender));
+  const reads = [...code.matchAll(/\.stderr\(\)/g)];
+  expect(reads, "no stderr read found - the scan is vacuous").toHaveLength(1);
+  // …and it is an ARGUMENT to reasonCodeFor, not a value bound to anything else.
+  expect(code).toMatch(/reasonCodeFor\(\s*run\.exitCode,\s*await run\.stderr\(\)\s*\)/);
+
+  // Nowhere else on the render path may read it at all.
+  for (const [rel, path] of [
+    ["route.ts", renderRoute],
+    ["render/renderReel.ts", join(convexDir, "render/renderReel.ts")],
+  ] as const) {
+    expect(stripCode(readAt(path)), `${rel} reads ffmpeg stderr`).not.toMatch(/\.stderr\(\)/);
+  }
+  // The bake script IS exempt and this records why rather than leaving it to a reader: it runs by
+  // hand, against a sandbox created with ZERO tenant bytes in it, and prints to the owner's own
+  // console. There is no tenant content in that VM for stderr to carry.
+  expect(stripCode(readAt(bakeScript))).toMatch(/\.stderr\(\)/);
+});
+
+test("the route's maxDuration LITERAL still equals the exported constant", () => {
+  // Next.js reads route segment config by STATIC ANALYSIS at build time, so `export const
+  // maxDuration = RENDER_MAX_DURATION_S` does not resolve — the route must carry a literal. This
+  // scan is the drift guard the import would otherwise have been, and without it the sandbox
+  // timeout could quietly stop being below the function's ceiling.
+  const literal = readAt(renderRoute).match(/export const maxDuration = (\d+)/)?.[1];
+  expect(literal, "the route's maxDuration literal was not found").toBeTruthy();
+  const constant = readAt(coreRender).match(/RENDER_MAX_DURATION_S = (\d+)/)?.[1];
+  expect(constant, "RENDER_MAX_DURATION_S was not found").toBeTruthy();
+  expect(literal, "route maxDuration has drifted from RENDER_MAX_DURATION_S").toBe(constant);
+
+  // And the sandbox timeout is STRICTLY below it, in the same units.
+  const timeoutMs = Number(readAt(coreRender).match(/RENDER_SANDBOX_TIMEOUT_MS = ([\d_]+)/)?.[1]?.replace(/_/g, ""));
+  expect(timeoutMs).toBeGreaterThan(0);
+  expect(timeoutMs).toBeLessThan(Number(literal) * 1000);
+});
+
+test("storage.delete has exactly ONE site in the media subsystem — the retention loop", () => {
+  // D12(b) is delete-on-SUCCESS and keep-on-FAILURE, and the failure half is the one that is easy
+  // to get backwards and impossible to notice. A second deletion site is how a delete-on-failure
+  // bug gets introduced later, so the site count is pinned rather than the behaviour described.
+  // Scoped to the MEDIA subsystem: `llm.ts` deletes its own transient blobs and is not this
+  // policy's business. What must stay single-sited is the deletion of TENANT MEDIA.
+  const sites: Array<[string, number]> = [];
+  for (const [rel, code] of allConvexSources()) {
+    if (!rel.startsWith("render/") && !rel.startsWith("media")) continue;
+    const n = [...code.matchAll(/storage\.delete\b/g)].length;
+    if (n > 0) sites.push([rel, n]);
+  }
+  expect(sites).toEqual([["render/renderReel.ts", 1]]);
+
+  // …and it is inside the SUCCESS arm. The failure arm returns before reaching it, which is what
+  // makes "the intermediates are the only debugging evidence a failed render leaves" true.
+  const src = stripCode(readSource("render/renderReel.ts"));
+  const failureArm = src.slice(src.indexOf("if (!a.result.ok)"), src.indexOf("renderStatus: \"rendered\""));
+  expect(failureArm, "the failure arm deletes an intermediate").not.toMatch(/storage\.delete/);
 });

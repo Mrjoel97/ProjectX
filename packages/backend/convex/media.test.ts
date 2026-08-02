@@ -24,7 +24,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 // specifiers). guardrails.test.ts carries the same line for the same reason.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hmacHex } from "./gmailAuth";
 import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS } from "./guardrails";
@@ -429,34 +429,89 @@ describe("the narration BAND is caught before payment, not by ffprobe after it",
 
 // ── D12(a) at the rail ─────────────────────────────────────────────────────────────
 
-test("D12a AT THE RAIL: 13 sub-cent lines reserve 4 cents, not the 15 of per-line flooring", async () => {
+// ── The UNRENDERABLE-DECK guard (20-15 follow-up) ──────────────────────────────────────────────
+//
+// THIS TEST REPLACED A 13 x TEXT DECK, and the replacement is the point. The old
+// "D12a AT THE RAIL" test reserved 13 unpaid TEXT blocks to show cent-flooring-once, and it
+// PASSED — which is exactly the defect: an unpaid block gets no video line, so nothing writes its
+// `blockNN.mp4`, and `assemble_final.sh` (which discovers inputs by index) can never assemble that
+// deck. The deck sailed through the money gate and could never become a reel.
+//
+// The D12a arithmetic it proved is NOT lost: the pure "13 sub-cent lines → 1 cent, not 13" lives
+// in `packages/cost/src/media.test.ts`, and the rail-level flooring-ONCE property is re-asserted
+// below on a deck that can actually render.
+
+test("an UNRENDERABLE deck is refused BEFORE a cent moves — zero rows, zero consumption", async () => {
   const t = harness();
   const planId = await seedPlan(t);
-  // 13 unpaid (TEXT) blocks at 5 s: no clips, 13 voice lines of 2 x 43 = 86 chars ($0.00086 each),
-  // plus the flat render. TRUE cost $0.03118 → 4 cents once-only.
-  //
-  // Floored PER LINE it is 13 x 1 + 2 = 15 cents — nearly 4x the true cost, on the cheapest part
-  // of the job, compounding with deck length. That is the whole point of D12(a).
-  //
-  // (The purer "13 sub-cent lines → 1 cent, not 13" lives in packages/cost/src/media.test.ts. It
-  // cannot be built at THIS level: the flat $0.02 render line is on every job by construction, so
-  // no job reachable through `reserveJob` can total under 2 cents.)
+  const before = await mediaLeft(t);
+
+  for (const type of ["TEXT", "SCREEN REC"] as const) {
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: deck(3, { type, seconds: 5, chars: minCharsFor(5) }),
+      clipSeconds: 5,
+      withCaptions: false,
+    });
+    expect(res, `${type} deck was reserved`).toEqual({ ok: false, reason: "unrenderable_block" });
+  }
+
+  // A MIXED deck is refused too — one unrenderable block poisons the whole reel, because the
+  // assembler asserts `--blocks N` and hard-errors on the first missing clip.
+  const mixed = await reserve(t, {
+    tenantId: A,
+    planId,
+    blocks: [
+      ...deck(2, { type: "AI", seconds: 5, chars: minCharsFor(5) }),
+      ...deck(1, { type: "TEXT", seconds: 5, chars: minCharsFor(5) }),
+    ].map((b, i) => ({ ...b, index: i })),
+    clipSeconds: 5,
+    withCaptions: false,
+  });
+  expect(mixed).toEqual({ ok: false, reason: "unrenderable_block" });
+
+  // The whole point: nothing was inserted and NO budget was consumed. Without this guard the
+  // mixed deck above would have bought two AI clips for a reel that can never assemble.
+  expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  expect(await mediaLeft(t)).toBe(before);
+});
+
+test("D12a AT THE RAIL: the batch total is rounded ONCE, not per line", async () => {
+  const t = harness();
+  const planId = await seedPlan(t);
+  // A RENDERABLE deck now: 3 AI blocks at 5 s = 3 video lines + 3 voice lines + the flat render.
+  // The voice lines are the sub-cent ones (2 x 43 = 86 chars, $0.00086 each) and they are what
+  // per-line flooring would round up to a whole cent apiece.
   const res = await reserve(t, {
     tenantId: A,
     planId,
-    blocks: deck(13, { type: "TEXT", seconds: 5, chars: minCharsFor(5) }),
+    blocks: deck(3, { type: "AI", seconds: 5, chars: minCharsFor(5) }),
     clipSeconds: 5,
     withCaptions: false,
   });
 
   expect(res.ok).toBe(true);
   if (!res.ok) return;
-  expect(res.estUsd).toBeCloseTo(0.03118, 6);
-  expect(res.estCents).toBe(4);
-  expect(res.lineCount).toBe(13); // 0 video (TEXT is unpaid) + 13 tts
-  expect(await mediaLeft(t)).toBe(MEDIA_DAILY_BUDGET_CENTS - 4);
-  const perLineFloored = 13 * 1 + Math.ceil(MEDIA_SANDBOX_USD_PER_RENDER * 100);
-  expect(perLineFloored).toBe(15); // the number this assertion exists to NOT be
+  expect(res.lineCount).toBe(6); // 3 video + 3 tts; the render line has no row
+  // Rounded ONCE, on the TOTAL. The direction is UP — over-reservation is the fail-closed bias
+  // (`Math.max(1, Math.ceil(...))`, the same rule the no-refunds note in media.ts names). What
+  // D12(a) forbids is not rounding up, it is rounding up THIRTEEN TIMES.
+  expect(res.estCents).toBe(Math.ceil(res.estUsd * 100));
+  expect(await mediaLeft(t)).toBe(MEDIA_DAILY_BUDGET_CENTS - res.estCents);
+
+  // …and here is the thing per-line rounding would get wrong, stated as the property rather than
+  // as a magnitude: the three voice lines are worth LESS THAN ONE CENT IN TOTAL, yet rounding each
+  // one up individually charges three whole cents for them.
+  const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+  const tts = rows.filter((r) => r.kind === "tts");
+  expect(tts).toHaveLength(3);
+  expect(tts.reduce((n, r) => n + r.estUsd, 0) * 100).toBeLessThan(1);
+
+  const perLineRounded =
+    rows.reduce((n, r) => n + Math.max(1, Math.ceil(r.estUsd * 100)), 0) +
+    Math.ceil(MEDIA_SANDBOX_USD_PER_RENDER * 100);
+  expect(perLineRounded).toBeGreaterThan(res.estCents);
 });
 
 // ── the windows ────────────────────────────────────────────────────────────────────
@@ -1542,6 +1597,11 @@ function assetFetch(type = "video/mp4") {
 }
 
 const jobRow = (t: T, jobId: Id<"mediaJobs">) => t.run(async (ctx) => await ctx.db.get(jobId));
+const planRowOf = (t: T, planId: Id<"plans">) => t.run(async (ctx) => await ctx.db.get(planId));
+/** Does the blob still exist? Resolved INSIDE the transaction — a Blob is not a Convex type and
+ *  cannot be returned across the t.run boundary. */
+const blobExists = (t: T, id: Id<"_storage">) =>
+  t.run(async (ctx) => (await ctx.storage.get(id)) !== null);
 const auditRows = (t: T) => t.run(async (ctx) => await ctx.db.query("audit").collect());
 
 describe("POST /fal/callback/* : fail-closed 401, and NOTHING security-relevant from the body", () => {
@@ -2026,4 +2086,1027 @@ test("exactly ONE audit row per landing, and its keys are the allow-list", async
     ].sort(),
   );
   expect(JSON.stringify(audit[0]?.payload)).not.toMatch(/url|href|http/i);
+});
+
+// ── The render stage's Convex half (MEDIA-01, D11, plan 20-15) ────────────────────────────────
+//
+// Every test here runs through `MEDIA_SANDBOX_FIXTURE`, which is the DEFAULT in this suite and
+// must stay that way: on Hobby an accidental real `Sandbox.create` burns a shared monthly
+// Active-CPU allotment whose exhaustion PAUSES creation for 30 days — an OUTAGE, not a bill.
+// `handleRenderRequest` itself (the route body) is asserted in `@pikar/core`'s render.test.ts,
+// where the SDK is injected; what is asserted HERE is the Convex side: what may be rendered, the
+// bearer-guarded blob route, and the render terminal.
+
+const RENDER_SECRET = "test-render-secret";
+
+/** A sidecar the SHIPPED validator accepts, for the defence-in-depth re-check on return. */
+const RENDER_SIDECAR = JSON.stringify({
+  script: "assemble_final.sh",
+  block_count: 2,
+  clip_seconds: 10,
+  total_duration_s: 20,
+  actual_duration_s: 20,
+  gates: ["speech_within_window", "no_time_stretch"],
+  blocks: [
+    {
+      block_index: 0,
+      window_start_s: 0,
+      lead_silence_s: 0.3,
+      speech_abs_s: 0.5,
+      speech_dur_s: 9,
+      overrun: false,
+    },
+    {
+      block_index: 1,
+      window_start_s: 10,
+      lead_silence_s: 0.3,
+      speech_abs_s: 10.5,
+      speech_dur_s: 9,
+      overrun: false,
+    },
+  ],
+});
+
+function stubRenderEnv() {
+  stubMediaEnv();
+  vi.stubEnv("MEDIA_RENDER_SECRET", RENDER_SECRET);
+  vi.stubEnv("MEDIA_RENDER_URL", "https://app.example.com/api/media/render");
+}
+
+/** A batch of N blocks, every line LANDED — the only state a reel may be rendered from. */
+async function seedRenderable(
+  t: T,
+  opts: {
+    blocks?: number;
+    tenantId?: string;
+    batchId?: string;
+    missVoice?: boolean;
+    unlanded?: boolean;
+  } = {},
+) {
+  const blocks = opts.blocks ?? 2;
+  const tenantId = opts.tenantId ?? A;
+  const batchId = opts.batchId ?? "batch_render";
+  const planId = await seedPlan(t, tenantId);
+  const jobIds: Id<"mediaJobs">[] = [];
+  await t.run(async (ctx) => {
+    for (let i = 0; i < blocks; i++) {
+      for (const kind of ["video", "tts"] as const) {
+        if (kind === "tts" && opts.missVoice && i === blocks - 1) continue;
+        const held = opts.unlanded === true && i === 0 && kind === "video";
+        // A DISTINCT blob per row, as production has — each fal asset is stored separately.
+        // Sharing one id here hid the fact that the retention loop deletes per row, and it made
+        // `storage.delete` throw on the second row of the batch.
+        const storageId = await ctx.storage.store(
+          new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" }),
+        );
+        jobIds.push(
+          await ctx.db.insert("mediaJobs", {
+            tenantId,
+            planId,
+            batchId,
+            blockIndex: i,
+            provider: "fal",
+            kind,
+            model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+            spec:
+              kind === "video"
+                ? { kind: "video", resolution: "480p", seconds: 10 }
+                : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 },
+            promptHash: "0".repeat(64),
+            status: held ? "submitted" : "succeeded",
+            assetStorageId: held ? undefined : storageId,
+            mimeType: kind === "video" ? "video/mp4" : "audio/wav",
+            estUsd: 0.5,
+            createdAt: T0,
+            updatedAt: T0,
+          }),
+        );
+      }
+    }
+  });
+  return { planId, batchId, tenantId, jobIds };
+}
+
+const planRow = (t: T, planId: Id<"plans">) => t.run(async (ctx) => await ctx.db.get(planId));
+
+/** Store one blob and hand back its id — the fixture pair every success case needs. */
+async function storeBlob(t: T, body: string | Uint8Array<ArrayBuffer>, type: string) {
+  return await t.run(async (ctx) => await ctx.storage.store(new Blob([body], { type })));
+}
+
+describe("batchToRender: a reel is ALL-OR-NOTHING, and the refusal is free", () => {
+  test("returns one input per clip AND per voice take, named the way the script discovers them", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t, { blocks: 3 });
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // 1-based, zero-padded to two digits — 20-13 pinned these exact names.
+    expect(res.value.inputs.map((i) => i.name)).toEqual([
+      "block01.mp4",
+      "voice01.wav",
+      "block02.mp4",
+      "voice02.wav",
+      "block03.mp4",
+      "voice03.wav",
+    ]);
+    expect(res.value.blockCount).toBe(3);
+    expect(res.value.clipSeconds).toBe(10);
+  });
+
+  test("REFUSES a batch whose lines have not all landed — no sandbox is worth starting for it", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t, { unlanded: true });
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    );
+    expect(res).toEqual({ ok: false, reason: "not_all_succeeded" });
+  });
+
+  test("REFUSES a block that has a clip but no voice take — the assembler requires both", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t, { missVoice: true });
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    );
+    expect(res).toEqual({ ok: false, reason: "incomplete_blocks" });
+  });
+
+  test("is TENANT-SCOPED by the index prefix — B cannot render A's batch", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t);
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: B, batchId }),
+    );
+    expect(res).toEqual({ ok: false, reason: "empty_batch" });
+  });
+});
+
+describe("renderReel: fail-closed on the secret, then the offline seam", () => {
+  test("an unset MEDIA_RENDER_SECRET refuses BEFORE any fetch exists", async () => {
+    const t = harness();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubRenderEnv();
+    vi.stubEnv("MEDIA_RENDER_SECRET", "");
+    const { batchId } = await seedRenderable(t);
+
+    await expect(
+      t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId }),
+    ).rejects.toThrow(/MEDIA_RENDER_SECRET/);
+    // The assertion that matters: a COUNT of zero, not merely the right message.
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("an unset MEDIA_RENDER_URL refuses the same way", async () => {
+    const t = harness();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubRenderEnv();
+    vi.stubEnv("MEDIA_RENDER_URL", "");
+    const { batchId } = await seedRenderable(t);
+    await expect(
+      t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId }),
+    ).rejects.toThrow(/MEDIA_RENDER_URL/);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("with the fixture set, the whole path runs at $0 and NEVER issues a fetch", async () => {
+    const t = harness();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubRenderEnv();
+    const { planId, batchId } = await seedRenderable(t);
+    const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({
+        ok: true,
+        mp4StorageId,
+        sidecarStorageId,
+        renderMs: 91_000,
+        gates: [],
+        blockCount: 2,
+      }),
+    );
+
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    expect(out).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("rendered");
+    expect(plan?.renderStorageId).toBe(mp4StorageId);
+    expect(plan?.sidecarStorageId).toBe(sidecarStorageId);
+    expect(plan?.sidecarHash).toHaveLength(64);
+    expect(plan?.renderReason).toBeUndefined();
+  });
+
+  test("DEFENCE IN DEPTH: a sidecar the route accepted but OUR validator rejects publishes nothing", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    const { planId, batchId } = await seedRenderable(t);
+    // A sidecar reporting an overrun — D8's hard error. A compromised or buggy route could return
+    // `ok: true` for it; re-validating from the bytes that actually landed in OUR storage is what
+    // stops an ungoverned reel being published anyway.
+    const bad = JSON.parse(RENDER_SIDECAR) as { blocks: Array<{ overrun: boolean }> };
+    const target = bad.blocks[1];
+    if (target) target.overrun = true;
+    const sidecarStorageId = await storeBlob(t, JSON.stringify(bad), "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({
+        ok: true,
+        mp4StorageId,
+        sidecarStorageId,
+        renderMs: 1,
+        gates: [],
+        blockCount: 2,
+      }),
+    );
+
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    expect(out).toEqual({ ok: false, reason: "sidecar_rejected_on_return" });
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("sidecar_rejected_on_return");
+    expect(plan?.renderStorageId).toBeUndefined();
+  });
+
+  test("a governed stop from the route lands its CODE and publishes nothing", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    const { planId, batchId } = await seedRenderable(t);
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({ ok: false, code: "speech_out_of_window" }),
+    );
+
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    expect(out).toEqual({ ok: false, reason: "speech_out_of_window" });
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("speech_out_of_window");
+    expect(plan?.renderStorageId).toBeUndefined();
+    expect(plan?.sidecarStorageId).toBeUndefined();
+  });
+
+  test("exactly ONE audit row per successful render, and its keys are the allow-list", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    const { batchId } = await seedRenderable(t);
+    const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({
+        ok: true,
+        mp4StorageId,
+        sidecarStorageId,
+        renderMs: 91_000,
+        gates: [],
+        blockCount: 2,
+      }),
+    );
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+
+    const audit = (await auditRows(t)).filter((r) => r.eventType === "media.rendered");
+    expect(audit).toHaveLength(1);
+    // Kept in lockstep with llmRedaction.test.ts's MEDIA_AUDIT_ALLOWED — refs, hashes and counts.
+    expect(Object.keys((audit[0]?.payload ?? {}) as object).sort()).toEqual(
+      ["batchId", "planId", "blockCount", "renderMs", "sidecarHash", "gatesPassed"].sort(),
+    );
+    expect(JSON.stringify(audit[0]?.payload)).not.toMatch(/url|href|http/i);
+    // `gatesPassed` comes from the RE-VALIDATED sidecar, not from what the route claimed: the
+    // fixture above returns `gates: []` and this is 2.
+    expect((audit[0]?.payload as { gatesPassed: number }).gatesPassed).toBe(2);
+  });
+
+  test("a FAILED render writes no audit row at all — a stop is not an event to log", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    const { batchId } = await seedRenderable(t);
+    vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify({ ok: false, code: "decode_failed" }));
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    expect((await auditRows(t)).filter((r) => r.eventType === "media.rendered")).toHaveLength(0);
+  });
+});
+
+describe("GET /media/blob/* : the same fail-closed bearer, and everything from the ROW", () => {
+  const get = (t: T, segment: string, auth?: string) =>
+    t.fetch(`/media/blob/${segment}`, {
+      method: "GET",
+      headers: auth === undefined ? {} : { Authorization: auth },
+    });
+
+  test("no bearer, a wrong bearer, and an UNSET secret are all 401", async () => {
+    const t = harness();
+    stubRenderEnv();
+    const { jobIds } = await seedRenderable(t);
+    const id = String(jobIds[0]);
+
+    expect((await get(t, id)).status).toBe(401);
+    expect((await get(t, id, "Bearer wrong")).status).toBe(401);
+
+    // Mutation check: drop the `!expected` half and this goes RED. `undefined`, NOT `""` — the
+    // empty string makes the template `"Bearer "`, and a trailing space is untypeable because
+    // header values are trimmed on the way in, so a `""` stub would pass even with the guard
+    // removed and prove nothing. `Bearer undefined` is the string a caller can actually send, and
+    // it is the exact fail-open `http.ts:92`'s `!expected` half exists to close. Observed red.
+    vi.stubEnv("MEDIA_RENDER_SECRET", undefined);
+    expect((await get(t, id, "Bearer undefined")).status).toBe(401);
+    expect((await get(t, id, `Bearer ${RENDER_SECRET}`)).status).toBe(401);
+  });
+
+  test("serves the bytes for a resolved, SUCCEEDED row, with the row's own MIME type", async () => {
+    const t = harness();
+    stubRenderEnv();
+    const { jobIds } = await seedRenderable(t);
+    const res = await get(t, String(jobIds[0]), `Bearer ${RENDER_SECRET}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("video/mp4");
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("404s for garbage, for a FOREIGN-TABLE id, and for a row that has not succeeded", async () => {
+    const t = harness();
+    stubRenderEnv();
+    const { planId, jobIds } = await seedRenderable(t, { unlanded: true });
+    const auth = `Bearer ${RENDER_SECRET}`;
+
+    // `normalizeId` refuses both — db.get is never reached with an id from another table.
+    expect((await get(t, "not-an-id", auth)).status).toBe(404);
+    expect((await get(t, String(planId), auth)).status).toBe(404);
+    // Seeded `unlanded`, so block 0's video row is `submitted` with no assetStorageId.
+    expect((await get(t, String(jobIds[0]), auth)).status).toBe(404);
+  });
+});
+
+// ── The CANVAS plane (plan 20-09) ──────────────────────────────────────────────────────────────
+//
+// Five tenant-guarded reads, six tenant-guarded writes, and the BETA-05 isolation assertion that
+// ships WITH the surface rather than after it. Reads return []/null for a foreign tenant; writes
+// throw. Every test is $0.
+
+const asA = (t: T) => t.withIdentity({ subject: A });
+const asB = (t: T) => t.withIdentity({ subject: B });
+
+/** A plan carrying a real deck, which is what every canvas function reads. */
+async function seedDeck(
+  t: T,
+  opts: { tenantId?: string; blocks?: number; clipSeconds?: number; chars?: number } = {},
+) {
+  const tenantId = opts.tenantId ?? A;
+  const clipSeconds = opts.clipSeconds ?? 10;
+  const n = opts.blocks ?? 3;
+  const planId = await seedPlan(t, tenantId);
+  const shots = Array.from({ length: n }, (_, i) => ({
+    index: i,
+    type: "AI" as const,
+    seconds: clipSeconds,
+    windowStartMs: i * clipSeconds * 1000,
+    description: `shot ${i}`,
+    prompt: `prompt ${i}`,
+    narration: "x".repeat(opts.chars ?? minCharsFor(clipSeconds)),
+  }));
+  await t.run(async (ctx) => await ctx.db.patch(planId, { clipSeconds, shots }));
+  return { planId, clipSeconds, shots };
+}
+
+describe("the canvas READ plane: two states per block, and a url only when it is earned", () => {
+  test("byPlan reports the clip and the voice INDEPENDENTLY", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    // Block 0: voice landed, clip still in flight. Block 1: the reverse. A single merged status
+    // could not tell these apart, and they arrive minutes apart through two different webhooks.
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const base = {
+        tenantId: A,
+        planId,
+        batchId: "b1",
+        provider: "fal" as const,
+        promptHash: "0".repeat(64),
+        estUsd: 0.1,
+        createdAt: T0,
+        updatedAt: T0,
+      };
+      await ctx.db.insert("mediaJobs", {
+        ...base, blockIndex: 0, kind: "video", model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 }, status: "submitted",
+      });
+      await ctx.db.insert("mediaJobs", {
+        ...base, blockIndex: 0, kind: "tts", model: MEDIA_DEFAULT_VOICE.model,
+        spec: { kind: "tts", characters: 200, voice: "v", sampleRateHertz: 24000 },
+        status: "succeeded", assetStorageId: storageId,
+      });
+      await ctx.db.insert("mediaJobs", {
+        ...base, blockIndex: 1, kind: "video", model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 }, status: "succeeded",
+        assetStorageId: storageId,
+      });
+    });
+
+    const rows = await asA(t).query(api.media.byPlan, { planId });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.clip?.status).toBe("submitted");
+    expect(rows[0]?.voice?.status).toBe("succeeded");
+    expect(rows[1]?.clip?.status).toBe("succeeded");
+    expect(rows[1]?.voice).toBeNull(); // no voice row yet — absent, not "pending"
+    // NO url on this read by construction: assetUrls is the only bearer-minting surface.
+    expect(JSON.stringify(rows)).not.toMatch(/url/i);
+  });
+
+  test("byPlan carries the narration and its count against the live ceiling", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 1, clipSeconds: 5, chars: minCharsFor(5) });
+    const rows = await asA(t).query(api.media.byPlan, { planId });
+    expect(rows[0]?.narrationChars).toBe(minCharsFor(5));
+    expect(rows[0]?.maxChars).toBe(maxCharsFor(5)); // the 5 s band, not the flat 140
+    expect(rows[0]?.overCharLimit).toBe(false);
+  });
+
+  test("assetUrls yields a NULL url for a line with no asset — a pending tile is not an absent one", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 1 });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A, planId, batchId: "b1", blockIndex: 0, provider: "fal", kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model, spec: { kind: "video", resolution: "480p", seconds: 10 },
+        promptHash: "0".repeat(64), status: "submitted", estUsd: 0.1, createdAt: T0, updatedAt: T0,
+      });
+    });
+    const rows = await asA(t).query(api.media.assetUrls, { planId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.url).toBeNull();
+    expect(rows[0]?.status).toBe("submitted");
+  });
+
+  test("reel returns a NULL url for every status that is not `rendered`", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    for (const status of ["pending", "rendering", "failed"] as const) {
+      await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: status }));
+      const r = await asA(t).query(api.media.reel, { planId });
+      expect(r.status).toBe(status);
+      expect(r.url).toBeNull();
+    }
+  });
+
+  test("reel surfaces the FAILURE REASON, so the canvas can say what happened in words", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    await t.run(
+      async (ctx) =>
+        await ctx.db.patch(planId, { renderStatus: "failed", renderReason: "speech_out_of_window" }),
+    );
+    const r = await asA(t).query(api.media.reel, { planId });
+    expect(r).toMatchObject({ status: "failed", url: null, reason: "speech_out_of_window" });
+  });
+
+  test("a `rendered` row WITHOUT a renderSummary still yields no url — the sidecar guarantee", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    // `recordRender` writes renderSummary in the SAME patch as the two ids, and only after the
+    // sidecar parsed. A row hand-patched to `rendered` therefore cannot surface a reel.
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: storageId,
+        sidecarStorageId: storageId,
+      });
+    });
+    expect((await asA(t).query(api.media.reel, { planId })).url).toBeNull();
+  });
+
+  test("a fully-recorded render surfaces the url, the duration and the gate list", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: storageId,
+        sidecarStorageId: storageId,
+        renderSummary: { durationS: 30, blockCount: 3, gates: ["no_time_stretch", "full_decode"] },
+      });
+    });
+    const r = await asA(t).query(api.media.reel, { planId });
+    expect(r.url).toBeTruthy();
+    expect(r.durationS).toBe(30);
+    expect(r.blockCount).toBe(3);
+    expect(r.gates).toEqual(["no_time_stretch", "full_decode"]);
+  });
+});
+
+describe("jobEstimate: four itemised lines, and the SAME number the rail will consume", () => {
+  test("itemises clips, voice, captions and render", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 3 });
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+
+    expect(est.lines.map((l) => l.label)).toEqual(["clips", "voice", "captions", "render"]);
+    expect(est.lines[0]?.qty).toBe(3);
+    expect(est.lines[1]?.qty).toBe(3);
+    expect(est.totalCents).toBeGreaterThan(0);
+    expect(est.capCents).toBe(Math.round(MEDIA_JOB_CAP_USD * 100));
+    expect(est.refusal).toBeNull();
+    // The expensive line must be visible AS a line — that is the whole reason this itemises.
+    expect(est.lines[0]?.cents).toBeGreaterThan(est.lines[1]?.cents ?? 0);
+  });
+
+  test("THE ANTI-DRIFT ASSERTION: the estimate equals what reserveJobInner actually consumes", async () => {
+    const t = harness();
+    const { planId, clipSeconds, shots } = await seedDeck(t, { blocks: 4 });
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+
+    // The SAME deck through the rail. A UI that computes its own total and a rail that computes
+    // another is the drift this phase exists to prevent, so this is asserted directly and not
+    // by eyeball.
+    const reserved = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: shots,
+      clipSeconds,
+      withCaptions: true,
+    });
+    expect(reserved.ok).toBe(true);
+    if (!reserved.ok) return;
+    expect(est.totalCents).toBe(reserved.estCents);
+  });
+
+  test("jobEstimate CONSUMES NOTHING — it is a query and cannot", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    const before = await mediaLeft(t);
+    await asA(t).query(api.media.jobEstimate, { planId });
+    await asA(t).query(api.media.jobEstimate, { planId });
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  test("names the LEVER: an over-length line comes back with its block index and count", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2, chars: maxCharsFor(10) + 46 });
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(est.refusal).toMatchObject({
+      reason: "narration_too_long",
+      blockIndex: 0,
+      chars: maxCharsFor(10) + 46,
+    });
+    expect(est.totalCents).toBe(0); // nothing to price until the lever is pulled
+  });
+
+  test("names the UNRENDERABLE block too, before the button is ever pressed", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s, i) => (i === 1 ? { ...s, type: "TEXT" } : s));
+      await ctx.db.patch(planId, { shots });
+    });
+    expect(await asA(t).query(api.media.jobEstimate, { planId })).toMatchObject({
+      refusal: { reason: "unrenderable_block", blockIndex: 1 },
+    });
+  });
+});
+
+describe("the PAID write plane: one money gate, and a regenerate that cannot leave a stale reel", () => {
+  test("generateReel reserves the whole job and schedules the submit", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 3 });
+    const before = await mediaLeft(t);
+
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(await mediaLeft(t)).toBe(before - res.estCents);
+    // 3 video + 3 tts + 1 stt. The render line has no row, by construction.
+    expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(7);
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+  });
+
+  test("a REFUSED generate schedules nothing and consumes nothing", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2, chars: maxCharsFor(10) + 46 });
+    const before = await mediaLeft(t);
+
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "narration_too_long",
+    });
+    expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await mediaLeft(t)).toBe(before);
+  });
+
+  test("regenerateBlock is a JOB OF ONE BLOCK — clip, voice AND render", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 4 });
+    const res = await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 2 });
+    expect(res.ok).toBe(true);
+
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    expect(rows).toHaveLength(3); // 1 video + 1 tts + 1 stt; NOT the whole four-block deck
+    expect(new Set(rows.map((r) => r.blockIndex))).toEqual(new Set([2, -1]));
+  });
+
+  test("REGENERATING CLEARS THE RENDER — every artifact field, in the same transaction", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: storageId,
+        sidecarStorageId: storageId,
+        sidecarHash: "a".repeat(64),
+        renderedAt: T0,
+        renderSummary: { durationS: 20, blockCount: 2, gates: ["g"] },
+      });
+    });
+
+    await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 });
+
+    // A canvas showing a stale final.mp4 beside a freshly regenerated block is lying to the user,
+    // and it is a lie they would only find by watching the whole reel.
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("pending");
+    expect(plan?.renderStorageId).toBeUndefined();
+    expect(plan?.sidecarStorageId).toBeUndefined();
+    expect(plan?.sidecarHash).toBeUndefined();
+    expect(plan?.renderedAt).toBeUndefined();
+    expect(plan?.renderSummary).toBeUndefined();
+    // …and the reel query agrees, which is the property the user actually experiences.
+    expect((await asA(t).query(api.media.reel, { planId })).url).toBeNull();
+  });
+});
+
+describe("the FREE editor: five affordances, none of which costs a cent", () => {
+  test("editing a prompt or a narration line costs nothing and clears the render", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    const before = await mediaLeft(t);
+    await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: "rendered" }));
+
+    expect(await asA(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "new" })).toEqual({ ok: true });
+    expect((await planRowOf(t, planId))?.shots?.[0]?.prompt).toBe("new");
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+
+    const line = "y".repeat(minCharsFor(10));
+    expect(await asA(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 1, narration: line })).toEqual({ ok: true });
+    expect((await planRowOf(t, planId))?.shots?.[1]?.narration).toBe(line);
+
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  test("an over-length narration edit is REFUSED with the same count the rail would report", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 1 });
+    const tooLong = "z".repeat(maxCharsFor(10) + 46);
+    // Without this cure, `narration_too_long` from the rail is a dead end: the user is told the
+    // line is too long and has no way to shorten it.
+    expect(
+      await asA(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 0, narration: tooLong }),
+    ).toMatchObject({ ok: false, reason: "narration_too_long", chars: tooLong.length });
+    expect((await planRowOf(t, planId))?.shots?.[0]?.narration).not.toBe(tooLong);
+  });
+
+  test("reorder permutes, renumbers and recomputes the windows — and rejects a non-permutation", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 3 });
+    const promptsBefore = (await planRowOf(t, planId))?.shots?.map((s) => s.prompt);
+
+    expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: [2, 0, 1] })).toEqual({ ok: true });
+    const after = await planRowOf(t, planId);
+    expect(after?.shots?.map((s) => s.prompt)).toEqual([
+      promptsBefore?.[2], promptsBefore?.[0], promptsBefore?.[1],
+    ]);
+    expect(after?.shots?.map((s) => s.index)).toEqual([0, 1, 2]);
+    expect(after?.shots?.map((s) => s.windowStartMs)).toEqual([0, 10_000, 20_000]);
+
+    for (const bad of [[0, 1], [0, 1, 5], [0, 0, 1]]) {
+      expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: bad })).toEqual({
+        ok: false, reason: "not_a_permutation",
+      });
+    }
+  });
+
+  test("delete splices and renumbers, and refuses to empty the deck", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).toEqual({ ok: true });
+    expect((await planRowOf(t, planId))?.shots?.map((s) => s.index)).toEqual([0]);
+    expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).toEqual({
+      ok: false, reason: "last_block",
+    });
+  });
+
+  test("a landed job keeps its OWN blockIndex across a reorder — the snapshot is authoritative", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A, planId, batchId: "b1", blockIndex: 0, provider: "fal", kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model, spec: { kind: "video", resolution: "480p", seconds: 10 },
+        promptHash: "0".repeat(64), status: "succeeded", estUsd: 0.1, createdAt: T0, updatedAt: T0,
+      });
+    });
+    await asA(t).mutation(api.media.reorderBlocks, { planId, order: [1, 0] });
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    // Re-pointing a landed asset at a different block's tile would be worse than leaving it.
+    expect(rows[0]?.blockIndex).toBe(0);
+  });
+});
+
+describe("BETA-05 ISOLATION: tenant B cannot read, spend or edit tenant A's canvas", () => {
+  test("every READ returns empty for the wrong tenant", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { tenantId: A, blocks: 2 });
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered", renderStorageId: storageId, sidecarStorageId: storageId,
+        renderSummary: { durationS: 20, blockCount: 2, gates: ["g"] },
+      });
+    });
+
+    // A sees it…
+    expect(await asA(t).query(api.media.byPlan, { planId })).toHaveLength(2);
+    expect((await asA(t).query(api.media.reel, { planId })).url).toBeTruthy();
+
+    // …and B gets NOTHING, including no signed URL.
+    // MUTATION CHECK: drop `plan.tenantId !== ctx.tenantId` from assetUrls and this goes RED.
+    expect(await asB(t).query(api.media.byPlan, { planId })).toEqual([]);
+    expect(await asB(t).query(api.media.assetUrls, { planId })).toEqual([]);
+    const bReel = await asB(t).query(api.media.reel, { planId });
+    expect(bReel.url).toBeNull();
+    expect(bReel.status).toBeNull();
+    expect((await asB(t).query(api.media.jobEstimate, { planId })).totalCents).toBe(0);
+  });
+
+  test("every WRITE throws for the wrong tenant — reads return [], writes throw", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { tenantId: A, blocks: 2 });
+    const before = await mediaLeft(t);
+
+    const line = "y".repeat(minCharsFor(10));
+    await expect(asB(t).mutation(api.media.generateReel, { planId })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "x" })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 0, narration: line })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.reorderBlocks, { planId, order: [1, 0] })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).rejects.toThrow(/plan not found/);
+
+    // Nothing moved: no rows, no budget, no edits.
+    expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await mediaLeft(t)).toBe(before);
+    expect((await planRowOf(t, planId))?.shots?.[0]?.prompt).toBe("prompt 0");
+  });
+
+  test("an UNAUTHENTICATED caller reaches none of it", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    await expect(t.query(api.media.byPlan, { planId })).rejects.toThrow(/UNAUTHENTICATED/);
+    await expect(t.mutation(api.media.generateReel, { planId })).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+});
+
+// ── The RENDER TRIGGER and D12(b) RETENTION (plan 20-16) ──────────────────────────────────────
+//
+// The last landing starts the render. There is no chain, no poller and no ticker — `landResult`
+// already runs on every arrival inside a serializable mutation, so the `pending -> rendering`
+// transition IS the once-only guard.
+
+/** A batch mid-flight: every renderable row still `submitted`, the plan at `pending`. */
+async function seedInFlight(t: T, opts: { blocks?: number; batchId?: string } = {}) {
+  const blocks = opts.blocks ?? 2;
+  const batchId = opts.batchId ?? "batch_trigger";
+  const planId = await seedPlan(t, A);
+  const jobIds: Id<"mediaJobs">[] = [];
+  await t.run(async (ctx) => {
+    await ctx.db.patch(planId, { renderStatus: "pending", clipSeconds: 10 });
+    for (let i = 0; i < blocks; i++) {
+      for (const kind of ["video", "tts"] as const) {
+        jobIds.push(
+          await ctx.db.insert("mediaJobs", {
+            tenantId: A,
+            planId,
+            batchId,
+            blockIndex: i,
+            provider: "fal",
+            kind,
+            model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+            spec:
+              kind === "video"
+                ? { kind: "video", resolution: "480p", seconds: 10 }
+                : { kind: "tts", characters: 100, voice: "v", sampleRateHertz: 24000 },
+            promptHash: "0".repeat(64),
+            status: "submitted",
+            falRequestId: `req_${i}_${kind}`,
+            estUsd: 0.1,
+            createdAt: T0,
+            updatedAt: T0,
+          }),
+        );
+      }
+    }
+  });
+  return { planId, batchId, jobIds };
+}
+
+/** Land one row through the real `landResult`, as the webhook would. */
+const land = (t: T, jobId: Id<"mediaJobs">, ok = true) =>
+  t.run(
+    async (ctx) =>
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId,
+        outcome: ok
+          ? {
+              ok: true,
+              assetStorageId: await ctx.storage.store(
+                new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" }),
+              ),
+              assetHash: "b".repeat(64),
+              mimeType: "video/mp4",
+              bytes: 3,
+              moderation: null,
+            }
+          : { ok: false, code: "provider_error" },
+      }),
+  );
+
+describe("the render TRIGGER: the last landing starts it, exactly once, with no poller", () => {
+  test("an EARLIER landing schedules nothing and leaves the status at pending", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 2 });
+    await land(t, jobIds[0] as Id<"mediaJobs">);
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+  });
+
+  test("the LAST landing moves pending -> rendering", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 2 });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
+  });
+
+  test("A SECOND arrival cannot start a second render — the transition IS the guard", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 1 });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
+
+    // A re-delivered webhook for an already-terminal row. A double render is a double sandbox.
+    await land(t, jobIds[0] as Id<"mediaJobs">);
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
+  });
+
+  test("a FAILED sibling means incomplete_batch and NO render — the sandbox is never bought", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 2 });
+    await land(t, jobIds[0] as Id<"mediaJobs">, false); // the clip fails
+    for (const id of jobIds.slice(1)) await land(t, id as Id<"mediaJobs">);
+
+    // D8's fixed-window contract makes a missing clip a HARD ERROR, so this render is already
+    // known to fail. Finding that out in the sandbox costs a sandbox.
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("incomplete_batch");
+    expect(plan?.renderStorageId).toBeUndefined();
+  });
+
+  test("a pending STT line does NOT hold the reel hostage — captions are POST-assembly (D8)", async () => {
+    const t = harness();
+    const { planId, batchId, jobIds } = await seedInFlight(t, { blocks: 1 });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A, planId, batchId, blockIndex: -1, provider: "fal", kind: "stt",
+        model: MEDIA_DEFAULT_STT.model, spec: { kind: "stt", audioMinutes: 0.5 },
+        promptHash: "0".repeat(64), status: "queued", estUsd: 0.01, createdAt: T0, updatedAt: T0,
+      });
+    });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    // The STT row is still `queued` and the render fired anyway, on the video+tts set alone.
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
+  });
+
+  test("a batch whose plan was never approved for a render is left alone", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 1 });
+    await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: undefined }));
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    expect((await planRowOf(t, planId))?.renderStatus).toBeUndefined();
+  });
+});
+
+describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
+  /** Drive a full render through the offline seam and return the batch's rows afterwards. */
+  async function renderThrough(t: T, fixture: Record<string, unknown>) {
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify(fixture));
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    return { planId, rows };
+  }
+
+  test("a SUCCESSFUL render deletes every intermediate and unsets every field", async () => {
+    const t = harness();
+    const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    const { planId, rows } = await renderThrough(t, {
+      ok: true, mp4StorageId, sidecarStorageId, renderMs: 1000, gates: [], blockCount: 2,
+    });
+
+    // The FIELDS are unset…
+    expect(rows.every((r) => r.assetStorageId === undefined)).toBe(true);
+    expect(rows.length).toBeGreaterThan(0); // …and the scan is not vacuous.
+
+    // The DELIVERABLE is kept — deleting it would delete the thing the user asked for.
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("rendered");
+    // Existence is resolved INSIDE the transaction: a Blob is not a Convex type and cannot cross
+    // the t.run boundary.
+    expect(await blobExists(t, mp4StorageId)).toBe(true);
+    expect(await blobExists(t, sidecarStorageId)).toBe(true);
+  });
+
+  test("a FAILED render KEEPS every intermediate — the half that is easy to get backwards", async () => {
+    const t = harness();
+    const { planId, rows } = await renderThrough(t, { ok: false, code: "decode_failed" });
+
+    // The intermediates are the only debugging evidence a failed render leaves.
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.assetStorageId !== undefined)).toBe(true);
+    for (const r of rows) {
+      expect(r.assetStorageId).toBeDefined();
+      if (r.assetStorageId) expect(await blobExists(t, r.assetStorageId)).toBe(true);
+    }
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("failed");
+  });
+
+  test("a FAILED render writes ONE dead letter, refs and codes only", async () => {
+    const t = harness();
+    await renderThrough(t, { ok: false, code: "speech_out_of_window" });
+    const dl = await t.run(async (ctx) => await ctx.db.query("deadLetters").collect());
+    expect(dl).toHaveLength(1);
+    expect(Object.keys((dl[0]?.payload ?? {}) as object).sort()).toEqual(
+      ["batchId", "planId", "reasonCode"].sort(),
+    );
+    // No ffmpeg output, no filename, no narration, no URL.
+    expect(JSON.stringify(dl[0]?.payload)).not.toMatch(/url|href|http|\.mp4|\.wav/i);
+    expect(dl[0]?.error).toBe("speech_out_of_window");
+  });
+
+  test("a SUCCESSFUL render writes no dead letter at all", async () => {
+    const t = harness();
+    const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await renderThrough(t, {
+      ok: true, mp4StorageId, sidecarStorageId, renderMs: 1, gates: [], blockCount: 2,
+    });
+    expect(await t.run(async (ctx) => await ctx.db.query("deadLetters").collect())).toHaveLength(0);
+  });
+
+  test("the deletion is IDEMPOTENT — a second terminal over a cleaned batch is a no-op", async () => {
+    const t = harness();
+    const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    const { planId } = await seedRenderable(t, { blocks: 2 });
+
+    const result = {
+      ok: true as const,
+      renderStorageId: mp4StorageId,
+      sidecarStorageId,
+      sidecarHash: "c".repeat(64),
+      blockCount: 2,
+      renderMs: 1,
+      gatesPassed: 2,
+      summary: { durationS: 20, blockCount: 2, gates: ["g", "h"] },
+    };
+    const run = () =>
+      t.run(async (ctx) =>
+        ctx.runMutation(internal.render.renderReel.recordRender, {
+          tenantId: A, planId, batchId: "batch_render", result,
+        }),
+      );
+    await run();
+    await expect(run()).resolves.not.toThrow(); // no "Delete on non-existent doc"
+  });
 });

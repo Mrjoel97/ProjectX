@@ -10,7 +10,23 @@
 > two remaining §-parsers, plus a section-terminator fix. Pure `@pikar/core`, zero new deps. See
 > `## The §-parsers` below. The dispatch route itself is documented in `cockpit.md`.)
 >
-> Last verified: 2026-08-02 (20-14 - **the voiceover stage.** One TTS take per block through the
+> Last verified: 2026-08-02 (20-09 + 20-16 + the unrenderable-deck guard - **the canvas plane, the
+> render trigger and D12(b) retention.** ONE bump covering waves 9 and 10; this lane executed both.
+> Five tenant-guarded reads and six writes with the BETA-05 isolation assertion shipped alongside;
+> the last landing starts the render with NO chain and NO poller (the pending->rendering transition
+> is the once-only guard); delete-on-success / KEEP-on-failure retention pinned to a single
+> `storage.delete` site. **And a money leak closed: a deck with a TEXT or SCREEN REC block used to
+> pass the money gate and could never assemble.** See `## The canvas plane`, `## The render trigger
+> and D12(b) retention` and `## The unrenderable-deck guard` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-15 - **the renderer.** A Next.js route handler starts an
+> ephemeral Vercel Sandbox and runs `assemble_final.sh` over the landed clips and voice takes,
+> with **no Vercel access token existing anywhere in the system** (D11) - a property now asserted
+> repo-wide rather than described. `persistent: false` and `networkPolicy: "deny-all"` are the two
+> cross-tenant leak vectors and both were OBSERVED to fail a test when deleted. Plan tier **Pro**,
+> route `maxDuration` **300 s**, sandbox `timeout` **240 s**. See `## The renderer` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-14 - **the voiceover stage.** One TTS take per block through the
 > SAME adapter, secret, webhook and landing code: two switch arms, one narration read, and no
 > second integration anywhere. The endpoint was chosen because it has NO rate knob, so D8's
 > no-time-stretch rule is enforced by the provider rather than by our discipline. See
@@ -710,6 +726,383 @@ reporting a failed render, not a rendered failure.
 poster frame, and the `--manifest`/`--allow-mismatch` pair plumbing that index discovery replaces.
 `assembleScript.test.ts` scans for all three flags, so re-adding one is a visible decision rather
 than a quiet drift.
+
+## The renderer (20-15)
+
+Where the reel is actually assembled: an ephemeral Vercel Sandbox microVM, started by a Next.js
+route handler, running `assemble_final.sh` over the landed clips and voice takes.
+
+**The architecture, in three sentences.** Convex cannot encode video (D9), so `renderReel` (a Convex
+`internalAction`) POSTs to `apps/web/app/api/media/render` with a shared bearer; that route starts
+an OIDC-authed sandbox, fetches the tenant bytes itself from a bearer-guarded Convex blob route,
+runs ffmpeg, and validates everything that comes back; the finished `final.mp4` and its sidecar go
+up through two Convex-minted single-use upload URLs, and only small JSON travels in the response.
+
+### THE PROPERTY THIS DESIGN EXISTS FOR: no Vercel access token anywhere
+
+The re-scope delta wanted the runner in Convex with a `VERCEL_TOKEN`. **D11 overrode that.** A Vercel
+personal access token is scoped to a **team, not a capability**: it can deploy, delete projects and
+read every project environment variable. That is strictly more powerful than anything else this
+codebase holds, and it would falsify ADR-011's cleanest property — *"an API key in a deployment
+secret is the whole auth story"* — which is true of `FAL_KEY` precisely because `FAL_KEY` can only
+generate media.
+
+Putting the runner where OIDC is automatic deletes three secrets, the crown-jewel-token liability,
+the `convex.json` Node-22 pin, the `@vercel/sandbox`-under-Convex-bundler question and the
+connectivity spike. It costs one HTTP hop.
+
+`llmRedaction.test.ts` scans every Convex source plus the route, the bake script and
+`packages/core/src/render.ts` for `VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID` and
+requires **zero occurrences in code** (comments may name them while explaining the absence). This is
+a headline property, so it is an assertion rather than a paragraph.
+
+### The plan tier and the duration ceiling — the number D11 moved
+
+**Vercel plan tier: Pro. Route `maxDuration`: 300 s. Sandbox `timeout`: 240 s.** Settled at plan
+20-15's blocking Task 1 checkpoint, 2026-08-02. Record both numbers here whenever the tier changes.
+
+Under the delta's Convex-hosted runner the ceiling was Convex's 10-minute action limit. **Under D11
+the binding ceiling is the Vercel function's max duration** — and on Hobby that defaults to 60 s,
+which does *not* fit a 60–150 s render. Pro's 300 s gives ~2× headroom over the modelled render.
+
+The sandbox timeout is **strictly below** the route's, with 60 s of teardown margin, so the VM is
+stopped by our own `finally` rather than orphaned by the function being killed mid-cleanup.
+`buildSandboxOptions` CLAMPS to `RENDER_SANDBOX_TIMEOUT_MS` rather than trusting its caller, and a
+scan pins the route's `maxDuration` literal to `RENDER_MAX_DURATION_S` (Next.js reads route segment
+config by static analysis, so the route cannot import the constant — the scan is the drift guard the
+import would have been).
+
+⚠ **On Hobby, exhausting the 5 free Active-CPU hours PAUSES sandbox creation for 30 days rather
+than charging** (delta pitfall 18). The render stage silently stops working mid-month with no
+invoice to notice. D10 permits 2 jobs/day ≈ 60/month against ≈150 renders/month of allotment — but
+a retry storm or a test suite that accidentally creates real sandboxes eats that headroom fast,
+which is why `MEDIA_SANDBOX_FIXTURE` is mandatory in tests.
+
+### Two INVARIANTS, not implementation details
+
+Both are cross-tenant leak vectors, both are closed by an infrastructure option, and a test has been
+**observed to fail without each one**:
+
+| Option | Why it is mandatory |
+|---|---|
+| `persistent: false` | **The SDK default is TRUE** (vendor README: *"Sandboxes are persistent by default"*). Left unset, the SDK snapshots the filesystem on stop and restores it on the next resume — so tenant A's clips, voice takes and `final.mp4` survive into the VM that renders tenant B's reel. A cross-tenant data leak created by an *unset option*, not by a bug. |
+| `networkPolicy: "deny-all"` | The VM holds tenant media and must not be able to send it anywhere. This is why the route — never the sandbox — does every fetch, and why ffmpeg is baked into a snapshot instead of downloaded per invocation. |
+
+`name` is **never** passed either: a named sandbox is resumable BY NAME, which is the whole
+persistence mechanism. The test asserts `"name" in opts === false`, not `opts.name === undefined` —
+an explicit `name: undefined` would pass the weaker check and still hand the SDK the key.
+
+These are assertable at $0 **because `buildSandboxOptions` is a pure function rather than an inline
+literal** inside `Sandbox.create({...})`. A literal could only be tested by booting a real VM. This
+is the same move plan 20-05 makes with `buildSubmitBody`, and a scan pins the route to calling
+`Sandbox.create(options)` and never `Sandbox.create({`.
+
+### The snapshot, and the bake
+
+ffmpeg is **not** present in a stock sandbox and is **not** in Amazon Linux 2023's `dnf` repos.
+`deny-all` and a per-invocation download are mutually exclusive; the snapshot is that tension's
+resolution.
+
+```bash
+cd apps/web && npx vercel link && npx vercel env pull   # writes VERCEL_OIDC_TOKEN into .env.local
+pnpm --filter @pikar/web bake:sandbox
+```
+
+- **The exact asset:** BtbN `ffmpeg-master-latest-linux64-gpl.tar.xz` (~125 MB) — ffmpeg AND
+  ffprobe, statically linked, **`libass` ENABLED**. Plan 20-17's caption burn needs `libass`, so an
+  LGPL build is not a substitute, and the bake **fails** if `ffmpeg -buildconf` does not show it.
+- `dejavu-sans-fonts` is baked now, so 20-17 adds nothing to the image and a cut of 20-17 costs
+  nothing.
+- **`snapshotExpiration: 0`.** Snapshots otherwise expire 30 days after last use, and a media rail
+  that goes 31 days unused would wake up with a dead id and fail for everyone at once.
+- **The `awk` question is settled by a command, not an assumption:** the bake runs
+  `command -v awk ffmpeg ffprobe` and fails if any is missing. AL2023 is *expected* to ship `gawk`;
+  expected is not verified. In-repo fallback if it ever fails: add `dnf install -y gawk`.
+- **The script lives in `apps/web/scripts/`, not `packages/backend/scripts/`** (a recorded deviation
+  from plan 20-15). `@vercel/sandbox` is a dependency of `apps/web` ALONE — that is what keeps the
+  SDK out of the Convex bundle — and under pnpm's default isolated linker it is materialised at
+  `apps/web/node_modules/@vercel/sandbox` and nowhere else, so the import cannot resolve from
+  `packages/backend/`. `vercel link` also points at `apps/web`, which is where the OIDC token lands.
+  The script belongs where its dependency and its credential already are.
+- **Local auth is an OIDC token, not a PAT.** The SDK resolves credentials from `VERCEL_OIDC_TOKEN`
+  (`@vercel/oidc`); `vercel env pull` writes it into `.env.local` and it is short-lived and
+  project-scoped. If it expires, pull again. D11's no-access-token property holds for the bake too.
+
+### What NEVER crosses into the VM
+
+No `FAL_KEY`, no `OPENAI_API_KEY`, no Vercel credential, no `tenantId`, no fal URL, no signed
+storage read-URL, no prompt and no narration. The runner passes `env` to neither `Sandbox.create`
+nor `runCommand`, and the only bytes written in are the media itself and `assemble_final.sh`.
+
+The request body Convex sends is the complete list: `{ renderId, blockCount, clipSeconds, inputs:
+[{name, jobId}], uploadUrls }`. **The job ids are opaque refs — the runner is handed no URL to fetch
+at all** and builds every blob URL itself from `convexSiteOrigin(NEXT_PUBLIC_CONVEX_URL)`. That is
+the read-direction SSRF guard; the write direction is guarded by requiring both `uploadUrls` to sit
+on the derived deployment origin. A scan asserts the body literal carries none of the banned names.
+
+Filenames are validated against `RENDER_INPUT_NAME` before a byte is written: a name from a request
+body reaching `writeFiles` unchecked is a path traversal into the VM — including over
+`assemble_final.sh` itself, which would make the endpoint arbitrary code execution.
+
+### What comes BACK is not trusted either
+
+`validateRenderReturn` (pure, `packages/core/src/render.ts`) runs before anything is published:
+
+| Condition | Code |
+|---|---|
+| `readFileToBuffer` returned `null` | `missing_output` |
+| zero bytes | `empty_output` |
+| bytes 4..8 are not `ftyp` | `not_an_mp4` |
+| outside 200 KB – 200 MB | `implausible_size` |
+| sidecar absent | `invalid_sidecar` (detail `missing`) |
+| sidecar fails `parseAssemblySidecar` | `invalid_sidecar` (detail = the validator's own code) |
+| **valid JSON reporting `overrun: true`** | **`invalid_sidecar` — D8's HARD ERROR arriving from the renderer, and NOTHING is published** |
+
+**The MIME type is OURS**: the stored blob's type is the literal `"video/mp4"` we assert, never a
+value read from the VM.
+
+**And Convex re-validates the sidecar a second time**, with the same `parseAssemblySidecar`, from
+the bytes that actually landed in our storage. That is defence in depth, not duplication: it costs
+one function call and a ~2 KB read, and it means a compromised or buggy route cannot publish an
+ungoverned reel. `gatesPassed` in the audit comes from *that* re-validation, never from what the
+route claimed.
+
+### ffmpeg's stderr never reaches a row, a log or a dead letter
+
+`reasonCodeFor(exitCode, stderr)` maps to a CLOSED union and **returns a code only** — the input
+cannot appear in the output by construction. ffmpeg's stderr carries file paths and, on a caption
+burn, narration text; it is CLAUDE.md §4 content. A scan asserts `.stderr()` is read **exactly
+once** in `render.ts` and on the same line it becomes a code, and never at all in the route or in
+`renderReel.ts`. The bake script is the one exemption, recorded at the scan: it runs by hand against
+a sandbox with zero tenant bytes in it.
+
+### The blob route, and where the tenant boundary actually is
+
+`GET /media/blob/{jobId}` on `http.ts`, bearer-guarded by `MEDIA_RENDER_SECRET` with the same
+fail-closed shape as `/skillopt/export`. It takes ONE opaque job id and nothing else — no tenant, no
+path, no storage id (`http.ts:123-129`'s rule) — resolves it with `normalizeId`, and refuses a row
+that is not `succeeded`.
+
+**The tenant boundary is NOT on this route.** It is upstream, in `renderReel.batchToRender`, which
+reads job ids through the tenant-prefixed `by_batch` index. Saying the route "checks the tenant"
+would be a phrase with no mechanism: it is handed an id it did not choose, and the only honest
+guarantee it makes is that it invents nothing.
+
+**No HMAC path segment, unlike `/fal/callback/*`**, and the difference is the caller: fal is a third
+party holding no secret of ours, so the segment is the only thing that can authenticate it. Here the
+caller already proves knowledge of `MEDIA_RENDER_SECRET` in the header, and an HMAC keyed on that
+same secret is derivable by anyone who has it. It would be ceremony, not defence.
+
+### A reel is ALL-OR-NOTHING
+
+`batchToRender` refuses `not_all_succeeded` (a line without bytes), `incomplete_blocks` (an index
+missing its clip or its voice take) and `empty_batch` — all **before** a sandbox exists, so the
+failure is free rather than a $0.02 VM that hard-errors on a missing input. The assembler asserts
+`--blocks N` before any work for the same reason: a dropped block must FAIL, not ship a hole.
+
+⚠ **A deck containing a TEXT or SCREEN REC block cannot currently render.** `reserveJobInner`
+creates a video line only `if (isPaidBlock(block))`, so those indices have a voice take and no clip,
+and `assemble_final.sh` requires both. It is refused as `incomplete_blocks` rather than discovered
+inside the VM. Making those blocks renderable (a generated title card, say) is a **scope decision
+for the canvas**, not a patch in the render path.
+
+### The `MEDIA_SANDBOX_FIXTURE` seam — and the rule that it is the DEFAULT in tests
+
+`renderReel` short-circuits on `MEDIA_SANDBOX_FIXTURE` (the `FAL_FIXTURE` / `llm.ts:922` precedent)
+and never issues a fetch. It sits **after** the two `requireEnvMedia` reads on purpose, so "no
+secret" is the same refusal in fixture mode as in production.
+
+**No test suite may reach `Sandbox.create`.** On Hobby an accidental real create burns a shared
+monthly allotment whose exhaustion is a 30-day outage. The route body is asserted in
+`packages/core/src/render.test.ts` with the SDK *injected* — which is also the only way "a bad
+bearer creates NO sandbox" is assertable at all, since `apps/web` has no unit-test runner.
+
+### The two secrets
+
+```bash
+# from packages/backend
+npx convex env set MEDIA_RENDER_SECRET <fresh random>
+npx convex env set MEDIA_RENDER_URL https://<app>/api/media/render
+# and on Vercel (Project -> Settings -> Environment Variables)
+MEDIA_RENDER_SECRET=<the same value>
+MEDIA_SANDBOX_SNAPSHOT_ID=<from the bake script>
+```
+
+`MEDIA_RENDER_SECRET` is the shared bearer in **both** directions (Convex→route and route→Convex)
+and is set on BOTH sides. The route additionally reads `NEXT_PUBLIC_CONVEX_URL`, which apps/web
+already has — no third secret. Both Convex-side values are **deployment** env vars
+(`npx convex env set`), never `.env.local`.
+
+
+## The canvas plane (20-09)
+
+Five tenant-guarded reads and six tenant-guarded writes, in `media.ts`. **Reads return `[]`/null for
+a foreign tenant; writes THROW** (`cockpit.ts:531`'s rule). One `ownedPlan` guard behind all of them,
+so a new canvas function cannot ship without it.
+
+| Read | What it is for |
+|---|---|
+| `byPlan` | one entry per BLOCK, carrying **two independent states** — `clip` and `voice`. They arrive minutes apart through two different webhooks, and a merged status cannot express "voice landed, clip did not". Carries `narrationChars` / `maxChars` / `overCharLimit`. **No URL.** |
+| `assetUrls` | the per-asset signed URLs. **The only bearer-minting surface** — a query that mints a capability should be the smallest one possible, which is why this is not merged into `byPlan`. A line with no asset yields a NULL url, not an omitted row. |
+| `reel` | the finished mp4 + the sidecar's gate summary. |
+| `jobEstimate` | the ITEMISED estimate. |
+
+### D7's rule is a BACKEND requirement before it is a UI one
+
+*"The editor must not offer a control that can spend money without showing the estimate first."*
+`jobEstimate` returns **four labelled lines** — clips, voice, captions, render — plus `totalCents`,
+`capCents` and `remainingCents`, so the UI can print *"6 clips $3.00 · voice $0.02 · captions $0.01 ·
+render $0.02 = $3.05"*. A single total is not enough: **the user must be able to see WHICH line is
+the expensive one before deciding to cut a block.**
+
+It builds the SAME spec list `reserveJobInner` builds, from the same price table, including the 2×
+voice multiplier and the flat render constant. **`media.test.ts` asserts `jobEstimate.totalCents ===
+reserveJobInner`'s `estCents` for the same deck** — a UI that computes its own total and a rail that
+computes another is the drift this phase exists to prevent. It also returns the pre-flight `refusal`
+(with block index and character count) so the canvas can name the lever *before* the button is
+pressed.
+
+`jobEstimate` **consumes nothing.** It is a query and cannot.
+
+### The url guarantee, and where it actually lives
+
+`reel` returns a non-null `url` ONLY when `renderStatus === "rendered"` AND both storage ids AND
+`renderSummary` are present. `recordRender` writes all four in ONE patch, and only after
+`parseAssemblySidecar` accepted the bytes — **so the check is at the WRITE**, which is the only place
+it can be: `ctx.storage` in a query is a `StorageReader` with `getUrl` and no way to read a blob.
+A row hand-patched to `rendered` therefore surfaces no reel.
+
+`renderSummary` (`{ durationS, blockCount, gates }`) exists for that reason and one more: it means
+the sidecar is parsed once per RENDER instead of once per canvas subscription tick.
+
+### The free editor: five affordances, floor AND ceiling
+
+`editBlockPrompt` · `editBlockNarration` · `regenerateBlock` · `reorderBlocks` · `deleteBlock`.
+**Nothing else.** No timeline, transitions, filters, layers, masking, music, or client-side
+rendering. If a reviewer asks for one, it is a deferred idea and not a small addition.
+
+`editBlockNarration` is **the UI half of the pre-payment guard, not scope creep**: without it,
+`narration_too_long` from the rail is a dead end — a user told *"block 4's line is 186 characters"*
+with no way to shorten it is stuck. It refuses with the same reason and the same count the rail
+would return.
+
+### EVERY structural edit clears the render, through ONE helper
+
+`clearRender` unsets `renderStatus` → `pending`, `renderStorageId`, `sidecarStorageId`,
+`sidecarHash`, `renderReason`, `renderedAt` and `renderSummary`. **Six callers, one helper**, and
+that is the point: six copies of the unset is exactly how one of them ends up missing a field. It
+already happened — `renderSummary` was added to the schema and to `recordRender` but not to
+`clearRender`, and the regenerate test caught it.
+
+A canvas showing a stale `final.mp4` beside a freshly regenerated block is lying to the user, and it
+is a lie they would only discover by watching the whole reel.
+
+### The reorder ceiling, stated
+
+`mediaJobs.blockIndex` is a SNAPSHOT taken at reserve time, and `byPlan` renders a job under the
+block it was reserved for. A reorder after submit therefore leaves in-flight jobs pointing at their
+original index. That is deliberate — the alternative is re-pointing a landed asset at a different
+block's tile, which is worse. Upgrade path if it ever confuses anyone: a stable per-block id instead
+of an array index, which is a schema change and not a UI one.
+
+`reorderBlocks` refuses anything that is not a PERMUTATION of the existing indices: a dropped or
+duplicated block becomes a deck with a hole, which hard-errors at the assembler.
+
+### BETA-05 isolation, shipped WITH the surface
+
+`media.test.ts` § *BETA-05 ISOLATION*: tenant B gets `[]`/null from every read (including no signed
+URL) and a thrown `plan not found` from all six writes, with zero rows and zero budget movement.
+An unauthenticated caller gets `UNAUTHENTICATED`. **Mutation-checked**: dropping
+`plan.tenantId !== ctx.tenantId` from `ownedPlan` turns it red.
+
+## The render trigger and D12(b) retention (20-16)
+
+### There is NO chain, and that is a decision, not an omission
+
+Delta §6.7 N4 described *"reserve → submit → wait-for-all-landed → render"*, and 20-07 left a
+hand-off to re-point `EXTERNAL_TARGETS.media` at a chain entry action. **20-16 evaluated that and
+declined it**, and `cockpit.ts` now says so at the site instead of carrying a promise nobody kept.
+
+`mediaComplete.landResult` already runs on every arrival, already holds the batch id, and already
+runs inside a serializable mutation. So "wait for all" is `maybeStartRender` — one indexed read of
+the batch — and **the `pending → rendering` transition IS the once-only guard**: two concurrent
+last-landings cannot both observe `pending`, so they cannot both schedule. A double render is a
+double sandbox.
+
+- An earlier landing schedules nothing.
+- A re-delivered webhook for a terminal row schedules nothing.
+- **A failed or blocked sibling means `renderStatus: "failed"`, `renderReason: "incomplete_batch"`,
+  and NO render.** D8's fixed-window contract makes a missing clip a hard error, so that render is
+  already known to fail — and finding that out in the sandbox costs a sandbox.
+- **A pending `stt` line does NOT hold the reel hostage.** Captions are a POST-assembly step (D8),
+  submitted after `final.mp4` exists. The trigger fires on the video+tts set alone.
+
+`ponytail:` an O(batch) read on every landing — 13 rows, indexed. The ceiling is a reel with hundreds
+of blocks, which D10's cap refuses long before it matters; the upgrade path is a landed-count on the
+plan row.
+
+### Retention: delete on SUCCESS, KEEP on FAILURE
+
+The arithmetic that forces it: ~55 MB/job × 2 jobs/day = **~3.3 GB/month against a Convex
+Free/Starter allowance of 1 GB TOTAL**.
+
+On a successful render, every `video`/`image`/`tts` row in the batch has its blob deleted and its
+`assetStorageId` unset. **`final.mp4` and the sidecar are KEPT** — deleting them would delete the
+deliverable. On a FAILED render **everything is kept**: the intermediates are the only debugging
+evidence a failed render leaves, and failures are rare.
+
+**ORDER MATTERS, and the code says why:** the plan row is patched FIRST, so the reel is published and
+readable, and only then are the intermediates deleted. A crash between the two leaves orphaned blobs
+— 35 MB of waste. A crash in the other order leaves a published reel whose tiles point at deleted
+blobs — a broken canvas. **Fail toward waste, not toward a lie.**
+
+The loop dedupes storage ids before deleting: `storage.delete` THROWS on an id that is already gone,
+so a blob referenced by two rows would abort the loop AFTER the reel was published and leave the rest
+of the batch undeleted forever.
+
+**`llmRedaction.test.ts` pins `storage.delete` to EXACTLY ONE site in the media subsystem**
+(`render/renderReel.ts`) and asserts the failure arm does not contain it. A second deletion site is
+how a delete-on-failure bug gets introduced later, and the failure half is the one that is easy to
+get backwards and impossible to notice.
+
+`ponytail:` no TTL, no cron, no sweep job. Upgrade path if failed-render debris ever accumulates: a
+scheduled sweep of `mediaJobs` older than N days — which is a cron, and this deliberately is not one.
+
+### A failed render dead-letters, and does not retry
+
+ONE `deadLetters` row, payload `{ batchId, planId, reasonCode }` and nothing else — no ffmpeg output,
+no filename, no narration, no URL. **A failed render does NOT retry:** at 480p a structural failure
+repeats, and the action-retrier would buy N sandboxes to learn the same thing N times.
+
+## The unrenderable-deck guard (20-15 follow-up)
+
+⚠ **`storyboard.ts`'s PAID table promised something the assembler cannot do.** Its comments called
+TEXT *"rendered by the assembler"* and SCREEN REC *"an instruction to the human"* — but the assembler
+harvested in 20-13 has **no title-card path and no upload path**, and it discovers inputs BY INDEX
+and hard-errors on the first missing clip. An unpaid block gets no video line, so nothing ever writes
+its `blockNN.mp4`.
+
+**That was a money leak, not a cosmetic gap:** a deck containing a TEXT block passed the money gate,
+spent real money on its AI blocks, and could then never assemble anything.
+
+`reserveJobInner` now refuses any deck containing an unpaid block with **`unrenderable_block`, BEFORE
+a cent moves** — the same placement rule the narration band follows: *a condition that makes a render
+impossible must be caught UPSTREAM of the reservation, never downstream of it.* `renderReel.
+batchToRender` still refuses it too (`incomplete_blocks`), but by then the clips are bought.
+
+`jobEstimate` surfaces the same refusal with its block index, so the canvas names the block.
+
+`ponytail:` refuse, rather than build a title card. The ceiling is that a deck mixing an AI block
+with a TEXT card cannot be made at all. The upgrade path is a `drawtext` branch in
+`assemble_final.sh` for a clipless index — **the DejaVu font is already baked into the sandbox
+snapshot** for 20-17 — plus a regenerated mirror and its byte-identity drift test, at which point the
+guard narrows to "unpaid AND no overlay text" rather than disappearing.
+
+**A test that displaced coverage was re-homed, not dropped:** the old *"D12a AT THE RAIL: 13 sub-cent
+lines"* test used a 13×TEXT deck and passed — which was the defect. The flooring-once property is now
+asserted on a RENDERABLE deck, and the pure 13-line arithmetic remains in
+`packages/cost/src/media.test.ts`.
+
 
 ## Storage retention (D12b)
 

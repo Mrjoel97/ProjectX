@@ -108,8 +108,15 @@ export type ParsedDeck =
 const PAID = {
   AI: true,
   VIDEO: true,
-  "SCREEN REC": false, // an instruction to the human — estimates to zero
-  TEXT: false, // rendered by the assembler — estimates to zero
+  // ⚠ AN UNPAID BLOCK IS ALSO AN UNRENDERABLE ONE, TODAY. Unpaid means no video line, which means
+  // nothing ever writes that index's `blockNN.mp4` — and `assemble_final.sh` discovers inputs BY
+  // INDEX and hard-errors on the first missing clip. The two comments below described an INTENT
+  // (a title card; a human-supplied recording) that the assembler harvested in 20-13 does not
+  // implement, and until it does, `media.reserveJobInner` refuses any deck containing one with
+  // `unrenderable_block` — BEFORE a cent moves. Do not "fix" that refusal without first giving
+  // the assembler a clipless-index branch.
+  "SCREEN REC": false, // INTENT: an instruction to the human. No upload path exists yet.
+  TEXT: false, // INTENT: a card rendered by the assembler. No drawtext branch exists yet.
 } as const satisfies Record<ShotType, boolean>;
 
 export const isPaidBlock = (b: Block): boolean => PAID[b.type];

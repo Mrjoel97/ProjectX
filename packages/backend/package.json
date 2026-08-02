@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./api": "./convex/_generated/api.js"
+    "./api": "./convex/_generated/api.js",
+    "./render/assembleScript": "./convex/render/assembleScript.ts"
   },
   "scripts": {
     "dev": "convex dev --run skills:seedSkills",

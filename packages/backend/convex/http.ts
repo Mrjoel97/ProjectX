@@ -318,4 +318,52 @@ http.route({
   }),
 });
 
+// ── The render BLOB route (MEDIA-01, plan 20-15) ──────────────────────────────────────────────
+//
+// The render runner lives in `apps/web` (D11 — that is where OIDC is automatic and no Vercel access
+// token is needed), so the clips and voice takes have to reach it over HTTP. This route is how, and
+// it is the THIRD use of the `/skillopt/export` bearer shape — the same fail-closed four lines.
+//
+// **Everything security-relevant comes from the ROW** (`http.ts:123-129`'s rule): the request
+// carries ONE opaque job id and nothing else — no tenant, no path, no storage id. `normalizeId`
+// refuses a malformed or foreign-table id, and a job that is not `succeeded` has no bytes.
+//
+// The tenant boundary is NOT here — it is upstream, in `renderReel.batchToRender`, which reads job
+// ids through the tenant-prefixed `by_batch` index. Saying this route "checks the tenant" would be
+// a phrase with no mechanism: it is handed an id it did not choose, and the only honest guarantee
+// it can make is that it invents nothing.
+//
+// ponytail: a bearer-guarded blob route instead of handing out `ctx.storage.getUrl` results.
+// `plans.attachmentUrls`' own header calls a signed storage URL a bearer capability; this keeps
+// that capability inside the deployment and hands out only a secret we rotate — and it keeps
+// `storage.getUrl`'s "only inside a tenantQuery" scan intact, which an httpAction could not
+// satisfy. Upgrade path if the render ever runs somewhere we do not control: short-lived scoped
+// read tokens, which is a real design rather than a URL.
+//
+// NO HMAC PATH SEGMENT, unlike `/fal/callback/*`, and the difference is the caller. fal is a THIRD
+// PARTY that holds no secret of ours, so the segment is the only thing that can authenticate it.
+// Here the caller already proves knowledge of `MEDIA_RENDER_SECRET` in the header — and an HMAC
+// keyed on that same secret is derivable by anyone who has it. It would be ceremony, not defence.
+http.route({
+  // `pathPrefix`, not a glob: Convex's router has no `*` syntax (the 20-06 lesson).
+  pathPrefix: "/media/blob/",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const expected = process.env.MEDIA_RENDER_SECRET;
+    const authHeader = req.headers.get("Authorization");
+    // Fail-closed: reject when the secret is unset OR the header is missing/mismatched.
+    if (!expected || authHeader !== `Bearer ${expected}`) {
+      return new Response("unauthorized", { status: 401 });
+    }
+
+    const raw = new URL(req.url).pathname.split("/").pop() ?? "";
+    const asset = await ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw });
+    if (!asset) return new Response("not found", { status: 404 });
+
+    const blob = await ctx.storage.get(asset.assetStorageId);
+    if (!blob) return new Response("not found", { status: 404 });
+    return new Response(blob, { headers: { "Content-Type": asset.mimeType } });
+  }),
+});
+
 export default http;
