@@ -95,7 +95,9 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(2);
   for (const eventType of ["plan.canceled", "plan.rescheduled"]) {
     const m = cockpit.match(
-      new RegExp(`eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`),
+      new RegExp(
+        `eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`,
+      ),
     );
     expect(m, `${eventType} audit payload not found`).not.toBeNull();
     const payload = m![1]!.replace(/\/\/[^\n]*/g, "");
@@ -156,10 +158,13 @@ test("the ONLY POST fetches in gmail.ts are TOKEN_ENDPOINT (refresh) and SEND_EN
   // send; a THIRD POST would be a new write verb reaching Gmail without a governance gate, so the
   // counts must match exactly — a POST that is not one of these two fails here.
   const src = readSource("gmail.ts");
-  const postFetches = [...src.matchAll(/fetch\(\s*([^,\s]+)\s*,\s*\{\s*method:\s*["']POST["']/g)].map(
-    (m) => m[1],
-  );
-  expect(postFetches, "the POST fetch targets changed").toEqual(["TOKEN_ENDPOINT", "SEND_ENDPOINT"]);
+  const postFetches = [
+    ...src.matchAll(/fetch\(\s*([^,\s]+)\s*,\s*\{\s*method:\s*["']POST["']/g),
+  ].map((m) => m[1]);
+  expect(postFetches, "the POST fetch targets changed").toEqual([
+    "TOKEN_ENDPOINT",
+    "SEND_ENDPOINT",
+  ]);
   // …and no OTHER `method: "POST"` exists anywhere in the module (e.g. on a template-literal URL).
   const allPosts = src.match(/method:\s*["']POST["']/g) ?? [];
   expect(
@@ -229,11 +234,15 @@ test("rawBodies flows ONLY into the toolless digest — never into a briefInbox 
   // THE assertion: no `return` in this block may reference the body-bearing value. Bodies (and
   // gists) must never ride the tool's return into the tool-bearing loop's context.
   const returns = block.match(/return\s+[^;]*;/g) ?? [];
-  expect(returns.length, "no return statements found in briefInbox — the scan is vacuous").toBeGreaterThan(0);
+  expect(
+    returns.length,
+    "no return statements found in briefInbox — the scan is vacuous",
+  ).toBeGreaterThan(0);
   for (const r of returns) {
-    expect(r, `a briefInbox return references rawBodies (body text would reach the loop): ${r}`).not.toMatch(
-      /rawBodies/,
-    );
+    expect(
+      r,
+      `a briefInbox return references rawBodies (body text would reach the loop): ${r}`,
+    ).not.toMatch(/rawBodies/);
   }
 });
 
@@ -267,7 +276,10 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
   // normalized back off after the call. This scan holds that line for every jsonSchema in llm.ts.
   const src = readSource("llm.ts");
   const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
-  expect(schemas.length, "no jsonSchema definitions found — has the idiom changed?").toBeGreaterThan(0);
+  expect(
+    schemas.length,
+    "no jsonSchema definitions found — has the idiom changed?",
+  ).toBeGreaterThan(0);
 
   for (const name of schemas) {
     const start = src.indexOf(`const ${name} = jsonSchema<`);
@@ -321,9 +333,10 @@ test("no body-bearing identifier reaches the tool-bearing loop region of llm.ts 
     /generateText/,
   );
   for (const id of ["rawBodies", "fetchInboxBodies"]) {
-    expect(block, `${id} appears in the tool-bearing loop region (raw bodies would be ingested)`).not.toContain(
-      id,
-    );
+    expect(
+      block,
+      `${id} appears in the tool-bearing loop region (raw bodies would be ingested)`,
+    ).not.toContain(id);
   }
 });
 
@@ -366,18 +379,25 @@ test("the digest synopsis rides the briefings row ONLY — never the loop return
   expect(insertMatch![0], "synopsis never reaches the briefings row").toMatch(/synopsis/);
   // THE assertion: no `return` in briefInbox may carry the synopsis into the loop.
   const returns = block.match(/return\s+[^;]*;/g) ?? [];
-  expect(returns.length, "no return statements found in briefInbox — the scan is vacuous").toBeGreaterThan(0);
+  expect(
+    returns.length,
+    "no return statements found in briefInbox — the scan is vacuous",
+  ).toBeGreaterThan(0);
   for (const r of returns) {
-    expect(r, `a briefInbox return references synopsis (model prose would reach the loop): ${r}`).not.toMatch(
-      /synopsis/,
-    );
+    expect(
+      r,
+      `a briefInbox return references synopsis (model prose would reach the loop): ${r}`,
+    ).not.toMatch(/synopsis/);
   }
   // And it must NOT appear in the briefing.created audit payload object.
-  const auditPayload = block.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBeNull();
-  expect(auditPayload![1], "synopsis leaked into the refs-only briefing.created payload").not.toMatch(
-    /synopsis/,
+  const auditPayload = block.match(
+    /eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/,
   );
+  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBeNull();
+  expect(
+    auditPayload![1],
+    "synopsis leaked into the refs-only briefing.created payload",
+  ).not.toMatch(/synopsis/);
 });
 
 // ── 03.11-04 (RPLY-01): the replyToMessage toolless-ingestion boundary (§2-D / SC-2) ──────────────
@@ -403,28 +423,40 @@ function replyToMessageBlock(): string {
 test("replyToMessage: the original body flows ONLY into draftReply — never a return, never an audit (SC-2)", () => {
   const block = replyToMessageBlock();
   // Present at all — a rename must not silently void the scan.
-  expect(block, "the body-bearing identifier `originalBody` is gone from replyToMessage").toMatch(/originalBody/);
+  expect(block, "the body-bearing identifier `originalBody` is gone from replyToMessage").toMatch(
+    /originalBody/,
+  );
   // Its ONE sanctioned destination is the toolless drafter.
   expect(block, "originalBody never reaches internal.llm.draftReply").toMatch(
     /runAction\(internal\.llm\.draftReply/,
   );
   // The block writes NO audit — so the body/From can never reach an audit payload from here.
-  expect(block, "replyToMessage writes a log-plane row (the body could reach an audit payload)").not.toMatch(
-    /audit\.log\b|\.insert\(\s*["'](?:audit|deadLetters|telemetry)["']|payload:/,
-  );
+  expect(
+    block,
+    "replyToMessage writes a log-plane row (the body could reach an audit payload)",
+  ).not.toMatch(/audit\.log\b|\.insert\(\s*["'](?:audit|deadLetters|telemetry)["']|payload:/);
   // No return may carry the body into the tool-bearing loop.
   const returns = block.match(/return\s+[^;]*;/g) ?? [];
-  expect(returns.length, "no return statements found in replyToMessage — the scan is vacuous").toBeGreaterThan(0);
+  expect(
+    returns.length,
+    "no return statements found in replyToMessage — the scan is vacuous",
+  ).toBeGreaterThan(0);
   for (const r of returns) {
-    expect(r, `a replyToMessage return references the original body: ${r}`).not.toMatch(/originalBody/);
+    expect(r, `a replyToMessage return references the original body: ${r}`).not.toMatch(
+      /originalBody/,
+    );
   }
 });
 
 test("replyToMessage: the resolved From address reaches patchPlan ONLY — never a tool return (§2-D)", () => {
   const block = replyToMessageBlock();
   // The address-bearing identifier is present and reaches the recipient-by-ref patch.
-  expect(block, "the address-bearing identifier `address` is gone from replyToMessage").toMatch(/const address =/);
-  expect(block, "the address never reaches patchPlan (recipient-by-ref)").toMatch(/recipients:\s*\[address\]/);
+  expect(block, "the address-bearing identifier `address` is gone from replyToMessage").toMatch(
+    /const address =/,
+  );
+  expect(block, "the address never reaches patchPlan (recipient-by-ref)").toMatch(
+    /recipients:\s*\[address\]/,
+  );
   // No return may INTERPOLATE the resolved address or the raw From/Message-ID header. The word
   // "address" in a return's PROSE ("ask the user for the address") is fine — only an interpolation
   // (`${address}` / `parsed.address` / `${tgt.target.from}`) or a Message-ID field would be a leak.
@@ -451,7 +483,9 @@ test("draftReply is structurally TOOLLESS (generateText, no tools:) — the repl
   const end = rest.indexOf("\nexport const", 1);
   const block = end >= 0 ? rest.slice(0, end) : rest;
   expect(block, "draftReply does not use generateText").toMatch(/generateText/);
-  expect(block, "draftReply is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(/\btools\s*:/);
+  expect(block, "draftReply is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(
+    /\btools\s*:/,
+  );
   expect(block, "draftReply does not load the reply-drafter skill").toMatch(/REPLY_DRAFTER_SKILL/);
 });
 
@@ -529,7 +563,9 @@ test("the personalizeRecipient tool redacts (scanText) BEFORE any model call (GR
   const draftAt = block.indexOf("draftCockpit");
   expect(scanAt, "personalizeRecipient does not call scanText").toBeGreaterThanOrEqual(0);
   expect(draftAt, "personalizeRecipient does not call draftCockpit").toBeGreaterThanOrEqual(0);
-  expect(scanAt, "scanText must run before draftCockpit (redact-before-model)").toBeLessThan(draftAt);
+  expect(scanAt, "scanText must run before draftCockpit (redact-before-model)").toBeLessThan(
+    draftAt,
+  );
 });
 
 test("recipientBodies (per-recipient content) never reaches an audit/DLQ/telemetry write (§4, Pitfall 5)", () => {
@@ -619,7 +655,10 @@ test("the agentSteps schema declares NO field outside the allow-list (§4 IS the
 function callbackBlock(name: string): string {
   const src = readSource("llm.ts").replace(/\/\/[^\n]*/g, ""); // the comments name the hazards by design
   const start = src.indexOf(`${name}: async (`);
-  expect(start, `${name} is gone from llm.ts — the emitter was removed or renamed`).toBeGreaterThanOrEqual(0);
+  expect(
+    start,
+    `${name} is gone from llm.ts — the emitter was removed or renamed`,
+  ).toBeGreaterThanOrEqual(0);
   const bodyStart = src.indexOf("{", src.indexOf("=>", start));
   let depth = 1;
   let i = bodyStart + 1;
@@ -731,7 +770,10 @@ test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, 
   const src = readSource("voice.ts");
   const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
   // Present at all: the started + clean-ended + abnormal-ended audits (a removal must fail loudly).
-  expect(payloads.length, "no voice audit payloads found — the scan is vacuous").toBeGreaterThanOrEqual(3);
+  expect(
+    payloads.length,
+    "no voice audit payloads found — the scan is vacuous",
+  ).toBeGreaterThanOrEqual(3);
   // The counts ARE allowed and DO ride the ended payloads — assert one is present so the scan is not
   // vacuously strict (it proves these are the real session payloads, not empty objects).
   expect(
@@ -779,7 +821,10 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.
   const refs = src.match(/const lineageRefs = \([^)]*\) => \(?(\{[^}]*\})/);
-  expect(refs, "the shared refs object is gone from dispatch.ts — the scan is half-blind").not.toBeNull();
+  expect(
+    refs,
+    "the shared refs object is gone from dispatch.ts — the scan is half-blind",
+  ).not.toBeNull();
 
   for (const p of [...payloads, refs![1] ?? ""]) {
     expect(p, `a dispatch lineage payload carries specialist output: ${p}`).not.toMatch(
@@ -803,11 +848,18 @@ test("no notify call interpolates a content field into its message (§4 static-l
   // The notify call-sites across the phase. `message:` is a static label or a static-label interpolation;
   // it must never carry a `${...content...}`. Comments are stripped — prose names the fields by design.
   let scanned = 0;
-  for (const file of ["pipeline.ts", "cockpit.ts", "deadLetter.ts", "notifications.ts", "notifyExternal.ts", "http.ts"]) {
+  for (const file of [
+    "pipeline.ts",
+    "cockpit.ts",
+    "deadLetter.ts",
+    "notifications.ts",
+    "notifyExternal.ts",
+    "http.ts",
+  ]) {
     const src = readSource(file).replace(/\/\/[^\n]*/g, "");
-    const messages = [...src.matchAll(/notifications\.notify,\s*\{[\s\S]*?message:\s*([^\n]*)/g)].map(
-      (m) => m[1] ?? "",
-    );
+    const messages = [
+      ...src.matchAll(/notifications\.notify,\s*\{[\s\S]*?message:\s*([^\n]*)/g),
+    ].map((m) => m[1] ?? "");
     for (const msg of messages) {
       scanned++;
       expect(msg, `${file} interpolates content into a notify message: ${msg}`).not.toMatch(
@@ -832,14 +884,17 @@ test("the external channel sends only the kind label + notificationMessage — n
   expect(ext, "notifyExternal interpolates a content field into the mail").not.toMatch(
     CONTENT_INTERPOLATION,
   );
-  expect(ext, "notifyExternal reads a request/plan content field or takes a requestId ref").not.toMatch(
-    /\.(body|subject|recipient|recipients|draft|goal|snippet|gist)\b|\brequestId\b/,
-  );
+  expect(
+    ext,
+    "notifyExternal reads a request/plan content field or takes a requestId ref",
+  ).not.toMatch(/\.(body|subject|recipient|recipients|draft|goal|snippet|gist)\b|\brequestId\b/);
 
   // The choke point schedules dispatch with { tenantId, kind } ONLY — never the message/requestId/content
   // (the loop guard is also a §4 guard: nothing content-bearing crosses into the external channel).
   const notif = readSource("notifications.ts").replace(/\/\/[^\n]*/g, "");
-  const sched = notif.match(/runAfter\(\s*0\s*,\s*internal\.notifyExternal\.dispatch\s*,\s*(\{[^}]*\})/);
+  const sched = notif.match(
+    /runAfter\(\s*0\s*,\s*internal\.notifyExternal\.dispatch\s*,\s*(\{[^}]*\})/,
+  );
   expect(sched, "notify does not schedule notifyExternal.dispatch").not.toBeNull();
   expect(sched?.[1], "the dispatch schedule carries more than { tenantId, kind }").not.toMatch(
     /\b(message|requestId|body|subject|recipient|draft|goal)\b/,
@@ -924,7 +979,10 @@ test("voiceDoc.ts log-plane surface is PINNED: exactly 2 audit sites, no telemet
   // A COUNT, not a ">= 1": pinning it makes a third audit row a failing test rather than a
   // silently-shipped leak. If you add a legitimate one, update this number DELIBERATELY.
   const auditSites = [...src.matchAll(/internal\.audit\.log\b/g)].length;
-  expect(auditSites, "voiceDoc.ts audit call-site count changed - is the new payload SC4-safe?").toBe(2);
+  expect(
+    auditSites,
+    "voiceDoc.ts audit call-site count changed - is the new payload SC4-safe?",
+  ).toBe(2);
   // The module writes to no other log-plane table at all.
   expect(src).not.toMatch(/\.insert\(\s*["']telemetry["']/);
   expect(src).not.toMatch(/\.insert\(\s*["']deadLetters["']/);
@@ -982,7 +1040,10 @@ test("voiceDoc.ts jsonSchema blocks are STRICT-mode legal (every property also r
   // declared `type: ["string","null"]` AND required rather than optional.
   const src = readSource("voiceDoc.ts");
   const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
-  expect(schemas.length, "no jsonSchema in voiceDoc.ts - has the producer changed shape?").toBeGreaterThan(0);
+  expect(
+    schemas.length,
+    "no jsonSchema in voiceDoc.ts - has the producer changed shape?",
+  ).toBeGreaterThan(0);
 
   for (const name of schemas) {
     const start = src.indexOf(`const ${name} = jsonSchema<`);
@@ -1017,6 +1078,37 @@ test("voiceDoc.ts jsonSchema blocks are STRICT-mode legal (every property also r
       }
     }
   }
+});
+
+test("the assemble script is NOT a skills registry row (delta pitfall 17 — the RCE door)", () => {
+  // CLAUDE.md §5 makes PROMPTS registry rows. The obvious generalisation — "the assemble script
+  // should be a registry row too" — is REMOTE CODE EXECUTION: a registry row is mutable by a
+  // database write, and this string is executed as a shell script inside a VM that holds tenant
+  // media. The script is a repo file (`convex/render/assemble_final.sh`) with a byte-identity
+  // drift test against its bundler-safe mirror. This scan is the door.
+  //
+  // Comments are stripped before matching (the 15.2-07 lesson): this very file, and skills.ts's
+  // own commentary, may NAME the banned thing while explaining it. Prose may; CODE may not.
+  const seeds = readSource("skills.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+  // No seed entry may be named for the assembler…
+  expect(
+    seeds,
+    "an `assemble` seed entry would make the shell script a mutable DB row",
+  ).not.toMatch(/name:\s*["'`]assemble/i);
+  expect(seeds).not.toMatch(/\bASSEMBLE\w*_SKILL\b/);
+  // …and no seed body may come from the render directory, whatever the entry is called.
+  expect(
+    seeds,
+    "a seeds body sourced from convex/render/ is the same door by another name",
+  ).not.toMatch(/from\s+["'`][^"'`]*render\//);
+  expect(seeds).not.toMatch(/assembleScriptBody/);
+
+  // Non-vacuity floor: if `readSource` or the comment-strip ever returns nothing, the four
+  // assertions above pass by finding nothing. The seeds array must still be in there.
+  expect(seeds).toMatch(/const seeds = \[/);
 });
 
 test("the voice-doc UI never turns a finding excerpt into a log field", () => {

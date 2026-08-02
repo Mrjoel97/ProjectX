@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts must keep LF in the WORKING TREE, not just in the index. A CRLF checkout on
+# Windows makes the shebang read `/usr/bin/env bash\r` and Linux answers "bad interpreter" —
+# and packages/backend/convex/render/assemble_final.sh is executed inside a Linux sandbox.
+*.sh text eol=lf

@@ -1,6 +1,11 @@
 # Playbook: Media Canvas (finished reel)
 
-> Last verified: 2026-08-02 (20-01 tasks 2+3 — `storyboard.ts` and `media.ts` shipped; the price
+> Last verified: 2026-08-02 (20-13 — **the assemble contract landed before its machinery.**
+> `assemble_final.sh` harvested from the Higgsfield workflow v2.0, its bundler-safe mirror, the
+> `assembly.json` validator in `packages/core/src/assembly.ts`, and the RCE scan that keeps the
+> script out of the `skills` registry. See `## The assemble contract` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-01 tasks 2+3 — `storyboard.ts` and `media.ts` shipped; the price
 > figures were re-read VENDOR-DIRECT from fal's catalog API the same day and are unchanged; the
 > `## Reconciliation` procedure below is now runnable, not a stub.)
 
@@ -86,6 +91,65 @@ Against `MEDIA_JOB_CAP_USD = $3.50` — **12.8% headroom**.
 D10's arithmetic refuses 6 blocks at 720p ($6.00+) and 12 blocks at 480p ($6.00+), and why **the
 budget rail is also the render-duration rail**: the sandbox never sees a resolution whose encode time
 would change delta §2.4's numbers.
+
+## The assemble contract (20-13)
+
+`packages/backend/convex/render/assemble_final.sh` is the governed assembler, **harvested** from
+the Higgsfield `faceless-channel-video` workflow v2.0 on 2026-08-02. Harvested, not cloned: the
+contract and the ffmpeg invocations were taken; the workflow is not a dependency, and its MCP is
+client-side only — structurally unreachable from a Convex action and from a Vercel Sandbox, which
+is the finding ADR-011 exists to record.
+
+### §5 DOES NOT APPLY TO THIS FILE
+
+**CLAUDE.md §5 makes PROMPTS versioned `skills` rows. The obvious generalisation — "the assemble
+script should be a registry row too" — is REMOTE CODE EXECUTION.** A registry row is mutable by a
+database write, and this string is executed as a shell script inside a VM that holds tenant media.
+The script is a repo file mirrored to a bundler-safe constant (`assembleScript.ts`) with a
+byte-identity drift test, and `llmRedaction.test.ts` scans `skills.ts` to prove no `assemble` seed
+entry and no `render/`-sourced body ever appears. Do not "fix" the mirror into a registry row.
+
+### The five inherited properties, and the failure each one encodes
+
+| Property | The failure it prevents |
+|---|---|
+| **Fixed length `N × clip-seconds`**, asserted on the OUTPUT to ±1s | a video silently shortened to fit its audio |
+| **No time-stretch, ever** — no `atempo`, no `setpts`, no speech trimming | an overrunning line rate-shifted into the window; audible, and no downstream test would catch it. An overrun is a HARD ERROR to be rewritten upstream |
+| **A clip shorter than its window by >0.5s is a HARD ERROR** | a held still frame passed off as a scene |
+| **Speech-centred, not file-centred** (lead/trail silence measured by `silencedetect` and ignored) | a padded TTS take shifting the words off their scene |
+| **Narration in every window**, asserted on the joined track before finalisation | the "silent second half" failure of every hand-rolled assembly |
+
+Also inherited: per-input voice loudnorm (a fresh TTS take lands near −31 dB while dialogue lifted
+out of a generated clip lands near −21 dB — mixing both at 1.0 is the "narrator quiet, character
+loud" complaint), two-pass **linear** loudnorm at −16 LUFS on the final, and full-decode validation.
+
+### The sidecar field set AS HARVESTED
+
+**`packages/core/src/assembly.ts` is the SOURCE OF TRUTH for these names from here on.** The
+validator maps snake_case in → camelCase out in one place, so a field-name correction is a one-file
+change.
+
+Top level: `script` · `out` · `block_count` · `clip_seconds` · `total_duration_s` ·
+`actual_duration_s` · `width` · `height` · `fps` · `sfx_vol` · `gates[]` · `blocks[]` · `ts`
+Per block: `block_index` (0-based) · `window_start_s` · `lead_silence_s` · `speech_abs_s` ·
+`speech_dur_s` · `clip_dur_s` · `overrun` · `internal_pauses` · `freeze_head` · `freeze_tail`
+
+The captions rebase is why the two anchors exist, and it is one line:
+`absolute_t = speech_abs_s + (word_t_in_clean_take - lead_silence_s)`
+
+### An invalid sidecar means the reel is NOT published
+
+This is an invariant, not a preference. D8: *"a final video without one was hand-assembled."* An
+invalid sidecar is not "render with a warning" — the job fails with a code and nothing is published
+(plan 20-16 enforces it). A sidecar reporting `overrun: true` on any block is INVALID: it is
+reporting a failed render, not a rendered failure.
+
+### Deferred, and re-adding either is a scope decision
+
+`--music` (ducked bed) and `--song` (music-video mode) are stripped, along with `--stepped`, the
+poster frame, and the `--manifest`/`--allow-mismatch` pair plumbing that index discovery replaces.
+`assembleScript.test.ts` scans for all three flags, so re-adding one is a visible decision rather
+than a quiet drift.
 
 ## Storage retention (D12b)
 
