@@ -1,6 +1,10 @@
 # Playbook: Media Canvas (finished reel)
 
-> Last verified: 2026-08-02 (20-13 — **the assemble contract landed before its machinery.**
+> Last verified: 2026-08-02 (20-04 — **the second budget rail and the transactional job
+> reservation.** `mediaSpendCents` + `deploymentMediaSpendCents` at the D10 numbers, the media kill
+> switch, and `media.reserveJob` — the ONE money gate. See `## The budget rail` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-13 — **the assemble contract landed before its machinery.**
 > `assemble_final.sh` harvested from the Higgsfield workflow v2.0, its bundler-safe mirror, the
 > `assembly.json` validator in `packages/core/src/assembly.ts`, and the RCE scan that keeps the
 > script out of the `skills` registry. See `## The assemble contract` below.)
@@ -86,21 +90,126 @@ Three things the 2026-08-02 read established that the plan's table did not say:
 
 ## The §4.1 job economics
 
+The **worst legal case**: 6 paid blocks at 480p × 10 s, every narration at the band ceiling
+(`maxCharsFor(10)` = 140 chars), with captions.
+
 | Line | Cost |
 |---|---|
-| 6 × 480p × 10 s clips | $3.000 |
-| voice (~1,200 chars) | $0.012 |
-| voice retry allowance | $0.012 |
-| captions STT (1 min) | $0.008 |
-| render (sandbox) | $0.020 |
-| **Total** | **$3.052** |
+| 6 × 480p × 10 s clips | $3.0000 |
+| voice — 6 × 140 chars, reserved at **2×** (840 chars → 1,680 submitted) | $0.0168 |
+| captions STT (1 min) | $0.0080 |
+| render (sandbox) | $0.0200 |
+| **Total** | **$3.0448 → 305 cents** |
 
-Against `MEDIA_JOB_CAP_USD = $3.50` — **12.8% headroom**.
+Against `MEDIA_JOB_CAP_USD = $3.50` — **13% headroom**.
 
-**The cap is bounded by the CLIPS.** TTS is 0.4% of the job and is not a threat to it. That is why
+> **Corrected 2026-08-02 (20-04).** This table previously read `voice (~1,200 chars) $0.012` +
+> `voice retry allowance $0.012`, total **$3.052 → 306 cents**. That 1,200 is **not reachable**: it
+> is 200 characters per block, and 20-13's narration BAND caps a 10-second block at **140**. Six
+> blocks hold at most 840 characters, so the largest legal 6-block job is **$3.0448 → 305 cents**,
+> and `media.test.ts` pins that number. The old figure was an estimate written before the band
+> existed; nothing regressed, the ceiling simply got tighter. The retry allowance is unchanged in
+> substance — it is the `× 2` on the voice line, not a separate row.
+
+**The cap is bounded by the CLIPS.** TTS is 0.55% of the job and is not a threat to it. That is why
 D10's arithmetic refuses 6 blocks at 720p ($6.00+) and 12 blocks at 480p ($6.00+), and why **the
 budget rail is also the render-duration rail**: the sandbox never sees a resolution whose encode time
-would change delta §2.4's numbers.
+would change delta §2.4's numbers. Both refusals are pinned in `media.test.ts`.
+
+## The budget rail (20-04)
+
+Media draws its **own** named daily windows. They are appended to the ONE `RateLimiter` in
+`packages/backend/convex/guardrails.ts` — a second limiter instance would be a second component
+mount for zero gain.
+
+| Window | Rate | Keyed by |
+|---|---|---|
+| `mediaSpendCents` | `MEDIA_DAILY_BUDGET_CENTS` = **1,000** ($10/day) | `tenantId` |
+| `deploymentMediaSpendCents` | `DEPLOYMENT_MEDIA_BUDGET_CENTS` = **10,000** ($100/day) | **KEYLESS** |
+
+`DEPLOYMENT_MEDIA_BUDGET_CENTS` resolves research Open Question 2. D10 names only the per-tenant
+number; the ceiling is a planning decision, and 22.1-02's argument applies unchanged — per-tenant
+keying alone makes exposure `N × $10`, unbounded in N, with the manual kill switch as the only
+global stop. **10,000 keeps the same 10× ratio `DEPLOYMENT_BUDGET_CENTS` holds over
+`DAILY_BUDGET_CENTS`** — one ratio to remember across both rails. Worst-case daily exposure is
+therefore **$100 media + $50 LLM, across four windows that never share.**
+
+### Invariants
+
+- **Media spend NEVER moves the token budget, in either direction.** ADR-011 and D10 both say the
+  rails do not share a window, and `dispatch.ts`'s `ENVELOPE_FRACTION` takes its 25% out of the LLM
+  rail specifically — folding media in would silently shrink every sub-agent envelope. Asserted both
+  ways in `media.test.ts`.
+- **The whole JOB is reserved BEFORE the first POST.** `media.reserveJob` estimates every line
+  (clips + voice + captions STT + render), refuses over `MEDIA_JOB_CAP_USD`, `check`s both windows
+  and consumes them with `reserve: true` — **all inside one mutation, which is one serializable
+  transaction.** This is the ONE place media diverges from the LLM rail: `prepare`/`recordSpend` can
+  safely check-then-record-later because LLM calls in a turn are serial and an overshoot is cents.
+  Here 13+ jobs are submitted back-to-back and land minutes apart, so post-hoc recording would let
+  all of them fire against a window that had room for one. *An LLM overshoot is cents, a media
+  overshoot is dollars* (20-PROVIDER-EVAL.md §4).
+- **A refused job inserts ZERO `mediaJobs` rows.** All-or-nothing by construction, not by cleanup —
+  every refusal returns before the first `ctx.db.insert`.
+- **The cents floor is applied ONCE, on the job total**, by `chooseMediaBatch`. Per-line `estUsd`
+  goes onto the rows unfloored.
+- **The voice line is reserved at 2× its character estimate** so one rewrite round is already paid
+  for. The provider returns no duration, so an overrunning line is only provable in the sandbox, and
+  the cure is a rewrite plus a re-voice — a job that cannot afford its own cure would strand a paid
+  deck.
+- **The render is a reserved cost line with NO `mediaJobs` row.** It has no `falRequestId` and no
+  webhook; it is a plan-row concern. It is reserved so a job that cannot afford its own render is
+  refused before its clips are bought.
+- **No refunds.** If 3 of 6 blocks come back `provider_blocked`, the reserved cents stay consumed.
+  Over-reservation is the fail-closed bias. Refunding turns a rate-limiter window into a ledger; the
+  upgrade path, if drift ever proves material, is a real spend table — not a credit call.
+- **Regenerate-one-block is a job of ONE block through the identical path** (one video line, one tts
+  line, one render line — regenerating a block invalidates the reel and forces a re-render). No
+  second rail, no second cap, no bypass.
+
+### The two kill switches — INDEPENDENT levers
+
+```bash
+# from packages/backend — the convex CLI only resolves the deployment from there
+npx convex run guardrails:setKillSwitch      '{"on":true}'   # stops EVERYTHING incl. media
+npx convex run guardrails:setMediaKillSwitch '{"on":true}'   # stops paid generation ONLY
+```
+
+Flipping the LLM kill switch must not be the only way to pause media, and pausing media must not
+pause the email cockpit — that is the point of a separate rail. But `reserveJob` checks **both**: an
+all-stop is an all-stop. `mediaKillSwitch` is `v.optional` in the schema, so a row written before
+Phase 20 reads OFF by the same default-on-read the main switch uses. Zero seed, zero migration.
+
+Read remaining budget without consuming it: `guardrails:mediaRemainingCents` (the tighter of the two
+rails, each clamped `>= 0` first — `reserve: true` can drive a window negative).
+
+### The refusal codes
+
+`kill_switch` · `unknown_model` · `over_job_cap` · `illegal_duration` · `narration_too_long` ·
+`narration_too_short` · `media_daily_exhausted` · `deployment_media_exhausted`
+
+They are distinct because they send the user to distinct levers: rewrite a line, cut blocks, wait
+for tomorrow, or call the operator. `unknown_model` is the one that fires on the `-preview` rename
+risk below — loud, free, and fail-closed.
+
+### Mutation checks — observed RED on demand, 2026-08-02
+
+The guarantees below were each **seen to fail**, not merely asserted. Restored byte-identical after
+every one.
+
+| Mutation applied | What actually fired |
+|---|---|
+| `rateLimiter.limit(...)` removed from `reserveJobInner` (consumption outside the transaction) | **7 of 22 tests RED**, incl. the concurrency test — no window moved at all |
+| the tenant `check` sized `count: 1` instead of `count: estCents` (the `preCall` shape) | concurrency test RED on the target line: **`expected [ {…}, {…} ] to have a length of 1 but got 2`** — both jobs won |
+| the cents floor moved from the batch total to per-line | **6 RED**: the 13-line sub-cent job `expected 15 to be 4`; the §4.1 job `expected 309 to be 305` |
+| the narration band pre-flight guard deleted | **3 RED**, and each returned a 5-key `ok: true` object — i.e. **the over-length job reached a reservation. Money moved.** That second half is the point of the guard |
+
+### Known gap — `guardrails.ts` is in NO playbook's watch prefix
+
+Research §11.3 recorded it and it is still true: `packages/backend/convex/guardrails.ts` appears in
+no `watch.json` entry, so `check-playbooks` cannot demand a playbook bump when the spend rails
+change. **20-04 deliberately did not fix it** — `guardrails.ts` is shared by the LLM rail and the
+media rail, so assigning it to `media.md` alone would be wrong, and assigning it needs an owner
+decision about which playbook holds the guard subsystem.
 
 ## The assemble contract (20-13)
 
@@ -191,8 +300,16 @@ npx convex run media:spendForPeriod '{"sinceMs": 1754006400000, "untilMs": 17546
 
 Compare the returned `actualCents` total against fal's billing page for the same window. A gap
 means the table is wrong, not that the meter is wrong — the meter records what the provider
-reported. *(The query lands with plan 20-04; until then, read the rows directly:
-`npx convex run media:listJobs '{"planId": "<id>"}'`.)*
+reported.
+
+> ⚠️ **`media:spendForPeriod` DOES NOT EXIST, and no plan owns it (found 2026-08-02 by 20-04).**
+> This paragraph said it "lands with plan 20-04". It does not: 20-04 ships only `reserveJob` +
+> `reserveJobInner`, and a grep across all seventeen Phase-20 plans finds no plan that authors this
+> query or `media:listJobs` either. `mediaJobs.actualCents` is written by the webhook path (20-06),
+> so **the reader is the missing half of the D5 procedure**. The natural home is 20-11, whose
+> owner-run live gate this playbook already calls "this procedure's first run" — but that is an
+> assignment nobody has made. Until then, reconcile by reading rows directly in the dashboard or via
+> `npx convex run` against a `by_plan`/`by_batch` index query.
 
 **(b) Is the price table still the vendor's price?** Re-read fal's catalog API and diff it against
 the committed fixture:

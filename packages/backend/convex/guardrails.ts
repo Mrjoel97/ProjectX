@@ -31,6 +31,23 @@ import { contentHash } from "./lib/hash";
 export const DAILY_BUDGET_CENTS = 500; // ≈ $5/day PER TENANT.
 export const DEPLOYMENT_BUDGET_CENTS = 5_000; // ≈ $50/day across ALL tenants — the hard cap.
 
+// ── The MEDIA rail (Phase 20, D10) ────────────────────────────────────────────────────
+//
+// A SECOND, NAMED pair of windows. Media spend NEVER moves the token budget and the token budget
+// never moves media — in either direction. ADR-011 and D10 both say the rails do not share a
+// window, and `dispatch.ts`'s ENVELOPE_FRACTION takes its 25% out of the LLM rail specifically, so
+// folding media in would silently shrink every sub-agent envelope by up to 20x.
+//
+// D10 supersedes D4: the reserved unit is the whole JOB (clips + voice + captions STT + render)
+// against MEDIA_JOB_CAP_USD = $3.50, not a per-request cap. $10/day is ~2 full 60 s reels.
+export const MEDIA_DAILY_BUDGET_CENTS = 1_000; // $10/day PER TENANT.
+// KEYLESS, and it exists for exactly the reason DEPLOYMENT_BUDGET_CENTS does: per-tenant keying
+// alone makes exposure N x $10, unbounded in N, with the manual kill switch as the only global
+// stop. 10,000 keeps the SAME 10x ratio the LLM ceiling holds over its per-tenant window — one
+// ratio to remember across both rails. Worst-case daily exposure is now $100 media + $50 LLM,
+// across four windows that never share. DO NOT remove this as redundant.
+export const DEPLOYMENT_MEDIA_BUDGET_CENTS = 10_000; // $100/day across ALL tenants.
+
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Per-tenant submit rate (keyed by tenantId): steady 20/hr with a small burst of 5.
   submitRequest: { kind: "token bucket", rate: 20, period: HOUR, capacity: 5 },
@@ -40,13 +57,26 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Deployment-wide ceiling. KEYLESS ON PURPOSE — this is the one bucket everybody shares, and
   // it is what stops N invited beta users from multiplying the bill.
   deploymentSpendCents: { kind: "fixed window", rate: DEPLOYMENT_BUDGET_CENTS, period: 24 * HOUR },
+  // The media pair, same shapes, same keying rules, DIFFERENT money. `media.reserveJob` consumes
+  // both with `reserve: true` BEFORE any fal request exists.
+  mediaSpendCents: { kind: "fixed window", rate: MEDIA_DAILY_BUDGET_CENTS, period: 24 * HOUR },
+  deploymentMediaSpendCents: {
+    kind: "fixed window",
+    rate: DEPLOYMENT_MEDIA_BUDGET_CENTS,
+    period: 24 * HOUR,
+  },
 });
 
 // Default-on-read: a missing guardrailConfig row means the kill switch is OFF
 // (zero seed, no migration — Pitfall 7). budgetUsdPerRequest is the per-request cap.
-const DEFAULT_CONFIG = { killSwitch: false, budgetUsdPerRequest: 0.05 };
+// `mediaKillSwitch` is v.optional in the schema, so a row written before Phase 20 also reads OFF.
+const DEFAULT_CONFIG = { killSwitch: false, budgetUsdPerRequest: 0.05, mediaKillSwitch: false };
 
-async function getConfig(ctx: QueryCtx) {
+/** Exported for `media.ts`, which must read BOTH switches inside its own reservation transaction
+ *  (plan 20-04). Exported rather than duplicated: two config readers is two places to forget a
+ *  switch. `media.reserveJob` is deliberately NOT here — a guard module inserting `mediaJobs` rows
+ *  would be the wrong layering. */
+export async function getGuardrailConfig(ctx: QueryCtx) {
   return (await ctx.db.query("guardrailConfig").first()) ?? DEFAULT_CONFIG;
 }
 
@@ -63,6 +93,29 @@ export const setKillSwitch = internalMutation({
       await ctx.db.insert("guardrailConfig", {
         killSwitch: on,
         budgetUsdPerRequest: DEFAULT_CONFIG.budgetUsdPerRequest,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+/** Flip the MEDIA-only kill switch (MEDIA-01). Operator:
+ *  `npx convex run guardrails:setMediaKillSwitch '{"on":true}'`. Same upsert as `setKillSwitch`.
+ *
+ *  The two switches are INDEPENDENT — flipping this one must not pause the email cockpit, and
+ *  flipping the global one must not be the only way to pause paid generation. That independence is
+ *  the point of a separate rail. But `media.reserveJob` checks BOTH: an all-stop is an all-stop. */
+export const setMediaKillSwitch = internalMutation({
+  args: { on: v.boolean() },
+  handler: async (ctx, { on }) => {
+    const row = await ctx.db.query("guardrailConfig").first();
+    if (row) {
+      await ctx.db.patch(row._id, { mediaKillSwitch: on, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("guardrailConfig", {
+        killSwitch: DEFAULT_CONFIG.killSwitch,
+        budgetUsdPerRequest: DEFAULT_CONFIG.budgetUsdPerRequest,
+        mediaKillSwitch: on,
         updatedAt: Date.now(),
       });
     }
@@ -95,7 +148,7 @@ export const prepare = internalMutation({
     const req = await ctx.db.get(requestId);
     if (!req) throw new Error("guardrails.prepare: request not found"); // bug, not a governed stop
 
-    const cfg = await getConfig(ctx);
+    const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
 
     // Destructure ONLY safeText + counts — the scan's raw-PII field must never
@@ -179,7 +232,7 @@ export const preCall = internalMutation({
     | { ok: true }
     | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
   > => {
-    const cfg = await getConfig(ctx);
+    const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
     // `count: 1` asks "is there ANY budget left", not "can I afford this call" — the real spend
     // is consumed after the fact by recordSpend. Both rails must still have room.
@@ -225,6 +278,32 @@ export const remainingDailyCents = internalQuery({
   handler: async (ctx, { tenantId }): Promise<number> => {
     const tenant = Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value);
     const deployment = Math.max(0, (await rateLimiter.getValue(ctx, "deploymentSpendCents")).value);
+    return Math.min(tenant, deployment);
+  },
+});
+
+/**
+ * The readable half of the MEDIA rail (MEDIA-01) — `remainingDailyCents`'s shape verbatim, over
+ * the media pair. Reads without consuming.
+ *
+ * Each rail is clamped to >= 0 BEFORE the min for the same reason the LLM one is: `reserveJob`
+ * consumes with `reserve: true`, so either window can go negative, and a negative deployment rail
+ * would otherwise zero every tenant's remaining media budget.
+ *
+ * Explicit `Promise<number>` return type is mandatory — an inferred one collapses the generated
+ * API to `any` (13-01 shipped 90 `apps/web` errors that way).
+ */
+export const mediaRemainingCents = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<number> => {
+    const tenant = Math.max(
+      0,
+      (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
+    );
+    const deployment = Math.max(
+      0,
+      (await rateLimiter.getValue(ctx, "deploymentMediaSpendCents")).value,
+    );
     return Math.min(tenant, deployment);
   },
 });
