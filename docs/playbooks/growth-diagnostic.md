@@ -1,6 +1,15 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-08-03 (20-17 — **the no-paid-reach scan grew two entries and NOTHING else
+> Last verified: 2026-08-03 (20-11 tasks 1-3 — **the diagnostic is untouched, and the reason it
+> is untouched is now an ADR.** [ADR-012](../decisions/012-media-route-and-the-reel.md) records
+> `media` as the SECOND instance of ADR-010's pattern — dispatchable, never emitted by
+> `diagnose()` — which is what keeps it a decided pattern rather than a one-off exception minted
+> for `research`. A reel is not a remedy for a diagnosed business constraint; it is something a
+> user asks for. The companion assertion is *"diagnose() emits neither `research` nor `media`"* in
+> `specialists.test.ts`. Widening `diagnose()` to emit either remains ADR-009 territory and needs
+> its own ADR.)
+>
+> Prior: 2026-08-03 (20-17 — **the no-paid-reach scan grew two entries and NOTHING else
 > here changed.** `PAID_ENTRY_POINTS` in `specialists.test.ts` now also names `submitCaptions` and
 > `burnCaptions`, the caption stage's two money entry points, so a specialist grant that named
 > either would fail the same way it already would for `submitBatch`/`renderReel`. No specialist,

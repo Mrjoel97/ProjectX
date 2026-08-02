@@ -1,6 +1,15 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-02 (20-03 — **`media-director` added, DELIBERATELY UNGATED, live at v1.**)
+> Last verified: 2026-08-03 (20-11 tasks 1-3 — **no registry row changed; the §5 EXEMPTION that
+> two Phase-20 files rely on is now an ADR decision.**
+> [ADR-013](../decisions/013-the-render-worker.md) Decision 5 records that `assemble_final.sh` and
+> `burn_caps.sh` are **CODE, not registry rows**: §5 governs *prompts*, and a runtime-mutable shell
+> script executed in a VM holding tenant media is remote code execution. The scan that refuses them
+> as rows was mutation-checked — adding `{ name: "assemble", body: assembleScriptBody }` to
+> `skills.ts` fires it. `media-director` itself is unchanged and still UNGATED at v1; ADR-012
+> records the whole media spine it emits.)
+>
+> Prior: 2026-08-02 (20-03 — **`media-director` added, DELIBERATELY UNGATED, live at v1.**)
 >
 > **`media-director`** is the Phase-20 media specialist: script → art direction → block deck →
 > block prompts, all four produced in ONE turn (one row, not four — a `SpecialistSpec.skillName` is

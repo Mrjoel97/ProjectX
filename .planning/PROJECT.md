@@ -30,9 +30,11 @@ beta (former Phase 9) moves to the END of this milestone.
    (honest "no gaps" too; the user decides).
 2. **Breadth of Action** — real sub-agent **dispatch** (make the `sub_agent` route real) + first
    exemplar, then calendar · web research · document/content creation · contacts/CRM/follow-ups.
-3. **Creation & Self-Extension** — media canvas (images + video ≤3 min — **leverage the connected
-   Pikar-Ai service**, do not rebuild) · dynamic skill creation (user-authored first, then
-   agent-authored — self-modification, governance-heavy, placed late).
+3. **Creation & Self-Extension** — media canvas (images + a finished short-form reel assembled
+   from clips of ≤15 s each, capped at 60 s by BUDGET not capability — **wrap a server-to-server
+   provider API**, do not rebuild; the Pikar-Ai MCP is claude.ai client-side only and unreachable
+   from the backend — corrected 2026-08-03, see ADR-011/ADR-012) · dynamic skill creation
+   (user-authored first, then agent-authored — self-modification, governance-heavy, placed late).
 4. **Governance & Open the Beta** — ISO 9001:2015 QMS foundation (formalize the existing audit /
    skill-versioning / GSD-playbook change-control bones) · `requireOwner` + cross-user isolation
    test · Private Beta Productionization (invite/waitlist, Microsoft Graph/Outlook, Vercel deploy) —

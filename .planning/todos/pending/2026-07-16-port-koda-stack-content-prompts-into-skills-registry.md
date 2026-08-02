@@ -34,19 +34,42 @@ seedSkills array in packages/backend/convex/skills.ts):
 Their "Creative DNA" config (Voice / Visual Identity / Content Format / Audience /
 Rules) maps to a per-tenant brand-profile document, not a file.
 
-SKIP: /assemble (multi-clip concatenation — ADR-011 rules it out of Phase 20),
+~~SKIP: /assemble (multi-clip concatenation — ADR-011 rules it out of Phase 20)~~,
 /trends (needs live trend data).
 
-**PARTLY SUPERSEDED 2026-08-01 (owner, Phase 20 planning).** This todo's original
-SKIP list covered the media stages as "heavy". Phase 20 reverses that for the
-MEDIA stages only: `/art-direction`, `/storyboard` and the prompt shape of
-`/generate` are claimed by Phase 20 (`20-CONTEXT.md` D6) — with the fal.ai CALL
-being ours, not koda's invocation. Corroboration: koda's `/generate` already
-targets fal.ai, which ADR-011 chose independently on price-per-clip.
+**⚠ THE `/assemble` DEFERRAL ABOVE IS REVERSED — struck through, not deleted, so
+the reversal is legible.** ADR-011's "any longer artifact is assembly, which is a
+different feature" line is **SUPERSEDED by ADR-012** (2026-08-03): a CLIP is
+≤15 s, but a DELIVERABLE is N clips assembled, and assembly shipped in Phase 20.
+`20-CONTEXT.md`'s Deferred list carries the same reversal. Leaving either one
+contradictory is what D6 forbids.
 
-The four CONTENT stages below (`/brief`, `/script`, `/publish`, `/repurpose`)
-plus `/concept` remain unclaimed and stay with this todo. Phase 18's
-`content-drafter` covers documents/HTML and does NOT claim them.
+**PARTLY SUPERSEDED 2026-08-01 (owner, Phase 20 planning); SETTLED 2026-08-03
+(plan 20-11, ADR-012).** This todo's original SKIP list covered the media stages
+as "heavy". Phase 20 reversed that for the MEDIA stages, and D8 additionally
+pulled `/script` IN — a voiceover has nothing to say without one.
+
+**DONE — ported into the `media-director` registry row (all four in ONE row) and
+the render stage, Phase 20:**
+
+- `/script` — moved IN by D8, was previously left to this todo
+- `/art-direction`
+- `/storyboard` — emits the fixed-length BLOCK DECK the price table and the
+  assembler both parse
+- `/generate` — the PROMPT SHAPE only; the CALL is ours (our adapter, price
+  table, budget rail and webhook), never koda's invocation
+- `/assemble` — a harvested `assemble_final.sh` run in an ephemeral Vercel
+  Sandbox (ADR-013). **Deliberately NOT a registry row**: §5 governs prompts, and
+  a runtime-mutable shell script executing in a VM that holds tenant media is RCE
+
+Corroboration worth keeping: koda's `/generate` already targets fal.ai, which
+ADR-011 chose independently on a price-per-clip argument.
+
+**STILL PENDING, and this todo remains open for them:** `/brief`, `/concept`,
+`/publish`, `/repurpose` and `/trends`. Phase 18's `content-drafter` covers
+documents/HTML and does NOT claim them. Also still out of Phase 20 and unclaimed:
+music beds and sung tracks (the harvested assembler's `--music` / `--song`, both
+stripped), and re-cutting footage the user already has.
 
 MIT license — keep an attribution note in each ported skill body's header.
 Do NOT clone the repo into the codebase (CLAUDE.md §5: prompts live in the

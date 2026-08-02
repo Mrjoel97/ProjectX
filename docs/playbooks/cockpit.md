@@ -1,6 +1,15 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-03 (20-10 + the canvas tab — **the workspace right pane gained a THIRD
+> Last verified: 2026-08-03 (20-11 tasks 1-3 — **no cockpit code changed; the media route this
+> playbook documents is now ADR-recorded.** [ADR-012](../decisions/012-media-route-and-the-reel.md)
+> records `cockpit.ts`'s `EXTERNAL_TARGETS.media` arm as ONE of the two human-initiated paid entry
+> points — the other being the canvas mutations — and states that "plan-gated by construction" is
+> STRUCTURAL: there is no code path from a dispatched specialist to any of the four paid
+> capabilities, and `SPECIALISTS.media.tools` is `SPECIALIST_TOOLS` **by object identity**, so there
+> is no media grant to widen. If a future change gives the media specialist a paid tool, it
+> supersedes ADR-012 — three tests go red first.)
+>
+> Prior: 2026-08-03 (20-10 + the canvas tab — **the workspace right pane gained a THIRD
 > plan surface and a viewport toggle.**
 >
 > **The surface:** `plan.kind === "media"` now early-returns `<MediaCanvas>` from `PlanCard`,

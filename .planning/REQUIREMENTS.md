@@ -146,7 +146,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 ### S3 — Creation & Self-Extension
 
-- [ ] **MEDIA-01**: A media-creation canvas produces images and video (≤3 min) via the connected Pikar-Ai service as async governed jobs with a separate cost cap — generation is wrapped, not rebuilt
+- [ ] **MEDIA-01**: A media-creation canvas produces images and video — a finished short-form reel assembled from clips of ≤15 s each, capped at 60 s by BUDGET rather than by capability — via a server-to-server provider API (fal.ai) behind a deployment secret, as async governed jobs with a separate capped budget; generation is wrapped, not rebuilt. **Corrected 2026-08-03 (plan 20-11).** The original wording carried two premises the Phase-20 spike refuted: no model generates 3 minutes (the ceiling is 15 s across 28 models from eight labs), and the Pikar-Ai MCP is a claude.ai CLIENT-side account connector, structurally unreachable from a Convex action (ADR-011). The re-scope then PARTLY UN-REFUTED the first: a 12-block reel IS two minutes and is refused only by `MEDIA_JOB_CAP_USD`, not by the models (ADR-012). So the honest line is neither the original nor a flat "5 or 10 seconds"
 - [ ] **SKILL-01**: The user can author skills adapted to their business through the eval-gated skills registry
 - [ ] **SKILL-02**: The agent can author skills as candidates only — structurally unable to self-activate; activation requires the eval gate plus owner approval
 

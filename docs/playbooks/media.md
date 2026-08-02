@@ -10,7 +10,9 @@
 > two remaining §-parsers, plus a section-terminator fix. Pure `@pikar/core`, zero new deps. See
 > `## The §-parsers` below. The dispatch route itself is documented in `cockpit.md`.)
 >
-> Last verified: 2026-08-03 (20-10 + the canvas tab — **the canvas is SEEN.** The 20-09 read plane finally has a consumer: MediaCanvas.tsx in the workspace right pane, mounted through the same one-line plan.kind switch as the memo and calendar cards, plus an "Open canvas" toggle beside "Clear workspace" that gives it the whole pane. See `## The canvas, SEEN (20-10)` below. NO POLLING anywhere; five reel states including the out-of-date trap; two status rows per block; `none_reported` renders as "not checked", never a pass. **NO HUMAN HAS SEEN IT** — it typechecks and builds and has never been rendered against a real media plan.)
+> Last verified: 2026-08-03 (20-11 tasks 1-3 — **the two ADRs, and every document that still stated a premise this phase refuted.** `docs/decisions/012-media-route-and-the-reel.md` (the dispatchable route whose product costs money and which cannot spend it, the reel scope, the whole-job reserve, the once-only cents floor, the two budget rails, delete-on-success retention, and the corrected + now vendor-direct ADR-011 arithmetic) and `docs/decisions/013-the-render-worker.md` (Vercel Sandbox chosen, Fly/Cloud Run and ffmpeg.wasm rejected, the token-free route handler, `persistent:false` and `deny-all` as DECISIONS, the trust boundary in both directions, and the script-is-code-not-a-registry-row rule). **`docs/decisions/011-media-provider-fal-wan25.md` is byte-unchanged** — ADR-012 amends it from outside, because only its `<=15 s` scope line is superseded while its provider choice and four consequences all still stand. `REQUIREMENTS.md` MEDIA-01, `PROJECT.md` S3 and the koda todo's reversed `/assemble` deferral are corrected. **The live gate has NOT been run** — the last subsection of `## Reconciliation` is its evidence table, and every row of it is still blank.)
+>
+> Prior: 2026-08-03 (20-10 + the canvas tab — **the canvas is SEEN.** The 20-09 read plane finally has a consumer: MediaCanvas.tsx in the workspace right pane, mounted through the same one-line plan.kind switch as the memo and calendar cards, plus an "Open canvas" toggle beside "Clear workspace" that gives it the whole pane. See `## The canvas, SEEN (20-10)` below. NO POLLING anywhere; five reel states including the out-of-date trap; two status rows per block; `none_reported` renders as "not checked", never a pass. **NO HUMAN HAS SEEN IT** — it typechecks and builds and has never been rendered against a real media plan.)
 >
 > Prior: 2026-08-03 (20-17 — **BURNED CAPTIONS, the phase's designated cut line, SHIPPED**.
 > The reel now works on an autoplay-muted feed, and it cost no Python, no Whisper weights, no font
@@ -85,6 +87,13 @@ assemble → captions. The deliverable is **ONE mp4**, not a bag of clips.
 The storyboard is a **BLOCK DECK**: N blocks, every block the same length, each carrying exactly one
 narration line. `packages/core/src/storyboard.ts` parses it; `packages/cost/src/media.ts` prices the
 whole job before a request exists.
+
+**The decisions of record are [ADR-012](../decisions/012-media-route-and-the-reel.md) (the route,
+the reel scope and the money shape) and [ADR-013](../decisions/013-the-render-worker.md) (the
+renderer), on top of [ADR-011](../decisions/011-media-provider-fal-wan25.md) (the provider).** This
+playbook is the operational surface — how to run it, how to change it safely, what breaks. The ADRs
+are *why*, and they are immutable: a change that contradicts one of them supersedes it with a new
+ADR rather than editing this page.
 
 ## Invariants — what must never break
 
@@ -1552,6 +1561,50 @@ rename risk below. Any change is a one-line table edit plus a fixture update —
 **Known open item from the 2026-08-02 read:** FLUX schnell's **$0.003/megapixel is MEDIUM
 confidence** — the vendor publishes the rounding rule but no price string. The first invoice that
 includes an image generation resolves it.
+
+### The live gate — **NOT YET RUN as of 2026-08-03**
+
+Plan 20-11 Task 4, owner-run. **This is the first execution of both bullets above**, and it is the
+only place in this playbook that may carry an invoice-confirmed number.
+
+Everything upstream of this section is proven at $0. **Five things offline testing structurally
+cannot prove**, and they are exactly the ones that fail in production:
+
+1. that fal's live queue ACCEPTS our clip, voice and transcript submit bodies — the STT one is a
+   `data:` URI at ~3 MB, a deliberate deviation from a file upload (plan 20-17);
+2. that our webhook URL is reachable from fal's egress;
+3. that a real Vercel Sandbox boots from our snapshot, finds ffmpeg **with libass**, and finishes
+   inside the route's 300 s;
+4. that the harvested `assemble_final.sh` writes a sidecar `parseAssemblySidecar` accepts;
+5. that the amount actually billed matches the price table.
+
+Budget **≈$0.75** across three runs: **A** the Wan spine at 480p (≈$0.29); **B** the same storyboard
+on `fal-ai/longcat-video/distilled/text-to-video/720p` for the D13 resolution-for-price A/B
+(≈$0.12); **C** one 30 s block (≈$0.33) that settles TTS-window consistency, visual coherence past
+15 s, and — the real prize — **fal's billed-seconds fps divisor, backed out of the arithmetic**
+(`billed_usd / rate = billed_seconds`, then `num_frames / billed_seconds = the tier fps`). The 720p
+page implies 30 fps and the 480p page 15 fps; **fal returned HTTP 429 to every automated fetch, so
+this has never been read first-hand.** A wrong divisor puts every LongCat reservation off by 2x.
+
+**Record the divisor here whether or not LongCat is adopted** — it is a fact about fal's billing,
+not about our model choice, and nothing else in the phase can obtain it.
+
+| Observation | Value |
+|---|---|
+| Date run | — |
+| fal balance before / after / delta | — |
+| `sum(mediaJobs.actualCents)` for the run | — |
+| Difference (fal delta vs recorded), **recorded even when zero** | — |
+| Reserved cents vs the sum of floored line items (D12a, observed in production) | — |
+| Observed render wall-clock vs the modelled 60–150 s | — |
+| Observed sandbox cold start | — |
+| **fal's billed-seconds fps divisor (720p / 480p)** | — |
+| LongCat vs Wan verdict (D13) | — |
+| 30 s TTS take: three speech durations vs the [28.6, 30.0] s window | — |
+| Snapshot id + bake date | — |
+
+*"We compared and it matched"* **is** the finding — record the number even when the difference is
+zero. A blank row above means the gate has not run; it never means it passed.
 
 ## How to change this safely
 
