@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 7 (done)
+current_phase: 15.3
+current_plan: 2
 status: in_progress
-stopped_at: Phase 15.3 context gathered
-last_updated: "2026-08-02T16:52:41.708Z"
+stopped_at: "Completed 15.3-01-PLAN.md — the whole phase schema landed as a pure widening; next is 15.3-02 (wave 2, vault survivability at folder scale)."
+last_updated: "2026-08-02T22:18:03.353Z"
 progress:
   total_phases: 42
   completed_phases: 28
-  total_plans: 238
-  completed_plans: 223
+  total_plans: 247
+  completed_plans: 226
 ---
 
 ---
@@ -41,6 +42,7 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
+| F | **15.3** Vault Folders | 1/9 plans (wave 1 of 9) | 15.3-02 (wave 2 — paginate the vault grid, counter-derived stats, de-duplicate the size caps) | 15.3-01 COMPLETE (`882ae13`, `6df8252`, `c99c8d0`, `9f94f82`, `c6ef00c`, `4e9e493`). **`schema.ts` IS CLOSED FOR THIS PHASE** — `vaultFolders` + `folderId`/`docType`/`identityLine`/`identityUserSet`/`driveFileId`/`driveModifiedTime` + `by_tenant_folder`/`by_tenant_driveFileId` + the `folder_digest` origin literal all landed together, so no later wave edits that file; a plan that thinks it must has drifted. **PURE WIDENING, VERIFIED:** codegen green, `tsc` 15 errors ALL in `convex/*.test.ts` and ZERO in `schema.ts` (13 is the standing baseline + 2 from the concurrent media lane uncommitted `media.test.ts`), vault+blueprint suites 154/154, full backend suite re-run green. **⚠ THE `folder_digest` LITERAL IS INERT** — there is exactly ONE `origin` predicate in the whole non-test convex tree (`vault.ts:723`, `patchCreatedDoc` revise guard) and ZERO in any retrieval path; the `origin:"agent"` exclusion is the ABSENT `startIngest` call, so a digest is groundable ONLY because its insert calls `startIngest` and the observable check is `ragEntryId != null`, NEVER the literal. Do not add an origin filter anywhere. **Two more traps for later waves:** never `.collect()` on `by_tenant_folder` (rows carry `text` up to 400k chars; ~40 max-size rows exhaust the 16 MiB read cap — bounded `.take()` + projection only), and cancel DELETES the `vaultFolders` row, so every folder read needs a lenient join where an unresolvable `folderId` means "no folder". **VALT-05..VALT-14 are written but deliberately left Pending** — schema satisfies none of them; every id names behaviour owned by waves 2-9 (the 17.1-01 precedent, where an early `requirements mark-complete` flip was reverted as a false signal). **`gsd-tools state advance-plan` REFUSED (`advanced:false, reason:last_plan`)** because this first frontmatter block carried a stale `current_plan: 7 (done)` and no `current_phase`; both are now hand-set. `state update-progress` DID work correctly (247/226 from disk), and it REWROTE THE FIRST BLOCK IN LF while the rest of the file is CRLF — anchor accordingly. **A FOREIGN HUNK RODE ALONG IN `c99c8d0`:** another lane uncommitted `by_tenant_kind` index on `vaultDocuments` (an `onboarding.status` hot-path fix) was already in `schema.ts`, git stages whole files and `git stash` is banned here — it is preserved and named in that commit message, and is NOT this plan work. Its sibling `convex/onboarding.ts` edit was left untouched |
 | — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | **DEFERRED 2026-08-02 (owner) — billing only** | **ENGINEERING COMPLETE, DEFERRED ON BILLING.** All six previously-failing fixtures are probe-verified green (29/30/31 run `73583564` 3/3; 32/33/34 run `1246bb4a` 3/3; 32 re-verified `e106bc36` 1/1) and committed (`52a421d`, `3f77378`, `d57dcce`). Last full gate `3ec490ab` was **32/33** and its only red is the one since fixed. Blocker is an OpenAI balance of $0 (`credit_balance_exhausted` verified directly against the key); free daily tokens do NOT unblock it (embeddings + hosted web search sit outside that programme). **Do not re-diagnose — read `deferred-items.md`, which carries the one-command resume recipe and the 18-08 consequence.** ACTN-03 stays Pending; nothing is ticked |
@@ -90,7 +92,29 @@ plans 01-09 through the profile confirmation surface and continues at 17.1-10's 
 
 ## Current Position
 
-**PHASE 18 — Document & Content Creation (Wave 5 of 7) — 18-07 COMPLETE: the Output card.** SC#6's
+**PHASE 15.3 — Vault Folders (Wave 1 of 9) — 15.3-01 COMPLETE: the whole phase schema, landed once.**
+`schema.ts` is the repo highest-collision file and this phase touches it for five unrelated reasons,
+so all of them landed together in wave 1: the `vaultFolders` table (with a block comment recording
+the four decisions a later reader would otherwise undo), six optional `vaultDocuments` fields
+(`folderId`, `docType`, `identityLine`, `identityUserSet`, `driveFileId`, `driveModifiedTime`), the
+`by_tenant_folder` and `by_tenant_driveFileId` indexes, and the `folder_digest` origin literal.
+**NO LATER WAVE EDITS `schema.ts`.** Every addition is a new table or an optional field, so this is a
+PURE WIDENING that ships and sits inert — zero backfill, zero migration, zero behaviour. Also landed:
+VALT-05..VALT-14 in REQUIREMENTS.md (the coverage gate was vacuous — the file held only VALT-01..04,
+all completed in Phase 5), a corrected ROADMAP entry (SEVEN scope items, not five; nine plans; the
+Drive-moves-bytes and probe-stage research corrections), `watch.json` coverage for the three convex
+modules later plans create, and the `## Phase 15.3` container in `docs/playbooks/vault.md`.
+⚠ **THE `folder_digest` LITERAL IS INERT AND THAT IS THE MOST MISREADABLE FACT IN THE PHASE** — it
+excludes nothing and includes nothing, because there is ZERO `origin` predicate in any retrieval
+path (verified: exactly one `origin` predicate exists in the whole non-test convex tree, and it is
+`patchCreatedDoc` revise guard). A digest is groundable ONLY because its insert calls
+`startIngest`; the observable check is `ragEntryId != null`, never the literal. Gates: codegen green,
+`tsc` 15 errors ALL in `convex/*.test.ts` and ZERO in `schema.ts`, vault+blueprint 154/154,
+`check-playbooks` exit 0. VALT-05..14 are deliberately left **Pending** — schema satisfies none of
+them. Next: 15.3-02 (wave 2 — the vault page read-cap fix, without which the phase own acceptance
+demo cannot render).
+
+PRIOR — **PHASE 18 — Document & Content Creation (Wave 5 of 7) — 18-07 COMPLETE: the Output card.** SC#6's
 automated half. `OutputCard` is `SourceCard`'s dumb self-querying shape with ONE extra arg on the
 SAME `byThread` query (`role: "created"`) — zero new tables, zero new queries, zero new routes, zero
 new dependencies, no component library — and it returns `null` on a turn that created nothing, so
