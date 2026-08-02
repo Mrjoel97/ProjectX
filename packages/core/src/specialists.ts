@@ -17,6 +17,11 @@ import { type BehaviorPreset, sanitizeAgentName, type Tier } from "./businessPro
  * a business constraint, it is how you find out what the constraint is. Widening `diagnose()` is
  * ADR-009 territory and needs its own ADR.
  *
+ * `media` (20-08) is the SECOND instance of that same pattern, which is what keeps it a decided
+ * pattern rather than a one-off: dispatchable, and never emitted by `diagnose()`. A reel is not a
+ * remedy for a business constraint — it is something the user asks for. `specialists.test.ts`
+ * carries the companion assertion for both.
+ *
  * The old sentence ("exactly the routes `diagnose()` emits") is left corrected rather than
  * deleted-in-silence, because the next reader would otherwise treat it as load-bearing.
  */
@@ -25,6 +30,7 @@ export const SPECIALIST_ROUTES = [
   "money-model-designer",
   "lead-engine",
   "research",
+  "media",
 ] as const satisfies readonly string[];
 export type SpecialistRoute = (typeof SPECIALIST_ROUTES)[number];
 
@@ -40,7 +46,8 @@ export type SpecialistSpec = {
     | "dispatchOfferArchitect"
     | "dispatchMoneyModelDesigner"
     | "dispatchLeadEngine"
-    | "dispatchResearch";
+    | "dispatchResearch"
+    | "dispatchMedia";
 };
 
 /**
@@ -54,6 +61,16 @@ export type SpecialistSpec = {
  * reaches the specialist through its PROMPT instead (15-03 injects
  * `internal.evaluations.lastForThread`), which is cheaper and strictly read-only. Do not "fix"
  * this by adding the tool back.
+ *
+ * Also deliberately NOT granted: any media generation, voiceover or render tool. A tool that called
+ * fal.ai — or started a sandbox — from inside a dispatch would be strictly worse than
+ * `evaluateBusiness`: it spends REAL DOLLARS with no human in the loop, and it would falsify roadmap
+ * SC #3 ("an agent or injected content cannot fire generation without human approval"). The media
+ * specialist emits prose plus a script, an art direction and a structured block deck, and spins up a
+ * canvas; the paid calls fire only from the post-`approved` arm (`cockpit.ts` `EXTERNAL_TARGETS.media`)
+ * or from an explicit human click in the canvas. There are now FOUR paid capabilities behind that
+ * line — clip generation, TTS, captions STT and the sandbox render — and none of them is reachable
+ * from here. Do not "fix" this by adding a tool.
  */
 const SPECIALIST_TOOLS = ["searchVault"] as const;
 
@@ -114,6 +131,13 @@ export const SPECIALISTS: Readonly<Record<SpecialistRoute, SpecialistSpec>> = {
     skillName: "research-specialist",
     tools: RESEARCH_TOOLS,
     stepTool: "dispatchResearch",
+  },
+  // 20-08. The grant is `SPECIALIST_TOOLS` by IDENTITY, not a copy — there is no media grant to
+  // widen, which is the strongest form of "no code path from a dispatch to a paid call".
+  media: {
+    skillName: "media-director",
+    tools: SPECIALIST_TOOLS,
+    stepTool: "dispatchMedia",
   },
 };
 

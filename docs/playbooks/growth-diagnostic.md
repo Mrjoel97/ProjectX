@@ -1,6 +1,56 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-08-01 (ACTN-03 — **`specialists.ts` touched, but NO diagnostic math, gate
+> Last verified: 2026-08-02 (20-08, **by the owning lane, and the RED recorded below is CLOSED**
+> — **`media` is a registered dispatch route and the diagnostic is untouched.**)
+>
+> `SPECIALIST_ROUTES` is now five literals; `SPECIALISTS.media` resolves to
+> `{ skillName: "media-director", tools: SPECIALIST_TOOLS, stepTool: "dispatchMedia" }`. **The grant
+> is `SPECIALIST_TOOLS` BY IDENTITY, not an equal copy** — `SPECIALISTS.media.tools` is the same
+> object the three growth specialists hold, asserted with `toBe`. There is no media grant to widen,
+> which is a stronger statement than "the media grant happens to be small".
+>
+> **Nothing in `diagnose()` changed and nothing in it may.** `media` is the SECOND instance of the
+> ADR-010 pattern — dispatchable routes are a SUPERSET of what `diagnose()` emits — and the second
+> instance is what keeps it a decided pattern rather than a one-off exception for `research`. A reel
+> is not a remedy for a business constraint; it is something the user asks for. The companion
+> assertion now names BOTH routes, and it is non-vacuous in both directions: it asserts each route
+> is absent from `diagnose()`'s literals AND that it really resolves, so the absence is a decision
+> rather than a route that does not exist yet. **Mutation-verified**: making `diagnose()` emit
+> `route: "media"` turns it RED (2 failed / 57 passed).
+>
+> The three growth specialists' grants are UNCHANGED — each still exactly `["searchVault"]`, which
+> is what `citesVaultDoc` on fixtures 29-31 depends on.
+>
+> **NEW here, and it is a capability assertion rather than a diagnostic one:** `specialists.test.ts`
+> now carries the roadmap SC#3 no-path scan over `PAID_ENTRY_POINTS = ["submitBatch", "renderReel"]`
+> — no granted tool of ANY specialist may name a paid entry point. `renderReel` is seeded before
+> plan 20-15 creates it, deliberately: the scan passes whether or not the function exists, and
+> seeding it means 20-15 cannot land a reachable render without this going red. The list asserts
+> itself non-empty so a future "clean-up" fails loudly instead of passing vacuously
+> (**mutation-verified**: emptying it → 1 failed / 58 passed).
+>
+> ⚠ **THE PRIOR ENTRY'S RED IS RESOLVED.** It was written from OUTSIDE this lane's diff and caught a
+> real intermediate state: `"media"` had been added to the route union before `SPECIALISTS.media`
+> existed, so `SPECIALISTS[route]` was `undefined` and core was 5 failed / 51 passed. That is closed
+> — **core `specialists.test.ts` is 59/59 and the whole package is 448/448.** The claim it flagged as
+> untrue in the working tree is now true. Recorded rather than deleted: the observation was correct
+> when it was made, and a shared tree is exactly where a half-done state gets read as a finished one.
+>
+> Last verified: 2026-08-02 (20-08, ANOTHER LANE's in-flight work — **`specialists.ts` touched, but
+> NO diagnostic math, gate order, threshold or prescription changed.** `SPECIALIST_ROUTES` gained a
+> fifth literal, `media`. The diagnostic is unaffected BY CONSTRUCTION and this was verified, not
+> assumed: `packages/core/src/growth/diagnose.ts` contains **zero** occurrences of `media`, and the
+> only route literals it emits are `offer-architect`, `money-model-designer` and `lead-engine` — the
+> same three whose `["searchVault"]` grant `citesVaultDoc` depends on. `media` is dispatchable-only,
+> the second instance of the ADR-010 pattern (dispatchable routes are a SUPERSET of what `diagnose()`
+> emits); a reel is not a remedy for a business constraint.
+> ⚠ **THIS IS NOT A GREEN VERIFICATION.** At the time of writing, `packages/core` is RED:
+> `specialists.test.ts` is **5 failed / 51 passed** because `"media"` was added to the route union
+> without a matching `SPECIALISTS.media` entry, so `SPECIALISTS[route]` is `undefined` (test lines
+> 101 and 154). The `specialists.ts` comment claiming *"`specialists.test.ts` carries the companion
+> assertion for both"* is **not true in the working tree yet**. The owning lane must close this
+> before its commit; nothing about the diagnostic is implicated either way.
+> Prior: 2026-08-01 (ACTN-03 — **`specialists.ts` touched, but NO diagnostic math, gate
 > order, threshold, route literal or prescription changed.**) This playbook watches
 > `packages/core/src/specialists.ts`, so this entry records why it moved: `RESEARCH_TOOLS` lost
 > `searchVault` — the research specialist is now web-only (measured: the free vault was

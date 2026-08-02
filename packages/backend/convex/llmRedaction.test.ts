@@ -838,8 +838,23 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // webSearchCalls: 0}`: refs, a CODE literal from the closed reason set, and a COUNT. No reply,
   // body, text or output, and nothing derived from one. §4-clean. A SEVENTH gets the same
   // treatment — review the payload, then move the number and say here what you reviewed.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(6);
-  // All six SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
+  //
+  // 20-08 adds the SEVENTH and EIGHTH — the media storyboard terminal. BOTH REVIEWED against this
+  // rule before the count moved, which is what the sentence above demands:
+  //   `media.deck_refused`   — `{...lineageRefs(args), reason: <ParsedDeck reason>, blockIndex,
+  //                            chars}`. The reason is a CODE from the parser's CLOSED union; the
+  //                            block index is a REF and the character count is a COUNT. **The
+  //                            narration text itself never enters** — that is the whole reason the
+  //                            parser returns `{blockIndex, chars}` rather than the offending line,
+  //                            and dispatch.test.ts asserts the 186-char string appears NOWHERE in
+  //                            the audit plane.
+  //   `media.deck_persisted` — `{...lineageRefs(args), blocks, clipSeconds, narrationChars,
+  //                            hasArtDirection}`. Four COUNTS and a boolean. `narrationChars` is a
+  //                            NUMBER (the total the tts reservation is priced from), never the
+  //                            narration. No script, no prompt, no art direction, no block text.
+  // Both are §4-clean. A NINTH is a new §4 surface and gets the same treatment, not a renumber.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(8);
+  // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.
   const refs = src.match(/const lineageRefs = \([^)]*\) => \(?(\{[^}]*\})/);

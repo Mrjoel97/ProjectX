@@ -188,12 +188,16 @@ const FAL_ASSET_HOSTS = ["fal.media", "fal.ai", "fal.run"];
  *  ceiling, not a budget: a provider that returns something enormous fails the line loudly. */
 const MAX_ASSET_BYTES = 32 * 1024 * 1024;
 
-/** ONE arm per kind, keyed on the ROW's kind — never on the payload's shape. `tts` is added by plan
- *  20-14 and `stt` by plan 20-17; until then an unhandled kind fails with a code, because "find
- *  whatever url is in this body" is a third party choosing what we download. */
+/** ONE arm per kind, keyed on the ROW's kind — never on the payload's shape. `stt` is added by plan
+ *  20-17; until then an unhandled kind fails with a code, because "find whatever url is in this body"
+ *  is a third party choosing what we download. */
 const ASSET_PATH: Record<string, (p: Record<string, unknown>) => unknown> = {
   video: (p) => (p.video as Record<string, unknown> | undefined)?.url,
   image: (p) => (p.images as Array<Record<string, unknown>> | undefined)?.[0]?.url,
+  // 20-14. `fal-ai/inworld-tts` returns `{ audio: { url, content_type, file_name, file_size } }` —
+  // no duration, no character count, and no moderation field. Everything downstream of this line is
+  // the SAME code a video take walks; that sameness is the plan's whole argument.
+  tts: (p) => (p.audio as Record<string, unknown> | undefined)?.url,
 };
 
 /** The provider's checker, or `null` when it said nothing at all. `null` is NOT `false`. */

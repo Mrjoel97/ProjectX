@@ -22,6 +22,13 @@ import {
   tierBriefing,
   wouldCycle,
 } from "@pikar/core";
+import {
+  narrationChars,
+  type ParsedDeck,
+  parseArtDirection,
+  parseBlockDeck,
+  parseScript,
+} from "@pikar/core/storyboard";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -355,7 +362,8 @@ async function governedDispatch(
     args.envelopeCents > 0
       ? args.envelopeCents
       : Math.floor(
-          (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId })) * ENVELOPE_FRACTION,
+          (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId })) *
+            ENVELOPE_FRACTION,
         );
   if (args.spentCents >= envelopeCents) return refuse("budget_exhausted", BUDGET_EXHAUSTED_REPLY);
 
@@ -569,6 +577,127 @@ const RESEARCH_FAILED_MEMO =
   "# Research\n\nI couldn't finish that piece of research — the run stopped before it produced" +
   " anything. Ask me to look into it again and I'll start it over.";
 
+/** The same, for a media run. Same class of driver-plane string, same reason. */
+const MEDIA_FAILED_MEMO =
+  "# Reel\n\nI couldn't put that reel proposal together — the run stopped before it produced" +
+  " anything. Ask me to plan it again and I'll start over. Nothing was generated and nothing was" +
+  " charged.";
+
+/**
+ * What a media run lands when it produced PROSE but no usable deck. One sentence per lever, so the
+ * user is told which knob to turn — never a bare "parse failed", and never an empty canvas.
+ *
+ * `narration_too_long` / `narration_too_short` carry the block and the character count. That is a
+ * REF and a COUNT (§4), not content: the narration text itself never leaves the plan row.
+ */
+function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
+  const where =
+    "blockIndex" in bad ? ` Block ${bad.blockIndex + 1} is ${bad.chars} characters.` : "";
+  const why: Record<string, string> = {
+    no_deck: "it never wrote a block deck",
+    empty_deck: "the block deck came back empty",
+    unknown_shot_type: "one of the blocks used a shot type the renderer does not have",
+    bad_duration: "the block length was not 5 or 10 seconds, which is all the model accepts",
+    mixed_durations: "the blocks disagreed about how long they are, and they must all match",
+    missing_narration: "a block had no narration line, and every block needs one to be voiced",
+    narration_too_long: "a narration line is too long to fit its block without rushing it",
+    narration_too_short: "a narration line is too short to fill its block without dead air",
+  };
+  // Assembled from SHORT pieces rather than one template literal: `skills.test.ts` refuses any
+  // inline string over 200 characters anywhere in `convex/` (§5, no hardcoded prompts), and a
+  // single-literal version of this sentence is 206. The sibling driver-plane strings above are
+  // concatenated for the same reason.
+  const lede = "# Reel\n\nI drafted this, but I couldn't turn it into a usable deck";
+  const tail = " Ask me to redo the block deck and I'll keep the direction below.";
+  const cause = why[bad.reason] ?? "the deck did not parse";
+  return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
+}
+
+/**
+ * The storyboard terminal (MEDIA-01), bolted onto a media dispatch AFTER `dispatchAndLand` has
+ * returned — `persistResearchFindings`' ordering argument verbatim: the memo card is already landed
+ * by the time this runs, so the user has the specialist's prose whatever happens here.
+ *
+ * It writes through `ctx.db.patch` on an internal mutation rather than `patchPlan`, and that is
+ * deliberate: `patchPlan` has NO deck args and NO render args, and **that absence is the guarantee**
+ * (20-02, the `calendarEventId`/`calendarRunId` rule). Nothing reachable from the MODEL may write a
+ * block prompt or a narration line that later becomes a paid generation.
+ *
+ * **It NEVER writes `shots: []`.** An empty deck that says `kind: "media"` is an empty canvas
+ * wearing a successful proposal's clothes — the user approves it, the reservation prices zero
+ * blocks, and nothing ever explains why. A body that does not parse lands as a MEMO with the lever
+ * named instead.
+ */
+async function persistStoryboard(
+  ctx: Ctx,
+  args: DispatchArgs,
+  res: DispatchResult,
+): Promise<DispatchResult> {
+  // SUCCESS PATH ONLY. A governed refusal is a paused conversation, not a proposal — its reply is
+  // already on the card via `fallbackBody`.
+  if (!res.ok) return res;
+
+  const deck = parseBlockDeck(res.body);
+  if (!deck.ok) {
+    await ctx.runMutation(internal.plans.landStoryboardRefusal, {
+      tenantId: args.tenantId,
+      planId: args.planId,
+      body: deckRefusalBody(deck),
+    });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "media.deck_refused",
+      actor: "system",
+      // Refs and COUNTS only (§4): the reason CODE, the block INDEX and the character COUNT. Never
+      // the narration, never the prompt, never the body.
+      payload: {
+        ...lineageRefs(args),
+        reason: deck.reason,
+        ...("blockIndex" in deck ? { blockIndex: deck.blockIndex, chars: deck.chars } : {}),
+      },
+    });
+    return res;
+  }
+
+  // `null` when the nine fields are not all there. The plan still gets its deck — an art direction
+  // is how the clips LOOK, and a missing one is a worse reel, not an unusable one.
+  const artDirection = parseArtDirection(res.body);
+  await ctx.runMutation(internal.plans.persistDeck, {
+    tenantId: args.tenantId,
+    planId: args.planId,
+    script: parseScript(res.body),
+    artDirection,
+    clipSeconds: deck.clipSeconds,
+    shots: deck.blocks.map((b) => ({
+      index: b.index,
+      type: b.type,
+      seconds: b.seconds,
+      windowStartMs: b.windowStartMs,
+      description: b.description,
+      ...(b.overlay === undefined ? {} : { overlay: b.overlay }),
+      prompt: b.prompt,
+      narration: b.narration,
+    })),
+  });
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: args.tenantId,
+    correlationId: args.rootRequestId,
+    eventType: "media.deck_persisted",
+    actor: "system",
+    // COUNTS only. `blocks` and `narrationChars` are what the reservation will price, so they are
+    // the two numbers worth being able to reconcile against a later `mediaJobs` batch.
+    payload: {
+      ...lineageRefs(args),
+      blocks: deck.blocks.length,
+      clipSeconds: deck.clipSeconds,
+      narrationChars: narrationChars(deck.blocks),
+      hasArtDirection: artDirection !== null,
+    },
+  });
+  return res;
+}
+
 /**
  * 16-07's findings terminal (ACTN-03), bolted onto a research dispatch AFTER `dispatchAndLand` has
  * returned. The ordering is the whole error-handling argument and it is structural, not incidental:
@@ -691,6 +820,37 @@ export const runResearch = internalAction({
 });
 
 /**
+ * The media route's scheduled entry point (20-08). `runResearch`'s shape verbatim — the SAME
+ * `dispatchAndLand` spine, the SAME landing, a different terminal.
+ *
+ * **A dispatched media run spends TOKENS ONLY.** The specialist's grant is `SPECIALIST_TOOLS`
+ * (`searchVault`) and there is no code path from here to a fal POST or a sandbox: no `mediaJobs`
+ * row is inserted, neither media window moves, and `renderStatus` is never set. The paid calls fire
+ * from `cockpit.ts`'s `EXTERNAL_TARGETS.media` after the human Approve gate, and from nowhere else.
+ */
+export const runMedia = internalAction({
+  args: dispatchArgs,
+  handler: async (ctx, args): Promise<DispatchResult> =>
+    persistStoryboard(
+      ctx,
+      args,
+      await dispatchAndLand(
+        ctx,
+        args,
+        (a) =>
+          runSpecialistTurn(ctx, {
+            // `...a` FIRST — the clobber lesson the research path records above.
+            ...a,
+            tenantId: args.tenantId,
+            planId: args.planId,
+            skillVersions: args.skillVersions,
+          }),
+        MEDIA_FAILED_MEMO,
+      ),
+    ),
+});
+
+/**
  * The OFFLINE twin (the __runCockpitAgentWithScript precedent, llm.ts:2116). A LanguageModel is
  * not Convex-serializable, so the mock is built inside runSpecialistTurn from a script. It calls
  * the SAME governedDispatch — test-support surface, never a second code path.
@@ -712,6 +872,12 @@ export const __runSpecialistWithScript = internalAction({
     // be an assertion about `persistFindings` alone rather than about the dispatch. Absent ⇒ the gap
     // path, byte-identical. The `softCutoffMs` precedent, same reason.
     research: v.optional(v.boolean()),
+    // 20-08: the SAME seam for the media terminal, and for the same reason. `runMedia` itself can
+    // never be driven offline (a LanguageModel is not Convex-serializable), so without this flag
+    // `persistStoryboard` would be wiring no test can reach — and "a dispatched media run stages a
+    // proposed deck and ZERO mediaJobs rows" would be an assertion about the parser alone rather
+    // than about the dispatch. Absent ⇒ the gap path, byte-identical.
+    media: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<DispatchResult> => {
     const res = await dispatchAndLand(
@@ -731,8 +897,14 @@ export const __runSpecialistWithScript = internalAction({
             softCutoffMs: args.softCutoffMs,
           },
         }),
-      args.research === true ? RESEARCH_FAILED_MEMO : undefined,
+      args.research === true
+        ? RESEARCH_FAILED_MEMO
+        : args.media === true
+          ? MEDIA_FAILED_MEMO
+          : undefined,
     );
-    return args.research === true ? persistResearchFindings(ctx, args, res) : res;
+    if (args.research === true) return persistResearchFindings(ctx, args, res);
+    if (args.media === true) return persistStoryboard(ctx, args, res);
+    return res;
   },
 });

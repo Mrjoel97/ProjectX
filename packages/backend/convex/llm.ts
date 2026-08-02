@@ -717,6 +717,33 @@ const RESEARCH_REFUSAL_REPLY: Record<"research_in_flight" | "draft_in_progress",
 // the MODEL, so it closes the loop it opens. It exists to kill the early-exit incentive: a model
 // that learns this call ends the work will reach for it to escape a hard question. A bare "ok"
 // would train exactly that.
+// 20-08. The same class of driver-plane string, for the media route. It must close its loop for the
+// same reason RESEARCH_UNDERWAY_REPLY does — and it carries one extra sentence the research one does
+// not need: the proposal is FREE and the generation is not, so a model that implies the reel is
+// being made would be describing a charge that has not happened and needs a human click first.
+const MEDIA_UNDERWAY_REPLY =
+  "The media director has started in the background. A reel PROPOSAL — a script, an art direction " +
+  "and the block deck — will arrive as a plan card the user can review; you do not have it yet, " +
+  "so do not describe it, do not wait for it, and do not ask for a reel again on this " +
+  "conversation. Nothing has been generated and nothing has been charged: generating the clips, " +
+  "the voiceover and the render happens only when the user approves the card. Tell the user the " +
+  "proposal is being put together and carry on.";
+const MEDIA_REFUSAL_REPLY: Record<
+  "reel_in_flight" | "render_in_flight" | "draft_in_progress",
+  string
+> = {
+  reel_in_flight:
+    "A reel is already being generated on this conversation and its clips are already paid for. " +
+    "Nothing new was started. Tell the user it is still running, and that a second reel needs a " +
+    "new conversation.",
+  render_in_flight:
+    "This conversation's reel is being assembled right now. Nothing new was started. Tell the " +
+    "user the render is still going and that a second reel needs a new conversation.",
+  draft_in_progress:
+    "There is an email draft on this conversation's plan card, and starting a reel would discard " +
+    "it. Nothing was started. Tell the user plainly, and offer to make the reel once the draft is " +
+    "sent or discarded.",
+};
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -865,6 +892,55 @@ export function buildCockpitTools(
           skillVersions,
         });
         return RESEARCH_UNDERWAY_REPLY;
+      },
+    }),
+  };
+
+  // 20-08. `dispatchResearchTool`'s shape verbatim — stage, schedule, return immediately. It is
+  // gated by the SAME `grantDispatch` + lineage condition, in the same spread, so media can never
+  // become reachable in a context where research is not.
+  const dispatchMediaTool = {
+    dispatchMedia: tool({
+      description:
+        "Propose a short-form video reel — a script, an art direction and a deck of blocks with " +
+        "a narration line each. The media director runs in the background and the proposal " +
+        "arrives as a plan card in the workspace; you do not get it in this turn. The proposal " +
+        "itself is free. Generating the clips, recording the voiceover and rendering the finished " +
+        "video cost real money and happen only after the user approves the card — a separate " +
+        "human click that you cannot make on their behalf.",
+      inputSchema: jsonSchema<{ brief: string }>({
+        type: "object",
+        properties: { brief: { type: "string" } },
+        required: ["brief"],
+        additionalProperties: false,
+      }),
+      execute: async ({ brief }): Promise<string> => {
+        // Non-null asserted: the whole record key is absent unless both are present (the gate below).
+        const threadId = agentContext?.threadId as string;
+        const rootRequestId = agentContext?.rootRequestId as string;
+        const staged = await ctx.runMutation(internal.plans.stageMediaPlan, {
+          tenantId,
+          threadId,
+          subject: `Reel: ${brief}`.slice(0, 120),
+        });
+        // Conversational, never a throw — a governed stop is a paused conversation.
+        if (!staged.ok) return MEDIA_REFUSAL_REPLY[staged.reason];
+        await ctx.scheduler.runAfter(0, internal.dispatch.runMedia, {
+          tenantId,
+          threadId,
+          planId: staged.planId,
+          gapIndex: 0, // unused on this path — the BRIEF is what briefs the specialist
+          route: "media",
+          question: brief,
+          rootRequestId,
+          parentAgentId: EXECUTIVE_AGENT_ID,
+          depth: 1,
+          ancestry: [],
+          envelopeCents: 0, // the ROOT signal — governedDispatch derives the real envelope
+          spentCents: 0,
+          skillVersions,
+        });
+        return MEDIA_UNDERWAY_REPLY;
       },
     }),
   };
@@ -1117,9 +1193,11 @@ export function buildCockpitTools(
       : ({} as typeof webResearchTool & typeof declareUnsupportedTool)),
     // DISP-02: present ONLY for the executive, and only when it has a turn identity to dispatch
     // under (no lineage ⇒ nothing to correlate the async run to). Same one-type-both-branches trick.
+    // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
+    // precedent above. Media can never become reachable in a context where research is not.
     ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
-      ? dispatchResearchTool
-      : ({} as typeof dispatchResearchTool)),
+      ? { ...dispatchResearchTool, ...dispatchMediaTool }
+      : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({

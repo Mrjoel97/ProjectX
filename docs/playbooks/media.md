@@ -6,7 +6,17 @@
 > verified it — see `## Reconciliation` bullet (b) and plan 20-19.** The registration it made was
 > the correct one and is kept.
 
-> Last verified: 2026-08-02 (20-06 — **the authenticated callback and the landing plane.**
+> Also 2026-08-02 (20-08 — **`storyboard.ts` gained `parseScript` and `parseArtDirection`**, the
+> two remaining §-parsers, plus a section-terminator fix. Pure `@pikar/core`, zero new deps. See
+> `## The §-parsers` below. The dispatch route itself is documented in `cockpit.md`.)
+>
+> Last verified: 2026-08-02 (20-14 - **the voiceover stage.** One TTS take per block through the
+> SAME adapter, secret, webhook and landing code: two switch arms, one narration read, and no
+> second integration anywhere. The endpoint was chosen because it has NO rate knob, so D8's
+> no-time-stretch rule is enforced by the provider rather than by our discipline. See
+> `## The voiceover stage` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-06 — **the authenticated callback and the landing plane.**
 > `POST /fal/callback/*` with an HMAC path segment and a ±300 s window, the asset downloaded and
 > stored INSIDE the webhook so no fal URL can live anywhere, the honest four-value verdict, and
 > kind-aware reconciliation. See `## The landing plane` below.)
@@ -522,6 +532,125 @@ six scans in `llmRedaction.test.ts` are:
    If 20-17 needs the bytes at a provider, it uploads them — it does not hand over a URL.
 
 All six strip comments before matching, so the modules can spell out what they forbid.
+
+## The voiceover stage (20-14)
+
+The reel gets a voice, and it cost **two switch arms, one narration read and zero new integration
+surface**. Same provider, same `FAL_KEY`, same queue submit, same HMAC webhook segment, same
+`mediaJobs` row, same landing, same audit. If you are here to add a "TTS adapter", stop — there
+isn't one, and that is the design.
+
+### The endpoint and its three PINNED fields
+
+`fal-ai/inworld-tts`, **$0.01 per 1000 SUBMITTED characters** (`MEDIA_TTS_PRICING`). The request
+body is exactly:
+
+```ts
+{ text, voice: spec.voice, sample_rate_hertz: spec.sampleRateHertz }   // and NOTHING else
+```
+
+- `text` — the block's **narration**, verbatim. Never truncated, never re-wrapped. A silent
+  truncation ships a voiceover missing its last words with no error anywhere and a clip that still
+  renders.
+- `voice` — `MEDIA_DEFAULT_VOICE.voice` (`"Evelyn (en)"`), read off the **ROW**, not off the
+  constant. A row reserved under one voice must not submit under another after a constant bump; the
+  row is the record of what was priced.
+- `sample_rate_hertz` — **24000**, pinned. The vendor default is **48000**, which doubles the bytes
+  that have to reach the render sandbox and makes the ffmpeg resample step non-deterministic.
+
+### THE NO-RATE-KNOB RULE — why this model, and not a better-sounding one
+
+**`fal-ai/inworld-tts` has no `speed` / `rate` parameter at all.** D8's *no time-stretch, ever* is
+therefore enforced by the **provider's own schema**, not by our discipline. The `fal-ai/kokoro`
+family exposes `speed: 0.1-5.0` and is a live foot-gun: a future contributor "fixing" an overrunning
+line by nudging `speed` to 1.15 would violate D8 silently and no test would catch it (delta pitfall
+15). **That outranks any difference in voice character.** If the model is ever swapped, this
+paragraph is the thing to read first.
+
+The tripwire is an **exact key-set equality** on the built body, not a substring absence — mutation
+check M2 (adding `speed: 1.0`) was observed RED.
+
+### The character arithmetic, and what the 2x reservation buys
+
+~15 characters per second of speech, so a 10 s block's narration band is **103-140 characters**
+(`minCharsFor`/`maxCharsFor`, 20-01) and a 5 s block's is 43-70. A 6-block 60 s voiceover is
+~1,200 characters and **$0.012 — 0.4% of a $3.05 job.** The cap is bounded by the clips, and the
+clips were already the locked constraint.
+
+`reserveJob` (20-04) reserves each voice line at **2x** its character estimate. That is the rewrite
+budget: a re-voiced line does not need a second reservation. It is never refunded (20-04's
+no-refunds rule) and at $0.012 it does not need to be.
+
+**The 140-character pre-flight ceiling is the real defence against an overrun** — it is the only
+check that runs BEFORE money moves.
+
+### Landing: `none_reported`, exact spend, and a window that does not move
+
+`ASSET_PATH.tts` reads `payload.audio.url`; everything after that is the video path, unchanged.
+
+- **`verdict` is `none_reported`.** inworld-tts publishes no moderation field. *"Audio is obviously
+  fine"* is exactly the reasoning that would put a compliance claim fal never made onto a row.
+- **`actualCents === estCents`, and both media windows move by exactly 0.** `tts` is in
+  `EXACT_SPEND_KINDS`: the response carries **no duration and no character count**, so there is
+  nothing to reconcile and re-pricing would mean INVENTING an actual. The audit records
+  `reconciled: "exact_by_construction"` — that field, not the window delta, is where the
+  distinction is observable (the delta is 0 either way, which is why the plan's stated
+  window-based mutation check could not fire).
+
+### The `file_size` heuristic and its honest ceiling
+
+`landResult` fails a `tts` line with `failureReason: "take_too_long"` when
+`bytes / 48000 > plan.clipSeconds + 2`. It is a **byte-count heuristic, not a measurement** — 24 kHz
+mono 16-bit PCM is ~48 KB/s, so the division is a duration ESTIMATE. Three things it is not:
+
+1. **Not a pre-flight guard.** By the time it runs the take is already paid for. The 140-character
+   ceiling is the only check before money moves.
+2. **Not reliable on a compressed container.** A compressed take reads far smaller per second and
+   will simply not trip it — a false negative, which is the safe direction for a heuristic.
+3. **Not a blanket refusal.** A plan with no `clipSeconds` has no window to measure against, so the
+   net is **skipped** — never *"zero seconds, therefore too long"*, which would fail every take on
+   a plan shape this phase did not write.
+
+A take that trips it leaves the reel **un-renderable** rather than rendering with a word cut off —
+D8's hard-error direction. Upgrade path: read the WAV header's byte rate instead of assuming it.
+
+### Two things that bit, recorded so they do not bite twice
+
+- **`SUBMIT_TEXT` is a table, not an `if`-chain.** `video`/`image` submit `prompt`, `tts` submits
+  `narration`, and 20-17's `stt` reads NEITHER (it is keyed to the whole deck at `blockIndex: -1`),
+  so a missing key stays a governed `missing_shot` rather than falling through to `prompt`. A `tts`
+  line submitting `prompt` would voice the **shot description** over the clip — fluent, plausible,
+  completely wrong, and nothing else goes red. The fixture behind it has a prompt and a narration
+  that differ, per block.
+- **Never write a literal slash-star inside a LINE comment in `media.ts`.** `media.test.ts` builds a
+  comment-stripped copy of the module for its static scans, and the stripper closes the block at the
+  next star-slash — silently eating the code between, including the `never` guard. Caught here
+  because the scan failed loudly; the same trick would make a security scan pass **vacuously**.
+
+## The §-parsers (20-08)
+
+`parseBlockDeck` is joined by two siblings in `@pikar/core/storyboard`, both pure, both feeding the
+plan row's DISPLAY fields rather than the money:
+
+- **`parseScript(body)`** — the SCRIPT section verbatim, or `""`. Deliberately not re-wrapped or
+  length-checked: the per-block narration is what gets submitted, and `parseBlockDeck` already
+  enforces the 103-140 band on it. This string is the reel's script of record at the Approve gate.
+- **`parseArtDirection(body)`** — koda's fixed nine fields, or **`null`**. Never a partial object
+  with empty strings: the schema field is a 9-key object and a half-filled one renders as an art
+  direction the specialist never wrote. `typography` is the one optional key, matching the schema.
+  A missing art direction still gets its DECK — a worse-looking reel, not an unusable one.
+
+**The parser does NOT enforce the hex-palette rule.** The skill body teaches *"hex, never a vague
+colour word"*; a parser that refused `warm tones` would turn a soft quality problem into a hard
+refusal at the Approve gate, where a human is already reading the proposal and is the better judge.
+
+**Two shapes of heading exist in real output and both must parse.** `media-director.md` uses
+`## 2. ART DIRECTION` for its own instruction headings but shows the model a **bare `BLOCK DECK`
+token** in its example (`media-director.md:76`). `sectionOf` therefore matches with or without `#`s
+and with or without an `N.` prefix — and, more importantly, a section ends at the next `#` heading
+**or at the next known section token**. With a `#`-only terminator a model emitting bare tokens
+would have ART DIRECTION run to EOF and swallow the whole deck, so `avoid` would come back carrying
+table rows onto a row the user reads. Found by a fixture that used the wrong heading shape.
 
 ## The assemble contract (20-13)
 
