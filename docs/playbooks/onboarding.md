@@ -1,6 +1,8 @@
 # Playbook: Persona Onboarding & Business Profile
-
-> Last verified: 2026-08-02 (profile tabs + blueprint segments). `blueprintSegments.ts` adds the
+
+> Last verified: 2026-08-02 (connections tab). The profile surface gained a fourth tab, `connections`. `ConnectionsPanel` reads `gmailAuth.gmailStatus` and renders the shared `DisconnectGoogle`; the three blocked rows (social accounts, databases & CRMs, third-party apps) are static data in `connections.ts` with their blockers stated. No profile field, writer, serializer or Convex function changed. The existing `surfaceOf("profile")` scan in `businessProfile.test.ts` reads every `.tsx` in the route folder, so `ConnectionsPanel.tsx` falls inside it automatically — but `connections.ts` does **not** (that filter is `.tsx`-only), which is why the blocker-completeness check is its own test (`connectionsSurface.test.ts`) rather than an addition to that scan.
+>
+> Prior: 2026-08-02 (profile tabs + blueprint segments). `blueprintSegments.ts` adds the
 > PRESENTATION grouping over the closed field set — six segments named after `SPECIALIST_ROUTES`,
 > with a compile-time totality check that every `BLUEPRINT_FIELD` is claimed by exactly one
 > segment. No blueprint field, serializer, spine or Convex function changed.

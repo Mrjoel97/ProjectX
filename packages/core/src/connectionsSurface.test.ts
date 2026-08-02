@@ -41,3 +41,53 @@ describe("DisconnectGoogle is the single writer of the disconnect copy", () => {
     expect(button).toContain("myaccount.google.com/permissions");
   });
 });
+
+const panel = read(`${WEB}/dashboard/profile/ConnectionsPanel.tsx`);
+const data = read(`${WEB}/dashboard/profile/connections.ts`);
+const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
+
+describe("the blocked rows are information, not decoration", () => {
+  test("the data module and panel are really being scanned", () => {
+    expect(data.length).toBeGreaterThan(300);
+    expect(data).toContain("export const BLOCKED");
+    expect(panel).toContain("export function ConnectionsPanel");
+  });
+
+  // `connections.ts` holds ONLY the array, so these two keys cannot collide with anything else in
+  // the file — which is why the data lives in its own module instead of inside the .tsx.
+  test("every blocked entry carries a non-empty blocker", () => {
+    const labels = data.match(/^\s*label:/gm) ?? [];
+    const blockers = data.match(/^\s*blocker:/gm) ?? [];
+    expect(labels.length).toBeGreaterThanOrEqual(3);
+    expect(blockers.length).toBe(labels.length);
+    expect(data).not.toMatch(/blocker:\s*""/);
+  });
+
+  test("every blocked entry carries a ponytail comment naming what clears it", () => {
+    const ponytails = data.match(/ponytail:/g) ?? [];
+    const labels = data.match(/^\s*label:/gm) ?? [];
+    expect(ponytails.length).toBe(labels.length);
+  });
+
+  // A dead "Connect" button that does nothing is the exact failure this tab exists to avoid.
+  test("the blocked rows expose no interactive control", () => {
+    const start = panel.indexOf("BLOCKED.map(");
+    expect(start, "BLOCKED.map( not found — the scan below would be vacuous").toBeGreaterThan(-1);
+    const block = panel.slice(start, panel.indexOf("</section>", start));
+    expect(block.length).toBeGreaterThan(100);
+    expect(block).not.toContain("onClick");
+    expect(block).not.toContain("<button");
+    expect(block).not.toContain("href");
+  });
+
+  test("loading is never rendered as disconnected", () => {
+    // A false "Not connected" invites reconnecting an already-connected account.
+    expect(panel).toContain("Checking…");
+    expect(panel).toContain("status === undefined");
+  });
+
+  test("the profile page mounts the tab", () => {
+    expect(profilePage).toContain('id: "connections"');
+    expect(profilePage).toContain("<ConnectionsPanel />");
+  });
+});
