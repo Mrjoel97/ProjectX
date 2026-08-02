@@ -154,6 +154,9 @@
     "packages/backend/convex/vaultGraph.ts",
     "packages/backend/convex/vaultGround.ts",
     "packages/backend/convex/vaultSmoke.ts",
+    "packages/backend/convex/vaultFolders.ts",
+    "packages/backend/convex/vaultDigest.ts",
+    "packages/backend/convex/vaultDrive.ts",
     "apps/web/app/(app)/dashboard/vault/",
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs"
