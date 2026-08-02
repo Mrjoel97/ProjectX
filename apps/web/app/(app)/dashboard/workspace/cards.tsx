@@ -17,6 +17,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
+import { MediaCanvas } from "./MediaCanvas";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
 // projection. Cards are plain inline-styled <div>s (the `box` style mirrors review/[id]).
@@ -271,6 +272,15 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         </button>
       </div>
     );
+  }
+
+  // MEDIA plan (20-10, MEDIA-01): NOT an approve gate at all — the canvas owns its own itemised
+  // estimate and its own Generate button, because what is being bought is four cost lines rather
+  // than one send. Same reason the two branches above exist: everything below is email chrome
+  // (recipients, mode, a send-time picker, "Send to N recipients") and every word of it would be a
+  // lie on a storyboard and a reel.
+  if (plan.kind === "media") {
+    return <MediaCanvas plan={plan} threadId={threadId} />;
   }
 
   // CALENDAR plan (17-01, ACTN-02): same single Approve gate, a different promise. Approving
@@ -941,7 +951,7 @@ function BriefingSection({ title, items, tz }: { title: string; items: readonly 
 
 // The OPAQUE sheet — the other half of the legibility fix. `box` (a bare border, transparent) let the
 // canvas aura bleed through; this is a real --card surface with a soft shadow so text reads on any bg.
-const briefingSheet = {
+export const briefingSheet = {
   background: "var(--card)",
   border: "1px solid var(--rule)",
   borderRadius: "0.9rem",
@@ -1211,7 +1221,7 @@ export function stepText(step: StepView, now: number = Date.now()): string {
 
 // Mirrors page.tsx:39 — the BRAND §3 tracked-caps section label. Mirrored rather than imported
 // because page.tsx imports THIS file (importing back would be a cycle).
-const capsTeal = {
+export const capsTeal = {
   margin: 0,
   fontSize: "0.68rem",
   fontWeight: 700,
@@ -1315,7 +1325,7 @@ const FORM_LABEL = { long: "DOCUMENT", short: "POST" } as const;
 // The type badge pill. Token-only (the DocGrid icon-badge tint + --ink text): --teal-600 on white
 // is ~2.9:1 and BRAND §6 bans it for small text, so the teal lives in the FILL and the label stays
 // --ink. Never --held.
-const typeBadge = {
+export const typeBadge = {
   flex: "none",
   fontSize: "0.62rem",
   fontWeight: 800,
@@ -1330,7 +1340,7 @@ const typeBadge = {
 // The rendered artifact: the newest write's stored markdown, first ~240 chars as written by the
 // tool. A PREVIEW, not a renderer — the vault owns the full document (CONTEXT lock: do not invent
 // a second way to display an artifact). Neutral --canvas sheet, the insufficientBox idiom below.
-const snippetSheet = {
+export const snippetSheet = {
   margin: "0.7rem 0 0",
   border: "1px solid var(--rule)",
   borderRadius: "0.6rem",
@@ -1809,7 +1819,13 @@ function PlanCards({ plan, threadId, briefing }: { plan: Plan; threadId: string;
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
   // A memo's body IS the card above it — a DRAFT card would just print the same memo twice.
-  const hasDraft = (Boolean(plan.body) || Boolean(plan.subject)) && !halted && plan.kind !== "memo";
+  // `media` excluded for the same reason `memo` is: a DRAFT card printing an email body beside the
+  // canvas would be email chrome on a reel.
+  const hasDraft =
+    (Boolean(plan.body) || Boolean(plan.subject)) &&
+    !halted &&
+    plan.kind !== "memo" &&
+    plan.kind !== "media";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);

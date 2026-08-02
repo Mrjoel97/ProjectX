@@ -10,6 +10,7 @@ import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { CanvasPane } from "./MediaCanvas";
 import { SplitPane } from "./SplitPane";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
@@ -182,6 +183,17 @@ export default function WorkspacePage() {
     const id = new URLSearchParams(window.location.search).get("thread");
     if (id) openThread(id, "Voice brief");
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // THE CANVAS VIEW (20-10 follow-up). The right pane shows either the agent's work stream or the
+  // media canvas, full-width. It is a VIEWPORT, not a route: the thread, the tab strip and every
+  // in-flight cockpit subscription are untouched by the toggle, which is the whole reason it is
+  // local state and not a `<Link>` to a second page.
+  //
+  // `?view=canvas` is read from `window.location.search` — the repo idiom, never `useSearchParams`
+  // (which forces a Suspense boundary on this page for a value that never changes after mount).
+  const [view, setView] = useState<"work" | "canvas">("work");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "canvas") setView("canvas");
   }, []);
   const newChat = () => setThreadId(undefined);
   // Close a session tab. The tab strip is view state, so this only stops SHOWING the chat — the
@@ -375,14 +387,50 @@ export default function WorkspacePage() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  {threadId ? "Live work canvas" : `${greeting}, Executive.`}
+                  {view === "canvas"
+                    ? "Media canvas"
+                    : threadId
+                      ? "Live work canvas"
+                      : `${greeting}, Executive.`}
                 </h2>
                 <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
-                  {threadId
-                    ? "Plans, drafts, and delivery reports render here live as the agent works."
-                    : "Start from chat and the agent will stream its work here — plans, drafts, and delivery reports."}
+                  {view === "canvas"
+                    ? "The storyboard, the blocks and the finished reel for this thread. Nothing generates until you approve the cost."
+                    : threadId
+                      ? "Plans, drafts, and delivery reports render here live as the agent works."
+                      : "Start from chat and the agent will stream its work here — plans, drafts, and delivery reports."}
                 </p>
               </div>
+              {/* The canvas toggle, beside Clear workspace. A BUTTON, not a link: it swaps what the
+                  pane renders and leaves the thread, the tabs and every open subscription alone —
+                  a navigation would put the conversation a back-button away. `aria-pressed` is what
+                  makes a two-state button legible to a screen reader; the LABEL also changes, so
+                  the state is never carried by styling alone (BRAND §6). */}
+              <button
+                type="button"
+                aria-pressed={view === "canvas"}
+                data-testid="canvas-toggle"
+                style={{
+                  margin: 0,
+                  padding: "0.55rem 1rem",
+                  fontSize: "0.85rem",
+                  borderRadius: "0.5rem",
+                  border: "1px solid var(--rule)",
+                  background: view === "canvas" ? "var(--canvas)" : "var(--paper)",
+                  color: "var(--ink)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontWeight: 600,
+                }}
+                title={
+                  view === "canvas"
+                    ? "Back to the agent's work stream"
+                    : "Show the storyboard and reel for this thread"
+                }
+                onClick={() => setView((v) => (v === "canvas" ? "work" : "canvas"))}
+              >
+                {view === "canvas" ? "Back to workspace" : "Open canvas"}
+              </button>
               <button
                 type="button"
                 className="cta-dark"
@@ -400,7 +448,11 @@ export default function WorkspacePage() {
                 <TrashIcon size={15} /> Clear workspace
               </button>
             </header>
-            <CardList threadId={threadId} sending={sending} />
+            {view === "canvas" ? (
+              <CanvasPane threadId={threadId} />
+            ) : (
+              <CardList threadId={threadId} sending={sending} />
+            )}
           </section>
         }
       />

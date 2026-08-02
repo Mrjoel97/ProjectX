@@ -1,6 +1,45 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-02 (connections-tab fix wave — **`DisconnectGoogle` now owns its own `gmailStatus` subscription instead of trusting the caller's `connected` flag.** `disconnectGoogle` runs `deleteTokens` UNCONDITIONALLY before returning, so gating the component's mount on `status.connected` (as both `connect-gmail/page.tsx` and the Connections tab did) unmounted it — and destroyed its `revoked: false` partial-revoke warning — the instant a disconnect resolved. `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` unconditionally, outside the `status.connected` branch; its orphaned comment describing the old inline behaviour is deleted. No backend behaviour changed.)
+> Last verified: 2026-08-03 (20-10 + the canvas tab — **the workspace right pane gained a THIRD
+> plan surface and a viewport toggle.**
+>
+> **The surface:** `plan.kind === "media"` now early-returns `<MediaCanvas>` from `PlanCard`,
+> beside the `memo` and `calendar_event` branches and for the same stated reason — everything below
+> those branches is email chrome (recipients, mode, a send-time picker, "Send to N recipients") and
+> every word of it would be a lie on a storyboard. `hasDraft` excludes `"media"` exactly as it
+> excludes `"memo"`, or a DRAFT card prints beside the canvas. **That is the whole `cards.tsx`
+> change** — `PlanCards` is NOT widened; the canvas is a new component mounted through the existing
+> one-line switch, so `CardList`'s trace, `SourceCard` and `EvaluationCard` still render above it.
+> Four style primitives (`capsTeal`, `typeBadge`, `briefingSheet`, `snippetSheet`) gained `export`
+> so the canvas reuses them rather than duplicating tokens; no value changed.
+>
+> **The toggle:** an "Open canvas" / "Back to workspace" button beside "Clear workspace" swaps the
+> pane between `CardList` and `CanvasPane`. **It is a VIEWPORT, not a route** — local state, so the
+> thread, the tab strip and every in-flight subscription survive the switch; a `<Link>` to a second
+> page would put the conversation a back-button away. `?view=canvas` is read once from
+> `window.location.search` (the repo idiom — never `useSearchParams`, which would force a Suspense
+> boundary for a value that never changes after mount). `aria-pressed` plus a CHANGING LABEL carry
+> the state, never styling alone.
+>
+> **NO POLLING**, and this is the rule most likely to be broken by a well-meaning edit: a clip is
+> 1–3 minutes of wall clock and the render adds 1–3 more, so the canvas shows meaningful state
+> through minutes of nothing arriving — but the mechanism is Convex reactivity, not a ticker. There
+> is no `setInterval` in the media surface and there must never be one.)
+>
+> Prior: 2026-08-02 (20-15 - **`http.ts` gained a FIFTH route: `GET /media/blob/*`.**
+> SCOPE: this entry covers `http.ts` ALONE, as changed by plan 20-15. It is the render stage's byte
+> path - the runner lives in `apps/web` (D11), so the landed clips and voice takes have to reach it
+> over HTTP. Bearer-guarded by `MEDIA_RENDER_SECRET` with `/skillopt/export`'s exact fail-closed
+> four lines; it takes ONE opaque job id and nothing else - no tenant, no path, no storage id
+> (`http.ts:123-129`'s rule) - resolves it with `normalizeId`, and refuses any row that is not
+> `succeeded`. NO HMAC path segment, unlike `/fal/callback/*`: fal is a third party holding no
+> secret of ours, so its segment is the only thing that can authenticate it, whereas this caller
+> already proves knowledge of the secret in the header and an HMAC keyed on that same secret adds
+> nothing. The tenant boundary is UPSTREAM, in `renderReel.batchToRender`'s tenant-prefixed
+> `by_batch` index - this route invents nothing but checks no tenant either. The four shipped
+> routes are UNTOUCHED. Full detail in `media.md` ``## The renderer``.)
+>
+> Prior: 2026-08-02 (connections-tab fix wave — **`DisconnectGoogle` now owns its own `gmailStatus` subscription instead of trusting the caller's `connected` flag.** `disconnectGoogle` runs `deleteTokens` UNCONDITIONALLY before returning, so gating the component's mount on `status.connected` (as both `connect-gmail/page.tsx` and the Connections tab did) unmounted it — and destroyed its `revoked: false` partial-revoke warning — the instant a disconnect resolved. `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` unconditionally, outside the `status.connected` branch; its orphaned comment describing the old inline behaviour is deleted. No backend behaviour changed.)
 >
 > Prior: 2026-08-02 (connections-tab Task 1 — **the Google disconnect control has one writer.** The confirm copy and the partial-revoke branch (`revoked: false` → point the user at `myaccount.google.com/permissions`) moved out of `connect-gmail/page.tsx` into `apps/web/app/(app)/_components/DisconnectGoogle.tsx`; `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` and no longer calls `api.gmailAuth.disconnectGoogle` itself. No backend behaviour changed.)
 >

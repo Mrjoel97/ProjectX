@@ -10,7 +10,9 @@
 > two remaining §-parsers, plus a section-terminator fix. Pure `@pikar/core`, zero new deps. See
 > `## The §-parsers` below. The dispatch route itself is documented in `cockpit.md`.)
 >
-> Last verified: 2026-08-03 (20-17 — **BURNED CAPTIONS, the phase's designated cut line, SHIPPED**.
+> Last verified: 2026-08-03 (20-10 + the canvas tab — **the canvas is SEEN.** The 20-09 read plane finally has a consumer: MediaCanvas.tsx in the workspace right pane, mounted through the same one-line plan.kind switch as the memo and calendar cards, plus an "Open canvas" toggle beside "Clear workspace" that gives it the whole pane. See `## The canvas, SEEN (20-10)` below. NO POLLING anywhere; five reel states including the out-of-date trap; two status rows per block; `none_reported` renders as "not checked", never a pass. **NO HUMAN HAS SEEN IT** — it typechecks and builds and has never been rendered against a real media plan.)
+>
+> Prior: 2026-08-03 (20-17 — **BURNED CAPTIONS, the phase's designated cut line, SHIPPED**.
 > The reel now works on an autoplay-muted feed, and it cost no Python, no Whisper weights, no font
 > fetcher and NOTHING added to the sandbox image. See `## Burned captions (20-17)` below for the
 > whole stage. Three things a reader must not miss: (a) **the audio goes to fal as a `data:` URI,
@@ -1085,6 +1087,127 @@ scheduled sweep of `mediaJobs` older than N days — which is a cron, and this d
 ONE `deadLetters` row, payload `{ batchId, planId, reasonCode }` and nothing else — no ffmpeg output,
 no filename, no narration, no URL. **A failed render does NOT retry:** at 480p a structural failure
 repeats, and the action-retrier would buy N sandboxes to learn the same thing N times.
+
+## The canvas, SEEN (20-10) — and the tab that opens it
+
+The backend read plane shipped at 20-09 and had **no consumer for four plans**. 20-10 is the
+consumer: `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx`, mounted through the same
+one-line `plan.kind` switch in `cards.tsx` that the memo and calendar cards mount through.
+
+**Not a new route, not a NAV entry, not a parallel rendering system.** The workspace's "Open canvas"
+tab gives the same component the whole right pane instead of a card slot — a viewport, not a second
+implementation. Two renderings of a reel that could drift apart is exactly what that objective rules
+out.
+
+### It self-queries, and it never polls
+
+Four subscriptions taken by the component itself (the `SourceCard` idiom), not threaded through
+props: `byPlan`, `assetUrls`, `reel`, `jobEstimate`.
+
+**There is no ticker anywhere in this surface and there must never be one.** A 10 s clip is 1–3
+MINUTES of wall clock and the render adds 1–3 more, so the canvas has to stay meaningful through
+several minutes of nothing arriving — but the mechanism is Convex reactivity, which delivers the
+webhook's mutation and the render terminal's patch to an open canvas for free. If a `setInterval`
+looks necessary, the bug is elsewhere.
+
+### The reel region has FIVE states, and one of them is a trap
+
+| State | What it says |
+|---|---|
+| no `renderStatus` | "No reel has been requested for this plan yet." |
+| `pending`, nothing landed | "Not assembled yet. The reel is built after every block's clip and voice have landed." |
+| `pending`, **assets landed** | **"The reel is out of date — the blocks have changed since it was assembled."** |
+| `rendering` | "Assembling the reel… (usually 1–3 minutes)" |
+| `rendered` + url | the `<video>`, plus `N blocks · N seconds · every block's narration fits its window` |
+| `rendered`, **no url** | "The render finished but did not produce a valid assembly record, so it was not published." |
+| `failed` | the reasonCode **in words** (`failureText`), never a bare code |
+
+**The out-of-date state is the trap.** `regenerateBlock` and every structural edit clear the render
+fields (20-09), so a stale reel and a never-built one are BOTH `renderStatus: "pending"` and are
+indistinguishable from that field alone. The landed-asset count is what separates them, and saying
+"not assembled yet" over a deck the user already paid to render would be a lie they can watch.
+
+**`rendered` with no url is not a bug.** `media.reel` returns a url only when the sidecar validated
+(D8: *"a final video without an assembly.json was hand-assembled"*), so that combination is a
+governed refusal to publish and gets its own sentence.
+
+### Two status rows per block, never one
+
+A block is a PIPELINE of two jobs from two providers whose webhooks land minutes apart. A block
+whose voice is ready and whose clip is not MUST look different from the reverse, and a single merged
+status cannot express that. Both rows use `.trace-line` and sit inside an `aria-live="polite"`
+region — a silent progress surface reproduces the "is it stuck?" complaint for non-sighted users
+through exactly the minutes where it matters most (BRAND §6).
+
+The wording differs per pipeline on purpose: "Generating…" is wrong for audio and "Recording the
+narration…" is wrong for video.
+
+### The verdict copy is a COMPLIANCE statement, not a style choice
+
+| Verdict | Copy |
+|---|---|
+| `checker_clear` | "Provider safety check: passed" |
+| `checker_flagged` | "Provider safety check: flagged" |
+| `provider_blocked` | "Refused by the provider's content check" |
+| `none_reported` | **"Not checked — this model reports no safety verdict"** |
+
+**Never a green tick for `none_reported`.** Every Wan 2.5 video and every voice take lands there,
+and rendering it as a pass makes a claim fal never made. Never colour alone, for any of the four.
+
+### The estimate gate: four lines, not one total
+
+D7's binding rule is *"the editor must not offer a control that can spend money without showing the
+estimate first."* The button is `disabled` until `jobEstimate` resolves — genuinely disabled, not
+merely styled that way, because a disabled *look* on a live button is a click that spends money the
+user was told it could not.
+
+**One number is not enough.** The panel prints every itemised line (clips, voice, captions, render)
+plus the total, the model and resolution they were priced at, and today's remaining media budget —
+so the user can see WHICH line is expensive before deciding to cut a block.
+
+Every refusal NAMES THE LEVER rather than reporting a code: `over_job_cap` says remove blocks or
+drop to 480p; `narration_too_long` names the block, its character count and the limit — **and the
+Edit-narration control is on that same tile**, because a refusal whose cure is three clicks away is
+a dead end.
+
+### Exactly five editor affordances, labelled by what they cost
+
+Free: **edit prompt**, **edit narration**, **move up / move down** (one `reorderBlocks` call with
+the whole new order), **delete block**. Paid: **regenerate this block**, which states in words that
+it buys a new clip and voice take AND rebuilds the reel.
+
+The narration editor carries a **live character count against the block's own `maxChars`**, turning
+`--held-text` amber past the limit — `--held-text`, never `--held`, which is a fill token and fails
+contrast as text (BRAND §6). **The count itself is the signal**, so the state is never carried by
+colour alone. This control is the UI half of the pre-payment guard: `jobEstimate` refuses an
+over-length deck before a cent moves, and this is where the user fixes it.
+
+**Nothing beyond those five exists** — no timeline, no transitions, no filters, no layers, no
+masking, no music controls, no client-side rendering. That is D7's ceiling and the canvas is
+deliberately at it.
+
+### The 18-07 Output-card collision, resolved
+
+18-07's `OutputCard` landed first, but it is a THREAD-scoped self-querying component for created
+vault docs — not a reusable card primitive, so there was nothing to import. The block tile and the
+reel region reuse its VISUAL vocabulary exactly (`briefingSheet`, `typeBadge`, `capsTeal`,
+`snippetSheet`, all newly `export`ed from `cards.tsx`) so the two read as one system. In particular
+they inherit its badge decision: **the teal lives in the FILL and the label stays `--ink`**, because
+`--teal-600` as small text is ~2.9:1 and BRAND §6 bans it. Do not "restore" teal text there.
+
+### The palette swatches are the ONE legitimate hardcoded colour
+
+CLAUDE.md §10 bans hardcoding a hex a token covers — that rule is about product CHROME. The art
+direction's palette hexes are the CONTENT being displayed, so they are inline styles by necessity,
+and each swatch prints its hex **as text beside it** so a colour is never named only by a colour.
+
+### What has NEVER run
+
+**No human has seen this surface.** It typechecks and builds; it has not been rendered against a
+real media plan, and there is no media plan to render it against until the agent can produce one —
+which is 20-12, still parked on the Phase-16 gate. The empty state ("No reel in this thread yet")
+is therefore the state this canvas will be in for every existing thread.
+
 
 ## Burned captions (20-17) — the phase's designated cut line, and it SHIPPED
 
