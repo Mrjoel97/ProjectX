@@ -239,7 +239,13 @@ describe("SC5 — the ceiling and its upgrade path exist in the source", () => {
   it("the reconciliation procedure is runnable, not aspirational", () => {
     const playbook = read("../../../docs/playbooks/media.md");
     expect(playbook).toMatch(/^## Reconciliation$/m);
-    expect(playbook.split("## Reconciliation")[1]).toMatch(/convex run/);
+    // Split on the anchored HEADING, not on the bare string. The playbook legitimately REFERS to
+    // `## Reconciliation` in prose four times above the section itself, and a bare split lands on
+    // the first of those — so `[1]` was the header block, which has no command in it. Red at HEAD
+    // since a foreign session added the registration note at the top; found by 20-07's full-suite
+    // run and fixed here rather than worked around, because the guard's job is to prove the
+    // SECTION is runnable.
+    expect(playbook.split(/^## Reconciliation$/m)[1]).toMatch(/convex run/);
   });
   it("no time-stretch lever is reachable from the cost surface (delta pitfall 15)", () => {
     // Scoped deliberately: `\brate\b` would fire on `sample_rate_hertz`, which is a PINNED audio

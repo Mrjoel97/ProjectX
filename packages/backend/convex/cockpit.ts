@@ -23,6 +23,10 @@ import {
   notificationMessage,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
+// 20-07: the SHOT_TYPES boundary check for the media pre-step. Deep specifier — `storyboard` is not
+// re-exported from the package root (media.ts:23 carries the same pair of lines).
+import type { ShotType } from "@pikar/core/storyboard";
+import { SHOT_TYPES } from "@pikar/core/storyboard";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -33,6 +37,9 @@ import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated
 import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+// 20-07 MEDIA-01: the whole-reel reservation, called DIRECTLY (not via runMutation) so it lands in
+// the same serializable transaction as the proposed -> approved CAS. See its doc comment.
+import { type ReserveRefusal, reserveJobInner } from "./media";
 
 // No hardcoded `instructions` prompt (CLAUDE.md §5): the reasoning prompt is the cockpit-agent
 // skill body, loaded inside runCockpitAgent. The Agent here is a pure message store — it never
@@ -506,7 +513,63 @@ const _ARM_TABLE = {
   email: "workflow",
   memo: "inline",
   calendar_event: "externalAction",
+  // 20-07 MEDIA-01: the arm's SECOND occupant. Research Open Question 1, answered GENERALIZE — see
+  // the `Arm` doc comment in @pikar/core/actionType.
+  media: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
+
+/** The action types whose arm is `externalAction`, DERIVED from the table above rather than
+ *  hand-listed. That derivation is the whole point: mark a new type `"externalAction"` in
+ *  `_ARM_TABLE` and `EXTERNAL_TARGETS` below is instantly incomplete — a COMPILE error, not an
+ *  `undefined` target at runtime. A hand-written union would have accepted the new member silently. */
+type ExternalActionType = {
+  [K in ActionType]: (typeof _ARM_TABLE)[K] extends "externalAction" ? K : never;
+}[ActionType];
+
+/**
+ * The `externalAction` arm's TARGETS — one THUNK per type, bound over the whole `retrier.run` call.
+ *
+ * Thunks rather than a `{ action, args, onComplete }` record because each action has its OWN
+ * argument validator: `createEvent` takes `{planId, tenantId, correlationId}` and `submitBatch`
+ * takes `{tenantId, batchId}`. A shared record would force TS to union the function reference and
+ * the args independently, losing the correlation between them — and a shared ARG OBJECT would mean
+ * passing `createEvent`'s `correlationId` to `submitBatch`, which its validator rejects. Each thunk
+ * type-checks against its own target.
+ *
+ * ponytail: a table, not a framework. No strategy objects, no registry class.
+ *
+ * The terminals live in NON-node siblings (`calendarComplete` / `mediaComplete`) because a
+ * "use node" file may hold only actions, so a completion MUTATION cannot sit beside its action.
+ *
+ * **ONE-LINE HAND-OFF TO PLAN 20-16:** today `media` starts the submit fan-out ONLY. When the reel
+ * chain lands, 20-16 re-points this ONE thunk at the chain entry (which itself calls `submitBatch`
+ * first). That is deliberately one line in one place — the arm shape does not move again, and
+ * **20-16 is the only plan permitted to change it.**
+ */
+const EXTERNAL_TARGETS = {
+  calendar_event: (ctx: MutationCtx, a: ExternalArgs) =>
+    retrier.run(
+      ctx,
+      internal.calendar.createEvent,
+      { planId: a.planId, tenantId: a.tenantId, correlationId: a.correlationId },
+      { onComplete: internal.calendarComplete.onCreateComplete },
+    ),
+  media: (ctx: MutationCtx, a: ExternalArgs) =>
+    retrier.run(
+      ctx,
+      internal.media.submitBatch,
+      { tenantId: a.tenantId, batchId: a.batchId ?? "" },
+      { onComplete: internal.mediaComplete.onSubmitComplete },
+    ),
+} satisfies Record<ExternalActionType, (ctx: MutationCtx, a: ExternalArgs) => Promise<unknown>>;
+
+type ExternalArgs = {
+  planId: Id<"plans">;
+  tenantId: string;
+  correlationId: string;
+  /** Set by the media pre-step only — the reservation's batch id. */
+  batchId?: string;
+};
 
 /**
  * The human approve gate (SC4). Idempotent CAS on plan.status: only the FIRST proposed→approved
@@ -525,7 +588,18 @@ export const executePlan = tenantMutation({
     { planId },
   ): Promise<
     | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
-    | { ok: false; reason: "gmail_not_connected" | "send_time_too_far" | "review_escalated" }
+    | {
+        ok: false;
+        reason:
+          | "gmail_not_connected"
+          | "send_time_too_far"
+          | "review_escalated"
+          // 20-07 MEDIA-01. Every one of these is a GOVERNED STOP that names a lever the user can
+          // pull — rewrite a line, cut blocks, drop a tier, wait for tomorrow, or call the operator.
+          // Plan 20-10's canvas renders them. Only BUGS throw; a refusal returns.
+          | "no_deck"
+          | ReserveRefusal;
+      }
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
@@ -565,20 +639,74 @@ export const executePlan = tenantMutation({
         // deliverApprovedPlan.ts stays byte-unchanged: it is the workflow-backed EMAIL entry point,
         // not a universal dispatcher. Routing Calendar through it would make the gmail fan-out
         // reachable from a calendar action.
-        await ctx.db.patch(planId, { status: "approved" });
+        //
+        // 20-07: the body is now a TABLE over the arm's occupants plus a per-type PRE-STEP. The
+        // calendar path below is the same lines, MOVED not rewritten — `cockpit.test.ts` asserts it
+        // byte-for-byte in behaviour, including that no media window moves.
+        //
+        // **D2 IS NOT WEAKENED BY THE MEDIA OCCUPANT.** The trigger here is a HUMAN clicking Approve
+        // on a plan row. No dispatched specialist can reach it: `SPECIALIST_TOOLS` is
+        // `["searchVault"]` and there is no code path from a dispatched specialist to a fal POST, a
+        // TTS submit or a sandbox render. Plan-gated by construction is STRUCTURAL, and plan 20-08's
+        // static scan proves it.
+        const externalType = actionTypeOf(plan.kind) as ExternalActionType;
+        let batchId: string | undefined;
+
+        if (externalType === "media") {
+          // THE MEDIA PRE-STEP. It runs BEFORE the CAS patch, so a refused reel leaves the plan at
+          // `proposed` with zero mediaJobs rows, no renderStatus and nothing scheduled.
+          //
+          // **The reservation is in THIS mutation, which is ONE serializable transaction with the
+          // `proposed → approved` CAS.** That is what makes "approve once, reserve once" true
+          // without a second idempotency mechanism — and it is why plan 20-04 exposed
+          // `reserveJobInner` as a plain async function: a Convex mutation cannot `runMutation`.
+          const shots = plan.shots ?? [];
+          // Absent, empty, or carrying a shot type the price table does not know — all three mean
+          // there is nothing safe to reserve. `persistStoryboard` (20-08) parses through
+          // `parseBlockDeck`, which already enforces SHOT_TYPES, so this is a boundary check rather
+          // than an expected path; a money gate does not assume its writer was correct.
+          if (
+            shots.length === 0 ||
+            plan.clipSeconds === undefined ||
+            !shots.every((s) => (SHOT_TYPES as readonly string[]).includes(s.type))
+          ) {
+            return { ok: false, reason: "no_deck" };
+          }
+          const reserved = await reserveJobInner(ctx, {
+            tenantId: ctx.tenantId,
+            planId,
+            blocks: shots.map((s) => ({ ...s, type: s.type as ShotType })),
+            clipSeconds: plan.clipSeconds,
+            // ponytail: PINNED true until the canvas (20-09) offers a toggle. Captions are part of
+            // the D8 deliverable, and the fail-closed direction is over-reserving: an unused STT
+            // line costs $0.008, while an unreserved one that IS used is spend outside the rail.
+            withCaptions: true,
+          });
+          if (!reserved.ok) return { ok: false, reason: reserved.reason }; // governed stop, never a throw
+          batchId = reserved.batchId;
+        }
+
+        await ctx.db.patch(planId, {
+          status: "approved",
+          // A reel that has been PAID FOR but not yet rendered is a state the canvas must be able to
+          // name. Set in the same patch as `approved` so there is no window where it is neither.
+          ...(externalType === "media" ? { renderStatus: "pending" as const } : {}),
+        });
         const correlationId = crypto.randomUUID(); // server-minted, never client-supplied
-        const runId = await retrier.run(
-          ctx,
-          internal.calendar.createEvent,
-          { planId, tenantId: ctx.tenantId, correlationId },
-          // The terminal lives in calendarComplete.ts, NOT calendar.ts: calendar.ts is "use node"
-          // and may hold only actions, so the completion mutation cannot live beside its action.
-          { onComplete: internal.calendarComplete.onCreateComplete },
-        );
+        const runId = await EXTERNAL_TARGETS[externalType](ctx, {
+          planId,
+          tenantId: ctx.tenantId,
+          correlationId,
+          batchId,
+        });
         await ctx.db.patch(planId, {
           status: "delivering",
           correlationId,
-          calendarRunId: String(runId),
+          // `calendarRunId` stays CALENDAR's column — `calendarComplete` resolves through
+          // `by_calendar_run` and would happily match a media run written into it.
+          ...(externalType === "media"
+            ? { mediaRunId: String(runId) }
+            : { calendarRunId: String(runId) }),
         });
         return { ok: true };
       }

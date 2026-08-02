@@ -178,8 +178,16 @@ test("both Calendar actions check stored scope before the shared token refresh",
   }
 });
 
-test("the externalAction arm wires only the Calendar retrier action and its non-Node terminal", () => {
+// 20-07 UPDATED. The arm generalized: its retrier wiring MOVED from inside the switch case into
+// `EXTERNAL_TARGETS`, one thunk per occupant. The guard's subject moved with it, so the scan now
+// covers BOTH — the table (which target each type gets) and the case (what it may never reach).
+// Weakening it to "the arm exists" would have been the easy read of this failure and the wrong one.
+test("the externalAction arm wires each occupant's OWN retrier action and non-Node terminal", () => {
   const src = readExecutableCode("cockpit.ts");
+  const tableStart = src.indexOf("const EXTERNAL_TARGETS = {");
+  expect(tableStart, "cockpit.ts has no EXTERNAL_TARGETS table").toBeGreaterThanOrEqual(0);
+  const table = src.slice(tableStart, src.indexOf("} satisfies Record<ExternalActionType", tableStart));
+
   const start = src.indexOf('case "externalAction"');
   expect(start, "cockpit.ts has no externalAction case").toBeGreaterThanOrEqual(0);
   const rest = src.slice(start);
@@ -188,20 +196,42 @@ test("the externalAction arm wires only the Calendar retrier action and its non-
 
   for (const required of [
     "retrier.run(",
+    // Calendar's pair, unchanged — the terminal lives in a NON-node sibling because a "use node"
+    // module may hold only actions.
     "internal.calendar.createEvent",
     "onComplete: internal.calendarComplete.onCreateComplete",
+    // 20-07: media's pair. The arm's SECOND occupant must get its OWN target, never calendar's.
+    "internal.media.submitBatch",
+    "onComplete: internal.mediaComplete.onSubmitComplete",
   ]) {
     expect(
-      arm,
-      `externalAction lacks ${required} — mutation: change onComplete to ` +
-        `internal.calendar.onCreateComplete, a Node module that structurally cannot hold a mutation.`,
+      table,
+      `EXTERNAL_TARGETS lacks ${required} — mutation: point media's thunk at ` +
+        `internal.calendar.createEvent, and a media approval silently books a calendar event.`,
     ).toContain(required);
   }
+
+  // The arm dispatches THROUGH the table rather than naming a target itself — that is what makes a
+  // third occupant a compile error at `Record<ExternalActionType, …>` instead of a missed branch.
+  expect(
+    arm,
+    "the externalAction case names a retrier target directly — mutation: inline retrier.run(...) " +
+      "back into the case, and a new external type inherits whichever target the code fell through to.",
+  ).toContain("EXTERNAL_TARGETS[");
+
+  // 20-07: the MONEY GATE is inside the arm, before the CAS. A media approval that reached the
+  // retrier without reserving would spend outside the rail entirely.
+  expect(
+    arm,
+    "the externalAction case does not call reserveJobInner — mutation: drop the media pre-step, " +
+      "and a reel is generated with no reservation and no cap.",
+  ).toContain("reserveJobInner");
+
   for (const forbidden of ["workflow.start", "deliverApprovedPlan"]) {
     expect(
       arm,
       `externalAction contains ${forbidden} — mutation: add await workflow.start(...) inside the ` +
-        `case. Calendar must never inherit the Gmail request fan-out.`,
+        `case. Neither Calendar nor media may ever inherit the Gmail request fan-out.`,
     ).not.toContain(forbidden);
   }
 });

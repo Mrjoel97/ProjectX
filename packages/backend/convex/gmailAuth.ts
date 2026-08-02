@@ -23,7 +23,7 @@ const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 // Never trust a raw tenant param on the callback: an attacker could forge a state for
 // another tenant and graft their Gmail onto that tenant. HMAC the tenantId with the
 // (server-only) client secret — no new secret, no nonce table needed for the beta.
-async function hmacHex(data: string, secret: string): Promise<string> {
+export async function hmacHex(data: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),

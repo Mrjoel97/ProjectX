@@ -270,7 +270,12 @@ export default defineSchema({
     // proposeCalendarEvent tool, executed on Approve by the `externalAction` arm. ABSENT still
     // means email, so this stays a no-migration, no-backfill change (the sendAt/attachments
     // precedent) — and it is still CLOSED, so the next widening is still a deliberate edit.
-    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"))),
+    // Phase-20 (20-07, MEDIA-01) widened it a THIRD time: "media" = a reel staged as a BLOCK DECK,
+    // reserved and started on Approve by the same `externalAction` arm. Still optional, still
+    // closed, still no migration.
+    kind: v.optional(
+      v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media")),
+    ),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).
@@ -283,6 +288,7 @@ export default defineSchema({
     // are deliberately NOT `patchPlan` args: nothing reachable from the model may write an event
     // ref or a run id. Do not add them to patchPlan speculatively.
     calendarEventId: v.optional(v.string()), // the Google event ref, set on success. A ref, not content.
+    mediaRunId: v.optional(v.string()), // 20-07: the media submit run — see by_media_run below
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
     // ── Phase-20 (MEDIA-01) media canvas: the BLOCK DECK and the RENDER PLANE ──────────────
@@ -362,7 +368,13 @@ export default defineSchema({
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
-    .index("by_calendar_run", ["calendarRunId"]),
+    .index("by_calendar_run", ["calendarRunId"])
+    // Phase-20 (20-07). The SAME reason, for the media submit run: `onSubmitComplete` receives only
+    // {runId, result}, so without this index the terminal cannot find the plan whose batch it is
+    // failing. Deliberately a SECOND column rather than a reuse of `calendarRunId` — that one is
+    // calendar-named and read by `calendarComplete`; overloading it would make a media retry
+    // resolvable as a calendar plan.
+    .index("by_media_run", ["mediaRunId"]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).

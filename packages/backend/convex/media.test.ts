@@ -9,6 +9,7 @@ import type { Block, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
+  MEDIA_DEFAULT_IMAGE,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_JOB_CAP_USD,
   MEDIA_SANDBOX_USD_PER_RENDER,
@@ -16,27 +17,36 @@ import {
   type MediaSpec,
 } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // The reserve drives the REAL rate-limiter component (relative import — the packages block deep
 // specifiers). guardrails.test.ts carries the same line for the same reason.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { hmacHex } from "./gmailAuth";
 import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS } from "./guardrails";
-import { reserveJobInner } from "./media";
+import { contentHash } from "./lib/hash";
+import { buildSubmitBody, reserveJobInner, type SubmittableSpec, submitLine } from "./media";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 type T = TestConvex<typeof schema>;
 
-/** A harness with the rate-limiter component registered — every reserve touches it. */
+/** A harness with the rate-limiter component registered — every reserve touches it. `auditCounts`
+ *  joined it in 20-06: the landing writes an audit row, and `audit.log` mirrors every insert into
+ *  the aggregate (calendar.test.ts carries the same pair of lines). */
 function harness(): T {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 }
 
@@ -834,4 +844,939 @@ describe("listJobs: the per-plan detail, as a projection", () => {
     await seedJobs(t, planId, [{ kind: "video", estUsd: 0.5, createdAt: T0 }]);
     expect(await t.query(internal.media.listJobs, { tenantId: B, planId })).toEqual([]);
   });
+});
+
+// ── plan 20-05: the fal SUBMIT adapter ─────────────────────────────────────────────
+//
+// COMPILE-TIME NOTE, and it is half the point of this plan: `buildSubmitBody` takes
+// `SubmittableSpec = Extract<MediaSpec, {kind:"video"|"image"}>`, and its switch ends in
+// `const _never: never = spec`. Deleting the `image` case is a `tsc` error here, not a runtime
+// fallthrough. Plan 20-14 widens that alias with `"tts"` and plan 20-17 with `"stt"` — the moment
+// either does, the `never` arm goes RED until the matching case is written. A `default: return {}`
+// would let a `tts` spec inherit the video arm's body, which is the money bug in a new costume.
+//
+// Everything below is $0: `fetch` is a spy in every test, and `FAL_FIXTURE` covers the rest.
+
+const mediaSource = (
+  import.meta.glob("./media.ts", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >
+)["./media.ts"];
+/** Comments stripped — the invariants below are about the CODE surface, and this module's prose
+ *  legitimately NAMES the things it forbids (a poll, a wait, a provider default). */
+const mediaCode = (mediaSource ?? "")
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/(^|\s)\/\/.*$/gm, "$1");
+
+const VIDEO: SubmittableSpec = {
+  kind: "video",
+  model: MEDIA_DEFAULT_VIDEO.model,
+  resolution: MEDIA_DEFAULT_VIDEO.resolution,
+  seconds: 10,
+};
+const HOOK = "https://example.convex.site/fal/callback/abc.def";
+
+/** fal's queue accept, one distinct `request_id` per call. A fresh Response per call is REQUIRED:
+ *  a body is a single-read stream, so `mockResolvedValue(new Response(...))` would hand the same
+ *  consumed object to call 2 and every test asserting N submits would be a lie. */
+function acceptFetch() {
+  let n = 0;
+  return vi.fn().mockImplementation(() => {
+    n += 1;
+    return Promise.resolve(
+      new Response(JSON.stringify({ request_id: `req_${n}`, status: "IN_QUEUE" }), { status: 200 }),
+    );
+  });
+}
+
+function stubMediaEnv() {
+  vi.stubEnv("FAL_KEY", "test-key");
+  vi.stubEnv("FAL_WEBHOOK_SECRET", "test-secret");
+  vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+describe("buildSubmitBody: the body is a function of the PRICED spec, and nothing else", () => {
+  test("the video body is the spec field for field — nothing left for fal to default", () => {
+    expect(buildSubmitBody(VIDEO, "a lighthouse at dusk")).toEqual({
+      prompt: "a lighthouse at dusk",
+      resolution: "480p",
+      duration: "10",
+      enable_prompt_expansion: false,
+    });
+  });
+
+  test("`duration` is the STRING enum, not the number — the arithmetic type stops at the wire", () => {
+    const body = buildSubmitBody({ ...VIDEO, seconds: 5 }, "p");
+    expect(body.duration).toBe("5");
+    expect(body.duration).not.toBe(5); // the submission that would 422 AFTER the reservation
+  });
+
+  test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 480p", () => {
+    // Not vacuous: were `resolution` dropped from the arm, the test above would still see the key
+    // absent, but THIS one proves the value tracks the spec rather than a constant.
+    expect(buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").resolution).toBe("1080p");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
+  });
+
+  test("NO audio field is sent, on any video submit", () => {
+    // The endpoint has no audio toggle (20-01 preflight): the only audio field is `audio_url` and
+    // we never send one. A clip's own native track is ducked to SFXVOL 0.20 under the voice bed by
+    // `render/assemble_final.sh`'s LEVEL LAW — Open Question 5 resolves at the assembler.
+    const keys = Object.keys(buildSubmitBody(VIDEO, "p"));
+    expect(keys.filter((k) => /audio/i.test(k))).toEqual([]);
+  });
+
+  test("the image body maps width/height onto `image_size` and pins `num_images`", () => {
+    expect(
+      buildSubmitBody(
+        {
+          kind: "image",
+          model: MEDIA_DEFAULT_IMAGE.model,
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        },
+        "a poster",
+      ),
+    ).toEqual({
+      prompt: "a poster",
+      // There is no width/height on this endpoint, and `num_images` is a STRAIGHT price multiplier
+      // defaulting to 1 — omitting it would let a fal default multiply the invoice.
+      image_size: { width: 1080, height: 1920 },
+      num_images: 1,
+    });
+  });
+
+  test("the switch ends in a `never` binding, and no `default` returns a body", () => {
+    expect(mediaCode).toMatch(/const\s+_never\s*:\s*never\s*=\s*spec/);
+    expect(mediaCode).not.toMatch(/default:\s*\n?\s*return\s*\{/);
+  });
+});
+
+describe("submitLine: fail-closed on the key, a CODE on failure, and never a wait", () => {
+  test("FAL_KEY unset refuses BEFORE any fetch — the spy sees ZERO calls", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("FAL_KEY", "");
+    await expect(submitLine(VIDEO, "p", HOOK)).rejects.toThrow(/FAL_KEY/);
+    // The assertion that matters: not the message, but that nothing reached the network.
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("FAL_FIXTURE short-circuits with a synthetic id and ZERO fetches", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("FAL_FIXTURE", "1");
+    const res = await submitLine(VIDEO, "p", HOOK);
+    expect(res).toEqual({ ok: true, requestId: expect.stringMatching(/^fixture-/) });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("the fixture seam does NOT weaken the key check", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("FAL_KEY", "");
+    vi.stubEnv("FAL_FIXTURE", "1");
+    await expect(submitLine(VIDEO, "p", HOOK)).rejects.toThrow(/FAL_KEY/);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("the wire request: queue URL, webhook query param, Key header, spec-derived body", async () => {
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+
+    expect(await submitLine(VIDEO, "a lighthouse", HOOK)).toEqual({ ok: true, requestId: "req_1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      `https://queue.fal.run/${MEDIA_DEFAULT_VIDEO.model}?fal_webhook=${encodeURIComponent(HOOK)}`,
+    );
+    expect((init.headers as Record<string, string>).Authorization).toBe("Key test-key");
+    expect(init.method).toBe("POST");
+    // THE containment: the submitted JSON is `buildSubmitBody` of the priced spec, byte for byte.
+    expect(JSON.parse(String(init.body))).toEqual(buildSubmitBody(VIDEO, "a lighthouse"));
+  });
+
+  test("a 422 is a CODE with `blocked` — and the provider's prose appears NOWHERE", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              detail: [
+                {
+                  type: "content_policy_violation",
+                  msg: "the prompt depicts a named public figure",
+                },
+              ],
+            }),
+            { status: 422 },
+          ),
+        ),
+      ),
+    );
+    stubMediaEnv();
+
+    const res = await submitLine(VIDEO, "p", HOOK);
+    expect(res).toEqual({ ok: false, code: "content_policy_violation", blocked: true });
+    expect(JSON.stringify(res)).not.toContain("public figure");
+  });
+
+  test("a top-level `type` discriminator is read too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(JSON.stringify({ type: "content_policy_violation" }), { status: 422 }),
+          ),
+        ),
+    );
+    stubMediaEnv();
+    expect(await submitLine(VIDEO, "p", HOOK)).toEqual({
+      ok: false,
+      code: "content_policy_violation",
+      blocked: true,
+    });
+  });
+
+  test("a 5xx yields a DISTINCT, non-blocking code and never reads the body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(new Response("<html>upstream gateway exploded</html>", { status: 503 })),
+        ),
+    );
+    stubMediaEnv();
+
+    const res = await submitLine(VIDEO, "p", HOOK);
+    expect(res).toEqual({ ok: false, code: "http_503", blocked: false });
+    expect(res).not.toEqual({ ok: false, code: "content_policy_violation", blocked: true });
+    expect(JSON.stringify(res)).not.toContain("gateway");
+  });
+
+  test("a transport throw is a code, not a rethrow — the message can carry the webhook HMAC", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error(`ECONNRESET connecting to ${HOOK}`)),
+    );
+    stubMediaEnv();
+    const res = await submitLine(VIDEO, "p", HOOK);
+    expect(res).toEqual({ ok: false, code: "transport_error", blocked: false });
+    expect(JSON.stringify(res)).not.toContain("callback");
+  });
+
+  test("a 200 with no request_id is a failure, never a silently-lost line", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => Promise.resolve(new Response("{}", { status: 200 }))),
+    );
+    stubMediaEnv();
+    expect(await submitLine(VIDEO, "p", HOOK)).toEqual({
+      ok: false,
+      code: "no_request_id",
+      blocked: false,
+    });
+  });
+});
+
+test("SC2: nothing in media.ts polls fal or waits for a terminal status", () => {
+  for (const token of ["status_url", "response_url", "cancel_url", "setTimeout", "setInterval"]) {
+    expect(mediaCode, `media.ts waits on ${token}`).not.toContain(token);
+  }
+  expect(mediaCode).not.toMatch(/while\s*\(/);
+  expect(mediaCode).toContain("queue.fal.run"); // not vacuous: the submit really is in this file
+});
+
+// ── submitBatch ────────────────────────────────────────────────────────────────────
+
+async function seedPlanWithShots(t: T, blocks: Block[], tenantId = A): Promise<Id<"plans">> {
+  return await t.run(
+    async (ctx) =>
+      await ctx.db.insert("plans", {
+        tenantId,
+        threadId: "thread_1",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: blocks.map((b) => ({
+          index: b.index,
+          type: b.type,
+          seconds: b.seconds,
+          windowStartMs: b.windowStartMs,
+          description: b.description,
+          prompt: b.prompt,
+          narration: b.narration,
+        })),
+      }),
+  );
+}
+
+/** A reserved 2-block batch: 2 video lines (submittable now) + 2 tts lines (plan 20-14's). */
+async function reservedBatch(t: T) {
+  const blocks = deck(2);
+  const planId = await seedPlanWithShots(t, blocks);
+  const res = await reserve(t, {
+    tenantId: A,
+    planId,
+    blocks,
+    clipSeconds: 10,
+    withCaptions: false,
+  });
+  if (!res.ok) throw new Error(`reserve failed: ${res.reason}`);
+  return { blocks, planId, batchId: res.batchId };
+}
+
+describe("submitBatch: idempotent per line, and it returns without waiting", () => {
+  test("TWO consecutive runs issue exactly N fetches — not 2N", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { batchId } = await reservedBatch(t);
+
+    const first = await t.action(internal.media.submitBatch, { tenantId: A, batchId });
+    // 2 video submitted; the 2 tts lines are NOT wired yet and were never claimed.
+    expect(first).toEqual({ submitted: 2, blocked: 0, failed: 0, skipped: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const second = await t.action(internal.media.submitBatch, { tenantId: A, batchId });
+    expect(second).toEqual({ submitted: 0, blocked: 0, failed: 0, skipped: 4 });
+    // Mutation check: delete the `claimLine` call from the loop and this line reads 4.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("the rows after a submit: video claimed + ticketed, tts untouched at queued", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", acceptFetch());
+    stubMediaEnv();
+    await reservedBatch(t);
+    const batchId = (await rows(t))[0]?.batchId ?? "";
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId });
+
+    const all = await rows(t);
+    const video = all.filter((r) => r.kind === "video");
+    const tts = all.filter((r) => r.kind === "tts");
+    expect(video.every((r) => r.status === "submitted")).toBe(true);
+    expect(video.map((r) => r.falRequestId).sort()).toEqual(["req_1", "req_2"]);
+    // Plan 20-14 inherits these EXACTLY as the reservation left them.
+    expect(tts.every((r) => r.status === "queued" && r.falRequestId === undefined)).toBe(true);
+  });
+
+  test("the webhook segment is the buildAuthorizeUrl construction, per JOB ROW", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { batchId } = await reservedBatch(t);
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const hook = new URL(url).searchParams.get("fal_webhook") ?? "";
+    expect(hook.startsWith("https://example.convex.site/fal/callback/")).toBe(true);
+
+    // Plan 20-06 RE-DERIVES this segment rather than reading a stored hash — so it must be
+    // re-derivable here, character for character, from the jobId alone.
+    const segment = hook.split("/").pop() ?? "";
+    const dot = segment.lastIndexOf(".");
+    const jobId = segment.slice(0, dot);
+    expect(segment.slice(dot + 1)).toBe(await hmacHex(jobId, "test-secret"));
+    // ...and the id in it is a REAL row of this batch, not a batch id or a plan id.
+    expect((await rows(t)).some((r) => r._id === jobId)).toBe(true);
+
+    // Two lines, two DIFFERENT segments — the URL binds to one job, never to the tenant.
+    const [url2] = fetchMock.mock.calls[1] as [string];
+    expect(new URL(url2).searchParams.get("fal_webhook")).not.toBe(hook);
+  });
+
+  test("a 422 blocks ONE line and leaves its sibling alone", async () => {
+    const t = harness();
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        n += 1;
+        return Promise.resolve(
+          n === 1
+            ? new Response(JSON.stringify({ request_id: "req_1" }), { status: 200 })
+            : new Response(JSON.stringify({ type: "content_policy_violation" }), { status: 422 }),
+        );
+      }),
+    );
+    stubMediaEnv();
+    const { batchId } = await reservedBatch(t);
+
+    expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
+      submitted: 1,
+      blocked: 1,
+      failed: 0,
+      skipped: 2,
+    });
+
+    const video = (await rows(t)).filter((r) => r.kind === "video");
+    const ok = video.find((r) => r.blockIndex === 0);
+    const bad = video.find((r) => r.blockIndex === 1);
+    expect(ok).toMatchObject({ status: "submitted", falRequestId: "req_1" });
+    expect(ok?.verdict).toBeUndefined();
+    expect(bad).toMatchObject({
+      status: "blocked",
+      verdict: "provider_blocked",
+      failureReason: "content_policy_violation",
+    });
+  });
+
+  test("a 5xx fails ONE line with a code, and the retrier may re-run the action for free", async () => {
+    const t = harness();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(new Response("boom", { status: 503 })));
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { batchId } = await reservedBatch(t);
+
+    expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
+      submitted: 0,
+      blocked: 0,
+      failed: 2,
+      skipped: 2,
+    });
+    expect((await rows(t)).filter((r) => r.status === "failed")).toHaveLength(2);
+    // The claim already happened, so the retrier's re-run POSTs nothing — the failure is recorded
+    // once and does NOT buy a second attempt at the provider's expense.
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("a batch whose plan has no shots fails the line with a code, never an empty prompt", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const planId = await seedPlan(t); // seeded WITHOUT shots
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: deck(1),
+      clipSeconds: 10,
+      withCaptions: false,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(
+      await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId }),
+    ).toEqual({ submitted: 0, blocked: 0, failed: 1, skipped: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect((await rows(t)).find((r) => r.kind === "video")).toMatchObject({
+      status: "failed",
+      failureReason: "missing_shot",
+    });
+  });
+
+  test("a missing FAL_WEBHOOK_SECRET refuses the batch BEFORE line 1 is claimed", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("FAL_WEBHOOK_SECRET", "");
+    const { batchId } = await reservedBatch(t);
+
+    await expect(t.action(internal.media.submitBatch, { tenantId: A, batchId })).rejects.toThrow(
+      /FAL_WEBHOOK_SECRET/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    // Nothing was claimed — every row is still exactly where the reservation left it.
+    expect((await rows(t)).every((r) => r.status === "queued")).toBe(true);
+  });
+
+  test("FAL_FIXTURE drives the whole batch at $0 — zero fetches, real rows, real tickets", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("FAL_FIXTURE", "1");
+    const { batchId } = await reservedBatch(t);
+
+    expect(await t.action(internal.media.submitBatch, { tenantId: A, batchId })).toEqual({
+      submitted: 2,
+      blocked: 0,
+      failed: 0,
+      skipped: 2,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(
+      (await rows(t))
+        .filter((r) => r.kind === "video")
+        .every((r) => r.falRequestId?.startsWith("fixture-")),
+    ).toBe(true);
+  });
+
+  test("a cross-tenant batchId submits NOTHING", async () => {
+    const t = harness();
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { batchId } = await reservedBatch(t);
+
+    expect(await t.action(internal.media.submitBatch, { tenantId: B, batchId })).toEqual({
+      submitted: 0,
+      blocked: 0,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect((await rows(t)).every((r) => r.status === "queued")).toBe(true);
+  });
+});
+
+// ── plan 20-06: the fal CALLBACK and the landing plane ─────────────────────────────
+//
+// Every callback body here is synthesized locally and every asset download is a spy. **$0.**
+//
+// The route is exercised through `t.fetch` against the REAL `http.ts` router, so the HMAC segment,
+// the timestamp window and the 401s are the shipped code paths — not a re-implementation.
+
+const SECRET = "test-secret";
+/** Enough "bytes" to prove a store happened and a hash was taken over the real content. */
+const ASSET = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]);
+
+/** A `submitted` row — the state 20-05's `submitBatch` leaves a line in. Seeded directly rather
+ *  than reserved: these tests need to choose `kind`, `spec` and `estUsd`, and an `image` row is not
+ *  reachable through `reserveJob` at all. */
+async function seedLandable(
+  t: T,
+  opts: {
+    kind?: "video" | "image" | "tts";
+    spec?: Doc<"mediaJobs">["spec"];
+    estUsd?: number;
+    tenantId?: string;
+  } = {},
+) {
+  const kind = opts.kind ?? "video";
+  const planId = await seedPlan(t, opts.tenantId ?? A);
+  const jobId = await t.run(
+    async (ctx) =>
+      await ctx.db.insert("mediaJobs", {
+        tenantId: opts.tenantId ?? A,
+        planId,
+        batchId: "batch_land",
+        blockIndex: 0,
+        provider: "fal",
+        kind,
+        model:
+          kind === "video"
+            ? MEDIA_DEFAULT_VIDEO.model
+            : kind === "image"
+              ? MEDIA_DEFAULT_IMAGE.model
+              : "fal-ai/inworld-tts",
+        spec:
+          opts.spec ??
+          (kind === "video"
+            ? { kind: "video", resolution: "480p", seconds: 10 }
+            : kind === "image"
+              ? { kind: "image", width: 1080, height: 1920 }
+              : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 }),
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        falRequestId: "req_1",
+        estUsd: opts.estUsd ?? 0.5,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+  );
+  return { planId, jobId };
+}
+
+const signed = async (jobId: string) => `${jobId}.${await hmacHex(jobId, SECRET)}`;
+
+function post(t: T, segment: string, body: unknown, tsSeconds?: number) {
+  return t.fetch(`/fal/callback/${segment}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-fal-webhook-timestamp": String(tsSeconds ?? Math.floor(Date.now() / 1000)),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+const VIDEO_OK = {
+  status: "OK",
+  payload: {
+    video: {
+      url: "https://v3.fal.media/files/panda/clip.mp4",
+      content_type: "video/mp4",
+      file_name: "clip.mp4",
+      file_size: 8,
+    },
+  },
+};
+const imageOk = (nsfw: boolean[], width = 1080, height = 1920) => ({
+  status: "OK",
+  payload: {
+    images: [
+      { url: "https://v3.fal.media/files/panda/a.png", content_type: "image/png", width, height },
+    ],
+    seed: 1,
+    has_nsfw_concepts: nsfw,
+  },
+});
+
+/** The asset download. `t.fetch` dispatches into the router in-process rather than through the
+ *  global, so stubbing `fetch` intercepts only the handler's own outbound call. */
+function assetFetch(type = "video/mp4") {
+  return vi
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(new Response(ASSET, { status: 200, headers: { "content-type": type } })),
+    );
+}
+
+const jobRow = (t: T, jobId: Id<"mediaJobs">) => t.run(async (ctx) => await ctx.db.get(jobId));
+const auditRows = (t: T) => t.run(async (ctx) => await ctx.db.query("audit").collect());
+
+describe("POST /fal/callback/* : fail-closed 401, and NOTHING security-relevant from the body", () => {
+  test("a wrong digest is 401 and the row is BYTE-unchanged", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+    const before = await jobRow(t, jobId);
+
+    expect((await post(t, `${jobId}.${"0".repeat(64)}`, VIDEO_OK)).status).toBe(401);
+    expect(await jobRow(t, jobId)).toEqual(before);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(await auditRows(t)).toHaveLength(0);
+  });
+
+  test("a segment with no digest at all is 401", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", assetFetch());
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+    expect((await post(t, String(jobId), VIDEO_OK)).status).toBe(401);
+    expect((await post(t, "", VIDEO_OK)).status).toBe(401);
+    expect((await jobRow(t, jobId))?.status).toBe("submitted");
+  });
+
+  test("an UNSET FAL_WEBHOOK_SECRET is 401 — the fail-closed env guard", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", assetFetch());
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+    const segment = await signed(jobId); // signed with the REAL secret...
+    vi.stubEnv("FAL_WEBHOOK_SECRET", ""); // ...which the deployment then does not have
+
+    // Mutation check: delete `if (!secret) return null` from resolveJob and this goes RED — an
+    // unset secret would let `hmacHex(raw, "")` produce a digest anyone can compute.
+    expect((await post(t, segment, VIDEO_OK)).status).toBe(401);
+    expect((await jobRow(t, jobId))?.status).toBe("submitted");
+  });
+
+  test("an id that does not normalizeId to a mediaJobs row is 401 — db.get is never reached", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", assetFetch());
+    stubMediaEnv();
+    const { planId } = await seedLandable(t);
+
+    // Garbage, and a WELL-FORMED id from a FOREIGN table. Both refuse.
+    expect((await post(t, await signed("not-an-id"), VIDEO_OK)).status).toBe(401);
+    expect((await post(t, await signed(planId), VIDEO_OK)).status).toBe(401);
+    expect(await auditRows(t)).toHaveLength(0);
+  });
+
+  test("a timestamp outside +/-300 s is 401 — replay of a captured URL+body dies here", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", assetFetch());
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+    const segment = await signed(jobId);
+    const now = Math.floor(Date.now() / 1000);
+
+    expect((await post(t, segment, VIDEO_OK, now - 301)).status).toBe(401);
+    expect((await post(t, segment, VIDEO_OK, now + 301)).status).toBe(401);
+    expect((await jobRow(t, jobId))?.status).toBe("submitted");
+    // Not vacuous: the SAME request inside the window lands.
+    expect((await post(t, segment, VIDEO_OK, now - 299)).status).toBe(200);
+    expect((await jobRow(t, jobId))?.status).toBe("succeeded");
+  });
+
+  test("an ABSENT timestamp header is a refusal, not a pass", async () => {
+    const t = harness();
+    vi.stubGlobal("fetch", assetFetch());
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+    const res = await t.fetch(`/fal/callback/${await signed(jobId)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(VIDEO_OK),
+    });
+    expect(res.status).toBe(401);
+    expect((await jobRow(t, jobId))?.status).toBe("submitted");
+  });
+});
+
+describe("the happy path: the bytes land, the URL does not", () => {
+  test("a video OK stores the bytes and lands none_reported — NEVER checker_clear", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+
+    expect((await post(t, await signed(jobId), VIDEO_OK)).status).toBe(200);
+
+    const row = await jobRow(t, jobId);
+    expect(row).toMatchObject({
+      status: "succeeded",
+      // Wan 2.5 publishes NO per-output moderation field. Calling this clear/passed/safe would be
+      // a compliance claim fal never made.
+      verdict: "none_reported",
+      mimeType: "video/mp4",
+      bytes: ASSET.byteLength,
+    });
+    expect(row?.assetStorageId).toBeDefined();
+    expect(row?.assetHash).toBe(await contentHash(ASSET));
+    // The bytes really are in storage, not merely referenced.
+    expect(
+      await t.run((ctx) => ctx.storage.getUrl(row?.assetStorageId ?? ("" as Id<"_storage">))),
+    ).not.toBeNull();
+
+    // Mutation check target: make the no-moderation video yield checker_clear and this goes RED.
+    expect(row?.verdict).not.toBe("checker_clear");
+
+    // NO fal URL survives anywhere on the row. Downloading here is what makes that structural.
+    expect(JSON.stringify(row)).not.toMatch(/fal\.media|https?:/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://v3.fal.media/files/panda/clip.mp4");
+  });
+
+  test("has_nsfw_concepts drives checker_clear and checker_flagged — both reachable", async () => {
+    for (const [flags, verdict] of [
+      [[false], "checker_clear"],
+      [[true], "checker_flagged"],
+    ] as const) {
+      const t = harness();
+      vi.stubGlobal("fetch", assetFetch("image/png"));
+      stubMediaEnv();
+      const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.009 });
+      expect((await post(t, await signed(jobId), imageOk([...flags]))).status).toBe(200);
+      expect((await jobRow(t, jobId))?.verdict).toBe(verdict);
+    }
+  });
+
+  test("status ERROR fails the row with a CODE — fal's prose appears nowhere", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t);
+
+    const res = await post(t, await signed(jobId), {
+      status: "ERROR",
+      error: "Invalid input: the prompt names a real living person",
+    });
+    expect(res.status).toBe(200);
+
+    const row = await jobRow(t, jobId);
+    expect(row).toMatchObject({ status: "failed", failureReason: "provider_error" });
+    expect(row?.assetStorageId).toBeUndefined();
+    expect(JSON.stringify(row)).not.toContain("living person");
+    expect(JSON.stringify(await auditRows(t))).not.toContain("living person");
+    expect(fetchMock).toHaveBeenCalledTimes(0); // nothing was downloaded
+  });
+
+  test("an UNHANDLED kind fails with a code rather than probing the body for a url", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    // A tts row (plan 20-14's arm). The body deliberately CARRIES a findable url.
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028 });
+
+    expect(
+      (
+        await post(t, await signed(jobId), {
+          status: "OK",
+          payload: { audio: { url: "https://v3.fal.media/files/panda/take.mp3" } },
+        })
+      ).status,
+    ).toBe(200);
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "unhandled_kind",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("a non-fal asset host is REFUSED before any fetch — the SSRF gate", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const control = await seedLandable(t);
+
+    for (const url of [
+      "https://fal.media.evil.com/x.mp4", // the suffix LOOKS right; the host is not
+      "http://v3.fal.media/x.mp4", // plaintext
+      "https://169.254.169.254/latest/meta-data/", // the cloud metadata endpoint
+      "file:///etc/passwd",
+    ]) {
+      const fresh = await seedLandable(t);
+      const res = await post(t, await signed(fresh.jobId), {
+        status: "OK",
+        payload: { video: { url } },
+      });
+      expect(res.status).toBe(200);
+      expect((await jobRow(t, fresh.jobId))?.failureReason, url).toMatch(
+        /asset_host_refused|bad_asset_url/,
+      );
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect((await jobRow(t, control.jobId))?.status).toBe("submitted"); // the untouched control
+  });
+
+  test("a re-delivered webhook is IDEMPOTENT: no second store, no second spend, no second audit", async () => {
+    const t = harness();
+    const fetchMock = assetFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.009 });
+    const segment = await signed(jobId);
+
+    expect((await post(t, segment, imageOk([false], 2160, 3840))).status).toBe(200);
+    const after = await jobRow(t, jobId);
+    const left = await mediaLeft(t);
+    expect(await auditRows(t)).toHaveLength(1);
+
+    // At-least-once delivery: the same callback, again.
+    expect((await post(t, segment, imageOk([false], 2160, 3840))).status).toBe(200);
+    expect(await jobRow(t, jobId)).toEqual(after); // byte-identical row
+    expect(await mediaLeft(t)).toBe(left); // the window did not move a second time
+    expect(await auditRows(t)).toHaveLength(1); // and no second log line
+    expect(fetchMock).toHaveBeenCalledTimes(1); // and no second download
+  });
+});
+
+describe("reconciliation: SKIPPED when there is nothing to reconcile, re-priced when there is", () => {
+  const land = async (t: T, jobId: Id<"mediaJobs">, actual?: Record<string, number | string>) =>
+    await t.mutation(internal.mediaComplete.landResult, {
+      jobId,
+      outcome: {
+        ok: true,
+        // A REAL storage id: v.id("_storage") is validated, so a placeholder string is rejected at
+        // the boundary — which is the validator doing its job.
+        assetStorageId: await t.run((ctx) => ctx.storage.store(new Blob([ASSET]))),
+        assetHash: "a".repeat(64),
+        mimeType: "application/octet-stream",
+        bytes: 8,
+        moderation: null,
+        ...(actual === undefined ? {} : { actual }),
+      },
+    });
+
+  test("an EXACT_SPEND kind is SKIPPED, not faked — window delta exactly 0", async () => {
+    const t = harness();
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028 });
+    const before = await mediaLeft(t);
+
+    await land(t, jobId);
+
+    expect((await jobRow(t, jobId))?.actualCents).toBe(Math.round(0.0028 * 100));
+    expect(await mediaLeft(t)).toBe(before); // not one cent
+
+    // The distinction the set exists for, made OBSERVABLE. Mutation check: remove "tts" from
+    // EXACT_SPEND_KINDS and this flips to "reprice_failed" — the landing would be GUESSING an
+    // actual from a value inworld-tts never returns. (The window delta stays 0 either way, which
+    // is why the plan's stated window-based mutation check could not fire — see the summary.)
+    const payload = (await auditRows(t))[0]?.payload as Record<string, unknown>;
+    expect(payload.reconciled).toBe("exact_by_construction");
+  });
+
+  test("a re-price UPWARD consumes exactly the delta, on BOTH windows", async () => {
+    const t = harness();
+    stubMediaEnv();
+    // Submitted 1080x1920 = 2.07 MP -> ceil 3 MP -> $0.009 -> 1 cent.
+    const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.009 });
+    const before = await mediaLeft(t);
+
+    // fal returned 2160x3840 = 8.29 MP -> ceil 9 MP -> $0.027 -> 3 cents.
+    await land(t, jobId, { width: 2160, height: 3840 });
+
+    expect((await jobRow(t, jobId))?.actualCents).toBe(3);
+    expect(await mediaLeft(t)).toBe(before - 2); // 3 - 1, and not 3
+    const payload = (await auditRows(t))[0]?.payload as Record<string, unknown>;
+    expect(payload.reconciled).toBe("repriced");
+  });
+
+  test("actual <= est consumes NOTHING and refunds NOTHING", async () => {
+    const t = harness();
+    stubMediaEnv();
+    // Reserved as if 4K, delivered at the submitted size — a real over-reservation.
+    const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.027 });
+    const before = await mediaLeft(t);
+
+    await land(t, jobId, { width: 1080, height: 1920 });
+
+    expect((await jobRow(t, jobId))?.actualCents).toBe(1); // the honest actual is recorded...
+    expect(await mediaLeft(t)).toBe(before); // ...and the window is NOT credited back
+  });
+
+  test("a re-price the TABLE cannot do is recorded, never silently trusted", async () => {
+    const t = harness();
+    stubMediaEnv();
+    const { jobId } = await seedLandable(t, { kind: "video", estUsd: 0.5 });
+    // fal claims a tier the price table has no row for. That is DRIFT and must be visible.
+    await land(t, jobId, { resolution: "4k" });
+
+    const payload = (await auditRows(t))[0]?.payload as Record<string, unknown>;
+    expect(payload.reconciled).toBe("reprice_failed");
+    expect(payload.resolution).toBe("4k"); // the drift itself reaches the log plane
+    expect((await jobRow(t, jobId))?.actualCents).toBe(50); // falls back to the estimate, recorded
+  });
+});
+
+test("exactly ONE audit row per landing, and its keys are the allow-list", async () => {
+  const t = harness();
+  vi.stubGlobal("fetch", assetFetch());
+  stubMediaEnv();
+  const { jobId } = await seedLandable(t);
+  await post(t, await signed(jobId), VIDEO_OK);
+
+  const audit = await auditRows(t);
+  expect(audit).toHaveLength(1);
+  expect(audit[0]?.eventType).toBe("media.landed");
+  expect(audit[0]?.actor).toBe("fal");
+  // A KEY-SET assertion, not an eyeball: a field added to the payload must be a deliberate edit
+  // both here AND in llmRedaction.test.ts's allow-list scan.
+  expect(Object.keys((audit[0]?.payload ?? {}) as object).sort()).toEqual(
+    [
+      "jobId",
+      "batchId",
+      "planId",
+      "falRequestId",
+      "kind",
+      "model",
+      "promptHash",
+      "estCents",
+      "assetHash",
+      "verdict",
+      "actualCents",
+      "reconciled",
+      "resolution",
+    ].sort(),
+  );
+  expect(JSON.stringify(audit[0]?.payload)).not.toMatch(/url|href|http/i);
 });

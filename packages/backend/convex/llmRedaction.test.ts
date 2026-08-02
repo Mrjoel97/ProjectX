@@ -4,13 +4,35 @@
 // surface (llm.ts) must be structurally incapable of reading raw goal text or leaking
 // raw PII, and its only system prompt must come from the skills registry (CLAUDE.md §5).
 // Mirrors auditImmutability.test.ts's on-disk readSource pattern; runs in `node`.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 const convexDir = dirname(fileURLToPath(import.meta.url));
 const readSource = (file: string): string => readFileSync(join(convexDir, file), "utf8");
+
+/** Every hand-written convex source, comment-stripped, as [relative path, code]. Recursive so
+ *  `lib/` and `render/` are covered; `_generated/` and tests are not source. Added by plan 20-06 for
+ *  the two whole-tree pins at the bottom of this file (terminal writers, storage.getUrl). */
+function allConvexSources(dir = convexDir, prefix = ""): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      if (entry.name === "_generated" || entry.name === "node_modules") continue;
+      out.push(...allConvexSources(join(dir, entry.name), rel));
+    } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      out.push([
+        rel,
+        readSource(rel)
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/(^|\s)\/\/.*$/gm, "$1"),
+      ]);
+    }
+  }
+  return out;
+}
 
 test("llm.ts cannot reach raw goal text (no getForDelivery, no .goal)", () => {
   const src = readSource("llm.ts");
@@ -1126,4 +1148,173 @@ test("the voice-doc UI never turns a finding excerpt into a log field", () => {
     expect(src, `${rel} writes a log-plane row`).not.toMatch(/audit\.log\b/);
     expect(src, `${rel} calls a telemetry sink`).not.toMatch(/\btelemetry\b/);
   }
+});
+
+// ── 20-06 (MEDIA-01 / SC4): the media log plane carries refs, hashes, counts and one enum ─────────
+//
+// A signed fal URL is BOTH a content leak and a live credential. The whole reason plan 20-06
+// downloads the asset inside the webhook is so there is nowhere in the schema for one to live —
+// but "nowhere in the schema" does not stop someone putting one in an audit payload. That is what
+// these scans are for, and they are the §4 guard the TYPE system cannot give us:
+// `packages/contracts/src/audit.ts` permits ANY string in its flat map by design.
+//
+// Every scan below asserts its target is PRESENT before asserting anything about it, so a rename
+// fails loudly rather than passing vacuously.
+
+const MEDIA_MODULES = ["media.ts", "mediaComplete.ts"] as const;
+const stripCode = (src: string): string =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+
+/**
+ * The media audit payload allow-list, AS SHIPPED. Ids, hashes, counts and two enums — nothing else.
+ *
+ * Deliberately differs from plan 20-06's list in two places, both recorded in 20-06-SUMMARY.md:
+ * `lineCount` is OUT (a per-row terminal has no line count without a batch scan, and `batchId` is
+ * already the join key), and `reconciled` + `failureReason` are IN (`reconciled` is what makes the
+ * EXACT_SPEND_KINDS skip observable and therefore testable; `failureReason` is already a CODE).
+ */
+const MEDIA_AUDIT_ALLOWED = new Set([
+  "jobId",
+  "batchId",
+  "planId",
+  "falRequestId",
+  "kind",
+  "model",
+  "resolution",
+  "promptHash",
+  "assetHash",
+  "verdict",
+  "estCents",
+  "actualCents",
+  "reconciled",
+  "failureReason",
+]);
+
+/** Top-level keys of an object literal. A plain comma split is enough BECAUSE `mediaComplete.ts`
+ *  deliberately hoists any call-valued field out of its payload literals — see the comment at the
+ *  `resolution` hoist. If that ever stops being true this needs a depth-tracking parser, which is
+ *  the signal to hoist instead. */
+const keysOf = (literal: string): string[] =>
+  literal
+    .replace(/^\s*\{/, "")
+    .replace(/\}\s*$/, "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && !part.startsWith("..."))
+    .map((part) => (part.split(":")[0] ?? "").trim());
+
+/** Every media audit payload literal: the `payload:` object handed to `audit.log`, and the argument
+ *  of each `audit(...)` helper call that feeds it. */
+function mediaAuditLiterals(): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const file of MEDIA_MODULES) {
+    const code = stripCode(readSource(file));
+    for (const m of code.matchAll(/payload:\s*(\{[^}]*\})/g)) out.push([file, m[1] ?? ""]);
+    for (const m of code.matchAll(/\bawait audit\((\{[^}]*\})\)/g)) out.push([file, m[1] ?? ""]);
+  }
+  return out;
+}
+
+test("media audit payloads are refs-only — every key is on the allow-list", () => {
+  const literals = mediaAuditLiterals();
+  // A file-wide scan over zero payloads passes vacuously and proves nothing.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(3);
+  for (const [file, literal] of literals) {
+    for (const key of keysOf(literal)) {
+      expect(
+        MEDIA_AUDIT_ALLOWED.has(key),
+        `${file} media audit payload carries a non-allow-list key "${key}": ${literal}`,
+      ).toBe(true);
+    }
+  }
+});
+
+test("NO url / href / http substring reaches a media audit payload", () => {
+  // Mutation check (20-06): add `url: falUrl` to the landing payload and this goes RED.
+  for (const [file, literal] of mediaAuditLiterals()) {
+    expect(literal, `${file} media audit payload names a URL: ${literal}`).not.toMatch(
+      /url|href|http/i,
+    );
+  }
+});
+
+test("no prompt text and no narration text reaches the media log plane — only promptHash", () => {
+  for (const file of MEDIA_MODULES) {
+    const code = stripCode(readSource(file));
+    // `promptHash` is the ONLY representation permitted. `\bprompt\b` bans a bare prompt field
+    // while allowing the hash; `narration` is banned outright (it is D8's spoken line).
+    for (const [, literal] of mediaAuditLiterals().filter(([f]) => f === file)) {
+      expect(literal, `${file} audit payload carries raw prompt/narration: ${literal}`).not.toMatch(
+        /\bprompt\b(?!Hash)|narration/,
+      );
+    }
+    // ...and no other log-plane sink exists in these modules at all.
+    expect(code, `${file} writes a deadLetters row`).not.toMatch(
+      /\.insert\(\s*["']deadLetters["']/,
+    );
+    expect(code, `${file} writes a telemetry row`).not.toMatch(/\.insert\(\s*["']telemetry["']/);
+  }
+});
+
+test("the media log-plane surface is PINNED: exactly 1 audit site across both modules", () => {
+  // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-14 (voice), 20-16 (render/retention) and
+  // 20-17 (captions) EACH add audit sites and must EACH bump this number deliberately, having
+  // checked the new payload against MEDIA_AUDIT_ALLOWED above.
+  const sites = MEDIA_MODULES.map(
+    (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
+  );
+  expect(
+    sites.reduce((a, b) => a + b, 0),
+    "media audit call-site count changed - is the new payload refs-only? (20-09/20-14/20-16/20-17 each bump this)",
+  ).toBe(1);
+  // And WHERE it lives: the landing terminal, not the submit path.
+  expect(sites[0], "media.ts grew an audit site").toBe(0);
+});
+
+test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and succeeded is mediaComplete's alone", () => {
+  // CORRECTION to research's SC2 line, recorded in 20-06-SUMMARY.md: research says the webhook is
+  // the ONLY writer of succeeded/failed/blocked. That is not achievable — a 422
+  // content_policy_violation is SYNCHRONOUS at submit and produces no webhook at all, so media.ts
+  // must be able to write blocked/failed. The honest pin is the two-module set with `succeeded`
+  // reachable from the terminal ALONE.
+  // NOTE for plan 20-16: the render terminal writes `plans.renderStatus`, not `mediaJobs.status`,
+  // so it does not widen this set. If it ever needs to, that is a deliberate edit HERE.
+  const terminal = /\bstatus:\s*["'](succeeded|failed|blocked)["']/;
+  const writers = new Set<string>();
+  const succeeders = new Set<string>();
+  let scanned = 0;
+  for (const [rel, code] of allConvexSources()) {
+    if (!code.includes("mediaJobs")) continue; // only modules that touch the table at all
+    scanned++;
+    if (terminal.test(code)) writers.add(rel);
+    if (/\bstatus:\s*["']succeeded["']/.test(code)) succeeders.add(rel);
+  }
+  expect(
+    scanned,
+    "no mediaJobs-touching modules were scanned - the pin is vacuous",
+  ).toBeGreaterThan(1);
+  expect([...writers].sort()).toEqual(["media.ts", "mediaComplete.ts"]);
+  expect([...succeeders]).toEqual(["mediaComplete.ts"]);
+});
+
+test("storage.getUrl is only ever called inside a tenantQuery", () => {
+  // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
+  // step from a log line or an unguarded return.
+  // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
+  // STT `audio_url` would give a third party a bearer capability to a tenant's asset. If 20-17
+  // needs the bytes at a provider, it uploads them - it does not hand over a URL.
+  const builder =
+    /=\s*(tenantQuery|tenantMutation|tenantAction|internalQuery|internalMutation|internalAction|httpAction|action|mutation|query)\s*\(/g;
+  let sites = 0;
+  for (const [rel, code] of allConvexSources()) {
+    for (const call of code.matchAll(/storage\.getUrl/g)) {
+      sites++;
+      const enclosing = [...code.slice(0, call.index).matchAll(builder)].pop();
+      expect(
+        enclosing?.[1],
+        `${rel}: storage.getUrl is not inside a tenantQuery (found ${enclosing?.[1] ?? "top level"})`,
+      ).toBe("tenantQuery");
+    }
+  }
+  expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
 });

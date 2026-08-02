@@ -21,8 +21,12 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
 
   // Adding a member here without an arm is a COMPILE error at the arm table (15-05).
   // This assertion makes widening the union a deliberate, visible act.
-  test("the union is exactly email + memo + calendar_event after Phase 17", () => {
-    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event"]);
+  test("media maps to media", () => {
+    expect(actionTypeOf("media")).toBe("media");
+  });
+
+  test("the union is exactly email + memo + calendar_event + media after Phase 20", () => {
+    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event", "media"]);
   });
 });
 
@@ -42,6 +46,15 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
   // as `workflow` would silently inherit the EMAIL terminal). A third arm is structurally forced.
   test("calendar_event executes as an externalAction", () => {
     expect(armFor("calendar_event")).toBe("externalAction");
+  });
+
+  // 20-07 MEDIA-01: the arm's SECOND occupant, and the reason `externalAction` stopped being
+  // calendar's. The per-type retrier TARGET lives in cockpit.ts's `EXTERNAL_TARGETS`, derived from
+  // the arm table itself — so marking a third type `externalAction` without a target is a COMPILE
+  // error there, the same way an armless ActionType is one here.
+  test("media also executes as an externalAction — the arm has TWO occupants", () => {
+    expect(armFor("media")).toBe("externalAction");
+    expect(armFor("media")).toBe(armFor("calendar_event"));
   });
 
   // Totality at RUNTIME as well as at compile time: a member added to the union without an arm
@@ -68,7 +81,7 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
 // if a future edit ever makes an incomplete arm table legal, this file stops compiling.
 
 /** A complete arm table compiles. */
-const _COMPLETE_ARMS = { email: "workflow", memo: "inline", calendar_event: "externalAction" } as const satisfies Record<
+const _COMPLETE_ARMS = { email: "workflow", memo: "inline", calendar_event: "externalAction", media: "externalAction" } as const satisfies Record<
   ActionType,
   Arm
 >;

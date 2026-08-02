@@ -5,16 +5,26 @@
 
 /** The closed set of action types an approved plan can execute (ACTN-01). Adding a member
  *  without an arm is a COMPILE error at the arm table in cockpit.ts (15-05). */
-export const ACTION_TYPES = ["email", "memo", "calendar_event"] as const;
+export const ACTION_TYPES = ["email", "memo", "calendar_event", "media"] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** plans.kind is `v.optional(v.literal("memo"))` — ABSENT means the email plan every prior
  *  phase built, so this needs no migration and no backfill. */
-export const actionTypeOf = (kind: "memo" | "calendar_event" | undefined): ActionType => kind ?? "email";
+export const actionTypeOf = (
+  kind: "memo" | "calendar_event" | "media" | undefined,
+): ActionType => kind ?? "email";
 
 /** How an arm executes. `workflow` = durable multi-step orchestration (email). `inline` = a single
  *  transactional write (memo). `externalAction` = ONE governed external side effect, executed by
- *  the action-retrier behind the Approve gate (calendar).
+ *  the action-retrier behind the Approve gate.
+ *
+ *  CORRECTED AGAIN in Phase 20 (20-07). This used to say "(calendar)". `externalAction` now has
+ *  TWO occupants — `calendar_event` and `media` — and it is no longer calendar's arm. Phase 20
+ *  answered research Open Question 1 with GENERALIZE: routing a canvas Generate button around
+ *  `executePlan` would still break `actionTypeOf`'s parameter type the moment `plans.kind` widened,
+ *  forcing an explicit `kind === "media"` refusal inside the dispatcher — a hole wearing a guard's
+ *  clothes, and two Approve stories instead of one. The per-type TARGET table lives in `cockpit.ts`
+ *  (`EXTERNAL_TARGETS`), so a third occupant cannot silently inherit calendar's retrier target.
  *
  *  Two-level dispatch: executePlan is the DISPATCHER and picks the arm; deliverApprovedPlan is the
  *  workflow-backed EMAIL arm's entry point, NOT the universal dispatcher — routing an inline arm
@@ -40,6 +50,7 @@ const ARMS = {
   email: "workflow",
   memo: "inline",
   calendar_event: "externalAction",
+  media: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
 
 export const armFor = (t: ActionType): Arm => ARMS[t];

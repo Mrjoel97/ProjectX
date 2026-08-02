@@ -32,9 +32,11 @@ import {
   MEDIA_JOB_CAP_USD,
 } from "@pikar/cost/media";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { hmacHex } from "./gmailAuth";
 import { getGuardrailConfig, rateLimiter } from "./guardrails";
 import { contentHash } from "./lib/hash";
 
@@ -442,5 +444,320 @@ export const listJobs = internalQuery({
         failureReason: r.failureReason ?? null,
         promptHash: r.promptHash,
       }));
+  },
+});
+
+// ── The fal SUBMIT adapter (plan 20-05) ────────────────────────────────────────────────
+//
+// Submit a reserved line to fal's QUEUE with a per-job authenticated webhook, and return. Nothing
+// below this line waits for a clip: a 10 s Wan 2.5 render is 1–3 MINUTES of wall clock, and plan
+// 20-06's webhook is what lands it.
+
+/** The `gmailAuth.requireEnv` IDIOM with a media-worded message — a "Gmail OAuth env not
+ *  configured" throw on a fal submit sends an operator to the wrong runbook. Both media secrets are
+ *  DEPLOYMENT env vars (`npx convex env set`), never `.env.local`. */
+function requireEnvMedia(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`Media env not configured: ${name}`);
+  return val;
+}
+
+/**
+ * The kinds this adapter can POST **today**. Plan 20-14 adds `"tts"` here and plan 20-17 adds
+ * `"stt"`; widening this alias is what turns the `never` arm in `buildSubmitBody` red until the
+ * matching case is written. That is the whole mechanism — the compiler, not a code review.
+ *
+ * It is deliberately NOT `MediaSpec`: `"render"` (the flat sandbox constant) and `"free"` (an
+ * unpaid block) have no provider request at all, so an arm for them would be a lie.
+ */
+export type SubmittableSpec = Extract<MediaSpec, { kind: "video" | "image" }>;
+
+/**
+ * The request body, as a pure function of the PRICED spec — pitfall 1, the money bug.
+ *
+ * Every dimension the price table keys on is set here, from the SAME spec object
+ * `chooseMediaBatch` consumed. NEVER omit one and let fal default it: `wan-25-preview` defaults to
+ * 1080p, which is 3× the 480p rate, and the estimate would silently under-report with no test going
+ * red. If you add a priced dimension to the table, add it here in the SAME commit. The `never` arm
+ * below is what makes that "same commit" mechanical rather than remembered.
+ *
+ * Field names are the ones read vendor-direct from `fal.ai/api/openapi/queue/openapi.json` in plan
+ * 20-01's preflight — not from memory.
+ */
+export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
+  switch (spec.kind) {
+    case "video":
+      return {
+        prompt: text,
+        resolution: spec.resolution,
+        // A STRING enum ["5","10"] on this endpoint. Submitting the NUMBER 10 fails schema
+        // validation — after the reservation has already been taken. `MediaSpec.seconds` is a
+        // number because it is arithmetic; this is the boundary where it becomes the wire type.
+        duration: String(spec.seconds),
+        // Defaults TRUE: a model-side rewrite of our prompt. Pinned off, or the prompt we priced is
+        // not the prompt that ran.
+        enable_prompt_expansion: false,
+        // NOTE — there is no audio toggle on this endpoint (preflight, 20-01). Wan 2.5 generates
+        // native audio and the only audio field is `audio_url`, which we never send. The clip's own
+        // diegetic track is not a conflict: `render/assemble_final.sh` ducks it to SFXVOL 0.20
+        // under the voice bed by its LEVEL LAW. Research Open Question 5 resolves THERE, not here.
+      };
+    case "image":
+      return {
+        prompt: text,
+        // There is no `width`/`height` on this endpoint. `image_size` takes a preset name OR a
+        // {width,height} object; `MediaSpec.image` keeps width/height because that is what
+        // megapixels are computed from, and this is the ONLY place they are mapped.
+        image_size: { width: spec.width, height: spec.height },
+        // Defaults to 1 and is a STRAIGHT price multiplier — pinned, same rule as `resolution`.
+        num_images: 1,
+      };
+    default: {
+      const _never: never = spec;
+      throw new Error(`unhandled media kind: ${JSON.stringify(_never)}`);
+    }
+  }
+}
+
+const SAFE_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/;
+
+/** A CODE, never the provider's prose (CLAUDE.md §4, the `calendar.ts:84` idiom). Only a 422 body
+ *  is parsed at all, and only its `type` discriminator: a 5xx body is a stack trace as often as not,
+ *  so it is never read — its status alone becomes the code. */
+async function falReasonCode(response: Response): Promise<string> {
+  if (response.status !== 422) return `http_${response.status}`;
+  try {
+    const body = (await response.json()) as { type?: unknown; detail?: unknown };
+    const nested = Array.isArray(body.detail)
+      ? (body.detail[0] as { type?: unknown } | undefined)
+      : undefined;
+    const candidate = typeof body.type === "string" ? body.type : nested?.type;
+    return typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "http_422";
+  } catch {
+    return "http_422";
+  }
+}
+
+/** `blocked` is the 422 arm — a non-retryable input refusal, which is a `provider_blocked` VERDICT
+ *  on the row rather than a failure. Everything else is a plain failure the retrier may re-run. */
+export type SubmitResult =
+  | { ok: true; requestId: string }
+  | { ok: false; code: string; blocked: boolean };
+
+/** POST one line to fal's queue. Pure over (spec, text, webhookUrl) apart from the two env reads. */
+export async function submitLine(
+  spec: SubmittableSpec,
+  text: string,
+  webhookUrl: string,
+): Promise<SubmitResult> {
+  // THE FIRST STATEMENT, deliberately. No key, no request — fail-closed by construction rather than
+  // by the ordering happening to be right today. media.test.ts asserts the fetch spy saw ZERO calls,
+  // not merely that the message was right.
+  const key = requireEnvMedia("FAL_KEY");
+
+  /* ponytail: FAL_FIXTURE is the offline seam that lets the whole submit → webhook → land path be
+   * exercised at $0 (the `llm.ts:922` `render=fail::` precedent). It sits AFTER the key check on
+   * purpose, so "no key" stays the same refusal in fixture mode as in production. Remove it only
+   * when a hermetic fal mock exists; until then this is the reason no test in Phase 20 spends
+   * money. */
+  if (process.env.FAL_FIXTURE) return { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://queue.fal.run/${spec.model}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify(buildSubmitBody(spec, text)),
+      },
+    );
+  } catch {
+    // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
+    // code only; the exception itself is dropped on the floor.
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+
+  if (!response.ok) {
+    return { ok: false, code: await falReasonCode(response), blocked: response.status === 422 };
+  }
+
+  const body = (await response.json().catch(() => null)) as { request_id?: unknown } | null;
+  const requestId = body?.request_id;
+  if (typeof requestId !== "string" || requestId.length === 0) {
+    return { ok: false, code: "no_request_id", blocked: false };
+  }
+  // Returns HERE, holding a queue ticket. No status_url read, no wait loop, no second request.
+  return { ok: true, requestId };
+}
+
+/** One `mediaJobs` row, reduced to what a submit needs. `promptHash` is deliberately absent: the
+ *  TEXT comes from the content plane (`plans.shots`), never from the job row. */
+type SubmitLine = {
+  jobId: Id<"mediaJobs">;
+  blockIndex: number;
+  model: string;
+  spec: Doc<"mediaJobs">["spec"];
+};
+
+/** The stored spec back into a typed `SubmittableSpec`, or `null` for a kind this plan does not
+ *  wire. `spec.resolution` is `v.string()` on the row, so it is CHECKED here rather than cast —
+ *  a money boundary does not get to assume. */
+function toSubmittable(line: SubmitLine): SubmittableSpec | null {
+  if (line.spec.kind === "video") {
+    const resolution = line.spec.resolution;
+    if (resolution !== "480p" && resolution !== "720p" && resolution !== "1080p") return null;
+    return { kind: "video", model: line.model, resolution, seconds: line.spec.seconds };
+  }
+  if (line.spec.kind === "image") {
+    return { kind: "image", model: line.model, width: line.spec.width, height: line.spec.height };
+  }
+  return null; // "tts" (plan 20-14) and "stt" (plan 20-17) are not wired yet — left at `queued`
+}
+
+/** The batch's rows AND the plan's shots in ONE read. Deliberately UNFILTERED by status: `claimLine`
+ *  is the sole idempotency gate, and filtering here would mask its removal from the retry test. */
+export const batchToSubmit = internalQuery({
+  args: { tenantId: v.string(), batchId: v.string() },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<{
+    lines: SubmitLine[];
+    shots: Array<{ index: number; prompt: string; narration: string }>;
+  }> => {
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
+      .collect();
+    // The index PREFIX is the tenant boundary, so the planId below is this tenant's by construction.
+    const planId = rows[0]?.planId;
+    const plan = planId ? await ctx.db.get(planId) : null;
+    return {
+      lines: rows.map((r) => ({
+        jobId: r._id,
+        blockIndex: r.blockIndex,
+        model: r.model,
+        spec: r.spec,
+      })),
+      shots: (plan?.shots ?? []).map((s) => ({
+        index: s.index,
+        prompt: s.prompt,
+        narration: s.narration,
+      })),
+    };
+  },
+});
+
+/**
+ * `queued → submitted`, in a serializable mutation, BEFORE the POST. Returns false if the row is
+ * already past `queued`.
+ *
+ * **This is pitfall 5's whole fix.** The action-retrier re-runs a failed action, so a `submitBatch`
+ * that dies on line 7 of 13 would re-POST lines 1–6 on retry — a real double spend against a window
+ * already consumed. The finished-reel re-scope makes it sharper, not softer: a reel's batch is
+ * ~2N+1 lines rather than N, so there is twice as much to double-spend.
+ */
+export const claimLine = internalMutation({
+  args: { jobId: v.id("mediaJobs") },
+  handler: async (ctx, { jobId }): Promise<boolean> => {
+    const row = await ctx.db.get(jobId);
+    if (row?.status !== "queued") return false; // absent row included — a claim never invents one
+    await ctx.db.patch(jobId, { status: "submitted", updatedAt: Date.now() });
+    return true;
+  },
+});
+
+/** The submit outcome onto the row. A CODE reaches `failureReason` — never provider prose, never
+ *  the prompt, never the narration (CLAUDE.md §4). No fal URL is stored: plan 20-06 re-derives the
+ *  webhook segment from the jobId, so there is nothing to leak. */
+export const recordSubmission = internalMutation({
+  args: {
+    jobId: v.id("mediaJobs"),
+    result: v.union(
+      v.object({ ok: v.literal(true), falRequestId: v.string() }),
+      v.object({ ok: v.literal(false), blocked: v.boolean(), code: v.string() }),
+    ),
+  },
+  handler: async (ctx, { jobId, result }): Promise<null> => {
+    const updatedAt = Date.now();
+    if (result.ok) {
+      await ctx.db.patch(jobId, { falRequestId: result.falRequestId, updatedAt });
+    } else if (result.blocked) {
+      // A 422 is an INPUT refusal — the line is finished, not retryable, and it says so.
+      await ctx.db.patch(jobId, {
+        status: "blocked",
+        verdict: "provider_blocked",
+        failureReason: result.code,
+        updatedAt,
+      });
+    } else {
+      await ctx.db.patch(jobId, { status: "failed", failureReason: result.code, updatedAt });
+    }
+    return null;
+  },
+});
+
+/**
+ * Submit a whole reserved batch. Idempotent per line, and it NEVER waits.
+ *
+ * Both env reads are hoisted above the loop on purpose: a missing `FAL_WEBHOOK_SECRET` must refuse
+ * the batch before line 1 claims itself, not halfway through one.
+ */
+export const submitBatch = internalAction({
+  args: { tenantId: v.string(), batchId: v.string() },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<{ submitted: number; blocked: number; failed: number; skipped: number }> => {
+    const siteUrl = requireEnvMedia("CONVEX_SITE_URL");
+    const secret = requireEnvMedia("FAL_WEBHOOK_SECRET");
+    const { lines, shots } = await ctx.runQuery(internal.media.batchToSubmit, a);
+    const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
+
+    for (const line of lines) {
+      // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
+      // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
+      const spec = toSubmittable(line);
+      if (!spec) {
+        tally.skipped += 1;
+        continue;
+      }
+
+      if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+        tally.skipped += 1; // already submitted/succeeded/failed/blocked — a retry costs nothing
+        continue;
+      }
+
+      // The `gmailAuth.buildAuthorizeUrl:59` construction verbatim, per JOB ROW rather than per
+      // tenant: the segment binds to ONE `mediaJobs` row, so a leaked URL buys an attacker one
+      // already-finished job. Nothing is stored — plan 20-06 re-derives this exact string.
+      const webhookUrl = `${siteUrl}/fal/callback/${line.jobId}.${await hmacHex(line.jobId, secret)}`;
+
+      // The content plane, by kind: a video/image line submits the block's PROMPT. It goes to fal
+      // and to nothing else — never an audit row, never a log, never onto the job row (only its
+      // `promptHash` lives there). A `tts` line submits `narration` instead; plan 20-14 wires it.
+      const text = shots.find((s) => s.index === line.blockIndex)?.prompt;
+      if (text === undefined) {
+        await ctx.runMutation(internal.media.recordSubmission, {
+          jobId: line.jobId,
+          result: { ok: false, blocked: false, code: "missing_shot" },
+        });
+        tally.failed += 1;
+        continue;
+      }
+
+      const res = await submitLine(spec, text, webhookUrl);
+      await ctx.runMutation(internal.media.recordSubmission, {
+        jobId: line.jobId,
+        result: res.ok
+          ? { ok: true, falRequestId: res.requestId }
+          : { ok: false, blocked: res.blocked, code: res.code },
+      });
+      if (res.ok) tally.submitted += 1;
+      else if (res.blocked) tally.blocked += 1;
+      else tally.failed += 1;
+    }
+    return tally;
   },
 });

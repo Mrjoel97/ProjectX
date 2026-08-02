@@ -194,7 +194,10 @@ export const patchPlan = internalMutation({
     // so executePlan takes the persist terminal instead of the gmail fan-out. Drop-undefined means
     // an email patch never touches it; resetPlan clears it explicitly.
     // 17-01 ACTN-02: widened to the same closed union as schema.ts.
-    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"))),
+    // 20-07 MEDIA-01: widened to the same closed union as schema.ts. Widening ONE of the two and
+    // not the other is Pitfall 9 — every typecheck passes and the runtime validator rejects the new
+    // kind (the PLAN_STATUS Pitfall-5 lesson at the top of this file).
+    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
     // 17-01 ACTN-02: the four STAGED event slots a cockpit tool may write. Drop-undefined means a
     // non-calendar patch never touches them; resetPlan clears them explicitly.
     // `calendarEventId` and `calendarRunId` are deliberately NOT args here: they are written only
@@ -339,6 +342,8 @@ export const resetPlan = internalMutation({
       eventTz: undefined,
       calendarEventId: undefined,
       calendarRunId: undefined,
+      mediaRunId: undefined, // 20-07: same Pitfall-6 class — a stale run id would let a media
+      // retrier terminal fail rows on a plan that has since been reset to a fresh compose.
       // 20-02 MEDIA-01: the block deck AND the render plane, explicitly. Same Pitfall-6 class as
       // the staged event above, one rung worse for the render: a surviving `renderStorageId` would
       // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.

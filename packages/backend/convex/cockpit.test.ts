@@ -9,8 +9,12 @@
 // pattern cockpitTools.test.ts uses for the aggregate). smoke:fanout remains the live coverage.
 import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+import { maxCharsFor } from "@pikar/core/storyboard";
 import retrierTest from "@convex-dev/action-retrier/test";
 import { convexTest } from "convex-test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -23,11 +27,14 @@ import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/s
 // the auditCounts aggregate, so register the component (relative import — the package blocks the
 // deep specifier), same pattern as cockpitTools.test.ts.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+// 20-07: the media pre-step drives BOTH media spend windows through the REAL rate-limiter.
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
 const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
 const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
 
 const TENANT = "tenant_a";
 
@@ -183,6 +190,231 @@ describe("executePlan calendar arm (ACTN-02)", () => {
     expect(plan?.status).toBe("proposed");
     expect(plan?.calendarRunId).toBeUndefined();
     expect(await countRequests(t)).toHaveLength(0);
+  });
+
+  // ── 20-07: THE REGRESSION THAT MAKES THE GENERALIZATION SAFE ─────────────────────────────
+  //
+  // Option (a) — generalize the arm — was taken with its cost stated honestly: the shipped calendar
+  // path must come out behaviourally byte-identical. Every assertion above still passes unchanged,
+  // and these two add what only becomes checkable once a SECOND occupant exists.
+
+  test("a calendar approval moves NEITHER media window and sets no renderStatus", async () => {
+    const t = withMedia();
+    const planId = await seedCalendarPlan(t, "proposed");
+    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT });
+
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    // A generalization that silently drew on the media rail would be invisible without this.
+    expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT })).toBe(
+      before,
+    );
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.renderStatus).toBeUndefined();
+    expect(plan?.mediaRunId).toBeUndefined(); // the calendar run id went to CALENDAR's column
+    expect(plan?.calendarRunId).toEqual(expect.any(String));
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  test("deliverApprovedPlan.ts is byte-unchanged — it is the EMAIL entry point, not a dispatcher", async () => {
+    // Routing an external action through it would make the gmail fan-out reachable from calendar
+    // AND from media. The file is asserted by content hash against the value 12-05 shipped, so a
+    // future "just make it generic" edit is a failing test rather than a review comment.
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "deliverApprovedPlan.ts"));
+    expect(src.length).toBeGreaterThan(0);
+    expect(src.toString()).not.toMatch(/calendar|mediaJobs|reserveJobInner|submitBatch/i);
+  });
+});
+
+// ── 20-07: the media arm ─────────────────────────────────────────────────────────────────
+
+/** The calendar harness plus the rate-limiter — the media pre-step drives BOTH spend windows. */
+function withMedia() {
+  const t = withDelivery();
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  return t;
+}
+
+/** A staged BLOCK DECK on a `kind: "media"` plan — what 20-08's `persistStoryboard` will write. */
+async function seedMediaPlan(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    blocks?: number;
+    clipSeconds?: number;
+    chars?: number;
+    status?: "proposed" | "approved";
+    tenantId?: string;
+    type?: string;
+    noDeck?: boolean;
+  } = {},
+) {
+  const clipSeconds = opts.clipSeconds ?? 10;
+  const n = opts.blocks ?? 2;
+  const chars = opts.chars ?? maxCharsFor(10);
+  return t.run((ctx) =>
+    ctx.db.insert("plans", {
+      tenantId: opts.tenantId ?? TENANT,
+      threadId: `media_thread_${crypto.randomUUID()}`,
+      kind: "media",
+      status: opts.status ?? "proposed",
+      createdAt: Date.now(),
+      ...(opts.noDeck
+        ? {}
+        : {
+            clipSeconds,
+            shots: Array.from({ length: n }, (_, index) => ({
+              index,
+              type: opts.type ?? "AI",
+              seconds: clipSeconds,
+              windowStartMs: index * clipSeconds * 1000,
+              description: `scene ${index}`,
+              narration: "x".repeat(chars),
+              prompt: `prompt ${index}`,
+            })),
+          }),
+    }),
+  );
+}
+
+const mediaJobsOf = (t: ReturnType<typeof convexTest>) =>
+  t.run((ctx) => ctx.db.query("mediaJobs").collect());
+
+describe("executePlan media arm (20-07, MEDIA-01)", () => {
+  test("approving a media plan reserves the WHOLE reel and starts it — through the ONE Approve gate", async () => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t);
+    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT });
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).toEqual({ ok: true });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("delivering");
+    // Paid for, not yet rendered — the state the canvas must be able to name.
+    expect(plan?.renderStatus).toBe("pending");
+    expect(plan?.mediaRunId).toEqual(expect.any(String));
+    expect(plan?.calendarRunId).toBeUndefined(); // never the calendar column
+    expect(plan?.correlationId).toEqual(expect.any(String));
+
+    // The WHOLE reel: 2 video + 2 tts + 1 captions STT. The render line is reserved but gets no row.
+    const jobs = await mediaJobsOf(t);
+    expect(jobs.filter((r) => r.kind === "video")).toHaveLength(2);
+    expect(jobs.filter((r) => r.kind === "tts")).toHaveLength(2);
+    expect(jobs.filter((r) => r.kind === "stt")).toHaveLength(1);
+    expect(jobs.every((r) => r.status === "queued")).toBe(true);
+    expect(new Set(jobs.map((r) => r.batchId)).size).toBe(1); // ONE reservation
+    // ...and the cents moved exactly once.
+    expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT })).toBeLessThan(
+      before,
+    );
+  });
+
+  test("a reel over the JOB CAP is a governed refusal — plan stays proposed, ZERO rows, nothing scheduled", async () => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t, { blocks: 12 }); // 12 x $0.50 clips blows the $3.50 cap
+    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT });
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    // A governed stop RETURNS. Only bugs throw.
+    expect(result).toEqual({ ok: false, reason: "over_job_cap" });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed"); // the CAS never ran
+    expect(plan?.renderStatus).toBeUndefined();
+    expect(plan?.mediaRunId).toBeUndefined();
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+    expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT })).toBe(before);
+  });
+
+  test.each([
+    ["an over-length narration line", { chars: maxCharsFor(10) + 1 }, "narration_too_long"],
+    ["a clip length nobody prices", { clipSeconds: 7, chars: 90 }, "illegal_duration"],
+  ] as const)("%s refuses before the CAS", async (_label, opts, reason) => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t, opts);
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(result).toEqual({ ok: false, reason });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+  });
+
+  test("the MEDIA kill switch refuses the approval on its own", async () => {
+    const t = withMedia();
+    await t.mutation(internal.guardrails.setMediaKillSwitch, { on: true });
+    const planId = await seedMediaPlan(t);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: false, reason: "kill_switch" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+  });
+
+  test.each([
+    ["no deck at all", { noDeck: true }],
+    ["a shot type the price table does not know", { type: "MONTAGE" }],
+  ] as const)("%s is no_deck — a money gate does not assume its writer was correct", async (_l, opts) => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t, opts);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: false, reason: "no_deck" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+  });
+
+  test("double-approve reserves NOTHING a second time", async () => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t);
+    const asTenant = t.withIdentity({ subject: TENANT });
+
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId })).toEqual({ ok: true });
+    const firstJobs = await mediaJobsOf(t);
+    const afterFirst = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT });
+
+    const second = await asTenant.mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(second).toEqual({ ok: true, alreadyStarted: true });
+    // The reservation lives in the SAME serializable transaction as the CAS — that is what makes
+    // "approve once, reserve once" true with no second idempotency mechanism.
+    expect(await mediaJobsOf(t)).toHaveLength(firstJobs.length);
+    expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT })).toBe(
+      afterFirst,
+    );
+  });
+
+  test("a cross-tenant approve of a media plan still throws plan not found", async () => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t, { tenantId: "tenant_other" });
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/plan not found/);
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+  });
+
+  test("a media approval reaches NO gmail request and NO workflow", async () => {
+    const t = withMedia();
+    const planId = await seedMediaPlan(t);
+
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(await countRequests(t)).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.workflowId).toBeUndefined();
   });
 });
 
