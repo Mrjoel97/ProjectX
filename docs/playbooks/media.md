@@ -41,12 +41,17 @@ whole job before a request exists.
 - **The cents floor is applied ONCE, on the batch total** (D12a). Never per line item: a 6-block
   reel's true $0.012 voice cost becomes $0.06 that way — a 5× over-reservation that compounds on
   longer decks.
-- **The narration ceiling SCALES with the block length: `maxCharsFor(clipSeconds)` — 140 at 10 s,
-  70 at 5 s.** `MAX_CHARS_PER_BLOCK = 140` is the 10-second value and the number the skill body
-  teaches; it is NOT the whole rule. A flat 140 was a hole: `assemble_final.sh` hard-errors when a
-  take's speech exceeds its window and a 5-second window holds ~75 characters, so a 120-character
-  line in a 5-second deck cleared the guard and failed the render **after the clips were paid for**.
-- A narration line over the ceiling is refused at storyboard parse,
+- **A narration line has a BAND, not a ceiling, and the band travels with the block length:**
+  `minCharsFor(clipSeconds)`–`maxCharsFor(clipSeconds)` — **103–140 at 10 s, 43–70 at 5 s.**
+  `MAX_CHARS_PER_BLOCK = 140` is only the 10-second ceiling and the number the skill body teaches.
+  `assemble_final.sh` hard-errors on a take whose speech falls OUTSIDE
+  `[clipSeconds - 1.4, clipSeconds]` seconds — **too short is as fatal as too long**, and both land
+  after the clips are paid for. Two holes lived here: a flat 140 passed a 120-character line in a
+  5-second deck, and no floor at all passed a pithy 46-character line in a 10-second one. The floor
+  is computed at the SLOWEST plausible delivery (12 chars/s) on purpose, so it only refuses a line
+  that cannot fill its window at any pace — measured pace wanders 1.9–3.4 words/second between
+  generations of the same line.
+- A narration line outside the band is refused at storyboard parse,
   **before a cent is spent**. The provider returns no duration (delta §1.5), so the overrun is
   otherwise only measurable by `ffprobe` in the sandbox — after ~$3.00 of clips have been paid for.
 - **No fal URL is ever written to any row or any audit payload** (§4).

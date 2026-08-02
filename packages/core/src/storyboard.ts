@@ -33,10 +33,21 @@ export const CLIP_SECONDS = [5, 10] as const;
  *  not fall back to it: an absent `Clip seconds:` declaration is `bad_duration`, because guessing
  *  a block length picks a price. */
 export const DEFAULT_CLIP_SECONDS = 10;
+/** `assemble_final.sh`'s own tolerance: a take's SPEECH must fill
+ *  `[clipSeconds - SPEECH_SLACK_S, clipSeconds]` seconds. BOTH ends are hard errors at render
+ *  time — after the clips are paid for — so both ends are guarded here, at parse time, for free.
+ *  Kept as a named constant so the two files can be compared rather than re-derived. */
+export const SPEECH_SLACK_S = 1.4;
 /** English speech runs ~15 chars/second, so a window holds ~15 × its seconds. 14 leaves headroom.
  *  Enforced HERE, at parse time, because the provider returns no duration (delta §1.5) and the
  *  overrun is otherwise only measurable by ffprobe — after the clips are paid for. */
 export const MAX_CHARS_PER_SECOND = 14;
+/** The SLOWEST plausible delivery, deliberately — the floor must only refuse a line that cannot
+ *  fill its window under ANY plausible reading pace. Pace genuinely wanders (upstream measured
+ *  1.9–3.4 words/second between generations of the SAME line), so a floor computed at the average
+ *  rate would reject lines that render fine. At 12 chars/second a 10 s block needs 103 characters
+ *  and a 5 s block needs 43 — anything under that is short at any pace. */
+export const MIN_CHARS_PER_SECOND = 12;
 /** The 10-second ceiling, and the number `media-director.md` teaches. It is NOT the whole rule:
  *  the ceiling SCALES with the deck's clip length — see `maxCharsFor`. */
 export const MAX_CHARS_PER_BLOCK = 140;
@@ -49,6 +60,14 @@ export const MAX_CHARS_PER_BLOCK = 140;
  *  harvesting the assembler in 20-13. */
 export const maxCharsFor = (clipSeconds: number): number =>
   Math.round(clipSeconds * MAX_CHARS_PER_SECOND);
+/** The FLOOR for a deck of this block length. 103 at 10 s, 43 at 5 s.
+ *
+ *  The other half of the same hole: `assemble_final.sh` hard-errors on a take whose speech is
+ *  SHORTER than `clipSeconds - 1.4` just as loudly as on one that overruns, and the parser used to
+ *  have no floor at all. A 60-character line in a 10-second block is ~4 s of speech — it fails the
+ *  render, after the clips are paid for, exactly like an overrun does. */
+export const minCharsFor = (clipSeconds: number): number =>
+  Math.round((clipSeconds - SPEECH_SLACK_S) * MIN_CHARS_PER_SECOND);
 
 export type Block = {
   index: number;
@@ -73,7 +92,12 @@ export type ParsedDeck =
         | "mixed_durations"
         | "missing_narration";
     }
-  | { ok: false; reason: "narration_too_long"; blockIndex: number; chars: number };
+  | {
+      ok: false;
+      reason: "narration_too_long" | "narration_too_short";
+      blockIndex: number;
+      chars: number;
+    };
 
 /** Which blocks draw CLIP money. The ONE place this is decided.
  *
@@ -179,6 +203,15 @@ export function parseBlockDeck(body: string): ParsedDeck {
 
     const narration = (cells[iNarr] ?? "").trim();
     if (narration === "") return fail("missing_narration");
+    // BOTH ends. The assembler treats a short take and a long one as the same hard error, and both
+    // land after the clips are paid for.
+    if (narration.length < minCharsFor(clipSeconds))
+      return {
+        ok: false,
+        reason: "narration_too_short",
+        blockIndex: index,
+        chars: narration.length,
+      };
     if (narration.length > maxCharsFor(clipSeconds))
       return {
         ok: false,
