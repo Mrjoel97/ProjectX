@@ -52,6 +52,28 @@ export const BLUEPRINT_SEGMENTS = [
   { id: "evidence", label: "Evidence", fields: ["entities"], specialist: "research" },
 ] as const satisfies readonly BlueprintSegment[];
 
+/**
+ * How the segments feed each other — the wiring the canvas draws.
+ *
+ * This is an ASSERTION about the business, not decoration: the offer determines both what you can
+ * charge and who is worth chasing, and those two together set the direction. `feeds` is a hard
+ * dependency (the target is guesswork without the source); `informs` is softer (the target is
+ * better with the source, not impossible without it).
+ *
+ * Kept beside the segments so an edge cannot outlive the node it points at — the test asserts every
+ * endpoint resolves.
+ */
+export const SEGMENT_FLOW = [
+  { from: "foundation", to: "offer", kind: "feeds" },
+  { from: "offer", to: "money-model", kind: "feeds" },
+  { from: "offer", to: "leads", kind: "feeds" },
+  { from: "money-model", to: "direction", kind: "informs" },
+  { from: "leads", to: "direction", kind: "informs" },
+  { from: "evidence", to: "foundation", kind: "informs" },
+] as const satisfies readonly { from: string; to: string; kind: "feeds" | "informs" }[];
+
+export type SegmentFlowEdge = (typeof SEGMENT_FLOW)[number];
+
 type AssignedField = (typeof BLUEPRINT_SEGMENTS)[number]["fields"][number];
 
 /**
@@ -74,6 +96,29 @@ export function segmentFill(
   let filled = 0;
   for (const field of segment.fields) if (blueprint[field] !== null) filled += 1;
   return { filled, total: segment.fields.length };
+}
+
+/**
+ * Where the chain breaks: the first segment, in `BLUEPRINT_SEGMENTS` order, that COULD be known
+ * but is not yet complete.
+ *
+ * The order is the growth engine's own sequence — foundation feeds the offer, the offer feeds the
+ * money model, the money model feeds leads — so the first incomplete link is the one worth acting
+ * on. Advice about a later link rests on facts the system does not have yet.
+ *
+ * A `total === 0` segment (Leads today) is SKIPPED, never returned. It is not a gap the user can
+ * close: no blueprint field maps to it, so no answer they give and no document they upload would
+ * fill it. Returning it would send them to a specialist to fix something the system cannot record —
+ * the same dishonesty as rendering it `0 / 3`.
+ *
+ * Returns null when every fillable segment is complete.
+ */
+export function firstGap(blueprint: BusinessBlueprint): BlueprintSegment | null {
+  for (const segment of BLUEPRINT_SEGMENTS) {
+    const { filled, total } = segmentFill(blueprint, segment);
+    if (total > 0 && filled < total) return segment;
+  }
+  return null;
 }
 
 /**

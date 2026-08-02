@@ -1,9 +1,15 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BlueprintDiffRow, type BlueprintField, FIELD_SPEC } from "@pikar/core";
+import {
+  type BlueprintDiffRow,
+  type BlueprintField,
+  type BusinessBlueprint,
+  FIELD_SPEC,
+} from "@pikar/core";
 import { useMutation } from "convex/react";
 import { useState } from "react";
+import { BlueprintCanvas } from "./BlueprintCanvas";
 import { label, primaryButton } from "./styles";
 
 type AdditionRow = Extract<BlueprintDiffRow, { kind: "addition" }>;
@@ -25,7 +31,14 @@ const secondaryButton = (disabled: boolean): React.CSSProperties => ({
  * D5's review split is semantic, not decorative: additions cannot remove typed content, while a
  * contradiction can replace a typed value in the Blueprint and therefore requires its own tick.
  */
-export function BlueprintDiff({ diff }: { diff: readonly BlueprintDiffRow[] }) {
+export function BlueprintDiff({
+  diff,
+  draft,
+}: {
+  diff: readonly BlueprintDiffRow[];
+  /** The proposed blueprint, so the sheet can show WHERE the disagreement sits on the map. */
+  draft?: BusinessBlueprint | null;
+}) {
   const confirmBlueprint = useMutation(api.blueprint.confirmBlueprint);
   const discardDraft = useMutation(api.blueprint.discardDraft);
   const additions = diff.filter((row): row is AdditionRow => row.kind === "addition");
@@ -37,6 +50,7 @@ export function BlueprintDiff({ diff }: { diff: readonly BlueprintDiffRow[] }) {
     new Set(),
   );
   const [pending, setPending] = useState<"confirm" | "discard" | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const busy = pending !== null;
@@ -102,6 +116,20 @@ export function BlueprintDiff({ diff }: { diff: readonly BlueprintDiffRow[] }) {
         Confirming changes the Blueprint that agents read. It does not rewrite the profile text
         above; edit that card directly when your own words should change.
       </p>
+
+      {/* The map of the disagreement. It REPORTS the choices made below and never makes one: the
+          accept state and the single confirm mutation stay here, in one place. */}
+      {draft != null && (
+        <BlueprintCanvas
+          blueprint={draft}
+          built={true}
+          gapId={null}
+          selectedId={focused}
+          onSelect={(id) => setFocused(focused === id ? null : id)}
+          draftRows={diff}
+          acceptedContradictions={acceptedContradictions}
+        />
+      )}
 
       {additions.length > 0 && (
         <section

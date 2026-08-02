@@ -200,67 +200,75 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
         </p>
       )}
 
-      <LabeledField label="How many people work on this, including you?">
-        <input
-          style={field}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={headcount}
-          onChange={(e) => setHeadcount(digits(e.target.value))}
-        />
-      </LabeledField>
-      <LabeledField label="How many of them are paid staff?">
-        <input
-          style={field}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={paidStaff}
-          onChange={(e) => setPaidStaff(digits(e.target.value))}
-        />
-      </LabeledField>
-      <LabeledField label="Where are you on revenue?">
-        <select
-          style={field}
-          value={revenueStage}
-          onChange={(e) => setRevenueStage(e.target.value as RevenueStage | "")}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(17rem, 1fr))",
+            gap: "1rem",
+          }}
         >
-          <option value="">Not said yet</option>
-          {REVENUE_STAGES.map((r) => (
-            <option key={r} value={r}>
-              {REVENUE_LABEL[r]}
-            </option>
-          ))}
-        </select>
-      </LabeledField>
-      <LabeledField label="How is it funded?">
-        <select
-          style={field}
-          value={funding}
-          onChange={(e) => setFunding(e.target.value as Funding | "")}
-        >
-          <option value="">Not said yet</option>
-          {FUNDING_STATES.map((f) => (
-            <option key={f} value={f}>
-              {FUNDING_LABEL[f]}
-            </option>
-          ))}
-        </select>
-      </LabeledField>
-      <LabeledField label="How many full years has it been running?">
-        <input
-          style={field}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={yearsOperating}
-          onChange={(e) => setYearsOperating(digits(e.target.value))}
-        />
-      </LabeledField>
+        <LabeledField label="How many people work on this, including you?">
+          <input
+            style={field}
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={headcount}
+            onChange={(e) => setHeadcount(digits(e.target.value))}
+          />
+        </LabeledField>
+        <LabeledField label="How many of them are paid staff?">
+          <input
+            style={field}
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={paidStaff}
+            onChange={(e) => setPaidStaff(digits(e.target.value))}
+          />
+        </LabeledField>
+        <LabeledField label="Where are you on revenue?">
+          <select
+            style={field}
+            value={revenueStage}
+            onChange={(e) => setRevenueStage(e.target.value as RevenueStage | "")}
+          >
+            <option value="">Not said yet</option>
+            {REVENUE_STAGES.map((r) => (
+              <option key={r} value={r}>
+                {REVENUE_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </LabeledField>
+        <LabeledField label="How is it funded?">
+          <select
+            style={field}
+            value={funding}
+            onChange={(e) => setFunding(e.target.value as Funding | "")}
+          >
+            <option value="">Not said yet</option>
+            {FUNDING_STATES.map((f) => (
+              <option key={f} value={f}>
+                {FUNDING_LABEL[f]}
+              </option>
+            ))}
+          </select>
+        </LabeledField>
+        <LabeledField label="How many full years has it been running?">
+          <input
+            style={field}
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={yearsOperating}
+            onChange={(e) => setYearsOperating(digits(e.target.value))}
+          />
+        </LabeledField>
+        </div>
 
       {/* Business tier — READ-ONLY (design §9). Text, never a control: a disabled picker still
           reads as "there is a control here". The reason and the source make it legible; editing
@@ -439,6 +447,10 @@ export function LabeledField({
   children: React.ReactNode;
 }) {
   return (
+    // The control IS the `children` this wraps: the implicit-association pattern
+    // (<label><input/></label>), valid and accessible. The rule cannot see through a ReactNode
+    // prop, and every call site passes exactly one form control.
+    // biome-ignore lint/a11y/noLabelWithoutControl: implicit association via children
     <label style={{ display: "grid", gap: "0.35rem" }}>
       <span style={label}>{text}</span>
       {children}

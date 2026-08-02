@@ -4,7 +4,15 @@ import {
   type BlueprintField,
   type BusinessBlueprint,
 } from "./blueprint";
-import { BLUEPRINT_SEGMENTS, segmentFill, segmentHeadline } from "./blueprintSegments";
+import {
+  BLUEPRINT_SEGMENTS,
+  firstGap,
+  SEGMENT_FLOW,
+  segmentFill,
+  segmentHeadline,
+} from "./blueprintSegments";
+
+const stated = (...values: string[]) => ({ values, origin: "stated" as const });
 
 /** Every field null — the shape `mergeBlueprint` produces for an empty business. */
 const blank = (): BusinessBlueprint =>
@@ -15,6 +23,53 @@ const segment = (id: string) => {
   if (!found) throw new Error(`no segment ${id}`);
   return found;
 };
+
+describe("SEGMENT_FLOW — the wiring the canvas draws", () => {
+  // The bug this guards: a segment is renamed or dropped and an edge points at a node that is no
+  // longer drawn, so the canvas renders a wire into empty space.
+  it("every endpoint resolves to a real segment", () => {
+    const ids = new Set(BLUEPRINT_SEGMENTS.map((s) => s.id));
+    for (const edge of SEGMENT_FLOW) {
+      expect(ids.has(edge.from), `unknown from: ${edge.from}`).toBe(true);
+      expect(ids.has(edge.to), `unknown to: ${edge.to}`).toBe(true);
+      expect(edge.from).not.toBe(edge.to);
+    }
+  });
+
+  it("reaches every segment — no node is left unwired", () => {
+    const touched = new Set(SEGMENT_FLOW.flatMap((e) => [e.from, e.to]));
+    expect([...BLUEPRINT_SEGMENTS.map((s) => s.id)].filter((id) => !touched.has(id))).toEqual([]);
+  });
+});
+
+describe("firstGap — where the chain breaks", () => {
+  it("returns the first incomplete segment in chain order", () => {
+    // Foundation complete, Offer half-done -> Offer is the break, not the later Money model.
+    const blueprint = {
+      ...blank(),
+      oneLineDescription: stated("Fractional CFO"),
+      name: stated("Acme"),
+      stage: stated("advisory"),
+      tier: stated("solopreneur"),
+      offering: stated("Retainer"),
+    } as BusinessBlueprint;
+    expect(firstGap(blueprint)?.id).toBe("offer");
+  });
+
+  // The honesty rule: Leads has no fields, so no answer and no document could ever close it.
+  // Naming it as the gap would send the user to a specialist to fix an unrecordable thing.
+  it("never returns a segment that has no fields to fill", () => {
+    const everythingFillable = Object.fromEntries(
+      BLUEPRINT_FIELDS.map((f) => [f, stated("known")]),
+    ) as unknown as BusinessBlueprint;
+    expect(segmentFill(everythingFillable, segment("leads"))).toEqual({ filled: 0, total: 0 });
+    expect(firstGap(everythingFillable)).toBeNull();
+  });
+
+  it("returns the earliest gap on a blank blueprint", () => {
+    expect(firstGap(blank())?.id).toBe("foundation");
+  });
+});
 
 describe("segment assignment", () => {
   // The bug this guards: a twelfth blueprint field is added and silently never renders.

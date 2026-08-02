@@ -67,55 +67,69 @@ export function NarrativePanel({
     <div style={card}>
       <span style={label}>What the business is</span>
 
-      <LabeledField label="Business name (optional)">
-        <input style={field} value={profile.name} onChange={(e) => set("name", e.target.value)} />
-      </LabeledField>
-      <LabeledField label="One-line description">
-        <input
-          style={field}
-          value={profile.oneLineDescription}
-          onChange={(e) => set("oneLineDescription", e.target.value)}
-        />
-      </LabeledField>
-      <LabeledField label="Stage (optional)">
-        <input
-          style={field}
-          value={profile.stage}
-          onChange={(e) => set("stage", e.target.value)}
-        />
-      </LabeledField>
-      <LabeledField label="Offering (optional)">
-        <textarea
-          style={field}
-          rows={2}
-          value={profile.offering}
-          onChange={(e) => set("offering", e.target.value)}
-        />
-      </LabeledField>
-      <LabeledField label="Target customer (optional)">
-        <textarea
-          style={field}
-          rows={2}
-          value={profile.targetCustomer}
-          onChange={(e) => set("targetCustomer", e.target.value)}
-        />
-      </LabeledField>
-      <LabeledField label="Primary goals (one per line)">
-        <textarea
-          style={field}
-          rows={3}
-          value={profile.primaryGoals.join("\n")}
-          onChange={(e) => set("primaryGoals", e.target.value.split("\n"))}
-        />
-      </LabeledField>
-      <LabeledField label="Known constraints (one per line)">
-        <textarea
-          style={field}
-          rows={2}
-          value={profile.knownConstraints.join("\n")}
-          onChange={(e) => set("knownConstraints", e.target.value.split("\n"))}
-        />
-      </LabeledField>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(17rem, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        <LabeledField label="Business name (optional)">
+          <input style={field} value={profile.name} onChange={(e) => set("name", e.target.value)} />
+        </LabeledField>
+        <LabeledField label="One-line description">
+          <input
+            style={field}
+            value={profile.oneLineDescription}
+            onChange={(e) => set("oneLineDescription", e.target.value)}
+          />
+        </LabeledField>
+        <LabeledField label="Stage (optional)">
+          <input
+            style={field}
+            value={profile.stage}
+            onChange={(e) => set("stage", e.target.value)}
+          />
+        </LabeledField>
+      </div>
+
+      {/* The long-form answers get the full width, one per row. They were columned with the short
+            inputs, which squeezed a paragraph into ~17rem and made the user lean in to read what
+            they had just typed. Short facts tile; prose does not. */}
+      <div style={{ display: "grid", gap: "1rem" }}>
+        <LabeledField label="Offering (optional)">
+          <textarea
+            style={field}
+            rows={3}
+            value={profile.offering}
+            onChange={(e) => set("offering", e.target.value)}
+          />
+        </LabeledField>
+        <LabeledField label="Target customer (optional)">
+          <textarea
+            style={field}
+            rows={3}
+            value={profile.targetCustomer}
+            onChange={(e) => set("targetCustomer", e.target.value)}
+          />
+        </LabeledField>
+        <LabeledField label="Primary goals (one per line)">
+          <textarea
+            style={field}
+            rows={3}
+            value={profile.primaryGoals.join("\n")}
+            onChange={(e) => set("primaryGoals", e.target.value.split("\n"))}
+          />
+        </LabeledField>
+        <LabeledField label="Known constraints (one per line)">
+          <textarea
+            style={field}
+            rows={2}
+            value={profile.knownConstraints.join("\n")}
+            onChange={(e) => set("knownConstraints", e.target.value.split("\n"))}
+          />
+        </LabeledField>
+      </div>
 
       {error && (
         <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: 0 }}>

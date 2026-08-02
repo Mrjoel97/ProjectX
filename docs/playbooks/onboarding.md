@@ -4,8 +4,13 @@
 >
 > Prior: 2026-08-02 (connections tab). The profile surface gained a fourth tab, `connections`. `ConnectionsPanel` reads `gmailAuth.gmailStatus` and renders the shared `DisconnectGoogle`; the three blocked rows (social accounts, databases & CRMs, third-party apps) are static data in `connections.ts` with their blockers stated. No profile field, writer, serializer or Convex function changed. The existing `surfaceOf("profile")` scan in `businessProfile.test.ts` reads every `.tsx` in the route folder, so `ConnectionsPanel.tsx` falls inside it automatically — but `connections.ts` does **not** (that filter is `.tsx`-only), which is why the blocker-completeness check is its own test (`connectionsSurface.test.ts`) rather than an addition to that scan.
 >
-> Prior: 2026-08-02 (⚠ **entry written from a CODE READ of UNCOMMITTED working-tree work,
-> not a live verification — confirm the behaviour before committing**). `BlueprintCanvas.tsx` (new)
+> Prior: 2026-08-02 (now COMMITTED, and ⚠ **STATICALLY verified only** — web `tsc` 0, biome adds no
+> new violation, core 536/536 incl. the `surfaceOf("profile")` scans, `next build` green. **The
+> canvas has still never been rendered in a browser**, so pan/zoom/drag, the wire dash-march and the
+> node-height arithmetic under real content are UNCONFIRMED; that is the outstanding half. The dead
+> `.bp-doc-lit` rule was deleted on the way in — documents render INSIDE their node, so the chip-lane
+> pulse it styled had no call site and its `!important` was the only new lint warning in the change).
+> `BlueprintCanvas.tsx` (new)
 > draws the blueprint as a blueprint: segments are nodes on a pannable/zoomable sheet wired by
 > `SEGMENT_FLOW` in `@pikar/core`. **No canvas/graph/drag library was added** — geometry is
 > model-space (`NODE_W`/`NODE_H` constants, edge endpoints are pure arithmetic on `{x,y}`), never

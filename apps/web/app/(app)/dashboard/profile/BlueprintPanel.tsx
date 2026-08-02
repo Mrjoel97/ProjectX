@@ -2,15 +2,19 @@
 
 import { api } from "@pikar/backend/api";
 import {
+  BLUEPRINT_FIELDS,
   BLUEPRINT_SEGMENTS,
   type BlueprintSegment,
   type BusinessBlueprint,
   FIELD_SPEC,
+  firstGap,
   segmentFill,
   segmentHeadline,
 } from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BlueprintCanvas } from "./BlueprintCanvas";
 import { BlueprintDiff } from "./BlueprintDiff";
 import { card, label, primaryButton } from "./styles";
 
@@ -28,6 +32,71 @@ const secondaryButton = (disabled: boolean): React.CSSProperties => ({
 
 const formatConfirmedAt = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(timestamp));
+
+/**
+ * Every field blank. Lets the segment grid render BEFORE a blueprint exists, so the shape of the
+ * thing is visible without spending a model call to find out what it looks like. Built off
+ * BLUEPRINT_FIELDS rather than written out, so a twelfth field cannot leave a hole here.
+ */
+const EMPTY_BLUEPRINT = Object.fromEntries(
+  BLUEPRINT_FIELDS.map((blueprintField) => [blueprintField, null]),
+) as unknown as BusinessBlueprint;
+
+/**
+ * Per-segment copy. Lives here, not in `@pikar/core`: it is presentation language, and core owns
+ * the structure and the maths only.
+ *
+ * `known` and `gap` are written to slot into the lede sentence ("I know X. I don't know Y."), so
+ * they are noun phrases, never sentences. `seed` is the message the specialist handoff opens with —
+ * phrased as the USER asking, because that is who appears to have sent it in the thread.
+ */
+const SEGMENT_COPY: Record<
+  string,
+  { short: string; known: string; gap: string; from: string; seed: string }
+> = {
+  foundation: {
+    short: "the basics",
+    known: "what the business is",
+    gap: "the basics — what this business is and what stage it's at",
+    from: "from your profile",
+    seed: "Help me describe what my business actually is, in one clear line.",
+  },
+  offer: {
+    short: "your offer",
+    known: "what you sell and who it's for",
+    gap: "what you sell, or who it's for",
+    from: "from your profile",
+    seed: "Help me pin down my offer — what I sell, and exactly who it's for.",
+  },
+  "money-model": {
+    short: "how you make money",
+    known: "how you make money",
+    gap: "how you price it or what it earns",
+    from: "from your documents",
+    seed: "Help me define how this business makes money — pricing, packages and margins.",
+  },
+  leads: {
+    short: "where leads come from",
+    known: "where leads come from",
+    gap: "where leads come from",
+    from: "not tracked yet",
+    seed: "Help me work out where my leads should come from.",
+  },
+  direction: {
+    short: "where you're heading",
+    known: "where you're heading",
+    gap: "where you're heading, or what's holding you back",
+    from: "from your documents",
+    seed: "Help me set the goals for this business and name the constraint holding it back.",
+  },
+  evidence: {
+    short: "the evidence",
+    known: "the documents behind this",
+    gap: "which documents back this up",
+    from: "from your vault",
+    seed: "What do my vault documents say about this business that I haven't told you?",
+  },
+};
 
 export function BlueprintPanel() {
   const blueprintState = useQuery(api.blueprint.blueprintState);
@@ -83,24 +152,32 @@ export function BlueprintPanel() {
   const liveBlueprint = blueprintState.live;
 
   return (
-    <section style={card}>
-      <div style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={label}>Business blueprint</span>
-        <h2 style={{ margin: 0, color: "var(--ink)", fontSize: "1.2rem" }}>
-          The standing context every agent reads
-        </h2>
-      </div>
-
+    <section style={card} aria-label="Business blueprint">
+      {/* The masthead inside BlueprintReport carries the title for the built and empty states, so a
+          card header here would say it twice. The draft review has no masthead and still needs one. */}
       {blueprintState.state === "draft" ? (
-        <BlueprintDiff diff={blueprintState.diff} />
-      ) : blueprintState.state === "none" || liveBlueprint === null ? (
         <>
-          <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-            A blueprint brings your profile and useful facts from your vault documents into one
-            confirmed business picture. Building it reads both and costs one model call.
-          </p>
-          <div>{buildButton("Build blueprint", true)}</div>
+          <div style={{ display: "grid", gap: "0.35rem" }}>
+            <span style={label}>Business blueprint</span>
+            <h2 style={{ margin: 0, color: "var(--ink)", fontSize: "1.2rem" }}>
+              Review what changed
+            </h2>
+          </div>
+          <BlueprintDiff diff={blueprintState.diff} draft={blueprintState.draft} />
         </>
+      ) : blueprintState.state === "none" || liveBlueprint === null ? (
+        /* Renders EMPTY rather than being hidden until the first build: showing the shape of the
+           thing is how the page explains what a blueprint is. The build CTA is passed IN rather
+           than rendered above, because the masthead bleeds to the card edge and must be the
+           card's first child — anything above it gets overlapped. */
+        <BlueprintReport
+          blueprint={EMPTY_BLUEPRINT}
+          confirmedAt={null}
+          unincorporatedCount={0}
+          rebuild={null}
+          built={false}
+          action={buildButton("Build blueprint", true)}
+        />
       ) : (
         <BlueprintReport
           blueprint={liveBlueprint}
@@ -109,6 +186,7 @@ export function BlueprintPanel() {
             blueprintState.state === "live_stale" ? blueprintState.unincorporatedCount : 0
           }
           rebuild={buildButton("Rebuild", blueprintState.state === "live_stale")}
+          built={true}
         />
       )}
 
@@ -125,164 +203,365 @@ export function BlueprintPanel() {
   );
 }
 
+/**
+ * The overview, shaped as a STANDING BRIEF rather than a list of counters (BRAND §5: "when a card
+ * summarizes many items, shape it as a standing brief, not a list"). Four parts, in this order:
+ * masthead (scope + hard counts) → lede in the agent's voice → the chain and its break → the
+ * ledger, where every fact carries where it came from.
+ *
+ * The chain is the signature element and it earns that by encoding something true: the segments are
+ * the growth engine's own sequence, so the FIRST incomplete link is the one worth acting on, and
+ * everything after it rests on facts the system does not have. That is why the stations after the
+ * break are dimmed rather than merely uncoloured.
+ */
 function BlueprintReport({
   blueprint,
   confirmedAt,
   unincorporatedCount,
   rebuild,
+  built,
+  action,
 }: {
   blueprint: BusinessBlueprint;
   confirmedAt: number | null;
   unincorporatedCount: number;
-  rebuild: React.ReactNode;
+  /** null before the first build — there is no confirmation date or rebuild to offer yet. */
+  rebuild: React.ReactNode | null;
+  /** false = nothing built yet; the brief explains the machine instead of reporting on it. */
+  built: boolean;
+  /** The primary call to action for this state, rendered under the lede. */
+  action?: React.ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
 
+  const known = BLUEPRINT_SEGMENTS.filter((s) => {
+    const { filled, total } = segmentFill(blueprint, s);
+    return total > 0 && filled === total;
+  });
+  const gap = firstGap(blueprint);
+  const captured = BLUEPRINT_FIELDS.filter((f) => blueprint[f] !== null).length;
+
   return (
-    <div style={{ display: "grid", gap: "0.85rem" }}>
+    <div style={{ display: "grid", gap: "1rem" }}>
+      {/* Bleeds to the card edge. The -1.25rem matches `card`'s padding in styles.ts. */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-          gap: "0.75rem",
+          margin: "-1.25rem -1.25rem 0",
+          padding: "1.05rem 1.25rem",
+          background: "var(--teal-900)",
+          color: "#fff",
+          borderRadius: "1.1rem 1.1rem 0 0",
         }}
       >
-        {BLUEPRINT_SEGMENTS.map((segment) => (
-          <SegmentTile
-            key={segment.id}
-            segment={segment}
-            blueprint={blueprint}
-            open={open === segment.id}
-            onToggle={() => setOpen(open === segment.id ? null : segment.id)}
-          />
-        ))}
-        <StatusTile
-          confirmedAt={confirmedAt}
-          unincorporatedCount={unincorporatedCount}
-          rebuild={rebuild}
-        />
+        <div
+          style={{
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            letterSpacing: "0.11em",
+            textTransform: "uppercase",
+            color: "var(--teal-400)",
+          }}
+        >
+          Business blueprint
+          {built
+            ? confirmedAt === null
+              ? " · confirmed"
+              : ` · confirmed ${formatConfirmedAt(confirmedAt)}`
+            : " · not built yet"}
+        </div>
+        <h2 style={{ margin: "0.3rem 0 0.75rem", fontSize: "1.15rem", fontWeight: 700 }}>
+          {!built
+            ? "I haven't formed a picture of your business yet"
+            : gap === null
+              ? "Everything I can record about this business is captured"
+              : `The gap is ${SEGMENT_COPY[gap.id]?.short ?? gap.label.toLowerCase()}`}
+        </h2>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1.6rem" }}>
+          <Kpi n={captured} k="facts captured" />
+          <Kpi n={BLUEPRINT_FIELDS.length - captured} k={built ? "still unknown" : "I could know"} />
+          {unincorporatedCount > 0 && <Kpi n={unincorporatedCount} k="documents added since" />}
+        </div>
       </div>
 
+      <p style={{ margin: 0, fontSize: "1rem", lineHeight: 1.5 }}>
+        {built ? (
+          <>
+            {known.length > 0 && (
+              <>
+                I know <strong>{joinPhrases(known.map((s) => SEGMENT_COPY[s.id]?.known ?? s.label))}</strong>.{" "}
+              </>
+            )}
+            <span style={{ color: "var(--ink-soft)" }}>
+              {gap === null
+                ? "Nothing fillable is missing."
+                : `I don't know ${SEGMENT_COPY[gap.id]?.gap ?? gap.label.toLowerCase()}.`}
+            </span>
+          </>
+        ) : (
+          <>
+            Building it reads your profile and your vault documents and turns them into the
+            standing context every agent works from, split into the parts of your business below.{" "}
+            <strong>One model call.</strong>
+          </>
+        )}
+      </p>
+
+      {action !== undefined && <div>{action}</div>}
+
+      <BlueprintCanvas
+        blueprint={blueprint}
+        built={built}
+        gapId={gap?.id ?? null}
+        selectedId={open}
+        onSelect={(id) => setOpen(open === id ? null : id)}
+      />
+
+      {built && gap !== null && <NeedsYou segment={gap} />}
+
+      {built && (
+        <SegmentLedger
+          blueprint={blueprint}
+          open={open}
+          onToggle={(id) => setOpen(open === id ? null : id)}
+        />
+      )}
+
       {openSegment && <SegmentDetail segment={openSegment} blueprint={blueprint} />}
+
+      {rebuild !== null && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>{rebuild}</div>
+      )}
     </div>
   );
 }
 
-function SegmentTile({
-  segment,
+function Kpi({ n, k }: { n: number; k: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: "1.45rem", fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+        {n}
+      </div>
+      <div
+        style={{
+          fontSize: "0.66rem",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "rgb(255 255 255 / 62%)",
+          marginTop: "0.25rem",
+        }}
+      >
+        {k}
+      </div>
+    </div>
+  );
+}
+
+/** "a, b and c" — the lede reads as a sentence, so the list has to as well. */
+function joinPhrases(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function NeedsYou({ segment }: { segment: BlueprintSegment }) {
+  return (
+    <div style={{ border: "1px solid var(--rule)", borderRadius: "0.9rem", overflow: "hidden" }}>
+      <div
+        style={{
+          fontSize: "0.68rem",
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "var(--ink-soft)",
+          padding: "0.55rem 0.9rem",
+          borderBottom: "1px solid var(--rule)",
+          background: "var(--canvas)",
+        }}
+      >
+        Needs you
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.9rem", padding: "0.8rem 0.9rem" }}>
+        {/* A neutral stripe. Priority is weight and rule, never the approval amber — that token is
+            the review gate's alone (BRAND §2), and this is a gap, not a thing awaiting approval. */}
+        <span
+          aria-hidden="true"
+          style={{ width: 3, alignSelf: "stretch", background: "var(--ink)", borderRadius: 2, flex: "none" }}
+        />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <strong style={{ display: "block", fontSize: "0.94rem" }}>{segment.label}</strong>
+          <span style={{ display: "block", fontSize: "0.83rem", color: "var(--ink-soft)", marginTop: "0.1rem" }}>
+            I don't know {SEGMENT_COPY[segment.id]?.gap ?? segment.label.toLowerCase()} — everything
+            after this rests on it.
+          </span>
+        </span>
+        {segment.specialist !== null && <AskSpecialist segment={segment} />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The segment → specialist handoff. Opens a cockpit thread seeded with the user's own question and
+ * routes there — the same two-step `AbnormalBriefBanner` uses for its plan handoff, so this adds no
+ * new concept. On failure it stays put and says so rather than navigating to nothing.
+ */
+function AskSpecialist({ segment }: { segment: BlueprintSegment }) {
+  const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const ask = async () => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const { threadId } = await sendCockpitMessage({
+        text: SEGMENT_COPY[segment.id]?.seed ?? `Help me work out my ${segment.label.toLowerCase()}.`,
+      });
+      router.push(`/dashboard/workspace?thread=${encodeURIComponent(threadId)}`);
+    } catch {
+      setBusy(false);
+      setFailed(true);
+    }
+  };
+
+  return (
+    <span style={{ flex: "none", display: "grid", gap: "0.2rem", justifyItems: "end" }}>
+      <button
+        type="button"
+        onClick={() => void ask()}
+        disabled={busy}
+        style={{
+          fontSize: "0.76rem",
+          fontWeight: 700,
+          color: "#fff",
+          background: "var(--teal-600)",
+          border: "none",
+          padding: "0.42rem 0.85rem",
+          borderRadius: "999px",
+          cursor: busy ? "default" : "pointer",
+          opacity: busy ? 0.6 : 1,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {busy ? "Opening…" : `Ask ${segment.specialist} →`}
+      </button>
+      {failed && (
+        <span role="alert" style={{ fontSize: "0.72rem", color: "var(--ink-soft)" }}>
+          Couldn't open that. Try again.
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The quiet ledger: one ruled row per segment, each carrying WHERE the fact came from. Provenance
+ * is the blueprint's whole point — a fact you stated is settled, a fact inferred from a document is
+ * challengeable — so it gets a column rather than a footnote.
+ *
+ * Rows are buttons: the row IS the disclosure control, so there is no separate affordance to miss.
+ */
+function SegmentLedger({
   blueprint,
   open,
   onToggle,
 }: {
-  segment: BlueprintSegment;
   blueprint: BusinessBlueprint;
-  open: boolean;
-  onToggle: () => void;
+  open: string | null;
+  onToggle: (id: string) => void;
 }) {
-  const { filled, total } = segmentFill(blueprint, segment);
-  const headline = segmentHeadline(blueprint, segment);
-  const complete = total > 0 && filled === total;
-
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-controls={open ? `segment-detail-${segment.id}` : undefined}
-      style={{
-        appearance: "none",
-        font: "inherit",
-        textAlign: "left",
-        cursor: "pointer",
-        display: "grid",
-        gap: "0.5rem",
-        alignContent: "start",
-        padding: "0.9rem 1rem",
-        borderRadius: "1rem",
-        background: "var(--card)",
-        border: `1px solid ${open ? "var(--teal-600)" : "var(--rule)"}`,
-        color: "var(--ink)",
-      }}
-    >
-      <span style={{ ...label, fontSize: "0.68rem" }}>{segment.label}</span>
-
-      {/* BRAND §5 stat tile. `total === 0` shows words, NEVER a ratio — the denominator would be
-          invented (spec §4). */}
-      <span style={{ fontSize: total === 0 ? "0.95rem" : "1.5rem", fontWeight: 700, lineHeight: 1.1 }}>
-        {total === 0 ? "Not tracked yet" : `${filled} / ${total}`}
-      </span>
-
-      {/* The meter repeats what the numerals already say — never colour alone (BRAND §6). */}
-      <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--rule)" }}>
-        <span
-          style={{
-            display: "block",
-            height: "100%",
-            borderRadius: 999,
-            width: total === 0 ? "0%" : `${(filled / total) * 100}%`,
-            /* NOT approval amber: that token means "held for your approval / spending", and a
-               half-filled progress meter is neither. Reusing it here would teach the eye that
-               amber means "incomplete", which is exactly the signal the Approve gate needs to
-               keep for itself. --ink-soft reads as in-progress against --rule and stays legible
-               in both themes. blueprint.test.ts scans this file for the amber token — and it
-               scans prose too, so do not name it here either. */
-            background: complete ? "var(--teal-600)" : "var(--ink-soft)",
-          }}
-        />
-      </span>
-
-      <span
-        style={{
-          fontSize: "0.8rem",
-          color: "var(--ink-soft)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {headline ?? "Nothing here yet"}
-      </span>
-    </button>
+    <div style={{ display: "grid" }}>
+      {BLUEPRINT_SEGMENTS.map((segment) => {
+        const { filled, total } = segmentFill(blueprint, segment);
+        const headline = segmentHeadline(blueprint, segment);
+        const entry = segment.fields.map((f) => blueprint[f]).find((e) => e !== null) ?? null;
+        const isOpen = open === segment.id;
+        return (
+          <button
+            key={segment.id}
+            type="button"
+            onClick={() => onToggle(segment.id)}
+            aria-expanded={isOpen}
+            aria-controls={isOpen ? `segment-detail-${segment.id}` : undefined}
+            style={{
+              appearance: "none",
+              font: "inherit",
+              textAlign: "left",
+              cursor: "pointer",
+              background: isOpen ? "var(--canvas)" : "transparent",
+              border: "none",
+              borderTop: "1px solid var(--rule)",
+              color: "var(--ink)",
+              display: "grid",
+              gridTemplateColumns: "minmax(6.5rem, 0.6fr) minmax(0, 1.6fr) auto",
+              gap: "0.75rem",
+              alignItems: "start",
+              padding: "0.6rem 0.4rem",
+            }}
+          >
+            <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{segment.label}</span>
+            <span style={{ fontSize: "0.9rem", minWidth: 0 }}>
+              {headline ?? (
+                <em style={{ fontStyle: "normal", color: "var(--ink-soft)" }}>
+                  {total === 0 ? "Not tracked yet" : "Not captured"}
+                </em>
+              )}
+              {total > 0 && filled > 0 && filled < total && (
+                <span style={{ display: "block", fontSize: "0.76rem", color: "var(--ink-soft)", marginTop: "0.1rem" }}>
+                  {filled} of {total} captured
+                </span>
+              )}
+            </span>
+            <ProvenancePill entry={entry} />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function StatusTile({
-  confirmedAt,
-  unincorporatedCount,
-  rebuild,
-}: {
-  confirmedAt: number | null;
-  unincorporatedCount: number;
-  rebuild: React.ReactNode;
-}) {
+/** Where a fact came from, in one mark: the user's own words, or the document it was inferred from. */
+function ProvenancePill({ entry }: { entry: { origin: string; source?: string } | null }) {
+  if (entry === null) {
+    return (
+      <span
+        style={{
+          fontSize: "0.68rem",
+          fontWeight: 700,
+          color: "var(--ink-soft)",
+          border: "1px dashed var(--rule)",
+          borderRadius: "0.3rem",
+          padding: "0.2rem 0.4rem",
+          whiteSpace: "nowrap",
+        }}
+      >
+        —
+      </span>
+    );
+  }
+  const stated = entry.origin === "stated";
   return (
-    <div
+    <span
       style={{
-        display: "grid",
-        gap: "0.5rem",
-        alignContent: "start",
-        padding: "0.9rem 1rem",
-        borderRadius: "1rem",
-        background: "var(--card)",
-        border: "1px solid var(--rule)",
+        fontSize: "0.68rem",
+        fontWeight: 700,
+        borderRadius: "0.3rem",
+        padding: "0.2rem 0.45rem",
+        maxWidth: "10rem",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        background: stated
+          ? "color-mix(in srgb, var(--teal-600) 13%, transparent)"
+          : "color-mix(in srgb, var(--ink-soft) 13%, transparent)",
+        color: stated ? "var(--teal-900)" : "var(--ink-soft)",
       }}
     >
-      <span style={{ ...label, fontSize: "0.68rem" }}>Confirmed</span>
-      <span style={{ fontSize: "1.1rem", fontWeight: 700, lineHeight: 1.1 }}>
-        {confirmedAt === null ? (
-          "—"
-        ) : (
-          <time dateTime={new Date(confirmedAt).toISOString()}>{formatConfirmedAt(confirmedAt)}</time>
-        )}
-      </span>
-      <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
-        {unincorporatedCount === 0
-          ? "Up to date with your documents"
-          : `${unincorporatedCount} ${unincorporatedCount === 1 ? "document" : "documents"} added since`}
-      </span>
-      <span>{rebuild}</span>
-    </div>
+      {stated ? "your words" : (entry.source ?? "a document")}
+    </span>
   );
 }
 
