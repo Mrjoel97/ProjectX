@@ -1,0 +1,15 @@
+{
+  "id": "35-create-document",
+  "description": "ACTN-04's behavioural proof, and the reason 18-08's body edit may ride a shared gate at all. Turn 1 asks for a standalone one-pager in plain language — an EXPLICIT request, which the locked trigger rule says the agent creates DIRECTLY without asking permission it was already given. Turn 2 revises it by #index, which must REWRITE IN PLACE rather than append. `createdDocCount: 1` after both turns therefore proves three things at once: the agent actually called `createDocument` (a prose answer describing the one-pager it would write reads 0 and fails), it did not stall on a confirmation it did not need, and `replace` revised rather than duplicated. What would make this vacuous: asking for something the agent might reasonably attach to an email instead (that is `generateAttachment`, a different tool and a different row), or naming the tool in the turn, which would make it a compliance test rather than a routing one. Neither is done here. `statusAtMost: collecting` and `recipientCount: 0` are the teeth on the 'it saves only, it never sends' half of the contract — a created document must never turn into an outbound plan.",
+  "turns": [
+    "Write me a one-pager I can hand to a prospective client explaining our onboarding process for benchmark-CD1, and keep it in my vault.",
+    "Revise that one-pager — make the timeline section more specific and give it a firmer closing line."
+  ],
+  "expect": {
+    "createdDocCount": 1,
+    "statusAtMost": "collecting",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["benchmark-CD1", "onboarding process"]
+}

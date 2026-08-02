@@ -557,6 +557,34 @@ async function researchTrailForThread(
   return { docs, webSearchCalls, costUsd, verdicts, declarations };
 }
 
+/**
+ * Phase 18 (ACTN-04): the eval harness's `createdDocCount` read — how many standalone documents
+ * `createDocument` actually saved on this thread.
+ *
+ * Reads `vaultSources`' `role: "created"` row, which is the ONLY writer of a created artifact's
+ * refs, and counts `docIds`. Deliberately NOT a plan-row or reply read: the failure this exists to
+ * catch is the agent ANSWERING IN PROSE — describing the one-pager it would write — while never
+ * calling the tool, which no reply-text assertion can distinguish from success.
+ *
+ * `docIds` is the right thing to count rather than rows, because the tool is READ-THEN-APPEND: one
+ * row carries ALL N documents for the thread, and a `replace: N` revision rewrites `docIds[N-1]` in
+ * place instead of appending. So a create-then-revise fixture asserting `createdDocCount: 1` proves
+ * BOTH that the tool ran and that `replace` revised rather than duplicated — which is exactly the
+ * property that has no code branch anywhere else.
+ */
+export const createdDocCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> => {
+    const row = await ctx.db
+      .query("vaultSources")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .order("desc")
+      .take(20)
+      .then((rows) => rows.find((r) => r.role === "created") ?? null);
+    return row?.docIds.length ?? 0;
+  },
+});
+
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
  * row, not the memo plan: a prose answer or a staged card must not pass a research fixture. */
 export const researchCountForThread = internalQuery({

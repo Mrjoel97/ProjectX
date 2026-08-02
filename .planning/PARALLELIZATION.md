@@ -18,6 +18,31 @@ first** and stays inside its lane. Set up 2026-07-14 after Phase 3.3.
 
 ## Phases 18 + 19 — document artifacts, then people/CRM (set up 2026-07-31)
 
+> ### ⚠ OWNER OVERRIDE 2026-08-02 — the 18-08 gate is LIFTED, with one condition attached
+>
+> **The rule below said 18-08 must not touch `cockpit-agent` while Lane R holds an open candidate.
+> The owner has lifted that, deliberately, and 18-08's blocking Task 1 checkpoint is overridden.**
+>
+> WHY the original rule no longer applies as written: it assumed Phase 16 would close SOON. It will
+> not — ACTN-03 is DEFERRED on billing (an OpenAI balance of $0; see
+> `phases/16-research-sub-agent-web-research/deferred-items.md`), and holding 18-08 behind a gate
+> with no date would have stalled Phase 18 at 7/10 indefinitely.
+>
+> WHAT IS NOW TRUE: `cockpit-agent.md` carries BOTH lanes' teaching — Lane R's
+> `## Researching the outside world` (already on disk at v16) and Phase 18's
+> `## Creating a document or a post`. The next `seedSkills` mints **v17 carrying both**, and ONE
+> eventual gate run certifies both (`--skill` is already multi-pin). Two paid runs become one.
+>
+> **THE CONDITION, and it is not optional:** the original rule's real objection was never "two
+> lanes in one file" — it was *"the next eval would certify instructions it never tested"*. That
+> objection stands and is answered by FIXTURES, not by the override. So 18-08 ships with
+> `eval-cases/35-create-document.json` and a new `createdDocCount` observable
+> (`smoke:createdDocCountForThread`), floor bumped 33 → 34. **Any future lane taking this same
+> override owes the same thing: teach a tool in the shared body and you owe a fixture that
+> exercises it BEFORE the gate run, or you have re-created the exact vacuity this project has spent
+> weeks removing.**
+
+
 **These two run SERIAL, not parallel — owner decision, 2026-07-31.** The contract exists anyway,
 because the surface it maps is real and the next planner needs it. A reader looking for a Wave-0
 freeze commit for 18 ∥ 19 must not go hunting: **there is none, deliberately** (§ *Why there is no

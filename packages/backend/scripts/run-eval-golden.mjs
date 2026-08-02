@@ -182,6 +182,16 @@ const EXPECT_KEYS = new Set([
   "insufficientEvidence",
   "webSearchCallsAtLeast",
   "declaredUnsupported",
+  // Phase 18 (ACTN-04): `createdDocCount` — how many standalone documents `createDocument` saved
+  // on the thread, read from smoke:createdDocCountForThread (the `vaultSources` role:"created"
+  // row's `docIds`), never from the reply. The failure it exists to catch is the agent ANSWERING
+  // IN PROSE — describing the one-pager it would write — while never calling the tool, which no
+  // reply assertion can tell apart from success.
+  // It is a COUNT rather than a boolean on purpose: the tool is read-then-append, so one row
+  // carries all N docs and a `replace: N` revision rewrites in place. A create-then-revise fixture
+  // asserting 1 therefore proves the tool ran AND that `replace` revised instead of duplicating —
+  // the locked revision semantic, which has no code branch to test offline.
+  "createdDocCount",
   // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
   // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
   // plan row that a non-dispatching case never stages.
@@ -260,6 +270,16 @@ function validateFixture(fx, source) {
     (!Number.isInteger(fx.expect.webSearchCallsAtLeast) || fx.expect.webSearchCallsAtLeast < 1)
   ) {
     fail("expect.webSearchCallsAtLeast must be an integer >= 1 (a zero floor is vacuous)");
+  }
+  // Phase 18: same anti-vacuity rule as the hosted-search floor. `createdDocCount: 0` would pass on
+  // every fixture in the set — including the 33 that never mention a document — so it asserts
+  // nothing and is rejected before the first spawn. A fixture that means "the agent must NOT create
+  // one" is a real thing to want, but it needs its own key rather than a zero that reads as absent.
+  if (
+    fx.expect.createdDocCount !== undefined &&
+    (!Number.isInteger(fx.expect.createdDocCount) || fx.expect.createdDocCount < 1)
+  ) {
+    fail("expect.createdDocCount must be an integer >= 1 (a zero count is vacuous)");
   }
   if (
     fx.expect.attributionRoute !== undefined &&
@@ -395,6 +415,9 @@ function evaluateExpect(
   insufficientEvidence = false,
   webSearchCalls = 0,
   declaredUnsupported = false,
+  /** @param createdDocCount smoke:createdDocCountForThread (0 when unasked — read skipped). 0 is
+   *  the FAIL-CLOSED direction: an unread key must never manufacture a created document. */
+  createdDocCount = 0,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -472,6 +495,9 @@ function evaluateExpect(
       case "declaredUnsupported":
         if (declaredUnsupported !== expected) miss(key, expected, declaredUnsupported);
         break;
+      case "createdDocCount":
+        if (createdDocCount !== expected) miss(key, expected, createdDocCount);
+        break;
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
         break;
@@ -519,8 +545,8 @@ function selfCheck() {
   const fixtures = loadFixtures();
   // Floor bumped 18 → 27 (the two BEVL-01 assessment fixtures) → 30 (the three DISP-01
   // gap→tap→dispatch fixtures) → 33 (the three Phase-16 research fixtures). The floor is a deletion
-  // tripwire: a fixture quietly dropped must not quietly shrink the gate.
-  assert.ok(fixtures.length >= 33, `expected >= 33 fixtures, found ${fixtures.length}`);
+  // tripwire: a fixture quietly dropped must not quietly shrink the gate. 34 adds 18-08's createDocument case (ACTN-04).
+  assert.ok(fixtures.length >= 34, `expected >= 34 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -751,6 +777,40 @@ function selfCheck() {
     () => validateFixture({ ...base, expect: { declaredUnsupported: true } }, "<synthetic>"),
     /requires researchDocPresent:true/,
     "the declaration without a persisted research document is vacuous",
+  );
+
+  // 2f. Phase 18 (ACTN-04): `createdDocCount` is in the vocabulary, is graded off the READ (arg 13)
+  // rather than the plan row, and rejects the vacuous zero before any spawn.
+  assert.ok(
+    validateFixture({ ...base, expect: { createdDocCount: 1 } }, "<synthetic>"),
+    "createdDocCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { createdDocCount: 0 } }, "<synthetic>"),
+    /integer >= 1/,
+    "a zero created-doc count passes on every fixture in the set and asserts nothing",
+  );
+  assert.equal(
+    evaluateExpect({ createdDocCount: 1 }, collecting, 0, false, 0, 0, 0, "", 0, false, 0, false, 1)
+      .length,
+    0,
+    "createdDocCount:1 passes when the thread really carries one created document",
+  );
+  // The load-bearing negative: the agent answered in PROSE and never called the tool. No reply
+  // assertion can tell that apart from success, which is the whole reason this key exists.
+  assert.equal(
+    evaluateExpect({ createdDocCount: 1 }, collecting, 0, false, 0, 0, 0, "", 0, false, 0, false, 0)
+      .length,
+    1,
+    "createdDocCount:1 MUST FAIL when createDocument never ran (a prose-only answer)",
+  );
+  // And the revision semantic: `replace` rewrites in place, so a create-then-revise thread still
+  // carries ONE document. A run that appended instead of replacing reads 2 and fails here.
+  assert.equal(
+    evaluateExpect({ createdDocCount: 1 }, collecting, 0, false, 0, 0, 0, "", 0, false, 0, false, 2)
+      .length,
+    1,
+    "createdDocCount:1 MUST FAIL when a `replace` appended a second document instead of revising",
   );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.
@@ -1243,6 +1303,12 @@ function attemptCase(fixture, tenant, pins) {
             RETRY_READ,
           ),
         );
+  // Phase 18 (ACTN-04). Same skipped-unless-asked rule as every read above, so the 33 fixtures
+  // that do not create a document pay no extra hop and see the fail-closed 0.
+  const createdDocCount =
+    fixture.expect.createdDocCount === undefined
+      ? 0
+      : parse(must("smoke:createdDocCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -1256,6 +1322,7 @@ function attemptCase(fixture, tenant, pins) {
     insufficientEvidence,
     webSearchCalls,
     declaredUnsupported,
+    createdDocCount,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
