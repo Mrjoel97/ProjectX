@@ -41,7 +41,12 @@ whole job before a request exists.
 - **The cents floor is applied ONCE, on the batch total** (D12a). Never per line item: a 6-block
   reel's true $0.012 voice cost becomes $0.06 that way — a 5× over-reservation that compounds on
   longer decks.
-- **`MAX_CHARS_PER_BLOCK = 140`.** A narration line over the ceiling is refused at storyboard parse,
+- **The narration ceiling SCALES with the block length: `maxCharsFor(clipSeconds)` — 140 at 10 s,
+  70 at 5 s.** `MAX_CHARS_PER_BLOCK = 140` is the 10-second value and the number the skill body
+  teaches; it is NOT the whole rule. A flat 140 was a hole: `assemble_final.sh` hard-errors when a
+  take's speech exceeds its window and a 5-second window holds ~75 characters, so a 120-character
+  line in a 5-second deck cleared the guard and failed the render **after the clips were paid for**.
+- A narration line over the ceiling is refused at storyboard parse,
   **before a cent is spent**. The provider returns no duration (delta §1.5), so the overrun is
   otherwise only measurable by `ffprobe` in the sandbox — after ~$3.00 of clips have been paid for.
 - **No fal URL is ever written to any row or any audit payload** (§4).

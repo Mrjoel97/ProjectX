@@ -33,10 +33,22 @@ export const CLIP_SECONDS = [5, 10] as const;
  *  not fall back to it: an absent `Clip seconds:` declaration is `bad_duration`, because guessing
  *  a block length picks a price. */
 export const DEFAULT_CLIP_SECONDS = 10;
-/** English speech runs ~15 chars/second, so a 10 s window holds ~150. 140 leaves headroom.
+/** English speech runs ~15 chars/second, so a window holds ~15 × its seconds. 14 leaves headroom.
  *  Enforced HERE, at parse time, because the provider returns no duration (delta §1.5) and the
  *  overrun is otherwise only measurable by ffprobe — after the clips are paid for. */
+export const MAX_CHARS_PER_SECOND = 14;
+/** The 10-second ceiling, and the number `media-director.md` teaches. It is NOT the whole rule:
+ *  the ceiling SCALES with the deck's clip length — see `maxCharsFor`. */
 export const MAX_CHARS_PER_BLOCK = 140;
+/** The ceiling for a deck of this block length. 140 at 10 s, 70 at 5 s.
+ *
+ *  A flat 140 was a hole: `assemble_final.sh` hard-errors when a take's SPEECH exceeds its window,
+ *  and a 5-second window holds ~75 characters. So a 120-character line in a 5-second deck cleared
+ *  the pre-payment guard and then failed the render — after the clips were paid for, which is the
+ *  exact failure this ceiling exists to prevent, just at the other clip length. Found while
+ *  harvesting the assembler in 20-13. */
+export const maxCharsFor = (clipSeconds: number): number =>
+  Math.round(clipSeconds * MAX_CHARS_PER_SECOND);
 
 export type Block = {
   index: number;
@@ -167,7 +179,7 @@ export function parseBlockDeck(body: string): ParsedDeck {
 
     const narration = (cells[iNarr] ?? "").trim();
     if (narration === "") return fail("missing_narration");
-    if (narration.length > MAX_CHARS_PER_BLOCK)
+    if (narration.length > maxCharsFor(clipSeconds))
       return {
         ok: false,
         reason: "narration_too_long",
