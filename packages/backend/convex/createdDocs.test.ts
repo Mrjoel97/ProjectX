@@ -50,9 +50,13 @@ test("SC1: long-form creation writes ONE governed, tenant-scoped vault row", asy
   // LOCKED: markdown is the artifact of record for BOTH forms. application/pdf would land the row
   // at pending_extraction and round-trip it through vaultExtract to recover text we authored.
   expect(row.mimeType).toBe("text/markdown");
-  expect(row.text).toBe("# A\n\nprivate");
-  expect(row.contentHash).toBe("hash_a");
   expect(row.size).toBe(new TextEncoder().encode("# A\n\nprivate").length);
+  // `text` / `contentHash` left the browse projection in 15.3-02 (the grid never needed a row's
+  // whole blob, and shipping it is what blew the 16 MiB read cap) — assert them off the row.
+  expect(await t.run((ctx) => ctx.db.get(docId))).toMatchObject({
+    text: "# A\n\nprivate",
+    contentHash: "hash_a",
+  });
   expect(row.createdAt).toBeGreaterThan(0);
   // storageId is written STRAIGHT THROUGH from args — the mutation renders nothing.
   expect(row.storageId).toBe(storageId);
@@ -206,10 +210,14 @@ test("SC7: a revision patches the SAME _id — one row before, one row after, ne
   expect(after).toHaveLength(before.length); // NO second row, NO version history
   const row = after.find((d) => d._id === docId)!;
   expect(row._id).toBe(docId); // the SAME _id
-  expect(row.text).toBe("# v2 shorter");
   expect(row.title).toBe("draft v2");
-  expect(row.contentHash).toBe("h2");
   expect(row.size).toBe(new TextEncoder().encode("# v2 shorter").length);
+  // `text` and `contentHash` are no longer on the browse projection (15.3-02) — the replaced body
+  // is asserted through the one-doc read the preview pane uses, and the dedup key off the row.
+  expect(
+    await asTenant(t, "tenant_a").query(api.vault.vaultDocText, { vaultDocId: docId }),
+  ).toMatchObject({ text: "# v2 shorter" });
+  expect(await t.run((ctx) => ctx.db.get(docId))).toMatchObject({ contentHash: "h2" });
   expect(row.storageId).toBe(newStorage);
   expect(row.origin).toBe("agent"); // a revise never promotes
 });

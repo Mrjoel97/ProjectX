@@ -23,7 +23,7 @@ import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/ico
 // Phase 15.1 (design §6, plan 07) — THE FLOW, in order:
 //   1. Opening turn. The three intake modalities all reduce to ONE `intakeText`:
 //        • pasted text  → the compose box text, straight through
-//        • uploaded file → vault.vaultUpload → poll listVaultDocs until the extracted `text` lands
+//        • uploaded file → vault.vaultUpload → poll vaultDocText until the extracted `text` lands
 //        • spoken brief → MediaRecorder one-shot → uploaded as audio → the SAME transcription poll
 //   2. `extractProfile(intakeText)` fills the NARRATIVE fields once. It returns no classification —
 //      `profileSchema` has no persona property, so there is nowhere for a guess to go (defect 1a).
@@ -103,6 +103,8 @@ type Draft = {
 // Convex storageId brand, derived from the mutation arg (no dataModel import — repo convention,
 // same as Dropzone.tsx / IntakeControls.tsx).
 type StorageId = FunctionArgs<typeof api.vault.vaultUpload>["storageId"];
+// Same derive-from-the-function idiom (no dataModel import — repo convention).
+type VaultDocId = FunctionArgs<typeof api.vault.vaultDocText>["vaultDocId"];
 
 async function sha256(buf: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -197,7 +199,7 @@ export default function OnboardingPage() {
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gaps, setGaps] = useState<SlotName[] | null>(null);
-  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  const [pendingDocId, setPendingDocId] = useState<VaultDocId | null>(null);
   const [recording, setRecording] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -247,11 +249,12 @@ export default function OnboardingPage() {
   // Poll the uploaded doc (file/voice) until the ingest rail populates its extracted `text`. The row
   // sits at pending_extraction/extracting first (no text yet) — only feed the opening turn once text
   // lands; a `failed` row means the format couldn't be read.
-  const docs = useQuery(api.vault.listVaultDocs, pendingDocId ? {} : "skip");
+  // ONE document, by id — deliberately not `listVaultDocs`, which no longer carries `text` at all
+  // (15.3-02: the grid projection dropped it, because collecting every row's blob to read one
+  // document's text is what blew the 16 MiB read cap).
+  const doc = useQuery(api.vault.vaultDocText, pendingDocId ? { vaultDocId: pendingDocId } : "skip");
   useEffect(() => {
-    if (!pendingDocId || !docs) return;
-    const doc = docs.find((d) => d._id === pendingDocId);
-    if (!doc) return;
+    if (!pendingDocId || !doc) return;
     if (doc.status === "failed") {
       setPendingDocId(null);
       setBusy(false);
@@ -263,7 +266,7 @@ export default function OnboardingPage() {
       setPendingDocId(null);
       void openingTurn(extracted);
     }
-  }, [pendingDocId, docs]);
+  }, [pendingDocId, doc]);
 
   /**
    * Step 2 + the first pass of step 3. `extractProfile` runs ONCE, on the intake text; the same text

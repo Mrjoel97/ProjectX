@@ -24,13 +24,20 @@ import {
   schedulingRailFor,
   VAULT_CATEGORIES,
   VAULT_FILE_CAP_BYTES,
+  VAULT_GRID_PAGE,
+  VAULT_GRID_READ_BUDGET_BYTES,
   VAULT_VIDEO_CAP_BYTES,
   type VaultSource,
 } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { startIngest } from "./vaultIngest";
@@ -266,21 +273,143 @@ export const deleteVaultDoc = tenantMutation({
 // All CHEAP metadata reads off `vaultDocuments` (no vectors); vaultSearch is the ONE surface that
 // reuses the same `rag.search` hybrid primitive as vaultGround ("one surface, two callers").
 
-/** The tenant's vault documents (cheap, no vectors), optionally filtered to a single category. */
+/**
+ * THE one bounded read of a tenant's `vaultDocuments` partition (15.3-02). Both browse surfaces go
+ * through it, so the ceiling is stated once and cannot drift between the grid and the stat tiles.
+ *
+ * WHY IT EXISTS: `listVaultDocs` and `vaultStats` each used to `.collect()` the whole partition.
+ * Convex has NO projection — reading a row reads the whole row, including a `text` blob of up to
+ * VAULT_EXTRACT_CHAR_CAP (400,000) chars — so ~40 max-size rows already exhaust the 16 MiB
+ * per-transaction read cap and the vault page hard-fails. Folder ingest does not cause that defect,
+ * it merely reaches it on day one.
+ *
+ * A row cap alone would NOT fix it (200 × 400 KB is ~80 MB), so this streams the index and stops on
+ * whichever bound hits first — VAULT_GRID_PAGE rows or VAULT_GRID_READ_BUDGET_BYTES of text. The
+ * page therefore always renders; it renders fewer cards when the documents are enormous.
+ *
+ * `capped` is true when the stream stopped early, i.e. there is more behind the window. It is what
+ * lets the stats tiles say "200+" instead of quietly reporting a wrong exact number.
+ *
+ * ponytail: a newest-first WINDOW, not pagination — a tenant with more documents than fit sees the
+ * newest ones. Upgrade path in ascending cost: (1) `.paginate()` with a cursor, which the grid can
+ * adopt with no change to what this returns; (2) move `text` to a side table keyed by docId, the
+ * only change that makes a whole-partition read cheap again — a real migration, deliberately out of
+ * scope for this phase.
+ */
+async function readVaultPage(
+  ctx: QueryCtx,
+  tenantId: string,
+  folderId?: Id<"vaultFolders">,
+): Promise<{ rows: Doc<"vaultDocuments">[]; capped: boolean }> {
+  // A lenient join by construction: cancel DELETES the vaultFolders row, so an unresolvable
+  // folderId simply matches nothing here rather than meaning "missing folder".
+  const stream = folderId
+    ? ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant_folder", (q) =>
+          q.eq("tenantId", tenantId).eq("folderId", folderId),
+        )
+        .order("desc")
+    : ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .order("desc");
+
+  const rows: Doc<"vaultDocuments">[] = [];
+  let textBytes = 0;
+  for await (const row of stream) {
+    if (rows.length >= VAULT_GRID_PAGE || textBytes >= VAULT_GRID_READ_BUDGET_BYTES) {
+      return { rows, capped: true };
+    }
+    rows.push(row);
+    textBytes += row.text?.length ?? 0;
+  }
+  return { rows, capped: false };
+}
+
+/**
+ * The browse projection — every field the vault surface actually consumes, and **NEVER `text`**.
+ * `ownedDocsMeta` below is the shipped refs-only precedent; this is the same rule applied to the
+ * whole grid row. The `text` blob is what made the read unbounded AND over-exposed raw content to
+ * the browser (§4): a card, a status pill and a size never needed it. One document's text is
+ * available on demand through `vaultDocText`.
+ *
+ * `tenantId` and `contentHash` are deliberately absent too — the query is already tenant-scoped by
+ * the wrapper (§2), and the dedup key is not the browser's business.
+ */
+function projectVaultDoc(d: Doc<"vaultDocuments">) {
+  return {
+    _id: d._id,
+    _creationTime: d._creationTime,
+    title: d.title,
+    kind: d.kind,
+    category: d.category,
+    source: d.source,
+    mimeType: d.mimeType,
+    size: d.size,
+    status: d.status,
+    failureReason: d.failureReason,
+    extractionTruncated: d.extractionTruncated,
+    origin: d.origin,
+    createdAt: d.createdAt,
+    storageId: d.storageId,
+    ragEntryId: d.ragEntryId,
+    folderId: d.folderId,
+    docType: d.docType,
+    identityLine: d.identityLine,
+    identityUserSet: d.identityUserSet,
+  };
+}
+
+/**
+ * The tenant's vault documents as PROJECTED metadata (cheap, no vectors, no `text`), bounded by
+ * `readVaultPage`, optionally scoped to one folder and/or filtered to a single category.
+ *
+ * ponytail: the category filter runs over the bounded window, not the partition — there is no
+ * (tenantId, category) index and `schema.ts` is closed for this phase, so a tenant past the window
+ * can see fewer rows on a narrow tab than exist. Upgrade path: a `by_tenant_category` index, or
+ * folder drill-in (which is why `folderId` is an arg here rather than a client-side filter).
+ */
 export const listVaultDocs = tenantQuery({
-  args: { category: v.optional(v.string()) },
-  handler: async (ctx, { category }) => {
-    const docs = await ctx.db
-      .query("vaultDocuments")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
+  args: { category: v.optional(v.string()), folderId: v.optional(v.id("vaultFolders")) },
+  handler: async (ctx, { category, folderId }) => {
+    const { rows } = await readVaultPage(ctx, ctx.tenantId, folderId);
+    const docs = rows.map(projectVaultDoc);
     return category ? docs.filter((d) => d.category === category) : docs;
   },
 });
 
 /**
- * The 4 browse stats, all DERIVED from the cheap metadata query (no vectors): TOTAL FILES,
- * PROCESSED (status === "ready"), STORAGE USED (Σ size), CATEGORIES (the fixed 6).
+ * ONE document's stored text — the on-demand companion to the projected `listVaultDocs`.
+ *
+ * The preview pane, the onboarding intake poll and the dropped-brief banner each need the text of
+ * exactly ONE document. Shipping it on every grid row to serve those three was the whole read-cap
+ * defect. Fail-closed cross-tenant by returning `null` rather than throwing — the `docContext`
+ * rule: a throw would distinguish "not yours" from "no such document" (an ownership oracle).
+ *
+ * `status` rides along because every caller branches on it (a `failed` row has no text coming), and
+ * a second subscription for one adjacent field would be silly.
+ */
+export const vaultDocText = tenantQuery({
+  args: { vaultDocId: v.id("vaultDocuments") },
+  handler: async (
+    ctx,
+    { vaultDocId },
+  ): Promise<{ text: string | null; status: string } | null> => {
+    const doc = await ctx.db.get(vaultDocId);
+    if (!doc || doc.tenantId !== ctx.tenantId) return null;
+    return { text: doc.text ?? null, status: doc.status };
+  },
+});
+
+/**
+ * The 4 browse stats, DERIVED from the same bounded window the grid reads: TOTAL FILES, PROCESSED
+ * (status === "ready"), STORAGE USED (Σ size), CATEGORIES (the fixed 6).
+ *
+ * THE CONTRACT: **the stats tiles must never be the reason the page fails to load.** That is why
+ * they are computed off `readVaultPage` rather than a `.collect()` — and why `capped` exists. An
+ * honest "200+" beats an exact figure that throws; a maintained counter row would be exact, but it
+ * needs a schema field and `schema.ts` is closed for this phase.
  */
 export const vaultStats = tenantQuery({
   args: {},
@@ -291,16 +420,15 @@ export const vaultStats = tenantQuery({
     processed: number;
     storageUsedBytes: number;
     categories: number;
+    capped: boolean;
   }> => {
-    const docs = await ctx.db
-      .query("vaultDocuments")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
+    const { rows, capped } = await readVaultPage(ctx, ctx.tenantId);
     return {
-      totalFiles: docs.length,
-      processed: docs.filter((d) => d.status === "ready").length,
-      storageUsedBytes: docs.reduce((sum, d) => sum + d.size, 0),
+      totalFiles: rows.length,
+      processed: rows.filter((d) => d.status === "ready").length,
+      storageUsedBytes: rows.reduce((sum, d) => sum + d.size, 0),
       categories: VAULT_CATEGORIES.length, // the fixed 6
+      capped, // true ⇒ the numbers above describe the newest window, not the whole vault
     };
   },
 });

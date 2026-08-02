@@ -273,17 +273,60 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     const t = convexTest(schema, modules);
     await seedDoc(t, { category: "brain-dumps" });
     await seedDoc(t, { category: "my-uploads" });
-    await seedDoc(t, { category: "my-uploads" }, "tenant_b");
+    const otherTenantDoc = await seedDoc(t, { category: "my-uploads" }, "tenant_b");
 
     const all = await asTenant(t).query(api.vault.listVaultDocs, {});
     expect(all).toHaveLength(2);
-    expect(all.every((d) => d.tenantId === TENANT)).toBe(true);
+    // The projection carries no `tenantId` (15.3-02), so isolation is asserted the way a caller
+    // actually feels it: the other tenant's row is simply not in the result.
+    expect(all.map((d) => d._id)).not.toContain(otherTenantDoc);
 
     const brainDumps = await asTenant(t).query(api.vault.listVaultDocs, {
       category: "brain-dumps",
     });
     expect(brainDumps).toHaveLength(1);
     expect(brainDumps[0]?.category).toBe("brain-dumps");
+  });
+
+  // ── 15.3-02: the read-cap guarantee, asserted on SHAPE and on the BOUND ────────────────────
+  //
+  // The defect this pins: both browse reads used to `.collect()` the whole tenant partition, and a
+  // vaultDocuments row carries up to VAULT_EXTRACT_CHAR_CAP (400k) chars of `text`. ~40 max-size
+  // rows exhaust the 16 MiB per-transaction read cap, so the vault page hard-failed on the first
+  // folder-sized vault. A SHAPE assertion is the cheap check that actually prevents the blow-up —
+  // a size assertion would only measure this fixture.
+  test("listVaultDocs never returns `text`, and the read is bounded by BYTES not just rows", async () => {
+    const t = convexTest(schema, modules);
+    // 50 × 200k chars = 10M chars, comfortably past VAULT_GRID_READ_BUDGET_BYTES (8 MiB) but well
+    // under VAULT_GRID_PAGE (200) rows — so this proves the BYTE bound is what bites. A row-count
+    // bound alone would have returned all 50 rows and ~20 MB, i.e. the original defect.
+    const big = "x".repeat(200_000);
+    for (let i = 0; i < 50; i++) await seedDoc(t, { title: `big-${i}`, text: big });
+
+    const docs = await asTenant(t).query(api.vault.listVaultDocs, {});
+    expect(docs.length).toBeGreaterThan(0);
+    expect(docs.length).toBeLessThan(50); // the stream stopped early — bounded, not collected
+    for (const d of docs) expect(d).not.toHaveProperty("text");
+    expect(JSON.stringify(docs)).not.toContain("xxxxx"); // no blob rode along under another key
+
+    // The stats tiles read the SAME window and say so rather than reporting a wrong exact number.
+    const stats = await asTenant(t).query(api.vault.vaultStats, {});
+    expect(stats.capped).toBe(true);
+    expect(stats.totalFiles).toBe(docs.length);
+  });
+
+  test("vaultDocText returns ONE doc's text to its owner and null cross-tenant", async () => {
+    const t = convexTest(schema, modules);
+    const mine = await seedDoc(t, { text: "my private words" });
+    const theirs = await seedDoc(t, { text: "their private words" }, "tenant_b");
+
+    expect(await asTenant(t).query(api.vault.vaultDocText, { vaultDocId: mine })).toEqual({
+      text: "my private words",
+      status: "ready",
+    });
+    // Fail-closed as null, never a throw — a throw would distinguish "not yours" from "no such
+    // document" (an ownership oracle), the `docContext` rule.
+    expect(await asTenant(t).query(api.vault.vaultDocText, { vaultDocId: theirs })).toBeNull();
   });
 
   test("vaultStats derives totalFiles / processed / storageUsedBytes / categories=6 from the cheap query", async () => {
@@ -298,6 +341,7 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     expect(stats.processed).toBe(2); // status === "ready"
     expect(stats.storageUsedBytes).toBe(600);
     expect(stats.categories).toBe(6);
+    expect(stats.capped).toBe(false); // 3 small rows fit the window — the numbers are exact
   });
 
   test("vaultDownloadUrl returns a signed URL to the owner and null cross-tenant", async () => {

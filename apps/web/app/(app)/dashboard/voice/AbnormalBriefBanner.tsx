@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useConvex, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -15,7 +15,10 @@ import { planSeedFromBrief } from "@pikar/voice";
 //
 // "Not yet reviewed" is a client-side seen-set (localStorage): PostCall marks a clean-end brief seen
 // the moment it stores (it was JUST reviewed), so only the auto-stored dropped briefs remain unseen
-// and surface here. ponytail: reuse the existing listVaultDocs query for the brief; no new backend.
+// and surface here. ponytail: reuse the existing listVaultDocs query to FIND the brief; no new
+// backend. Its TEXT comes from vault.vaultDocText, one document at a time — listVaultDocs stopped
+// carrying `text` in 15.3-02 (returning every row's blob to find one brief is what blew the read
+// cap), and the plan seed needs the real words, so a silent `?? ""` here would ship an empty plan.
 
 const SEEN_KEY = "pikar:voiceBriefsSeen";
 
@@ -39,11 +42,10 @@ export function markVoiceBriefSeen(id: string): void {
   }
 }
 
-type VoiceBrief = { _id: string; text?: string; createdAt: number };
-
 export function AbnormalBriefBanner() {
   const docs = useQuery(api.vault.listVaultDocs, {});
   const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
+  const convex = useConvex();
   const router = useRouter();
 
   // Load the seen-set AFTER mount (SSR has no localStorage) — until then render nothing so a
@@ -55,9 +57,11 @@ export function AbnormalBriefBanner() {
   if (seen === null || docs === undefined) return null;
 
   // The newest voice brief the user has not yet seen — the dropped-session recovery target.
-  const brief = (docs as Array<VoiceBrief & { source: string; kind: string }>)
+  // NO CAST: the row type comes from the query itself, so a field this banner reads that the query
+  // stops returning is a typecheck failure rather than a silent `undefined` at runtime.
+  const brief = docs
     .filter((d) => d.source === "voice" && d.kind === "brief" && !seen.has(d._id))
-    .sort((a, b) => b.createdAt - a.createdAt)[0] as VoiceBrief | undefined;
+    .sort((a, b) => b.createdAt - a.createdAt)[0];
   if (!brief) return null;
 
   const dismiss = () => {
@@ -69,7 +73,15 @@ export function AbnormalBriefBanner() {
     if (busy) return;
     setBusy(true);
     try {
-      const { threadId } = await sendCockpitMessage({ text: planSeedFromBrief(brief.text ?? "") });
+      // On demand, at click, for THIS brief only — the PreviewModal `convex.query` idiom. A brief
+      // whose text has not landed yet must not be seeded as an empty plan: leave the banner up.
+      const row = await convex.query(api.vault.vaultDocText, { vaultDocId: brief._id });
+      const text = row?.text?.trim();
+      if (!text) {
+        setBusy(false);
+        return;
+      }
+      const { threadId } = await sendCockpitMessage({ text: planSeedFromBrief(text) });
       dismiss();
       router.push(`/dashboard/workspace?thread=${encodeURIComponent(threadId)}`);
     } catch {

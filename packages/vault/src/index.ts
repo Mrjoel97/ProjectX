@@ -6,6 +6,8 @@ export {
   GRAPH_EXTRACT_CHAR_CAP,
   GRAPH_HOP_CAP,
   VAULT_FILE_CAP_BYTES,
+  VAULT_GRID_PAGE,
+  VAULT_GRID_READ_BUDGET_BYTES,
   VAULT_VIDEO_CAP_BYTES,
 } from "./constants";
 export type { ExtractionKind, SchedulingRail } from "./extractKind";

@@ -525,11 +525,25 @@ describe("SC#3 — stored findings are tenant-scoped", () => {
     const asA = await t.withIdentity({ subject: TENANT }).query(api.vault.listVaultDocs, {});
     const asB = await t.withIdentity({ subject: TENANT_B }).query(api.vault.listVaultDocs, {});
 
-    expect(asA.map((d) => d.tenantId)).toEqual([TENANT]);
+    // The browse projection carries neither `tenantId` nor `text` (15.3-02), so isolation is read
+    // off the ids, and the content half goes through the one-doc query the preview pane uses —
+    // which is now ALSO a public surface and therefore also has to be tenant-scoped.
+    expect(asA).toHaveLength(1);
     // BOTH halves: A is invisible to B, AND B can see its OWN — so this cannot pass because the
     // read path returned nothing for everyone.
-    expect(asB.map((d) => d.tenantId)).toEqual([TENANT_B]);
-    expect(asB[0]?.text).toContain("Tenant B's own findings.");
-    expect(JSON.stringify(asB)).not.toContain(FINDINGS);
+    expect(asB).toHaveLength(1);
+    const aDocId = asA[0]?._id;
+    const bDocId = asB[0]?._id;
+    expect(bDocId).not.toBe(aDocId);
+
+    const bReadsOwn = await t
+      .withIdentity({ subject: TENANT_B })
+      .query(api.vault.vaultDocText, { vaultDocId: bDocId! });
+    expect(bReadsOwn?.text).toContain("Tenant B's own findings.");
+    const bReadsA = await t
+      .withIdentity({ subject: TENANT_B })
+      .query(api.vault.vaultDocText, { vaultDocId: aDocId! });
+    expect(bReadsA).toBeNull();
+    expect(JSON.stringify([asB, bReadsOwn, bReadsA])).not.toContain(FINDINGS);
   });
 });

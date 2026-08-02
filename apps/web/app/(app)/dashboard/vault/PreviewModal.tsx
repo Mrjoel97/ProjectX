@@ -42,6 +42,11 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
   // Only subscribe to a signed URL when we actually render media; text docs never fetch one.
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
+  // The stored text of THIS one document. It is deliberately NOT on the grid row any more:
+  // listVaultDocs returns a projection with no `text`, because shipping every row's blob to the
+  // browser to serve this one pane is what blew the 16 MiB read cap (15.3-02).
+  const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
+  const text = docText?.text ?? null;
 
   // Esc closes; lock the background scroll while open.
   useEffect(() => {
@@ -206,7 +211,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                 borderRadius: "0.5rem",
               }}
             />
-          ) : doc.text ? (
+          ) : text ? (
             <>
               <pre
                 style={{
@@ -219,11 +224,11 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   color: "var(--ink)",
                 }}
               >
-                {expanded || doc.text.length <= SNIPPET_CHARS
-                  ? doc.text
-                  : `${doc.text.slice(0, SNIPPET_CHARS)}…`}
+                {expanded || text.length <= SNIPPET_CHARS
+                  ? text
+                  : `${text.slice(0, SNIPPET_CHARS)}…`}
               </pre>
-              {doc.text.length > SNIPPET_CHARS && (
+              {text.length > SNIPPET_CHARS && (
                 <button
                   type="button"
                   onClick={() => setExpanded((v) => !v)}
@@ -241,17 +246,21 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                 >
                   {expanded
                     ? "Show less"
-                    : `Show full text (${Math.ceil(doc.text.length / 1000)}k chars)`}
+                    : `Show full text (${Math.ceil(text.length / 1000)}k chars)`}
                 </button>
               )}
             </>
           ) : (
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>
-              {doc.status === "pending_extraction"
-                ? "Stored — text not yet extracted."
-                : doc.status === "extracting"
-                  ? "Extracting text from this file…"
-                  : "No inline preview for this file. Use Download."}
+              {/* `undefined` is the text subscription still settling — say so rather than showing
+                  "no inline preview" for a beat and then swapping it for a wall of text. */}
+              {docText === undefined
+                ? "Loading…"
+                : doc.status === "pending_extraction"
+                  ? "Stored — text not yet extracted."
+                  : doc.status === "extracting"
+                    ? "Extracting text from this file…"
+                    : "No inline preview for this file. Use Download."}
             </p>
           )}
         </div>

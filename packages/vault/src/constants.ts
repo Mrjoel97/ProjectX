@@ -12,6 +12,29 @@ export const VAULT_VIDEO_CAP_BYTES = 25 * 1000 * 1000;
 export const GRAPH_HOP_CAP = 2;
 
 /**
+ * How many `vaultDocuments` rows ONE vault read may touch. **A READ-CAP BOUND, NOT A UX
+ * PREFERENCE** — do not raise it because a grid "should show more".
+ *
+ * Convex has no projection: reading a row reads the whole row, and a `vaultDocuments` row carries
+ * up to VAULT_EXTRACT_CHAR_CAP (400,000) chars of `text`. An unbounded `.collect()` here therefore
+ * walks into the 16 MiB per-transaction read cap at ~40 max-size rows — which is exactly how the
+ * vault page hard-failed once a tenant's vault grew past a handful of large documents.
+ */
+export const VAULT_GRID_PAGE = 200;
+
+/**
+ * The SECOND half of that bound, and the half that actually makes the guarantee true: a row cap
+ * alone does not bound BYTES. 200 × 400 KB is ~80 MB, still 5× over the 16 MiB read cap, so a
+ * page-of-200 rule would keep failing on exactly the folder this phase exists to ingest.
+ *
+ * A vault read therefore stops on WHICHEVER bound hits first — VAULT_GRID_PAGE rows or this many
+ * bytes of `text`. 8 MiB is half the transaction cap, leaving room for the one row that trips it
+ * plus every other read in the same transaction. The page always renders; with enormous documents
+ * it renders fewer cards and says so (`capped`).
+ */
+export const VAULT_GRID_READ_BUDGET_BYTES = 8 * 1024 * 1024;
+
+/**
  * How long a doc may stay non-terminal (`pending_extraction`/`extracting`) after its attempt was
  * scheduled before a watchdog calls it stalled. 15 min is comfortably above the worst legitimate
  * run — the 480 s per-call ceiling plus Convex's 10-minute node-action limit bound any single
