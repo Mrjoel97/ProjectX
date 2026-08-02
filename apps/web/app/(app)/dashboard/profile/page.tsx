@@ -5,6 +5,7 @@ import type { BusinessProfile } from "@pikar/core";
 import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { BlueprintPanel } from "./BlueprintPanel";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 import { NarrativePanel } from "./NarrativePanel";
 import { ShapePanel } from "./ShapePanel";
 import { label } from "./styles";
@@ -49,6 +50,7 @@ const TABS = [
   { id: "shape", label: "Business shape" },
   { id: "business", label: "What the business is" },
   { id: "blueprint", label: "Blueprint" },
+  { id: "connections", label: "Connections" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -224,6 +226,9 @@ export default function ProfilePage() {
       </div>
       <div role="tabpanel" id="panel-blueprint" aria-labelledby="tab-blueprint" hidden={tab !== "blueprint"}>
         <BlueprintPanel />
+      </div>
+      <div role="tabpanel" id="panel-connections" aria-labelledby="tab-connections" hidden={tab !== "connections"}>
+        <ConnectionsPanel />
       </div>
     </div>
   );

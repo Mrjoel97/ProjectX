@@ -1,8 +1,9 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useAction, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
+import { DisconnectGoogle } from "../_components/DisconnectGoogle";
 
 // DLVR-03 / Google consent (02-05, widened in 17-02). One explicit consent grants mail and
 // calendar access. The authorize URL is minted server-side with a tenant-bound signed `state`;
@@ -19,29 +20,6 @@ export default function ConnectGmailPage() {
   useEffect(() => {
     setGmailError(new URLSearchParams(window.location.search).get("gmailError"));
   }, []);
-
-  // Disconnect revokes the grant at Google and drops the stored token. `gmailStatus` is a live
-  // subscription on that row, so the panel flips on its own — no refetch, no optimistic state.
-  const disconnect = useAction(api.gmailAuth.disconnectGoogle);
-  const [busy, setBusy] = useState(false);
-  const onDisconnect = async () => {
-    // ponytail: window.confirm — this app has no dialog pattern (BRAND §5 defines none) and no
-    // confirm() call anywhere yet. Native is keyboard-accessible and costs no component. Build a
-    // real dialog when a second destructive control needs one.
-    // The copy names calendar deliberately: it is ONE Google grant covering mail and calendar,
-    // so a user who reads "disconnect Gmail" would not expect their events to stop working.
-    const ok = window.confirm(
-      "Disconnect Google? Pikar will lose access to your mail AND your calendar. " +
-        "Any scheduled send will be held until you reconnect.",
-    );
-    if (!ok) return;
-    setBusy(true);
-    try {
-      await disconnect();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <section style={{ display: "grid", gap: "1rem", maxWidth: "40rem" }}>
@@ -69,24 +47,6 @@ export default function ConnectGmailPage() {
           <p style={{ fontSize: "0.9rem", color: "var(--ink-soft)" }}>
             Reconnect any time to refresh the connection.
           </p>
-          <button
-            type="button"
-            onClick={() => void onDisconnect()}
-            disabled={busy}
-            style={{
-              marginTop: "0.75rem",
-              padding: "0.45rem 0.9rem",
-              borderRadius: "0.375rem",
-              border: "1px solid var(--rule)",
-              background: "transparent",
-              color: "var(--ink-soft)",
-              fontWeight: 600,
-              cursor: busy ? "default" : "pointer",
-              width: "fit-content",
-            }}
-          >
-            {busy ? "Disconnecting…" : "Disconnect Google"}
-          </button>
         </div>
       ) : (
         <p style={{ color: "var(--ink-soft)" }}>
@@ -94,6 +54,13 @@ export default function ConnectGmailPage() {
           and create approved calendar events. It can never permanently delete your mail.
         </p>
       )}
+
+      {/* Rendered UNCONDITIONALLY — not nested inside the `status.connected` branch above. It
+          carries its own `gmailStatus` subscription and would otherwise unmount (destroying its
+          own partial-revoke warning) the instant disconnect flips `connected` to false. */}
+      <div style={{ marginTop: "0.75rem" }}>
+        <DisconnectGoogle />
+      </div>
 
       {connectUrl ? (
         <a

@@ -19,7 +19,7 @@
 - **`ponytail:` comment on every hardcoded blocker string**, naming what clears it.
 - **CLAUDE.md §9:** a playbook covering a touched path is updated in the SAME commit, with its `Last verified` line bumped. Path ownership (from `docs/playbooks/watch.json`): `dashboard/profile/` → `onboarding.md`; `connect-gmail/` → `cockpit.md`; `_components/DisconnectGoogle.tsx` → **currently unwatched, Task 1 registers it**.
 - **NEVER `git add -A` or `git commit -a`.** Another lane has uncommitted work in this shared working tree (including a red `packages/core/src/specialists.ts`). Stage explicit paths only, exactly as each Commit step lists them.
-- **`packages/core` is currently RED** (5 failures in `specialists.test.ts`, foreign lane). When a step says "all tests pass", it means *your new test file passes and you introduced no new failures* — compare against that known-red baseline, do not try to fix it.
+- **`packages/core` baseline is GREEN: 440 tests, 21 files, 0 failures**, verified in this worktree at commit `5f54f88`. "All tests pass" means exactly that — any failure you see is yours. (The 5 `specialists.test.ts` failures visible in the main checkout come from a different lane's uncommitted work and are absent here.)
 
 ---
 

@@ -101,9 +101,20 @@ function Shell({ children }: { children: ReactNode }) {
     });
 
   // Exact match for /dashboard (it prefixes everything); prefix match elsewhere so
-  // e.g. /review/[id]-style child routes keep their parent item lit.
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+  // e.g. /review/[id]-style child routes keep their parent item lit. A nav href may carry a
+  // `?tab=` deep link, but `usePathname()` never does — so compare the path portion only,
+  // otherwise such an item can never light up.
+  // ponytail: "Business Profile" and "Connections" both strip to /dashboard/profile, so both
+  // light up at once (known, PARKED — 2026-08-02 whole-branch review MED 3). Fixing it cleanly
+  // needs either useSearchParams or a layout-level `?tab=` mirror that goes stale the moment the
+  // user switches tabs in-page without a navigation; cosmetic only, not worth either cost yet.
+  // Upgrade path: once useSearchParams (or an equivalent live signal) is adopted elsewhere, drive
+  // this off the actual selected tab instead of the path prefix.
+  const isActive = (href: string) => {
+    // String.split always returns at least one element, so this index is never undefined.
+    const path = href.split("?")[0]!;
+    return path === "/dashboard" ? pathname === path : pathname.startsWith(path);
+  };
 
   return (
     <div className="app-frame">
@@ -147,14 +158,19 @@ function Shell({ children }: { children: ReactNode }) {
             <UserIcon />
             <span className="rail-label">Business Profile</span>
           </Link>
-          <Link
-            href="/connect-gmail"
-            className={`rail-item${isActive("/connect-gmail") ? " is-active" : ""}`}
-            title={collapsed ? "Connect Gmail" : undefined}
+          {/* Plain <a>, not <Link>: dashboard/profile/page.tsx reads `?tab=` ONCE on mount from
+              `window.location.search`. App Router client navigation within the same route segment
+              does not remount the page, so a `<Link>` here would change the URL while clicked from
+              /dashboard/profile and leave the panel showing whatever tab was already selected. A
+              full document navigation forces a remount, which re-runs that mount-time read. */}
+          <a
+            href="/dashboard/profile?tab=connections"
+            className={`rail-item${isActive("/dashboard/profile?tab=connections") ? " is-active" : ""}`}
+            title={collapsed ? "Connections" : undefined}
           >
             <MailIcon />
-            <span className="rail-label">Connect Gmail</span>
-          </Link>
+            <span className="rail-label">Connections</span>
+          </a>
           <button
             type="button"
             className="rail-item"
