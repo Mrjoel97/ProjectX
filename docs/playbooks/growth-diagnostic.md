@@ -1,6 +1,13 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-08-02 (20-08, **by the owning lane, and the RED recorded below is CLOSED**
+> Last verified: 2026-08-03 (20-17 — **the no-paid-reach scan grew two entries and NOTHING else
+> here changed.** `PAID_ENTRY_POINTS` in `specialists.test.ts` now also names `submitCaptions` and
+> `burnCaptions`, the caption stage's two money entry points, so a specialist grant that named
+> either would fail the same way it already would for `submitBatch`/`renderReel`. No specialist,
+> no route, no grant and no diagnostic content changed — the list is the assertion's input, not
+> this subsystem's behaviour.)
+>
+> Prior: 2026-08-02 (20-08, **by the owning lane, and the RED recorded below is CLOSED**
 > — **`media` is a registered dispatch route and the diagnostic is untouched.**)
 >
 > `SPECIALIST_ROUTES` is now five literals; `SPECIALISTS.media` resolves to

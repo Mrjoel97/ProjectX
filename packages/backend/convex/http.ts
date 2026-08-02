@@ -200,6 +200,40 @@ const ASSET_PATH: Record<string, (p: Record<string, unknown>) => unknown> = {
   tts: (p) => (p.audio as Record<string, unknown> | undefined)?.url,
 };
 
+/**
+ * Kinds whose asset arrives INLINE in the callback rather than as a URL to fetch (plan 20-17).
+ *
+ * `scribe-v2` returns `{ words: [{ text, start, end, type, speaker_id }] }` in the payload itself —
+ * there is no file and no URL, so the whole fetch-and-host-check path below simply does not apply.
+ * Storing it is still the right move: the transcript is the burn stage's input, and a payload that
+ * lived only in this request would have to be re-bought to be re-burned.
+ *
+ * Re-serialised rather than stored verbatim: the bytes that reach storage are then a value WE
+ * produced from a shape we checked, not a provider's response body echoed onto disk.
+ */
+const INLINE_ASSET: Record<
+  string,
+  // `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`: TS 5.9 made the view generic over its
+  // buffer, and the bare form is the SharedArrayBuffer-permitting supertype that `Blob` rejects.
+  (p: Record<string, unknown>) => { bytes: Uint8Array<ArrayBuffer>; mimeType: string } | null
+> = {
+  stt: (p) => {
+    if (!Array.isArray(p.words)) return null;
+    const words = p.words.flatMap((w) => {
+      const o = w as Record<string, unknown>;
+      if (typeof o.text !== "string") return [];
+      if (typeof o.start !== "number" || typeof o.end !== "number") return [];
+      // `type` absent means a plain word: the provider omits it on some rows and captions must not
+      // silently lose those. Anything else is carried through and dropped by the .ass writer.
+      return [{ text: o.text, start: o.start, end: o.end, type: String(o.type ?? "word") }];
+    });
+    return {
+      bytes: new TextEncoder().encode(JSON.stringify({ words })),
+      mimeType: "application/json",
+    };
+  },
+};
+
 /** The provider's checker, or `null` when it said nothing at all. `null` is NOT `false`. */
 function moderationOf(p: Record<string, unknown>): boolean | null {
   const flags = p.has_nsfw_concepts;
@@ -272,32 +306,45 @@ http.route({
     if (body.status !== "OK") return await failLand(errorCode(body));
 
     const payload = (body.payload ?? {}) as Record<string, unknown>;
+    const inline = INLINE_ASSET[job.kind];
     const extract = ASSET_PATH[job.kind];
-    if (!extract) return await failLand("unhandled_kind");
-    const rawUrl = extract(payload);
-    if (typeof rawUrl !== "string") return await failLand("no_asset_url");
+    if (!inline && !extract) return await failLand("unhandled_kind");
 
-    let assetUrl: URL;
-    try {
-      assetUrl = new URL(rawUrl);
-    } catch {
-      return await failLand("bad_asset_url");
+    let bytes: Uint8Array<ArrayBuffer>;
+    let mimeType: string;
+    if (inline) {
+      // No fetch, no host check, no URL — there is nothing to SSRF into. The payload came through
+      // the HMAC-guarded route and is turned into bytes right here.
+      const asset = inline(payload);
+      if (!asset) return await failLand("no_asset_payload");
+      if (asset.bytes.byteLength === 0) return await failLand("asset_empty");
+      bytes = asset.bytes;
+      mimeType = asset.mimeType;
+    } else {
+      const rawUrl = extract?.(payload);
+      if (typeof rawUrl !== "string") return await failLand("no_asset_url");
+
+      let assetUrl: URL;
+      try {
+        assetUrl = new URL(rawUrl);
+      } catch {
+        return await failLand("bad_asset_url");
+      }
+      if (
+        assetUrl.protocol !== "https:" ||
+        !FAL_ASSET_HOSTS.some((h) => assetUrl.hostname === h || assetUrl.hostname.endsWith(`.${h}`))
+      ) {
+        return await failLand("asset_host_refused");
+      }
+
+      const assetRes = await fetch(assetUrl).catch(() => null);
+      if (!assetRes?.ok) return await failLand("asset_fetch_failed");
+      const buf = await assetRes.arrayBuffer();
+      if (buf.byteLength === 0) return await failLand("asset_empty");
+      if (buf.byteLength > MAX_ASSET_BYTES) return await failLand("asset_too_large");
+      bytes = new Uint8Array(buf);
+      mimeType = assetRes.headers.get("content-type") ?? "application/octet-stream";
     }
-    if (
-      assetUrl.protocol !== "https:" ||
-      !FAL_ASSET_HOSTS.some((h) => assetUrl.hostname === h || assetUrl.hostname.endsWith(`.${h}`))
-    ) {
-      return await failLand("asset_host_refused");
-    }
-
-    const assetRes = await fetch(assetUrl).catch(() => null);
-    if (!assetRes?.ok) return await failLand("asset_fetch_failed");
-    const buf = await assetRes.arrayBuffer();
-    if (buf.byteLength === 0) return await failLand("asset_empty");
-    if (buf.byteLength > MAX_ASSET_BYTES) return await failLand("asset_too_large");
-
-    const bytes = new Uint8Array(buf);
-    const mimeType = assetRes.headers.get("content-type") ?? "application/octet-stream";
     const assetStorageId = await ctx.storage.store(new Blob([bytes], { type: mimeType }));
 
     // THE URL DIES HERE. It is not passed to `landResult`, not logged, not stored — the row carries

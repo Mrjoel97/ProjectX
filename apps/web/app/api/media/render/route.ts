@@ -19,6 +19,7 @@
  */
 
 import { assembleScriptBody } from "@pikar/backend/render/assembleScript";
+import { burnCapsScriptBody } from "@pikar/backend/render/burnCapsScript";
 import { handleRenderRequest, type SandboxLike } from "@pikar/core/render";
 import { Sandbox } from "@vercel/sandbox";
 
@@ -43,6 +44,9 @@ export async function POST(req: Request): Promise<Response> {
     snapshotId: process.env.MEDIA_SANDBOX_SNAPSHOT_ID,
     deploymentUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
     assembleScript: assembleScriptBody,
+    // The second mode's script (plan 20-17). Passed the same way and for the same reason: core
+    // must not reach into `packages/backend`, and a test can prove which bytes reached the VM.
+    burnScript: burnCapsScriptBody,
     fetch: globalThis.fetch,
     createSandbox: async (options): Promise<SandboxLike> => {
       // NO token/teamId/projectId argument, and there must never be one. `options` is

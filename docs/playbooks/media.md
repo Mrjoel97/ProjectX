@@ -10,7 +10,19 @@
 > two remaining §-parsers, plus a section-terminator fix. Pure `@pikar/core`, zero new deps. See
 > `## The §-parsers` below. The dispatch route itself is documented in `cockpit.md`.)
 >
-> Last verified: 2026-08-02 (20-09 + 20-16 + the unrenderable-deck guard - **the canvas plane, the
+> Last verified: 2026-08-03 (20-17 — **BURNED CAPTIONS, the phase's designated cut line, SHIPPED**.
+> The reel now works on an autoplay-muted feed, and it cost no Python, no Whisper weights, no font
+> fetcher and NOTHING added to the sandbox image. See `## Burned captions (20-17)` below for the
+> whole stage. Three things a reader must not miss: (a) **the audio goes to fal as a `data:` URI,
+> a deliberate DEVIATION from the plan's file-upload instruction** — the binding rule was "no
+> Convex signed URL reaches a third party" and a data URI satisfies it absolutely, while the
+> upload's multi-step protocol could not be confirmed vendor-direct; (b) **20-16's retention rule
+> is NARROWED** — the clean takes are the transcript's source, so they now survive until the FINAL
+> artifact exists, mutation-checked in both directions; (c) **narration now crosses into the VM**,
+> as the escaped `.ass` track, which is what burning captions means. Backend 1107/1107, core
+> 572/572, web build green. **$0 — no sandbox and no STT minute has ever been bought.**)
+>
+> Prior: 2026-08-02 (20-09 + 20-16 + the unrenderable-deck guard - **the canvas plane, the
 > render trigger and D12(b) retention.** ONE bump covering waves 9 and 10; this lane executed both.
 > Five tenant-guarded reads and six writes with the BETA-05 isolation assertion shipped alongside;
 > the last landing starts the render with NO chain and NO poller (the pending->rendering transition
@@ -1073,6 +1085,199 @@ scheduled sweep of `mediaJobs` older than N days — which is a cron, and this d
 ONE `deadLetters` row, payload `{ batchId, planId, reasonCode }` and nothing else — no ffmpeg output,
 no filename, no narration, no URL. **A failed render does NOT retry:** at 480p a structural failure
 repeats, and the action-retrier would buy N sandboxes to learn the same thing N times.
+
+## Burned captions (20-17) — the phase's designated cut line, and it SHIPPED
+
+20-17 was written as the cut line: *"cut it the moment the phase is running long, and the phase
+still ships D8's headline deliverable."* It was not cut. The reel now works on an autoplay-muted
+feed, which for social and marketing assets is the difference between an asset and a file.
+
+**What it did NOT add, which was the whole design goal:** no Python runtime, no Whisper weights
+(~1.5-3 GB), no font fetcher, and **nothing at all to the sandbox image**. The transcription is a
+fal line like every other media call; the timing math is pure TS; the burn is one ffmpeg pass over
+the image 20-15 already baked.
+
+### The STT model, and why a cheaper one is REFUSED
+
+| | |
+|---|---|
+| Model | `fal-ai/elevenlabs/speech-to-text/scribe-v2` (`MEDIA_DEFAULT_STT`) |
+| Billing unit | **$0.008 per INPUT audio minute** — reservable before the job runs |
+| Reserved by | 20-04, as ONE `stt` line at `blockIndex: -1`, priced `blocks × clipSeconds / 60` |
+| `keyterms` | **Never sent.** +30% on the per-minute rate, and a priced dimension the table does not model |
+
+**`fal-ai/whisper` is REFUSED and this is not a cost decision.** It bills per COMPUTE SECOND, which
+cannot be reserved before it runs — the same structural defect as a per-generated-second TTS model.
+It happens to be cheaper in practice, and *"cheap in practice"* is exactly the reasoning ADR-011
+exists to forbid. `fal-ai/speech-to-text` (NVIDIA Canary) returns plain text with **no timings** and
+is useless for captions.
+
+### Captions are timed on the CLEAN takes — never the mixed bed
+
+The upstream in-assembler Whisper path was removed on **2026-07-29** for transcribing MIXED audio
+(music and SFX under the speech) and swallowing words. D8 forbids re-merging assembly and captions,
+and `assemble_final.sh` refuses `--subs` in as many words. So the transcript is taken from the
+`tts` assets, and the burn is a second pass over the finished file.
+
+**THE REBASE, and it is the whole correctness story:**
+
+```
+absolute_t = speech_abs_s + (word_t_in_clean_take - lead_silence_s)
+```
+
+`windowStartS + t` is the wrong answer that looks right for block 1 and drifts for every block
+after it. `packages/core/src/captions.ts` owns this, consumes the VALIDATED `AssemblyReport` (never
+a raw sidecar), and its first test asserts the identity directly: a word at the take's very first
+speech instant lands EXACTLY at `speechAbsS`.
+
+A rebased time outside its own block's window is **CLAMPED and flagged**, never allowed through — a
+bleeding word is a caption rendered over the next block's scene, which reads as a caption for the
+wrong shot rather than as a timing bug.
+
+### ONE request, which forced a real wav concat
+
+The reservation creates ONE `stt` line for the whole reel, so the N takes are concatenated into one
+wav before submission. **This is NOT a byte concat**, and the delta's wording ("a byte-level concat
+of same-format WAVs") is wrong in a way that fails silently: gluing two wav files together leaves a
+header claiming the FIRST file's length, a decoder stops there, and you get a plausible-looking
+transcript of take 1 only. `concatWavTakes` rewrites the header canonically and returns
+`offsetsS` — the key the rebase partitions words by — which is persisted as `plans.captionOffsetsS`
+because it cannot be recomputed later without re-fetching every take.
+
+Mismatched formats are REFUSED (`format_mismatch`) rather than concatenated: a 24 kHz take glued
+onto a 48 kHz one plays at the wrong speed and produces plausible words at wrong times.
+
+### ⚠ DEVIATION: the audio goes as a `data:` URI, not through fal's file-upload endpoint
+
+The plan specified uploading the bytes to fal's storage and submitting the returned fal-hosted URL.
+**The binding requirement behind that instruction is *"a Convex signed storage URL is NEVER handed
+to a third party"*** — `plans.attachmentUrls`' header calls such a URL a bearer capability — and a
+data URI satisfies it completely, because no URL of ours exists to hand over.
+
+Why the deviation: fal's upload endpoint is a multi-step protocol (initiate → PUT → derive) whose
+exact shape **could not be confirmed vendor-direct** in the authoring session; the delta records
+only that it "returns a fal-hosted URL". Guessing a protocol at a money boundary fails at the first
+live call and buys nothing over the documented data-URI form, which is ONE request on a path
+already built. It also **removes a ceiling the plan expected to have to record**: with no upload
+there is no copy of tenant audio sitting in fal's storage under a retention policy we do not
+control. The bytes still reach fal — that is what transcription is — but only for the request.
+
+- Bounded by `MAX_STT_AUDIO_BYTES` (6 MB pre-base64; a 6×10s reel at the pinned 24 kHz mono 16-bit
+  is ~2.9 MB). Over that is a governed stop with a code, never a 413 discovered after the
+  reservation was spent.
+- **`llmRedaction.test.ts` scans `submitCaptions` for `storage.getUrl` and pins every `audio_url`
+  construction site.** This is a one-line "fix" away from being false and the symptom would be
+  invisible — the transcript comes back correct either way.
+- Upgrade path if a reel ever outgrows the cap: fal's file-upload endpoint, confirmed against its
+  OpenAPI spec FIRST. The seam is `audioDataUri`.
+
+### The transcript lands INLINE — there is no URL to fetch
+
+`scribe-v2` returns `{ words: [...] }` in the callback payload itself. `http.ts` gained
+`INLINE_ASSET` beside `ASSET_PATH`: the whole fetch-and-host-check path is skipped, and the words
+are **re-serialised** before storage rather than the provider's body being echoed onto disk. A
+payload with no `words` array is `no_asset_payload` — and `media.test.ts` proves the plausible fal
+URL sitting in that same body is NOT followed.
+
+`stt` is an `EXACT_SPEND_KIND`: we generated the audio and therefore already measured it, so the
+landing moves no window.
+
+### Two triggers, two once-only guards
+
+| | Fires when | Guard |
+|---|---|---|
+| `maybeStartCaptions` | the LAST voice take lands | `captionStatus` unset → `"transcribing"` |
+| `maybeBurnCaptions` | the transcript lands **or** the render terminal runs | `"transcribing"` → `"burning"` |
+
+The transcript submit runs **in PARALLEL with the render** — it needs the takes and the sidecar's
+anchors, never `final.mp4`. The burn needs both, so it is called from both terminals and whichever
+arrives second wins the transition. A deck with no `stt` line never gains a `captionStatus` at all.
+
+A failed voice take records `captionReason: "incomplete_takes"` rather than leaving the `stt` row
+queued forever behind audio that will never exist.
+
+### The burn: one pass, on a libass build that must not silently disappear
+
+`render/burn_caps.sh` (mirrored to `render/burnCapsScript.ts`, byte-identity drift test, **no
+`skills.ts` seed entry** — delta pitfall 17 applies identically to the assembler's mirror).
+
+**IT CONSTRAINS THE IMAGE.** `subtitles=` needs an ffmpeg built `--enable-libass`. 20-15's bake
+script installs the BtbN **`ffmpeg-master-latest-linux64-gpl.tar.xz`** tarball plus
+`dejavu-sans-fonts`; both are load-bearing for this stage. The script CHECKS for the filter up
+front and refuses, because `subtitles=` on a build without libass is an unknown-filter error on
+some builds and a silent no-op on others.
+
+- `-c:a copy` — the level law (linear loudnorm at −16 LUFS) was settled two passes ago and is not
+  re-opened here.
+- The output duration is asserted to ±1s of the input. A burn that re-times the video has
+  desynchronised the voice from the picture — the one failure a still frame would not show.
+- **No font is fetched.** `deny-all` egress makes it impossible, which is the point. A font named
+  in the `.ass` and absent from the image does NOT fail — libass substitutes silently — so the
+  writer and the bake script name the same family (DejaVu Sans) and a test pins it.
+- The `.ass` writer ESCAPES `{`, `}` and `\`. `.ass` treats `{...}` as an inline style override and
+  the caption text is model-authored narration: an unescaped brace is markup injection into a
+  renderer. A hostile fixture pins it.
+
+### The route's second MODE, and the sandbox it shares
+
+`handleRenderRequest` gained `mode: "caption"`, guarded by the same bearer and creating its sandbox
+with **`buildSandboxOptions` reused unchanged**. `render.test.ts` asserts the two modes produce an
+IDENTICAL options object — a second sandbox-creation path is a second place for `persistent: false`
+to go missing, which is a cross-tenant leak created by an unset option rather than by a bug.
+
+The captioned cut passes the **same** `validateMp4Bytes` checks as the assemble pass (magic bytes,
+size band, our MIME type). A burn that returns something implausible publishes nothing and leaves
+the uncaptioned reel exactly where it was.
+
+**⚠ ONE THING NOW CROSSES INTO THE VM THAT NEVER DID BEFORE: NARRATION.** The `.ass` track is
+model-authored words, and burning captions means putting them on screen — there is no version of
+this stage that keeps them out. Everything else on the forbidden list still holds: no `FAL_KEY`, no
+`OPENAI_API_KEY`, no Vercel credential, no `tenantId`, no fal URL, no signed storage read-URL. The
+`.ass` is the only content this endpoint accepts and it is capped at `CAPTION_MAX_ASS_BYTES`.
+
+`resolveRenderAsset` now resolves a **plans** id as well as a `mediaJobs` id, so the published
+`final.mp4` reaches the runner through the same bearer-guarded blob route with the same rule —
+an opaque id in, everything else read off the row. A plan whose sidecar never validated has no
+`renderStorageId` and is therefore unreachable, which is the governance rule holding by
+construction.
+
+### THE RETENTION RULE IS NARROWED (20-17 over 20-16)
+
+20-16's rule was *"delete once `final.mp4` is published"*. **The clean voice takes are the
+transcript's source**, so with captions in the pipeline they must survive past the assemble step.
+The deletion moved from "the reel exists" to "the FINAL artifact exists":
+
+- `deleteIntermediates` is now a function with TWO callers.
+- The render terminal calls it only when `captionsStillOwed` is false. **Cut captions and this
+  reverts to 20-16's simpler rule automatically** — a deck with no `stt` line has nothing to wait
+  for.
+- The caption terminal calls it after repointing `renderStorageId` at the captioned cut.
+- **A FAILED burn keeps everything**, exactly as a failed render does. 20-16's "keep on failure" is
+  not narrowed; only "delete on success" is.
+
+`media.test.ts` asserts this in **BOTH directions** (takes survive with captions owed; takes are
+deleted for a deck without captions), and the narrowing has been **mutation-checked**: replacing
+the condition with `if (true)` turns the survival assertion RED. Observed red, then restored.
+
+### A caption failure NEVER unpublishes the reel
+
+`renderStatus` stays `"rendered"`, `renderStorageId` still points at the uncaptioned cut, and
+`captionStatus: "failed"` + a `captionReason` code record why the track is missing. One dead letter
+(`workflowId: "media.captions"`, payload `{ batchId, planId, reasonCode }`). **A missing caption
+track is a degraded deliverable; an unpublished reel is no deliverable.**
+
+`storage.delete` is now pinned at **2** sites in the media subsystem, both in `render/renderReel.ts`
+— the retention loop and the uncaptioned-cut delete — and BOTH failure arms are asserted not to
+contain it.
+
+### What has NEVER run
+
+**No sandbox has ever been created and no STT minute has ever been bought.** Every test in this
+stage runs offline at $0 through `FAL_FIXTURE` and `MEDIA_SANDBOX_FIXTURE`. The first real
+transcript (~$0.008) and the first real burn are 20-11's owner-run live gate. In particular
+UNPROVEN until then: scribe-v2's exact response field names, whether `data:` URIs are accepted on
+that endpoint at the sizes involved, and whether the baked ffmpeg really carries libass.
+
 
 ## The unrenderable-deck guard (20-15 follow-up)
 

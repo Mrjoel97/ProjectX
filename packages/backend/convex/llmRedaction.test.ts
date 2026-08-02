@@ -1250,7 +1250,11 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // 3 -> 4 at 20-15 (the render terminal's audit) -> 5 at 20-16 (the render dead letter, whose
   // payload is scanned by the SAME allow-list on purpose: a dead letter is a log-plane row and §4
   // applies to it identically).
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(5);
+  // -> 7 at 20-17: the caption terminal's `media.captioned` audit and the caption dead letter.
+  // Both are scanned by this SAME allow-list, and neither needed a new key — a caption burn
+  // produces a duration and two refs, which is all a successful re-encode of an already-published
+  // reel can honestly report.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(7);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1304,12 +1308,14 @@ test("the media log-plane surface is PINNED: exactly 2 audit sites across the th
   expect(
     sites.reduce((a, b) => a + b, 0),
     "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17 each bump this)",
-  ).toBe(2);
-  // And WHERE they live: the two TERMINALS — the fal landing and the render — never the submit
-  // path and never the render's own pre-flight.
+  ).toBe(3);
+  // And WHERE they live: the THREE TERMINALS — the fal landing, the render and the caption burn —
+  // never the submit path and never a pre-flight. `media.ts` staying at ZERO is the load-bearing
+  // half: it holds the prompts and the narration, and 20-17 gave it a whole new action without
+  // giving it a log-plane sink.
   expect(sites[0], "media.ts grew an audit site").toBe(0);
   expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
-  expect(sites[2], "render/renderReel.ts is the render terminal").toBe(1);
+  expect(sites[2], "render/renderReel.ts holds the render AND caption terminals").toBe(2);
 });
 
 test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and succeeded is mediaComplete's alone", () => {
@@ -1481,9 +1487,14 @@ test("ffmpeg's stderr is READ exactly once, and on the same line it becomes a co
   // string. This is that guarantee.
   const code = stripCode(readAt(coreRender));
   const reads = [...code.matchAll(/\.stderr\(\)/g)];
-  expect(reads, "no stderr read found - the scan is vacuous").toHaveLength(1);
-  // …and it is an ARGUMENT to reasonCodeFor, not a value bound to anything else.
-  expect(code).toMatch(/reasonCodeFor\(\s*run\.exitCode,\s*await run\.stderr\(\)\s*\)/);
+  // TWO as of 20-17: the assemble pass and the caption burn — and the burn's is the more dangerous
+  // of the pair, because `subtitles=` echoes the track it choked on and that track is NARRATION.
+  expect(reads, "no stderr read found - the scan is vacuous").toHaveLength(2);
+  // …and EVERY one of them is an ARGUMENT to reasonCodeFor, never a value bound to anything else.
+  // Counting the call sites is what turns "it is" into "every one is": two reads, two calls.
+  expect(
+    [...code.matchAll(/reasonCodeFor\(\s*run\.exitCode,\s*await run\.stderr\(\)\s*\)/g)],
+  ).toHaveLength(2);
 
   // Nowhere else on the render path may read it at all.
   for (const [rel, path] of [
@@ -1515,6 +1526,43 @@ test("the route's maxDuration LITERAL still equals the exported constant", () =>
   expect(timeoutMs).toBeLessThan(Number(literal) * 1000);
 });
 
+test("no audio_url the media plane submits can originate from ctx.storage.getUrl", () => {
+  // THE TRUST BOUNDARY THIS PLAN EXISTS AROUND (20-17). Every fal STT endpoint takes a URL fal
+  // must FETCH. Our audio lives in `ctx.storage`, and `plans.attachmentUrls`' own header calls a
+  // signed storage URL a BEARER CAPABILITY — handing one to a third party gives them read access
+  // to a tenant's bytes for the life of the signature. The bytes go as a `data:` URI instead, so
+  // no URL of ours exists to hand over.
+  //
+  // Scanned rather than described: this is a one-line "fix" away from being false, and the
+  // symptom would be invisible — the transcript would come back correct either way.
+  const media = stripCode(readSource("media.ts"));
+  // Anchored on CODE at both ends, never on a comment: `stripCode` deletes comments, so a comment
+  // marker resolves to -1 and `slice(start, -1)` silently returns the rest of the FILE — a scan
+  // that reads far more than it claims to and fails for reasons that have nothing to do with it.
+  const submitAt = media.indexOf("export const submitCaptions");
+  const nextExport = media.indexOf("\nexport const", submitAt + 1);
+  const submitFn = media.slice(submitAt, nextExport === -1 ? media.length : nextExport);
+  expect(submitFn.length, "submitCaptions not found - has it been renamed?").toBeGreaterThan(200);
+  expect(submitFn, "the captions submit reaches for a signed storage URL").not.toMatch(
+    /storage\.getUrl/,
+  );
+  // …and the only thing that becomes an `audio_url` anywhere in the module is the data URI.
+  const audioUrlAssignments = [...media.matchAll(/audio_?[Uu]rl:\s*([^,\n]+)/g)].map((m) =>
+    (m[1] ?? "").trim(),
+  );
+  // Three: the field's TYPE on `SubmittableSpec`, the wire field in `buildSubmitBody`, and the one
+  // construction site. The type declaration is included deliberately — if the field is ever
+  // widened or re-typed, this count moves and the change gets read.
+  expect(audioUrlAssignments.length, "no audio_url assignment found - the scan is vacuous").toBe(3);
+  for (const value of audioUrlAssignments) {
+    expect(value, `audio_url is built from "${value}"`).toMatch(
+      // `^string` is the TYPE declaration on `SubmittableSpec`; the other two are the wire field
+      // and the one construction site. Nothing else may ever produce this value.
+      /^string\b|spec\.audioUrl|audioDataUri\(/,
+    );
+  }
+});
+
 test("storage.delete has exactly ONE site in the media subsystem — the retention loop", () => {
   // D12(b) is delete-on-SUCCESS and keep-on-FAILURE, and the failure half is the one that is easy
   // to get backwards and impossible to notice. A second deletion site is how a delete-on-failure
@@ -1527,11 +1575,23 @@ test("storage.delete has exactly ONE site in the media subsystem — the retenti
     const n = [...code.matchAll(/storage\.delete\b/g)].length;
     if (n > 0) sites.push([rel, n]);
   }
-  expect(sites).toEqual([["render/renderReel.ts", 1]]);
+  // TWO as of 20-17, both still inside the one module. The second is the caption terminal deleting
+  // the UNCAPTIONED cut after repointing `renderStorageId` at the captioned one — that is a delete
+  // of tenant media, so it is pinned here rather than exempted. What the count still forbids is a
+  // deletion site appearing in the submit or landing planes, which is where a delete-on-failure bug
+  // would hide.
+  expect(sites).toEqual([["render/renderReel.ts", 2]]);
 
   // …and it is inside the SUCCESS arm. The failure arm returns before reaching it, which is what
   // makes "the intermediates are the only debugging evidence a failed render leaves" true.
   const src = stripCode(readSource("render/renderReel.ts"));
   const failureArm = src.slice(src.indexOf("if (!a.result.ok)"), src.indexOf("renderStatus: \"rendered\""));
   expect(failureArm, "the failure arm deletes an intermediate").not.toMatch(/storage\.delete/);
+  // The CAPTION terminal's failure arm, held to the same rule: a failed burn deletes nothing at
+  // all — not the uncaptioned reel it failed to replace, and not the takes that fed it.
+  const capFailureArm = src.slice(
+    src.indexOf("if (!a.result.ok)", src.indexOf("export const recordCaptionBurn")),
+    src.indexOf("const uncaptioned"),
+  );
+  expect(capFailureArm, "the caption failure arm deletes something").not.toMatch(/storage\.delete/);
 });

@@ -369,6 +369,27 @@ export default defineSchema({
         gates: v.array(v.string()),
       }),
     ),
+    // The CAPTION PLANE (plan 20-17), on the same row and for the same reason as the render plane.
+    // Captions are a SECOND artifact derived from the first, so they get their own status rather
+    // than overloading `renderStatus`: a failed burn must leave `renderStatus: "rendered"` standing,
+    // because a reel without captions is a degraded deliverable and an unpublished reel is none.
+    captionStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("transcribing"),
+        v.literal("burning"),
+        v.literal("captioned"),
+        v.literal("failed"),
+      ),
+    ),
+    /** A reasonCode, never ffmpeg's stderr — and the `subtitles=` pass echoes NARRATION into its
+     *  error output, which makes this field the one most able to become a §4 violation. */
+    captionReason: v.optional(v.string()),
+    /** Where each clean voice take starts inside the ONE concatenated wav that was transcribed.
+     *  Written at submit, read at burn: it is how a word at t=4.5s in the transcript is known to
+     *  belong to take 1 rather than take 0, and it cannot be recomputed later without re-fetching
+     *  and re-concatenating every take. Seconds, take order, always `blockCount` long. */
+    captionOffsetsS: v.optional(v.array(v.number())),
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).

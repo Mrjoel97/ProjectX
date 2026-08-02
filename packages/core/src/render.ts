@@ -164,6 +164,25 @@ const hasFtypMagic = (mp4: Uint8Array): boolean =>
   mp4[7] === 0x70; // p
 
 /**
+ * The mp4 half of the return check, on its own so the CAPTION burn (plan 20-17) is held to the
+ * SAME bar as the assemble pass — same magic bytes, same size band, same codes.
+ *
+ * Returns the error, or `null` for "these bytes are a plausible mp4". Split out rather than
+ * duplicated: a second copy of the size band is a second number to forget to update, and a caption
+ * burn that skipped these checks would publish whatever the VM handed back over a reel that was
+ * already validated.
+ */
+export function validateMp4Bytes(mp4: Uint8Array | null): ({ ok: false } & RenderReturnError) | null {
+  if (mp4 === null) return { ok: false, code: "missing_output" };
+  if (mp4.byteLength === 0) return { ok: false, code: "empty_output" };
+  if (!hasFtypMagic(mp4)) return { ok: false, code: "not_an_mp4" };
+  if (mp4.byteLength < RENDER_MIN_BYTES || mp4.byteLength > RENDER_MAX_BYTES) {
+    return { ok: false, code: "implausible_size", bytes: mp4.byteLength };
+  }
+  return null;
+}
+
+/**
  * Everything the sandbox returns, checked before anything is published.
  *
  * The VM is a trust boundary in BOTH directions: we put no credential in, and we take nothing on
@@ -181,12 +200,8 @@ export function validateRenderReturn(a: {
   mp4: Uint8Array | null;
   sidecar: string | null;
 }): RenderReturn {
-  if (a.mp4 === null) return { ok: false, code: "missing_output" };
-  if (a.mp4.byteLength === 0) return { ok: false, code: "empty_output" };
-  if (!hasFtypMagic(a.mp4)) return { ok: false, code: "not_an_mp4" };
-  if (a.mp4.byteLength < RENDER_MIN_BYTES || a.mp4.byteLength > RENDER_MAX_BYTES) {
-    return { ok: false, code: "implausible_size", bytes: a.mp4.byteLength };
-  }
+  const mp4 = validateMp4Bytes(a.mp4);
+  if (mp4) return mp4;
   if (a.sidecar === null) return { ok: false, code: "invalid_sidecar", detail: "missing" };
 
   const parsed = parseAssemblySidecar(a.sidecar);
@@ -214,6 +229,7 @@ export type RenderReasonCode =
   | "no_audio_stream"
   | "decode_failed"
   | "sandbox_timeout"
+  | "caption_track_empty"
   | "render_failed";
 
 /** Anchored on `assemble_final.sh`'s OWN error wording, in order. Each pattern matches the fixed
@@ -232,6 +248,10 @@ const STDERR_CODES: ReadonlyArray<readonly [RegExp, RenderReasonCode]> = [
   [/!= expected/, "duration_mismatch"],
   [/no readable audio stream|mismatched\/truncated audio/, "no_audio_stream"],
   [/failed decode validation/, "decode_failed"],
+  // `burn_caps.sh`'s own wording (plan 20-17), anchored on the fixed part exactly as above.
+  [/libass is missing/, "missing_binary"],
+  [/subtitle track is empty/, "caption_track_empty"],
+  [/re-timed the video/, "duration_mismatch"],
 ];
 
 /** Codes the RUNNER produces before or around the sandbox, as distinct from the ones ffmpeg
@@ -306,15 +326,38 @@ export type RenderDeps = {
   /** The assemble script's bytes. Passed in rather than imported so this package does not reach
    *  into `packages/backend` — and so a test can prove the script is written to the VM. */
   assembleScript: string;
+  /** The caption burn's bytes, same contract (plan 20-17). */
+  burnScript: string;
 };
 
-type RenderRequestBody = {
-  renderId: string;
-  blockCount: number;
-  clipSeconds: number;
-  inputs: Array<{ name: string; jobId: string }>;
-  uploadUrls: { mp4: string; sidecar: string };
-};
+/** The `.ass` track is the ONLY content this endpoint has ever accepted in a request body, and it
+ *  is capped for the same reason every other input is: a 200 MB "subtitle track" is not a subtitle
+ *  track. A 60 s reel's track is a few kilobytes. */
+export const CAPTION_MAX_ASS_BYTES = 512 * 1024;
+
+/** The filenames the burn pass uses. Built HERE, never taken from the body: caption mode carries no
+ *  filename at all, which is a whole class of path-traversal that cannot reach it. */
+export const CAPTION_IN_NAME = "final.mp4";
+export const CAPTION_SUBS_NAME = "caps.ass";
+export const CAPTION_OUT_NAME = "out/final.captioned.mp4";
+
+type RenderRequestBody =
+  | {
+      mode: "assemble";
+      renderId: string;
+      blockCount: number;
+      clipSeconds: number;
+      inputs: Array<{ name: string; jobId: string }>;
+      uploadUrls: { mp4: string; sidecar: string };
+    }
+  | {
+      mode: "caption";
+      renderId: string;
+      /** The opaque id the blob route resolves to the published `final.mp4`. */
+      sourceId: string;
+      ass: string;
+      uploadUrls: { mp4: string };
+    };
 
 /** The two clip lengths the price table, the storyboard parser and the assembler all agree on. */
 const CLIP_SECONDS_SET = new Set([5, 10]);
@@ -328,6 +371,33 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const b = raw as Record<string, unknown>;
   if (!isStr(b.renderId)) return null;
+
+  /** Same guard both modes need: an upload URL must be on the origin WE derived, never one we were
+   *  handed — the write-direction SSRF guard. */
+  const sameOrigin = (url: unknown): url is string => {
+    if (!isStr(url)) return false;
+    try {
+      return new URL(url).origin === uploadOrigin;
+    } catch {
+      return false;
+    }
+  };
+
+  // CAPTION MODE (plan 20-17). Deliberately validated FIRST and completely separately: it shares
+  // the bearer, the sandbox options and the return checks with assemble, and shares NONE of its
+  // input shape. Threading one optional field through the assemble validator would have made every
+  // assemble-mode guard conditional, which is how a guard stops holding.
+  if (b.mode === "caption") {
+    // An id, not a name and not a path — it is only ever appended to OUR origin.
+    if (!isStr(b.sourceId) || !/^[A-Za-z0-9_-]{1,64}$/.test(b.sourceId)) return null;
+    if (!isStr(b.ass) || b.ass.length > CAPTION_MAX_ASS_BYTES) return null;
+    const up = b.uploadUrls;
+    if (up === null || typeof up !== "object") return null;
+    const { mp4 } = up as Record<string, unknown>;
+    if (!sameOrigin(mp4)) return null;
+    return { mode: "caption", renderId: b.renderId, sourceId: b.sourceId, ass: b.ass, uploadUrls: { mp4 } };
+  }
+
   if (typeof b.blockCount !== "number" || !Number.isInteger(b.blockCount) || b.blockCount < 1) {
     return null;
   }
@@ -351,21 +421,13 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
   const { mp4, sidecar } = up as Record<string, unknown>;
-  if (!isStr(mp4) || !isStr(sidecar)) return null;
   // The WRITE-direction SSRF guard. These URLs come from the body (Convex mints them per render),
   // so the runner POSTs bytes to them — and must not POST a tenant's reel to a host of the
   // caller's choosing. Their origin has to be the deployment we derived, not one we were handed.
-  for (const url of [mp4, sidecar]) {
-    let parsed: URL;
-    try {
-      parsed = new URL(url);
-    } catch {
-      return null;
-    }
-    if (parsed.origin !== uploadOrigin) return null;
-  }
+  if (!sameOrigin(mp4) || !sameOrigin(sidecar)) return null;
 
   return {
+    mode: "assemble",
     renderId: b.renderId,
     blockCount: b.blockCount,
     clipSeconds: b.clipSeconds,
@@ -395,10 +457,91 @@ function bearerMatches(header: string, expected: string): boolean {
   return diff === 0;
 }
 
+/** Bytes up through one of the single-use, write-only URLs Convex minted. **The MIME type is
+ *  OURS** — passed as a literal by the caller, never read from the VM's response. Module-level so
+ *  the assemble pass and the caption burn upload through the same four lines. */
+async function uploadTo(
+  fetchFn: typeof globalThis.fetch,
+  url: string,
+  bytes: Bytes,
+  type: string,
+): Promise<string | null> {
+  const res = await fetchFn(url, {
+    method: "POST",
+    headers: { "Content-Type": type },
+    // A Blob rather than the raw view: it is the shipped storage idiom (`http.ts:301` stores
+    // `new Blob([bytes], { type: mimeType })`) and it carries OUR asserted type on the body as
+    // well as the header.
+    body: new Blob([bytes], { type }),
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const parsed = (await res.json().catch(() => null)) as { storageId?: unknown } | null;
+  return isStr(parsed?.storageId) ? parsed.storageId : null;
+}
+
 const jsonStop = (code: RenderRunnerCode | RenderReasonCode | RenderReturnError["code"]) =>
   // A 200 with `ok: false`: a governed stop, not a transport failure. The Convex side records the
   // reason instead of the action-retrier re-running a deterministic failure at $0.02 a go.
   Response.json({ ok: false, code }, { status: 200 });
+
+/**
+ * THE CAPTION BURN (plan 20-17) — the route's second mode, and deliberately the same sandbox.
+ *
+ * `buildSandboxOptions` is REUSED UNCHANGED rather than a second literal being written here: a
+ * second sandbox-creation path is a second place for `persistent: false` to go missing, which is a
+ * cross-tenant leak created by an unset option. `render.test.ts` asserts the two modes produce an
+ * identical options object for exactly that reason.
+ *
+ * **This is the one thing that crosses INTO the VM that the assemble pass never sends: NARRATION
+ * TEXT.** The `.ass` track is model-authored words, and burning captions means putting them on
+ * screen — there is no version of this stage that keeps them out. What still never crosses: any
+ * credential, any tenant id, any fal URL, any signed storage URL. The track is escaped by
+ * `@pikar/core/captions`' `toAss` before it gets here, so it cannot carry style-override markup.
+ */
+async function burnCaptions(
+  body: Extract<RenderRequestBody, { mode: "caption" }>,
+  deps: RenderDeps,
+  snapshotId: string,
+  fetchBlob: (id: string) => Promise<Bytes | null>,
+): Promise<Response> {
+  const source = await fetchBlob(body.sourceId);
+  if (!source) return jsonStop("input_fetch_failed");
+
+  const startedAt = Date.now();
+  const sandbox = await deps.createSandbox(
+    buildSandboxOptions({ snapshotId, timeoutMs: RENDER_SANDBOX_TIMEOUT_MS }),
+  );
+  try {
+    await sandbox.mkDir("in");
+    await sandbox.writeFiles([
+      { path: `in/${CAPTION_IN_NAME}`, content: source },
+      { path: `in/${CAPTION_SUBS_NAME}`, content: new TextEncoder().encode(body.ass) },
+      { path: "burn_caps.sh", content: new TextEncoder().encode(deps.burnScript) },
+    ]);
+
+    const run = await sandbox.runCommand("sh", ["burn_caps.sh"]);
+    if (run.exitCode !== 0) {
+      // stderr here can contain NARRATION (the `subtitles=` filter echoes the track it choked on),
+      // which makes `reasonCodeFor` load-bearing rather than tidy. The string is read once, in
+      // that function, and only a member of a closed union comes back out.
+      return jsonStop(reasonCodeFor(run.exitCode, await run.stderr()));
+    }
+
+    const mp4 = await sandbox.readFileToBuffer({ path: CAPTION_OUT_NAME });
+    // The SAME bar as the assemble pass. A burn that returns something implausible publishes
+    // nothing, and the uncaptioned reel stays exactly where it is.
+    const bad = validateMp4Bytes(mp4);
+    if (bad || !mp4) return jsonStop(bad ? bad.code : "missing_output");
+
+    const mp4StorageId = await uploadTo(deps.fetch, body.uploadUrls.mp4, mp4, "video/mp4");
+    if (!mp4StorageId) return jsonStop("upload_failed");
+    // No sidecar: the caption pass does not re-govern the render, it re-encodes a reel that was
+    // already proven. The ORIGINAL sidecar stays the record, untouched.
+    return Response.json({ ok: true, mp4StorageId, renderMs: Date.now() - startedAt });
+  } finally {
+    await sandbox.stop().catch(() => {});
+  }
+}
 
 /**
  * The render runner. Bearer in, validated artifacts out, and a sandbox that is a trust boundary in
@@ -436,15 +579,22 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
 
   // 2. FETCH THE BYTES HERE, from our own origin, with the same bearer. The URL is BUILT, never
   //    accepted — see `convexSiteOrigin`.
-  const files: Array<{ path: string; content: Bytes }> = [];
-  for (const input of body.inputs) {
+  const fetchBlob = async (id: string): Promise<Bytes | null> => {
     const res = await deps
-      .fetch(`${blobOrigin}/media/blob/${input.jobId}`, {
+      .fetch(`${blobOrigin}/media/blob/${id}`, {
         headers: { Authorization: `Bearer ${deps.secret}` },
       })
       .catch(() => null);
-    if (!res?.ok) return jsonStop("input_fetch_failed");
-    files.push({ path: `in/${input.name}`, content: new Uint8Array(await res.arrayBuffer()) });
+    return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+  };
+
+  if (body.mode === "caption") return await burnCaptions(body, deps, deps.snapshotId, fetchBlob);
+
+  const files: Array<{ path: string; content: Bytes }> = [];
+  for (const input of body.inputs) {
+    const content = await fetchBlob(input.jobId);
+    if (!content) return jsonStop("input_fetch_failed");
+    files.push({ path: `in/${input.name}`, content });
   }
 
   const startedAt = Date.now();
@@ -490,24 +640,9 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
 
     // 3. Up through the two single-use, write-only, short-lived URLs Convex minted. **The MIME
     //    type is OURS** — asserted here as a literal, never read from the VM's response.
-    const upload = async (url: string, bytes: Bytes, type: string): Promise<string | null> => {
-      const res = await deps
-        .fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": type },
-          // A Blob rather than the raw view: it is the shipped storage idiom (`http.ts:301`
-          // stores `new Blob([bytes], { type: mimeType })`) and it carries OUR asserted type on
-          // the body as well as the header.
-          body: new Blob([bytes], { type }),
-        })
-        .catch(() => null);
-      if (!res?.ok) return null;
-      const parsed = (await res.json().catch(() => null)) as { storageId?: unknown } | null;
-      return isStr(parsed?.storageId) ? parsed.storageId : null;
-    };
-
-    const mp4StorageId = await upload(body.uploadUrls.mp4, mp4, "video/mp4");
-    const sidecarStorageId = await upload(
+    const mp4StorageId = await uploadTo(deps.fetch, body.uploadUrls.mp4, mp4, "video/mp4");
+    const sidecarStorageId = await uploadTo(
+      deps.fetch,
       body.uploadUrls.sidecar,
       sidecarBytes,
       "application/json",

@@ -1756,13 +1756,15 @@ describe("the happy path: the bytes land, the URL does not", () => {
     expect(fetchMock).toHaveBeenCalledTimes(0); // nothing was downloaded
   });
 
-  test("an UNHANDLED kind fails with a code rather than probing the body for a url", async () => {
+  test("an UNREADABLE payload fails with a code rather than probing the body for a url", async () => {
     const t = harness();
     const fetchMock = assetFetch();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    // An `stt` row — plan 20-17's arm, and the only kind left without one now that 20-14 wired
-    // `tts`. The body deliberately CARRIES a findable url.
+    // An `stt` row. 20-17 WIRED this kind, so it is no longer "unhandled" — and that makes this
+    // test sharper, not obsolete: `stt` reads its transcript INLINE from the payload, so a payload
+    // with no `words` array is unreadable, and the url sitting right there in the body is exactly
+    // the thing a "helpful" fallback would reach for. It must not be fetched.
     const { jobId } = await seedLandable(t, {
       kind: "stt",
       spec: { kind: "stt", audioMinutes: 1 },
@@ -1779,7 +1781,7 @@ describe("the happy path: the bytes land, the URL does not", () => {
     ).toBe(200);
     expect(await jobRow(t, jobId)).toMatchObject({
       status: "failed",
-      failureReason: "unhandled_kind",
+      failureReason: "no_asset_payload",
     });
     expect(fetchMock).toHaveBeenCalledTimes(0);
   });
@@ -3108,5 +3110,462 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
       );
     await run();
     await expect(run()).resolves.not.toThrow(); // no "Delete on non-existent doc"
+  });
+});
+
+// ── CAPTIONS: the transcript, the trigger, the burn and the narrowed retention (plan 20-17) ────
+//
+// Everything here runs offline at $0. `FAL_FIXTURE` covers the transcript submit and
+// `MEDIA_SANDBOX_FIXTURE` the burn — the same two seams the rest of the phase uses.
+
+/** A minimal canonical 24 kHz mono 16-bit PCM wav, which is what the landing plane records a voice
+ *  take as. `concatWavTakes` parses this for real; a blob of arbitrary bytes would not be a take. */
+function wavBytes(samples: number): Uint8Array<ArrayBuffer> {
+  const dataBytes = samples * 2;
+  const buf = new Uint8Array(44 + dataBytes);
+  const view = new DataView(buf.buffer);
+  const ascii = (at: number, s: string) => {
+    for (let i = 0; i < s.length; i++) buf[at + i] = s.charCodeAt(i);
+  };
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + dataBytes, true);
+  ascii(8, "WAVE");
+  ascii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 24_000, true);
+  view.setUint32(28, 48_000, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, "data");
+  view.setUint32(40, dataBytes, true);
+  return buf;
+}
+
+/** A sidecar the shipped validator ACCEPTS, with real per-block speech anchors — the rebase is
+ *  arithmetic on these, so a fixture that skipped them would prove nothing. */
+function sidecarFor(blocks: number, clipSeconds = 10): string {
+  return JSON.stringify({
+    script: "assemble_final.sh",
+    block_count: blocks,
+    clip_seconds: clipSeconds,
+    total_duration_s: blocks * clipSeconds,
+    actual_duration_s: blocks * clipSeconds,
+    gates: ["speech_within_window"],
+    blocks: Array.from({ length: blocks }, (_, i) => ({
+      block_index: i,
+      window_start_s: i * clipSeconds,
+      lead_silence_s: 0.5,
+      speech_abs_s: i * clipSeconds + 0.5,
+      speech_dur_s: 8,
+      overrun: false,
+    })),
+  });
+}
+
+/** A batch with captions reserved: N landed clips, N landed WAV takes, and one queued `stt` line
+ *  at blockIndex -1 — exactly what `reserveJobInner` writes for `withCaptions`. */
+async function seedCaptionable(
+  t: T,
+  opts: { blocks?: number; batchId?: string; takesLanded?: boolean } = {},
+) {
+  const blocks = opts.blocks ?? 2;
+  const batchId = opts.batchId ?? "batch_caps";
+  const { planId, jobIds } = await seedInFlight(t, { blocks, batchId });
+  const sttJobId = await t.run(async (ctx) => {
+    for (const id of jobIds) {
+      const row = await ctx.db.get(id as Id<"mediaJobs">);
+      if (row?.kind !== "tts") continue;
+      const storageId = await ctx.storage.store(new Blob([wavBytes(24_000)], { type: "audio/wav" }));
+      // `takesLanded` is the difference between the TRIGGER's precondition (rows still in flight,
+      // so landing one is what fires it) and the SUBMIT's (the takes already exist, because that
+      // is the only state from which a transcript can be bought).
+      await ctx.db.patch(id as Id<"mediaJobs">, {
+        assetStorageId: storageId,
+        ...(opts.takesLanded ? { status: "succeeded" as const } : {}),
+      });
+    }
+    return await ctx.db.insert("mediaJobs", {
+      tenantId: A,
+      planId,
+      batchId,
+      blockIndex: -1,
+      provider: "fal",
+      kind: "stt",
+      model: MEDIA_DEFAULT_STT.model,
+      spec: { kind: "stt", audioMinutes: 0.5 },
+      promptHash: "0".repeat(64),
+      status: "queued",
+      estUsd: 0.008,
+      createdAt: T0,
+      updatedAt: T0,
+    });
+  });
+  return { planId, batchId, jobIds, sttJobId };
+}
+
+describe("the stt submit body: one field, and deliberately no keyterms", () => {
+  const sttSpec = (audioUrl: string): SubmittableSpec => ({
+    kind: "stt",
+    model: MEDIA_DEFAULT_STT.model,
+    audioMinutes: 1,
+    audioUrl,
+  });
+
+  test("an stt line submits its audio_url and nothing else", () => {
+    expect(
+      buildSubmitBody(sttSpec("data:audio/wav;base64,AAA"), "ignored - an stt line has no text"),
+    ).toEqual({ audio_url: "data:audio/wav;base64,AAA" });
+  });
+
+  test("keyterms is ABSENT - it costs +30% on a per-minute rate", () => {
+    expect(Object.keys(buildSubmitBody(sttSpec("data:x"), ""))).toEqual(["audio_url"]);
+  });
+});
+
+describe("submitCaptions: the audio goes out, a signed storage URL never does", () => {
+  test("with FAL_KEY unset it refuses BEFORE any fetch exists", async () => {
+    const t = harness();
+    const { batchId } = await seedCaptionable(t);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("FAL_KEY", "");
+
+    await expect(t.action(internal.media.submitCaptions, { tenantId: A, batchId })).rejects.toThrow(
+      /FAL_KEY/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("the submitted audio_url is a data URI and carries NO Convex origin", async () => {
+    const t = harness();
+    const { batchId, planId, sttJobId } = await seedCaptionable(t, {
+      blocks: 2,
+      takesLanded: true,
+    });
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ request_id: "req_stt_1" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv(); // FAL_FIXTURE deliberately NOT set: the body is what this test is about
+
+    expect((await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).ok).toBe(true);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as { audio_url: string };
+    expect(body.audio_url.startsWith("data:audio/wav;base64,")).toBe(true);
+    // THE ASSERTION THIS WHOLE STAGE IS SHAPED BY: no URL of ours reaches a third party. A
+    // `ctx.storage.getUrl` result here would be a bearer capability handed to fal.
+    expect(body.audio_url).not.toContain("convex");
+    expect(body.audio_url).not.toContain("http");
+    expect(body).not.toHaveProperty("keyterms");
+
+    // …and the offsets were written in the SAME mutation that recorded the submission: two takes
+    // of 24 000 samples at 24 kHz, so take 1 starts exactly 1 s into the concatenated wav.
+    expect((await planRow(t, planId))?.captionOffsetsS).toEqual([0, 1]);
+    expect((await jobRow(t, sttJobId))?.falRequestId).toBe("req_stt_1");
+  });
+
+  test("a second run is a no-op - the claim is the idempotency gate, as for every other line", async () => {
+    const t = harness();
+    const { batchId } = await seedCaptionable(t, { takesLanded: true });
+    vi.stubGlobal("fetch", vi.fn());
+    stubMediaEnv();
+    vi.stubEnv("FAL_FIXTURE", "1");
+
+    expect((await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).ok).toBe(true);
+    expect(await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).toEqual({
+      ok: false,
+      code: "already_claimed",
+    });
+  });
+
+  test("a deck with no stt line submits nothing at all", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t, { blocks: 1 });
+    vi.stubGlobal("fetch", vi.fn());
+    stubMediaEnv();
+    expect(await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).toEqual({
+      ok: false,
+      code: "no_captions_line",
+    });
+  });
+});
+
+describe("the captions TRIGGER: the last VOICE take starts it, in parallel with the render", () => {
+  test("the last tts landing moves the plan to transcribing, and the render starts too", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedCaptionable(t, { blocks: 2 });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    const plan = await planRow(t, planId);
+    expect(plan?.captionStatus).toBe("transcribing");
+    // Neither waits for the other: a transcript needs the takes, not final.mp4.
+    expect(plan?.renderStatus).toBe("rendering");
+  });
+
+  test("a deck WITHOUT captions never gains a caption status - 20-16's behaviour, untouched", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedInFlight(t, { blocks: 1 });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    expect((await planRow(t, planId))?.captionStatus).toBeUndefined();
+  });
+
+  test("a FAILED voice take says incomplete_takes rather than leaving stt queued forever", async () => {
+    const t = harness();
+    const { planId, jobIds, sttJobId } = await seedCaptionable(t, { blocks: 2 });
+    const ttsIds = await t.run(async (ctx) => {
+      const out: Id<"mediaJobs">[] = [];
+      for (const id of jobIds) {
+        const row = await ctx.db.get(id as Id<"mediaJobs">);
+        if (row?.kind === "tts") out.push(id as Id<"mediaJobs">);
+      }
+      return out;
+    });
+    await land(t, ttsIds[0] as Id<"mediaJobs">, false);
+    for (const id of jobIds.filter((j) => j !== ttsIds[0])) await land(t, id as Id<"mediaJobs">);
+
+    const plan = await planRow(t, planId);
+    expect(plan?.captionStatus).toBe("failed");
+    expect(plan?.captionReason).toBe("incomplete_takes");
+    expect((await jobRow(t, sttJobId))?.status).toBe("queued"); // never submitted, never spent
+  });
+
+  test("a re-delivered webhook cannot submit twice - the status transition IS the guard", async () => {
+    const t = harness();
+    const { planId, jobIds } = await seedCaptionable(t, { blocks: 1 });
+    for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
+    expect((await planRow(t, planId))?.captionStatus).toBe("transcribing");
+    await land(t, jobIds[0] as Id<"mediaJobs">);
+    expect((await planRow(t, planId))?.captionStatus).toBe("transcribing");
+  });
+});
+
+describe("the caption BURN terminal: a failure degrades the reel, it never unpublishes it", () => {
+  /** A reel that is PUBLISHED and whose transcript has landed — the only state a burn runs from. */
+  async function seedBurnable(t: T, opts: { words?: unknown[] } = {}) {
+    const { planId, batchId, jobIds, sttJobId } = await seedCaptionable(t, {
+      blocks: 2,
+      takesLanded: true,
+    });
+    const reelId = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
+    const sidecarId = await storeBlob(t, sidecarFor(2), "application/json");
+    const transcriptId = await storeBlob(
+      t,
+      JSON.stringify({
+        words: opts.words ?? [
+          { text: "hello", start: 0.5, end: 0.9, type: "word" },
+          { text: "there", start: 1.5, end: 1.9, type: "word" },
+        ],
+      }),
+      "application/json",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: reelId,
+        sidecarStorageId: sidecarId,
+        captionStatus: "burning",
+        captionOffsetsS: [0, 1],
+      });
+      await ctx.db.patch(sttJobId, { status: "succeeded", assetStorageId: transcriptId });
+    });
+    return { planId, batchId, jobIds, sttJobId, reelId, sidecarId };
+  }
+
+  test("a SUCCESSFUL burn repoints the reel, deletes the uncaptioned cut, and captions the plan", async () => {
+    const t = harness();
+    const { planId, reelId } = await seedBurnable(t);
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({ ok: true, mp4StorageId: "PLACEHOLDER", renderMs: 4200 }),
+    );
+    // The fixture needs a REAL storage id for the repoint to be observable.
+    const captionedId = await storeBlob(t, new Uint8Array([9, 9, 9]), "video/mp4");
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({ ok: true, mp4StorageId: captionedId, renderMs: 4200 }),
+    );
+
+    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
+      { ok: true },
+    );
+
+    const plan = await planRow(t, planId);
+    expect(plan?.captionStatus).toBe("captioned");
+    expect(plan?.renderStatus).toBe("rendered"); // untouched by the caption plane, always
+    expect(plan?.renderStorageId).toBe(captionedId);
+    // The uncaptioned cut is gone, and the sidecar — the proof of a governed render — is not.
+    expect(await blobExists(t, reelId)).toBe(false);
+    expect(await blobExists(t, plan?.sidecarStorageId as Id<"_storage">)).toBe(true);
+  });
+
+  test("a FAILED burn leaves the UNCAPTIONED reel published, with a code and a dead letter", async () => {
+    const t = harness();
+    const { planId, reelId } = await seedBurnable(t);
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify({ ok: false, code: "missing_binary" }));
+
+    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
+      { ok: false, reason: "missing_binary" },
+    );
+
+    const plan = await planRow(t, planId);
+    // THE HALF THAT MATTERS: a missing caption track is a degraded deliverable; an unpublished
+    // reel is no deliverable. `renderStatus` and `renderStorageId` are both exactly as they were.
+    expect(plan?.renderStatus).toBe("rendered");
+    expect(plan?.renderStorageId).toBe(reelId);
+    expect(plan?.captionStatus).toBe("failed");
+    expect(plan?.captionReason).toBe("missing_binary");
+    expect(await blobExists(t, reelId)).toBe(true);
+
+    const letters = await t.run(async (ctx) => await ctx.db.query("deadLetters").collect());
+    expect(letters).toHaveLength(1);
+    expect(letters[0]?.workflowId).toBe("media.captions");
+    // Refs and codes ONLY (CLAUDE.md §4) — no ffmpeg output, no narration, no filename.
+    expect(Object.keys(letters[0]?.payload as object).sort()).toEqual([
+      "batchId",
+      "planId",
+      "reasonCode",
+    ]);
+  });
+
+  test("a transcript with no usable words never buys a sandbox", async () => {
+    const t = harness();
+    const { planId } = await seedBurnable(t, {
+      // Everything the .ass writer drops: spacing and the provider describing the audio.
+      words: [
+        { text: " ", start: 0.5, end: 0.6, type: "spacing" },
+        { text: "(music)", start: 0.6, end: 0.9, type: "audio_event" },
+      ],
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubRenderEnv(); // no MEDIA_SANDBOX_FIXTURE: a real POST would be attempted if it got that far
+
+    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
+      { ok: false, reason: "caption_track_empty" },
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
+  });
+
+  test("another tenant's plan id resolves to nothing — the check is on the row", async () => {
+    const t = harness();
+    const { planId } = await seedBurnable(t);
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: B, planId }),
+    ).toEqual({ ok: false, reason: "caption_inputs_missing" });
+  });
+});
+
+describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
+  /** Drive the render terminal over a batch that DOES reserve captions. */
+  async function renderWithCaptions(t: T) {
+    const { planId, batchId, sttJobId } = await seedCaptionable(t, {
+      blocks: 2,
+      takesLanded: true,
+    });
+    await t.run(async (ctx) => {
+      // Every renderable line landed, as `batchToRender` requires.
+      for (const row of await ctx.db.query("mediaJobs").collect()) {
+        if (row.kind === "video") {
+          const id = await ctx.storage.store(
+            new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" }),
+          );
+          await ctx.db.patch(row._id, { status: "succeeded", assetStorageId: id });
+        }
+      }
+      await ctx.db.patch(planId, { captionStatus: "transcribing" });
+    });
+    const mp4 = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
+    const sidecar = await storeBlob(t, sidecarFor(2), "application/json");
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({
+        ok: true,
+        mp4StorageId: mp4,
+        sidecarStorageId: sidecar,
+        renderMs: 1000,
+        gates: ["speech_within_window"],
+        blockCount: 2,
+      }),
+    );
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    return { planId, batchId, sttJobId };
+  }
+
+  test("with captions OWED, the voice takes SURVIVE the render — they are the transcript's source", async () => {
+    const t = harness();
+    await renderWithCaptions(t);
+    const takes = (await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).filter(
+      (r) => r.kind === "tts",
+    );
+    expect(takes.length).toBeGreaterThan(0);
+    for (const take of takes) {
+      expect(take.assetStorageId, "a voice take was deleted before its transcript was burned")
+        .toBeDefined();
+    }
+  });
+
+  test("…and they are deleted at the CAPTION terminal instead, once the final artifact exists", async () => {
+    const t = harness();
+    const { planId } = await renderWithCaptions(t);
+    const transcriptId = await storeBlob(
+      t,
+      JSON.stringify({ words: [{ text: "hi", start: 0.5, end: 0.9, type: "word" }] }),
+      "application/json",
+    );
+    const captionedId = await storeBlob(t, new Uint8Array([9, 9, 9]), "video/mp4");
+    await t.run(async (ctx) => {
+      const stt = (await ctx.db.query("mediaJobs").collect()).find((r) => r.kind === "stt");
+      if (stt) await ctx.db.patch(stt._id, { status: "succeeded", assetStorageId: transcriptId });
+      await ctx.db.patch(planId, { captionStatus: "burning", captionOffsetsS: [0, 1] });
+    });
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({ ok: true, mp4StorageId: captionedId, renderMs: 100 }),
+    );
+    await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId });
+
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    for (const row of rows) {
+      expect(row.assetStorageId, `${row.kind} survived the caption terminal`).toBeUndefined();
+    }
+  });
+
+  test("with captions NOT reserved, the render deletes them exactly as 20-16 did", async () => {
+    const t = harness();
+    const { batchId } = await seedRenderable(t, { blocks: 2 });
+    const mp4 = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
+    const sidecar = await storeBlob(t, sidecarFor(2), "application/json");
+    vi.stubGlobal("fetch", vi.fn());
+    stubRenderEnv();
+    vi.stubEnv(
+      "MEDIA_SANDBOX_FIXTURE",
+      JSON.stringify({
+        ok: true,
+        mp4StorageId: mp4,
+        sidecarStorageId: sidecar,
+        renderMs: 1000,
+        gates: ["speech_within_window"],
+        blockCount: 2,
+      }),
+    );
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.assetStorageId, "20-16's rule regressed for a deck with no captions").toBeUndefined();
+    }
   });
 });

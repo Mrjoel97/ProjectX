@@ -214,6 +214,98 @@ async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promis
   });
 }
 
+/**
+ * THE CAPTIONS TRIGGER (plan 20-17), and it is the render trigger's twin rather than its sequel.
+ *
+ * It fires off the SAME seam — the last landing in a batch — but on the voice takes alone, and it
+ * runs in PARALLEL with the render: a transcript needs the clean takes and the sidecar's anchors,
+ * never `final.mp4`. Gating one on the other would serialise two independent minutes of wall clock
+ * for no reason, and would make a caption failure able to delay a reel.
+ *
+ * The `captionStatus` transition is the once-only guard, exactly as `pending → rendering` is for
+ * the render: two concurrent last-tts-landings cannot both observe an unset status, so they cannot
+ * both submit — and a double submit is a double spend against one reservation.
+ */
+async function maybeStartCaptions(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
+  if (row.kind !== "tts") return;
+  const plan = await ctx.db.get(row.planId);
+  if (!plan || plan.captionStatus !== undefined) return; // already started, finished or failed
+
+  const siblings = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_batch", (q) => q.eq("tenantId", row.tenantId).eq("batchId", row.batchId))
+    .collect();
+  // No `stt` line means captions were never reserved for this deck (`reserveJobInner`'s
+  // `withCaptions`). That is not a failure and must not be recorded as one — plan 20-16's
+  // behaviour, including its retention rule, stands unchanged for such a deck.
+  if (!siblings.some((s) => s.kind === "stt")) return;
+
+  const takes = siblings.filter((s) => s.kind === "tts");
+  if (takes.some((s) => s.status === "queued" || s.status === "submitted")) return; // still landing
+  if (!takes.every((s) => s.status === "succeeded")) {
+    // A missing take is a missing transcript source. Said in words on the plan rather than left as
+    // an `stt` row queued forever behind audio that will never exist.
+    await ctx.db.patch(row.planId, {
+      captionStatus: "failed",
+      captionReason: "incomplete_takes",
+    });
+    return;
+  }
+
+  await ctx.db.patch(row.planId, { captionStatus: "transcribing" });
+  await ctx.scheduler.runAfter(0, internal.media.submitCaptions, {
+    tenantId: row.tenantId,
+    batchId: row.batchId,
+  });
+}
+
+/**
+ * THE BURN TRIGGER. Two things must both have happened — the transcript landed AND the reel is
+ * published — and neither knows about the other, so this is called from both terminals and the
+ * `transcribing → burning` patch is what makes it fire exactly once.
+ *
+ * Called with the plan id rather than a job row precisely because `recordRender` is the other
+ * caller and has no job row in hand.
+ */
+export async function maybeBurnCaptions(ctx: MutationCtx, planId: Id<"plans">): Promise<void> {
+  const plan = await ctx.db.get(planId);
+  if (!plan || plan.captionStatus !== "transcribing") return;
+  // The reel itself must exist first: the burn's input is `final.mp4`. A render that has not
+  // finished (or failed) simply leaves this pending — the render terminal calls back in.
+  if (plan.renderStatus !== "rendered" || !plan.renderStorageId) return;
+
+  const stt = (
+    await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", plan.tenantId).eq("planId", planId))
+      .collect()
+  ).find((r) => r.kind === "stt");
+  if (stt?.status !== "succeeded" || !stt.assetStorageId) return;
+
+  await ctx.db.patch(planId, { captionStatus: "burning" });
+  await ctx.scheduler.runAfter(0, internal.render.renderReel.burnCaptions, {
+    tenantId: plan.tenantId,
+    planId,
+  });
+}
+
+/** The caption plane's whole reaction to a landing, so `landResult` gains ONE line per arm rather
+ *  than a kind-check at each site. The row is RE-READ because the caller's copy predates the patch
+ *  this landing just made — reading `row.status` here would be reading the status it had on the way
+ *  in, which is `submitted` on every path. */
+async function afterCaptionLanding(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
+  if (row.kind === "tts") return await maybeStartCaptions(ctx, row);
+  if (row.kind !== "stt") return;
+  const fresh = await ctx.db.get(row._id);
+  if (fresh?.status === "succeeded") return await maybeBurnCaptions(ctx, row.planId);
+  // No transcript means no captions, and the reel is unaffected — `renderStatus` is not touched
+  // here or anywhere in this file's caption path.
+  await ctx.db.patch(row.planId, {
+    captionStatus: "failed",
+    captionReason: fresh?.failureReason ?? "transcript_failed",
+  });
+}
+
 export const landResult = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -266,6 +358,7 @@ export const landResult = internalMutation({
       await ctx.db.patch(jobId, { status: "failed", failureReason: code, updatedAt });
       await audit({ failureReason: code });
       await maybeStartRender(ctx, row);
+      await afterCaptionLanding(ctx, row);
       return null;
     };
 
@@ -345,6 +438,7 @@ export const landResult = internalMutation({
     const resolution = resolutionRef(row, outcome.actual);
     await audit({ assetHash: outcome.assetHash, verdict, actualCents, reconciled, resolution });
     await maybeStartRender(ctx, row);
+    await afterCaptionLanding(ctx, row);
     return null;
   },
 });

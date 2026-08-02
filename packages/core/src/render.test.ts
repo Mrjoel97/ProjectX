@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildSandboxOptions,
+  CAPTION_MAX_ASS_BYTES,
   convexSiteOrigin,
   handleRenderRequest,
   RENDER_INPUT_NAME,
@@ -292,6 +293,7 @@ function deps(
       snapshotId: "snapshotId" in over ? over.snapshotId : "snap_1",
       deploymentUrl: "deploymentUrl" in over ? over.deploymentUrl : DEPLOYMENT,
       assembleScript: "#!/usr/bin/env bash\necho assemble\n",
+      burnScript: "#!/usr/bin/env bash\necho burn\n",
       fetch: fetchImpl,
       createSandbox: async (options) => {
         rec.created.push(options);
@@ -601,5 +603,123 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
     // …and the same for a stderr that matches NOTHING, where a lazy implementation would be most
     // tempted to pass the string through.
     expect(reasonCodeFor(9, `${filename} ${narration}`)).toBe("render_failed");
+  });
+});
+
+// ── The CAPTION mode (plan 20-17) ──────────────────────────────────────────────────────────────
+//
+// The route's second mode. It shares the bearer, the sandbox and the return checks with assemble
+// and shares none of its input shape — so what these tests pin is mostly the SHARING.
+
+const captionBody = (over: Record<string, unknown> = {}) => ({
+  mode: "caption",
+  renderId: "batch-1",
+  sourceId: "plan1",
+  ass: "[Script Info]\n[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,hello\n",
+  uploadUrls: { mp4: `${DEPLOYMENT}/api/storage/upload?token=a` },
+  ...over,
+});
+
+describe("the caption burn shares the sandbox, and that is the point", () => {
+  it("produces an options object IDENTICAL to the assemble mode's", async () => {
+    const assemble = deps();
+    await handleRenderRequest(post(body()), assemble.deps);
+    const caption = deps();
+    await handleRenderRequest(post(captionBody()), caption.deps);
+
+    // A second sandbox-creation path is a second place for `persistent: false` to go missing —
+    // which is a cross-tenant leak created by an unset option, not by a bug. Asserting EQUALITY
+    // rather than re-asserting the two fields is what makes that hold for fields nobody has
+    // thought of yet.
+    expect(caption.rec.created).toHaveLength(1);
+    expect(caption.rec.created[0]).toEqual(assemble.rec.created[0]);
+    expect("name" in (caption.rec.created[0] as object)).toBe(false);
+  });
+
+  it("401s without the bearer, and creates NO sandbox", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(captionBody(), null), d);
+    expect(res.status).toBe(401);
+    expect(rec.created).toHaveLength(0);
+  });
+
+  it("writes the reel, the track and the burn script — and NOT the assembler", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(captionBody()), d);
+
+    const paths = rec.writes.map((w) => w.path);
+    expect(paths).toEqual(["in/final.mp4", "in/caps.ass", "burn_caps.sh"]);
+    expect(rec.commands).toEqual([{ cmd: "sh", args: ["burn_caps.sh"] }]);
+    const script = new TextDecoder().decode(
+      rec.writes.find((w) => w.path === "burn_caps.sh")?.content,
+    );
+    expect(script).toContain("echo burn");
+    expect(script).not.toContain("echo assemble");
+  });
+
+  it("returns the captioned cut and NO sidecar — the original stays the record", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(captionBody()), d);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.ok).toBe(true);
+    expect(typeof json.mp4StorageId).toBe("string");
+    // ONE upload, not two. The caption pass does not re-govern the render — it re-encodes a reel
+    // that was already proven, and the sidecar it was proven by is untouched.
+    expect(rec.fetches.filter((f) => f.init?.method === "POST")).toHaveLength(1);
+    expect(json).not.toHaveProperty("sidecarStorageId");
+  });
+
+  it("holds the burn to the SAME return checks — an implausible file publishes nothing", async () => {
+    // 4 bytes: valid-ish, far under RENDER_MIN_BYTES. The assemble pass refuses this and so must
+    // a burn, or a caption pass becomes a way to replace a validated reel with anything at all.
+    const { deps: d, rec } = deps({ mp4: new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]) });
+    const res = await handleRenderRequest(post(captionBody()), d);
+    expect(((await res.json()) as { code: string }).code).toBe("implausible_size");
+    // Nothing was uploaded: the uncaptioned reel is still the published one.
+    expect(rec.fetches.filter((f) => f.init?.method === "POST")).toHaveLength(0);
+    expect(rec.stops).toBe(1); // …and the VM was still torn down
+  });
+
+  it("refuses an oversized track — the only content this endpoint accepts is bounded", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(
+      post(captionBody({ ass: "x".repeat(CAPTION_MAX_ASS_BYTES + 1) })),
+      d,
+    );
+    expect(((await res.json()) as { code: string }).code).toBe("bad_request");
+    expect(rec.created).toHaveLength(0);
+  });
+
+  it("refuses an upload URL on a foreign origin — the write-direction SSRF guard", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(
+      post(captionBody({ uploadUrls: { mp4: "https://attacker.example/collect" } })),
+      d,
+    );
+    expect(((await res.json()) as { code: string }).code).toBe("bad_request");
+    expect(rec.created).toHaveLength(0);
+  });
+
+  it("refuses a sourceId carrying path characters — it is only ever appended to OUR origin", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(captionBody({ sourceId: "../../etc/passwd" })), d);
+    expect(((await res.json()) as { code: string }).code).toBe("bad_request");
+    expect(rec.created).toHaveLength(0);
+  });
+
+  it("maps the burn script's OWN error wording to codes, and never returns the wording", async () => {
+    for (const [stderr, code] of [
+      ["ERROR: this ffmpeg has no 'subtitles' filter — libass is missing from the image", "missing_binary"],
+      ["ERROR: subtitle track is empty: in/caps.ass", "caption_track_empty"],
+      ["ERROR: burned duration 11.4s != expected 20.0s — the caption pass re-timed the video", "duration_mismatch"],
+    ] as const) {
+      const { deps: d } = deps({ exitCode: 1, stderr });
+      const res = await handleRenderRequest(post(captionBody()), d);
+      const json = (await res.json()) as { code: string };
+      expect(json.code).toBe(code);
+      // ffmpeg's stderr on a caption burn can echo NARRATION. The response is a code and nothing
+      // else — by construction, since `reasonCodeFor` returns a member of a closed union.
+      expect(JSON.stringify(json)).not.toContain("ERROR");
+    }
   });
 });

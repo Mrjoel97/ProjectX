@@ -319,7 +319,11 @@ describe("coverage bind: every route diagnose() emits resolves", () => {
    * CAPABILITY GRANT, and this file is where grants are policed.
    */
   test("SC#3: no granted tool names ANY of the four paid entry points", () => {
-    const PAID_ENTRY_POINTS = ["submitBatch", "renderReel"];
+    // 20-17 adds the two caption entry points. `submitCaptions` spends the reel's `stt` line and
+    // `burnCaptions` buys a second sandbox — both are money, and neither is reachable by any
+    // specialist. The generic pattern below would already catch a tool named after them; this list
+    // is the explicit half, and it is the one a reviewer reads.
+    const PAID_ENTRY_POINTS = ["submitBatch", "renderReel", "submitCaptions", "burnCaptions"];
     // A future "clean-up" that empties the list must fail loudly instead of passing vacuously.
     expect(PAID_ENTRY_POINTS.length, "the forbidden-reach list is empty").toBeGreaterThan(0);
 

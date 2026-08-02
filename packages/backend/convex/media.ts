@@ -20,6 +20,7 @@
  * precedent). The tenant-facing canvas surface is plan 20-09's and uses the lib/functions.ts
  * wrappers (CLAUDE.md §2).
  */
+import { concatWavTakes } from "@pikar/core/captions";
 import type { Block, ShotType } from "@pikar/core/storyboard";
 import {
   CLIP_SECONDS,
@@ -510,7 +511,12 @@ export function requireEnvMedia(name: string): string {
  */
 export type SubmittableSpec =
   | Extract<MediaSpec, { kind: "video" | "image" }>
-  | (Extract<MediaSpec, { kind: "tts" }> & { voice: string; sampleRateHertz: number });
+  | (Extract<MediaSpec, { kind: "tts" }> & { voice: string; sampleRateHertz: number })
+  // `audioUrl` is not a priced dimension either — `audioMinutes` is. It rides here for the same
+  // reason `voice` does: it is a pinned wire field, and the alternative is reaching for it at the
+  // POST. It is NOT on the stored spec: it does not exist until the takes have landed and been
+  // concatenated, which is why `toSubmittable` still returns null for an `stt` row.
+  | (Extract<MediaSpec, { kind: "stt" }> & { audioUrl: string });
 
 /**
  * The request body, as a pure function of the PRICED spec — pitfall 1, the money bug.
@@ -569,6 +575,14 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
         // between here and the next star-slash — including the `never` guard below.)
         voice: spec.voice,
         sample_rate_hertz: spec.sampleRateHertz,
+      };
+    case "stt":
+      return {
+        // The ONLY field. And note what is deliberately absent: `keyterms`. It costs +30% on
+        // scribe-v2's per-minute rate — a priced dimension that would be paid on every reel to
+        // improve the spelling of words we did not know in advance. If it is ever added, the price
+        // table gains a keyterms multiplier in the SAME commit, or the estimate is a lie.
+        audio_url: spec.audioUrl,
       };
     default: {
       const _never: never = spec;
@@ -682,7 +696,12 @@ function toSubmittable(line: SubmitLine): SubmittableSpec | null {
       sampleRateHertz: line.spec.sampleRateHertz,
     };
   }
-  return null; // "stt" (plan 20-17) is not wired yet — left at `queued`
+  // "stt" is submittable (`buildSubmitBody` has its arm) but NEVER from here. Its `audio_url` does
+  // not exist yet at `submitBatch` time — the audio it transcribes is the OUTPUT of the tts lines in
+  // this same batch. `submitCaptions` owns it, after those lines have landed. Returning null keeps
+  // the row at `queued` and unclaimed until then, which is exactly what this return did for `tts`
+  // before plan 20-14 wired it.
+  return null;
 }
 
 /**
@@ -845,6 +864,198 @@ export const submitBatch = internalAction({
       else tally.failed += 1;
     }
     return tally;
+  },
+});
+
+// ── The CAPTIONS submit (plan 20-17) ───────────────────────────────────────────────────────────
+//
+// The one media line whose INPUT is another line's OUTPUT: the transcript is taken from the clean
+// voice takes this same batch just produced. That is why it is not in `submitBatch` — at submit
+// time the audio does not exist yet.
+//
+// ONE request for the whole reel, not one per take. That is not a choice this plan gets to make
+// freely: `reserveJobInner` already creates exactly ONE `stt` line at `blockIndex: -1`, priced at
+// the whole deck's audio minutes. N requests would spend one reservation N times.
+//
+// **Captions are timed on the CLEAN takes, never the mixed bed.** The upstream in-assembler Whisper
+// path was removed on 2026-07-29 for transcribing music and SFX under the speech and swallowing
+// words, and D8 forbids re-merging assembly and captions. So this reads the tts assets, NOT
+// `final.mp4` — which is also why it does not wait for the render and the render does not wait for
+// it.
+
+/**
+ * The audio, as a `data:` URI.
+ *
+ * **DEVIATION FROM THE PLAN, recorded here because it is a trust-boundary decision.** 20-17 says to
+ * POST the bytes to fal's file-upload endpoint and submit the returned fal-hosted URL. The BINDING
+ * requirement behind that instruction is *"a Convex signed storage URL is NEVER handed to a third
+ * party"* — `plans.attachmentUrls`' header calls such a URL a bearer capability — and a data URI
+ * satisfies it completely: no URL of ours exists, so none can be handed over.
+ *
+ * Why this and not the upload: fal's upload endpoint is a multi-step protocol (initiate → PUT →
+ * derive) whose exact shape could NOT be confirmed vendor-direct in this session, and the delta
+ * (§3.2) records only that it "returns a fal-hosted URL". Guessing a protocol at a money boundary
+ * fails at the first live call and buys nothing over the documented data-URI form, which is ONE
+ * request on a path already built. It also removes a ceiling the plan expected to have to record:
+ * with no upload there is no copy of tenant audio sitting in fal's storage under a retention policy
+ * we do not control. The bytes still reach fal — that is what transcription is — but they live only
+ * for the request.
+ *
+ * ponytail: upgrade path if a reel ever outgrows the body cap below (a longer deck, or a switch to
+ * 48 kHz takes): fal's file-upload endpoint, confirmed against its OpenAPI spec first, submitted the
+ * same way. The seam is this one function.
+ */
+export function audioDataUri(bytes: Uint8Array, mimeType: string): string {
+  let binary = "";
+  // Chunked: `String.fromCharCode(...bytes)` on a 3 MB array blows the argument limit.
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
+/** The ceiling on the concatenated takes, before base64. A 6x10s reel at the pinned 24 kHz mono
+ *  16-bit is ~2.9 MB, so this is ~2x headroom — and a refusal here is a governed stop with a code,
+ *  never a 413 discovered after the reservation was spent. */
+export const MAX_STT_AUDIO_BYTES = 6 * 1024 * 1024;
+
+/** Everything the captions submit needs, read through the tenant-prefixed index. */
+export const captionsToSubmit = internalQuery({
+  args: { tenantId: v.string(), batchId: v.string() },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<{
+    sttJobId: Id<"mediaJobs">;
+    planId: Id<"plans">;
+    model: string;
+    takes: Array<{ blockIndex: number; storageId: Id<"_storage"> }>;
+  } | null> => {
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
+      .collect();
+    const stt = rows.find((r) => r.kind === "stt");
+    if (!stt) return null; // captions were not reserved for this deck — nothing to do, not an error
+    const takes = rows
+      .filter((r) => r.kind === "tts" && r.status === "succeeded" && r.assetStorageId !== undefined)
+      .sort((l, r) => l.blockIndex - r.blockIndex)
+      .map((r) => ({ blockIndex: r.blockIndex, storageId: r.assetStorageId as Id<"_storage"> }));
+    if (takes.length === 0) return null;
+    return { sttJobId: stt._id, planId: stt.planId, model: stt.model, takes };
+  },
+});
+
+/** The take offsets onto the plan row, in the SAME mutation that records the submission — they are
+ *  two halves of one fact ("this is the audio that was sent"), and a transcript whose offsets were
+ *  never written is a transcript that cannot be rebased. */
+export const recordCaptionSubmission = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    jobId: v.id("mediaJobs"),
+    offsetsS: v.array(v.number()),
+    result: v.union(
+      v.object({ ok: v.literal(true), falRequestId: v.string() }),
+      v.object({ ok: v.literal(false), blocked: v.boolean(), code: v.string() }),
+    ),
+  },
+  handler: async (ctx, a): Promise<null> => {
+    const updatedAt = Date.now();
+    if (a.result.ok) {
+      await ctx.db.patch(a.planId, { captionOffsetsS: a.offsetsS });
+      await ctx.db.patch(a.jobId, { falRequestId: a.result.falRequestId, updatedAt });
+      return null;
+    }
+    // A caption failure NEVER touches `renderStatus` — the uncaptioned reel stays published.
+    await ctx.db.patch(a.planId, { captionStatus: "failed", captionReason: a.result.code });
+    await ctx.db.patch(a.jobId, {
+      status: a.result.blocked ? "blocked" : "failed",
+      ...(a.result.blocked ? { verdict: "provider_blocked" as const } : {}),
+      failureReason: a.result.code,
+      updatedAt,
+    });
+    return null;
+  },
+});
+
+/**
+ * Submit the reel's ONE captions line: concatenate the clean takes, transcribe them, return.
+ *
+ * Scheduled from `mediaComplete.maybeStartCaptions` the moment the last voice take lands — in
+ * PARALLEL with the render, because a transcript needs the takes and the sidecar's anchors, never
+ * `final.mp4`.
+ */
+export const submitCaptions = internalAction({
+  args: { tenantId: v.string(), batchId: v.string() },
+  handler: async (ctx, a): Promise<{ ok: boolean; code?: string }> => {
+    // ALL THREE env reads FIRST, before a single tenant byte is READ, let alone sent — the 20-05
+    // rule taken one step further than `submitLine` needs it. `FAL_KEY` is re-read inside
+    // `submitLine` and would refuse there anyway, but only after this action had already pulled
+    // every voice take out of storage and concatenated them. Refusing here means a deployment
+    // missing its key does no work at all. `media.test.ts` asserts a fetch-call count of ZERO.
+    requireEnvMedia("FAL_KEY");
+    const siteUrl = requireEnvMedia("CONVEX_SITE_URL");
+    const secret = requireEnvMedia("FAL_WEBHOOK_SECRET");
+
+    const job = await ctx.runQuery(internal.media.captionsToSubmit, a);
+    if (!job) return { ok: false, code: "no_captions_line" };
+    // The same idempotency gate every other line goes through: `queued → submitted` in a
+    // serializable mutation, so a retried action cannot re-POST a line that is already in flight.
+    if (!(await ctx.runMutation(internal.media.claimLine, { jobId: job.sttJobId }))) {
+      return { ok: false, code: "already_claimed" };
+    }
+
+    const takes: Uint8Array[] = [];
+    for (const take of job.takes) {
+      const blob = await ctx.storage.get(take.storageId);
+      if (!blob) {
+        await ctx.runMutation(internal.media.recordCaptionSubmission, {
+          planId: job.planId,
+          jobId: job.sttJobId,
+          offsetsS: [],
+          result: { ok: false, blocked: false, code: "take_missing" },
+        });
+        return { ok: false, code: "take_missing" };
+      }
+      takes.push(new Uint8Array(await blob.arrayBuffer()));
+    }
+
+    const joined = concatWavTakes(takes);
+    const fail = async (code: string) => {
+      await ctx.runMutation(internal.media.recordCaptionSubmission, {
+        planId: job.planId,
+        jobId: job.sttJobId,
+        offsetsS: [],
+        result: { ok: false, blocked: false, code },
+      });
+      return { ok: false, code };
+    };
+    if (!joined.ok) return await fail(joined.error.code);
+    if (joined.value.wav.byteLength > MAX_STT_AUDIO_BYTES) return await fail("audio_too_large");
+
+    const webhookUrl = `${siteUrl}/fal/callback/${job.sttJobId}.${await hmacHex(job.sttJobId, secret)}`;
+    const res = await submitLine(
+      {
+        kind: "stt",
+        model: job.model,
+        // MEASURED off the audio actually being sent, not copied from the reservation. `stt` is an
+        // EXACT_SPEND kind because we generated this audio and therefore already know its length —
+        // reading the estimate back here instead would make that claim circular.
+        audioMinutes: joined.value.durationS / 60,
+        audioUrl: audioDataUri(joined.value.wav, "audio/wav"),
+      },
+      "", // an stt line submits no text — the audio IS the input
+      webhookUrl,
+    );
+    await ctx.runMutation(internal.media.recordCaptionSubmission, {
+      planId: job.planId,
+      jobId: job.sttJobId,
+      offsetsS: joined.value.offsetsS,
+      result: res.ok
+        ? { ok: true, falRequestId: res.requestId }
+        : { ok: false, blocked: res.blocked, code: res.code },
+    });
+    return res.ok ? { ok: true } : { ok: false, code: res.code };
   },
 });
 

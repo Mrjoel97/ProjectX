@@ -778,6 +778,13 @@ describe("no hardcoded agent prompts in convex/", () => {
    * (2026-08-02) — the scan and 20-13's mirror landed in different plans and never met.
    */
   const ASSEMBLER_MIRROR = "/render/assembleScript.ts";
+  /** The SECOND mirror, on identical terms (plan 20-17). `render/burnCapsScript.ts` mirrors
+   *  `render/burn_caps.sh` — the caption burn — and everything above applies to it word for word:
+   *  it is a shell script executed in a VM holding tenant media, so making it a mutable registry
+   *  row would be remote code execution. Two exemptions, both the same shape, both anti-vacuity
+   *  checked below. A THIRD should be resisted: the pattern is "a harvested ffmpeg pass", and a
+   *  file that is not that does not belong here. */
+  const BURN_MIRROR = "/render/burnCapsScript.ts";
 
   test("the assembler-mirror exemption is REAL and still guarded elsewhere", () => {
     // Anti-vacuity. A skip keyed on a path becomes a silent hole the moment that path moves, and
@@ -786,6 +793,10 @@ describe("no hardcoded agent prompts in convex/", () => {
     expect(existsSync(at(`.${ASSEMBLER_MIRROR}`))).toBe(true); // the exempted file
     expect(existsSync(at("./render/assemble_final.sh"))).toBe(true); // its canonical source
     expect(existsSync(at("./render/assembleScript.test.ts"))).toBe(true); // the byte-identity drift test
+    // …and the same three for the caption burn's mirror.
+    expect(existsSync(at(`.${BURN_MIRROR}`))).toBe(true);
+    expect(existsSync(at("./render/burn_caps.sh"))).toBe(true);
+    expect(existsSync(at("./render/burnCapsScript.test.ts"))).toBe(true);
   });
 
   test("no long inline prompt string literals live in convex/ source", () => {
@@ -803,7 +814,7 @@ describe("no hardcoded agent prompts in convex/", () => {
         }
         if (!entry.endsWith(".ts")) continue;
         if (entry.endsWith(".test.ts")) continue;
-        if (full.endsWith(ASSEMBLER_MIRROR)) continue; // the ONE exemption — see below
+        if (full.endsWith(ASSEMBLER_MIRROR) || full.endsWith(BURN_MIRROR)) continue; // the TWO exemptions — see above
         sourceFiles.push(full);
       }
     };
