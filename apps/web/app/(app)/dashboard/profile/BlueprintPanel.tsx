@@ -10,7 +10,7 @@ import {
 import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { BlueprintDiff } from "./BlueprintDiff";
-import { card, label, primaryButton } from "./page";
+import { card, label, primaryButton } from "./styles";
 
 const REPORT_SECTIONS = [
   {

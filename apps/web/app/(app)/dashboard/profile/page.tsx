@@ -19,6 +19,7 @@ import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { BlueprintPanel } from "./BlueprintPanel";
+import { card, field, label, primaryButton } from "./styles";
 
 // ONBD-02 dedicated profile page — the post-onboarding EDIT surface. Editability is a locked
 // decision: a user (especially an idea-stage one who onboarded sparse — only oneLineDescription)
@@ -45,26 +46,6 @@ import { BlueprintPanel } from "./BlueprintPanel";
 // invitation to complete the facts. Never a modal, never a redirect, never a gate —
 // `onboarding.status` deliberately still returns `needsOnboarding: false` for them.
 
-export const label: React.CSSProperties = {
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "var(--ink-soft)",
-};
-
-export const field: React.CSSProperties = {
-  width: "100%",
-  padding: "0.6rem 0.75rem",
-  borderRadius: "0.7rem",
-  border: "1px solid var(--rule)",
-  fontFamily: "inherit",
-  fontSize: "0.95rem",
-  background: "var(--card)",
-  color: "var(--ink)",
-  resize: "vertical",
-};
-
 const page: React.CSSProperties = {
   maxWidth: "44rem",
   margin: "0 auto",
@@ -72,29 +53,6 @@ const page: React.CSSProperties = {
   display: "grid",
   gap: "1.5rem",
 };
-
-export const card: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--rule)",
-  borderRadius: "1.1rem",
-  padding: "1.25rem",
-  boxShadow: "0 12px 32px -24px rgb(14 20 25 / 45%)",
-  display: "grid",
-  gap: "1rem",
-};
-
-export const primaryButton = (disabled: boolean): React.CSSProperties => ({
-  padding: "0.65rem 1.5rem",
-  borderRadius: "999px",
-  border: "none",
-  background: "var(--teal-600)",
-  color: "#fff",
-  fontWeight: 700,
-  fontSize: "0.95rem",
-  cursor: disabled ? "default" : "pointer",
-  opacity: disabled ? 0.5 : 1,
-  boxShadow: "0 8px 18px -8px rgb(0 150 137 / 70%)",
-});
 
 /** How the tier reads in a sentence. The tier VALUE itself is still rendered verbatim above it. */
 const TIER_NAME = {

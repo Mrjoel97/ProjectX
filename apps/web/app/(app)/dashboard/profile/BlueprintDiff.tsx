@@ -4,7 +4,7 @@ import { api } from "@pikar/backend/api";
 import { type BlueprintDiffRow, type BlueprintField, FIELD_SPEC } from "@pikar/core";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { label, primaryButton } from "./page";
+import { label, primaryButton } from "./styles";
 
 type AdditionRow = Extract<BlueprintDiffRow, { kind: "addition" }>;
 type ContradictionRow = Extract<BlueprintDiffRow, { kind: "contradiction" }>;
