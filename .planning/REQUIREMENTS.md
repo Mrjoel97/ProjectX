@@ -62,6 +62,16 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **VALT-02**: Graphify extracts entities/relationships from vault content at ingestion; nodes/edges stored in Convex
 - [x] **VALT-03**: Request grounding uses hybrid retrieval — vector similarity plus hop-capped graph traversal — scoped to the requesting user
 - [x] **VALT-04**: User can browse and search their vault contents
+- [ ] **VALT-05**: User can upload a company folder as a unit (up to 1.5 GB total, 200 MB per file) and the vault tracks it as one thing
+- [ ] **VALT-06**: A folder's cost is estimated and the whole folder is reserved before the first paid call, or the folder is refused intact with its estimate, remaining budget and shortfall named
+- [ ] **VALT-07**: A folder's documents are excluded from retrieval until the folder completes
+- [ ] **VALT-08**: A folder completes with an honest manifest of what failed and why, and the digest states what it could not read
+- [ ] **VALT-09**: A folder-level digest is synthesised as a vault document that embeds, retrieves and grounds through the existing rails
+- [ ] **VALT-10**: Digest staleness is surfaced with a one-click rebuild, and no model call fires until the user asks
+- [ ] **VALT-11**: User can drill into a folder and browse its documents rather than one flat grid
+- [ ] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
+- [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail
+- [ ] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
 
 ### Live Voice Sessions
 
@@ -215,6 +225,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-02 | Phase 5 | Complete |
 | VALT-03 | Phase 5 | Complete |
 | VALT-04 | Phase 5 | Complete |
+| VALT-05 | Phase 15.3 | Pending |
+| VALT-06 | Phase 15.3 | Pending |
+| VALT-07 | Phase 15.3 | Pending |
+| VALT-08 | Phase 15.3 | Pending |
+| VALT-09 | Phase 15.3 | Pending |
+| VALT-10 | Phase 15.3 | Pending |
+| VALT-11 | Phase 15.3 | Pending |
+| VALT-12 | Phase 15.3 | Pending |
+| VALT-13 | Phase 15.3 | Pending |
+| VALT-14 | Phase 15.3 | Pending |
 | VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
 | VOIC-02 | Phase 6 | Complete (server engine unit-verified 06-05: watchdog cap + clean/abnormal CAS + fail-closed metering; live 15:00 hangup at phase-gate human-verify) |
 | VOIC-03 | Phase 6 | Complete (server engine unit-verified 06-05: brief → vault ingest, refs-only session audit; live round-trip at phase-gate human-verify) |
