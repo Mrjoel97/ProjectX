@@ -1,6 +1,8 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-02 (connections-tab Task 1 — **the Google disconnect control has one writer.** The confirm copy and the partial-revoke branch (`revoked: false` → point the user at `myaccount.google.com/permissions`) moved out of `connect-gmail/page.tsx` into `apps/web/app/(app)/_components/DisconnectGoogle.tsx`; `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` and no longer calls `api.gmailAuth.disconnectGoogle` itself. No backend behaviour changed.)
+> Last verified: 2026-08-02 (connections-tab fix wave — **`DisconnectGoogle` now owns its own `gmailStatus` subscription instead of trusting the caller's `connected` flag.** `disconnectGoogle` runs `deleteTokens` UNCONDITIONALLY before returning, so gating the component's mount on `status.connected` (as both `connect-gmail/page.tsx` and the Connections tab did) unmounted it — and destroyed its `revoked: false` partial-revoke warning — the instant a disconnect resolved. `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` unconditionally, outside the `status.connected` branch; its orphaned comment describing the old inline behaviour is deleted. No backend behaviour changed.)
+>
+> Prior: 2026-08-02 (connections-tab Task 1 — **the Google disconnect control has one writer.** The confirm copy and the partial-revoke branch (`revoked: false` → point the user at `myaccount.google.com/permissions`) moved out of `connect-gmail/page.tsx` into `apps/web/app/(app)/_components/DisconnectGoogle.tsx`; `connect-gmail/page.tsx` now renders `<DisconnectGoogle />` and no longer calls `api.gmailAuth.disconnectGoogle` itself. No backend behaviour changed.)
 >
 > Prior: 2026-08-02 (20-07 — **the `externalAction` arm has TWO occupants and is no longer
 > calendar's.** `media` joined `ACTION_TYPES`; the arm body became `EXTERNAL_TARGETS` (one thunk per

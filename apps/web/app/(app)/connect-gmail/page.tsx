@@ -21,9 +21,6 @@ export default function ConnectGmailPage() {
     setGmailError(new URLSearchParams(window.location.search).get("gmailError"));
   }, []);
 
-  // Disconnect revokes the grant at Google and drops the stored token. `gmailStatus` is a live
-  // subscription on that row, so the panel flips on its own — no refetch, no optimistic state.
-
   return (
     <section style={{ display: "grid", gap: "1rem", maxWidth: "40rem" }}>
       <h1>Connect Google</h1>
@@ -50,9 +47,6 @@ export default function ConnectGmailPage() {
           <p style={{ fontSize: "0.9rem", color: "var(--ink-soft)" }}>
             Reconnect any time to refresh the connection.
           </p>
-          <div style={{ marginTop: "0.75rem" }}>
-            <DisconnectGoogle />
-          </div>
         </div>
       ) : (
         <p style={{ color: "var(--ink-soft)" }}>
@@ -60,6 +54,13 @@ export default function ConnectGmailPage() {
           and create approved calendar events. It can never permanently delete your mail.
         </p>
       )}
+
+      {/* Rendered UNCONDITIONALLY — not nested inside the `status.connected` branch above. It
+          carries its own `gmailStatus` subscription and would otherwise unmount (destroying its
+          own partial-revoke warning) the instant disconnect flips `connected` to false. */}
+      <div style={{ marginTop: "0.75rem" }}>
+        <DisconnectGoogle />
+      </div>
 
       {connectUrl ? (
         <a

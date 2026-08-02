@@ -80,10 +80,14 @@ function GoogleRow() {
                 : "Connected"}
         </span>
       </div>
-      {status !== undefined &&
-        (status.connected ? (
-          <DisconnectGoogle />
-        ) : (
+      {/* `<DisconnectGoogle />` renders UNCONDITIONALLY — never gated on `status.connected` here.
+          It carries its own `gmailStatus` subscription and decides for itself whether to show the
+          button, a partial-revoke warning, or nothing. Gating its mount on this row's `connected`
+          check is exactly the bug this shape fixes: the action flips `connected` to false before
+          returning, which would unmount the component before its warning could render. After a
+          failed revoke the user correctly sees BOTH the warning below AND the Connect link. */}
+      <div style={{ display: "grid", gap: "0.4rem", justifyItems: "end" }}>
+        {status !== undefined && !status.connected && (
           <a
             href="/connect-gmail"
             style={{
@@ -99,7 +103,9 @@ function GoogleRow() {
           >
             Connect
           </a>
-        ))}
+        )}
+        <DisconnectGoogle />
+      </div>
     </div>
   );
 }

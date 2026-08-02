@@ -9,6 +9,9 @@ const read = (rel: string) => readFileSync(new URL(`../../../${rel}`, import.met
 const WEB = "apps/web/app/(app)";
 const button = read(`${WEB}/_components/DisconnectGoogle.tsx`);
 const connectPage = read(`${WEB}/connect-gmail/page.tsx`);
+const panel = read(`${WEB}/dashboard/profile/ConnectionsPanel.tsx`);
+const data = read(`${WEB}/dashboard/profile/connections.ts`);
+const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
 
 // The exact user-facing sentence. If the Google scope changes, this string changes in ONE place.
 const CONFIRM = "Disconnect Google? Pikar will lose access to your mail AND your calendar.";
@@ -42,9 +45,51 @@ describe("DisconnectGoogle is the single writer of the disconnect copy", () => {
   });
 });
 
-const panel = read(`${WEB}/dashboard/profile/ConnectionsPanel.tsx`);
-const data = read(`${WEB}/dashboard/profile/connections.ts`);
-const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
+// Finds the substring between `<condition> ? (` and the matching close-paren by counting
+// parens, so nested JSX inside the branch (extra `(` / `)` from other expressions) doesn't fool a
+// naive regex. Returns null if the exact ternary literal isn't present at all.
+function ternaryTrueBranch(source: string, condition: string): string | null {
+  const marker = `${condition} ? (`;
+  const openIdx = source.indexOf(marker) + marker.length - 1; // index of the opening "("
+  if (openIdx < marker.length - 1) return null; // indexOf returned -1
+  let depth = 0;
+  for (let i = openIdx; i < source.length; i++) {
+    if (source[i] === "(") depth++;
+    else if (source[i] === ")") {
+      depth--;
+      if (depth === 0) return source.slice(openIdx + 1, i);
+    }
+  }
+  return null;
+}
+
+describe("DisconnectGoogle's revoked:false warning is reachable — it must outlive connected:false", () => {
+  // The whole bug this guards: `disconnectGoogle` deletes the local token row UNCONDITIONALLY
+  // before returning, so `gmailStatus` flips to `connected: false` the instant the action
+  // resolves — including on a partial revoke (`revoked: false`). If the CALLER decided whether to
+  // mount <DisconnectGoogle /> from that same `connected` flag, the component (and its warning)
+  // would unmount before a human could ever read it. The fix: the component owns its own
+  // subscription and neither call site gates its mount on connection state.
+
+  test("DisconnectGoogle carries its own gmailStatus subscription", () => {
+    expect(button).toContain("useQuery(api.gmailAuth.gmailStatus)");
+  });
+
+  test("ConnectionsPanel does not wrap <DisconnectGoogle /> inside a status.connected ternary", () => {
+    const branch = ternaryTrueBranch(panel, "status.connected");
+    // No such ternary at all is fine (that's the fixed shape); if one exists, it must not be
+    // the thing gating the button's mount.
+    if (branch !== null) expect(branch).not.toContain("DisconnectGoogle");
+    // Guard the guard: the panel must still actually render the control somewhere unconditional.
+    expect(panel).toContain("<DisconnectGoogle");
+  });
+
+  test("connect-gmail does not wrap <DisconnectGoogle /> inside a status.connected ternary", () => {
+    const branch = ternaryTrueBranch(connectPage, "status.connected");
+    if (branch !== null) expect(branch).not.toContain("DisconnectGoogle");
+    expect(connectPage).toContain("<DisconnectGoogle");
+  });
+});
 
 describe("the blocked rows are information, not decoration", () => {
   test("the data module and panel are really being scanned", () => {
