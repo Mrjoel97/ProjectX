@@ -152,5 +152,17 @@
     "apps/web/app/(app)/dashboard/vault/",
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs"
+  ],
+  "media.md": [
+    "packages/cost/src/media.ts",
+    "packages/core/src/storyboard.ts",
+    "packages/core/src/assembly.ts",
+    "packages/core/src/render.ts",
+    "packages/core/src/captions.ts",
+    "packages/backend/convex/media.ts",
+    "packages/backend/convex/mediaComplete.ts",
+    "packages/backend/convex/render/",
+    "apps/web/app/api/media/",
+    "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx"
   ]
 }
