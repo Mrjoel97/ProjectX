@@ -189,7 +189,7 @@ function SegmentTile({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      aria-controls="segment-detail"
+      aria-controls={open ? `segment-detail-${segment.id}` : undefined}
       style={{
         appearance: "none",
         font: "inherit",
@@ -290,7 +290,7 @@ function SegmentDetail({
   const populated = segment.fields.filter((f) => blueprint[f] !== null);
 
   return (
-    <section id="segment-detail" style={{ display: "grid", gap: "0.65rem", paddingTop: "0.85rem", borderTop: "1px solid var(--rule)" }}>
+    <section id={`segment-detail-${segment.id}`} style={{ display: "grid", gap: "0.65rem", paddingTop: "0.85rem", borderTop: "1px solid var(--rule)" }}>
       <h3 style={{ ...label, margin: 0 }}>{segment.label}</h3>
 
       {populated.length === 0 && (
