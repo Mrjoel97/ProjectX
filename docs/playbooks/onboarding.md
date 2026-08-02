@@ -5,6 +5,7 @@
 > with a compile-time totality check that every `BLUEPRINT_FIELD` is claimed by exactly one
 > segment. No blueprint field, serializer, spine or Convex function changed.
 > Styles moved to `styles.ts`; no panel imports from a page component any more.
+> `page.tsx` split into `ShapePanel` / `NarrativePanel` / `BlueprintPanel`; both writers unchanged.
 >
 > Last verified: 2026-08-02 (16-09 side-work — **`__seedOnboardedTenant`: the only way into the
 > cockpit without a model call.**) Every `apps/web/e2e` spec sits behind the `(app)` auth gate AND
