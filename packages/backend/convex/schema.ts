@@ -856,7 +856,8 @@ export default defineSchema({
     // after this commit — the field is one optional line now, or a second freeze later.
     // Only `kind: "web_research"` docs write it; every other writer leaves it absent.
     // ponytail: no dedicated index — `by_tenant` + a `kind === "web_research"` filter is the
-    // read. Upgrade path if freshness ever needs ranking at scale: a `by_tenant_kind` index.
+    // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
+    // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
     // Phase-18 (ACTN-04). ABSENT ⇒ user-supplied (every row that exists today; ZERO backfill).
     // "agent" ⇒ agent-authored: excluded from vault retrieval (structurally — it is never
@@ -879,10 +880,66 @@ export default defineSchema({
     // Migration-free by the same rule as the first: Convex builds indexes automatically, and the
     // convex-migration-helper skill lists index changes under "When Not to Use".
     .index("by_tenant_status", ["tenantId", "status"])
+    // HOT-PATH REQUIREMENT, same class as `blueprintDocId` above. `onboarding.status` runs on
+    // EVERY authenticated page render (the app-shell onboarding gate), and its predicate is one
+    // `kind`. On `by_tenant` that read `.collect()`s the tenant's whole vault INCLUDING every
+    // `text` blob — which blew the 1s query budget once a tenant's vault grew past a handful of
+    // documents. Narrowing to (tenantId, kind) turns it into a read of the profile docs alone.
+    .index("by_tenant_kind", ["tenantId", "kind"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
   // single caller (the weekly review fan-out) and yielding tenant ids only, never content.
+
+  // ── Phase-15.3 folder plane (VALT-05..VALT-14) ─────────────────────────────
+  // A folder ingested as ONE thing: estimated and reserved whole, SEALED until every member is
+  // terminal, then synthesised into a digest that is itself a vault document. A NEW TABLE needs no
+  // migration (the convex-migration-helper skill lists "adding new tables with no existing data to
+  // migrate" under "When Not to Use").
+  //
+  // FOUR DECISIONS a later reader will otherwise undo:
+  //
+  // 1. THERE IS NO `cancelled` STATUS, DELIBERATELY. Cancel DELETES the row (15.3-CONTEXT §B13).
+  //    The seal is read THROUGH the folder row, so a folder merely *marked* cancelled would keep
+  //    its members sealed forever — inverting the locked "cancelled documents become groundable
+  //    immediately". Members keep a dangling `folderId` that resolves to nothing, so EVERY folder
+  //    read must treat an unresolvable id as "no folder" (a lenient join). Deleting the row is
+  //    also what keeps cancel migration-free: actively clearing `folderId` on 400 rows does not
+  //    fit one mutation — a patch rewrites the whole document, `text` blob included.
+  // 2. `memberCount` COUNTS ROWS ACTUALLY INSERTED, NEVER FILES SUBMITTED. Hash-dedup returns an
+  //    existing row and starts NO workflow (15.3-RESEARCH §2.9), so a duplicate inside the folder
+  //    produces no terminal event and a folder counting to "files picked" NEVER COMPLETES.
+  // 3. `digestDocId` / `digestSourceDocIds` / `digestBuiltAt` are a field-for-field clone of
+  //    `tenantProfiles.blueprintDocId` / `blueprintSourceDocIds` (below) so the 17.1 staleness
+  //    reader — a bounded set-difference against the documents a synthesis was built from —
+  //    transfers unchanged. Same names, same meaning; do not rename them to something
+  //    folder-flavoured.
+  // 4. `reservedAt` EXISTS FOR THE REFUND CLAMP. `@convex-dev/rate-limiter` clamps to capacity
+  //    BEFORE it subtracts the count, so a refund issued after the 24h fixed window rolls credits
+  //    a window that never paid — verified to yield 2900 against a capacity of 2500
+  //    (15.3-RESEARCH §1.2). The refund is `max(0, min(unspent, capacity - currentValue))`, and
+  //    this stamp is how the settle path knows which window it is refunding into.
+  vaultFolders: defineTable({
+    tenantId: v.string(),
+    name: v.string(),
+    source: v.union(v.literal("upload"), v.literal("drive")),
+    status: v.union(
+      v.literal("reserving"), // estimate taken, reservation not yet held
+      v.literal("ingesting"), // reserved; members in flight; SEALED from retrieval
+      v.literal("complete"), // every member terminal; unsealed
+      v.literal("refused"), // over budget — NOTHING was ingested
+    ),
+    memberCount: v.number(), // rows ACTUALLY INSERTED, never files submitted (decision 2 above)
+    terminalCount: v.number(),
+    failedCount: v.number(),
+    reservedCents: v.number(),
+    spentCents: v.number(),
+    reservedAt: v.optional(v.number()), // window-rollover guard for the refund clamp (decision 4)
+    digestDocId: v.optional(v.id("vaultDocuments")),
+    digestSourceDocIds: v.optional(v.array(v.string())),
+    digestBuiltAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
 
   // A typed entity extracted from vault documents. Cross-doc dedup upserts to
   // ONE node on (tenantId, normalizedName) [type filtered in-handler] via
