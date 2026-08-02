@@ -64,7 +64,7 @@ if (typeof PromiseCtor.withResolvers !== "function") {
 
 // Per-call wall-clock ceiling for the HOSTED extraction call. Deliberately NOT intake.ts's 45s:
 // that number is tuned for small email attachments, but a vault upload runs to VAULT_FILE_CAP_BYTES
-// (100 MiB). Measured live on a 14.4 MB / 12-page scanned PDF (~19 MB base64 on the wire, plus OCR
+// (200 MB since 15.3-02). Measured live on a 14.4 MB / 12-page scanned PDF (~19 MB base64 on the wire, plus OCR
 // of 12 full-page images): 45s was not survivable — the doc failed with
 // "extract_error: The operation was aborted due to timeout". 480s is the SAME ceiling
 // vaultTranscribe.ts already had to adopt for a 21 MB video, and stays under Convex's 10-minute

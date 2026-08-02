@@ -1,5 +1,18 @@
-/** The per-file vault upload ceiling for documents/images: 100 MiB. */
-export const VAULT_FILE_CAP_BYTES = 100 * 1024 * 1024;
+/**
+ * The per-file vault upload ceiling for documents/images: 200 MB (decimal — the copy reads
+ * "200 MB", so the number is declared the way it is spoken). Raised from 100 MiB in 15.3-02, safe
+ * only because 15.2's extraction fan-out bounded per-action memory.
+ *
+ * THE ONE DECLARATION. It used to be re-typed as a literal in five places — `Dropzone.tsx` consts,
+ * two of its error strings, its helper copy, and two server messages — so raising the server cap
+ * alone produced a client that rejected files the backend would have accepted.
+ *
+ * ponytail: the cap is REACHABLE ONLY ON A FAST LINK. Convex's upload POST times out at 2 minutes
+ * per file, so 200 MB needs ~13.3 Mbit/s sustained upstream; a slower connection sees an upload
+ * failure, not a cap refusal. Plan 15.3-04 owns recording that outcome in the folder manifest —
+ * until then a timed-out single file simply fails loudly at the fetch, which is honest but terse.
+ */
+export const VAULT_FILE_CAP_BYTES = 200 * 1000 * 1000;
 
 /**
  * The per-file ceiling for VIDEO uploads: 25 MB (decimal, strictly under the transcription
@@ -7,6 +20,14 @@ export const VAULT_FILE_CAP_BYTES = 100 * 1024 * 1024;
  * is bounded by a downstream service, not our own storage — so it caps lower than documents.
  */
 export const VAULT_VIDEO_CAP_BYTES = 25 * 1000 * 1000;
+
+/**
+ * Render a byte CAP as the whole decimal MB it was declared as — "200 MB", "25 MB". Both caps are
+ * decimal by construction, so `fmtSize` (binary, `DocGrid.tsx`) would print "190.7 MB" for the same
+ * constant and quietly contradict every place the product says 200. This is the formatter that
+ * agrees with the number; `fmtSize` stays the formatter for actual file sizes.
+ */
+export const capMB = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`;
 
 /** Hop cap for GraphRAG neighbor expansion — captures indirect context without exploding. */
 export const GRAPH_HOP_CAP = 2;

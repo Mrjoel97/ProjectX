@@ -38,6 +38,9 @@ importers:
       '@pikar/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pikar/vault':
+        specifier: workspace:*
+        version: link:../../packages/vault
       '@pikar/voice':
         specifier: workspace:*
         version: link:../../packages/voice

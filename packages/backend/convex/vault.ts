@@ -18,6 +18,7 @@
 // (the vault plane's zero-embed-before-accept invariant, mirroring executePlan for delivery).
 import type { EntryId } from "@convex-dev/rag";
 import {
+  capMB,
   categoryFor,
   EXTRACTION_WATCHDOG_MS,
   isSearchable,
@@ -151,8 +152,8 @@ export const vaultIngestText = tenantMutation({
 });
 
 /**
- * File upload ingest with ACCEPT-BUT-DEFER. Oversize is rejected per kind (video > 25 MB, else
- * > 100 MiB). A
+ * File upload ingest with ACCEPT-BUT-DEFER. Oversize is rejected per kind (video >
+ * VAULT_VIDEO_CAP_BYTES, else > VAULT_FILE_CAP_BYTES). A
  * searchable TXT/MD/CSV WITH text stores `processing` + starts the ingest workflow; a non-searchable
  * MIME (pdf/image/video/…) stores `pending_extraction` and starts NO workflow (its text arrives
  * later via the vaultIngestText `docId` seam). Hash-dedup applies to both (a re-upload of identical
@@ -171,13 +172,15 @@ export const vaultUpload = tenantMutation({
     ctx,
     { storageId, filename, mimeType, size, contentHash: hash, text },
   ): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
-    // Per-kind cap: video is bounded by the transcription API's 25 MB limit; everything else by
-    // the 100 MiB storage ceiling. This is the single chokepoint — all video reaches transcribeDoc
-    // only through here, so no downstream size guard is needed.
+    // Per-kind cap: video is bounded by the transcription API's hard limit, everything else by the
+    // storage ceiling. This is the single chokepoint — all video reaches transcribeDoc only through
+    // here, so no downstream size guard is needed. The MESSAGES name the cap from the constant:
+    // typing the number here is how the client and the server drifted apart before 15.3-02.
     if (mimeType.startsWith("video/")) {
-      if (size > VAULT_VIDEO_CAP_BYTES) throw new Error("vault: video too large (max 25 MB)");
+      if (size > VAULT_VIDEO_CAP_BYTES)
+        throw new Error(`vault: video too large (max ${capMB(VAULT_VIDEO_CAP_BYTES)})`);
     } else if (size > VAULT_FILE_CAP_BYTES) {
-      throw new Error("vault: file too large (max 100 MB)");
+      throw new Error(`vault: file too large (max ${capMB(VAULT_FILE_CAP_BYTES)})`);
     }
 
     // Hash-dedup: identical bytes for this tenant reuse the existing item (no re-store / re-embed).

@@ -2,6 +2,7 @@ export type { VaultCategory, VaultSource } from "./categories";
 export { categoryFor, isSearchable, VAULT_CATEGORIES } from "./categories";
 export {
   capGraphText,
+  capMB,
   EXTRACTION_WATCHDOG_MS,
   GRAPH_EXTRACT_CHAR_CAP,
   GRAPH_HOP_CAP,

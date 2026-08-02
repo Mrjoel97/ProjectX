@@ -2,6 +2,10 @@
 
 import { api } from "@pikar/backend/api";
 import { resolveMimeType } from "@pikar/core/validateSubmit";
+// The SUBPATH, never the barrel: `@pikar/vault` pulls xlsx (~1 MB) and fflate into the client
+// bundle. `@pikar/voice` is the precedent for a source-export workspace package imported by a
+// client component with no `transpilePackages` entry.
+import { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault/constants";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
@@ -18,12 +22,6 @@ import { UploadCloudIcon } from "./icons";
 
 // Convex storageId brand, derived from the mutation arg (no dataModel import — repo convention).
 type StorageId = FunctionArgs<typeof api.vault.vaultUpload>["storageId"];
-
-// Client-side mirror of the server caps (@pikar/vault constants.ts — the source of truth that
-// actually enforces). Duplicated as two plain numbers so this client component needn't depend on
-// the Node-oriented @pikar/vault barrel; keep in sync if the server caps change.
-const FILE_CAP_BYTES = 100 * 1024 * 1024; // VAULT_FILE_CAP_BYTES
-const VIDEO_CAP_BYTES = 25 * 1000 * 1000; // VAULT_VIDEO_CAP_BYTES
 
 const SEARCHABLE_MIME = new Set(["text/plain", "text/markdown", "text/csv"]);
 
@@ -53,9 +51,10 @@ export function Dropzone() {
     // Client-side size guard: fail fast with a clear message BEFORE uploading the bytes, so an
     // oversize file doesn't waste a full upload round-trip only to be rejected server-side.
     if (mimeType.startsWith("video/")) {
-      if (file.size > VIDEO_CAP_BYTES) throw new Error(`${file.name}: video too large — max 25 MB`);
-    } else if (file.size > FILE_CAP_BYTES) {
-      throw new Error(`${file.name}: file too large — max 100 MB`);
+      if (file.size > VAULT_VIDEO_CAP_BYTES)
+        throw new Error(`${file.name}: video too large — max ${capMB(VAULT_VIDEO_CAP_BYTES)}`);
+    } else if (file.size > VAULT_FILE_CAP_BYTES) {
+      throw new Error(`${file.name}: file too large — max ${capMB(VAULT_FILE_CAP_BYTES)}`);
     }
     const buf = await file.arrayBuffer();
     const contentHash = await hashBytes(buf);
@@ -171,7 +170,7 @@ export function Dropzone() {
           <br />
           Images & Videos: text extracted automatically — searchable too
           <br />
-          Up to 100 MB per file (video 25 MB)
+          Up to {capMB(VAULT_FILE_CAP_BYTES)} per file (video {capMB(VAULT_VIDEO_CAP_BYTES)})
         </span>
         {busy && <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>Uploading…</span>}
       </button>
