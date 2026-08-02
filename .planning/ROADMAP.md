@@ -596,11 +596,11 @@ Plans:
 **Requirements**: VALT-05, VALT-06, VALT-07, VALT-08, VALT-09, VALT-10, VALT-11, VALT-12, VALT-13, VALT-14
 **Depends on:** Phase 15.2 (the extraction fan-out that made the cap raise safe)
 **Unblocks:** Phase 17.1 — its Stage-2 blueprint drift is specified to fire on bulk/folder-ingest completion and degrades to the Stage-1 one-click rebuild banner until folder ingest exists (`17.1-RESEARCH.md:114-115`, `17.1-CONTEXT.md:201-207`)
-**Plans:** 1/9 plans executed (9 plans, waves 1-9, strictly serial — every plan depends on 01 schema)
+**Plans:** 2/9 plans executed (9 plans, waves 1-9, strictly serial — every plan depends on 01 schema)
 
 Plans:
 - [x] 15.3-01-PLAN.md - Wave 1: schema + requirements + roadmap - `vaultFolders` table, six optional `vaultDocuments` fields, two indexes, the `folder_digest` origin literal; ALL schema for the phase lands here so no later wave touches `schema.ts`
-- [ ] 15.3-02-PLAN.md - Wave 2: vault survivability at folder scale - paginate the grid, counter-derived stats, and delete the duplicated size caps (VALT-05, VALT-14)
+- [x] 15.3-02-PLAN.md - Wave 2: vault survivability at folder scale - the grid + stats read is bounded by ROWS AND BYTES and projected (no `text`), and the size cap is one 200 MB declaration (VALT-05, VALT-14)
 - [ ] 15.3-03-PLAN.md - Wave 3: the budget rail - third $25/day ingest window, two-stage estimate, hard reserve, clamped refund, intact refusal that names numbers (VALT-06)
 - [ ] 15.3-04-PLAN.md - Wave 4: folder ingest orchestration - dedicated workpool, watchdog armed at `markExtracting`, counter-based completion, reservation watchdog, cancel-by-delete (VALT-05, VALT-06, VALT-08)
 - [ ] 15.3-05-PLAN.md - Wave 5: sealing at all three read sites - `runVaultGround`, `vault.vaultSearch`, `blueprint.unincorporatedFor` (VALT-07)
@@ -926,7 +926,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |
-| 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 1/9 | In Progress (15.3-01 schema landed; next 15.3-02 wave 2) | - |
+| 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 2/9 | In Progress (15.3-02 bounded the vault read plane; next 15.3-03 wave 3, the budget rail) | - |
 | 16. Research Sub-Agent & Web Research | 8/9 | In Progress (16-09 live model-backed eval awaits a securely available `OPENAI_API_KEY`) | 2026-07-30 |
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
