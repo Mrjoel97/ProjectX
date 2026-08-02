@@ -57,6 +57,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15.1: Fact-Derived Tier & Conversational Onboarding** (INSERTED 2026-07-25) - Tier becomes derived-from-facts and non-self-assignable (no direct tier control in the UI *or* the mutation), conversational onboarding, agent name + behavior preset; plugs tier filtering into the Phase-15 dispatch seam. Consumes `.planning/design/tier-and-conversational-onboarding.md` (completed 2026-07-26)
 - [x] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17
  (completed 2026-07-27)
+- [ ] **Phase 15.3: Vault Folders - Folder Ingest, Synthesis & Drill-In** (INSERTED 2026-08-02) - The deliberately-deferred "Phase 2" of the 15.2 line, carved out at `15.2-CONTEXT.md:170-184` and never given a slot: a `vaultFolders` table + optional `folderId`, folder upload at 1-1.5 GB with the per-file cap raise to 200 MB (safe now that 15.2's fan-out bounds per-action memory), folder-level synthesis where the digest IS ITSELF a vault document so it embeds for free, a folder-scoped drill-in reusing `PreviewModal`, and a per-folder budget estimate + reservation. **The reservation is load-bearing, not polish:** every ingest opens with `guardrails.preCall`, so a large folder can trip the daily budget mid-run and leave half its documents `failed` - and a half-ingested folder is WORSE than a refused one, because the agent grounds on it confidently. SCOPE EXPANDED 2026-08-02 to SEVEN items: the owner put the two remaining carve-out deferrals back in scope — document identity classification as a first-class classifier (it applies to single-file uploads too) and the Google Drive export rail (one-time 1:1 import, re-import on demand, same budget window). Unblocks Phase 17.1's Stage-2 drift trigger, which fires on bulk/folder-ingest completion and degrades to a one-click rebuild banner until this exists (`17.1-RESEARCH.md:114`)
 - [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [x] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
  (completed 2026-07-30)
@@ -573,6 +574,41 @@ Plans:
 - [ ] 15-05-PLAN.md - Lane B: generalized action executor - exhaustive arm table in `executePlan`, `deliverApprovedPlan.ts` byte-unchanged, Approve-not-a-tool scan
 - [ ] 15-06-PLAN.md - Lane A: rewritten specialist bodies, multi-pin eval runner, 3 golden fixtures, one eval-gate run (ship dark on red)
 
+### Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED)
+
+**Goal:** A user can upload a company FOLDER as a unit and the vault treats it as one thing — ingested under a bounded budget, synthesised into a folder-level digest that is itself a grounded vault document, and browsable by drilling into the folder rather than scrolling one flat document grid.
+
+**Origin:** Not new scope. This is the "Phase 2 of this line of work" that Phase 15.2 explicitly carved out and sequenced AFTER itself (`15.2-CONTEXT.md:170-184`), because the per-file cap raise was unsafe until the extraction fan-out bounded per-action memory. 15.2 shipped that fan-out; the blocker is cleared and the work never got a slot.
+
+**Scope (SEVEN items — five from the 15.2 carve-out, plus the two carve-out deferrals the owner put back in scope on 2026-08-02; see `15.3-CONTEXT.md`):**
+- `vaultFolders` table + an OPTIONAL `folderId` on vault documents — new table, new optional field, the zero-migration widening idiom (`actionType.ts:11-13`). A document with no `folderId` is exactly what it is today.
+- Folder upload at 1–1.5 GB and the per-kind file cap raise to 200 MB.
+- Folder-level synthesis. The lazy shape the carve-out already names: **the folder digest IS ITSELF a vault document**, so it embeds, retrieves and grounds through the existing rails with no second plane.
+- Folder-scoped UI drill-in **reusing `PreviewModal`** — the file-side UI (`DocGrid`, `PreviewModal`, `CategoryTabs`, `Dropzone`, `VaultStats`) already shipped in 3.8/15.2, which is why this half was cheap to defer.
+- Per-folder budget estimate + reservation.
+- **Document identity classification as a first-class classifier** — a closed `docType` union plus a free-text identity line (*"2025 P&L"*, not *"a spreadsheet"*), user-correctable and never overwritten once corrected. Standalone, so it applies to SINGLE-FILE uploads too, not only to documents inside a folder.
+- **The Google Drive export rail** — a one-time 1:1 import of a Drive folder into one `vaultFolder`, re-importable on demand, bounded by the SAME budget window and the same intact-refusal path. Continuous sync is explicitly out of scope.
+
+**The one invariant this phase exists to protect:** every ingest opens with `guardrails.preCall`, which enforces a daily budget. A large folder can trip it mid-run and leave half its documents `failed` — and **a half-ingested folder is worse than a refused one**, because the agent grounds on it confidently without knowing what is missing. Estimate and reserve for the WHOLE folder before the first document, or refuse the folder intact.
+
+**Corrections carried from research:** the Drive rail DOES move bytes — non-native Drive files are downloaded into a Convex action, so the per-file byte cap applies to it too and is enforced from `size` metadata BEFORE download (`15.3-RESEARCH.md` §A6). And the estimator needs a probe stage: bytes + mime alone cannot see the variable that costs the money (a text-layer PDF vs a scanned one is a 40x spread inside one mime type), so a FREE local page-count/text-layer probe runs after bytes land and BEFORE the first paid call, and the reservation is taken off the probed number (§A4).
+
+**Requirements**: VALT-05, VALT-06, VALT-07, VALT-08, VALT-09, VALT-10, VALT-11, VALT-12, VALT-13, VALT-14
+**Depends on:** Phase 15.2 (the extraction fan-out that made the cap raise safe)
+**Unblocks:** Phase 17.1 — its Stage-2 blueprint drift is specified to fire on bulk/folder-ingest completion and degrades to the Stage-1 one-click rebuild banner until folder ingest exists (`17.1-RESEARCH.md:114-115`, `17.1-CONTEXT.md:201-207`)
+**Plans:** 9 plans (waves 1-9, strictly serial — every plan depends on 01's schema)
+
+Plans:
+- [ ] 15.3-01-PLAN.md - Wave 1: schema + requirements + roadmap - `vaultFolders` table, six optional `vaultDocuments` fields, two indexes, the `folder_digest` origin literal; ALL schema for the phase lands here so no later wave touches `schema.ts`
+- [ ] 15.3-02-PLAN.md - Wave 2: vault survivability at folder scale - paginate the grid, counter-derived stats, and delete the duplicated size caps (VALT-05, VALT-14)
+- [ ] 15.3-03-PLAN.md - Wave 3: the budget rail - third $25/day ingest window, two-stage estimate, hard reserve, clamped refund, intact refusal that names numbers (VALT-06)
+- [ ] 15.3-04-PLAN.md - Wave 4: folder ingest orchestration - dedicated workpool, watchdog armed at `markExtracting`, counter-based completion, reservation watchdog, cancel-by-delete (VALT-05, VALT-06, VALT-08)
+- [ ] 15.3-05-PLAN.md - Wave 5: sealing at all three read sites - `runVaultGround`, `vault.vaultSearch`, `blueprint.unincorporatedFor` (VALT-07)
+- [ ] 15.3-06-PLAN.md - Wave 6: the folder digest - registry-governed synthesis inserted as an INGESTED vault document, plus the 17.1 staleness/rebuild idiom (VALT-08, VALT-09, VALT-10)
+- [ ] 15.3-07-PLAN.md - Wave 7: the folder UI - folder picking, always-on pre-flight summary, the refusal, sealed progress, drill-in, stale-digest rebuild (VALT-05, VALT-06, VALT-08, VALT-10, VALT-11)
+- [ ] 15.3-08-PLAN.md - Wave 8: document identity classification - closed `DOC_TYPES` union, registry-row classifier prompt, one ingest step, user-correctable identity that wins (VALT-12)
+- [ ] 15.3-09-PLAN.md - Wave 9: the Google Drive rail - scope widening of the existing Google grant, metadata-only pre-flight, one-time import + on-demand re-import (VALT-13)
+
 ### Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED)
 **Goal**: The business tier stops being something a user can assign themselves and becomes a fact-derived, auditable property of the tenant — because tier now selects agent voice and which Growth OS specialists get offered, making a self-writable tier a behavioral control rather than a preference.
 **Depends on**: Phase 15 (dispatch seam exists, so tier plugs in as a filter/ordering layer rather than forking the router). Design doc D7 originally sequenced this "after Phase 13"; deferred one phase so Phase 15 can ship tier-agnostic dispatch and keep the seam clean.
@@ -890,6 +926,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |
+| 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 0/9 | Planned (9 plans, waves 1-9) | - |
 | 16. Research Sub-Agent & Web Research | 8/9 | In Progress (16-09 live model-backed eval awaits a securely available `OPENAI_API_KEY`) | 2026-07-30 |
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
