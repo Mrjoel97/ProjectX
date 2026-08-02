@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BusinessProfile } from "@pikar/core";
+import type { BusinessProfile } from "@pikar/core";
 import { useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { BlueprintPanel } from "./BlueprintPanel";
@@ -34,12 +34,15 @@ import { label } from "./styles";
 // invitation to complete the facts. Never a modal, never a redirect, never a gate —
 // `onboarding.status` deliberately still returns `needsOnboarding: false` for them.
 
+// Fills the canvas <main> leaves, which already flexes as the rail collapses (.app-frame is a flex
+// row, .rail is flex:none). No max-width and no auto margins: a centred 44rem column left most of a
+// wide screen empty, and the blueprint canvas in particular wants every pixel.
 const page: React.CSSProperties = {
-  maxWidth: "44rem",
-  margin: "0 auto",
-  padding: "2rem 1.25rem",
+  width: "100%",
+  padding: "2rem clamp(1rem, 2.5vw, 2.5rem)",
   display: "grid",
   gap: "1.5rem",
+  alignContent: "start",
 };
 
 const TABS = [

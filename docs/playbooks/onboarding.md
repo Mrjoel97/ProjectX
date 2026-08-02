@@ -1,6 +1,20 @@
 # Playbook: Persona Onboarding & Business Profile
-
-> Last verified: 2026-08-02 (profile tabs + blueprint segments). `blueprintSegments.ts` adds the
+
+> Last verified: 2026-08-02 (⚠ **entry written from a CODE READ of UNCOMMITTED working-tree work,
+> not a live verification — confirm the behaviour before committing**). `BlueprintCanvas.tsx` (new)
+> draws the blueprint as a blueprint: segments are nodes on a pannable/zoomable sheet wired by
+> `SEGMENT_FLOW` in `@pikar/core`. **No canvas/graph/drag library was added** — geometry is
+> model-space (`NODE_W`/`NODE_H` constants, edge endpoints are pure arithmetic on `{x,y}`), never
+> `getBoundingClientRect`, which is what keeps wires from drifting under the CSS transform. Node
+> positions persist per browser under `pikar:blueprintLayout` (the `AbnormalBriefBanner`
+> localStorage idiom); **dragging never rewires anything** — arrangement is the user's, the
+> connections are a claim about the business. `BlueprintPanel` gained `SEGMENT_COPY` (presentation
+> language, deliberately NOT in `@pikar/core` — core owns the field set, the panel owns the words),
+> an `EMPTY_BLUEPRINT` so the grid renders before a blueprint exists, a `NeedsYou` gap tile, and
+> `AskSpecialist` — a segment → specialist handoff that calls `api.cockpit.sendCockpitMessage` and
+> routes to the thread. That handoff is the panel-protocol escape hatch (a card control re-enters
+> the agent loop) and NOT an inline field editor, which stays rejected — two writers on one row.
+> Prior: 2026-08-02 (profile tabs + blueprint segments). `blueprintSegments.ts` adds the
 > PRESENTATION grouping over the closed field set — six segments named after `SPECIALIST_ROUTES`,
 > with a compile-time totality check that every `BLUEPRINT_FIELD` is claimed by exactly one
 > segment. No blueprint field, serializer, spine or Convex function changed.
