@@ -101,9 +101,13 @@ function Shell({ children }: { children: ReactNode }) {
     });
 
   // Exact match for /dashboard (it prefixes everything); prefix match elsewhere so
-  // e.g. /review/[id]-style child routes keep their parent item lit.
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+  // e.g. /review/[id]-style child routes keep their parent item lit. A nav href may carry a
+  // `?tab=` deep link, but `usePathname()` never does — so compare the path portion only,
+  // otherwise such an item can never light up.
+  const isActive = (href: string) => {
+    const path = href.split("?")[0] ?? href;
+    return path === "/dashboard" ? pathname === path : pathname.startsWith(path);
+  };
 
   return (
     <div className="app-frame">
@@ -148,12 +152,12 @@ function Shell({ children }: { children: ReactNode }) {
             <span className="rail-label">Business Profile</span>
           </Link>
           <Link
-            href="/connect-gmail"
-            className={`rail-item${isActive("/connect-gmail") ? " is-active" : ""}`}
-            title={collapsed ? "Connect Gmail" : undefined}
+            href="/dashboard/profile?tab=connections"
+            className={`rail-item${isActive("/dashboard/profile?tab=connections") ? " is-active" : ""}`}
+            title={collapsed ? "Connections" : undefined}
           >
             <MailIcon />
-            <span className="rail-label">Connect Gmail</span>
+            <span className="rail-label">Connections</span>
           </Link>
           <button
             type="button"
