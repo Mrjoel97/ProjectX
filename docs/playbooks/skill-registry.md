@@ -1,5 +1,11 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Re-checked 2026-08-02 by the Phase-20 lane (20-01): `packages/contracts/skills/cockpit-agent.md`
+> and `packages/contracts/src/skills/cockpitAgent.ts` show as modified in the shared working tree
+> but their diff against HEAD is **EMPTY** — stat-dirty only (mtime/EOL refresh), no body change,
+> so no registry version and no gate state moved. Nothing below is amended. The `media-director`
+> row that Phase 20 does add is plan 20-03's, and it is not in the tree yet.
+>
 > Last verified: 2026-08-01 (16-09 — **run `56bff5b8` paid, 29/33; FOUR bodies changed and NONE
 > are seeded. The “NUMBER-FREE” claim in the block below is SUPERSEDED.**)
 > Gate run `56bff5b8`: **29/33 passed, $0.3025** ($0.2290 executive + $0.0734 specialist) against a

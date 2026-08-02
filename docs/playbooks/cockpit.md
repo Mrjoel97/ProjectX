@@ -1,5 +1,5 @@
 # Playbook: Email Chat Cockpit
-
+
 > Last verified: 2026-08-02 (18-07 — **the Output card: the created artifact is SEEN in the
 > conversation.** Documenting shipped surface that landed WITHOUT a playbook bump; `check-playbooks`
 > was green only because foreign lanes kept touching this file, so a green hook was never the
@@ -54,6 +54,13 @@
 > The NESTED route prefix is part of the TOPIC and is load-bearing: `create=` only picks the tool,
 > it does NOT keep the model out of the loop. Without the prefix `generateObject` fires for real,
 > throws with no key, and NO vault row is written at all.
+>
+> Re-checked 2026-08-02 by the Phase-20 lane (20-01), which did NOT author this change: the code
+> this entry describes (`gmailAuth.store` + its `calendar.test.ts` coverage) is still UNCOMMITTED
+> in the shared working tree. Read against that diff and found accurate — the `by_tenant_read`
+> scan patching unread `gmail_reconnect` rows is present as written, and `awaiting_reauth`
+> requests are untouched as claimed. Nothing below is amended; the owning lane still owns the
+> commit.
 >
 > Last verified: 2026-08-02 (**the reconnect banner is now clearable — by reconnecting, and by
 > hand.**) Reported live: the user reconnected Gmail and the banner stayed up with no way out.
