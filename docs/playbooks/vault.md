@@ -1,5 +1,11 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-02 — **the vault read plane is bounded and projected, and the
+> size cap is declared in ONE place.** `listVaultDocs`/`vaultStats` stopped `.collect()`ing the
+> tenant partition with every `text` blob attached; the per-file cap is 200 MB and no longer
+> re-typed in five places. **This is the first change in this phase a user can SEE.** See
+> `### 15.3-02` at the END of this file.)
+
 > Last verified: 2026-08-03 (15.3-01 — **the vault schema is now folder-aware, and every byte of
 > it is inert.** `vaultFolders` + six optional `vaultDocuments` fields + two indexes + the
 > `folder_digest` origin literal landed as a PURE WIDENING: no behaviour, no backfill, no
@@ -1433,3 +1439,109 @@ later plan off a shared file.
 Verify with `npx convex codegen` + `npx tsc --noEmit -p tsconfig.json` from `packages/backend`
 (errors must stay confined to `convex/*.test.ts`, zero in `schema.ts`), and by confirming there is
 still no `origin` predicate in any retrieval path.
+
+### 15.3-02 — read-surface survivability + cap single-source
+
+The first 15.3 plan a user can SEE. Two shipped defects, one of which would have stopped the
+phase's own acceptance demo from rendering.
+
+**THE READ-CAP DEFECT (B1).** `listVaultDocs` (`vault.ts:270`) and `vaultStats` (`:285`) each
+`.collect()`ed the tenant's whole `vaultDocuments` partition — **including every `text` blob**, up
+to `VAULT_EXTRACT_CHAR_CAP` (400,000) chars per row. Convex has **no projection**: reading a row
+reads the whole row. At 200–400 documents that is 20–160 MB against a **16 MiB** per-transaction
+read cap; ~40 max-size rows already exhaust it. The vault page therefore hard-failed the moment a
+tenant's vault grew large — before any folder feature existed. Folder ingest does not cause this,
+it merely reaches it on day one. Same defect class as the `onboarding.status` timeout fixed
+2026-08-02.
+
+**The fix: `readVaultPage`, the ONE bounded read.** Both browse surfaces go through it, so the
+ceiling is stated once and cannot drift between the grid and the stat tiles. It streams the index
+(`by_tenant`, or `by_tenant_folder` when a `folderId` is given) newest-first and stops on
+**whichever bound bites first**:
+
+- `VAULT_GRID_PAGE` (200) rows, and
+- `VAULT_GRID_READ_BUDGET_BYTES` (8 MiB) of `text`.
+
+⚠ **The byte budget is the half that makes the guarantee true, and it is the easy one to delete.**
+A row cap ALONE does not bound bytes: 200 × 400 KB is ~80 MB, still 5× over the read cap. A
+"simplification" that drops the byte budget and keeps `.take(200)` restores the original defect
+while looking bounded. `constants.test.ts` asserts both directions — budget + one max-size row fits
+16 MiB, and `VAULT_GRID_PAGE × VAULT_EXTRACT_CHAR_CAP` does NOT.
+
+**`VAULT_GRID_PAGE` IS A READ-CAP BOUND, NOT A UX PREFERENCE.** Do not raise it because a grid
+"should show more". Upgrade path, in ascending cost: (1) `.paginate()` with a cursor, which the
+grid can adopt with no change to what the query returns; (2) move `text` to a side table keyed by
+docId — the only change that makes a whole-partition read cheap again, and a real migration,
+deliberately out of scope for this phase.
+
+**THE PROJECTION IS A CONTRACT CHANGE.** `listVaultDocs` now returns metadata only — and **never
+`text`** (nor `tenantId`/`contentHash`). `ownedDocsMeta` (`vault.ts:438`) was the shipped refs-only
+precedent; this is the same rule applied to the whole grid row. It is also a §4 improvement: raw
+document content stopped being shipped to the browser to render a card, a status pill and a size.
+
+One document's text now comes from **`vault.vaultDocText`** — a tenant-scoped, fail-closed-as-null
+one-doc read. Three surfaces were repaired onto it: `PreviewModal` (the preview pane), the
+onboarding intake poll, and the voice `AbnormalBriefBanner`. **The banner is the cautionary one:**
+it cast the query result to a local type, so dropping `text` would have compiled cleanly and seeded
+an EMPTY plan at runtime. The cast is gone (the row type comes from the query), and the handler now
+refuses rather than seeding an empty plan. Any future consumer that needs a document's words asks
+`vaultDocText`; a field added back to the projection to serve one screen is how this regresses.
+
+**`vaultStats` honesty.** The tiles derive from the same window and return `capped: boolean`. The
+contract: **the stats tiles must never be the reason the page fails to load.** When capped the UI
+renders `200+` and one plain sentence ("Showing your newest documents — this vault holds more than
+one page"), because a "+" alone encodes meaning in a glyph (BRAND §6). An exact figure would need a
+maintained counter row, i.e. a schema field — and `schema.ts` is closed for this phase.
+
+**Known ceiling, accepted:** the `category` filter runs over the bounded window, not the partition
+(there is no `by_tenant_category` index). A tenant past the window can see fewer rows on a narrow
+tab than exist. Upgrade path: that index, or folder drill-in.
+
+**THE CAP DUPLICATION (B11), deleted.** `VAULT_FILE_CAP_BYTES` was re-typed as a literal in FIVE
+places — `Dropzone.tsx:25,26` (consts), `:56,:58` (error strings), `:174` (helper copy) — plus two
+server messages in `vault.ts:171,173`. A server-only raise therefore yielded a client that silently
+rejected files the backend would have accepted. All five are gone: `Dropzone.tsx` imports
+**`@pikar/vault/constants` — the SUBPATH, never the barrel** (the barrel pulls `xlsx` ~1 MB and
+`fflate` into the client bundle), and `apps/web` gained `"@pikar/vault": "workspace:*"` following
+the `@pikar/voice` precedent (no `transpilePackages` entry needed). Error strings and helper copy
+are derived via `capMB()`, which lives beside the caps: the caps are DECIMAL by construction, so
+`DocGrid`'s binary `fmtSize` would print "190.7 MB" for the same constant.
+
+**The cap is now 200 MB (was 100 MiB).** ⚠ **`VAULT_VIDEO_CAP_BYTES` is UNCHANGED at 25 MB** —
+bounded by the transcription API's hard limit (`vaultTranscribe.ts:43`), not by our storage. Do not
+"tidy" it upward to match. `categories.test.ts` pins both values AND the strict `video < file`
+relationship, with the reason; before this plan it asserted only "a positive integer", under which
+the raise would have been silently unverified.
+
+⚠ **200 MB is reachable only on a fast link.** Convex's upload POST times out at **2 minutes** per
+file, so 200 MB needs ~13.3 Mbit/s sustained upstream; a slower connection sees an upload failure,
+not a cap refusal. Recorded at the constant. Plan 15.3-04 owns surfacing that outcome in the folder
+manifest; until then a timed-out single file fails loudly at the `fetch`, which is honest but terse.
+
+**THE GUARD (B16): `packages/core/src/vaultSurface.test.ts`.** Before this plan there was ZERO test
+coverage of the vault UI — grep `dashboard/vault` across every `*.test.ts`: no hits. That absence
+is exactly how the cap came to be duplicated. The scan reads the whole route FOLDER (`surfaceOf`,
+`businessProfile.test.ts:569-576`), so the FolderCard/pre-flight split later waves ship does not
+turn it red. It lives in `@pikar/core` because the backend vitest environment is `edge-runtime`
+with no `node:fs`.
+
+It guards: the `@pikar/vault/constants` import, no cap literal and no cap spelled out in copy, no
+`doc.text` on the surface (the projection contract), and no `setInterval`/`setTimeout` poll (the
+status gate is subscription-driven — `DocGrid.tsx:349-353`).
+
+⚠ **Every guard in it is a `not.toContain`, which passes forever over an empty string.** That is
+why the file OPENS with non-vacuity assertions (`src.length > 500`, `"use client"`, and the
+per-file anchors `api.vault.listVaultDocs` / `api.vault.vaultSearch` / `export function DocGrid`).
+If an anchor stops matching, fix THAT first — everything below it has been green over the wrong
+text since it broke. **Mutation-verified on 2026-08-03:** reintroducing `100 * 1024 * 1024` and
+`max 100 MB` in `Dropzone.tsx` turned 2 of the 6 tests RED; reverted, back to 6/6. A guard that does
+not break under its own mutation is not a guard — re-run that mutation if you change this file.
+
+**How to verify.** `npx vitest run src/vaultSurface.test.ts` from `packages/core`; `npx vitest run`
+from `packages/vault`; `npx vitest run --maxWorkers=1 convex/vaultGround.test.ts convex/vault.test.ts
+convex/createdDocs.test.ts convex/research.test.ts` from `packages/backend` (the read-plane block in
+`vaultGround.test.ts` seeds 50 × 200k-char rows and asserts the returned objects carry **no `text`
+property** — a SHAPE assertion, which is cheaper and more durable than a size assertion — plus
+`stats.capped === true` and a returned row count below 50, i.e. the BYTE bound biting). Then
+`npx tsc --noEmit` from `apps/web`, which is what catches a component reaching for a field the
+projection no longer returns.
