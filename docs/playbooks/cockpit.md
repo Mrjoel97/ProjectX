@@ -1,5 +1,52 @@
 # Playbook: Email Chat Cockpit
-
+
+> Last verified: 2026-08-02 (20-07 — **the `externalAction` arm has TWO occupants and is no longer
+> calendar's.** `media` joined `ACTION_TYPES`; the arm body became `EXTERNAL_TARGETS` (one thunk per
+> type) plus a per-type pre-step; approving a media plan reserves the WHOLE reel in the same
+> transaction as the CAS. **The calendar path is behaviourally unchanged and there is a test that
+> says so.** See `## The externalAction arm` below.)
+>
+> PREVIOUSLY: 2026-08-02 (20-06 — **`http.ts` gained a FOURTH route: `POST /fal/callback/*`.**
+> Guarded by an HMAC path segment (`${jobId}.${hmacHex(jobId, FAL_WEBHOOK_SECRET)}`) plus a ±300 s
+> `x-fal-webhook-timestamp` window; every refusal is a bare 401 with a byte-unchanged row, and the
+> fail-closed unset-env guard lives in `mediaComplete.resolveJob` — the one place the comparison
+> happens. The three shipped routes are UNTOUCHED: the Gmail OAuth callback, `/skillopt/export` and
+> `/skillopt/writeback` are byte-identical, and the new route reuses `/skillopt/writeback`'s
+> security rule verbatim — the tenant comes from the ROW, never from the request body. Full
+> mechanism in `docs/playbooks/media.md` § *The landing plane*.)
+>
+> PREVIOUSLY: 2026-08-02 (20-05 — **`gmailAuth.hmacHex` is now exported.** That is the entire
+> diff to this subsystem: one word, `async function` → `export async function`. **No behaviour
+> change to the OAuth state path** — `buildAuthorizeUrl:59` and `verifyState` call the same function
+> with the same body, and the 33 `calendar.test.ts` + 36 `gmail.test.ts` assertions over it are
+> unchanged and green. The media submit adapter (plan 20-05) mints its per-JOB-ROW webhook segment
+> with it rather than minting a second HMAC-path-segment pattern in `lib/hash.ts`; there is exactly
+> one such pattern in this repo and it has been in production since Phase 2.)
+>
+> PREVIOUSLY: 2026-08-02 (20-02 — **the Phase-20 schema and trace freeze.** `plans` gained the
+> media BLOCK DECK (`shots`, `artDirection`, `script`, `clipSeconds`) and the six RENDER-PLANE
+> fields; `agentSteps.tool` gained `dispatchMedia` with its `cards.tsx` VERB in the SAME commit;
+> `guardrailConfig.mediaKillSwitch` is optional so a missing row still reads OFF. All additive,
+> zero migration.)
+>
+> **`resetPlan` wipes the deck AND the render.** A staged deck surviving a reset would re-stage
+> onto the NEXT plan (the `eventTitle` rule), and a surviving `renderStorageId` would show the
+> previous thread's reel under a brand-new proposal — a lie the user can watch. `patchPlan` drops
+> undefined, so every new field must be named explicitly to clear.
+>
+> **`patchPlan` gains NO deck args and NO render args, and that absence IS the guarantee** — the
+> `calendarEventId`/`calendarRunId` rule verbatim. Nothing reachable from the MODEL may write a
+> block prompt or a narration line that later becomes a paid generation, or claim a render
+> happened. The deck is written only by `persistStoryboard` (20-08) and the canvas editor (20-09);
+> the render plane only by the render terminal (20-16). Do not "helpfully" add the args.
+>
+> **`plans.kind` and `patchPlan`'s `kind` union are a HAND-MAINTAINED MIRROR PAIR.** Widen one
+> without the other and the runtime argument validator rejects the new kind while the schema
+> happily stores it — the `PLAN_STATUS` Pitfall-5 lesson (`plans.ts:20-21`) in a second place.
+> There is a third mirror: `packages/core/src/actionType.ts`'s `actionTypeOf(kind)` parameter type,
+> which is why widening the schema alone is a NON-TEST typecheck error. **Plan 20-07 is the one
+> that widens all three in a single commit** — 20-02 deliberately left `plans.kind` untouched.
+
 > Last verified: 2026-08-02 (18-07 — **the Output card: the created artifact is SEEN in the
 > conversation.** Documenting shipped surface that landed WITHOUT a playbook bump; `check-playbooks`
 > was green only because foreign lanes kept touching this file, so a green hook was never the
@@ -60,7 +107,12 @@
 > in the shared working tree. Read against that diff and found accurate — the `by_tenant_read`
 > scan patching unread `gmail_reconnect` rows is present as written, and `awaiting_reauth`
 > requests are untouched as claimed. Nothing below is amended; the owning lane still owns the
-> commit.
+> commit. **THIS WHOLE FILE IS DELIBERATELY LEFT UNCOMMITTED** — `check-playbooks` pairs
+> working-tree code changes with working-tree playbook changes, so with `gmailAuth.ts` dirty and
+> `cockpit.md` clean the gate blocks every turn end in this tree. That also holds back the
+> **Phase-20 (20-02) entry at the top of this file**, whose code IS committed (`schema.ts`,
+> `cards.tsx`, `plans.ts`). Whoever commits the gmail change should commit this file with it and
+> delete this paragraph.
 >
 > Last verified: 2026-08-02 (**the reconnect banner is now clearable — by reconnecting, and by
 > hand.**) Reported live: the user reconnected Gmail and the banner stayed up with no way out.
@@ -1138,6 +1190,119 @@ rather than raising the clock**.
 `callTimeoutMsFor` is the ONE chooser and is exported so the 45s default is *assertable*, not
 assumed. The test pins a LITERAL `45_000` — an assertion written against `CALL_TIMEOUT_MS` would
 track the very refactor it exists to catch.
+
+## The externalAction arm (20-07) — TWO occupants, one Approve gate
+
+Research Open Question 1, answered **GENERALIZE**. D2's own table lists *"approving the plan"* as a
+legitimate generate path, and roadmap SC #3's *"plan-gated by construction"* is strongest when the
+trigger IS the one shipped Approve gate. Routing a canvas Generate button around `executePlan` would
+still have broken `actionTypeOf(plan.kind)`'s parameter type the moment `plans.kind` widened, forcing
+an explicit `kind === "media"` refusal inside the dispatcher — a hole wearing a guard's clothes, and
+two Approve stories instead of one.
+
+`ACTION_TYPES` is now `["email", "memo", "calendar_event", "media"]`. `armFor("media")` is
+`externalAction`, the same arm calendar uses.
+
+### `EXTERNAL_TARGETS` — a table, not a framework
+
+```ts
+type ExternalActionType = {                       // DERIVED from _ARM_TABLE, not hand-listed
+  [K in ActionType]: (typeof _ARM_TABLE)[K] extends "externalAction" ? K : never;
+}[ActionType];
+
+const EXTERNAL_TARGETS = {
+  calendar_event: (ctx, a) => retrier.run(ctx, internal.calendar.createEvent,
+    { planId: a.planId, tenantId: a.tenantId, correlationId: a.correlationId },
+    { onComplete: internal.calendarComplete.onCreateComplete }),
+  media: (ctx, a) => retrier.run(ctx, internal.media.submitBatch,
+    { tenantId: a.tenantId, batchId: a.batchId ?? "" },
+    { onComplete: internal.mediaComplete.onSubmitComplete }),
+} satisfies Record<ExternalActionType, (ctx: MutationCtx, a: ExternalArgs) => Promise<unknown>>;
+```
+
+**THUNKS, not a `{action, args, onComplete}` record.** Each action has its own argument validator —
+`createEvent` takes `{planId, tenantId, correlationId}` and `submitBatch` takes `{tenantId,
+batchId}` — so a shared record would force TS to union the function reference and the args
+independently, losing the correlation, and a shared ARG OBJECT would pass `correlationId` to
+`submitBatch`, which its validator rejects. Each thunk type-checks against its own target.
+
+**The `ExternalActionType` derivation is the guarantee.** Mark a new type `"externalAction"` in
+`_ARM_TABLE` and `EXTERNAL_TARGETS` is instantly incomplete — a COMPILE error, not an `undefined`
+target at runtime. Observed 2026-08-02: `Property 'media' is missing … but required in type
+'Record<ExternalActionType, …>'`. A hand-written union would have accepted the new member silently.
+
+> **ONE-LINE HAND-OFF TO PLAN 20-16, and 20-16 is the ONLY plan permitted to take it.** Today
+> `media` starts the submit fan-out only. When the reel chain lands, 20-16 re-points that ONE thunk
+> at the chain entry (which itself calls `submitBatch` first). The arm shape does not move again.
+
+### The per-type pre-step, and why it runs BEFORE the CAS
+
+`calendar_event` has no pre-step — **that absence is what keeps the calendar path byte-identical.**
+
+`media` reserves the WHOLE reel: `reserveJobInner(ctx, {tenantId, planId, blocks: plan.shots,
+clipSeconds, withCaptions: true})`. It runs **before** `patch({status: "approved"})`, so a refused
+reel leaves the plan at `proposed` with **zero `mediaJobs` rows, no `renderStatus`, and nothing
+scheduled**. Mutation check, observed RED 2026-08-02: move the pre-step after the CAS patch and six
+assertions fail with `expected 'approved' to be 'proposed'`.
+
+**Because the reservation runs inside `executePlan`'s own mutation, it is in the SAME serializable
+transaction as the `proposed → approved` CAS.** That is what makes *approve once, reserve once* true
+with no second idempotency mechanism — and it is why plan 20-04 exposed `reserveJobInner` as a plain
+async function: a Convex mutation cannot `runMutation`.
+
+`renderStatus: "pending"` is set in the SAME patch as `approved` — a reel that has been paid for but
+not yet rendered is a state the canvas must be able to name, and there must be no window where it is
+neither.
+
+`withCaptions` is **pinned `true`** — there is no schema field and no toggle until the canvas
+(20-09). Fail-closed direction: an unused STT line costs $0.008; an unreserved one that IS used is
+spend outside the rail.
+
+### The refusal reasons `executePlan` can now return
+
+`executePlan`'s return union grew by eight. Every one is a **governed stop that names a lever** —
+only bugs throw. **Plan 20-10's canvas renders these.**
+
+| reason | the lever |
+|---|---|
+| `no_deck` | no storyboard, an empty one, or a shot type the price table does not know |
+| `kill_switch` | the global OR the media pause — call the operator |
+| `unknown_model` | the endpoint was renamed; nothing is priced. Free, loud, correct |
+| `over_job_cap` | cut blocks or drop a tier |
+| `illegal_duration` | a clip length outside {5,10} |
+| `narration_too_long` / `narration_too_short` | rewrite that line |
+| `media_daily_exhausted` | this tenant's day is spent |
+| `deployment_media_exhausted` | the keyless ceiling — not this tenant's fault, and it says so |
+
+`no_deck` is `executePlan`'s own (returned before `reserveJobInner`); the rest are `ReserveRefusal`,
+re-exported from `media.ts` so the two unions cannot drift.
+
+### Run ids do not share a column
+
+`calendarRunId` stays CALENDAR's — `calendarComplete` resolves through `by_calendar_run` and would
+happily match a media run written into it. A media approval writes `mediaRunId`, indexed
+`by_media_run`, because the action-retrier's `onComplete` receives **only `{runId, result}`** (no
+context bag — verified against `@convex-dev/action-retrier@0.3.1`'s `RunOptions`), so the run id is
+the sole correlation handle back to the plan.
+
+### D2 is NOT weakened by the media occupant
+
+The trigger is a **HUMAN clicking Approve on a plan row.** No dispatched specialist can reach it:
+`SPECIALIST_TOOLS` is `["searchVault"]`, and there is no code path from a dispatched specialist to a
+fal POST, a TTS submit or a sandbox render. Plan-gated by construction is **structural**, and plan
+20-08's static scan proves it.
+
+### The calendar regression — the honestly-stated cost of generalizing
+
+`cockpit.test.ts` keeps every pre-existing calendar assertion **unchanged and green**, plus two that
+only become checkable once a second occupant exists: a calendar approval moves **neither media
+window** and sets no `renderStatus`, and `deliverApprovedPlan.ts` mentions no calendar/media symbol
+at all — it is the workflow-backed EMAIL entry point, **not** a universal dispatcher.
+
+`dispatchGuard.test.ts`'s arm scan was UPDATED, not weakened: its subject moved into
+`EXTERNAL_TARGETS`, so it now asserts **each occupant's own** action + terminal in the table, that
+the case dispatches through `EXTERNAL_TARGETS[...]` rather than naming a target inline, and that
+`reserveJobInner` is present in the arm. `workflow.start`/`deliverApprovedPlan` stay forbidden there.
 
 ## Phase 16 — the async research dispatch seam (16-06, DISP-02)
 
