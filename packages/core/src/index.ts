@@ -1,6 +1,7 @@
 export * from "./actionType";
 export * from "./calendar";
 export * from "./blueprint";
+export * from "./blueprintSegments";
 export * from "./briefing";
 export * from "./buildTelemetry";
 export * from "./businessProfile";

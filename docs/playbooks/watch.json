@@ -1,5 +1,5 @@
 {
-  "_unassigned": [],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -38,7 +38,9 @@
     "packages/backend/convex/tenantProfile.ts",
     "packages/backend/convex/tenantProfile.test.ts",
     "apps/web/app/(app)/dashboard/onboarding/",
-    "apps/web/app/(app)/dashboard/profile/"
+    "apps/web/app/(app)/dashboard/profile/",
+    "packages/core/src/blueprintSegments.ts",
+    "packages/core/src/blueprintSegments.test.ts"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
