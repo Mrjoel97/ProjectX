@@ -226,6 +226,9 @@ importers:
 
   packages/vault:
     dependencies:
+      '@pikar/cost':
+        specifier: workspace:*
+        version: link:../cost
       fflate:
         specifier: 0.8.3
         version: 0.8.3
