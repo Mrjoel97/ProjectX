@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.3
-current_plan: 3
+current_plan: 4
 status: in_progress
-stopped_at: "Completed 15.3-02-PLAN.md — the vault read plane is bounded + projected and the size cap is declared once; next is 15.3-03 (wave 3, the budget rail)."
-last_updated: "2026-08-03T00:00:00.000Z"
+stopped_at: "Completed 15.3-03-PLAN.md — the folder budget rail: a third $25/day window, reserveFolder/settleFolder with a clamped + rollover-guarded + idempotent refund, and the OPTIONAL rail selector that stops vault ingest spending the cockpit's $5. Next is 15.3-04 (wave 4, folder model + ingest orchestration)."
+last_updated: "2026-08-03T01:10:00.000Z"
 progress:
   total_phases: 42
   completed_phases: 28
   total_plans: 247
-  completed_plans: 229
+  completed_plans: 230
 ---
 
 ---
@@ -93,6 +93,24 @@ and goal-verified offline with status `human_needed` for owner UAT M1-M5. Phase 
 plans 01-09 through the profile confirmation surface and continues at 17.1-10's live gate.
 
 ## Current Position
+
+**PHASE 15.3 — Vault Folders (Wave 3 of 9) — 15.3-03 COMPLETE: the folder budget wall.**
+Folder ingest has its OWN $25/day window (`ingestSpendCents` + a keyless $250 deployment
+ceiling), a whole-folder `reserveFolder` that refuses INTACT with numbers rather than throwing,
+and a `settleFolder` that is the ONE release path — clamped, window-rollover-guarded and
+CAS-idempotent. The B3 defect is closed: every paid step of vault ingest used to charge the
+COCKPIT's $5 at six sites, so a folder both starved the agent and could be refused halfway.
+⚠ **THE REFUND IS A NEGATIVE `count` — ARITHMETIC, NOT AN API.** `@convex-dev/rate-limiter@0.3.2`
+has no refund call, is EXACT-pinned and pre-1.0, and a bump can silently stop refunds. Two guards
+are both load-bearing: the capacity clamp AND a window-rollover skip. `getValue` returns the
+STORED state (no roll-forward), so `settleFolder` rolls it forward with the component's own
+exported `calculateRateLimit` — clamping the raw number IS the 2900-against-2500 bug.
+⚠ **THE CROSS-WINDOW REFUND HAS NO OFFLINE PROOF.** Every test runs inside one 24h window; the
+case that manufactures budget needs a day boundary. Use the operator check in
+`docs/playbooks/guardrails.md` §15.3-03 (`npx convex run guardrails:ingestRemainingCents`).
+15.3-04 MUST: call `reserveFolderInner` in the same mutation that inserts the folder row, persist
+`reservedAt` (settle refuses to refund without it), route cancel AND completion through the one
+`settleFolder`, and pass `rail:"ingest", reserved:true` on every folder member's ingest.
 
 **PHASE 15.3 — Vault Folders (Wave 1 of 9) — 15.3-01 COMPLETE: the whole phase schema, landed once.**
 `schema.ts` is the repo highest-collision file and this phase touches it for five unrelated reasons,
@@ -1602,6 +1620,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 17.1 | 01 | 22 min | 2 | 5 |
 | 17 | 02 | 35 min | 3 | 8 |
 | 18 | 01 | 23 min | 2 | 2 |
+| 15.3 | 03 | 105 min | 7 | 15 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -1853,6 +1872,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-03T01:10:00.000Z
+Stopped at: Completed 15.3-03-PLAN.md
 Last session: 2026-08-02T16:52:41.616Z
 Stopped at: Phase 15.3 context gathered
 Last session: 2026-07-27T01:04:16.127Z
