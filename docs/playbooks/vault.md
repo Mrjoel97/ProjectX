@@ -1,5 +1,13 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (test-infrastructure, owner-directed — **`apps/web` HAS A TEST RUNNER
+> AT LAST**, so a test file placed there is no longer decoration; `preflightCopy.test.ts` moved
+> back beside its module and the cross-package behavioural import is gone from
+> `vaultSurface.test.ts`. **The `crypto is not defined` flake is STILL OPEN** — serialising the
+> suite was tried against measured evidence and DID NOT FIX IT, so the hypothesis was wrong and
+> the change was reverted rather than shipped for a 95 s cost. See *the open flake* below before
+> spending time on it.)
+
 > Last verified: 2026-08-04 (15.3-08 verify pass — **three defects, and the sharpest one is that
 > `identityLine` was the ONE field passed RAW from the model.** `docType` was coerced through
 > `isDocType`; `identityLine` was not, and the AI SDK's `jsonSchema()` without a `validate` fn does
@@ -2863,3 +2871,64 @@ serialising file execution (`fileParallelism: false` or a single fork), which ro
 140 s suite — an owner call, not a side effect of a feature wave.** Until then, a red
 `onboarding.test.ts` with a `not defined` ReferenceError is this flake, not a regression: re-run
 before investigating.
+
+
+#### `apps/web` has a test runner (2026-08-04)
+
+It previously had none — no `test` script, no vitest dependency, no config — and `pnpm test` is
+`turbo run test`, which skips a workspace that declares none. **Anything asserted inside
+`apps/web` was asserted by nobody**, which is how 15.3-07 shipped a `preflightCopy.test.ts` that
+executed nowhere while reading as coverage in the diff and in review.
+
+The runner is deliberately narrow: `environment: "node"`, `include` is **`.ts` only, never
+`.tsx`**. It runs the pure modules beside the components — copy builders, formatters, pure
+derivations. No jsdom, no testing-library, so React components still cannot be rendered.
+`passWithNoTests: false` on purpose: an empty run is the exact condition the config exists to
+make visible.
+
+**Where a vault UI guarantee belongs now:**
+
+| The guarantee is about… | Put it in |
+| --- | --- |
+| a pure module's OUTPUT (`refusalCopy` naming both figures) | `apps/web/**/*.test.ts`, beside the module |
+| the SHAPE of the surface (single writer, no poll, no amber, state above the remount key) | `packages/core/src/vaultSurface.test.ts` |
+| a rendered component's behaviour | still nowhere — needs jsdom, a deliberate two-dependency decision |
+
+**The division is not arbitrary.** A source scan proves the refusal template has exactly one
+writer and *cannot* prove it names both numbers — drop the remaining-cents interpolation while
+leaving the words "left today" in place and every text anchor still matches. Both halves exist, in
+different packages, for that reason.
+
+#### The open flake — `crypto is not defined` (NOT fixed, and one hypothesis is now dead)
+
+The backend suite fails intermittently — roughly 3 runs in 8 — with
+`ReferenceError: crypto is not defined` (and `process is not defined`) inside
+`convex/onboarding.test.ts`, taking three profile tests down. The throw is real code running:
+`lib/hash.ts`'s `crypto.subtle.digest`, reached from `onboarding.ts`'s `writeProfileDoc`.
+
+**WHAT IS RULED OUT — do not spend time re-testing any of these:**
+
+1. **It is not this phase's doing.** Reproduced with only pre-existing files:
+   `npx vitest run convex/onboarding.test.ts convex/vaultDigest.test.ts` failed 1 of 3 runs. No
+   15.3-08 file involved. Adding a 61st test file raises the odds; it did not create the fault.
+2. **It is not leaked fake timers.** Every suite that installs them pairs
+   `beforeEach(vi.useFakeTimers)` with `afterEach(vi.useRealTimers)`.
+3. **It is not a missing `process` shim.** Stubbing `globalThis.process` does not help; the global
+   that actually goes missing is `crypto`.
+4. **IT IS NOT FILE CONCURRENCY.** This one was tried and shipped-then-reverted, so the record
+   matters: `fileParallelism: false` looked promising on a small sample (the two-file pair went 6
+   of 6 green, against 1 of 3 failing parallel) — **but the full suite STILL FAILED the same three
+   tests while serialised.** The pair was too small a sample to carry the conclusion. The change
+   costs ~95 s (140 s -> 236 s) and buys nothing, so it was reverted rather than shipped.
+5. **The victim is always `onboarding.test.ts`.** Alone it is 24/24 green, repeatedly.
+
+**What that leaves.** Serialised execution still tears down and recreates the `@edge-runtime` VM
+per file, so the surviving hypothesis is environment lifecycle rather than parallelism — globals
+going missing from a recycled or partially-initialised VM context, independent of how many files
+run at once. The next thing to try is the POOL, not the parallelism: `pool: "threads"`, or
+`poolOptions.forks.singleFork`, or pinning `@edge-runtime/vm`. **Validate any candidate against a
+20-run sample of the full suite** — a 1-in-3 flake will show 6 clean runs by luck, which is exactly
+how hypothesis 4 above got as far as being committed.
+
+Until then: **a red `onboarding.test.ts` with a `not defined` ReferenceError is this flake, not a
+regression. Re-run before investigating.**

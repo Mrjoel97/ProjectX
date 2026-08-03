@@ -9,14 +9,6 @@
 // pages at all (`businessProfile.test.ts:548-550`).
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-// THE ONLY BEHAVIOURAL IMPORT IN THIS FILE, and it is here because `apps/web` HAS NO TEST RUNNER:
-// no `test` script, no vitest dependency, no config anywhere in the repo. 15.3-07 shipped a
-// `preflightCopy.test.ts` next to the module which NOTHING executed — `pnpm test` is `turbo run
-// test` and skips a workspace with no `test` script, so the plan's "only observable check of the
-// must-name-numbers rule" was dead text that read as coverage. It was deleted and its assertions
-// live here, in a suite that actually runs. `preflightCopy.ts` imports nothing, so it crosses the
-// package boundary cleanly.
-import { refusalCopy } from "../../../apps/web/app/(app)/dashboard/vault/preflightCopy";
 
 /**
  * The scanned unit is the SURFACE — every `.tsx` in the route folder — not one named file. Plans
@@ -234,45 +226,11 @@ describe("the vault surface", () => {
   });
 
 
-  // ── must_have: "The refusal names BOTH numbers" ──────────────────────────────────────────
-  //
-  // A SOURCE SCAN CANNOT PROVE THIS AND MUST NOT PRETEND TO. The sibling assertions below only
-  // check that the template lives in one file; they stay green if someone drops
-  // `${money(a.remainingCents)}` while leaving the words "left today" in place. Only calling the
-  // function observes the numbers coming out, which is why this block imports it.
-  describe("refusalCopy names both numbers (the locked sentence)", () => {
-    const NUMBERED = [
-      "over_folder_cap",
-      "over_deployment_cap",
-      "deployment_ingest_exhausted",
-      "ingest_daily_exhausted",
-      "a_code_added_in_some_later_phase", // the default arm — naming numbers is the FAIL-SAFE side
-    ];
-
-    test.each(NUMBERED)("%s names the estimate and what is left", (reason) => {
-      const { title, remedy } = refusalCopy({ reason, estimateCents: 340, remainingCents: 110 });
-      expect(title).toContain("$3.40");
-      expect(title).toContain("$1.10");
-      expect(remedy.length).toBeGreaterThan(0);
-    });
-
-    // The deny-list is the deliberate exception: pricing never ran, so both figures are 0 and a
-    // sentence naming them would be a confident lie. It must not name a MONEY figure at all.
-    test.each(["kill_switch", "not_reserving", "manifest_short"])(
-      "%s names no figure, because it has none",
-      (reason) => {
-        const { title, remedy } = refusalCopy({ reason, estimateCents: 0, remainingCents: 0 });
-        expect(`${title} ${remedy}`).not.toMatch(/\$\d/);
-        expect(title.length).toBeGreaterThan(0);
-      },
-    );
-
-    // Rounding is part of "the number the reserve takes": 5 cents must read $0.05, not $0.5.
-    test("cents render as two decimals", () => {
-      expect(refusalCopy({ reason: "over_folder_cap", estimateCents: 5, remainingCents: 0 }).title)
-        .toContain("$0.05");
-    });
-  });
+  // The BEHAVIOURAL half of "the refusal names both numbers" moved OUT of this file on 2026-08-04,
+  // to `apps/web/app/(app)/dashboard/vault/preflightCopy.test.ts`, once `apps/web` finally had a
+  // runner (see `apps/web/vitest.config.mts`). It lived here only because a test file over there
+  // executed nowhere. What stays is the SINGLE-WRITER scan above — a source check this file is the
+  // right home for, and one that deliberately cannot prove the sentence names both figures.
 
   // ── must_have: "Refresh does not kick the user out of a folder or discard a picked selection" ──
   //

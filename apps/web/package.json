@@ -9,7 +9,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "bake:sandbox": "node scripts/bake-sandbox-snapshot.mjs"
+    "bake:sandbox": "node scripts/bake-sandbox-snapshot.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@auth/core": "0.41.2",
@@ -32,6 +33,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "3.2.7"
   }
 }
