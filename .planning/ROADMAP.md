@@ -602,7 +602,7 @@ Plans:
 - [x] 15.3-01-PLAN.md - Wave 1: schema + requirements + roadmap - `vaultFolders` table, six optional `vaultDocuments` fields, two indexes, the `folder_digest` origin literal; ALL schema for the phase lands here so no later wave touches `schema.ts`
 - [x] 15.3-02-PLAN.md - Wave 2: vault survivability at folder scale - the grid + stats read is bounded by ROWS AND BYTES and projected (no `text`), and the size cap is one 200 MB declaration (VALT-05, VALT-14)
 - [x] 15.3-03-PLAN.md - Wave 3: the budget rail - third $25/day ingest window, two-stage estimate, hard reserve, clamped refund, intact refusal that names numbers (VALT-06)
-- [ ] 15.3-04-PLAN.md - Wave 4: folder ingest orchestration - dedicated workpool, watchdog armed at `markExtracting`, counter-based completion, reservation watchdog, cancel-by-delete (VALT-05, VALT-06, VALT-08)
+- [x] 15.3-04-PLAN.md - Wave 4: folder ingest orchestration - dedicated workpool, watchdog armed at `markExtracting`, counter-based completion, cancel-by-delete (VALT-05, VALT-06, VALT-08). **Two plan-vs-reality corrections shipped deliberately:** `pool.cancelAll` is unscopeable (it cancels every pending item for every tenant), so the stop moved into `vault.markExtracting`, which refuses work whose folder row has vanished; and `reserveFolder` runs AFTER the members upload because it is also the close signal — without that ordering a 3-file folder completes at `1 === 1`. No folder-level reservation watchdog was built: completion and cancel are the only two exits and both route through the one `settleFolder`
 - [ ] 15.3-05-PLAN.md - Wave 5: sealing at all three read sites - `runVaultGround`, `vault.vaultSearch`, `blueprint.unincorporatedFor` (VALT-07)
 - [ ] 15.3-06-PLAN.md - Wave 6: the folder digest - registry-governed synthesis inserted as an INGESTED vault document, plus the 17.1 staleness/rebuild idiom (VALT-08, VALT-09, VALT-10)
 - [ ] 15.3-07-PLAN.md - Wave 7: the folder UI - folder picking, always-on pre-flight summary, the refusal, sealed progress, drill-in, stale-digest rebuild (VALT-05, VALT-06, VALT-08, VALT-10, VALT-11)
@@ -926,7 +926,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |
-| 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 3/9 | In Progress (15.3-03 landed the folder budget rail; next 15.3-04 wave 4, folder model + ingest orchestration) | - |
+| 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 4/9 | In Progress (15.3-04 landed folder ingest orchestration: the named `vaultIngestPool`, a work-start watchdog, counter-based completion and cancel-by-delete; next 15.3-05 wave 5, sealing) | - |
 | 16. Research Sub-Agent & Web Research | 8/9 | In Progress (16-09 live model-backed eval awaits a securely available `OPENAI_API_KEY`) | 2026-07-30 |
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |

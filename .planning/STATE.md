@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.3
-current_plan: 4
+current_plan: 5
 status: in_progress
-stopped_at: "Completed 15.3-03-PLAN.md — the folder budget rail: a third $25/day window, reserveFolder/settleFolder with a clamped + rollover-guarded + idempotent refund, and the OPTIONAL rail selector that stops vault ingest spending the cockpit's $5. Next is 15.3-04 (wave 4, folder model + ingest orchestration)."
-last_updated: "2026-08-03T01:10:00.000Z"
+stopped_at: "Completed 15.3-04-PLAN.md — folder ingest orchestration: a named vaultIngestPool at parallelism 6, the extraction watchdog re-armed at WORK-START, vaultFolders.ts (create/reserve/complete/cancel) with counter-based completion hooked into the two terminal writers, and a cancel that settles then deletes the folder row without writing a document. Next is 15.3-05 (wave 5, sealing)."
+last_updated: "2026-08-03T06:20:00.000Z"
 progress:
   total_phases: 42
   completed_phases: 28
   total_plans: 247
-  completed_plans: 230
+  completed_plans: 231
 ---
 
 ---
@@ -42,7 +42,7 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
-| F | **15.3** Vault Folders | 2/9 plans (wave 2 of 9) | 15.3-03 (wave 3 — the budget rail: the third $25/day window, hard reserve + clamped refund, intact refusal) | **15.3-02 COMPLETE** (`fefb9e4`, `034e28a`, `36d2944`, `e0a2c5e`, `bc72c41`, `8f3ec57`) — the B1 read-cap blocker is closed and the phase's acceptance demo can now render. **THE BOUND IS ROWS AND BYTES, AND THE BYTE HALF IS THE ONE THAT MATTERS:** the plan specified `.take(200)`, which does NOT bound the read (200 rows × 400k chars ≈ 80 MB against a 16 MiB cap), so `readVaultPage` streams `by_tenant`/`by_tenant_folder` and breaks on `VAULT_GRID_PAGE` (200) rows OR `VAULT_GRID_READ_BUDGET_BYTES` (8 MiB) of text, whichever bites first — `constants.test.ts` asserts BOTH directions, so deleting the byte budget as a 'simplification' fails. **NEVER put `text` back on `listVaultDocs`**: it now returns a projection (no `text`, no `tenantId`, no `contentHash`) and one document's words come from the new `vault.vaultDocText`. Three shipped consumers were repaired onto it — `PreviewModal`, the onboarding intake poll, and voice `AbnormalBriefBanner`; **the banner is the cautionary one, it CAST the query result to a local type so the break would NOT have typechecked and would have seeded an empty cockpit plan** (the cast is deleted, the row type now comes from the query). `vaultStats` shares the same window and returns `capped`, rendered as `200+` plus one plain sentence (a '+' alone encodes meaning in a glyph, BRAND §6). **THE CAP IS 200 MB AND IS DECLARED ONCE** — five literal sites deleted; `Dropzone.tsx` imports `@pikar/vault/constants` (the SUBPATH — verified via a prod build that SheetJS does NOT enter the client bundle, chunks 1.7 MB), `apps/web` gained `@pikar/vault`, and copy is derived through `capMB()` because `DocGrid`'s binary `fmtSize` would print '190.7 MB' for the 200 MB constant. **`VAULT_VIDEO_CAP_BYTES` IS UNCHANGED AT 25 MB** — the transcription API's number, pinned with the strict `video < file` relationship. 200 MB is reachable only on a fast link (Convex's upload POST times out at 2 min ⇒ ~13.3 Mbit/s); plan 04 owns the manifest outcome. **KNOWN CEILING, ACCEPTED:** the `category` filter runs over the bounded window (no `by_tenant_category` index, `schema.ts` closed) so a narrow tab can under-report at scale. `packages/core/src/vaultSurface.test.ts` is the FIRST test ever to read the vault UI — 6 tests, non-vacuity anchors first, **mutation-verified RED** (reintroducing `100 * 1024 * 1024` + `max 100 MB` failed 2 of 6). Verified: `pnpm test` 8/8 green (backend 1109/1109), `pnpm typecheck` delta ZERO against the 15-error all-test baseline, `pnpm --filter @pikar/web build` succeeds, `check-playbooks` exit 0. **`gsd-tools state advance-plan` CLOBBERED the first frontmatter block AGAIN** — it dropped `current_phase` entirely and rewrote `current_plan`/`stopped_at` from a stale pre-15.3-01 source (`current_plan: 7 (done)`, `stopped_at: Phase 15.3 context gathered`); hand-restored. `update-progress` worked (229 from disk). VALT-05/VALT-14 deliberately left Pending |
+| F | **15.3** Vault Folders | 4/9 plans (wave 4 of 9) | 15.3-05 (wave 5 — sealing: a folder's members are excluded from retrieval until it is `complete`) | **15.3-02 COMPLETE** (`fefb9e4`, `034e28a`, `36d2944`, `e0a2c5e`, `bc72c41`, `8f3ec57`) — the B1 read-cap blocker is closed and the phase's acceptance demo can now render. **THE BOUND IS ROWS AND BYTES, AND THE BYTE HALF IS THE ONE THAT MATTERS:** the plan specified `.take(200)`, which does NOT bound the read (200 rows × 400k chars ≈ 80 MB against a 16 MiB cap), so `readVaultPage` streams `by_tenant`/`by_tenant_folder` and breaks on `VAULT_GRID_PAGE` (200) rows OR `VAULT_GRID_READ_BUDGET_BYTES` (8 MiB) of text, whichever bites first — `constants.test.ts` asserts BOTH directions, so deleting the byte budget as a 'simplification' fails. **NEVER put `text` back on `listVaultDocs`**: it now returns a projection (no `text`, no `tenantId`, no `contentHash`) and one document's words come from the new `vault.vaultDocText`. Three shipped consumers were repaired onto it — `PreviewModal`, the onboarding intake poll, and voice `AbnormalBriefBanner`; **the banner is the cautionary one, it CAST the query result to a local type so the break would NOT have typechecked and would have seeded an empty cockpit plan** (the cast is deleted, the row type now comes from the query). `vaultStats` shares the same window and returns `capped`, rendered as `200+` plus one plain sentence (a '+' alone encodes meaning in a glyph, BRAND §6). **THE CAP IS 200 MB AND IS DECLARED ONCE** — five literal sites deleted; `Dropzone.tsx` imports `@pikar/vault/constants` (the SUBPATH — verified via a prod build that SheetJS does NOT enter the client bundle, chunks 1.7 MB), `apps/web` gained `@pikar/vault`, and copy is derived through `capMB()` because `DocGrid`'s binary `fmtSize` would print '190.7 MB' for the 200 MB constant. **`VAULT_VIDEO_CAP_BYTES` IS UNCHANGED AT 25 MB** — the transcription API's number, pinned with the strict `video < file` relationship. 200 MB is reachable only on a fast link (Convex's upload POST times out at 2 min ⇒ ~13.3 Mbit/s); plan 04 owns the manifest outcome. **KNOWN CEILING, ACCEPTED:** the `category` filter runs over the bounded window (no `by_tenant_category` index, `schema.ts` closed) so a narrow tab can under-report at scale. `packages/core/src/vaultSurface.test.ts` is the FIRST test ever to read the vault UI — 6 tests, non-vacuity anchors first, **mutation-verified RED** (reintroducing `100 * 1024 * 1024` + `max 100 MB` failed 2 of 6). Verified: `pnpm test` 8/8 green (backend 1109/1109), `pnpm typecheck` delta ZERO against the 15-error all-test baseline, `pnpm --filter @pikar/web build` succeeds, `check-playbooks` exit 0. **`gsd-tools state advance-plan` CLOBBERED the first frontmatter block AGAIN** — it dropped `current_phase` entirely and rewrote `current_plan`/`stopped_at` from a stale pre-15.3-01 source (`current_plan: 7 (done)`, `stopped_at: Phase 15.3 context gathered`); hand-restored. `update-progress` worked (229 from disk). VALT-05/VALT-14 deliberately left Pending |
 | — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
 | R | **16** Research Sub-Agent | 8/9 plans | **DEFERRED 2026-08-02 (owner) — billing only** | **ENGINEERING COMPLETE, DEFERRED ON BILLING.** All six previously-failing fixtures are probe-verified green (29/30/31 run `73583564` 3/3; 32/33/34 run `1246bb4a` 3/3; 32 re-verified `e106bc36` 1/1) and committed (`52a421d`, `3f77378`, `d57dcce`). Last full gate `3ec490ab` was **32/33** and its only red is the one since fixed. Blocker is an OpenAI balance of $0 (`credit_balance_exhausted` verified directly against the key); free daily tokens do NOT unblock it (embeddings + hosted web search sit outside that programme). **Do not re-diagnose — read `deferred-items.md`, which carries the one-command resume recipe and the 18-08 consequence.** ACTN-03 stays Pending; nothing is ticked |
@@ -93,6 +93,48 @@ and goal-verified offline with status `human_needed` for owner UAT M1-M5. Phase 
 plans 01-09 through the profile confirmation surface and continues at 17.1-10's live gate.
 
 ## Current Position
+
+**PHASE 15.3 — Vault Folders (Wave 4 of 9) — 15.3-04 COMPLETE: folder ingest is orchestrated.**
+Commits `289aa0c`, `116bf14`, `0ed56c5`, `4b6c5c6`, `9ddaca2`. Extraction left the raw scheduler
+for a named `vaultIngestPool` (`@convex-dev/workpool@0.4.7`, now a real dependency at its exact
+pin) with an EXPLICIT `maxParallelism: VAULT_INGEST_PARALLELISM = 6`, asserted strictly below the
+smallest deployment concurrency class. The shared `WorkflowManager` was NOT widened — and note it
+actually runs at **25**, not 10: `@convex-dev/workflow@0.4.4` declares its own
+`DEFAULT_MAX_PARALLELISM = 25` and workpool's default is never reached.
+⚠ **THE PLAN'S CANCEL MECHANISM DOES NOT EXIST AND WAS REPLACED DELIBERATELY.**
+`Workpool.cancelAll` takes `{before, limit}` and NOTHING else — it cancels every pending item in
+the pool for every folder and every tenant, and per-item `pool.cancel` needs a `WorkId` nothing
+persists (`schema.ts` is closed). The stop moved one layer down: `vault.markExtracting` refuses to
+start work whose `folderId` no longer resolves and fails the row `folder_cancelled`. Folder-scoped,
+tenant-scoped, one `db.get`. `cancelFolder` therefore settles, then DELETES the row, writing ZERO
+`vaultDocuments` rows.
+⚠ **THE WATCHDOG NOW MEASURES WORK TIME, AND `watchdogStalled` NARROWED TO `extracting` ONLY.**
+The two halves are one decision: once the arm fires from `markExtracting` the row is `extracting`
+in the same transaction, so a fire finding `pending_extraction` can only mean a Retry re-queued it
+— killing that is the same fabricated failure through a different door. What it gives up
+(enqueued-but-never-dispatched) is recovered by `npx convex run vaultSweep:runSweep`.
+⚠ **RESERVE IS STEP 3, AND IS ALSO THE CLOSE SIGNAL.** `createFolder` → members upload at
+`reserving` and DISPATCH NOTHING → `reserveFolder` takes the money, flips to `ingesting`,
+evaluates completion once (the all-duplicate case) and then dispatches. Any other order breaks one
+of the two locked invariants: a folder already `ingesting` while members arrive settles at
+`1 === 1` and synthesises a third of itself.
+⚠ **COMPLETION COUNTS THE TRANSITION, OFF THE PRIOR ROW.** Neither terminal writer is idempotent
+and workflow mutations are replayed; a post-state test counts twice, overshoots `memberCount` and
+strands the reservation. `tryComplete` CASes on `ingesting` and tests `>=`.
+⚠ **`settleFolder` REFUNDS THE FULL RESERVATION AND THAT IS CORRECT** — `recordSpend` debits actual
+cents separately, so subtracting spend would charge the tenant twice. The plan's Task-5 wording
+("reservation minus spend") was written against shipped behaviour instead.
+Nine source mutations were applied, observed RED and reverted (see the SUMMARY table); the
+watchdog pair went RED before Task 2 and GREEN after, which is the plan's own proof.
+Verified: `pnpm test` 1131/1131 across 58 files, `tsc --noEmit` clean in every touched file
+(backend + web), `packages/vault` 160/160, `check-playbooks` exit 0. `pnpm boot:check` is
+UNRUNNABLE here (it shells `npx convex codegen`, which times out; `convex dev --once` would kill
+the owner's live backend) — the running `npx convex dev` codegen+pushed the component on save.
+⚠ **`pnpm typecheck` IS RED AT THE PHASE BASELINE** in seven unrelated test files (five unchanged
+since `c888acb`, two owned by the media lane) — out of scope, logged in the phase's
+`deferred-items.md`.
+15.3-05 MUST use `folder != null && folder.status !== "complete"` for the seal, NEVER bare optional
+chaining: `undefined !== "complete"` is TRUE and would seal a cancelled folder's members forever.
 
 **PHASE 15.3 — Vault Folders (Wave 3 of 9) — 15.3-03 COMPLETE: the folder budget wall.**
 Folder ingest has its OWN $25/day window (`ingestSpendCents` + a keyless $250 deployment
@@ -1621,6 +1663,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 17 | 02 | 35 min | 3 | 8 |
 | 18 | 01 | 23 min | 2 | 2 |
 | 15.3 | 03 | 105 min | 7 | 15 |
+| 15.3 | 04 | 105 min | 6 | 17 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -1872,6 +1915,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-03T06:20:00.000Z
+Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
 Stopped at: Completed 15.3-03-PLAN.md
 Last session: 2026-08-02T16:52:41.616Z
