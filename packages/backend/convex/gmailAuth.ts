@@ -93,6 +93,18 @@ export const store = internalMutation({
       .unique();
     if (existing) await ctx.db.delete(existing._id);
     await ctx.db.insert("gmailTokens", { ...args, updatedAt: Date.now() });
+
+    // A fresh consent IS the reconnect the warning asked for, so retire it here — otherwise the
+    // banner outlives the problem and the only way out is dismissing it by hand. Direct patch,
+    // mirroring flagExpiringTokens' direct insert below (same table, no notify path involved).
+    // Requests held at `awaiting_reauth` are NOT touched: nothing resumes them yet (see
+    // disconnectGoogle's note), so clearing them here would claim a send that never happens.
+    for (const n of await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_read", (q) => q.eq("tenantId", args.tenantId).eq("read", false))
+      .collect()) {
+      if (n.kind === "gmail_reconnect") await ctx.db.patch(n._id, { read: true });
+    }
   },
 });
 

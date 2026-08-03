@@ -1,5 +1,30 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-04 (reconnect banner — **a fresh consent now retires its own prompt, and
+> the half that cannot self-heal is dismissible by hand.**
+>
+> `gmailAuth.store` marks every unread `gmail_reconnect` notification read for that tenant on each
+> token write — the consent IS the reconnect the warning asked for, so the banner no longer outlives
+> the problem. Direct `ctx.db.patch`, mirroring `flagExpiringTokens`' direct insert (same table, no notify
+> path involved). **Requests parked at `awaiting_reauth` are deliberately NOT cleared here**:
+> nothing resumes them yet, so clearing them would claim a send that never happens.
+>
+> **A comment in `ReconnectBanner.tsx` was FALSE and is corrected**: it claimed the workflow
+> re-fires delivery on reconnect so the UI never re-prompts for approval. There is no resume sweep.
+> Reconnecting does not re-send a held draft. That is why the hold half needed a dismiss affordance
+> rather than an automatic clear — and why the copy no longer promises one.
+>
+> The dismiss control is split by what each half can honestly persist: the notification half goes
+> server-side through `notifications.markRead` (the NotificationsBanner idiom); the hold half has no
+> `dismissed` column, so its request ids go in a `localStorage` seen-set (`pikar:reconnectHoldsSeen`,
+> the AbnormalBriefBanner idiom) — **no schema change**. The set is read in a `useEffect` after mount
+> (SSR has no `localStorage`) and the banner renders `null` until then, so a dismissed banner never
+> flashes back on navigation. A NEW hold or a NEW expiry warning re-surfaces it: dismissing silences
+> today's prompt, never tomorrow's. A storage throw degrades to re-surfacing, never to hiding a hold.
+>
+> Verified: `calendar.test.ts` 33/33 (the new `store` test pins that other kinds and other tenants
+> are untouched), `apps/web` typecheck 0 errors.)
+
 > Last verified: 2026-08-04 (test-infrastructure — **no cockpit code changed; one TEST file did.**
 > `research.test.ts` gained the `beforeEach(vi.useFakeTimers)` / `afterEach(vi.useRealTimers)`
 > guard, because anything reaching `startIngest` schedules the WORKFLOW component's workpool runs

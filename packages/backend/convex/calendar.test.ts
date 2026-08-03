@@ -85,6 +85,38 @@ describe("one Google consent flow", () => {
   });
 });
 
+describe("store — a fresh consent retires the reconnect prompt", () => {
+  // The bug this guards: the user reconnects, but the "Reconnect Gmail" banner stays up forever
+  // because nothing ever marked the gmail_reconnect notification read.
+  test("unread gmail_reconnect rows go read; other kinds and other tenants are untouched", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      for (const row of [
+        { tenantId: TENANT, kind: "gmail_reconnect", read: false },
+        { tenantId: TENANT, kind: "request.rejected", read: false },
+        { tenantId: "tenant_other", kind: "gmail_reconnect", read: false },
+      ]) {
+        await ctx.db.insert("notifications", { ...row, message: "m", createdAt: BASE_MS });
+      }
+    });
+
+    await t.mutation(internal.gmailAuth.store, {
+      tenantId: TENANT,
+      refreshToken: "refresh-token",
+      accessToken: "access-token",
+      expiresAt: BASE_MS,
+      scope: GMAIL_MODIFY_SCOPE,
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(rows.map((r) => [r.tenantId, r.kind, r.read])).toEqual([
+      [TENANT, "gmail_reconnect", true],
+      [TENANT, "request.rejected", false],
+      ["tenant_other", "gmail_reconnect", false],
+    ]);
+  });
+});
+
 describe("disconnectGoogle — revoke at Google, then delete locally", () => {
   // The bug this guards: a disconnect that deletes our row but never tells Google leaves the
   // grant live on the user's account, and privacy/page.tsx:312 promises otherwise.
