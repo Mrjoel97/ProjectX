@@ -48,6 +48,24 @@ export const MEDIA_DAILY_BUDGET_CENTS = 1_000; // $10/day PER TENANT.
 // across four windows that never share. DO NOT remove this as redundant.
 export const DEPLOYMENT_MEDIA_BUDGET_CENTS = 10_000; // $100/day across ALL tenants.
 
+// ── The FOLDER-INGEST rail (Phase 15.3, VALT-06) ──────────────────────────────────────
+//
+// A THIRD named pair, and it exists for a defect rather than for symmetry. Until 15.3-03 the whole
+// vault ingest path — `vaultIngest.ingestDoc`, `vaultExtract.extractDoc`, `vaultTranscribe` —
+// spent `dailySpendCents`, i.e. THE COCKPIT'S $5. So a folder upload both starved the agent the
+// user relies on for actual work AND could be refused halfway by an unrelated cockpit turn. A
+// half-ingested folder is worse than a refused one, because the agent then grounds on it
+// confidently without knowing what is missing. Separate rails are what make both impossible.
+//
+// $25/day is DELIBERATELY the largest of the three per-tenant windows: a folder upload is a bursty
+// one-off onboarding-shaped event, not a daily habit, and the number is calibrated to the scanned-
+// PDF OCR path and to nothing else (~$0.005/page x 50 pages/doc — 15.3-RESEARCH §1.4). Accepted
+// consequence, owner decision: worst-case per-tenant daily exposure rises to $40.
+export const INGEST_DAILY_BUDGET_CENTS = 2_500; // $25/day PER TENANT.
+// KEYLESS, for the third time and for the same reason: per-tenant keying alone makes exposure
+// N x $25, unbounded in N. 25,000 holds the SAME 10x ratio both existing rails hold.
+export const DEPLOYMENT_INGEST_BUDGET_CENTS = 25_000; // $250/day across ALL tenants.
+
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Per-tenant submit rate (keyed by tenantId): steady 20/hr with a small burst of 5.
   submitRequest: { kind: "token bucket", rate: 20, period: HOUR, capacity: 5 },
@@ -63,6 +81,30 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   deploymentMediaSpendCents: {
     kind: "fixed window",
     rate: DEPLOYMENT_MEDIA_BUDGET_CENTS,
+    period: 24 * HOUR,
+  },
+  // The INGEST pair (15.3-03) — the media pair's shape verbatim, third distinct money.
+  //
+  // `maxReserved` IS DELIBERATELY UNSET ON BOTH, and it looks like an omission. `validateRequest`
+  // enforces `maxReserved` ONLY on the reserve path, so leaving it unset is precisely what lets
+  // `limit({ reserve: true })` take a whole-folder reservation (and issue the negative-count
+  // refund) regardless of count. Setting it "for safety" breaks the reservation.
+  //
+  // NEITHER IS SHARDED, including the keyless deployment one. Sharding would buy OCC throughput
+  // for the ~36 concurrent `recordSpend` writers the OCR fan-out produces, but it costs two things
+  // this rail cannot pay: `getValue` becomes a SAMPLED APPROXIMATION (and the pre-flight card
+  // promises an honest "remaining" figure), and `limit()` picks a shard AT RANDOM — so the refund
+  // clamp, which reads ONE value, could credit a shard that never paid and re-open the exact money
+  // bug it exists to close. 15.3-RESEARCH §1.7 says the same thing from the pre-flight side. The
+  // contention is not new either: those same writers already hit the unsharded `dailySpendCents` /
+  // `deploymentSpendCents` today, so moving them here is not a regression.
+  // ponytail: unsharded. Ceiling — OCC retries under a wide fan-out. Upgrade path if that is ever
+  // MEASURED to bite: shard these two AND stop refunding the deployment window (or replace the
+  // whole refund with a real spend table, which is `media.ts:279-282`'s stated upgrade path).
+  ingestSpendCents: { kind: "fixed window", rate: INGEST_DAILY_BUDGET_CENTS, period: 24 * HOUR },
+  deploymentIngestSpendCents: {
+    kind: "fixed window",
+    rate: DEPLOYMENT_INGEST_BUDGET_CENTS,
     period: 24 * HOUR,
   },
 });
@@ -315,4 +357,38 @@ export const mediaRemainingCents = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<number> =>
     await mediaRemainingCentsInner(ctx, tenantId),
+});
+
+/**
+ * The readable half of the INGEST rail (VALT-06) — `mediaRemainingCentsInner`'s shape verbatim
+ * over the ingest pair, and split into a plain function for the SAME reason: plan 15.3-07's
+ * pre-flight card must show today's remaining folder budget beside the estimate, it reads it from
+ * a `tenantQuery`, and a Convex query cannot `runQuery`.
+ *
+ * This is also the number the locked refusal copy interpolates — *"this folder needs ~$3.40; you
+ * have $1.10 left today"* — so it must be HONEST, which is the other half of why neither ingest
+ * window is sharded (a sharded `getValue` is a sample, not a figure you can put in a sentence).
+ *
+ * Each rail is clamped to >= 0 BEFORE the min: `recordSpend`/`reserveFolder` consume with
+ * `reserve: true`, so either window can go negative, and a negative deployment rail would
+ * otherwise zero every tenant's remaining ingest budget.
+ */
+export async function ingestRemainingCentsInner(ctx: QueryCtx, tenantId: string): Promise<number> {
+  const tenant = Math.max(
+    0,
+    (await rateLimiter.getValue(ctx, "ingestSpendCents", { key: tenantId })).value,
+  );
+  const deployment = Math.max(
+    0,
+    (await rateLimiter.getValue(ctx, "deploymentIngestSpendCents")).value,
+  );
+  return Math.min(tenant, deployment);
+}
+
+/** Operator: `npx convex run guardrails:ingestRemainingCents '{"tenantId":"…"}'` — the ONE way to
+ *  observe the cross-window refund, which no offline test can prove (see docs/playbooks/guardrails.md). */
+export const ingestRemainingCents = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<number> =>
+    await ingestRemainingCentsInner(ctx, tenantId),
 });
