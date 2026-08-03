@@ -143,8 +143,23 @@ jobs:
         if: steps.eligibility.outputs.proceed == 'true'
         working-directory: packages/backend
         run: |
-          OUT=$(node node_modules/convex/bin/main.js run skills:getActiveSkill '{"name":"cockpit-agent"}' 2>/dev/null)
-          printf '%s' "$OUT" | jq -r '.body' > "$GITHUB_WORKSPACE/skillopt/envs/pikar_cockpit/skills/initial.md"
+          # THIRD AND LAST SITE of the swallowed-failure family the two gates above fixed — and the
+          # only one where a swallowed failure does not skip work but produces a WRONG ARTIFACT:
+          # `2>/dev/null` with no exit check left OUT empty, jq then wrote nothing, and the run
+          # trained against an EMPTY cockpit-agent body. Note the ordering: `> initial.md` truncates
+          # the checked-out file BEFORE jq runs, so the base must be validated before redirecting.
+          if ! OUT=$(node node_modules/convex/bin/main.js run skills:getActiveSkill '{"name":"cockpit-agent"}' 2>err.log); then
+            echo "::error::could not read the active cockpit-agent skill — refusing to train on an empty base"
+            cat err.log >&2
+            exit 1
+          fi
+          # `// empty` not `// ""`: a missing field and an empty body are the same refusal here.
+          BODY=$(printf '%s' "$OUT" | jq -r '.body // empty')
+          if [ -z "$BODY" ]; then
+            echo "::error::active cockpit-agent body is empty or missing — refusing to train on an empty base"
+            exit 1
+          fi
+          printf '%s\n' "$BODY" > "$GITHUB_WORKSPACE/skillopt/envs/pikar_cockpit/skills/initial.md"
 
       - name: Train (rollout -> reflect -> edit -> held-out-accept)
         if: steps.eligibility.outputs.proceed == 'true'
