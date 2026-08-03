@@ -109,12 +109,23 @@ export const reserveFolder = tenantMutation({
   handler: async (
     ctx,
     { folderId, files },
-  ): Promise<FolderReserveResult | { ok: false; reason: "not_reserving" }> => {
+  ): Promise<FolderReserveResult | { ok: false; reason: "not_reserving" | "manifest_short" }> => {
     const folder = await ctx.db.get(folderId);
     if (!folder || folder.tenantId !== ctx.tenantId) return { ok: false, reason: "not_reserving" };
     // Idempotent by CAS on the status the create step set. A double-click cannot reserve twice, and
     // a cancelled folder (row deleted) cannot be reserved at all.
     if (folder.status !== "reserving") return { ok: false, reason: "not_reserving" };
+    // THE MANIFEST IS THE CLIENT'S, AND THIS IS THE ONE THING THE SERVER CAN CHECK IT AGAINST.
+    // `memberCount` counts rows this deployment actually inserted, and dedup only ever REMOVES
+    // files, so a real manifest can never be shorter than the folder it describes. Without this,
+    // `reserveFolder({ files: [] })` prices a 150 MB folder at 0 cents, flips it to `ingesting`,
+    // and dispatches every member with `reserved: true` — i.e. the caller chooses where the wall
+    // is, which is exactly what the comment below says a manifest may never do.
+    // It is a LOWER BOUND, not a derivation: `pages`/`hasTextLayer` come from the client's stage-2
+    // local probe (CONTEXT §A4) and no server walk can recover them — 400 member rows each
+    // carrying a 400 KB `text` blob is far over the 16 MiB read cap. Above the bound the manifest
+    // is still trusted; that residual is named in this phase's deferred-items.md.
+    if (files.length < folder.memberCount) return { ok: false, reason: "manifest_short" };
 
     const result = await reserveFolderInner(ctx, {
       tenantId: ctx.tenantId,
@@ -124,6 +135,7 @@ export const reserveFolder = tenantMutation({
     if (!result.ok) {
       await ctx.db.patch(folderId, { status: "refused" });
       await ctx.scheduler.runAfter(0, internal.vaultFolders.walkFolderMembers, {
+        tenantId: ctx.tenantId,
         folderId,
         mode: "refuse",
         cursor: null,
@@ -140,6 +152,7 @@ export const reserveFolder = tenantMutation({
     // zero rows and would otherwise never complete, because nothing will ever call `bumpFolder`.
     if (await tryComplete(ctx, folderId)) return result;
     await ctx.scheduler.runAfter(0, internal.vaultFolders.walkFolderMembers, {
+      tenantId: ctx.tenantId,
       folderId,
       mode: "dispatch",
       cursor: null,
@@ -156,41 +169,54 @@ export const reserveFolder = tenantMutation({
  * called only once per execution, which is why the cursor is an argument and the continuation is a
  * fresh scheduled call rather than a loop.
  *
- * Re-reads the folder every batch and stops if it is gone (cancel deleted it) or has left the
- * status the walk was started for. That is what makes cancel mid-dispatch cost nothing.
+ * `dispatch` and `refuse` re-read the folder every batch and stop if it is gone (cancel deleted it)
+ * or has left the status the walk was started for. That is what makes cancel mid-dispatch cost
+ * nothing.
+ *
+ * `cancel` is the third mode and the INVERSE of that: its parent row is already deleted, which is
+ * precisely why `tenantId` is an argument rather than read off the folder. It exists because
+ * cancelling a folder otherwise leaves every not-yet-dispatched member parked at
+ * `pending_extraction` with a dangling `folderId`, no dispatcher (this walk stops at a missing
+ * parent) and — since 15.3-04 narrowed `watchdogStalled` to `extracting` — no clock either. That is
+ * the silent parking 15.2 abolished, and cancelling BEFORE reserve (the pre-flight card's "no,
+ * don't start this", the likeliest cancel of all) parks 100% of the members. So they are failed
+ * `folder_cancelled` — the same reason `vault.markExtracting` writes for the members that got as
+ * far as work-start, terminal, honest, and individually Retry-able.
  */
 export const walkFolderMembers = internalMutation({
   args: {
+    tenantId: v.string(),
     folderId: v.id("vaultFolders"),
-    mode: v.union(v.literal("dispatch"), v.literal("refuse")),
+    mode: v.union(v.literal("dispatch"), v.literal("refuse"), v.literal("cancel")),
     cursor: v.union(v.string(), v.null()),
   },
-  handler: async (ctx, { folderId, mode, cursor }): Promise<null> => {
-    const folder = await ctx.db.get(folderId);
-    if (!folder) return null; // cancelled — the lenient join, and the cheapest possible stop
-    if (folder.status !== (mode === "dispatch" ? "ingesting" : "refused")) return null;
+  handler: async (ctx, { tenantId, folderId, mode, cursor }): Promise<null> => {
+    if (mode !== "cancel") {
+      const folder = await ctx.db.get(folderId);
+      if (!folder) return null; // cancelled — the lenient join, and the cheapest possible stop
+      if (folder.status !== (mode === "dispatch" ? "ingesting" : "refused")) return null;
+    }
 
     const page = await ctx.db
       .query("vaultDocuments")
-      .withIndex("by_tenant_folder", (q) =>
-        q.eq("tenantId", folder.tenantId).eq("folderId", folderId),
-      )
+      .withIndex("by_tenant_folder", (q) => q.eq("tenantId", tenantId).eq("folderId", folderId))
       .paginate({ cursor, numItems: VAULT_FOLDER_MEMBER_BATCH });
 
     for (const doc of page.page) {
       if (doc.status !== "pending_extraction") continue; // already dispatched / already terminal
-      if (mode === "refuse") {
-        await ctx.runMutation(internal.vault.markFailed, {
-          vaultDocId: doc._id,
-          reason: "folder_refused",
-        });
+      if (mode === "dispatch") {
+        await dispatchMember(ctx, doc);
         continue;
       }
-      await dispatchMember(ctx, doc);
+      await ctx.runMutation(internal.vault.markFailed, {
+        vaultDocId: doc._id,
+        reason: mode === "cancel" ? "folder_cancelled" : "folder_refused",
+      });
     }
 
     if (!page.isDone) {
       await ctx.scheduler.runAfter(0, internal.vaultFolders.walkFolderMembers, {
+        tenantId,
         folderId,
         mode,
         cursor: page.continueCursor,
@@ -262,6 +288,34 @@ export async function bumpFolder(
 }
 
 /**
+ * The EXACT INVERSE of `bumpFolder`, for the one thing that un-terminalises a member:
+ * `vaultSweep.retryExtraction` puts a `failed` row back to `pending_extraction`.
+ *
+ * The un-terminalling and the counter are ONE FACT. Without this, a retried member is counted a
+ * SECOND time on its next terminal event (`countTerminal` sees a genuine non-terminal → terminal
+ * transition, because the retry made the prior status non-terminal again) — so a 3-member folder
+ * whose first member fails, is retried and succeeds reaches `terminalCount === memberCount` while
+ * its LAST member is still queued. The folder then settles its reservation while that member has
+ * yet to spend, lifts the seal early, and hands plan 06 an incomplete folder to synthesise. The
+ * completion CAS does not help: it stops a SECOND completion, never an EARLY one.
+ *
+ * Only while the folder is still `ingesting`: a `complete` folder's counters are history — its
+ * digest was built from them — and decrementing them would not re-open it.
+ */
+export async function unbumpFolder(
+  ctx: MutationCtx,
+  folderId: Id<"vaultFolders">,
+  wasFailed: boolean,
+): Promise<void> {
+  const folder = await ctx.db.get(folderId);
+  if (!folder || folder.status !== "ingesting") return;
+  await ctx.db.patch(folderId, {
+    terminalCount: Math.max(0, folder.terminalCount - 1),
+    failedCount: Math.max(0, folder.failedCount - (wasFailed ? 1 : 0)),
+  });
+}
+
+/**
  * The completion transition, exactly three things in this order:
  *   1. settle the reservation (refund the unspent remainder),
  *   2. hand off to the digest build,
@@ -296,7 +350,10 @@ async function tryComplete(ctx: MutationCtx, folderId: Id<"vaultFolders">): Prom
 // ── Cancel ────────────────────────────────────────────────────────────────────
 
 /**
- * Cancel: settle the reservation, then DELETE the folder row. **ZERO `vaultDocuments` writes.**
+ * Cancel: settle the reservation, then DELETE the folder row. **ZERO `vaultDocuments` writes IN
+ * THIS MUTATION** (the write cap is a per-TRANSACTION cap, and that is the guarantee it needs),
+ * then a batched `cancel` walk terminalises the members nothing will ever dispatch — see
+ * `walkFolderMembers`. Same shape as the refusal path, for the same never-silent reason.
  *
  * WHY DELETE RATHER THAN MARK. The seal is read THROUGH the folder row, so a `cancelled` status
  * would keep every member sealed forever — the exact inverse of the locked "cancelled documents
@@ -339,6 +396,15 @@ export const cancelFolder = tenantMutation({
     if (!folder || folder.tenantId !== ctx.tenantId) return { ok: false };
     await ctx.runMutation(internal.guardrails.settleFolder, { folderId }); // BEFORE the delete
     await ctx.db.delete(folderId);
+    // AFTER the delete, and it carries the tenant because the row it would have read is gone.
+    // Members already `ready` are untouched and become ordinary folder-less documents; members
+    // still `pending_extraction` are failed `folder_cancelled` rather than left parked forever.
+    await ctx.scheduler.runAfter(0, internal.vaultFolders.walkFolderMembers, {
+      tenantId: ctx.tenantId,
+      folderId,
+      mode: "cancel",
+      cursor: null,
+    });
     return { ok: true };
   },
 });

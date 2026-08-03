@@ -367,12 +367,8 @@ describe("vaultUpload schedules permissively and arms NO watchdog (15.3-04)", ()
     return vaultDocId;
   };
 
-  test("the owner's .xlsm — previously scheduled NOTHING — now schedules extractDoc + a +15min watchdog", async () => {
+  test("the owner's .xlsm — previously scheduled NOTHING — now schedules extractDoc and arms NO watchdog at queue time", async () => {
     const t = setup();
-    // The reference point for the watchdog delta is WALL CLOCK, not the sibling scheduled row:
-    // 15.3-04 moved the extraction enqueue onto `vaultIngestPool`, so there is no app-side
-    // `_scheduled_functions` entry to measure against any more.
-    const before = Date.now();
     const docId = await upload(t, XLSM_MIME, "budget.xlsm");
 
     expect((await t.run((ctx) => ctx.db.get(docId)))?.status).toBe("pending_extraction");
@@ -382,9 +378,9 @@ describe("vaultUpload schedules permissively and arms NO watchdog (15.3-04)", ()
     expect(rail[0]?.name).toContain("vaultExtract");
 
     // NO watchdog at queue time. The clock starts at markExtracting, and THAT arm (+15 min from
-    // work start, per attempt) is asserted in vaultFolders.test.ts.
+    // work start, per attempt) is asserted in vaultFolders.test.ts — there is deliberately no
+    // timing assertion here, because there is nothing armed to time.
     expect(await watchdogScheduled(t)).toHaveLength(0);
-    expect(Date.now()).toBeGreaterThanOrEqual(before);
   });
 
   test("an EMPTY mimeType still schedules extractDoc (the allow-list no longer decides)", async () => {

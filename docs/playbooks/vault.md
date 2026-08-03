@@ -1,5 +1,7 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-04 repair — **an empty manifest could price a folder at 0 cents and walk past the budget wall.** `reserveFolder` now refuses a manifest shorter than `memberCount` (`manifest_short`): dedup only ever REMOVES files, so a real manifest can never be shorter than the folder it describes. The sweep rails were the other half — `sweepPendingExtraction` and `retryExtraction` now both route through one `ingestRailFor` helper, so only an `ingesting` folder spends the pre-paid rail and a `reserving` folder is skipped entirely rather than dispatched against a reservation that does not exist yet.)
+>
 > Last verified: 2026-08-03 (15.3-04 — **folder ingest is orchestrated: a named pool, a
 > work-start watchdog, counter-based completion, and a cancel that writes no document rows.**
 > Extraction left the raw scheduler for `vaultIngestPool`; the 15-minute stall clock now starts

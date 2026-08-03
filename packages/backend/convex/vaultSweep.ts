@@ -17,16 +17,24 @@
 //
 // Operator one-shot (03.8-06 runs this post-merge on main's deployment):
 //   npx convex run vaultSweep:runSweep
+import { VAULT_FOLDER_MEMBER_BATCH } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { tenantMutation } from "./lib/functions";
 import { migrations } from "./migrations";
 import { scheduleExtraction } from "./vault";
+import { unbumpFolder } from "./vaultFolders";
 
 /** Sweep every eligible pending_extraction row onto its extraction rail (EXTR-G). */
 export const sweepPendingExtraction = migrations.define({
   table: "vaultDocuments",
+  // 20, not the component default of 100. A migration batch reads WHOLE rows and Convex has no
+  // projection, so 100 vaultDocuments rows carrying up to VAULT_EXTRACT_CHAR_CAP (400,000) chars
+  // each is ~40 MB against a 16 MiB per-transaction read cap. Matters more now that the cron below
+  // runs this unattended.
+  batchSize: VAULT_FOLDER_MEMBER_BATCH,
   migrateOne: async (ctx, doc) => {
     // Guard chain: only pending rows with stored bytes. Those two guards SCOPE the sweep and are
     // correct. What was deleted is the third one — "and a recognized extraction kind" — because
@@ -35,14 +43,29 @@ export const sweepPendingExtraction = migrations.define({
     // skips it again. ready/processing/failed/extracting rows are untouched; a swept row stays
     // pending_extraction here — the action flips it to `extracting` when work actually starts.
     if (doc.status !== "pending_extraction" || !doc.storageId) return;
+    // FOLDER-AWARE, exactly like retryExtraction below and for the same money. A `reserving`
+    // folder has paid nothing yet — `reserveFolder` is what takes the reservation AND dispatches
+    // its members, so sweeping one here would spend before the reservation exists.
+    const folder = doc.folderId ? await ctx.db.get(doc.folderId) : null;
+    if (folder?.status === "reserving") return;
     await scheduleExtraction(ctx, {
       vaultDocId: doc._id,
       tenantId: doc.tenantId,
       mimeType: doc.mimeType,
       title: doc.title,
+      // ...and an `ingesting` folder HAS paid: charge the ingest rail it reserved, not the
+      // cockpit's $5 token window. A null folder (none, or cancelled) keeps today's behaviour.
+      ...ingestRailFor(folder),
     });
   },
 });
+
+/** The pre-paid rail selector, in one place because both sweep entry points owe the same answer:
+ *  only an `ingesting` folder has a live reservation to spend against. */
+const ingestRailFor = (
+  folder: Doc<"vaultFolders"> | null,
+): { spendRail: "ingest"; reserved: true } | Record<string, never> =>
+  folder?.status === "ingesting" ? { spendRail: "ingest", reserved: true } : {};
 
 /** The operator one-shot runner (migrations.ts `run` precedent, bound to this migration). */
 export const runSweep = migrations.runner(internal.vaultSweep.sweepPendingExtraction);
@@ -52,6 +75,18 @@ export const runSweep = migrations.runner(internal.vaultSweep.sweepPendingExtrac
  * (fail-closed no-op on cross-tenant/missing); only `failed` or stuck `pending_extraction`
  * docs; resets to pending_extraction, clears failureReason + extractionTruncated, and
  * re-schedules the kind-correct action. Returns refs only.
+ *
+ * FOLDER MEMBERS REACH THIS TODAY — they are ordinary rows in the flat grid with the same failed
+ * badge — so it owes the folder three things its single-file ancestor never had to think about:
+ *   1. **Un-count what it un-terminalises** (`unbumpFolder`). Retry makes a `failed` row
+ *      non-terminal again; without the decrement `countTerminal` counts it a SECOND time on its
+ *      next terminal event and the folder completes while other members are still in flight.
+ *   2. **Never spend ahead of the reservation.** A member of a `reserving` folder has not been
+ *      paid for; `reserveFolder` is what dispatches it. Refused, fail-closed.
+ *   3. **Drop a dangling `folderId`.** Cancel deletes the folder row, and `vault.markExtracting`
+ *      refuses to start work whose folder has vanished — so without this the retry loops for ever
+ *      and the document can never be extracted, embedded or grounded on, which is the exact
+ *      opposite of the locked "cancelled documents become ordinary documents".
  */
 export const retryExtraction = tenantMutation({
   args: { vaultDocId: v.id("vaultDocuments") },
@@ -64,16 +99,24 @@ export const retryExtraction = tenantMutation({
     // the worst of the three skips: the user PRESSED A BUTTON and nothing observable happened.
     // The three refusals above are real (cross-tenant, wrong status, no stored bytes); an unknown
     // format is not a refusal, it is work the action must do and then fail honestly at.
+    const folder = doc.folderId ? await ctx.db.get(doc.folderId) : null;
+    if (folder?.status === "reserving") return { ok: false }; // (2) nothing is paid for yet
+    // (1) The un-terminalling and the counter are one fact, so they are one transaction.
+    if (folder && doc.status === "failed") await unbumpFolder(ctx, folder._id, true);
     await ctx.db.patch(vaultDocId, {
       status: "pending_extraction",
       failureReason: undefined,
       extractionTruncated: undefined,
+      // (3) an id that resolves to nothing is not a folder — the lenient join, applied to the one
+      // row being re-queued rather than to 400 rows at cancel time.
+      ...(doc.folderId && !folder ? { folderId: undefined } : {}),
     });
     await scheduleExtraction(ctx, {
       vaultDocId,
       tenantId: ctx.tenantId,
       mimeType: doc.mimeType,
       title: doc.title,
+      ...ingestRailFor(folder),
     });
     return { ok: true };
   },
@@ -100,10 +143,12 @@ export const retryExtraction = tenantMutation({
  *
  * What that gives up, stated rather than hidden: a row that is enqueued and whose action never
  * reaches its handler body at all (a deployment restart, a dropped job) now parks at
- * `pending_extraction` with no automatic backstop. It is a much narrower window than the one this
+ * `pending_extraction` with no PER-ATTEMPT backstop. It is a much narrower window than the one this
  * closes — the pool always dispatches, the actions wrap their whole body in try/catch → markFailed,
- * and a cancelled folder's members are failed honestly at work-start by `markExtracting` — and the
- * recovery for it already exists and is named below.
+ * and a cancelled folder's members are failed honestly at work-start by `markExtracting`. It is not
+ * left to an operator either: `crons.ts` runs `runSweep` daily (`{ reset: true }` — a completed
+ * migration no-ops on a bare invocation), which re-queues exactly the `pending_extraction` rows
+ * this no longer touches, so the window self-heals within a day.
  *
  * ponytail: a scheduled function per attempt, NOT a cron + table scan. Convex durable scheduling is
  * the native feature (no new code, no timestamp field, no schema change), and it is per-attempt

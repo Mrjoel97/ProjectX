@@ -322,6 +322,14 @@ export const vaultUploadFolderFile = tenantAction({
  * endpoints' degree; a node whose degree hits 0 is GC'd (orphan), a node still shared with another
  * doc survives. Cross-tenant / missing → a no-op (tenant guard). The rag chunks + this row are the
  * only raw-content stores, so this fully removes the document's raw text (§4).
+ *
+ * A DELETE IS ALSO A TERMINAL EVENT when the row is a folder member that had not reached one.
+ * Deleting the row deletes the only thing that could ever produce that member's terminal event —
+ * `markReady`/`markFailed` both early-return on a missing row — so `terminalCount` could never
+ * reach `memberCount`: the folder would sit at `ingesting` forever, holding a reservation nothing
+ * settles (there is no folder-level watchdog) and, from plan 05 on, sealing every surviving member
+ * out of retrieval permanently. It counts as FAILED, so that memberCount = read + unread stays
+ * true and the manifest says the honest thing: this document is not there to be read.
  */
 export const deleteVaultDoc = tenantMutation({
   args: { vaultDocId: v.id("vaultDocuments") },
@@ -355,6 +363,10 @@ export const deleteVaultDoc = tenantMutation({
       else await ctx.db.patch(nodeId, { degree: newDegree });
     }
 
+    // The member's terminal event, taken here because the row that owed it is about to vanish.
+    if (doc.folderId && doc.status !== "ready" && doc.status !== "failed") {
+      await bumpFolder(ctx, doc.folderId, true);
+    }
     await ctx.db.delete(vaultDocId);
     return { ok: true };
   },
@@ -726,10 +738,14 @@ export const markFailed = internalMutation({
  * The one extra read this costs (`ctx.db.get` on the doc, whole row, `text` included) is
  * unavoidable — Convex has no projection and `folderId` cannot be learned any other way.
  *
- * Known, accepted: `retryExtraction` puts a `failed` row back to `pending_extraction`, which is a
- * genuine un-terminalling. The counters do not decrement, so a folder that already completed keeps
- * its historical `failedCount` even if the user later rescues a member by hand. The folder-level
- * CAS still stops a second settle or a second digest.
+ * THE OTHER HALF OF THIS FUNCTION LIVES IN `vaultSweep.retryExtraction`. Retry un-terminalises a
+ * `failed` row, and because the transition guard above reads the PRIOR status, that row would be
+ * counted a second time on its next terminal event — completing the folder EARLY, over members
+ * still in flight (settle while they must still spend, seal lifted, digest over a partial folder).
+ * The CAS stops a second completion, never an early one. So retry calls `unbumpFolder`, which is
+ * this counter's exact inverse and is guarded to the `ingesting` window. What remains known and
+ * accepted is only the historical case: a folder that has already COMPLETED keeps its `failedCount`
+ * if the user later rescues a member by hand — its digest was built from those numbers.
  */
 async function countTerminal(
   ctx: MutationCtx,
@@ -772,8 +788,13 @@ export const markExtracting = internalMutation({
     // is what "cancel means no NEW spend" actually costs: one `db.get` per attempt, folder-scoped
     // and tenant-scoped by construction. See cancelFolder for why `pool.cancelAll` is not usable.
     // The row is failed rather than left at `pending_extraction`: it is a real, honest outcome
-    // (the work was killed), it is terminal so nothing parks silently, and Retry re-queues it as
-    // an ordinary folder-less document — which is exactly what cancel promises it now is.
+    // (the work was killed) and it is terminal, so nothing parks silently.
+    // ⚠ THE DANGLING ID IS DROPPED BY RETRY, NOT HERE, and that is what makes "cancelled documents
+    // become ordinary documents" true rather than a claim: this gate is unconditional, so a member
+    // whose folder is gone would otherwise be refused on EVERY attempt for ever —
+    // retry → pending_extraction → scheduleExtraction → markExtracting → failed(folder_cancelled),
+    // a loop the user can never win. `vaultSweep.retryExtraction` resolves `folderId` and patches
+    // it away when it resolves to nothing, so the retried row arrives here folder-less.
     const doc = await ctx.db.get(vaultDocId);
     if (doc?.folderId && !(await ctx.db.get(doc.folderId))) {
       await ctx.runMutation(internal.vault.markFailed, {
