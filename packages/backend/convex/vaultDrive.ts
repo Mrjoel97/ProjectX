@@ -62,6 +62,7 @@ import { contentHash } from "./lib/hash";
 import { tryComplete } from "./vaultFolders";
 
 const DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
+const DRIVE_DRIVES_ENDPOINT = "https://www.googleapis.com/drive/v3/drives";
 
 /** Google's own folder mime. A folder is a file in Drive, which is why enumeration recurses. */
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -178,6 +179,18 @@ type Importable = {
 function driveUrl(path: string, params: Record<string, string>): string {
   const q = new URLSearchParams({ ...params, supportsAllDrives: "true" });
   return `${DRIVE_FILES_ENDPOINT}${path}?${q.toString()}`;
+}
+
+/**
+ * `drives.list` — the SHARED DRIVES themselves, which `files.list` cannot see.
+ *
+ * A separate builder because this is not a `files` endpoint: it takes no `supportsAllDrives` and no
+ * `includeItemsFromAllDrives` (there is nothing to include items *from* — the drives ARE the
+ * result). Routed through a helper anyway so the "no inline googleapis URL" scan stays true and
+ * every outbound Drive call remains greppable from one place.
+ */
+function drivesUrl(params: Record<string, string>): string {
+  return `${DRIVE_DRIVES_ENDPOINT}?${new URLSearchParams(params).toString()}`;
 }
 
 /**
@@ -334,6 +347,101 @@ function classify(files: DriveFile[]): {
 
   return { importable, skipped };
 }
+
+// ── Browsing (the picker, rendered by us) ─────────────────────────────────────
+
+/** One row in the folder browser. Names ARE user content, which is why they go to the user's own
+ *  screen and NEVER into an audit payload (§4). `kind` exists only so the UI can label a shared
+ *  drive as a drive rather than as a folder; both are addressable as a `parents` id. */
+export type DriveNode = { id: string; name: string; kind: "folder" | "shared_drive" };
+
+const FOLDER_Q = `mimeType='${FOLDER_MIME}' and trashed=false`;
+const NODE_FIELDS = "nextPageToken,files(id,name)";
+
+/** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
+ *  reading a list, and 100 folders in one directory is already past what anyone scans. */
+async function folderPage(token: string, q: string): Promise<DriveNode[]> {
+  const res = await driveFetch(
+    driveUrl("", { q, fields: NODE_FIELDS, pageSize: "100", includeItemsFromAllDrives: "true" }),
+    token,
+  );
+  if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+  const body = (await res.json()) as { files?: { id: string; name: string }[] };
+  return (body.files ?? []).map((f) => ({ id: f.id, name: f.name, kind: "folder" as const }));
+}
+
+export type DriveBrowseResult =
+  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" }
+  | { ok: true; folders: DriveNode[] };
+
+/**
+ * List the folders the user can pick, one level at a time. **THIS IS THE PICKER**, and we render it
+ * ourselves rather than mounting Google's.
+ *
+ * That is affordable precisely because the grant is `drive.readonly` and not `drive.file`: the
+ * narrow scope only ever grants access to files handed over through Google's Picker SDK, so
+ * choosing it would have forced an external `apis.google.com` script plus an API key and an app id
+ * into the client. With read access to the whole Drive we can ask `files.list` for the folders and
+ * draw them with our own tokens — no external script, no new dependency, no CSP hole.
+ *
+ * **THE ROOT LEVEL IS THREE LISTS, NOT ONE**, because Drive has three separate places a folder can
+ * live and `'root' in parents` sees only the first. A folder someone shared with you is not in your
+ * root, and a shared drive is not a file at all — it is not reachable through `files.list` under any
+ * query. Ask for only the first and the product tells a user with a shared-drive-shaped company
+ * that they have no folders.
+ */
+export const listDriveFolders = tenantAction({
+  args: { parentId: v.optional(v.string()) },
+  handler: async (ctx, { parentId }): Promise<DriveBrowseResult> => {
+    if (parentId !== undefined && !DRIVE_ID_RE.test(parentId))
+      return { ok: false, reason: "bad_folder_id" };
+
+    // The SAME ordering as the import, for the same reason: a grant that cannot call Drive
+    // refreshes perfectly happily, so checking scope after the refresh would show a pre-widening
+    // tenant a provider failure instead of a reconnect prompt. `dispatchGuard.test.ts` pins it.
+    const token: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
+      tenantId: ctx.tenantId,
+    });
+    if (!token) return { ok: false, reason: "not_connected" };
+    if (!hasScope(token.scope, DRIVE_READONLY_SCOPE)) return { ok: false, reason: "reauth" };
+
+    const access = await freshAccessToken(ctx, ctx.tenantId);
+    if (!access.ok)
+      return {
+        ok: false,
+        reason: access.reason === "not_connected" ? "not_connected" : "refresh_failed",
+      };
+
+    if (parentId !== undefined) {
+      return {
+        ok: true,
+        folders: await folderPage(access.token, `'${parentId}' in parents and ${FOLDER_Q}`),
+      };
+    }
+
+    const [drives, mine, shared] = await Promise.all([
+      (async (): Promise<DriveNode[]> => {
+        const res = await driveFetch(drivesUrl({ pageSize: "100" }), access.token);
+        // A tenant on a personal Google account has no shared drives and Drive answers 403 here.
+        // That is an ordinary shape of this feature, not a failure — degrade to "none".
+        if (!res.ok) return [];
+        const body = (await res.json()) as { drives?: { id: string; name: string }[] };
+        return (body.drives ?? []).map((d) => ({
+          id: d.id,
+          name: d.name,
+          kind: "shared_drive" as const,
+        }));
+      })(),
+      folderPage(access.token, `'root' in parents and ${FOLDER_Q}`),
+      folderPage(access.token, `sharedWithMe and ${FOLDER_Q}`),
+    ]);
+
+    // Dedup by id: a folder can legitimately appear in more than one of the three lists.
+    const byId = new Map<string, DriveNode>();
+    for (const n of [...drives, ...mine, ...shared]) if (!byId.has(n.id)) byId.set(n.id, n);
+    return { ok: true, folders: [...byId.values()] };
+  },
+});
 
 // ── The entry point ───────────────────────────────────────────────────────────
 
@@ -645,7 +753,7 @@ export const refuseFolder = internalMutation({
  */
 async function bumpLanded(ctx: MutationCtx, folderId: Id<"vaultFolders">): Promise<void> {
   const folder = await ctx.db.get(folderId);
-  if (!folder || folder.status !== "reserving") return; // cancelled, or already open
+  if (folder?.status !== "reserving") return; // cancelled (row gone), or already open
   const landed = (folder.driveLandedCount ?? 0) + 1;
   await ctx.db.patch(folderId, { driveLandedCount: landed });
   if (landed < (folder.driveExpectedCount ?? 0)) return;

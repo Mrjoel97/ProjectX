@@ -300,25 +300,31 @@ test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not e
 // the test harness; the shared-drive one CANNOT be tested behaviourally at all — a stub is free to
 // return whatever it likes, and the live symptom is HTTP 200 with an empty file list.
 
-test("the Drive import checks stored scope before the shared token refresh", () => {
+// EVERY Drive action, not just the import. `listDriveFolders` is the one a pre-widening tenant hits
+// FIRST — it is what draws the picker — so getting the ordering right only in the import would put
+// the 403 on the very first click.
+test("every Drive action checks stored scope before the shared token refresh", () => {
   const src = readCode("vaultDrive.ts");
-  const start = src.indexOf("export const importDriveFolder");
-  expect(start, "importDriveFolder not found").toBeGreaterThanOrEqual(0);
-  const rest = src.slice(start);
-  const end = rest.indexOf("\nexport const", 1);
-  const block = end >= 0 ? rest.slice(0, end) : rest;
+  for (const fn of ["export const importDriveFolder", "export const listDriveFolders"]) {
+    const start = src.indexOf(fn);
+    expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\nexport const", 1);
+    const block = end >= 0 ? rest.slice(0, end) : rest;
 
-  const scopeAt = block.indexOf("hasScope");
-  const tokenAt = block.search(/freshAccessToken\s*\(/);
-  expect(scopeAt, "importDriveFolder never checks hasScope").toBeGreaterThanOrEqual(0);
-  expect(tokenAt, "importDriveFolder never CALLS freshAccessToken").toBeGreaterThanOrEqual(0);
-  expect(
-    scopeAt,
-    "importDriveFolder refreshes before checking scope — mutation: move the hasScope call below " +
-      "freshAccessToken. `include_granted_scopes` is FORWARD-only, so every tenant connected before " +
-      "the Drive widening holds a token that refreshes fine and 403s on the first Drive call. " +
-      "Checking after the refresh turns a permanent reconnect condition into a provider failure.",
-  ).toBeLessThan(tokenAt);
+    const scopeAt = block.indexOf("hasScope");
+    const tokenAt = block.search(/freshAccessToken\s*\(/);
+    expect(scopeAt, `${fn} never checks hasScope`).toBeGreaterThanOrEqual(0);
+    expect(tokenAt, `${fn} never CALLS freshAccessToken`).toBeGreaterThanOrEqual(0);
+    expect(
+      scopeAt,
+      `${fn} refreshes before checking scope — mutation: move the hasScope call below ` +
+        `freshAccessToken. \`include_granted_scopes\` is FORWARD-only, so every tenant connected ` +
+        `before the Drive widening holds a token that refreshes fine and 403s on the first Drive ` +
+        `call. Checking after the refresh turns a permanent reconnect condition into a provider ` +
+        `failure.`,
+    ).toBeLessThan(tokenAt);
+  }
 });
 
 test("every Drive request carries the shared-drive parameters", () => {

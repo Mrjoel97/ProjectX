@@ -1,5 +1,10 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (15.3-09 follow-up — **no cockpit code changed; one TEST file did.**
+> `dispatchGuard.test.ts`’s scope-before-refresh pin now LOOPS over both Drive actions rather than
+> pinning `importDriveFolder` alone, because `listDriveFolders` (the folder picker) is what a
+> pre-widening tenant actually hits first. The Calendar assertions in that file are byte-unchanged.)
+
 > Last verified: 2026-08-04 (15.3-09 — **the Google grant gained a fourth scope, and every already-
 > connected tenant is unaffected by it in the one way that matters: they do not have it.**)
 >

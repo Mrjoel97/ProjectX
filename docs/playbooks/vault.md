@@ -1,5 +1,49 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-05 (15.3-09 follow-up — **WE RENDER THE DRIVE PICKER OURSELVES, and the
+> link-paste entry point is DELETED.**)
+>
+> The first cut shipped a "paste a Drive folder link" field. That was the wrong kind of lazy: if the
+> user has to open Drive, navigate to the folder and copy its URL, they are already in Drive and may
+> as well download the files and drag them in. The integration only earns its place if the folders
+> are reachable from inside the vault. `DriveBrowser.tsx` replaces it — a breadcrumb plus a list, one
+> level at a time, backed by `vaultDrive.listDriveFolders`.
+>
+> **WHY WE DO NOT MOUNT GOOGLE'S PICKER SDK, and why that is not a compromise.** The Picker exists to
+> make the NARROW `drive.file` scope usable: that scope grants access only to files the user hands
+> over through the Picker itself. We took `drive.readonly`, so we can ask `files.list` for the
+> folders directly and draw them with our own tokens. Mounting Google's would mean an external
+> `apis.google.com` script plus an API key and an app id, for a list we can already read — a CSP
+> hole and a third-party dependency bought for nothing. **The scope choice is what made the picker
+> cheap; do not "restore" the Picker without re-opening the scope decision first.**
+>
+> **⚠ THE ROOT LEVEL IS THREE LISTS, NOT ONE, and this is the bug waiting for the next editor.**
+> Drive has three separate places a folder can live and `'root' in parents` sees exactly one of
+> them: a folder shared WITH you is not in your root, and a shared drive is not a file at all — it is
+> unreachable through `files.list` under any query, which is why `drives.list` has its own endpoint
+> and its own URL builder (`drivesUrl`, deliberately WITHOUT the shared-drive params, because a
+> `drives` endpoint has no items to include). Collapse those three calls into one and a user whose
+> company runs on a shared drive is told they have no folders. `drives.list` 403s on a personal
+> Google account, which is an ordinary shape of this feature and degrades to an empty list, never to
+> an error.
+>
+> `listDriveFolders` repeats the import's ordering exactly — scope check → `reauth` BEFORE
+> `freshAccessToken` — and `dispatchGuard.test.ts` now loops over BOTH actions rather than pinning
+> the import alone. That matters more here than there: the browse is what a pre-widening tenant hits
+> FIRST, so getting the ordering right only in the import would have put the 403 on the very first
+> click. Mutation RUN on `listDriveFolders` specifically → RED.
+>
+> A browse level is deliberately ONE page of 100 folders with no pagination: a level is a human
+> reading a list, and 100 folders in one directory is already past what anyone scans. ponytail
+> ceiling, stated — upgrade is a "load more" and a `pageToken`.
+>
+> **LIVE-VERIFIED 2026-08-05** against a real Google account: the root listed ten real folders, and
+> drilling into `ISO9001-QMS` returned its real subfolders with the breadcrumb and the armed
+> `Import "ISO9001-QMS"` button. **STILL UNPROVEN: the shared-drive half.** That account surfaced no
+> shared drives, so `drives.list` returned nothing to render and the `supportsAllDrives` /
+> `includeItemsFromAllDrives` parameters — the ones the source scan exists to protect — have still
+> never been exercised against a real shared drive.
+
 > Last verified: 2026-08-04 (15.3-09 — **the Google Drive rail lands, and a refused folder now
 > refuses before it downloads anything.**) `convex/vaultDrive.ts` imports a Drive folder as an
 > ordinary vault folder over the EXISTING Google grant — no new secret, no new HTTP route, no second

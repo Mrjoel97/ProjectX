@@ -1,11 +1,11 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useAction, useQuery } from "convex/react";
-import Link from "next/link";
+import { useQuery } from "convex/react";
 import { useState } from "react";
 import { CategoryTabs } from "./CategoryTabs";
 import { DocGrid, type VaultDoc, type VaultFolder } from "./DocGrid";
+import { DriveBrowser } from "./DriveBrowser";
 import { Dropzone, type PickedFolder } from "./Dropzone";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import { RefreshIcon } from "./icons";
@@ -197,7 +197,7 @@ function VaultBody({
         ) : (
           <>
             <Dropzone onPickFolder={onPicked} />
-            <DriveImport />
+            <DriveBrowser />
           </>
         ))}
 
@@ -214,147 +214,5 @@ function VaultBody({
 
       {liveSelected && <PreviewModal doc={liveSelected} onClose={() => setSelected(null)} />}
     </>
-  );
-}
-
-/**
- * The Google Drive rail's entry point (15.3-09, VALT-13), beside the folder picker because it is
- * the same act: "bring this folder into the vault", from the other place folders live.
- *
- * GATED ON `driveReady`, NEVER ON `connected`. The two are different facts and the difference is
- * invisible from here without the flag: `include_granted_scopes` is forward-only, so a tenant who
- * connected before this phase is fully connected AND cannot call Drive. Routing them to reconnect
- * is the whole point — showing them a Drive error would blame the provider for a consent we never
- * asked for.
- *
- * ponytail: a pasted folder URL, not the Google Picker. The Picker needs an external
- * `apis.google.com` script, an API key and an app id, and it exists to grant per-file access under
- * `drive.file` — a scope we deliberately did not take. Upgrade path if pasting proves to be the
- * friction: the Picker returns the same folder id this field parses out.
- */
-function DriveImport() {
-  const status = useQuery(api.gmailAuth.gmailStatus);
-  const importFolder = useAction(api.vaultDrive.importDriveFolder);
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-
-  if (status === undefined) return null;
-
-  const box: React.CSSProperties = {
-    marginTop: "0.75rem",
-    padding: "0.9rem 1rem",
-    borderRadius: "12px",
-    border: "1px solid var(--rule)",
-    background: "var(--card)",
-    color: "var(--ink)",
-    fontSize: "0.9rem",
-  };
-
-  if (!status.driveReady) {
-    return (
-      <div style={box}>
-        <strong style={{ fontWeight: 600 }}>Import from Google Drive</strong>
-        <p style={{ margin: "0.35rem 0 0.7rem", color: "var(--ink-soft)" }}>
-          {status.connected
-            ? "Your Google connection was made before Drive access existed. Reconnect to add it — nothing else changes."
-            : "Connect your Google account to bring a Drive folder into your vault."}
-        </p>
-        <Link
-          href="/connect-gmail"
-          style={{
-            display: "inline-block",
-            padding: "0.5rem 1rem",
-            borderRadius: "999px",
-            background: "var(--teal-600)",
-            color: "#fff",
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
-          {status.connected ? "Reconnect Google" : "Connect Google"}
-        </Link>
-      </div>
-    );
-  }
-
-  // The id is the last path segment of a Drive folder URL, and a bare id is accepted as-is. The
-  // SERVER validates it against Drive's id grammar — this is a convenience parse, never the guard.
-  const folderIdFrom = (raw: string): string => {
-    const trimmed = raw.trim();
-    return trimmed.match(/folders\/([A-Za-z0-9_-]+)/)?.[1] ?? trimmed.split("?")[0] ?? trimmed;
-  };
-
-  const run = async () => {
-    setBusy(true);
-    setNote(null);
-    try {
-      const r = await importFolder({ driveFolderId: folderIdFrom(url), name: "Drive folder" });
-      if (r.ok) {
-        setNote(
-          `Importing ${r.added} new and ${r.updated} changed file${r.added + r.updated === 1 ? "" : "s"}` +
-            `${r.unchanged ? `, ${r.unchanged} already up to date` : ""}` +
-            `${r.skipped.length ? `, ${r.skipped.length} could not be read` : ""}.`,
-        );
-      } else if (r.reason === "unchanged") {
-        setNote(`Nothing has changed — all ${r.unchanged} files are already up to date.`);
-      } else if (r.reason === "empty_folder") {
-        setNote("That folder looks empty. Check the link, or that the folder is shared with you.");
-      } else if (r.reason === "refused") {
-        setNote(`That folder needs ${r.shortfallCents}¢ more than today's ingest budget allows.`);
-      } else if (r.reason === "bad_folder_id") {
-        setNote("That does not look like a Drive folder link.");
-      } else {
-        setNote("Your Google connection needs reconnecting.");
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div style={box}>
-      <strong style={{ fontWeight: 600 }}>Import from Google Drive</strong>
-      <p style={{ margin: "0.35rem 0 0.7rem", color: "var(--ink-soft)" }}>
-        Paste a Drive folder link. Re-importing later brings across only what changed.
-      </p>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <label htmlFor="drive-folder-url" style={{ position: "absolute", left: "-9999px" }}>
-          Google Drive folder link
-        </label>
-        <input
-          id="drive-folder-url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://drive.google.com/drive/folders/…"
-          style={{
-            flex: "1 1 20rem",
-            padding: "0.5rem 0.75rem",
-            borderRadius: "8px",
-            border: "1px solid var(--rule)",
-            background: "var(--canvas)",
-            color: "var(--ink)",
-          }}
-        />
-        <button
-          type="button"
-          onClick={run}
-          disabled={busy || url.trim() === ""}
-          style={{
-            padding: "0.5rem 1.1rem",
-            borderRadius: "999px",
-            border: "none",
-            background: "var(--teal-600)",
-            color: "#fff",
-            fontWeight: 600,
-            cursor: busy || url.trim() === "" ? "default" : "pointer",
-            opacity: busy || url.trim() === "" ? 0.5 : 1,
-          }}
-        >
-          {busy ? "Importing…" : "Import"}
-        </button>
-      </div>
-      {note && <p style={{ margin: "0.6rem 0 0", color: "var(--ink)" }}>{note}</p>}
-    </div>
   );
 }
