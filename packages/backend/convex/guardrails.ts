@@ -7,12 +7,13 @@
 // internalMutation/internalQuery from ./_generated/server are NOT banned by the
 // import guard (telemetry.ts precedent — no allowlist entry needed). This module
 // touches ctx.db, so it must stay on the default runtime (no "use node").
-import { HOUR, RateLimiter } from "@convex-dev/rate-limiter";
+import { calculateRateLimit, HOUR, type RateLimitConfig, RateLimiter } from "@convex-dev/rate-limiter";
 import { chooseModel } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
+import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 
@@ -391,4 +392,239 @@ export const ingestRemainingCents = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<number> =>
     await ingestRemainingCentsInner(ctx, tenantId),
+});
+
+// ── RESERVE / SETTLE: the whole-folder budget wall (VALT-06) ───────────────────────────
+//
+// THE INVARIANT, in one sentence: estimate and reserve for the WHOLE folder before the first
+// cent, or refuse the folder intact. A half-ingested folder is worse than a refused one.
+
+/** Every way a folder can be refused BEFORE a cent moves. Distinct codes because they send the
+ *  user to distinct levers: pause the operator, drop files, or wait for tomorrow. */
+export type FolderReserveRefusal =
+  | "kill_switch"
+  | "over_folder_cap"
+  | "over_deployment_cap"
+  | "ingest_daily_exhausted"
+  | "deployment_ingest_exhausted";
+
+/**
+ * REFS, IDS AND COUNTS ONLY — no filenames, no mime types, no text. The refusal is meant to be
+ * written straight into `audit.log` as-is (CLAUDE.md §3/§4), and it is also the payload the locked
+ * refusal copy interpolates: *"this folder needs ~$3.40; you have $1.10 left today."*
+ */
+export type FolderReserveResult =
+  | { ok: true; estCents: number; remainingCents: number; reservedAt: number; fileCount: number; totalBytes: number }
+  | {
+      ok: false;
+      reason: FolderReserveRefusal;
+      estCents: number;
+      remainingCents: number;
+      shortfallCents: number;
+      fileCount: number;
+      totalBytes: number;
+    };
+
+/** The manifest a reservation is derived FROM. Deliberately mirrors `EstimateInput` and nothing
+ *  else — a filename would be content in an audit payload, and a client-supplied cost would be a
+ *  number the client controls. */
+const vFileManifest = v.array(
+  v.object({
+    size: v.number(),
+    mimeType: v.string(),
+    pages: v.optional(v.number()),
+    hasTextLayer: v.optional(v.boolean()),
+    durationSec: v.optional(v.number()),
+  }),
+);
+
+/**
+ * Reserve a WHOLE folder. Returns a governed refusal — it NEVER throws for an expected stop.
+ *
+ * `media.reserveJobInner`'s ORDER, clone for clone, because every step of it is load-bearing:
+ *
+ *  1. Kill switch first (the component-free branch).
+ *  2. **Re-derive `estCents` from the manifest.** The pre-flight card computed a number too; that
+ *     number is a CARD, never an input. Trusting it would make the budget wall client-side.
+ *  3. **The ceiling comparison PRECEDES every limiter call.** `check()` does not return
+ *     `{ok:false}` above capacity — `validateRequest` THROWS `Rate limit ingestSpendCents count
+ *     3000 exceeds 2500`. Without this ordering the locked plain-language refusal is a stack trace.
+ *     `media.ts` never hits this only because `MEDIA_JOB_CAP_USD` sits below its own window.
+ *  4. **CHECK BOTH WINDOWS, THEN CONSUME BOTH, IN THIS ONE MUTATION** — which is ONE serializable
+ *     transaction. Split the check from the limit and two concurrent folders both pass a check
+ *     against a window neither has consumed yet.
+ *
+ * Plain function first (the `reserveJobInner` split) so plan 15.3-04's folder-create mutation can
+ * take the reservation in the SAME transaction as the `vaultFolders` insert — a Convex mutation
+ * cannot `runMutation`, and a reservation in a different transaction from the row that records it
+ * is a reservation that can leak.
+ *
+ * THE CALLER MUST PERSIST `reservedAt` ON THE FOLDER ROW. `settleFolder` refuses to refund without
+ * it (see there) — forgetting it costs the tenant money rather than manufacturing it, which is the
+ * direction this rail always fails in.
+ */
+export async function reserveFolderInner(
+  ctx: MutationCtx,
+  a: { tenantId: string; files: EstimateInput[] },
+): Promise<FolderReserveResult> {
+  const fileCount = a.files.length;
+  const totalBytes = a.files.reduce((s, f) => s + Math.max(0, f.size), 0);
+
+  const cfg = await getGuardrailConfig(ctx);
+  // estCents/remainingCents are 0 here because the kill switch stops BEFORE pricing. The reason
+  // discriminates, and kill-switch copy never names a figure.
+  if (cfg.killSwitch) {
+    return { ok: false, reason: "kill_switch", estCents: 0, remainingCents: 0, shortfallCents: 0, fileCount, totalBytes };
+  }
+
+  const { estCents } = estimateFolderCents(a.files);
+  const remainingCents = await ingestRemainingCentsInner(ctx, a.tenantId);
+  const shortfallCents = Math.max(0, estCents - remainingCents);
+  const refuse = (reason: FolderReserveRefusal): FolderReserveResult => ({
+    ok: false,
+    reason,
+    estCents,
+    remainingCents,
+    shortfallCents,
+    fileCount,
+    totalBytes,
+  });
+
+  // 3. THE CEILINGS, BEFORE THE LIMITER. The deployment branch looks unreachable while
+  //    INGEST_DAILY_BUDGET_CENTS < DEPLOYMENT_INGEST_BUDGET_CENTS — it is not: it is what keeps
+  //    the refusal governed if the two constants are ever edited out of that relationship.
+  if (estCents > INGEST_DAILY_BUDGET_CENTS) return refuse("over_folder_cap");
+  if (estCents > DEPLOYMENT_INGEST_BUDGET_CENTS) return refuse("over_deployment_cap");
+
+  // 4. Tenant FIRST, so a tenant that is personally out is told so rather than blamed for a global
+  //    pause (the `prepare` / `reserveJobInner` ordering, verbatim).
+  const tenantWindow = await rateLimiter.check(ctx, "ingestSpendCents", {
+    key: a.tenantId,
+    count: estCents,
+  });
+  if (!tenantWindow.ok) return refuse("ingest_daily_exhausted");
+  const deploymentWindow = await rateLimiter.check(ctx, "deploymentIngestSpendCents", {
+    count: estCents,
+  });
+  if (!deploymentWindow.ok) return refuse("deployment_ingest_exhausted");
+
+  await rateLimiter.limit(ctx, "ingestSpendCents", {
+    key: a.tenantId,
+    count: estCents,
+    reserve: true,
+  });
+  await rateLimiter.limit(ctx, "deploymentIngestSpendCents", { count: estCents, reserve: true });
+
+  return { ok: true, estCents, remainingCents, reservedAt: Date.now(), fileCount, totalBytes };
+}
+
+/** The `internalMutation` face of `reserveFolderInner`, for tests and for any caller that is not
+ *  already inside a mutation. 15.3-04's folder-create path calls the Inner directly. */
+export const reserveFolder = internalMutation({
+  args: { tenantId: v.string(), files: vFileManifest },
+  handler: async (ctx, a): Promise<FolderReserveResult> => reserveFolderInner(ctx, a),
+});
+
+/**
+ * How many cents may be credited back into ONE window, given what `getValue` reports.
+ *
+ * ⚠ `getValue` returns the STORED state, NOT a roll-forward: with a single shard its
+ * `calculateRateLimit` call passes `now = state.ts`, so `elapsedWindows` is 0 and both `value` and
+ * `ts` are as of the last WRITE. A window that rolled overnight with nothing written since still
+ * reports yesterday's drained value and yesterday's window start. Refunding against that number is
+ * exactly how the live probe produced **2900 against a capacity of 2500**.
+ *
+ * So the roll-forward is done here, with the component's OWN exported `calculateRateLimit` rather
+ * than a reimplementation — a version bump that changes the arithmetic then changes this guard too
+ * instead of silently desynchronising from it. `rolled.ts` is the CURRENT window's start.
+ *
+ * TWO guards, and both are needed:
+ *  - **Rollover skip:** a reservation taken in an earlier window is refunded into a window that
+ *    never paid. The clamp alone does NOT cover this — after a roll the window refills to capacity
+ *    and then someone else spends, which re-opens exactly `theirSpend` cents of headroom for us.
+ *  - **Clamp:** `max(0, min(unspent, capacity - value))`, because `calculateRateLimit` applies the
+ *    capacity clamp BEFORE subtracting the count, so a credit can otherwise exceed capacity.
+ *
+ * ponytail: `Date.now()` here is not the same instant the component reads inside `limit()`. A
+ * reservation settled in the microseconds either side of a 24h boundary can therefore still be
+ * off by one window — bounded by `unspent` and vanishingly rare. Upgrade path is a real spend
+ * table, which is what removes the whole negative-count mechanism.
+ */
+function refundableCents(
+  window: { value: number; ts: number; config: RateLimitConfig },
+  unspentCents: number,
+  reservedAt: number,
+): number {
+  const { config } = window;
+  const rolled = calculateRateLimit({ value: window.value, ts: window.ts }, config, Date.now());
+  if (reservedAt < rolled.ts) return 0; // the window rolled since the reservation — refund nothing
+  return clampRefundCents(unspentCents, rolled.value, config.capacity ?? config.rate);
+}
+
+/**
+ * Release a folder's reservation. **THE ONE PLACE a reservation is ever released** — folder
+ * completion and cancel both land here, because two release mechanisms is two places to get the
+ * clamp wrong. Cancel must call this BEFORE it deletes the `vaultFolders` row (15.3-CONTEXT §B13).
+ *
+ * IDEMPOTENT BY CAS: `reservedCents` is read and cleared in this same transaction, so a re-entered
+ * workflow `onComplete` (which can and does happen) is a no-op the second time. The mutation check
+ * for that guard is in `guardrails.test.ts`.
+ *
+ * ponytail: **THE REFUND IS A NEGATIVE `count`, WHICH IS ARITHMETIC AND NOT AN API.**
+ * `@convex-dev/rate-limiter@0.3.2` has no release/refund/credit call; `count` is an unvalidated
+ * `v.float64()` and `value = min(...) - count`, so a negative count credits the window. EXACT-pinned
+ * and pre-1.0 (CLAUDE.md §6) — a bump can silently stop refunds, which is why `guardrails.test.ts`
+ * drives the real component. The upgrade path is a real spend table, not a better credit call.
+ *
+ * **`media.ts:279-282` deliberately decided the OPPOSITE on its own rail, and that is not a bug.**
+ * Media over-reserves by CENTS (every line is bounded by `MEDIA_JOB_CAP_USD` = $3.50), so the drift
+ * is immaterial and a ledger would not pay for itself. Ingest over-reserves by DOLLARS, because the
+ * estimator cannot see page counts before the bytes land and must price every unprobed PDF as a
+ * 50-page scan. Refusing to refund THAT would charge a tenant $25 for a $2 folder.
+ */
+export const settleFolder = internalMutation({
+  args: { folderId: v.id("vaultFolders") },
+  handler: async (
+    ctx,
+    { folderId },
+  ): Promise<{ refundedCents: number; deploymentRefundedCents: number; reason: string }> => {
+    const none = (reason: string) => ({ refundedCents: 0, deploymentRefundedCents: 0, reason });
+
+    const folder = await ctx.db.get(folderId);
+    if (!folder) return none("no_folder"); // cancel already deleted the row — nothing to release
+    if (folder.reservedCents <= 0) return none("already_settled"); // THE CAS
+    // No stamp ⇒ we cannot prove WHICH window this reservation paid into, and a refund into the
+    // wrong one is free budget. Fail closed: the tenant keeps the charge, nobody mints money.
+    if (folder.reservedAt === undefined) {
+      await ctx.db.patch(folderId, { reservedCents: 0 });
+      return none("no_reserved_at");
+    }
+
+    const unspent = folder.reservedCents;
+    const tenantWindow = await rateLimiter.getValue(ctx, "ingestSpendCents", {
+      key: folder.tenantId,
+    });
+    const refundedCents = refundableCents(tenantWindow, unspent, folder.reservedAt);
+    if (refundedCents > 0) {
+      await rateLimiter.limit(ctx, "ingestSpendCents", {
+        key: folder.tenantId,
+        count: -refundedCents,
+        reserve: true,
+      });
+    }
+
+    // The deployment window rolls on its OWN randomised offset, so it gets its own read, its own
+    // rollover check and its own clamp — never the tenant window's numbers.
+    const deploymentWindow = await rateLimiter.getValue(ctx, "deploymentIngestSpendCents");
+    const deploymentRefundedCents = refundableCents(deploymentWindow, unspent, folder.reservedAt);
+    if (deploymentRefundedCents > 0) {
+      await rateLimiter.limit(ctx, "deploymentIngestSpendCents", {
+        count: -deploymentRefundedCents,
+        reserve: true,
+      });
+    }
+
+    await ctx.db.patch(folderId, { reservedCents: 0 });
+    return { refundedCents, deploymentRefundedCents, reason: "settled" };
+  },
 });
