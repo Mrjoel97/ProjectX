@@ -1,5 +1,12 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-04 — **folder ingest is orchestrated: a named pool, a
+> work-start watchdog, counter-based completion, and a cancel that writes no document rows.**
+> Extraction left the raw scheduler for `vaultIngestPool`; the 15-minute stall clock now starts
+> when work starts, not when it is queued. See `### 15.3-04` at the END of this file — in
+> particular why `pool.cancelAll` is NOT used, which is the one place the plan text and the
+> shipped component disagree.)
+
 > Last verified: 2026-08-03 (15.3-03 — **folder ingest no longer spends the cockpit's budget.**
 > An OPTIONAL `rail`/`reserved` selector is threaded from `startIngest` and `scheduleExtraction`
 > to all six ingest spend sites; reserved folder work checks the KILL SWITCH ONLY. Single-file
@@ -1617,3 +1624,268 @@ rail-without-`reserved` arm (-> still refused, so `reserved` is load-bearing), a
 (-> runs). **A first draft drained only the cockpit rail and stayed GREEN when `preCall`'s reserved
 branch was deleted**, because the untouched ingest window answered the check. The fixture now
 drains BOTH rails through a real `reserveFolder`. If you change this seam, re-run that mutation.
+
+
+---
+
+### 15.3-04 — folder orchestration (VALT-05, VALT-06, VALT-08)
+
+**What changed.** The fan-out mechanism already existed — each file is its own `vaultUpload`
+scheduling its own extraction. What was wrong at folder scale was throttling, the watchdog, and the
+absence of a folder object. This plan added `vaultFolders.ts`, moved extraction onto a named
+workpool, moved the watchdog's clock to work-start, and hooked completion into the two terminal
+writers.
+
+#### 1. `vaultIngestPool` — and why the shared `WorkflowManager` was left alone
+
+`vault.scheduleExtraction` used `ctx.scheduler.runAfter(0, ...)`, which is bounded only by the
+DEPLOYMENT's scheduled-job concurrency class. 400 queued extractions therefore sat in front of every
+delivery and cron job in the deployment: "never starve the cockpit" arriving as latency rather than
+as budget.
+
+`@convex-dev/workpool@0.4.7` moved from `devDependencies` to `dependencies` (exact pin, §6),
+`app.use(workpool, { name: "vaultIngestPool" })`, and the client lives in `convex/index.ts` beside
+`workflow` and `retrier`. **`{ name }` is required** — the component declares itself
+`defineComponent("workpool")`, so without it the identifier is `components.workpool`.
+
+- **`maxParallelism` is EXPLICIT.** `WorkpoolOptions.maxParallelism` is optional and defaults to 10,
+  which is silently above the smallest deployment class. `VAULT_INGEST_PARALLELISM = 6` lives in
+  `@pikar/vault` and `constants.test.ts` asserts it stays strictly below 8. **This project has no
+  cloud deployment** (`convex deployments` reports `Type: local`), so there is no class to read; the
+  bound is what makes the number safe on every class. Provisioning a cloud deployment is the point
+  at which it may be revisited, and the pre-flight "ready in" estimate is computed from THIS number,
+  never from an assumed class.
+- **Do NOT raise the `WorkflowManager` instead.** It is shared by every workflow in the app
+  (`executePlan`, `deliverApprovedPlan`, `pipelineWorkflow`, `ingestDoc`), so widening it widens the
+  delivery spine. Correct its number while you are here: `@convex-dev/workflow@0.4.4` declares its
+  OWN `DEFAULT_MAX_PARALLELISM = 25` and resolves `opts ?? config ?? 25` — **workpool's default of
+  10 is never reached**, and the `?? 10` in `workflowMutation.ts` is the per-EXECUTION step channel,
+  not a cross-workflow cap. Platform guidance: keep total parallelism under ~100.
+- **`retryActionsByDefault` is deliberately left `false`** on this pool (the WorkflowManager sets it
+  `true` for workflow steps; do not copy that across). `extractDoc` charges OCR pages via
+  `recordSpend` before it reaches the ingest seam, so it is not idempotent with respect to spend.
+- **A folder-level WORKFLOW was rejected**: the journal caps at 8 MiB, steps pass <=1 MB total, and
+  400 sequential `step.runAction` calls serialise the folder behind the shared pool with determinism
+  risk on redeploy. One workflow per document; the folder is a row plus counters.
+- **Honest qualifier:** the pool throttles the extraction ACTION. `ingestDoc` still runs on the
+  shared manager at 25. It is indirectly bounded (at most `VAULT_INGEST_PARALLELISM` extractions
+  reach the seam at once), but workflow retries and the pre-existing backlog are not.
+
+**Testing consequence.** A workpool writes its `work` row and schedules its main loop INSIDE the
+component's namespace, and convex-test scopes `_scheduled_functions` per component with no
+component-scoped `t.run`. So the enqueue is unobservable from a root-scoped test. `vault.test.ts`
+and `vaultSweep.test.ts` therefore assert the SCHEDULING DECISION through a `vi.spyOn` on the pool;
+`vaultExtract.test.ts`, `vaultTranscribe.test.ts` and `guardrails.test.ts` register
+`vaultIngestPool` and drive the REAL pool end to end. Do not "restore" the system-table helper — it
+returns `[]` and every assertion built on it silently inverts.
+
+#### 2. The watchdog measures WORK time, not queue time
+
+`EXTRACTION_WATCHDOG_MS` (15 min) was armed by `scheduleExtraction`, i.e. when the attempt was
+QUEUED. With 400 documents behind a concurrency of 6 a document sits queued for an hour and is
+marked `extraction_stalled` while perfectly healthy — **failures that never happened, written into
+the manifest this phase promises is honest.** The arm moved to `vault.markExtracting`, the ONE point
+every extraction rail passes through when work actually starts (`extractDoc` and `transcribeDoc` are
+its only non-test callers, and `scheduleExtraction` can only ever dispatch those two, so no rail
+lost its backstop).
+
+**COUPLED DECISION, and the two halves are one change:** `watchdogStalled` narrowed from
+`pending_extraction`+`extracting` to `extracting` only. Once the arm fires from `markExtracting`
+the row is `extracting` in the SAME transaction, so a fire that finds `pending_extraction` can only
+mean a Retry or the sweep re-queued the row after this clock started — and killing that is the same
+fabricated failure through a different door (a healthy retry queued behind 400 folder members).
+
+**What that gives up, stated rather than hidden:** a row that is enqueued and whose action never
+reaches its handler body (a deployment restart, a dropped job) now parks at `pending_extraction`
+with no automatic backstop. Narrower than what it closes — the pool always dispatches, both actions
+wrap their whole body in try/catch into `markFailed`, and a cancelled folder's members are failed
+honestly at work-start. **The recovery is `npx convex run vaultSweep:runSweep`**, which re-queues
+exactly the `pending_extraction` rows the watchdog no longer touches; a cron over it is the upgrade
+path if this ever needs to be automatic.
+
+Watchdog arms also accumulate (one per attempt, and a Retry is another attempt) because nothing
+persists the scheduled-function id. Every fire is status-idempotent, so extras are harmless; the
+upgrade path is `voice.ts`'s `watchdogFnId` pattern, which needs a schema field this phase does not
+have.
+
+#### 3. The lifecycle, and why RESERVE IS STEP 3
+
+```
+createFolder  -> "reserving"    members may be added; NOTHING may spend
+  vaultUpload({ folderId })      inserts the row, bumps memberCount, DISPATCHES NOTHING
+reserveFolder -> "ingesting"     takes the money, THEN dispatches every member
+  markReady / markFailed         bumpFolder -> terminalCount
+              -> "complete"      settle, digest, unseal — exactly once
+cancelFolder                     settle, DELETE the row, zero document writes
+```
+
+Two invariants force that ordering, and the plan text left it implicit:
+
+1. **"Reserve before the first cent"** (CONTEXT §A4). The reservation is taken off the probed
+   manifest, so no member may be dispatched at upload time.
+2. **"A folder completes exactly once, only after its last member goes terminal."** `memberCount`
+   GROWS one upload at a time. If the folder were already `ingesting` while members were still
+   arriving, a 3-file folder whose first file finished before its second was uploaded would see
+   `terminalCount === memberCount` at 1 === 1, settle its reservation and synthesise a digest over
+   one third of itself. **A status CAS does not prevent this** — it only prevents a SECOND
+   completion. `reserveFolder` is therefore also the CLOSE SIGNAL: after it, `memberCount` is fixed
+   and `vaultUpload` refuses further members with `folder not open for members`.
+
+`reserveFolder` calls `reserveFolderInner` (the plain-function half) so the reservation and the row
+that records it commit in ONE transaction — a reservation in a different transaction from its row is
+a reservation that can leak, and there is no folder-level watchdog.
+
+**On refusal** the folder goes `refused` and every member it collected is failed `folder_refused`.
+Nothing was ingested — refuse-intact is proven by absence — but the rows exist, and leaving them at
+`pending_extraction` would be exactly the silent parking 15.2 abolished.
+
+Member dispatch and member refusal both run through `vaultFolders.walkFolderMembers`, a bounded,
+self-scheduling batch (`VAULT_FOLDER_MEMBER_BATCH = 20`): Convex has no projection, so reading a
+member reads its whole row against a 16 MiB read cap, and `.paginate()` may be called only once per
+execution — hence a cursor argument and a fresh scheduled call rather than a loop. Every batch
+re-reads the folder and stops if it is gone or has left the status the walk was started for, which
+is what makes cancel mid-dispatch free.
+
+#### 4. Completion rides the TWO terminal writers, never `onIngestComplete`
+
+`vault.markReady` and `vault.markFailed` are the only two terminal writers for every rail — extract
+fail, transcribe fail, `unsupported_format`, `pii_scan_failed`, `empty_extraction`,
+`watchdogStalled`, `onIngestComplete`'s failed arm, and workflow success. One hook in those two
+handlers covers all nine call sites.
+
+**Do NOT hang folder logic on `onIngestComplete`**: it returns immediately on success and never
+fires for a document that failed before the workflow started.
+
+- **`countTerminal` takes the PRIOR ROW, not the id, and that is the whole correctness argument.**
+  Neither writer is idempotent (both are a bare `patch`) and a workflow mutation whose journal write
+  fails is re-run, so a post-state test ("is it terminal now?") is TRUE on every replay and counts
+  the same member twice. Counting only the non-terminal -> terminal TRANSITION is what makes
+  "exactly once" hold under replay.
+- **A counter, never a status-index probe.** `by_tenant_folder` returns whole rows including `text`;
+  ~40 max-size members exhaust the read cap. `vaultFolders.test.ts` proves both halves under
+  convex-test's real `transactionLimits`: the counter completes a 50-member folder fine, and the
+  probe it replaces throws.
+- **The completion transition is three things in this order:** settle (IN this transaction, never
+  scheduled — its CAS is `reservedCents > 0` read here and the next step flips the status), the
+  digest hand-off (plan 06 fills the named slot, together with 17.1 Stage-2, which needs an
+  `internalAction` sibling of the `tenantAction` `blueprint.buildBlueprintDraft`), then the flip to
+  `complete` — **last, because that flip is the unseal.**
+- **An all-duplicate folder still completes**: zero rows inserted means `bumpFolder` is never
+  called, so `reserveFolder` evaluates completion itself at the close signal.
+- **Known and accepted:** `retryExtraction` puts a `failed` row back to `pending_extraction`, a
+  genuine un-terminalling. The counters do not decrement, so a completed folder keeps its historical
+  `failedCount` even if a member is later rescued by hand. The folder CAS still stops a second
+  settle or a second digest.
+
+#### 5. Hash-dedup — the trap that stops folders completing
+
+`vaultUpload` returns an EXISTING row on a `contentHash` match and starts NO workflow, so a
+duplicate produces no terminal event.
+
+1. `memberCount` counts **rows actually inserted**, never files submitted. A folder counting to
+   "files picked" never completes.
+2. **A dedup hit is NEVER assigned a `folderId`.** Patching it would silently annex a pre-existing
+   document into the folder and seal a document the user could ground on yesterday. It is reported
+   as `deduped: true` instead (`vaultUpload` now returns `{ vaultDocId, deduped }`, the
+   `ingestFromAttachment` shape — non-breaking at every call site).
+3. A document already carrying a `folderId` is never re-parented.
+4. `by_tenant_contentHash` is **not unique over time**: `ingestExtractedText` overwrites
+   `contentHash` with the hash of the EXTRACTED text, so a binary's hash changes once extraction
+   lands. Do not build counter logic that assumes hash uniqueness.
+
+**Server-side hashing for the folder rail.** `vault.vaultUploadFolderFile` (a `tenantAction`) reads
+the bytes back from `ctx.storage`, hashes them there, and calls the public `vaultUpload` — the
+identity propagates through `ctx.runMutation` from an authenticated action, so no internal twin is
+needed (the `ingestExtractedText` twins exist because their callers are SCHEDULED actions, which
+have no identity). The dedup check and the insert stay together in `vaultUpload`'s one serializable
+transaction; only the HASH moved. The single-file path keeps its client hash.
+
+- **Correct the record on why:** this does not save an upload. `Dropzone.ingestOne` already POSTs
+  the bytes before it calls `vaultUpload`, so the client hash never skipped a transfer. What it buys
+  is browser heap — and it RELOCATES the whole-file buffer to the action rather than removing it
+  (`crypto.subtle.digest` has no streaming API on either side). Safe only because the client drives
+  these sequentially. **Do not move hashing onto `vaultIngestPool`**: 6 x 200 MB does not fit a
+  ~512 MB action.
+
+#### 6. Cancel — and why `pool.cancelAll` is NOT used
+
+**THIS IS THE ONE PLACE THE PLAN TEXT AND THE SHIPPED COMPONENT DISAGREE, and the disagreement is
+resolved in favour of the component.** The plan said cancel should call `pool.cancelAll` "for the
+folder's enqueued work". No such scoping exists: `Workpool.cancelAll` takes `{ before?, limit? }`
+and NOTHING else — it pages the pool's entire `work` table and cancels every pending item in it, for
+every folder, every tenant, and every single-file upload queued in the same instant. Per-item
+`pool.cancel` needs the `WorkId` the enqueue returns, and nothing persists one (`schema.ts` is
+closed for this phase). Calling `cancelAll` would also strand foreign members at
+`pending_extraction` — with the watchdog now armed at work-start, work cancelled before it starts
+has no clock — so one user's cancel would permanently strand another user's reservation.
+
+**The stop lives one layer down instead.** `vault.markExtracting` refuses to start work whose
+`folderId` no longer resolves and fails the row `folder_cancelled`. That is a strictly better
+"no NEW spend": folder-scoped and tenant-scoped by construction, one `db.get` per attempt, and it
+cannot touch another tenant's queue. The row is failed rather than left pending because it is a
+real, honest outcome and because Retry then re-queues it as the ordinary folder-less document cancel
+promises it now is.
+
+**Cancel DELETES the folder row.** A `cancelled` status would keep members sealed forever, because
+the seal is read THROUGH the folder row — the exact inverse of the locked "cancelled documents
+become groundable immediately".
+
+- **Every folder read treats an unresolvable id as "no folder"** — a lenient join. `getFolder`
+  returns `null` (the drill-in routes back to the flat grid); `readVaultPage`'s folder branch is
+  index equality, so `listVaultDocs({ folderId })` still returns the members, which is correct —
+  they are ordinary documents now. **`vaultIngest.retryStuckIngests` used to test `d.folderId` for
+  TRUTHINESS**, reading a dangling id as "still reserved" and re-starting the member with
+  `rail:"ingest" + reserved:true` — unbounded spend on the $25 window with no reservation and no
+  folder to settle against. It now resolves the id. If you add a folder read, resolve, never test.
+- **Why not clear `folderId` on the members:** a `patch` rewrites the whole document, `text`
+  included. At the 400,000-char cap the 16 MiB written-per-transaction cap is reached at **41 rows**,
+  and a 400-member folder is ~9.5x over it. It would need a batched `scheduler.runAfter(0, self)`
+  loop to achieve exactly what the dangling id achieves for free.
+- **The refund settles AT THE CLICK, and the plan's "after the last in-flight action" is not
+  implementable** alongside deleting the row (`settleFolder` returns `no_folder` once it is gone).
+  Settling at the click is arithmetically safe: `reserveFolderInner` debited the estimate,
+  `recordSpend` debits the ACTUAL cents as they happen, and `refundableCents` clamps the credit to
+  `capacity - currentValue` — at that instant exactly the estimate minus what has been spent.
+  Trailing in-flight spend then debits normally. **Residual cost, stated:** a second folder reserved
+  in that gap shrinks the clamp, so the first tenant can be UNDER-refunded. Fail-closed; money is
+  never minted.
+- **In-flight work is not killable.** `startIngest` discards the workflow id, so a member already
+  past extraction runs its embed -> graph -> recordSpend -> markReady to completion. Cancel means
+  "no NEW spend", not "no spend".
+- **`settleFolder` has NO tenant guard of its own** (it takes a bare `folderId` and reads
+  `folder.tenantId` for the limiter key). `cancelFolder` asserts ownership itself before settling or
+  deleting. Do not remove that check.
+- **Ordering is load-bearing: settle THEN delete.** Reversed, the reservation is stranded
+  permanently and nothing can release it.
+- **Consequence, deliberate, do not "fix" it:** cancelling makes N `ready` members instantly
+  "unincorporated", so `blueprint.unincorporatedFor` inflates the drift banner on the next cockpit
+  turn. That follows directly from the locked decision that cancelled documents are groundable.
+- Already-armed watchdogs are not cancellable (nothing persists their ids), so a member killed
+  mid-`extracting` is flipped to `failed(extraction_stalled)` 15 minutes later with no folder left
+  to explain it. Correct — it really was killed mid-flight — but expect it in UAT.
+
+#### 7. Dead field
+
+`vaultFolders.spentCents` has **zero writers**. `recordSpend` moves rate-limiter windows only and
+has no `folderId` to write with. Whoever renders a per-folder spend figure (plan 07/08) must either
+thread a `folderId` into `recordSpend` or show nothing.
+
+#### How to verify
+
+```bash
+cd packages/backend
+npx vitest run convex/vaultFolders.test.ts    # 12 — completion, dedup, cancel, watchdog, read cap
+npx vitest run --maxWorkers=1 convex/vault.test.ts convex/vaultSweep.test.ts \
+  convex/vaultExtract.test.ts convex/vaultTranscribe.test.ts convex/guardrails.test.ts
+npx tsc --noEmit -p tsconfig.json
+cd ../vault && npx vitest run                 # VAULT_INGEST_PARALLELISM < 8
+```
+
+`pnpm boot:check` cannot be used here: `scripts/boot-check.mjs` runs `npx convex codegen`, which
+fails in this environment with a 30 s startup timeout, and `convex dev --once` would kill the
+persistent local backend. Save `convex.config.ts` and let the running `npx convex dev` codegen and
+push, then typecheck.
+
+**Every `Mutation RUN:` comment in `vaultFolders.test.ts` names a mutation that was applied to the
+source, observed RED and reverted.** If you change this seam, re-run them — a green suite that does
+not sample its guarantee is how this phase shipped two false positives already.
