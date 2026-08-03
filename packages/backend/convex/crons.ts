@@ -31,4 +31,16 @@ crons.weekly(
   internal.proactiveReview.runWeekly,
   {},
 );
+// EXTR-G, the automatic half (15.3-04 repair). Since the extraction watchdog is armed at
+// work-start, a row that is enqueued but whose action never reaches its handler body (a deployment
+// restart, a dropped job) has no per-attempt clock — so the resumable, batched, self-gating sweep
+// runs daily instead of only when an operator types `npx convex run vaultSweep:runSweep`.
+// `{ reset: true }` is REQUIRED, not decorative: `sweepPendingExtraction` is a @convex-dev/
+// migrations migration and a completed migration NO-OPS on a bare invocation — the 2026-07-18
+// stranded-.xlsm lesson, recorded in docs/playbooks/vault.md.
+// Each re-queued extraction still self-gates on the kill switch + the daily budget, so a large
+// backlog throttles itself rather than draining the window.
+crons.daily("vault-pending-extraction-sweep", { hourUTC: 5, minuteUTC: 0 }, internal.vaultSweep.runSweep, {
+  reset: true,
+});
 export default crons;
