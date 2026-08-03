@@ -8,7 +8,17 @@
 // the "use node" llm.ts — a Convex-runtime module cannot load it.
 import { INCOMPLETE_MARKER, NOT_RESEARCHED_LABEL } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
+// reason (2026-08-04). Anything that reaches `startIngest` schedules the WORKFLOW component's
+// workpool functions; under real timers they fire after this file finishes and retry-loop against a
+// torn-down module runner, throwing `crypto is not defined` / `process is not defined` inside
+// whichever file the worker runs next. These tests assert synchronous effects, so the timers never
+// need to advance.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
 // The persist writes a refs-only audit row (auditCounts), starts the ingest workflow
 // (workflow + workpool) and — through the dispatch wiring block — draws on the rate-limiter's
 // daily-spend window. Relative imports: the packages block the deep specifier (evaluations.test.ts).

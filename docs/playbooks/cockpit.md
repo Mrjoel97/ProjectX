@@ -1,5 +1,14 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-04 (test-infrastructure — **no cockpit code changed; one TEST file did.**
+> `research.test.ts` gained the `beforeEach(vi.useFakeTimers)` / `afterEach(vi.useRealTimers)`
+> guard, because anything reaching `startIngest` schedules the WORKFLOW component's workpool runs
+> and, under real timers, they fire AFTER the file finishes and retry-loop against a torn-down
+> module runner — throwing `crypto is not defined` inside whatever unrelated file the worker runs
+> next. That was the suite-wide flake; `vault.test.ts` was the main leaker. Full rationale and the
+> two rules it leaves behind: `docs/playbooks/vault.md`, *the flake* section. No assertion,
+> invariant or product line in this subsystem was touched.)
+
 > Last verified: 2026-08-03 (20-11 tasks 1-3 — **no cockpit code changed; the media route this
 > playbook documents is now ADR-recorded.** [ADR-012](../decisions/012-media-route-and-the-reel.md)
 > records `cockpit.ts`'s `EXTERNAL_TARGETS.media` arm as ONE of the two human-initiated paid entry

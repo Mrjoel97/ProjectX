@@ -19,7 +19,17 @@
 import type { ProfileInput, SlotName } from "@pikar/core";
 import { missingSlots, REQUIRED_SLOTS, serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+// Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
+// reason (2026-08-04). Anything that reaches `startIngest` schedules the WORKFLOW component's
+// workpool functions; under real timers they fire after this file finishes and retry-loop against a
+// torn-down module runner, throwing `crypto is not defined` / `process is not defined` inside
+// whichever file the worker runs next. These tests assert synchronous effects, so the timers never
+// need to advance.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
 // The components the commit → startIngest spine touches offline (voice.test.ts set): auditCounts
 // (audit.log aggregate) + workflow/workpool (startIngest → ingestDoc). Relative specifiers because
 // the packages block the deep component path.

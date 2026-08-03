@@ -1,12 +1,14 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-08-04 (test-infrastructure, owner-directed — **`apps/web` HAS A TEST RUNNER
-> AT LAST**, so a test file placed there is no longer decoration; `preflightCopy.test.ts` moved
-> back beside its module and the cross-package behavioural import is gone from
-> `vaultSurface.test.ts`. **The `crypto is not defined` flake is STILL OPEN** — serialising the
-> suite was tried against measured evidence and DID NOT FIX IT, so the hypothesis was wrong and
-> the change was reverted rather than shipped for a 95 s cost. See *the open flake* below before
-> spending time on it.)
+> Last verified: 2026-08-04 (test-infrastructure, owner-directed — **two standing gaps closed.**
+> (1) **`apps/web` HAS A TEST RUNNER AT LAST**, so a test file placed there is no longer
+> decoration; `preflightCopy.test.ts` moved back beside its module and the cross-package
+> behavioural import is gone from `vaultSurface.test.ts`. (2) **The `crypto is not defined` flake
+> is FIXED, and it was never an environment problem:** `vault.test.ts` started 20 ingest workflows
+> and mocked only the ingest pool, so the WORKFLOW component's scheduled runs escaped the file and
+> retry-looped inside whichever file ran next — which is why the victim was always the innocent
+> `onboarding.test.ts`, and why neither serialising nor switching pool helped. 3-in-8 failures ->
+> 0 in 8. See *the flake* below for the two rules it leaves behind.)
 
 > Last verified: 2026-08-04 (15.3-08 verify pass — **three defects, and the sharpest one is that
 > `identityLine` was the ONE field passed RAW from the model.** `docType` was coerced through
@@ -2899,36 +2901,43 @@ writer and *cannot* prove it names both numbers — drop the remaining-cents int
 leaving the words "left today" in place and every text anchor still matches. Both halves exist, in
 different packages, for that reason.
 
-#### The open flake — `crypto is not defined` (NOT fixed, and one hypothesis is now dead)
+#### The `crypto is not defined` flake — FIXED, and the cause was not what it looked like
 
-The backend suite fails intermittently — roughly 3 runs in 8 — with
-`ReferenceError: crypto is not defined` (and `process is not defined`) inside
-`convex/onboarding.test.ts`, taking three profile tests down. The throw is real code running:
-`lib/hash.ts`'s `crypto.subtle.digest`, reached from `onboarding.ts`'s `writeProfileDoc`.
+**Root cause: `vault.test.ts` leaked workflow work.** It starts ingest 20 times and spies on the
+ingest POOL — but `startIngest` goes through `workflow.start`, which schedules the **workflow**
+component's own workpool functions via the scheduler, a completely separate path that file mocked
+nothing on. Under real timers those runs fired *after* the file finished and the workflow component
+retry-looped (`Run …runs failed, retrying in 800 ms`) against a torn-down module runner. The retry
+executed inside whichever test file the worker had moved on to, and threw
+`ReferenceError: crypto is not defined` / `process is not defined` out of perfectly innocent code.
 
-**WHAT IS RULED OUT — do not spend time re-testing any of these:**
+**That is why every earlier theory failed.** The victim (`onboarding.test.ts`) had nothing wrong
+with it — it was simply the file most often running when someone else's orphaned retry landed. And
+it is why neither `fileParallelism: false` nor `pool: "threads"` helped: both change how files are
+*scheduled*, and the leak is work escaping a file's lifetime entirely.
 
-1. **It is not this phase's doing.** Reproduced with only pre-existing files:
-   `npx vitest run convex/onboarding.test.ts convex/vaultDigest.test.ts` failed 1 of 3 runs. No
-   15.3-08 file involved. Adding a 61st test file raises the odds; it did not create the fault.
-2. **It is not leaked fake timers.** Every suite that installs them pairs
-   `beforeEach(vi.useFakeTimers)` with `afterEach(vi.useRealTimers)`.
-3. **It is not a missing `process` shim.** Stubbing `globalThis.process` does not help; the global
-   that actually goes missing is `crypto`.
-4. **IT IS NOT FILE CONCURRENCY.** This one was tried and shipped-then-reverted, so the record
-   matters: `fileParallelism: false` looked promising on a small sample (the two-file pair went 6
-   of 6 green, against 1 of 3 failing parallel) — **but the full suite STILL FAILED the same three
-   tests while serialised.** The pair was too small a sample to carry the conclusion. The change
-   costs ~95 s (140 s -> 236 s) and buys nothing, so it was reverted rather than shipped.
-5. **The victim is always `onboarding.test.ts`.** Alone it is 24/24 green, repeatedly.
+**The fix** is the guard `vaultExtract.test.ts` already documented and credited to `vault.test.ts`:
+`beforeEach(vi.useFakeTimers)` / `afterEach(vi.useRealTimers)` in every suite that reaches
+`startIngest` and asserts only synchronous effects. Applied to `vault.test.ts`, `gapAction`,
+`intake`, `onboarding`, `research`, `vaultSweep`, `vaultTranscribe`. Suites that DRAIN instead
+(`cockpit`, `vaultDigest`, `vaultFolders`, `vaultClassify`, `evaluations` — `finishAllScheduledFunctions`)
+were already correct and are untouched.
 
-**What that leaves.** Serialised execution still tears down and recreates the `@edge-runtime` VM
-per file, so the surviving hypothesis is environment lifecycle rather than parallelism — globals
-going missing from a recycled or partially-initialised VM context, independent of how many files
-run at once. The next thing to try is the POOL, not the parallelism: `pool: "threads"`, or
-`poolOptions.forks.singleFork`, or pinning `@edge-runtime/vm`. **Validate any candidate against a
-20-run sample of the full suite** — a 1-in-3 flake will show 6 clean runs by luck, which is exactly
-how hypothesis 4 above got as far as being committed.
+**`dispatch.test.ts` is the one exception: it needs real timers** (one test fails under fake ones),
+so it still leaks a little. That is the residual — two runs in eight printed a `not defined` line on
+stderr while every test passed. If the flake ever returns, `dispatch.test.ts` is where to look
+first, and the fix there is draining rather than freezing.
 
-Until then: **a red `onboarding.test.ts` with a `not defined` ReferenceError is this flake, not a
-regression. Re-run before investigating.**
+**Measured, because a 1-in-3 flake shows clean runs by luck:**
+
+| | full-suite failures |
+| --- | --- |
+| before | 3 in 8 |
+| after `vault.test.ts` alone | 2 in 10 |
+| after all seven | **0 in 8**, stderr noise 0 in the last 4 |
+
+**Two rules this leaves behind.** (1) **A test that calls `startIngest` owns the work it starts** —
+either freeze the clock or drain the scheduler; doing neither pushes a failure into someone else's
+file, where it is nearly undiagnosable. (2) **Validate a flake fix on the FULL suite, never a
+subset.** Both wrong theories here looked confirmed on a two-file reproducer — `fileParallelism:
+false` went 6/6 and `pool: threads` went 9/9 on the pair, and both still failed the full suite.

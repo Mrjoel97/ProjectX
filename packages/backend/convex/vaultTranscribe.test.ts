@@ -14,7 +14,17 @@
 // convex-test — `status: "processing"` IS the seam's synchronous effect (vault.test.ts pattern).
 import { VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
+// reason (2026-08-04). Anything that reaches `startIngest` schedules the WORKFLOW component's
+// workpool functions; under real timers they fire after this file finishes and retry-loop against a
+// torn-down module runner, throwing `crypto is not defined` / `process is not defined` inside
+// whichever file the worker runs next. These tests assert synchronous effects, so the timers never
+// need to advance.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
 import { internal } from "./_generated/api";
 import schema from "./schema";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
