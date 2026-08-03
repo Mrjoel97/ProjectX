@@ -61,14 +61,16 @@ const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
 const enqueuedExtractions: { name: string; args: [Record<string, unknown>] }[] = [];
 beforeEach(() => {
   enqueuedExtractions.length = 0;
+  // The generic signature of `enqueueAction` cannot be satisfied by a concrete stub, so the
+  // implementation is cast once here rather than typed twice.
   vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
-    async (_ctx: unknown, fn: never, fnArgs: unknown) => {
+    ((async (_ctx: unknown, fn: never, fnArgs: unknown) => {
       enqueuedExtractions.push({
         name: getFunctionName(fn),
         args: [fnArgs as Record<string, unknown>],
       });
       return "workId_test" as never;
-    },
+    }) as never) as never,
   );
 });
 afterEach(() => vi.restoreAllMocks());

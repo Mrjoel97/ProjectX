@@ -63,8 +63,11 @@ export const transcribeDoc = internalAction({
         await ctx.runMutation(internal.guardrails.preCall, { tenantId, rail: spendRail, reserved });
       if (!pre.ok) return fail(pre.reason);
 
-      // 2. Work actually starts → flip the visible pill (honest pill).
-      await ctx.runMutation(internal.vault.markExtracting, { vaultDocId });
+      // 2. Work actually starts → flip the visible pill (honest pill). `{ ok: false }` means the
+      //    folder was CANCELLED while this queued — markExtracting already failed the row
+      //    `folder_cancelled`, and no transcription cent is spent.
+      const started = await ctx.runMutation(internal.vault.markExtracting, { vaultDocId });
+      if (!started.ok) return null;
 
       // 3. Metadata + bytes (bytes via storage, never args).
       const doc = await ctx.runQuery(internal.vault.getDocForExtraction, { vaultDocId, tenantId });

@@ -317,8 +317,12 @@ export const extractDoc = internalAction({
         return null;
       }
 
-      // 2. Flip the visible pill — work actually starts now (honest pill).
-      await ctx.runMutation(internal.vault.markExtracting, { vaultDocId });
+      // 2. Flip the visible pill — work actually starts now (honest pill). `{ ok: false }` means
+      //    this document's folder was CANCELLED while it queued: markExtracting has already
+      //    failed the row `folder_cancelled`, and returning here is what makes "cancel = no NEW
+      //    spend" true for work that had not started.
+      const started = await ctx.runMutation(internal.vault.markExtracting, { vaultDocId });
+      if (!started.ok) return null;
 
       // 3. Metadata (fail-closed tenant guard) + bytes from storage.
       const meta: { storageId: Id<"_storage"> | undefined; mimeType: string; title: string; status: string } =

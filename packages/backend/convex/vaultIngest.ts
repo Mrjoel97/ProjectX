@@ -100,17 +100,23 @@ export const retryStuckIngests = internalMutation({
     let requeued = 0;
     for (const d of docs) {
       if (d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff) continue;
+      // A folder member re-started by this sweep must NOT go back to spending the cockpit's
+      // budget — the rail is derived from the row, because the sweep has no other context.
+      // 15.3-04: RESOLVE the id, never test it for truthiness. Cancel DELETES the folder row and
+      // leaves the member's `folderId` dangling, so `d.folderId ? …` read a cancelled member as
+      // "still reserved" and would spend the $25 ingest window with no reservation behind it and
+      // no folder left to settle against. An unresolvable folderId means "no folder" here exactly
+      // as it does at every other folder read.
+      const folder = d.folderId ? await ctx.db.get(d.folderId) : null;
       await startIngest(ctx, {
         vaultDocId: d._id,
         tenantId: d.tenantId,
         correlationId: crypto.randomUUID(),
-        // A folder member re-started by this sweep must NOT go back to spending the cockpit's
-        // budget — the rail is derived from the row, because the sweep has no other context.
         // ponytail: `reserved: true` even though the folder's reservation may already have been
-        // settled, so a swept retry can spend the ingest window without a live reservation. The
-        // ceiling is a small over-spend on a recovery path; the upgrade path is reading the folder
-        // row's `reservedCents` here, which 15.3-04 owns along with the folder watchdog.
-        ...(d.folderId ? { rail: "ingest" as const, reserved: true } : {}),
+        // settled (a folder that reached `complete` has `reservedCents: 0`), so a swept retry can
+        // spend the ingest window without a live reservation. The ceiling is a small over-spend on
+        // a recovery path; the upgrade path is reading `folder.reservedCents` here.
+        ...(folder ? { rail: "ingest" as const, reserved: true } : {}),
       });
       requeued++;
     }

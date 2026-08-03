@@ -464,7 +464,7 @@ export type FolderReserveResult =
 /** The manifest a reservation is derived FROM. Deliberately mirrors `EstimateInput` and nothing
  *  else — a filename would be content in an audit payload, and a client-supplied cost would be a
  *  number the client controls. */
-const vFileManifest = v.array(
+export const vFileManifest = v.array(
   v.object({
     size: v.number(),
     mimeType: v.string(),

@@ -90,6 +90,19 @@ export const EXTRACTION_WATCHDOG_MS = 15 * 60_000;
 export const VAULT_INGEST_PARALLELISM = 6;
 
 /**
+ * How many folder members ONE transaction may walk when the folder is dispatched (or refused).
+ * A TRANSACTION BOUND, not a tuning knob — the same rule as VAULT_GRID_PAGE next door: Convex has
+ * no projection, so reading a member reads its whole row, and a folder has up to several hundred
+ * of them. Batches beyond the first are self-scheduled (`scheduler.runAfter(0, self)`).
+ *
+ * ponytail: a ROW bound, not the rows-OR-bytes bound `readVaultPage` uses. A folder member has no
+ * extracted `text` yet (that is the point — it has not been dispatched), so the rows are small;
+ * the one shape that could still trip the read cap is a client that passes megabytes of `text` on
+ * a searchable member. Upgrade path: copy `readVaultPage`'s second bound in.
+ */
+export const VAULT_FOLDER_MEMBER_BATCH = 20;
+
+/**
  * Chars of document text sent to the graph extractor. ~120k chars ≈ 30k tokens, well inside the
  * 128k window even for token-dense content (tab-joined spreadsheet rows tokenize far worse than
  * prose) and leaving room for the schema + system prompt. Before this cap, extractGraph was the

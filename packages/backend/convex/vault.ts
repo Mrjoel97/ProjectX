@@ -31,7 +31,7 @@ import {
   type VaultSource,
 } from "@pikar/vault";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalMutation,
@@ -42,6 +42,7 @@ import {
 import { vaultIngestPool } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { bumpFolder } from "./vaultFolders";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
@@ -183,11 +184,13 @@ export const vaultUpload = tenantMutation({
     size: v.number(),
     contentHash: v.string(),
     text: v.optional(v.string()),
+    /** 15.3-04 folder rail. ABSENT ⇒ exactly today's single-file behaviour. */
+    folderId: v.optional(v.id("vaultFolders")),
   },
   handler: async (
     ctx,
-    { storageId, filename, mimeType, size, contentHash: hash, text },
-  ): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+    { storageId, filename, mimeType, size, contentHash: hash, text, folderId },
+  ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
     // Per-kind cap: video is bounded by the transcription API's hard limit, everything else by the
     // storage ceiling. This is the single chokepoint — all video reaches transcribeDoc only through
     // here, so no downstream size guard is needed. The MESSAGES name the cap from the constant:
@@ -199,14 +202,29 @@ export const vaultUpload = tenantMutation({
       throw new Error(`vault: file too large (max ${capMB(VAULT_FILE_CAP_BYTES)})`);
     }
 
+    // A folder member may only be added while its folder is still `reserving` — that status IS the
+    // window in which `memberCount` may move, and `reserveFolder` closes it. A member accepted
+    // after the close signal would push `memberCount` past a `terminalCount` that has already
+    // settled, and the folder would never complete again.
+    const folder = folderId ? await ctx.db.get(folderId) : null;
+    if (folderId && (!folder || folder.tenantId !== ctx.tenantId || folder.status !== "reserving"))
+      throw new Error("vault: folder not open for members");
+
     // Hash-dedup: identical bytes for this tenant reuse the existing item (no re-store / re-embed).
+    //
+    // ⚠ A DEDUP HIT IS NEVER ANNEXED INTO THE FOLDER (15.3-CONTEXT §B7). Patching `folderId` onto
+    // the existing row would silently take a pre-existing document into the folder AND seal a
+    // document the user could ground on yesterday. It is reported as `deduped` instead, and
+    // `memberCount` — which counts ROWS ACTUALLY INSERTED, never files submitted — does not move.
+    // That is also why a duplicate inside a folder cannot stop the folder completing: a dedup hit
+    // starts no workflow, so it would never produce the terminal event a naive count waits for.
     const dup = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant_contentHash", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("contentHash", hash),
       )
       .first();
-    if (dup) return { vaultDocId: dup._id };
+    if (dup) return { vaultDocId: dup._id, deduped: true };
 
     // Searchable ONLY when the format is wired through embed+extract AND its text is already present.
     const searchable = isSearchable(mimeType) && text !== undefined && text.length > 0;
@@ -221,9 +239,17 @@ export const vaultUpload = tenantMutation({
       contentHash: hash,
       storageId,
       text, // present for searchable TXT/MD/CSV; undefined for binaries (awaits extraction)
-      status: searchable ? "processing" : "pending_extraction",
+      status: searchable && !folderId ? "processing" : "pending_extraction",
+      folderId,
       createdAt: Date.now(),
     });
+    if (folder) {
+      await ctx.db.patch(folder._id, { memberCount: folder.memberCount + 1 });
+      // AND DISPATCH NOTHING. The folder's reservation has not been taken yet, and "reserve before
+      // the first cent" is the invariant the whole phase exists to protect —
+      // `vaultFolders.reserveFolder` starts every member once the money is held.
+      return { vaultDocId, deduped: false };
+    }
     if (searchable) {
       const correlationId = crypto.randomUUID();
       await startIngest(ctx, { vaultDocId, tenantId: ctx.tenantId, correlationId });
@@ -240,7 +266,53 @@ export const vaultUpload = tenantMutation({
         title: filename,
       });
     }
-    return { vaultDocId };
+    return { vaultDocId, deduped: false };
+  },
+});
+
+/**
+ * The FOLDER rail's upload seam: hash the bytes SERVER-side, then insert through `vaultUpload`.
+ *
+ * `Dropzone` hashes each file in browser heap because `vaultUpload` needs a `contentHash` and
+ * SubtleCrypto has no streaming digest. At a 200 MB per-file cap across a 1.5 GB folder that is
+ * not viable, and the bytes are already in `ctx.storage` — so the folder rail hashes there
+ * (15.3-CONTEXT §B9). The single-file path keeps its client hash, unchanged.
+ *
+ * An ACTION because `ctx.storage.get` is action-only, and it calls the PUBLIC `vaultUpload` rather
+ * than an internal twin: this action is invoked by an authenticated browser, so `ctx.runMutation`
+ * carries the identity through and the tenant wrapper resolves normally. (The `ingestFromAttachment`
+ * / `ingestExtractedText` internal twins exist because their callers are SCHEDULED actions, which
+ * have no identity — Pitfall 3. That does not apply here.)
+ *
+ * The dedup check and the insert stay together inside `vaultUpload`'s single serializable
+ * transaction; only the HASH moves out. Split those two and two concurrent identical files both
+ * insert.
+ *
+ * Accepted cost, recorded: a folder cannot skip UPLOADING a duplicate it has not yet sent. That is
+ * not a regression — `Dropzone.ingestOne` already POSTs the bytes before it ever calls
+ * `vaultUpload`, so the client hash never saved an upload either.
+ * ponytail: this relocates the whole-file buffer from browser heap to action heap rather than
+ * removing it (`crypto.subtle.digest` has no streaming API on either side). Safe because the
+ * client drives these sequentially — one buffer live at a time. Do NOT move this onto
+ * `vaultIngestPool`: VAULT_INGEST_PARALLELISM × 200 MB does not fit a ~512 MB action.
+ */
+export const vaultUploadFolderFile = tenantAction({
+  args: {
+    folderId: v.id("vaultFolders"),
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    text: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+    const blob = await ctx.storage.get(args.storageId);
+    if (!blob) throw new Error("vault: uploaded bytes not found");
+    const hash = await contentHash(new Uint8Array(await blob.arrayBuffer()));
+    return await ctx.runMutation(api.vault.vaultUpload, { ...args, contentHash: hash });
   },
 });
 
@@ -620,7 +692,10 @@ export const ownedDocsMeta = internalQuery({
 export const markReady = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments"), ragEntryId: v.string() },
   handler: async (ctx, { vaultDocId, ragEntryId }) => {
+    const before = await ctx.db.get(vaultDocId);
+    if (!before) return; // deleted mid-flight — `patch` on a missing id throws
     await ctx.db.patch(vaultDocId, { status: "ready", ragEntryId, failureReason: undefined });
+    await countTerminal(ctx, before, false);
   },
 });
 
@@ -628,9 +703,43 @@ export const markReady = internalMutation({
 export const markFailed = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments"), reason: v.string() },
   handler: async (ctx, { vaultDocId, reason }) => {
+    const before = await ctx.db.get(vaultDocId);
+    if (!before) return;
     await ctx.db.patch(vaultDocId, { status: "failed", failureReason: reason });
+    await countTerminal(ctx, before, true);
   },
 });
+
+/**
+ * The ONE folder hook, in the ONE pair of handlers that terminate every rail — extract fail,
+ * transcribe fail, unsupported_format, pii_scan_failed, empty_extraction, watchdogStalled,
+ * onIngestComplete's failed arm, and workflow success. Nine call sites, one place.
+ *
+ * ⚠ IT TAKES THE PRIOR ROW, NOT THE ID, AND THAT IS THE WHOLE CORRECTNESS ARGUMENT. Neither writer
+ * is idempotent (both are a bare `patch`) and a workflow mutation whose journal write fails is
+ * re-run, so a post-state test ("is it terminal now?") is TRUE on every replay and would count the
+ * same member twice. Counting only the non-terminal → terminal TRANSITION is what makes "a folder
+ * reaches complete exactly once" hold under replay.
+ *
+ * A counter, not a status-index probe over `by_tenant_folder`: O(1), and it never reads a `text`
+ * blob — the schema's own warning is that ~40 max-size member rows exhaust the 16 MiB read cap.
+ * The one extra read this costs (`ctx.db.get` on the doc, whole row, `text` included) is
+ * unavoidable — Convex has no projection and `folderId` cannot be learned any other way.
+ *
+ * Known, accepted: `retryExtraction` puts a `failed` row back to `pending_extraction`, which is a
+ * genuine un-terminalling. The counters do not decrement, so a folder that already completed keeps
+ * its historical `failedCount` even if the user later rescues a member by hand. The folder-level
+ * CAS still stops a second settle or a second digest.
+ */
+async function countTerminal(
+  ctx: MutationCtx,
+  before: Doc<"vaultDocuments">,
+  failed: boolean,
+): Promise<void> {
+  if (!before.folderId) return;
+  if (before.status === "ready" || before.status === "failed") return; // already counted
+  await bumpFolder(ctx, before.folderId, failed);
+}
 
 // ── Phase-3.8 extraction lifecycle (Wave-0 seam — called by vaultExtract/vaultTranscribe) ─────
 
@@ -656,7 +765,24 @@ export const markFailed = internalMutation({
  */
 export const markExtracting = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments") },
-  handler: async (ctx, { vaultDocId }) => {
+  handler: async (ctx, { vaultDocId }): Promise<{ ok: boolean }> => {
+    // THE CANCEL GATE, and the only place a cancelled folder's queued work is actually stopped.
+    // `vaultFolders.cancelFolder` deletes the folder row and writes nothing to any document, so a
+    // member whose `folderId` no longer resolves was cancelled mid-flight. Refusing to start here
+    // is what "cancel means no NEW spend" actually costs: one `db.get` per attempt, folder-scoped
+    // and tenant-scoped by construction. See cancelFolder for why `pool.cancelAll` is not usable.
+    // The row is failed rather than left at `pending_extraction`: it is a real, honest outcome
+    // (the work was killed), it is terminal so nothing parks silently, and Retry re-queues it as
+    // an ordinary folder-less document — which is exactly what cancel promises it now is.
+    const doc = await ctx.db.get(vaultDocId);
+    if (doc?.folderId && !(await ctx.db.get(doc.folderId))) {
+      await ctx.runMutation(internal.vault.markFailed, {
+        vaultDocId,
+        reason: "folder_cancelled",
+      });
+      return { ok: false };
+    }
+
     await ctx.db.patch(vaultDocId, {
       status: "extracting",
       failureReason: undefined,
@@ -665,6 +791,7 @@ export const markExtracting = internalMutation({
     await ctx.scheduler.runAfter(EXTRACTION_WATCHDOG_MS, internal.vaultSweep.watchdogStalled, {
       vaultDocId,
     });
+    return { ok: true };
   },
 });
 
