@@ -280,6 +280,18 @@ export async function reserveJobInner(
   // consumed. Over-reservation is the fail-closed bias, same as `Math.max(1, Math.ceil(...))`.
   // Refunding turns a rate-limiter window into a ledger; if drift ever proves material the upgrade
   // path is a real spend table, not a credit call.
+  //
+  // ⚠ THE FOLDER-INGEST RAIL (15.3-03, `guardrails.settleFolder`) DELIBERATELY TAKES THE OPPOSITE
+  // POSITION, and neither rail is a bug. The difference is the SIZE of the over-reservation, not a
+  // change of mind:
+  //   · media over-reserves by CENTS — every line is priced from a known spec and the whole job is
+  //     bounded by MEDIA_JOB_CAP_USD ($3.50), so the drift a refund would recover is not worth a
+  //     ledger;
+  //   · ingest over-reserves by DOLLARS — the estimator cannot see page counts or audio duration
+  //     before the bytes land, so every unprobed PDF is priced as a 50-page scan. Not refunding
+  //     THAT would charge a tenant $25 for a $2 folder.
+  // Do not "harmonise" the two rails in either direction without re-reading both reasons;
+  // docs/playbooks/guardrails.md §15.3-03 states this from the ingest side.
   await rateLimiter.limit(ctx, "mediaSpendCents", {
     key: a.tenantId,
     count: estCents,

@@ -1,6 +1,18 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-02 (created by 20-04 to close a standing §9 gap — `guardrails.ts` was in
+> Last verified: 2026-08-03 (15.3-03 - **the THIRD rail: folder ingest.** Two new windows
+> (`ingestSpendCents` $25/tenant, `deploymentIngestSpendCents` $250 keyless), a whole-folder
+> `reserveFolder`/`settleFolder` pair whose refund is a CLAMPED negative `count`, and an
+> OPTIONAL `rail` selector on `preCall`/`recordSpend`. Every pre-15.3 call site is unchanged:
+> the argument is absent there, and absent means exactly today's behaviour.)
+>
+> PREVIOUSLY: 2026-08-02 (20-09 - **`mediaRemainingCentsInner` extracted as a plain function**,
+> so a `tenantQuery` can read today's remaining media budget: a Convex query cannot `runQuery`, and
+> the canvas must show the remaining budget beside the itemised estimate (D7). The `internalQuery`
+> face is unchanged and now delegates to it - the `reserveJobInner` / `reserveJob` split, for the
+> same reason. NO rail behaviour changed: same two windows, same `Math.min`, same clamping at 0.)
+>
+> PREVIOUSLY: 2026-08-02 (created by 20-04 to close a standing §9 gap — `guardrails.ts` was in
 > NO playbook's watch prefix, recorded in 20-RESEARCH §11.3 and never assigned. It is now covered
 > here.)
 > Build history: `.planning/phases/03-guardrails/`, `.planning/phases/22.1-*/` (22.1-02, the
@@ -30,9 +42,9 @@ verification of the other's playbook — claiming a review of a diff nobody read
 | `packages/backend/scripts/run-smoke-guardrails.mjs` | `pnpm smoke:guardrails` — the end-to-end prepare/preCall-through-the-pipeline path against a live deployment |
 | `packages/cost/src/cost.ts` · `packages/cost/src/media.ts` | the pure estimators. `guardrails.ts` never prices anything itself |
 
-## The four windows
+## The six windows
 
-All four are named windows on **ONE** `RateLimiter` instance. A second `RateLimiter` would be a
+All six are named windows on **ONE** `RateLimiter` instance. A second `RateLimiter` would be a
 second component mount for zero gain — add a name, not an instance.
 
 | Window | Rate | Key | Consumed by |
@@ -41,10 +53,13 @@ second component mount for zero gain — add a name, not an instance.
 | `deploymentSpendCents` | `DEPLOYMENT_BUDGET_CENTS` = 5,000 | **keyless** | `recordSpend`, AFTER the call |
 | `mediaSpendCents` | `MEDIA_DAILY_BUDGET_CENTS` = 1,000 | `tenantId` | `media.reserveJob`, BEFORE the call |
 | `deploymentMediaSpendCents` | `DEPLOYMENT_MEDIA_BUDGET_CENTS` = 10,000 | **keyless** | `media.reserveJob`, BEFORE the call |
+| `ingestSpendCents` | `INGEST_DAILY_BUDGET_CENTS` = 2,500 | `tenantId` | `reserveFolder` BEFORE, `recordSpend(rail)` DURING, `settleFolder` credits back |
+| `deploymentIngestSpendCents` | `DEPLOYMENT_INGEST_BUDGET_CENTS` = 25,000 | **keyless** | same three |
 
-Worst-case daily exposure: **$50 LLM + $100 media = $150.** The keyless ceilings are what bound it;
-per-tenant keying alone makes exposure `N × budget`, unbounded in N. Each rail's deployment ceiling
-is **10× its per-tenant window** — one ratio across both rails.
+Worst-case daily exposure: **$50 LLM + $100 media + $250 ingest = $400** deployment-wide, **$40 per
+tenant.** The keyless ceilings are what bound it; per-tenant keying alone makes exposure
+`N × budget`, unbounded in N. Each rail's deployment ceiling is **10× its per-tenant window** —
+one ratio across all three rails.
 
 ## Invariants — what must never break
 
@@ -128,13 +143,111 @@ npx convex run guardrails:setKillSwitch      '{"on":true}'   # stops EVERYTHING 
 npx convex run guardrails:setMediaKillSwitch '{"on":true}'   # stops paid generation ONLY
 ```
 
+## Phase 15.3 — the folder-ingest rail
+
+### 15.3-03 — the third window, the clamped refund, and the rail selector
+
+**Why a third rail at all.** Until this plan the ENTIRE vault ingest path spent
+`dailySpendCents` — the cockpit's $5 — at six sites (`vaultIngest.ts` gate + charge,
+`vaultExtract.ts` gate + per-OCR-page charge, `vaultTranscribe.ts` gate + charge). So a folder
+upload both **starved the agent the user relies on for actual work** and **could be refused
+halfway by an unrelated cockpit turn.** A half-ingested folder is worse than a refused one,
+because the agent then grounds on it confidently without knowing what is missing.
+
+**$25/day per tenant**, deliberately the largest of the three per-tenant windows: a folder upload
+is a bursty one-off onboarding-shaped event, not a daily habit. Owner decision; accepted
+consequence is $40 worst-case per-tenant daily exposure. The number is calibrated to the
+**scanned-PDF OCR path and to nothing else** — ~$0.005/page � a 50-page cap – which is the only
+work in the pipeline that costs real money at folder scale. Extraction of text/office/text-layer
+PDF is free, embedding is free today, graph extraction is ~$0.006/doc.
+
+**The refund is a NEGATIVE `count`. That is arithmetic, not an API.**
+`@convex-dev/rate-limiter@0.3.2` has no release/refund/credit call; `reserve: true` only permits
+the value to go negative. `count` is an unvalidated `v.float64()` and the component computes
+`value = min(state.value + rate * elapsedWindows, capacity) - count`, so a negative count credits
+the window. The package is EXACT-pinned and pre-1.0 (CLAUDE.md §6) and **a bump can silently stop
+refunds**, which is why `guardrails.test.ts` drives the real component rather than a mock. The
+upgrade path is a real spend table, not a better credit call.
+
+**THE MONEY BUG, and the two guards that close it.** The capacity clamp runs BEFORE the count is
+subtracted, so a refund issued after the 24h fixed window rolls credits a window that never paid:
+a live probe produced **2900 against a capacity of 2500.** Folder ingests routinely span the
+reset. Both guards are needed and neither is sufficient alone:
+
+1. **The clamp** — `clampRefundCents(unspent, value, capacity)` = `max(0, min(unspent, capacity -
+   value))`, a pure function in `packages/vault/src/ingestEstimate.ts`, unit-tested there because
+   reproducing a window roll inside convex-test means hand-editing the component's private rows.
+2. **The rollover skip** — if the window rolled since `vaultFolders.reservedAt`, refund nothing.
+   The clamp alone does NOT cover this: after a roll the window refills to capacity and then
+   somebody else spends, which re-opens exactly *their* spend as headroom for our credit.
+
+⚠ **`getValue` returns the STORED state, not a roll-forward.** With one shard its internal
+`calculateRateLimit` call passes `now = state.ts`, so `elapsedWindows` is 0: a window that rolled
+overnight with nothing written since still reports yesterday's value and yesterday's window start.
+`settleFolder` therefore rolls the numbers forward itself using the component's OWN exported
+`calculateRateLimit`, so a version bump that changes the arithmetic changes the guard with it.
+
+**NEITHER ingest window is sharded, including the keyless one.** Sharding would buy OCC throughput
+under the OCR fan-out, and it costs two things this rail cannot pay: `getValue` becomes a SAMPLED
+APPROXIMATION (and the pre-flight card promises an honest "you have $1.10 left today" figure), and
+`limit()` picks a shard AT RANDOM — so a clamp reading one value could credit a shard that never
+paid, re-opening the bug above per-shard. The contention is not new: the same writers already hit
+the unsharded `dailySpendCents`/`deploymentSpendCents` today.
+
+**`check()` THROWS above capacity** (`Rate limit ingestSpendCents count 3000 exceeds 2500`), so
+`reserveFolder` compares `estCents` against both ceilings **before touching the limiter.** Without
+that ordering the locked plain-language refusal is a stack trace. `media.ts` never hits this only
+because `MEDIA_JOB_CAP_USD` sits below its own window; ingest has no per-job cap.
+
+**The deliberate divergence from the media rail.** `media.ts:279-282` says, in writing, *"no
+refunds … refunding turns a rate-limiter window into a ledger."* This rail takes the opposite
+position on purpose, and the difference is the SIZE of the over-reservation:
+
+| | media | folder ingest |
+|---|---|---|
+| Over-reserves by | **cents** — every line priced from a known spec, whole job bounded by `MEDIA_JOB_CAP_USD` ($3.50) | **dollars** — the estimator cannot see page counts or audio duration before the bytes land, so every unprobed PDF is priced as a 50-page scan |
+| Therefore | a ledger would not pay for itself | not refunding would charge a tenant $25 for a $2 folder |
+
+Both sites state this from their own side. **Do not harmonise them in either direction** without
+re-reading both reasons.
+
+**The rail selector.** `preCall` and `recordSpend` take an OPTIONAL `rail?: "ingest"` plus
+`reserved?: boolean`. Optional is mandatory, not stylistic: there are ~15 call sites, and
+`dispatch.ts`'s sub-agent envelope sizing reads `remainingDailyCents` over the TOKEN window —
+folding another rail in would silently resize every envelope. **Absent means exactly today's
+behaviour, everywhere.** Reserved folder work checks **the kill switch ONLY**: the money is already
+paid, so checking the ingest window would refuse the run precisely when its own reservation drove
+that window to 0. It still *charges* the ingest window, because settle releases against a window
+that must have seen the real cost.
+
+**Operator check — the cross-window refund is NOT provable offline.** Every test here runs inside
+one window; the case that actually manufactures budget only exists across a real day boundary. Do
+not read a green suite as proof of it. Verify on a live deployment instead, from
+`packages/backend`:
+
+```bash
+npx convex run guardrails:ingestRemainingCents '{"tenantId":"<id>"}'   # before the folder
+# ... ingest a folder, let it complete, and let the 24h window roll ...
+npx convex run guardrails:ingestRemainingCents '{"tenantId":"<id>"}'   # after
+```
+
+The number after the roll must be **at most `INGEST_DAILY_BUDGET_CENTS` (2500)**. Anything above it
+means the clamp or the rollover skip regressed, and the tenant is minting budget.
+
 ## Known gaps & deferred work
 
 - **No media equivalent of `recordSpend`.** The media rail reserves and never reconciles: if 3 of 6
   blocks fail, the reserved cents stay consumed. Over-reservation is the deliberate fail-closed
   bias; refunding would turn a rate-limiter window into a ledger. The upgrade path, if drift ever
   proves material, is a real spend table — not a credit call. The `ponytail:` note is at the site
-  in `media.ts`.
+  in `media.ts`, and now also points at the ingest rail's opposite decision so neither reads as a
+  bug.
+- **The ingest refund's cross-window behaviour has no offline proof.** See the operator check in
+  §15.3-03. A test suite runs inside one window; the failure mode needs a day boundary.
+- **A folder whose workflow dies after reserving holds its cents for up to 24h.** `settleFolder` is
+  the only release, and nothing sweeps for orphaned reservations yet — 15.3-04 owns the folder
+  watchdog. `retryStuckIngests` re-derives the rail from the row's `folderId`, but a swept retry
+  can spend the ingest window without a live reservation.
 - **The windows are fixed 24-hour windows, not rolling.** A tenant exhausted at 23:00 is refused
   until the window rolls, not for 24 hours. Accepted.
 - **`run-smoke-guardrails.mjs` covers the LLM rail only.** There is no live smoke for the media

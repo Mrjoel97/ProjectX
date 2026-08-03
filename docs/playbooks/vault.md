@@ -1,5 +1,10 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-03 — **folder ingest no longer spends the cockpit's budget.**
+> An OPTIONAL `rail`/`reserved` selector is threaded from `startIngest` and `scheduleExtraction`
+> to all six ingest spend sites; reserved folder work checks the KILL SWITCH ONLY. Single-file
+> uploads are unchanged. See `### 15.3-03` at the END of this file.)
+
 > Last verified: 2026-08-03 (15.3-02 — **the vault read plane is bounded and projected, and the
 > size cap is declared in ONE place.** `listVaultDocs`/`vaultStats` stopped `.collect()`ing the
 > tenant partition with every `text` blob attached; the per-file cap is 200 MB and no longer
@@ -1545,3 +1550,70 @@ property** — a SHAPE assertion, which is cheaper and more durable than a size 
 `stats.capped === true` and a returned row count below 50, i.e. the BYTE bound biting). Then
 `npx tsc --noEmit` from `apps/web`, which is what catches a component reaching for a field the
 projection no longer returns.
+
+### 15.3-03 — the budget rail selector (ingest stops spending the cockpit's $5)
+
+**The defect this closed.** Every paid step of vault ingest charged `dailySpendCents`, the
+COCKPIT's $5/day window, at six sites:
+
+| gate (`preCall`) | charge (`recordSpend`) |
+|---|---|
+| `vaultIngest.ingestDoc` step 1 | `vaultIngest.ingestDoc` step 5 (embed + graph) |
+| `vaultExtract.extractDoc` step 1 | `vaultExtract.extractHosted` — **once per OCR page** |
+| `vaultTranscribe.transcribeDoc` step 1 | `vaultTranscribe.transcribeDoc` (per-minute) |
+
+So an ingest both starved the agent the user relies on for actual work AND could be refused
+halfway by an unrelated cockpit turn. The money rail itself lives in
+`docs/playbooks/guardrails.md` §15.3-03 — read that for the window, the reservation and the
+refund. What lives HERE is how the selector reaches the vault's six sites.
+
+**The seam.** `preCall` and `recordSpend` take an OPTIONAL `rail?: "ingest"` plus
+`reserved?: boolean`. It is threaded:
+
+- `vaultIngest.startIngest({ rail, reserved })` -> the `ingestDoc` workflow args -> its `preCall`
+  gate and its `recordSpend`. Eight existing call sites pass neither and are unchanged.
+- `vault.scheduleExtraction({ spendRail, reserved })` -> the scheduler args of
+  `vaultExtract.extractDoc` / `vaultTranscribe.transcribeDoc` -> their gate, and down through
+  `extractPdf` into `extractHosted` so each OCR page charges the right rail.
+
+⚠ **`scheduleExtraction` now has TWO things called a rail.** `spendRail` is the BUDGET rail; the
+local `rail` is the SCHEDULING rail (`schedulingRailFor` -> transcribe vs extract), and
+`vaultExtract` has a third (`resolveRail`, the FORMAT rail read from magic bytes). They are
+unrelated. The budget one is spelled `spendRail` at every vault site for exactly this reason.
+
+**Reserved folder work checks the KILL SWITCH ONLY.** This is the whole "a folder can never be
+refused halfway" guarantee: a whole-folder reservation takes the tenant's ingest window to 0 by
+design, so a mid-run window check would refuse the run because of its own reservation. It still
+CHARGES the ingest window — `reserved` skips the check, never the charge — or settle would release
+against a window that never saw what the folder really cost.
+
+**ABSENT means exactly today's behaviour.** Folder-less single-file uploads deliberately stay on
+the token rail (15.3-CONTEXT puts only FOLDER ingest on the $25 window), and `dispatch.ts`'s
+sub-agent envelope sizing still reads `remainingDailyCents` over the token rail, untouched.
+
+**`retryStuckIngests` derives the rail from the row.** A swept folder member re-derives
+`rail: "ingest", reserved: true` from its `folderId`, so an ops recovery does not silently push a
+folder document back onto the cockpit's budget. ponytail ceiling, named at the site: the folder's
+reservation may already have been settled, so a swept retry can spend the ingest window without a
+live reservation. 15.3-04 owns the folder watchdog and the better fix (read `reservedCents`).
+
+**What is NOT covered.** `vaultSweep.sweepPendingExtraction` / `retryExtraction` still call
+`scheduleExtraction` without a rail, so a swept EXTRACTION (as opposed to a swept ingest) charges
+the token rail. Left deliberately: those two are pre-15.3 recovery paths with no folder context in
+scope, and 15.3-04 rebuilds the fan-out onto a named workpool anyway.
+
+**How to verify.**
+
+```bash
+cd packages/backend
+npx vitest run convex/guardrails.test.ts      # 18/18 — incl. the cross-rail isolation trio
+npx vitest run --maxWorkers=1 convex/vaultExtract.test.ts convex/vaultTranscribe.test.ts \
+  convex/vaultSweep.test.ts convex/vault.test.ts
+```
+
+The isolation block in `guardrails.test.ts` is the one that matters, and it has THREE arms because
+two were not enough: the control (no rail -> refused, i.e. the old behaviour), the
+rail-without-`reserved` arm (-> still refused, so `reserved` is load-bearing), and the reserved arm
+(-> runs). **A first draft drained only the cockpit rail and stayed GREEN when `preCall`'s reserved
+branch was deleted**, because the untouched ingest window answered the check. The fixture now
+drains BOTH rails through a real `reserveFolder`. If you change this seam, re-run that mutation.
