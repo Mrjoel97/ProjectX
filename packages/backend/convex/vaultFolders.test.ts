@@ -78,8 +78,25 @@ const watchdogs = (t: ReturnType<typeof convexTest>) =>
     ),
   );
 
-const newFolder = async (t: ReturnType<typeof convexTest>): Promise<Id<"vaultFolders">> => {
-  const { folderId } = await asTenant(t).mutation(api.vaultFolders.createFolder, {
+/**
+ * Enqueues recorded for ONE tenant.
+ *
+ * ⚠ `enqueued` IS SHARED AND IS WRITTEN TO BY OTHER TESTS. convex-test never runs a
+ * `scheduler.runAfter` entry inside the test that created it (verified: it stays `{kind:"pending"}`
+ * through `finishInProgressScheduledFunctions` AND `finishAllScheduledFunctions`) — it runs during
+ * a LATER test, against its own instance, and pushes into this array. Filtering by document id
+ * would not discriminate: convex-test ids restart at `00000000000000010000<table>` per instance, so
+ * every instance's first document has the SAME id. The tenant string is chosen by the test, so it
+ * is the one field that cannot collide. Anything that COUNTS enqueues uses its own tenant.
+ */
+const enqueuedFor = (tenantId: string) =>
+  enqueued.filter((e) => e.args[0]?.tenantId === tenantId);
+
+const newFolder = async (
+  t: ReturnType<typeof convexTest>,
+  tenantId = TENANT,
+): Promise<Id<"vaultFolders">> => {
+  const { folderId } = await asTenant(t, tenantId).mutation(api.vaultFolders.createFolder, {
     name: "Company docs",
     source: "upload",
   });
@@ -94,10 +111,11 @@ const upload = async (
     hash?: string;
     filename?: string;
     mimeType?: string;
+    tenant?: string;
   } = {},
 ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
   const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["bytes"])));
-  return await asTenant(t).mutation(api.vault.vaultUpload, {
+  return await asTenant(t, opts.tenant ?? TENANT).mutation(api.vault.vaultUpload, {
     storageId,
     filename: opts.filename ?? "report.pdf",
     mimeType: opts.mimeType ?? "application/pdf",
@@ -109,6 +127,16 @@ const upload = async (
 
 const folderRow = (t: ReturnType<typeof convexTest>, folderId: Id<"vaultFolders">) =>
   t.run((ctx) => ctx.db.get(folderId));
+
+/** Member walks scheduled but not yet run. convex-test leaves a `scheduler.runAfter` entry at
+ *  `{kind:"pending"}` and never executes it, which is exactly why section 6 invokes the walk
+ *  directly rather than trusting the scheduler to have run it. */
+const scheduledWalks = (t: ReturnType<typeof convexTest>, mode: string) =>
+  t.run(async (ctx) =>
+    (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+      (s) => /walkFolderMembers/.test(s.name) && (s.args[0] as { mode?: string })?.mode === mode,
+    ),
+  );
 
 // ── 1. The watchdog must not kill QUEUED work (15.3-CONTEXT §B2) ─────────────
 //
@@ -423,10 +451,13 @@ describe("cancelFolder", () => {
       ok: true,
     });
 
-    // ZERO document writes. Every row is byte-identical, `folderId` included — the dangling id IS
-    // the mechanism, not an oversight.
+    // ZERO document writes IN THIS MUTATION. Every row is byte-identical, `folderId` included —
+    // the dangling id IS the mechanism, not an oversight. What terminalises the members nothing
+    // will ever dispatch is the BATCHED walk this schedules (section 6), which is what keeps the
+    // guarantee a per-transaction write-cap guarantee rather than silent parking.
     const docsAfter = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
     expect(docsAfter).toEqual(docsBefore);
+    expect(await scheduledWalks(t, "cancel")).toHaveLength(1);
 
     // The folder is GONE, not marked: a `cancelled` status would keep its members sealed forever.
     expect(await folderRow(t, folderId)).toBeNull();
@@ -469,6 +500,50 @@ describe("cancelFolder", () => {
     expect(await watchdogs(t)).toHaveLength(0); // no clock armed for work that never started
   });
 
+  // The other half of "cancel writes zero rows in the mutation": the members it did NOT write are
+  // terminalised by the batched walk. Cancelling while the folder is still `reserving` — the
+  // pre-flight card's "no, don't start this", the likeliest cancel of all — parks 100% of the
+  // members, because reserveFolder is what dispatches them and it never ran.
+  // Mutation RUN: drop the `mode: "cancel"` schedule from cancelFolder -> RED, but on the
+  // zero-writes test ABOVE (`scheduledWalks(t, "cancel")` is empty), not here — this test invokes
+  // the walk directly, so the two together are what pin "scheduled AND correct". Without the
+  // schedule the member sits at `pending_extraction` for ever: dangling folderId, no dispatcher
+  // (the dispatch walk stops at a missing parent) and, since the watchdog moved to work-start,
+  // no clock either.
+  test("cancel terminalises the members nothing will ever dispatch, and Retry then WORKS", async () => {
+    const T = "tenant_cancel_retry";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    const a = (await upload(t, { folderId, hash: "cx-a", tenant: T })).vaultDocId;
+
+    await asTenant(t, T).mutation(api.vaultFolders.cancelFolder, { folderId });
+    await t.mutation(internal.vaultFolders.walkFolderMembers, {
+      tenantId: T,
+      folderId,
+      mode: "cancel",
+      cursor: null,
+    });
+
+    expect(await t.run((ctx) => ctx.db.get(a))).toMatchObject({
+      status: "failed",
+      failureReason: "folder_cancelled",
+    });
+
+    // And it is a REAL retry, not a loop: `markExtracting` refuses work whose folder has vanished,
+    // so the dangling id has to die on the row being re-queued or the document can never be
+    // extracted, embedded or grounded on again — the inverse of "cancelled documents become
+    // ordinary documents".
+    // Mutation RUN: drop the `folderId: undefined` from retryExtraction's patch -> RED on the
+    // markExtracting assertion (folder_cancelled again, for ever).
+    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
+      { ok: true },
+    );
+    expect((await t.run((ctx) => ctx.db.get(a)))?.folderId).toBeUndefined();
+    expect(enqueuedFor(T)).toHaveLength(1);
+    expect(enqueuedFor(T)[0]?.args[0]?.spendRail).toBeUndefined(); // no reservation left to spend
+    expect(await t.mutation(internal.vault.markExtracting, { vaultDocId: a })).toEqual({ ok: true });
+  });
+
   test("a foreign tenant cannot settle or delete another tenant's folder", async () => {
     const t = budgetHarness();
     const folderId = await newFolder(t);
@@ -481,5 +556,200 @@ describe("cancelFolder", () => {
     // `settleFolder` takes a bare folderId and has no tenant guard of its own, so this assertion is
     // the whole protection: the reservation is untouched and the row is still there.
     expect(await folderRow(t, folderId)).toMatchObject({ status: "ingesting", reservedCents: 1 });
+  });
+});
+
+// ── 6. The member walk, and the three mutations that reach a member from OUTSIDE the walk ────
+//
+// Why this section is invoked DIRECTLY rather than through the scheduler: `reserveFolder` and
+// `cancelFolder` schedule the walk with `ctx.scheduler.runAfter(0, …)`, and convex-test leaves that
+// entry at `{kind:"pending"}` for ever — `finishInProgressScheduledFunctions()` does not help,
+// because the walk is pending, not in-progress. Everything the walk does was therefore UNSAMPLED:
+// "reserve dispatches every member" is the mechanism that makes a folder ingest at all, and a wrong
+// mode literal, status filter or index in it would have left the suite green.
+
+describe("walkFolderMembers — the mechanism the scheduler hides", () => {
+  test("dispatch: one pool enqueue per member, on the PRE-PAID rail", async () => {
+    const T = "tenant_walk_dispatch";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    await upload(t, { folderId, hash: "w-a", tenant: T });
+    await upload(t, { folderId, hash: "w-b", tenant: T });
+    await upload(t, { folderId, hash: "w-c", tenant: T });
+
+    await asTenant(t, T).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(3),
+    });
+    expect(enqueuedFor(T)).toHaveLength(0); // uploading a member dispatches NOTHING — no cent before the money
+    expect(await scheduledWalks(t, "dispatch")).toHaveLength(1);
+
+    await t.mutation(internal.vaultFolders.walkFolderMembers, {
+      tenantId: T,
+      folderId,
+      mode: "dispatch",
+      cursor: null,
+    });
+
+    const mine = enqueuedFor(T);
+    expect(mine).toHaveLength(3);
+    expect(mine.every((e) => e.name.includes("vaultExtract"))).toBe(true);
+    // `reserved: true` + the ingest rail on BOTH halves is what keeps a folder off the cockpit's
+    // $5 window and unrefusable by a drained one — the money is already taken.
+    for (const e of mine) {
+      expect(e.args[0]).toMatchObject({ spendRail: "ingest", reserved: true });
+    }
+  });
+
+  test("refuse: every member is failed folder_refused, and NOTHING is ingested", async () => {
+    const T = "tenant_walk_refuse";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    const a = (await upload(t, { folderId, hash: "rf-a", tenant: T })).vaultDocId;
+
+    const refusal = await asTenant(t, T).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(INGEST_DAILY_BUDGET_CENTS + 1),
+    });
+    expect(refusal).toMatchObject({ ok: false, reason: "over_folder_cap" });
+    expect(await folderRow(t, folderId)).toMatchObject({ status: "refused" });
+
+    await t.mutation(internal.vaultFolders.walkFolderMembers, {
+      tenantId: T,
+      folderId,
+      mode: "refuse",
+      cursor: null,
+    });
+
+    // Terminal and honest rather than parked at pending_extraction — and Retry-able one at a time
+    // if the user wants a single file after all.
+    expect(await t.run((ctx) => ctx.db.get(a))).toMatchObject({
+      status: "failed",
+      failureReason: "folder_refused",
+    });
+    expect(enqueuedFor(T)).toHaveLength(0); // refuse-intact is proven by absence
+  });
+});
+
+describe("a member reached from outside the walk", () => {
+  // THE RETRY RACE. Retry un-terminalises a `failed` row; `countTerminal` counts the NON-TERMINAL →
+  // TERMINAL transition, so without the matching decrement that row is counted TWICE and the folder
+  // completes while a member that never ran is still outstanding — settling the reservation that
+  // member has yet to spend, lifting the seal, and handing plan 06 a partial folder to synthesise.
+  // Mutation RUN: delete the `unbumpFolder` call from retryExtraction -> RED, the folder below
+  // reads `complete` with terminalCount 3 while member c is still pending_extraction.
+  test("retrying a failed member un-counts it, so the folder cannot complete early", async () => {
+    const T = "tenant_retry_race";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    const a = (await upload(t, { folderId, hash: "rt-a", tenant: T })).vaultDocId;
+    const b = (await upload(t, { folderId, hash: "rt-b", tenant: T })).vaultDocId;
+    const c = (await upload(t, { folderId, hash: "rt-c", tenant: T })).vaultDocId;
+    await asTenant(t, T).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(3),
+    });
+
+    await t.mutation(internal.vault.markFailed, { vaultDocId: a, reason: "unsupported_format" });
+    expect(await folderRow(t, folderId)).toMatchObject({ terminalCount: 1, failedCount: 1 });
+
+    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
+      { ok: true },
+    );
+    expect(await folderRow(t, folderId)).toMatchObject({ terminalCount: 0, failedCount: 0 });
+    // and the retry rides the reservation the folder is already holding
+    expect(enqueuedFor(T)).toHaveLength(1);
+    expect(enqueuedFor(T)[0]?.args[0]).toMatchObject({ spendRail: "ingest", reserved: true });
+
+    await t.mutation(internal.vault.markReady, { vaultDocId: a, ragEntryId: "entry_a" });
+    await t.mutation(internal.vault.markReady, { vaultDocId: b, ragEntryId: "entry_b" });
+
+    expect(await folderRow(t, folderId)).toMatchObject({
+      status: "ingesting",
+      memberCount: 3,
+      terminalCount: 2,
+      failedCount: 0,
+    });
+    expect((await t.run((ctx) => ctx.db.get(c)))?.status).toBe("pending_extraction");
+  });
+
+  // A member of a `reserving` folder has not been paid for and `reserveFolder` is what dispatches
+  // it; extracting it here would spend BEFORE the reservation, the one ordering the whole rail is
+  // built around. Fail-closed, like the cross-tenant and wrong-status refusals beside it.
+  test("retry is refused while the folder has not reserved", async () => {
+    const T = "tenant_retry_early";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    const a = (await upload(t, { folderId, hash: "pre-a", tenant: T })).vaultDocId;
+
+    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
+      { ok: false },
+    );
+    expect(enqueuedFor(T)).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(a)))?.status).toBe("pending_extraction");
+  });
+
+  // Deleting a member deletes the only thing that could ever produce its terminal event, so an
+  // un-counted delete strands the folder at `ingesting` for ever — reservation held, members sealed
+  // (plan 05), no folder-level watchdog to notice.
+  // Mutation RUN: drop the bumpFolder call from deleteVaultDoc -> RED, the folder stays `ingesting`
+  // at terminalCount 1 of 2 and `remaining` never returns to the full window.
+  test("deleting the last outstanding member completes the folder and settles it", async () => {
+    const T = "tenant_delete_member";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    const a = (await upload(t, { folderId, hash: "dl-a", tenant: T })).vaultDocId;
+    const b = (await upload(t, { folderId, hash: "dl-b", tenant: T })).vaultDocId;
+    await asTenant(t, T).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(2),
+    });
+    // `a` goes terminal the ordinary way. It is failed rather than ready ONLY so the delete below
+    // does not need the `rag` component registered — a ready row carries a ragEntryId and
+    // `deleteVaultDoc` cascades into rag.
+    await t.mutation(internal.vault.markFailed, { vaultDocId: a, reason: "unsupported_format" });
+    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS - 2);
+
+    expect(await asTenant(t, T).mutation(api.vault.deleteVaultDoc, { vaultDocId: b })).toEqual({
+      ok: true,
+    });
+
+    expect(await folderRow(t, folderId)).toMatchObject({
+      status: "complete",
+      memberCount: 2,
+      terminalCount: 2,
+      failedCount: 2, // memberCount = read + unread: a document that is not there was not read
+      reservedCents: 0,
+    });
+    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS);
+
+    // ...and deleting an ALREADY-terminal member counts nothing twice.
+    await asTenant(t, T).mutation(api.vault.deleteVaultDoc, { vaultDocId: a });
+    expect(await folderRow(t, folderId)).toMatchObject({ terminalCount: 2 });
+  });
+
+  // The manifest is the CLIENT's, and it is what the reservation is priced off. Without a
+  // cross-check the caller chooses where the budget wall is.
+  // Mutation RUN: delete the `files.length < folder.memberCount` guard -> RED, `{ files: [] }`
+  // returns ok with estCents 0, the folder flips to `ingesting` holding a 0-cent reservation, and
+  // every member is then dispatched with `reserved: true` (preCall waves those through on the kill
+  // switch alone).
+  test("a manifest shorter than the folder is refused before pricing", async () => {
+    const T = "tenant_manifest_short";
+    const t = budgetHarness();
+    const folderId = await newFolder(t, T);
+    await upload(t, { folderId, hash: "ms-a", tenant: T });
+    await upload(t, { folderId, hash: "ms-b", tenant: T });
+
+    expect(
+      await asTenant(t, T).mutation(api.vaultFolders.reserveFolder, { folderId, files: [] }),
+    ).toEqual({ ok: false, reason: "manifest_short" });
+
+    expect(await folderRow(t, folderId)).toMatchObject({
+      status: "reserving", // still open — nothing was taken and nothing was dispatched
+      reservedCents: 0,
+    });
+    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS);
+    expect(enqueuedFor(T)).toHaveLength(0);
   });
 });
