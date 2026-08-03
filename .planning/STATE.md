@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.3
-current_plan: 5
+current_plan: 6
 status: in_progress
-stopped_at: "Completed 15.3-04-PLAN.md — folder ingest orchestration: a named vaultIngestPool at parallelism 6, the extraction watchdog re-armed at WORK-START, vaultFolders.ts (create/reserve/complete/cancel) with counter-based completion hooked into the two terminal writers, and a cancel that settles then deletes the folder row without writing a document. Next is 15.3-05 (wave 5, sealing)."
-last_updated: "2026-08-03T06:20:00.000Z"
+stopped_at: "Completed 15.3-05-PLAN.md — sealing (VALT-07). ONE predicate `vaultFolders.sealedIn` (`folderId` set AND the folder row EXISTS AND its status is `ingesting`) applied at four sites: runVaultGround seeds (before `expand`, and `hits` is filtered too because `fuse` builds from the hit list), runVaultGround graph neighbours (an INDEPENDENT leak path — `vaultGraph.expand` reads `graphEdges` unfiltered), `vault.vaultSearch`, and `blueprint.unincorporatedFor` (members are `ready` during the sealed window and `spineForTenant` runs on EVERY grounding call). The status test is POSITIVE: `cancelFolder` DELETES the folder row, so `!== \"complete\"` would seal every cancelled folder's documents forever. Predicate lives in vaultFolders.ts, not vaultGround.ts as the plan said — `unincorporatedFor` is a plain QueryCtx helper and cannot runQuery. vaultSealing.test.ts 6/6 offline at $0; all five mutations run RED against exactly their named test; the graph-neighbour test was VACUOUS on first run (upsertGraph dedups edges cross-doc — link docs by a shared NODE) and its own control caught it. Full suite 1144/1144, typecheck delta ZERO. Next is 15.3-06 (wave 6, the folder digest)."
+last_updated: "2026-08-03T14:20:00.000Z"
 progress:
   total_phases: 42
   completed_phases: 28
   total_plans: 247
-  completed_plans: 231
+  completed_plans: 232
 ---
 
 ---
