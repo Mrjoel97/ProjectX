@@ -250,6 +250,11 @@ means the clamp or the rollover skip regressed, and the tenant is minting budget
   can spend the ingest window without a live reservation.
 - **The windows are fixed 24-hour windows, not rolling.** A tenant exhausted at 23:00 is refused
   until the window rolls, not for 24 hours. Accepted.
+- **`run-smoke-guardrails.mjs` has NO ingest arm either (15.3-03).** The ingest rail is proven
+  offline against the REAL rate-limiter component (`guardrails.test.ts`, 18 tests, every
+  guarantee mutation-verified), and the one thing an arm still could not cover is the
+  cross-window refund — that needs a day boundary, not a script. Use the §15.3-03 operator
+  check instead. Adding an arm means writing `vaultFolders` rows to a live deployment.
 - **`run-smoke-guardrails.mjs` covers the LLM rail only.** There is no live smoke for the media
   rail; `media.test.ts` is unit-only against the real component. Plan 20-11's owner-run live gate is
   the first end-to-end exercise of `reserveJob`.
