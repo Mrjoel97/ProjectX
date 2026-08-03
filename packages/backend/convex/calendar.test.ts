@@ -1,6 +1,11 @@
 import type { RunId } from "@convex-dev/action-retrier";
 import retrierTest from "@convex-dev/action-retrier/test";
-import { CALENDAR_EVENTS_SCOPE, CALENDAR_FREEBUSY_SCOPE, GMAIL_MODIFY_SCOPE } from "@pikar/core";
+import {
+  CALENDAR_EVENTS_SCOPE,
+  CALENDAR_FREEBUSY_SCOPE,
+  DRIVE_READONLY_SCOPE,
+  GMAIL_MODIFY_SCOPE,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -61,15 +66,22 @@ describe("calendar fixture seam", () => {
 });
 
 describe("one Google consent flow", () => {
-  test("the one authorize URL requests mail, free/busy, and event scopes", async () => {
+  test("the one authorize URL requests mail, free/busy, event and Drive scopes", async () => {
     vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "client-id");
     vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret");
     vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://example.test/gmail/callback");
 
     const url = new URL(await buildAuthorizeUrl(TENANT));
     const scopes = new Set(url.searchParams.get("scope")?.split(" ") ?? []);
+    // An EXACT set, so widening the grant is always a deliberate edit here — a scope that appears
+    // in the consent screen without a test saying so is a permission nobody decided to ask for.
     expect(scopes).toEqual(
-      new Set([GMAIL_MODIFY_SCOPE, CALENDAR_FREEBUSY_SCOPE, CALENDAR_EVENTS_SCOPE]),
+      new Set([
+        GMAIL_MODIFY_SCOPE,
+        CALENDAR_FREEBUSY_SCOPE,
+        CALENDAR_EVENTS_SCOPE,
+        DRIVE_READONLY_SCOPE,
+      ]),
     );
   });
 
@@ -145,6 +157,9 @@ describe("disconnectGoogle — revoke at Google, then delete locally", () => {
     expect(await as.query(api.gmailAuth.gmailStatus, {})).toEqual({
       connected: false,
       expiresAt: null,
+      // A disconnected tenant is not Drive-ready either — the flag is derived from the scope of a
+      // row that no longer exists, so it must read false rather than absent.
+      driveReady: false,
     });
 
     // 3. One audit row, flags only, and no token material anywhere in it (CLAUDE.md §4).

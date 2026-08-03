@@ -13,12 +13,29 @@ export const CALENDAR_FREEBUSY_SCOPE = "https://www.googleapis.com/auth/calendar
 export const CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 
+/** Read-only Drive (15.3-09, VALT-13). ONE scope covers all three things the Drive rail does:
+ *  `files.list` metadata, `alt=media` downloads of uploaded files, and `files.export` of
+ *  Google-native Docs Editors files.
+ *
+ *  Deliberately NOT `drive.file` (the narrower per-file grant): it only grants access to files the
+ *  user hands over through the Google Picker, which means shipping the Picker JS SDK from
+ *  `apis.google.com` plus an API key and an app id — an external client-side script that buys
+ *  nothing while the OAuth consent screen is still in Testing mode and the user list is us. */
+export const DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+
 /** The full Google grant this app requests — ONE consent, ONE token row, ONE connect button
- *  (D1: mirror the shipped gmail.ts adapter; do not invent a second integration shape). */
+ *  (D1: mirror the shipped gmail.ts adapter; do not invent a second integration shape).
+ *
+ *  **Widening this array does NOT retro-grant anything.** `include_granted_scopes=true`
+ *  (`gmailAuth.ts`) is FORWARD-only: the NEXT consent returns a grant covering old+new scopes, but
+ *  every token issued BEFORE the widening keeps its old `scope` string. So an already-connected
+ *  tenant must be detected with `hasScope` and sent to reconnect BEFORE any call — otherwise they
+ *  get a 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` that reads as a product bug. */
 export const GOOGLE_SCOPES = [
   GMAIL_MODIFY_SCOPE,
   CALENDAR_FREEBUSY_SCOPE,
   CALENDAR_EVENTS_SCOPE,
+  DRIVE_READONLY_SCOPE,
 ].join(" ");
 
 /** The CLOSED availability enum. Closed so a new range is a deliberate edit, not a model string. */

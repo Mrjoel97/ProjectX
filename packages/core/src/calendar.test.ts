@@ -5,7 +5,9 @@ import { describe, expect, test } from "vitest";
 import {
   availabilityWindow,
   CALENDAR_EVENTS_SCOPE,
+  CALENDAR_FREEBUSY_SCOPE,
   CALENDAR_HORIZON_MS,
+  DRIVE_READONLY_SCOPE,
   eventIdFor,
   GMAIL_MODIFY_SCOPE,
   GOOGLE_SCOPES,
@@ -94,8 +96,22 @@ describe("hasScope — whole-token matching, because a PREFIX must not pass", ()
     expect(hasScope(GMAIL_MODIFY_SCOPE, CALENDAR_EVENTS_SCOPE)).toBe(false);
   });
 
+  // The same trap one widening later (15.3-09): a tenant connected for mail AND calendar still
+  // holds no Drive scope, and `freshAccessToken` will happily hand back {ok:true} for that token.
+  // Reading this as "connected, therefore Drive-ready" is what turns a reconnect prompt into a 403.
+  test("a gmail+calendar grant does not satisfy the Drive scope", () => {
+    expect(hasScope(`${GMAIL_MODIFY_SCOPE} ${CALENDAR_EVENTS_SCOPE}`, DRIVE_READONLY_SCOPE)).toBe(
+      false,
+    );
+  });
+
   test("GOOGLE_SCOPES contains every scope the app requests", () => {
-    for (const s of [GMAIL_MODIFY_SCOPE, CALENDAR_EVENTS_SCOPE]) {
+    for (const s of [
+      GMAIL_MODIFY_SCOPE,
+      CALENDAR_FREEBUSY_SCOPE,
+      CALENDAR_EVENTS_SCOPE,
+      DRIVE_READONLY_SCOPE,
+    ]) {
       expect(hasScope(GOOGLE_SCOPES, s)).toBe(true);
     }
   });

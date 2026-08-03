@@ -1,0 +1,476 @@
+// The Google Drive import rail (15.3-09, VALT-13).
+//
+// Two kinds of test live here on purpose. The behavioural ones drive the real functions against
+// convex-test with `fetch` stubbed; the SOURCE-SCAN one (shared-drive params) is static, because
+// its failure mode has no observable behaviour to assert on — Drive answers a param-less request
+// with HTTP 200 and an empty file list, so the bug looks exactly like an empty folder. A stub
+// cannot catch what a stub is free to return.
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import schema from "./schema";
+
+const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
+
+// The REAL components, because the fan-in's tail runs `tryComplete` → `settleFolder` → the
+// rate-limiter. Stubbing the settle would make every "the folder opened" assertion below vacuous:
+// the flip and the settle are the same transaction, by design.
+function harness() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  return t;
+}
+
+// Fake timers — the `vault.test.ts` / `research.test.ts` guard, and NOT optional here. Landing the
+// last file flips the folder to `ingesting`, which schedules `walkFolderMembers`, and `tryComplete`
+// schedules `buildFolderDigest`. Under real timers both fire AFTER this file finishes and
+// retry-loop against a torn-down module runner, throwing `crypto is not defined` inside whichever
+// file the worker runs next. Every assertion below is on a synchronous effect, so the timers never
+// need to advance.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+/** `rows[0]`, narrowed. The preceding length assertion is the real check; this only satisfies
+ *  `noUncheckedIndexedAccess` without scattering non-null assertions through the expectations. */
+function first<T>(rows: T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error("expected at least one row");
+  return row;
+}
+
+const TENANT = "tenant_drive";
+const DRIVE_FOLDER = "0ABCdef123";
+const DOC_MIME = "application/vnd.google-apps.document";
+const NOW = 1_700_000_000_000;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+/** A Drive grant WITHOUT the Drive scope — i.e. every tenant connected before this phase. */
+const PRE_WIDENING_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+const FULL_SCOPE = `${PRE_WIDENING_SCOPE} https://www.googleapis.com/auth/drive.readonly`;
+
+async function seedGrant(t: ReturnType<typeof harness>, scope: string): Promise<void> {
+  await t.run(async (ctx) => {
+    await ctx.db.insert("gmailTokens", {
+      tenantId: TENANT,
+      refreshToken: "refresh",
+      accessToken: "access",
+      expiresAt: NOW + 3_600_000,
+      scope,
+      updatedAt: NOW,
+    });
+  });
+}
+
+async function openFolder(t: ReturnType<typeof harness>, expected: number) {
+  return await t.run(async (ctx) =>
+    ctx.db.insert("vaultFolders", {
+      tenantId: TENANT,
+      name: "Drive folder",
+      source: "drive" as const,
+      status: "reserving" as const,
+      memberCount: 0,
+      terminalCount: 0,
+      failedCount: 0,
+      reservedCents: 10,
+      spentCents: 0,
+      reservedAt: NOW,
+      driveFolderId: DRIVE_FOLDER,
+      driveExpectedCount: expected,
+      driveLandedCount: 0,
+      createdAt: NOW,
+    }),
+  );
+}
+
+// ── 1. The reauth ordering ────────────────────────────────────────────────────
+
+describe("a pre-widening grant reauths BEFORE any Drive network call", () => {
+  // `include_granted_scopes=true` is forward-only: it widens the NEXT consent and retro-grants
+  // nothing. So every already-connected tenant holds a token whose scope string has no Drive in
+  // it, and `freshAccessToken` returns {ok:true} for that token quite happily. Checking scope
+  // after the refresh would present a permanent reconnect condition as a provider failure.
+  test("reauth, and fetch is never called", async () => {
+    const t = harness();
+    await seedGrant(t, PRE_WIDENING_SCOPE);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .action(api.vaultDrive.importDriveFolder, {
+        driveFolderId: DRIVE_FOLDER,
+        name: "Q3",
+      })
+      .catch((e: Error) => ({ threw: e.message }));
+
+    expect(result).toEqual({ ok: false, reason: "reauth" });
+    // THE HALF THAT MATTERS: not merely that the answer is `reauth`, but that nothing was asked.
+    // A refresh POST here would burn the grant's rate budget to learn what the scope string
+    // already said.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("no grant at all is not_connected, and also silent", async () => {
+    const t = harness();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t
+        .withIdentity({ subject: TENANT })
+        .action(api.vaultDrive.importDriveFolder, {
+          driveFolderId: DRIVE_FOLDER,
+          name: "Q3",
+        }),
+    ).toEqual({ ok: false, reason: "not_connected" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // The id is interpolated into Drive's `q=` SEARCH EXPRESSION, which percent-encoding does not
+  // protect: `' in parents and trashed=false` is a query language, not a URL.
+  test("a folder id that could break out of the q= literal is refused before anything else", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t
+        .withIdentity({ subject: TENANT })
+        .action(api.vaultDrive.importDriveFolder, {
+          driveFolderId: "abc' or '1'='1",
+          name: "Q3",
+        }),
+    ).toEqual({ ok: false, reason: "bad_folder_id" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── 2. Landing into the spine ─────────────────────────────────────────────────
+
+describe("an exported file lands as an ordinary vault document", () => {
+  test("source google, category google-docs, a real hash, and a resolvable storageId", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["hello drive"])));
+
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "file_a",
+      driveModifiedTime: NOW,
+      title: "Strategy",
+      mimeType: "text/plain",
+      size: 11,
+      contentHash: "hash_a",
+      storageId,
+      text: "hello drive",
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(rows).toHaveLength(1);
+    const doc = first(rows);
+    expect(doc.source).toBe("google");
+    expect(doc.category).toBe("google-docs");
+    expect(doc.contentHash).toBe("hash_a");
+    expect(doc.folderId).toBe(folderId);
+    expect(doc.driveFileId).toBe("file_a");
+    // pending_extraction and NOT dispatched: the folder's own walk starts every member once the
+    // run opens, which is what keeps "reserve before the first cent" true.
+    expect(doc.status).toBe("pending_extraction");
+    expect(await t.run((ctx) => ctx.storage.getUrl(doc.storageId as never))).toBeTruthy();
+  });
+
+  // The fan-in. The folder may not leave `reserving` until every expected file has landed —
+  // `tryComplete` refuses to fire on anything but `ingesting`, so this flip is the ONLY thing
+  // standing between a fast first file and a folder that completes while file 2 is in flight.
+  test("the folder opens only when the LAST expected file lands", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 2);
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["a"])));
+
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "f1",
+      driveModifiedTime: NOW,
+      title: "one",
+      mimeType: "text/plain",
+      size: 1,
+      contentHash: "h1",
+      storageId,
+      text: "a",
+    });
+    expect((await t.run((ctx) => ctx.db.get(folderId)))?.status).toBe("reserving");
+
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "f2",
+      driveModifiedTime: NOW,
+      title: "two",
+      mimeType: "text/plain",
+      size: 1,
+      contentHash: "h2",
+      storageId,
+      text: "a",
+    });
+    expect((await t.run((ctx) => ctx.db.get(folderId)))?.status).toBe("ingesting");
+  });
+
+  // A single 404 that did not count would hang the folder in `reserving` forever, holding a
+  // reservation nothing settles — there is no folder-level watchdog.
+  test("a file that FAILED to export still counts toward the fan-in and creates no row", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+
+    await t.mutation(internal.vaultDrive.landFailure, {
+      tenantId: TENANT,
+      folderId,
+      code: "export_too_large",
+    });
+
+    // `complete`, not `ingesting`: the run opened and immediately had nothing to ingest, so
+    // `tryComplete` fired in the same transaction (terminalCount 0 >= memberCount 0). THE POINT IS
+    // THAT IT REACHED A TERMINAL STATUS AT ALL — without the failure counting toward the fan-in the
+    // folder sits at `reserving` forever, holding a reservation nothing settles.
+    expect((await t.run((ctx) => ctx.db.get(folderId)))?.status).toBe("complete");
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
+  });
+});
+
+// ── 3. Dedup attaches identity, never membership ──────────────────────────────
+
+describe("a content dedup hit is not annexed into the folder", () => {
+  // `vault.vaultUpload`'s dedup branch returns and does nothing else — correct there, WRONG here:
+  // the row would carry no driveFileId, so every future refresh would re-export it forever. But
+  // attaching `folderId` would SEAL a document the user could already ground on (CONTEXT §B7).
+  // Identity yes, membership no.
+  test("driveFileId is patched on; folderId is NOT, and memberCount does not move", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+    const existing = await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "already here",
+        kind: "upload",
+        category: "my-uploads",
+        source: "upload",
+        mimeType: "text/plain",
+        size: 5,
+        contentHash: "shared_hash",
+        status: "ready" as const,
+        createdAt: NOW,
+      }),
+    );
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["x"])));
+
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "file_dup",
+      driveModifiedTime: NOW,
+      title: "same bytes",
+      mimeType: "text/plain",
+      size: 5,
+      contentHash: "shared_hash",
+      storageId,
+      text: "x",
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(existing));
+    expect(row?.driveFileId).toBe("file_dup");
+    expect(row?.folderId).toBeUndefined(); // never sealed into an ingesting folder
+    expect(row?.status).toBe("ready"); // and never knocked back off groundable
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(1);
+    expect((await t.run((ctx) => ctx.db.get(folderId)))?.memberCount).toBe(0);
+  });
+});
+
+// ── 4. Re-import ──────────────────────────────────────────────────────────────
+
+describe("re-import is keyed on driveFileId + modifiedTime, never on contentHash", () => {
+  // OOXML is a zip — two exports of an unchanged Sheet are not byte-identical, so a contentHash
+  // key would duplicate the whole folder on every refresh.
+  test("an unchanged listing fetches nothing and creates nothing", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      const folderId = await ctx.db.insert("vaultFolders", {
+        tenantId: TENANT,
+        name: "Drive folder",
+        source: "drive" as const,
+        status: "complete" as const,
+        memberCount: 1,
+        terminalCount: 1,
+        failedCount: 0,
+        reservedCents: 0,
+        spentCents: 4,
+        driveFolderId: DRIVE_FOLDER,
+        createdAt: NOW,
+      });
+      await ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Strategy",
+        kind: "upload",
+        category: "google-docs",
+        source: "google",
+        mimeType: "text/plain",
+        size: 10,
+        contentHash: "h",
+        status: "ready" as const,
+        folderId,
+        driveFileId: "file_a",
+        driveModifiedTime: NOW,
+        createdAt: NOW,
+      });
+    });
+
+    const diff = await t.mutation(internal.vaultDrive.diffImport, {
+      tenantId: TENANT,
+      driveFolderId: DRIVE_FOLDER,
+      name: "Drive folder",
+      files: [{ driveFileId: "file_a", modifiedTime: NOW, mimeType: "text/plain", estBytes: 10 }],
+    });
+
+    expect(diff.fetchIds).toEqual([]); // nothing to fetch ⇒ zero export calls, zero spend
+    expect(diff.unchanged).toBe(1);
+    expect(diff.added).toBe(0);
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(1);
+  });
+
+  test("a moved modifiedTime is fetched, and updates the SAME row rather than adding one", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+    const original = await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Strategy",
+        kind: "upload",
+        category: "google-docs",
+        source: "google",
+        mimeType: "text/plain",
+        size: 10,
+        contentHash: "old_hash",
+        status: "ready" as const,
+        folderId,
+        driveFileId: "file_a",
+        driveModifiedTime: NOW,
+        createdAt: NOW,
+      }),
+    );
+
+    const diff = await t.mutation(internal.vaultDrive.diffImport, {
+      tenantId: TENANT,
+      driveFolderId: DRIVE_FOLDER,
+      name: "Drive folder",
+      files: [
+        { driveFileId: "file_a", modifiedTime: NOW + 1, mimeType: "text/plain", estBytes: 10 },
+      ],
+    });
+    expect(diff.fetchIds).toEqual(["file_a"]);
+    expect(diff.updated).toBe(1);
+
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["new"])));
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "file_a",
+      driveModifiedTime: NOW + 1,
+      title: "Strategy",
+      mimeType: "text/plain",
+      size: 3,
+      contentHash: "new_hash",
+      storageId,
+      text: "new",
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(rows).toHaveLength(1); // THE MUTATION TARGET: drop the driveFileId lookup → 2 rows
+    expect(first(rows)._id).toBe(original); // in place, so digestSourceDocIds stays stable
+    expect(first(rows).contentHash).toBe("new_hash");
+    expect(first(rows).status).toBe("pending_extraction"); // re-queued for ingest
+  });
+
+  test("a touched-but-unedited file records the new stamp and is NOT re-ingested", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+    await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Strategy",
+        kind: "upload",
+        category: "google-docs",
+        source: "google",
+        mimeType: "text/plain",
+        size: 3,
+        contentHash: "same",
+        status: "ready" as const,
+        folderId,
+        driveFileId: "file_a",
+        driveModifiedTime: NOW,
+        createdAt: NOW,
+      }),
+    );
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["abc"])));
+
+    await t.mutation(internal.vaultDrive.landFile, {
+      tenantId: TENANT,
+      folderId,
+      driveFileId: "file_a",
+      driveModifiedTime: NOW + 5,
+      title: "Strategy",
+      mimeType: "text/plain",
+      size: 3,
+      contentHash: "same",
+      storageId,
+      text: "abc",
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(rows).toHaveLength(1);
+    expect(first(rows).driveModifiedTime).toBe(NOW + 5); // so the NEXT refresh reads it as unchanged
+    expect(first(rows).status).toBe("ready"); // untouched — no re-embed, no re-spend
+  });
+});
+
+// ── 5. The audit payload carries no user content ──────────────────────────────
+
+describe("the audit payload is refs and counts only", () => {
+  test("an unreadable file records its CODE and nothing else identifying", async () => {
+    const t = harness();
+    const folderId = await openFolder(t, 1);
+    await t.mutation(internal.vaultDrive.landFailure, {
+      tenantId: TENANT,
+      folderId,
+      code: "no_download_permission",
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(rows).toHaveLength(1);
+    expect(first(rows).eventType).toBe("vault.drive.unreadable");
+    expect(Object.keys(first(rows).payload as object).sort()).toEqual(["code", "folderId"]);
+  });
+});

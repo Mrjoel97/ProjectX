@@ -1,5 +1,34 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-04 (15.3-09 — **the Google grant gained a fourth scope, and every already-
+> connected tenant is unaffected by it in the one way that matters: they do not have it.**)
+>
+> `DRIVE_READONLY_SCOPE` is appended to `GOOGLE_SCOPES` (`packages/core/src/calendar.ts`), which
+> reaches both `gmailAuth.buildAuthorizeUrl` and the `http.ts` callback default. One scope covers
+> `files.list` metadata, `alt=media` downloads and `files.export`. `drive.file` was rejected: it
+> needs the Google Picker SDK from `apis.google.com` plus an API key and app id, which buys nothing
+> while consent is in Testing mode.
+>
+> **⚠ ADDING A SCOPE RETRO-GRANTS NOTHING, AND THIS IS THE THING TO KNOW BEFORE WIDENING AGAIN.**
+> `include_granted_scopes=true` is FORWARD-only: the NEXT consent returns a grant covering old+new
+> scopes, but every token issued BEFORE the widening keeps its old `scope` string and refreshes
+> perfectly happily. So every tenant connected before this phase would 403
+> `ACCESS_TOKEN_SCOPE_INSUFFICIENT` on the first Drive call. The shipped handling is Calendar's,
+> copied exactly: `hasScope(token.scope, SCOPE)` → return `reauth` **BEFORE** `freshAccessToken` and
+> before any network call. Check it after the refresh and a permanent reconnect condition arrives
+> looking like a provider failure. `dispatchGuard.test.ts` now pins that ordering statically for the
+> Drive action as well as for both Calendar actions, and `vaultDrive.test.ts` pins the behavioural
+> half — `fetch` was never called at all.
+>
+> `gmailAuth.gmailStatus` gained `driveReady`, a DERIVED BOOLEAN and never the raw scope string
+> (this module returns booleans and timestamps about the grant, never an inventory of it). It exists
+> because `connected` cannot distinguish "connected before the widening" from "Drive-ready", and a
+> UI that gates on `connected` sends a pre-widening tenant into a 403 instead of into reconnect.
+>
+> No cockpit behaviour, no delivery path and no calendar assertion changed. Verified: core
+> `calendar.test.ts` 15/15 (mutation RUN: delete the Drive scope from the join → RED), backend
+> `dispatchGuard.test.ts` 14/14, `vaultDrive.test.ts` 11/11.
+
 > Last verified: 2026-08-04 (reconnect banner — **a fresh consent now retires its own prompt, and
 > the half that cannot self-heal is dismissible by hand.**
 >

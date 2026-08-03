@@ -1005,6 +1005,24 @@ export default defineSchema({
     digestDocId: v.optional(v.id("vaultDocuments")),
     digestSourceDocIds: v.optional(v.array(v.string())),
     digestBuiltAt: v.optional(v.number()),
+    // Phase-15.3 (VALT-13) — the Drive rail's THREE fields. All optional ⇒ every upload-rail folder
+    // is byte-unchanged and there is zero backfill. Only `vaultDrive` writes them.
+    //
+    // `driveFolderId` is the re-import handle: "refresh from Drive" re-runs the import against the
+    // SAME Drive folder, so the id has to survive the first import.
+    //
+    // The other two are THE FAN-IN, and they are why this rail needs state the upload rail does
+    // not. On the upload rail the browser knows when it has sent the last file and calls
+    // `reserveFolder` itself. Here the last file lands inside a SCHEDULED action with no identity
+    // and no knowledge of its siblings, so "everyone has landed" has to be a counter:
+    // `driveLandedCount` counts every file that reached a terminal landing outcome — inserted,
+    // deduped OR failed to export — and the folder leaves `reserving` when it reaches
+    // `driveExpectedCount`. Counting only insertions (i.e. reusing `memberCount`) would hang the
+    // folder in `reserving` forever the first time one export 404s, holding a reservation that
+    // nothing settles, because there is no folder-level watchdog.
+    driveFolderId: v.optional(v.string()),
+    driveExpectedCount: v.optional(v.number()),
+    driveLandedCount: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_tenant", ["tenantId"]),
 

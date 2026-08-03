@@ -7,7 +7,7 @@
 // The tokens are the crown jewels (CONTEXT): the `refreshToken`/`accessToken` are read
 // ONLY by internal functions, NEVER returned to a client query, and NEVER placed in an
 // audit payload (CLAUDE.md §4). `gmailStatus` exposes booleans/timestamps only.
-import { GOOGLE_SCOPES } from "@pikar/core";
+import { DRIVE_READONLY_SCOPE, GOOGLE_SCOPES, hasScope } from "@pikar/core";
 import { isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "@pikar/core/tokenExpiry";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -225,7 +225,16 @@ export const flagExpiringTokens = internalMutation({
 
 // ── Client-safe surfaces (tenant-scoped; never leak a token) ───────────────────────
 
-/** Connected? + access-token expiry ONLY — never the tokens themselves. */
+/**
+ * Connected? + access-token expiry ONLY — never the tokens themselves.
+ *
+ * `driveReady` (15.3-09) is a DERIVED BOOLEAN, never the raw `scope` string: this module's
+ * standing rule is that nothing about the grant leaves it except booleans and timestamps, and a
+ * scope string is a capability inventory. It exists because `connected` alone cannot distinguish
+ * "connected before the Drive widening" from "Drive-ready" — the two look identical from the
+ * client, and a Drive control that trusts `connected` sends a pre-widening tenant into a 403
+ * instead of into reconnect.
+ */
 export const gmailStatus = tenantQuery({
   args: {},
   handler: async (ctx) => {
@@ -233,7 +242,11 @@ export const gmailStatus = tenantQuery({
       .query("gmailTokens")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
       .unique();
-    return { connected: !!row, expiresAt: row?.expiresAt ?? null };
+    return {
+      connected: !!row,
+      expiresAt: row?.expiresAt ?? null,
+      driveReady: hasScope(row?.scope ?? "", DRIVE_READONLY_SCOPE),
+    };
   },
 });
 

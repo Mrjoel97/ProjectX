@@ -292,3 +292,76 @@ test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not e
     ).toHaveLength(0);
   }
 });
+
+// ── 15.3-09 (VALT-13): the Google Drive rail ──────────────────────────────────
+//
+// Two invariants, both statically pinned, because neither has a cheap behavioural test. The
+// ordering one is pinned here rather than only in vaultDrive.test.ts so it survives a refactor of
+// the test harness; the shared-drive one CANNOT be tested behaviourally at all — a stub is free to
+// return whatever it likes, and the live symptom is HTTP 200 with an empty file list.
+
+test("the Drive import checks stored scope before the shared token refresh", () => {
+  const src = readCode("vaultDrive.ts");
+  const start = src.indexOf("export const importDriveFolder");
+  expect(start, "importDriveFolder not found").toBeGreaterThanOrEqual(0);
+  const rest = src.slice(start);
+  const end = rest.indexOf("\nexport const", 1);
+  const block = end >= 0 ? rest.slice(0, end) : rest;
+
+  const scopeAt = block.indexOf("hasScope");
+  const tokenAt = block.search(/freshAccessToken\s*\(/);
+  expect(scopeAt, "importDriveFolder never checks hasScope").toBeGreaterThanOrEqual(0);
+  expect(tokenAt, "importDriveFolder never CALLS freshAccessToken").toBeGreaterThanOrEqual(0);
+  expect(
+    scopeAt,
+    "importDriveFolder refreshes before checking scope — mutation: move the hasScope call below " +
+      "freshAccessToken. `include_granted_scopes` is FORWARD-only, so every tenant connected before " +
+      "the Drive widening holds a token that refreshes fine and 403s on the first Drive call. " +
+      "Checking after the refresh turns a permanent reconnect condition into a provider failure.",
+  ).toBeLessThan(tokenAt);
+});
+
+test("every Drive request carries the shared-drive parameters", () => {
+  const src = readExecutableCode("vaultDrive.ts");
+
+  // `supportsAllDrives` is set ONCE, in the URL builder every Drive call goes through — that is the
+  // invariant, not "it appears N times". Pin the chokepoint instead of counting call sites.
+  expect(
+    src,
+    "vaultDrive.ts no longer sets supportsAllDrives in driveUrl — mutation: delete it. A " +
+      "shared-drive folder then returns HTTP 200 with an EMPTY files array and the product reports " +
+      "'imported 0 files, folder complete'. A lying folder is worse than a failed one.",
+  ).toMatch(/driveUrl[\s\S]{0,400}supportsAllDrives:\s*["']true["']/);
+
+  const buildersBypassingHelper = [...src.matchAll(/fetch\(\s*`https:\/\/www\.googleapis\.com/g)];
+  expect(
+    buildersBypassingHelper,
+    "vaultDrive.ts builds a googleapis URL inline instead of through driveUrl — that path would " +
+      "carry neither shared-drive parameter.",
+  ).toHaveLength(0);
+
+  expect(
+    src,
+    "vaultDrive.ts no longer sets includeItemsFromAllDrives — mutation: delete it from the " +
+      "files.list projection. supportsAllDrives alone does NOT make a shared drive's children " +
+      "visible to files.list; both are required, and only on the list call.",
+  ).toContain('includeItemsFromAllDrives: "true"');
+});
+
+test("the Drive audit payload cannot carry a file or folder NAME", () => {
+  const src = readExecutableCode("vaultDrive.ts");
+  const payloads = [...src.matchAll(/payload:\s*\{([\s\S]*?)\n {6}\}/g)].map((m) => m[1] ?? "");
+  expect(payloads.length, "no Drive audit payload found — the scan is vacuous").toBeGreaterThan(0);
+  for (const payload of payloads) {
+    for (const forbidden of ["name", "title", "fileNames", "filename"]) {
+      // Matches BOTH `name: x` and the shorthand `name,`. Testing only for `name:` was the first
+      // version of this assertion, and the mutation run walked straight through it — `{ name, }`
+      // is exactly how a leak would actually be written.
+      expect(
+        new RegExp(`(^|[{,\\s])${forbidden}\\s*[,:}\\n]`).test(payload),
+        `a vaultDrive audit payload carries \`${forbidden}\` — mutation: add a fileNames array. ` +
+          `A Drive file name is user content and §4 makes audit refs/hashes/ids/counts ONLY.`,
+      ).toBe(false);
+    }
+  }
+});

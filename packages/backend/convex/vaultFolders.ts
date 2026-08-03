@@ -344,7 +344,7 @@ export async function unbumpFolder(
  * which a folder is complete while still holding a live reservation, and there is no folder-level
  * watchdog to notice.
  */
-async function tryComplete(ctx: MutationCtx, folderId: Id<"vaultFolders">): Promise<boolean> {
+export async function tryComplete(ctx: MutationCtx, folderId: Id<"vaultFolders">): Promise<boolean> {
   const folder = await ctx.db.get(folderId);
   if (!folder || folder.status !== "ingesting") return false;
   if (folder.terminalCount < folder.memberCount) return false;

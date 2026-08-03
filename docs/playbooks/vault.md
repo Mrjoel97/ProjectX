@@ -1,5 +1,18 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (15.3-09 — **the Google Drive rail lands, and a refused folder now
+> refuses before it downloads anything.**) `convex/vaultDrive.ts` imports a Drive folder as an
+> ordinary vault folder over the EXISTING Google grant — no new secret, no new HTTP route, no second
+> token table. The reservation is taken from `files.list` METADATA, before any byte is exported, so
+> refuse-intact is proven by absence rather than asserted. Two locked decisions were corrected on
+> facts: the per-file byte cap DOES apply (non-native files download into a ~512 MB action), and
+> Drive does not report `size` for Google-native docs (`estimatedBytesFor` never returns 0 — the one
+> check keeping the reservation invariant true on this rail). The shared-drive parameters are the
+> detail to protect: omit either and Drive answers 200 with an empty file list, which reads as
+> "imported 0 files, folder complete". `vaultFolders.tryComplete` is now exported for the Drive
+> fan-in's reuse. Full detail, the deviations and the five mutations RUN: the `### 15.3-09` section
+> below. **NO LIVE RUN YET** — every Drive response in the suite is a stub.
+
 > Last verified: 2026-08-04 (test-infrastructure, owner-directed — **two standing gaps closed.**
 > (1) **`apps/web` HAS A TEST RUNNER AT LAST**, so a test file placed there is no longer
 > decoration; `preflightCopy.test.ts` moved back beside its module and the cross-package
@@ -2941,3 +2954,104 @@ either freeze the clock or drain the scheduler; doing neither pushes a failure i
 file, where it is nearly undiagnosable. (2) **Validate a flake fix on the FULL suite, never a
 subset.** Both wrong theories here looked confirmed on a two-file reproducer — `fileParallelism:
 false` went 6/6 and `pool: threads` went 9/9 on the pair, and both still failed the full suite.
+
+### 15.3-09 — the Google Drive rail (VALT-13)
+
+`packages/backend/convex/vaultDrive.ts` + `packages/vault/src/driveEstimate.ts`.
+
+**A SCOPE-WIDENING OF THE EXISTING GOOGLE GRANT, NOT A SECOND INTEGRATION.** No new secret, no new
+HTTP route, no second token table, no second refresh POST — exactly as Calendar was.
+`DRIVE_READONLY_SCOPE` is appended to `GOOGLE_SCOPES` in `packages/core/src/calendar.ts`, and the
+token plane is `gmailAuth` + `gmail.freshAccessToken` reused verbatim.
+
+**THE ORDER IS THE DESIGN, AND IT IS NOT THE UPLOAD RAIL'S ORDER.**
+
+1. scope check → `reauth`, BEFORE `freshAccessToken` and before any network call;
+2. enumerate (metadata only — no bytes);
+3. **RESERVE, from that metadata**;
+4. only then download anything.
+
+Step 3 before step 4 is the one place this rail is deliberately ordered differently. On the upload
+rail the browser has already sent the bytes by the time a manifest exists, so the reservation is
+necessarily last. `files.list` returns count, size and type BEFORE a byte is exported, so a refused
+Drive folder is refused without downloading a gigabyte first — refuse-intact stops being a property
+we assert and becomes one proven by absence.
+
+**TWO LOCKED DECISIONS WERE CORRECTED HERE, ON FACTS, NOT PREFERENCE (CONTEXT §A6/§A7).**
+
+- **§A6 — the byte cap DOES apply.** "Nothing is uploaded, so the cap is irrelevant" was wrong:
+  non-native files are DOWNLOADED, into a ~512 MB action, and a 600 MB video OOMs the action before
+  any cap could refuse it. `classify()` applies `VAULT_VIDEO_CAP_BYTES`/`VAULT_FILE_CAP_BYTES`
+  against `size` metadata during pre-flight, so the count the user approves is the count that
+  imports.
+- **§A7 — Drive metadata has no `size` for Google-native docs.** `estimatedBytesFor` falls back to
+  `DRIVE_NATIVE_ASSUMED_BYTES` per kind and **NEVER returns 0**. Reading a missing size as 0 prices
+  a 500-Doc folder at $0, reserves nothing, and the folder then trips the budget wall halfway
+  through — the half-ingested folder this phase exists to forbid. `driveEstimate.test.ts` tests that
+  exact branch; it is the single check keeping the reservation invariant true on this rail.
+
+**⚠ THE SHARED-DRIVE PARAMETERS ARE THE HIGHEST-CONSEQUENCE, LOWEST-VISIBILITY DETAIL IN THE FILE.**
+`supportsAllDrives=true` on every call (set ONCE, in `driveUrl`) and `includeItemsFromAllDrives=true`
+on every `files.list`. Omit either and a shared-drive folder does not error — it returns **HTTP 200
+with an empty `files` array**, and the product says "imported 0 files, folder complete". A lying
+folder is worse than a failed one. There is NO behavioural test for this (a stub returns whatever it
+likes), so it is pinned by a SOURCE SCAN in `dispatchGuard.test.ts`. A zero-child result on a folder
+the user explicitly picked is additionally surfaced as `empty_folder`, never as a completed import.
+
+**EXPORT TARGETS ARE LOAD-BEARING FOR DEDUP, not formatting.** Docs → `text/plain`, Slides →
+`text/plain` (both deterministic, both in `SEARCHABLE_MIME`, so they skip extraction), Sheets →
+**xlsx, NOT `text/csv`** — csv export is FIRST SHEET ONLY and silently drops every other tab.
+
+**THE RE-IMPORT KEY IS `driveFileId + modifiedTime`, AND `contentHash` CANNOT BE IT.** OOXML is a
+zip carrying timestamps and generated ids, so two exports of an UNCHANGED Sheet are not
+byte-identical; a contentHash key would re-hash differently every refresh and duplicate the whole
+folder. A changed file UPDATES ITS EXISTING ROW IN PLACE so the member set and `digestSourceDocIds`
+stay stable. An unchanged listing issues **zero export fetches and creates zero rows** —
+`diffImport` decides that before the reservation is even attempted.
+
+**THE DUP EARLY-RETURN TRAP.** `vault.vaultUpload`'s dedup branch returns `{vaultDocId}` and does
+nothing else — correct there, WRONG here. Copied verbatim, a file whose bytes the tenant already
+holds gets no `driveFileId` (so it re-exports forever) and no `folderId` (so the folder reports N
+files while owning fewer). `landFile` therefore **attaches identity without attaching membership**:
+it patches `driveFileId`/`driveModifiedTime` and deliberately does NOT set `folderId`, because
+annexing a pre-existing document into an `ingesting` folder would SEAL a document the user could
+ground on yesterday (CONTEXT §B7).
+
+**THE FAN-IN, AND WHY IT NEEDS TWO NEW FOLDER FIELDS.** On the upload rail the browser knows when it
+has sent the last file and calls `reserveFolder` itself. Here the last file lands inside a SCHEDULED
+action with no identity and no knowledge of its siblings, so "everyone has landed" is a counter:
+`driveLandedCount` counts every terminal landing outcome — inserted, deduped, updated **or failed to
+export** — and the folder leaves `reserving` only at `driveExpectedCount`. **Counting only
+insertions would hang the folder in `reserving` forever the first time one export 404s**, holding a
+reservation nothing settles, because there is no folder-level watchdog. The folder stays `reserving`
+while files land precisely because `tryComplete` refuses to fire on anything but `ingesting` — that
+is the structural guard against a fast first file completing a folder whose second file is still in
+flight. `tryComplete` is now EXPORTED from `vaultFolders.ts` for this one reuse; do not inline a copy.
+
+**`vaultDrive.ts` IS DELIBERATELY NOT `"use node"`**, unlike `gmail.ts`/`calendar.ts`. Those are
+actions-only modules and the 01-07 rule is that a `"use node"` module holds ONLY actions — but this
+rail's fan-in is a mutation. Nothing here needs a Node builtin (`fetch`, `Blob`, `TextDecoder`,
+`crypto.subtle` are all in the V8 runtime). Adding `"use node"` later would silently break the
+mutations, not just relocate them.
+
+**DEVIATIONS FROM THE PLAN, STATED.** (1) The plan specified a self-scheduling enumeration
+continuation to survive the 10-minute action limit; instead the walk is BOUNDED below that limit by
+`DRIVE_MAX_FILES` (2,000) / `DRIVE_MAX_FOLDERS` (200) with an explicit `ponytail:` note and an
+upgrade path — at `pageSize=1000` the caps are a handful of round-trips, not minutes. (2) The plan
+did not name the folder-id validation; the id is interpolated into Drive's `q=` SEARCH EXPRESSION,
+which percent-encoding does not protect, so `DRIVE_ID_RE` guards it at the trust boundary. (3)
+Export-time failure codes go to `audit` (`vault.drive.unreadable`), not to the folder card — the
+ceiling and its upgrade path are stated at the site.
+
+**Verification.** `vaultDrive.test.ts` 11/11 and `dispatchGuard.test.ts` 14/14, with FIVE mutations
+RUN: drop `supportsAllDrives` → RED; drop `includeItemsFromAllDrives` → RED; move `hasScope` below
+`freshAccessToken` → RED in BOTH the static pin and the behavioural "fetch was never called" test;
+add a file name to an audit payload → RED; bypass the `driveFileId` lookup → two rows instead of one.
+**The name-leak scan initially PASSED that mutation** — it tested for `name:` and the shorthand
+`name,` walked straight through. Fixed; if you add a forbidden key to that list, use the same
+property-position regex, not `includes`.
+
+**NOT DONE, AND OWED: no live run.** Every Drive response in the suite is a stub, so what is proven
+is that we SEND both shared-drive parameters, never that Google honours them for a real shared
+drive. One real import against a real shared-drive folder, confirming a non-zero file count, is the
+gate — and it is the ONLY thing that can settle it.
