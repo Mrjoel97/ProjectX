@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 15.3
-current_plan: 6
+current_plan: 7
 status: in_progress
-stopped_at: "Completed 15.3-05-PLAN.md — sealing (VALT-07). ONE predicate `vaultFolders.sealedIn` (`folderId` set AND the folder row EXISTS AND its status is `ingesting`) applied at four sites: runVaultGround seeds (before `expand`, and `hits` is filtered too because `fuse` builds from the hit list), runVaultGround graph neighbours (an INDEPENDENT leak path — `vaultGraph.expand` reads `graphEdges` unfiltered), `vault.vaultSearch`, and `blueprint.unincorporatedFor` (members are `ready` during the sealed window and `spineForTenant` runs on EVERY grounding call). The status test is POSITIVE: `cancelFolder` DELETES the folder row, so `!== \"complete\"` would seal every cancelled folder's documents forever. Predicate lives in vaultFolders.ts, not vaultGround.ts as the plan said — `unincorporatedFor` is a plain QueryCtx helper and cannot runQuery. vaultSealing.test.ts 6/6 offline at $0; all five mutations run RED against exactly their named test; the graph-neighbour test was VACUOUS on first run (upsertGraph dedups edges cross-doc — link docs by a shared NODE) and its own control caught it. Full suite 1144/1144, typecheck delta ZERO. Next is 15.3-06 (wave 6, the folder digest)."
-last_updated: "2026-08-03T14:20:00.000Z"
+stopped_at: "Completed 15.3-06-PLAN.md — the folder digest (VALT-08/09/10), executed as a 5-agent workflow. The digest is a vault document that grounds ONLY because its insert calls `startIngest`: `origin: \"folder_digest\"` is INERT (no origin predicate exists anywhere in retrieval), so the observable is `ragEntryId != null` and the delete-startIngest mutation leaves every origin assertion GREEN. Ungated `folder-digest` skill row in all five places (gating would deadlock it at v1 — run-eval-golden derives --skill from GATED_SKILLS and no fixture can build a folder manifest); V8 action, skill-first fail-closed, scanText before the model, INGEST rail. The digest carries NO `folderId` — the recursion guard. **AN ADVERSARIAL VERIFY PASS AFTER THE SUITE WAS ALREADY 6/6 FOUND THREE DEFECTS, ALL THE SAME ROOT CAUSE: a digest with no folderId is invisible to every mechanism that finds work by folder membership.** (1) unincorporatedForFolder bounded ROWS not BYTES — ~40 max-size members exhaust the 16 MiB cap INSIDE folderDigestState, the drill-in banner read, so the page THREW; now streams like readVaultPage, newest-first (a member rescued failed->ready by retryExtraction is the stated residual). (2) cancelFolder orphaned a ready, embedded, GROUNDABLE digest describing a deleted folder; now cascaded via deleteVaultDoc. (3) A budget refusal was completely silent (scheduled call, discarded return, digestBuiltAt unset); now one refs-only folder.digest_refused audit row. PLUS retryStuckIngests was charging a digest re-ingest to the COCKPIT $5 rail. 9 tests, EIGHT mutations run RED, backend 1154/1154, contracts 25/25, typecheck delta ZERO, $0 spent. Next is 15.3-07 (wave 7, the folder UI)."
+last_updated: "2026-08-03T18:55:00.000Z"
 progress:
   total_phases: 42
   completed_phases: 28
   total_plans: 247
-  completed_plans: 232
+  completed_plans: 233
 ---
 
 ---
