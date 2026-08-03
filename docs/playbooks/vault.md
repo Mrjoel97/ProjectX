@@ -1,5 +1,27 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-07 verify pass — **the surface shipped green with FOUR major
+> defects, and the theme is that `apps/web` HAS NO TEST RUNNER.** (1) A `preflightCopy.test.ts`
+> sat next to the module executing nowhere — no `test` script, no vitest dep, no config — so the
+> plan's "only observable check of the must-name-numbers rule" was dead text that READ as
+> coverage. (2) The estimate/reserve parity the plan's own <verification> block names was
+> asserted by nothing. (3) The Start loop awaited `reserveFolder` OUTSIDE any try/catch in a
+> fire-and-forget handler, so one dropped socket froze the panel forever with members parked at
+> `pending_extraction` under a folder no sweep will touch. (4) Per-file failures were accumulated
+> and then discarded on the partial-success path. All four fixed and now mutation-verified. See
+> *the verify pass* in `### 15.3-07`.)
+
+> Last verified: 2026-08-03 (15.3-07 — **the folder surface: picking, the always-on inline
+> pre-flight, the refusal that names both numbers, sealed progress, drill-in, and the stale-digest
+> rebuild.** Three facts that are one edit away from silent breakage: every atom a user would be
+> angry to lose (`currentFolderId`, `picked`, `phase`) lives in `VaultPage`, because `nonce` is
+> `VaultBody`'s remount KEY and a remount destroys — not re-renders — everything below it;
+> `reserveFolder` gets `picked.manifest` VERBATIM AND UNFILTERED, which is the whole of
+> estimate/reserve parity; and naming both figures in the refusal is the DEFAULT branch with a
+> three-reason deny-list, not a per-reason opt-in. The pre-flight is an INLINE panel, not a modal,
+> and that is an a11y decision — this app has no shared dialog pattern to inherit. Zero amber
+> anywhere (BRAND §2). See `### 15.3-07` at the END of this file.)
+
 > Last verified: 2026-08-03 (15.3-06 verify pass — **three defects found AFTER the suite was green,
 > all three the same root cause: the digest has no `folderId`, so it is invisible to every
 > mechanism that finds work by folder membership.** (1) `folderDigestState`'s staleness read bounded
@@ -2221,3 +2243,328 @@ error that cannot happen against a real entry id. The guarantee under test is th
 the digest; the cascade itself is `deleteVaultDoc`'s own contract, covered in `vault.test.ts`.
 
 Re-run: `cd packages/backend && npx vitest run convex/vaultDigest.test.ts` (**9 passed**).
+
+### 15.3-07 — the folder surface (VALT-05, VALT-06, VALT-08, VALT-10, VALT-11)
+
+The user-facing half of folders: a directory picker, an always-on pre-flight card, the refusal that
+names both numbers, folder cards with sealed progress and cancel, drill-in, and the stale-digest
+rebuild. Seven files — `vaultFolders.folderEstimate` (the only backend addition), `preflightCopy.ts`
+(+ its test), `PreFlight.tsx`, `FolderBreadcrumb.tsx`, and edits to `Dropzone.tsx`, `DocGrid.tsx`,
+`page.tsx`. The app still has **no component library** (BRAND §8, `globals.css:4-5`): inline style
+objects, `globals.css` tokens, `clay-*` classes. Do not add one to change this surface.
+
+#### The pre-flight is an INLINE PANEL, never a modal — and that is an a11y decision
+
+`PreFlight` renders in the Dropzone's slot as a `clay-card`, not a portal. It is not a style
+preference. There is **no shared dialog pattern in this app to inherit**: only two `aria-modal`
+blocks exist, neither is shared, `PreviewModal` has Esc + scroll-lock but **no focus trap**, and
+`DisconnectGoogle.tsx:25-27` documents that absence deliberately. A modal here would have owed a
+focus trap, a scroll lock, an Esc handler and a return-focus target — four things nothing in this
+codebase provides — so an inline step was the shortest path that also inherits **no** gap. A second
+reason it cannot be a portal: `.clay-card`'s `backdrop-filter` frosts the `.pane-canvas` teal aura
+(`globals.css:884-886`), so a portalled panel renders against nothing.
+
+If someone later wants this in a dialog, that is a dialog-pattern plan for the whole app, not a
+vault plan.
+
+#### Every atom that must survive Refresh lives in `VaultPage`, because `key={nonce}` DESTROYS `VaultBody`
+
+Refresh does not re-fetch — it bumps `nonce`, which is `VaultBody`'s **remount key**
+(`page.tsx:41`). React does not re-render on a key change; it unmounts the subtree and every
+`useState` in it. `page.tsx:19-21` already said this about `category`. This plan added three more
+atoms to the shell, each for a failure a user would actually hit:
+
+| State | Owner | What a remount would have done |
+| --- | --- | --- |
+| `currentFolderId` | `VaultPage` | Teleported the user out of the folder they were reading, silently, back to the flat grid |
+| `picked` (File handles + manifest) | `VaultPage` | Forced a re-pick of a 1.5 GB directory — File handles cannot be re-derived |
+| `phase` (idle/uploading/refused/failed/started) | `VaultPage` | Wiped a reserve **refusal** whose folder is already `refused` server-side, so the user presses Start again and re-uploads 1.5 GB into a second folder |
+| `selected` (preview modal) | `VaultBody` — **deliberately left** | Nothing: it is one click to re-open, and discarding it on Refresh is existing behaviour |
+
+Belt AND braces on the upload: the Refresh button carries `disabled={phase.kind === "uploading"}`
+with an honest `title` (BRAND §1). Lifting `phase` keeps the *result* alive; disabling the only
+remount trigger is what stops the async loop — which RUNS inside `PreFlight`, inside `VaultBody` —
+being orphaned mid-flight (setState on an unmounted tree, half-created folder). Refresh is
+meaningless during an upload anyway: every vault query is already live.
+
+**The rule to carry forward: anything new on this surface that a user would be angry to lose belongs
+in `VaultPage`.** Putting it in `VaultBody` is not a bug you will see in a test — it is a bug you see
+once, in production, after an 8-minute upload.
+
+#### Inside a folder the breadcrumb REPLACES `CategoryTabs` — one ternary, in the same slot
+
+A folder is a **provenance scope, not a category**; they are different axes. Leaving the tabs live
+inside a folder lets a user select "Videos" in a folder that has none and stare at an empty grid with
+no explanation — the tab says one thing, the folder says another, and the surface explains neither.
+So the slot is one ternary: `currentFolderId ? <FolderBreadcrumb …> : <CategoryTabs …>`.
+
+The same logic gates the upload slot on `!currentFolderId`: a sealed folder takes no new members
+(`vault.ts:205-211`), so offering a Dropzone inside one would promise what the server refuses.
+
+Presence of the `folders` prop is the scope signal, and it is load-bearing for the empty state:
+an ARRAY (possibly empty) at the top level, `undefined` inside a folder — which is what lets `DocGrid`
+say "This folder is empty." with no extra prop. `folders ?? []` at the top level means a *loading*
+folder list never misreads as "in a folder". `getFolder` returning `null` (the lenient join,
+`vaultFolders.ts:507-512`) routes back out; `undefined` (loading) must NOT, or a slow first paint
+bounces the user out of the folder.
+
+#### READY IN is TWO terms, and processing dominates transfer
+
+```
+transferSec = ingestBytes / UPSTREAM_BYTES_PER_SEC
+processSec  = ceil(docCount / VAULT_INGEST_PARALLELISM) * SECONDS_PER_DOC
+readySec    = transferSec + processSec
+```
+
+Showing transfer time alone is the dishonest version: 400 documents at concurrency 6 is **tens of
+minutes**, not the four minutes the bytes suggest. BRAND §1 ("honest about limits") makes that a
+brand rule, not a nicety.
+
+`VAULT_INGEST_PARALLELISM = 6` is real (`constants.ts:90`, whose own comment says the ready-in
+estimate is computed from THIS number, never an assumed deployment class). **The other two do not
+exist anywhere in the repo and were invented**, declared locally in `PreFlight.tsx` beside their only
+consumer with a `ponytail:` comment. That is the trap to know about: *every* time-shaped constant in
+the ingest path is a CEILING — `EXTRACTION_WATCHDOG_MS` (15 min), `CALL_TIMEOUT_MS` (480 s),
+`PAGE_TIMEOUT_MS` (60 s), `FANOUT_BUDGET_MS` (420 s) — and using one as a duration gives ~16 hours
+for 400 documents. Upgrade path, when anyone wants it real: measure elapsed `markExtracting` →
+terminal, then move both into `packages/vault/src/constants.ts`.
+
+#### The refusal sentence has ONE writer, and naming the numbers is the DEFAULT
+
+`preflightCopy.ts` is a **sibling** of `failureCopy.ts`, not a row in it, for a mechanical reason:
+`failureCopy` is a flat `Record<string, {title, remedy}>` of frozen literals with no number
+parameter, so it cannot interpolate. Both obey the same boundary — codes stay in `convex/`, prose
+lives in the surface (`failureCopy.ts:3-5`, `:17-18`, CLAUDE.md §4). **The template must never appear
+in `vaultFolders.ts`**; the runnable form of that rule is the single-writer assertion in
+`vaultSurface.test.ts` (which must `readFileSync` `preflightCopy.ts` explicitly — `surfaceOf()`
+globs `.tsx` only, so a `.ts` module is invisible to `src` and any assertion against it would be
+vacuously green).
+
+The locked shape:
+
+> This folder needs about $3.40 and you have $1.10 left today.
+
+**Naming both numbers is the DEFAULT branch, not a per-reason opt-in.** Only three reasons are on the
+no-figure deny-list, because their numbers are meaningless: `kill_switch` (the switch stops BEFORE
+pricing, so both figures are 0 — `guardrails.ts:510-511`), and the two state guards `not_reserving` /
+`manifest_short` (`vaultFolders.ts:112-128`), which are zero-valued. Everything else — **including a
+refusal code added later** — names both. That direction is deliberate and fail-safe: a new code that
+falls through to a default names real figures instead of going silently quiet.
+
+`skipCopy(reason)` returns `null` for a non-skip reason, and that `null` IS the membership test — it
+keeps the skip vocabulary (`empty_file` / `over_video_cap` / `over_file_cap`) in the one module that
+already owns code→prose, so `PreFlight` needs no literal set of its own. Its copy contains no digits
+at all: `vaultSurface.test.ts` bans `/100 MB/` across the surface, so a skip line says "too large to
+read", never a size.
+
+#### Estimate/reserve parity — what keeps the on-screen figure equal to the money taken
+
+Three things, and all three matter:
+
+1. **`folderEstimate` is a `tenantQuery` that consumes nothing** (modelled on `media.jobEstimate`). It
+   replays `reserveFolderInner`'s checks in the SAME ORDER, steps 1-4, and stops before the two
+   `rateLimiter.limit(..., reserve: true)` calls. `rateLimiter.check` takes a `RunQueryCtx`, so this
+   is real parity, not an approximation.
+2. **The ceilings PRECEDE the two `check` calls.** `check()` does not return `{ok:false}` above
+   capacity — it THROWS (`guardrails.ts:485-488`). Get the order wrong and a governed plain-language
+   refusal becomes a stack trace on the pre-flight card.
+3. **`reserveFolder` receives `picked.manifest` VERBATIM AND UNFILTERED** — the identical array the
+   card priced, so `estimateFolderCents` runs over the same input and the cents cannot drift. Do NOT
+   rebuild it from the upload results: that drifts the number *and* risks `manifest_short`, since
+   reserve refuses when `files.length < folder.memberCount`. The manifest is always ≥ `memberCount`
+   because `memberCount` counts only rows actually INSERTED (dedup hits and failures never bump it).
+
+The manifest carries **no filename** — `vFileManifest` mirrors `EstimateInput` and nothing else
+(`guardrails.ts:464-466`). `folderEstimate.perFile` is index-aligned with `files` and refs-only, so
+the surface zips it against its own local `File[]` for names. Never add `name` to that validator.
+
+**The reserve can refuse with FRESHER numbers than the card showed** — the card is read at T, the
+reserve happens at T+8 minutes of transfer — so that is a designed state, not an edge case. On
+`!ok` the panel HOLDS, re-renders `refusalCopy()` over the RESERVE's figures, visibly replaces the
+EST. COST tile, and adds "Nothing was read." (the folder is already `refused` server-side with its
+members failed). Start is never re-enabled on that `folderId`: `reserveFolder` CASes on status
+`reserving` and would only answer `not_reserving`.
+
+#### The rebuild is the 17.1 idiom REUSED, not a new banner
+
+Staleness renders as an unincorporated COUNT beside the folder name plus the **same** Rebuild button
+flipping secondary→primary — one label, one handler, only the emphasis changes
+(`BlueprintPanel.tsx:141-150`, `:188`) — with a `<p role="status" aria-live="polite">` outcome line
+whose no-op wording is the established "Nothing has changed" (`:115`, `:116`, `:125`). Staleness is
+DERIVED from `unincorporatedCount > 0` at read time (`blueprint.ts:450-457` shape), never a stored
+flag, and nothing auto-triggers the rebuild — `vaultDigest.ts:556-557`: *the rebuild is the user's
+click, never a reaction to this read.*
+
+**`ReconnectBanner` is the wrong model and must not be copied.** Four disqualifiers:
+
+1. **It is dismissible, and dismissal is client-only `localStorage`.** A stale digest is not a notice
+   you acknowledge — it is a state of the data that only rebuilding clears. Dismissal would leave a
+   folder whose digest is permanently, silently wrong in one browser and correct in another. The 17.1
+   idiom needs no dismiss: when the count hits 0 the affordance disappears on its own.
+2. It renders nothing until after mount (flash-avoidance for a page-chrome strip) — dead weight
+   inline, and it would fail a first-paint scan.
+3. It is a full-bleed strip mounted in the app shell; the digest state belongs beside the folder
+   header, reporting on a folder the user is actually in.
+4. **It uses amber, hardcoded** (`#fef3c7` / `#f59e0b` / `#92400e`) — see below.
+
+No `aria-live` on the ticking sealed counters (`ChatPane.tsx:208` precedent); only the terminal
+rebuild outcome is announced.
+
+#### Amber is the approval gate's alone (BRAND §2)
+
+Nothing on this surface renders `--held` or `--held-text`, and nothing hand-rolls an amber.
+BRAND.md:50: *"The approval gate ONLY — amber = 'held, awaiting release'. Spend amber in exactly one
+place."* BRAND.md:114-115 adds that `--held` is ~1.9:1 on light paper and fails WCAG for text at all
+— so `ReconnectBanner`'s `#92400e` is already a hand-rolled dodge of the token rule, which is a
+second reason not to copy it.
+
+The refusal uses the established failure palette — `#fef2f2` bg / `#fecaca` border / `#991b1b` text,
+cloned from `PreviewModal.tsx:345-371`, licensed by `connect-gmail/page.tsx:28-31`: *"Red stays
+hardcoded: BRAND defines no error token."* A one-line inline note uses the `#dc2626` `role="alert"`
+form already shipped in `Dropzone.tsx:187`; the panel palette is for the governed refusal BLOCK only.
+
+Two related traps:
+
+- The sealed-folder progress chip reuses `StatusChip` with an existing `statusBadge` key plus a
+  `label` override ("12 of 300 read"), and deliberately maps `ingesting` to the neutral
+  `pending_extraction` palette — NOT `processing`, which is amber-LOOKING (`#fef3c7`/`#92400e`). Zero
+  new hexes, and the COUNT carries the meaning (BRAND §6: never colour alone).
+- **An amber guard in `vaultSurface.test.ts` must match TOKEN NAMES** (`--held`, `#f0a22e`,
+  `#8f5406`), never "amber-ish hexes" — `#fef3c7`/`#92400e` already ship for the `processing` chip
+  and are explicitly sanctioned at `DocGrid.tsx:20-23`.
+
+#### Sealed progress and the wait control
+
+Progress is read straight off the live `listFolders` row (`terminalCount` / `memberCount`) — **no
+poll, no timer, no second query** (`DocGrid.tsx:349-353`; `vaultSurface.test.ts:86-89` bans
+`setInterval` and the literal `setTimeout(` across every `.tsx` on this surface, so a debounce, a
+retry delay or an auto-dismissing toast turns a green test red). The sealed folder's Discuss control
+is the REAL `disabled` + `aria-disabled="true"` + `title` + `aria-label` button, never an `<a>` and
+never `pointer-events:none`. Cancel sits in the sibling-absolute slot Retry uses, driven by a NEW
+`cancellingId` lock — sharing `retryingId` would cross-disable every failed document's Retry
+(`:390` is a global one-at-a-time lock).
+
+Both counters that would have started lying were fixed: the header reads `3 FOLDERS · 12 ITEMS`
+(prefix suppressed at zero), and the zero test became "nothing at all to show" — gating on
+`rows.length` alone would have suppressed the whole grid container and every folder card with it.
+
+#### Known ceilings and gotchas
+
+- **No cap on how many files a directory pick may contain.** There is no `VAULT_FOLDER_FILE_CAP`
+  (`VAULT_FOLDER_MEMBER_BATCH = 20` is a transaction read bound, not a limit). A 5,000-file pick
+  sends a 5,000-element array as `folderEstimate`'s query args on every subscription and drives a
+  5,000-iteration sequential upload loop. Deliberately not invented here; the fix is a constant in
+  `packages/vault/src/constants.ts` plus an honest client-side refusal at pick time.
+- **`vaultStats` is not folder-scoped.** It reads the unscoped `readVaultPage` (`vault.ts:528`), so
+  inside a folder the four KPI tiles still describe the whole vault, and at the top level TOTAL FILES
+  disagrees with the grid's new "N FOLDERS · M ITEMS" line by the folder count. The in-surface
+  mitigation is that explicit two-count line; making the tiles folder-aware needs an optional
+  `folderId` on `vaultStats`.
+- **Cancel is only reachable from the folder card**, not from inside the folder — the breadcrumb
+  deliberately carries no `cancelFolder`. Back out to cancel.
+- **`webkitdirectory` is non-standard and cannot go on the existing input** (it makes an input
+  directory-ONLY), so there is a SECOND hidden input, with the attribute applied via
+  `ref.setAttribute` because React/TS does not type it. **There is no directory-DROP support at all**
+  — `e.dataTransfer.files` is empty for a dropped folder, which used to look like nothing happening;
+  the drop handler now detects it and says to use the Folder button. `ponytail:` upgrade path is
+  `webkitGetAsEntry()` + paginated `readEntries()`.
+- **The folder rail does not hash in the browser.** `vault.vaultUploadFolderFile` hashes server-side
+  (plan 04); `ingestOne`'s `crypto.subtle` path stays on the single-file route only. Hashing 400
+  files client-side means 400 full-file `arrayBuffer()` reads.
+- `Dropzone.handleFiles` no longer collapses nine failures into one message: it accumulates a
+  `FileOutcome[]` and the loop continues past a throw.
+- **`preflightCopy.test.ts` runs NOWHERE as written.** `apps/web` has no vitest dependency, no
+  config, no `test` script and no root workspace, and `pnpm test` is `turbo run test`. The file is at
+  the mandated path but the CI-visible assertion is the one in `packages/core/src/vaultSurface.test.ts`
+  — which is also where any future pure-copy check belongs (that package already reads `apps/web`
+  sources off disk, and its `edge-runtime` sibling in `convex/` has no `node:fs`).
+
+#### How this is VERIFIED
+
+```
+cd apps/web && npx tsc --noEmit                     # 0 errors
+cd packages/backend && npx convex codegen --typecheck disable && npx tsc --noEmit -p tsconfig.json
+cd packages/core && npx vitest run src/vaultSurface.test.ts
+pnpm --filter @pikar/web build
+cd apps/web && npx playwright test --list           # 25 tests in 16 files — LIST ONLY, never a run
+```
+
+Two harness facts worth not rediscovering: `npx playwright test --list` works only from `apps/web`
+(the root-relative `--config` form resolves a second playwright module and reports 0 tests), and a
+real e2e run needs convex dev plus `:3111`, which is not a thing this repo starts for you.
+
+
+#### The verify pass — four defects the green suite could not see
+
+Three adversarial lenses ran against the shipped code once everything was green and the build
+passed. **The unifying cause is infrastructural: `apps/web` has no unit-test runner at all** — no
+`test` script, no vitest dependency, no config at the app or repo root, and `pnpm test` is
+`turbo run test`, which skips a workspace that declares no `test` script. Anything asserted inside
+`apps/web` is asserted by nobody.
+
+**1. A test file that never ran.** `preflightCopy.test.ts` was written beside its module and
+executed nowhere. That is worse than no test: the file reads as coverage in a diff and in review.
+Deleted; its assertions now live in `packages/core/src/vaultSurface.test.ts`, which really runs, as
+the **only behavioural import in that otherwise source-scanning file** — `preflightCopy.ts` imports
+nothing, so it crosses the package boundary cleanly. **A source scan cannot prove this rule and
+must not pretend to:** the scan checks the template lives in one file, and stays green if someone
+drops the remaining-cents interpolation while leaving the words "left today" in place.
+Mutation-verified — that exact edit takes the four numbered arms RED while every text anchor still
+matches.
+
+**2. Estimate/reserve parity was asserted by nothing.** The plan's `<verification>` block names it
+("the pre-flight `totalCents` equals what `reserve` consumes") and names its precedent
+(`media.test.ts`'s `jobEstimate` describe), and the folder clone was never written. Parity was held
+only by two hand-maintained copies of the same checks — `folderEstimate` and `reserveFolderInner` —
+plus a comment asserting they match. **That rots silently in exactly one edit:** add a refusal check
+to the reserve, or reorder the ceilings, and nothing goes red, because `vaultSurface.test.ts` only
+greps text and nothing else called the query. Three tests now live in `vaultFolders.test.ts`: cents
+parity against the *window*, not just the return value; the estimate consumes nothing across five
+calls; and a refusal arm where both sides must agree on the reason. Two mutations run RED.
+**Fixture trap worth knowing:** a folder whose `memberCount` is still 0 reserves and immediately
+completes (`terminalCount === memberCount` at 0 === 0), which settles and REFUNDS inside the same
+call — the window ends up untouched and a parity assertion passes for the wrong reason. Upload the
+members first.
+
+**3. The Start loop's money path was unguarded.** `createFolder` and each per-file upload were in
+try/catch; `reserveFolder` and both `cancelFolder` calls were bare, inside a fire-and-forget
+`void start()` handler. A slept tab or one transient socket error after a 20-minute 1.5 GB upload
+rejected into the void: `onPhase` never fired again, the panel froze on "Sending 400 of 400…" with
+Start disabled and Cancel a no-op, and 400 members sat at `pending_extraction` under a folder **no
+sweep will touch** (`vaultSweep` deliberately skips `reserving`, and there is no folder-level cron).
+That is the silent parking this phase abolished, re-introduced in the browser. Now: a `safeCancel`
+helper that can never itself throw on the refund path, and a guarded reserve whose failure names
+the manual exit.
+
+**4. Per-file failures were built and then thrown away.** The accumulator exists because
+`handleFiles` used to collapse every failure into one `error` string. It kept every outcome — and
+then the partial-success path called `onClear()`, which unmounts the panel and takes the local
+`outcomes` state with it. A 10-file pick where 8 landed reported "8 documents" and never named the
+other two. Now the panel only auto-clears on a CLEAN run; a partial success holds it open on the
+`started` arm (previously a dead union member written and read by nothing) with a Done control.
+
+Also fixed, smaller: Cancel mirrors its ref into state so it says "Cancelling…" instead of sitting
+inert for a whole file; the EST. COST tile renders an em-dash rather than a confident zero on the
+two refusal arms that carry no `estCents`; the dropped-folder message names the control's real
+label ("Choose a folder", not "the Folder button"); the breadcrumb reads "3 added since the last
+digest" rather than the truncated "3 added since"; a search matching no document now SAYS so even
+when folder cards remain on screen (folders are not searched); and the pre-folder empty-state
+wording is byte-identical outside a folder, because "a tenant with no folders sees a vault page
+identical to today's" includes the words.
+
+**Deliberately NOT fixed, and why.** The new folder-card Cancel pill is 0.72rem bold white on
+`--teal-600` (3.67:1, below the 4.5:1 that applies under 18.66px). It is a **byte-identical clone
+of two already-shipped pills** — Retry and Discuss, same size, same fill — and BRAND §6 sanctions
+teal-600 for white-text button fills. Fixing one of three makes the surface inconsistent without
+making it accessible; it needs a surface-wide pass over all three, tracked here as a known gap.
+Likewise `remainingCents` is `min(tenant, deployment)`, so "you have X left today" can be reporting
+a shared constraint; the refusal REASON already distinguishes the deployment arms ("for everyone
+today"), and showing the tenant's own untouched allowance while refusing would be worse. And
+`npx playwright test --list` fails from the repo ROOT with a two-versions-of-@playwright/test
+module-resolution error — **pre-existing, unrelated to this wave**; from `apps/web` it reports 25
+tests in 16 files, matching the baseline.
+
+**The standing lesson: `apps/web` cannot hold a runnable check.** Until it gets a runner, anything
+that must be observable about the web surface belongs in `packages/core/src/vaultSurface.test.ts`
+(a source scan, or a behavioural import when the module has no React/Next dependency) or in a
+backend suite. A test file placed under `apps/web` is decoration.

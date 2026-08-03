@@ -22,12 +22,27 @@
 // uploaded would see `terminalCount === memberCount` at 1 === 1, settle, and synthesise a digest
 // over one third of itself. A status CAS does not help — it only stops a SECOND completion.
 // `reserveFolder` is therefore also the CLOSE SIGNAL: after it, `memberCount` is fixed.
-import { isSearchable, VAULT_FOLDER_MEMBER_BATCH, type EstimateInput } from "@pikar/vault";
+import {
+  estimateFolderCents,
+  isSearchable,
+  VAULT_FOLDER_MEMBER_BATCH,
+  type EstimateInput,
+} from "@pikar/vault";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { type FolderReserveResult, reserveFolderInner, vFileManifest } from "./guardrails";
+import {
+  DEPLOYMENT_INGEST_BUDGET_CENTS,
+  type FolderReserveRefusal,
+  type FolderReserveResult,
+  getGuardrailConfig,
+  ingestRemainingCentsInner,
+  INGEST_DAILY_BUDGET_CENTS,
+  rateLimiter,
+  reserveFolderInner,
+  vFileManifest,
+} from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { scheduleExtraction } from "./vault";
 import { startIngest } from "./vaultIngest";
@@ -488,6 +503,90 @@ export const sealedDocIds = internalQuery({
     return [...(await sealedIn(ctx, docs))];
   },
 });
+
+// ── Pre-flight (the card, which consumes NOTHING) ────────────────────────────
+
+/** One itemised line, grouped by the extraction rail that priced it. */
+type FolderEstimateLine = { label: string; qty: number; unit: string; cents: number };
+
+/**
+ * THE PRE-FLIGHT CARD'S ONLY BACKEND CALL — `media.jobEstimate`'s shape, over folders.
+ *
+ * **It is a query, so it CONSUMES NOTHING**, and that is the whole point: it runs
+ * `reserveFolderInner`'s refusal checks in the SAME ORDER (guardrails.ts:502-555), steps 1-4, and
+ * STOPS before the two `rateLimiter.limit(..., reserve: true)` calls. Same manifest in, same
+ * `estimateFolderCents` out ⇒ the number on the card is the number the reserve takes.
+ *
+ * ⚠ THE CEILINGS MUST PRECEDE THE TWO `check` CALLS. `check()` does not return `{ok:false}` above
+ * capacity — it THROWS (guardrails.ts:485-488). Reordering turns a governed refusal into a stack
+ * trace on the card. `check` takes a query ctx; only `limit` needs a mutation, which is exactly the
+ * line this query does not cross.
+ *
+ * Refs and counts only (§4): a `reason` is a code, never a filename. `perFile` is INDEX-ALIGNED
+ * with `files`, so the surface zips it against its own local `File[]` for names.
+ */
+export const folderEstimate = tenantQuery({
+  args: { files: vFileManifest },
+  handler: async (
+    ctx,
+    { files },
+  ): Promise<{
+    lines: FolderEstimateLine[];
+    perFile: { cents: number; reason: string }[];
+    totalCents: number;
+    capCents: number;
+    remainingCents: number;
+    refusal: { reason: FolderReserveRefusal; shortfallCents: number } | null;
+  }> => {
+    const capCents = INGEST_DAILY_BUDGET_CENTS;
+    const empty = { lines: [], perFile: [], totalCents: 0, capCents, remainingCents: 0 };
+
+    // 1. Kill switch first — pricing has not run, so both figures are 0 and the copy for this
+    //    reason names no figure.
+    const cfg = await getGuardrailConfig(ctx);
+    if (cfg.killSwitch) {
+      return { ...empty, refusal: { reason: "kill_switch", shortfallCents: 0 } };
+    }
+
+    // 2. Price the manifest and read the honest remaining budget.
+    const { estCents, perFile } = estimateFolderCents(files as EstimateInput[]);
+    const remainingCents = await ingestRemainingCentsInner(ctx, ctx.tenantId);
+    const shortfallCents = Math.max(0, estCents - remainingCents);
+    const priced = { lines: linesOf(perFile), perFile, totalCents: estCents, capCents, remainingCents };
+    const refuse = (reason: FolderReserveRefusal) => ({ ...priced, refusal: { reason, shortfallCents } });
+
+    // 3. THE CEILINGS, BEFORE THE LIMITER.
+    if (estCents > INGEST_DAILY_BUDGET_CENTS) return refuse("over_folder_cap");
+    if (estCents > DEPLOYMENT_INGEST_BUDGET_CENTS) return refuse("over_deployment_cap");
+
+    // 4. Tenant window first, so a tenant that is personally out is told so rather than blamed for
+    //    a global pause.
+    const tenantWindow = await rateLimiter.check(ctx, "ingestSpendCents", {
+      key: ctx.tenantId,
+      count: estCents,
+    });
+    if (!tenantWindow.ok) return refuse("ingest_daily_exhausted");
+    const deploymentWindow = await rateLimiter.check(ctx, "deploymentIngestSpendCents", {
+      count: estCents,
+    });
+    if (!deploymentWindow.ok) return refuse("deployment_ingest_exhausted");
+
+    return { ...priced, refusal: null };
+  },
+});
+
+/** Fold the index-aligned per-file estimate into one line per rail. The reason IS the label — it is
+ *  a stable refs-only code, and the surface owns the prose (`preflightCopy.ts`). */
+function linesOf(perFile: { cents: number; reason: string }[]): FolderEstimateLine[] {
+  const by = new Map<string, FolderEstimateLine>();
+  for (const f of perFile) {
+    const line = by.get(f.reason) ?? { label: f.reason, qty: 0, unit: "files", cents: 0 };
+    line.qty += 1;
+    line.cents += f.cents;
+    by.set(f.reason, line);
+  }
+  return [...by.values()];
+}
 
 // ── Reads (the drill-in surface) ─────────────────────────────────────────────
 

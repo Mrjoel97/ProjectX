@@ -9,6 +9,14 @@
 // pages at all (`businessProfile.test.ts:548-550`).
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+// THE ONLY BEHAVIOURAL IMPORT IN THIS FILE, and it is here because `apps/web` HAS NO TEST RUNNER:
+// no `test` script, no vitest dependency, no config anywhere in the repo. 15.3-07 shipped a
+// `preflightCopy.test.ts` next to the module which NOTHING executed — `pnpm test` is `turbo run
+// test` and skips a workspace with no `test` script, so the plan's "only observable check of the
+// must-name-numbers rule" was dead text that read as coverage. It was deleted and its assertions
+// live here, in a suite that actually runs. `preflightCopy.ts` imports nothing, so it crosses the
+// package boundary cleanly.
+import { refusalCopy } from "../../../apps/web/app/(app)/dashboard/vault/preflightCopy";
 
 /**
  * The scanned unit is the SURFACE — every `.tsx` in the route folder — not one named file. Plans
@@ -27,6 +35,22 @@ const surfaceOf = (route: string) => {
 
 const src = surfaceOf("vault");
 
+/**
+ * TWO FILES `surfaceOf` CANNOT SEE, read on purpose.
+ *
+ * `preflightCopy.ts` is a `.ts`, and the filter above takes `.tsx` only — asserting "the refusal
+ * sentence lives here" against `src` would be vacuously green forever. `vaultFolders.ts` is the
+ * backend half of the same guarantee: the codes live there, the prose must not.
+ */
+const preflightCopySrc = readFileSync(
+  new URL("../../../apps/web/app/(app)/dashboard/vault/preflightCopy.ts", import.meta.url),
+  "utf8",
+);
+const vaultFoldersSrc = readFileSync(
+  new URL("../../../packages/backend/convex/vaultFolders.ts", import.meta.url),
+  "utf8",
+);
+
 describe("the vault surface", () => {
   /**
    * NON-VACUITY FIRST, and it is the most important block in this file. Every guard below is a
@@ -41,6 +65,14 @@ describe("the vault surface", () => {
     expect(src).toContain("api.vault.listVaultDocs"); // page.tsx
     expect(src).toContain("api.vault.vaultSearch"); // DocGrid.tsx
     expect(src).toContain("export function DocGrid"); // DocGrid.tsx
+    // 15.3-07 added three components and a backend query; each block below slices on one of these.
+    expect(src).toContain("export function PreFlight"); // PreFlight.tsx
+    expect(src).toContain("export function FolderBreadcrumb"); // FolderBreadcrumb.tsx
+    expect(src).toContain("api.vaultFolders.folderEstimate"); // PreFlight.tsx
+    expect(src).toContain('aria-disabled="true"'); // DocGrid.tsx — the real disabled pattern
+    // …and the two files the `.tsx` filter cannot see.
+    expect(preflightCopySrc).toContain("export function refusalCopy");
+    expect(vaultFoldersSrc).toContain("export const folderEstimate");
   });
 
   // ── The cap is declared ONCE (VALT-14) ────────────────────────────────────────────────────
@@ -86,5 +118,182 @@ describe("the vault surface", () => {
   test("nothing polls the vault", () => {
     expect(src).not.toContain("setInterval");
     expect(src).not.toContain("setTimeout(");
+  });
+
+  // ── The pre-flight names every number BEFORE it offers Start (15.3-07, VALT-06) ───────────
+  //
+  // A Start button with no figure beside it is the defect this panel exists to prevent: the user
+  // commits a multi-gigabyte folder and a chunk of today's ingest budget without being told either
+  // the size or the price. The five elements are asserted by their SOURCE text — the captions are
+  // written uppercase in `PreFlight.tsx` on purpose, so a `textTransform` rule cannot defeat this.
+  test("the pre-flight names all five numbers and only then offers Start", () => {
+    const start = src.indexOf("export function PreFlight");
+    expect(
+      start,
+      "export function PreFlight not found — the scan below would be vacuous",
+    ).toBeGreaterThan(-1);
+    const block = src.slice(start, src.indexOf("</section>", start));
+    expect(block.length).toBeGreaterThan(1000);
+
+    expect(block).toContain("N FILES");
+    expect(block).toContain("TOTAL SIZE");
+    expect(block).toContain("EST. COST");
+    expect(block).toContain("READY IN");
+    // The skipped files are NAMED, not silently dropped from the count.
+    expect(block).toContain("skipCopy(");
+    // A BARE Start control. `\s*` spans the JSX line break around the label, and the trailing
+    // `\s*<` is what stops "Start over" (the post-refusal button) satisfying this on its own.
+    expect(block).toMatch(/>\s*Start\s*</);
+  });
+
+  // ── The refusal sentence has exactly ONE writer (CLAUDE.md §4) ───────────────────────────
+  //
+  // A refusal reason is a refs-only code that lives in `convex/` and is never shown to a user; the
+  // wording belongs in the surface that renders it (`failureCopy.ts:17-18` forbids moving copy
+  // backend-side, and a sentence in an audit-adjacent module is prose behind the §4 boundary).
+  // Two writers is the failure mode: one gets edited, the other keeps promising the old number.
+  test("the refusal sentence is written in preflightCopy.ts and nowhere else", () => {
+    expect(preflightCopySrc).toContain("This folder needs about");
+    expect(preflightCopySrc).toContain("left today");
+
+    // Not a second copy on the rendering surface…
+    expect(src).not.toContain("This folder needs about");
+    // …and not behind the refs-only boundary either.
+    expect(vaultFoldersSrc).not.toContain("This folder needs about");
+    expect(vaultFoldersSrc).not.toContain("left today");
+  });
+
+  // ── A sealed folder exposes no usable action (VALT-11) ───────────────────────────────────
+  //
+  // A folder still being read has nothing to ground a conversation on, and a control that LOOKS
+  // actionable but is not is worse than no control: a `<Link>` with `pointer-events:none` is
+  // invisible to a screen reader, which reads out an actionable link that does nothing.
+  test("the folder card branch exposes no link and no enabled Discuss", () => {
+    const start = src.indexOf("folders?.map((f) => {");
+    expect(
+      start,
+      "folders?.map((f) => { not found — the scan below would be vacuous",
+    ).toBeGreaterThan(-1);
+    const block = src.slice(start, src.indexOf("rows.map((doc)", start));
+    expect(block.length).toBeGreaterThan(500);
+
+    expect(block).not.toContain("href");
+    expect(block).not.toContain("<Link");
+    expect(block).not.toContain("pointerEvents");
+    // The wait control is a REAL disabled button.
+    expect(block).toContain('aria-disabled="true"');
+  });
+
+  // ── The stale digest reuses the 17.1 idiom (BlueprintPanel.tsx:188) ──────────────────────
+  //
+  // Staleness is DERIVED from an unincorporated count, never a stored flag, and the affordance is
+  // the SAME button flipping secondary→primary — one label, one handler, only the emphasis moves.
+  // The alternative the plan bans by name is `ReconnectBanner`: a dismissible localStorage notice
+  // would let a user permanently hide a digest that is genuinely out of date, on one browser.
+  test("the stale digest flips emphasis on one control rather than adding a second", () => {
+    const start = src.indexOf("export function FolderBreadcrumb");
+    expect(
+      start,
+      "export function FolderBreadcrumb not found — the scan below would be vacuous",
+    ).toBeGreaterThan(-1);
+    // Every file in the surface opens with the client directive, so the next one marks the end.
+    const block = src.slice(start, src.indexOf('"use client"', start));
+    expect(block.length).toBeGreaterThan(500);
+
+    expect(block).toContain('state === "stale"');
+    expect(block).toMatch(/style=\{\s*stale\s*\?\s*pillPrimary\(/);
+    expect(block.match(/Rebuild digest/g)?.length).toBe(1);
+    expect(block).not.toContain("localStorage");
+  });
+
+
+  // ── must_have: "The refusal names BOTH numbers" ──────────────────────────────────────────
+  //
+  // A SOURCE SCAN CANNOT PROVE THIS AND MUST NOT PRETEND TO. The sibling assertions below only
+  // check that the template lives in one file; they stay green if someone drops
+  // `${money(a.remainingCents)}` while leaving the words "left today" in place. Only calling the
+  // function observes the numbers coming out, which is why this block imports it.
+  describe("refusalCopy names both numbers (the locked sentence)", () => {
+    const NUMBERED = [
+      "over_folder_cap",
+      "over_deployment_cap",
+      "deployment_ingest_exhausted",
+      "ingest_daily_exhausted",
+      "a_code_added_in_some_later_phase", // the default arm — naming numbers is the FAIL-SAFE side
+    ];
+
+    test.each(NUMBERED)("%s names the estimate and what is left", (reason) => {
+      const { title, remedy } = refusalCopy({ reason, estimateCents: 340, remainingCents: 110 });
+      expect(title).toContain("$3.40");
+      expect(title).toContain("$1.10");
+      expect(remedy.length).toBeGreaterThan(0);
+    });
+
+    // The deny-list is the deliberate exception: pricing never ran, so both figures are 0 and a
+    // sentence naming them would be a confident lie. It must not name a MONEY figure at all.
+    test.each(["kill_switch", "not_reserving", "manifest_short"])(
+      "%s names no figure, because it has none",
+      (reason) => {
+        const { title, remedy } = refusalCopy({ reason, estimateCents: 0, remainingCents: 0 });
+        expect(`${title} ${remedy}`).not.toMatch(/\$\d/);
+        expect(title.length).toBeGreaterThan(0);
+      },
+    );
+
+    // Rounding is part of "the number the reserve takes": 5 cents must read $0.05, not $0.5.
+    test("cents render as two decimals", () => {
+      expect(refusalCopy({ reason: "over_folder_cap", estimateCents: 5, remainingCents: 0 }).title)
+        .toContain("$0.05");
+    });
+  });
+
+  // ── must_have: "Refresh does not kick the user out of a folder or discard a picked selection" ──
+  //
+  // THE HEADLINE GUARANTEE OF THIS PLAN, AND IT HAD NO RUNNABLE CHECK. `page.tsx` remounts
+  // <VaultBody> via `key={nonce}` on Refresh, which DESTROYS every `useState` that component owns.
+  // Moving the drill-in scope or the picked directory down into <VaultBody> — the exact pre-15.3-07
+  // shape — teleports the user out of the folder and throws away a 1.5 GB pick, and it typechecks
+  // clean. This slices the file at the component boundary and asserts which side each atom is on.
+  test("state that must survive Refresh is owned ABOVE the remount key", () => {
+    const pageSrc = readFileSync(
+      new URL("../../../apps/web/app/(app)/dashboard/vault/page.tsx", import.meta.url),
+      "utf8",
+    );
+    const boundary = pageSrc.indexOf("function VaultBody");
+    expect(boundary).toBeGreaterThan(-1); // non-vacuity: the component still has that name
+    const page = pageSrc.slice(0, boundary);
+    const body = pageSrc.slice(boundary);
+
+    // The remount key is what makes all of this load-bearing; if it goes, re-read this test.
+    expect(page).toContain("key={nonce}");
+
+    // The canonical declaration, as a plain substring — `const [picked, setPicked] = useState`.
+    // No regex: the setter PRECEDES `useState` here, and every escaping variant of that is harder
+    // to read than the thing it matches. Biome formats this file, so the spacing is stable; if it
+    // ever changes, the positive assertion below goes RED loudly rather than passing silently.
+    const declOf = (atom: string) =>
+      `[${atom}, set${atom[0].toUpperCase()}${atom.slice(1)}] = useState`;
+
+    for (const atom of ["currentFolderId", "picked", "phase"]) {
+      expect(page).toContain(declOf(atom));
+      expect(body).not.toContain(declOf(atom));
+    }
+    // `selected` (the preview modal) is deliberately BELOW — a remount SHOULD close it. That
+    // asymmetry is what makes the assertions above a real boundary rather than "no state below".
+    expect(body).toContain(declOf("selected"));
+  });
+
+  // ── Amber is the approval gate's alone (BRAND §2) ────────────────────────────────────────
+  //
+  // This matches USES, not the token NAME: `DocGrid.tsx:129` names `--held` in prose to explain why
+  // it is NOT used, and that comment is the documentation, not the violation. Nor can it ban
+  // amber-LOOKING hexes — `#fef3c7`/`#92400e` already ship as the `processing` chip and are
+  // sanctioned (`DocGrid.tsx:20-23`). `#f59e0b` is `ReconnectBanner`'s hand-rolled amber, so
+  // banning that one literal is the runnable form of "do not copy that banner onto this surface".
+  test("no amber is spent on the vault surface", () => {
+    expect(src).not.toContain("var(--held");
+    expect(src).not.toMatch(/#f0a22e/i);
+    expect(src).not.toMatch(/#8f5406/i);
+    expect(src).not.toMatch(/#f59e0b/i);
   });
 });

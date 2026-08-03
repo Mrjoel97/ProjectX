@@ -753,3 +753,80 @@ describe("a member reached from outside the walk", () => {
     expect(enqueuedFor(T)).toHaveLength(0);
   });
 });
+
+// ── ESTIMATE / RESERVE PARITY (15.3-07) ──────────────────────────────────────
+//
+// THE PLAN'S OWN <verification> LINE, and it shipped asserted by nothing: "the pre-flight
+// `totalCents` equals what `reserve` consumes for the same input (the media.test.ts guarantee)".
+// `media.test.ts:2618` has exactly this describe for `jobEstimate`; the folder clone was never
+// written, so the parity was held only by two hand-maintained copies of the same checks in
+// `vaultFolders.folderEstimate` and `guardrails.reserveFolderInner`, plus a comment asserting they
+// match.
+//
+// WHY THAT ROTS SILENTLY: add a sixth refusal check to `reserveFolderInner`, or reorder the
+// ceilings, or move a constant, and NOTHING goes red — `vaultSurface.test.ts` only greps source
+// text and nothing else calls the query. The card then shows a clean figure with Start enabled, the
+// user sends 1.5 GB, and the reserve refuses. That is precisely the failure the phase's key_link
+// exists to prevent.
+describe("folderEstimate is the number the reserve actually takes", () => {
+  // Mutation RUN: change `estimateFolderCents` to `estCents + 1` inside `folderEstimate` -> RED.
+  test("the estimate equals the cents the reserve consumes, for the same manifest", async () => {
+    const t = budgetHarness();
+    const folderId = await newFolder(t);
+    // THE MEMBERS MUST REALLY BE UPLOADED. A folder whose `memberCount` is still 0 reserves and
+    // then immediately completes (`terminalCount === memberCount` at 0 === 0), which SETTLES the
+    // reservation and refunds it inside the same call — the window ends up untouched and a parity
+    // assertion against it passes for the wrong reason.
+    for (const hash of ["p-a", "p-b", "p-c"]) await upload(t, { folderId, hash });
+    const files = manifestOf(3);
+
+    const est = await asTenant(t).query(api.vaultFolders.folderEstimate, { files });
+    expect(est.refusal).toBeNull();
+    expect(est.totalCents).toBeGreaterThan(0); // non-vacuity: 0 === 0 would pass for free
+
+    const before = await remaining(t);
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files });
+
+    expect(reserved).toMatchObject({ ok: true, estCents: est.totalCents });
+    // The WINDOW moved by exactly the figure the card showed — the money, not just the return value.
+    expect(await remaining(t)).toBe(before - est.totalCents);
+  });
+
+  // A query on a rate-limited rail that consumed a token would bill a user for LOOKING at a price.
+  // Mutation RUN: swap `rateLimiter.check` for `rateLimiter.limit` in `folderEstimate` -> RED.
+  test("the estimate CONSUMES NOTHING — it is a query and cannot", async () => {
+    const t = budgetHarness();
+    const before = await remaining(t);
+    for (let i = 0; i < 5; i++) {
+      await asTenant(t).query(api.vaultFolders.folderEstimate, { files: manifestOf(4) });
+    }
+    expect(await remaining(t)).toBe(before);
+  });
+
+  // The refusal the CARD shows must be the refusal the RESERVE would give, or Start is enabled on a
+  // folder that cannot start (and vice versa: a card refusing work the reserve would have accepted).
+  // Mutation RUN: drop the `over_folder_cap` check from `folderEstimate` -> RED.
+  test("an over-cap folder is refused by BOTH, with the same reason", async () => {
+    const t = budgetHarness();
+    const folderId = await newFolder(t);
+    await upload(t, { folderId, hash: "r-a" });
+    const files = manifestOf(3);
+
+    // Drain the tenant's ingest window, which is the arm a real user actually hits. `recordSpend`
+    // uses `reserve: true`, so this is the same mechanism real spend uses, not a test-only door.
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: TENANT,
+      costUsd: 999,
+      rail: "ingest",
+    });
+    const drained = await remaining(t);
+
+    const est = await asTenant(t).query(api.vaultFolders.folderEstimate, { files });
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files });
+
+    expect(est.refusal).not.toBeNull();
+    expect(reserved).toMatchObject({ ok: false, reason: est.refusal?.reason });
+    // And it cost nothing more: a refusal never moves the window.
+    expect(await remaining(t)).toBe(drained);
+  });
+});

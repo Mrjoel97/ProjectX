@@ -6,7 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { failureCopy } from "./failureCopy";
-import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
+import { FileTextIcon, FolderIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 
 // The browse grid (brand-024242 / brand-024258): a search bar, the N ITEMS count, a grid/list
 // toggle, and the doc cards/rows off the reactive listVaultDocs. Search runs vault.vaultSearch
@@ -17,6 +17,9 @@ import { FileTextIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
 // Clicking a card opens the preview (Task 3).
 
 export type VaultDoc = FunctionReturnType<typeof api.vault.listVaultDocs>[number];
+/** A folder card's row. Same idiom as VaultDoc: the projection the backend already returns, never a
+ *  hand-typed mirror of it. Carries the live counters sealed progress reads. */
+export type VaultFolder = FunctionReturnType<typeof api.vaultFolders.listFolders>[number];
 
 // status → badge palette (mirrors the cockpit cards idiom; no token covers these small semantic
 // chips, so the literals stand — not a hex a token covers). The label text carries the meaning,
@@ -45,25 +48,40 @@ export function fmtSize(n: number): string {
   return `${n} B`;
 }
 
-/** Shared geometry for the "Discuss by voice" pill so the enabled link and the disabled wait state
- *  occupy the identical spot — the control must not move as the status flips under the user.
- *  Mirrors the failed-card Retry placement (grid ⇒ bottom-right, list ⇒ vertically centred right). */
-function discussPillStyle(view: "grid" | "list"): React.CSSProperties {
+/** WHERE a card's sibling pill sits (grid ⇒ bottom-right, list ⇒ vertically centred right) — the
+ *  failed-card Retry placement, split out from the pill's own shape so a folder card can anchor a
+ *  ROW of pills in that spot. A document card never needs two at once (failed ⇒ no discuss); a
+ *  folder that is still ingesting shows both Cancel and the wait control. */
+function pillAnchor(view: "grid" | "list"): React.CSSProperties {
   return {
     position: "absolute",
     right: "0.85rem",
     ...(view === "grid" ? { bottom: "0.85rem" } : { top: "50%", transform: "translateY(-50%)" }),
-    padding: "0.2rem 0.7rem",
-    borderRadius: "999px",
-    border: "none",
-    fontSize: "0.72rem",
-    fontWeight: 700,
-    textDecoration: "none",
-    lineHeight: 1.6,
   };
 }
 
-function StatusChip({ status }: { status: string }) {
+/** The pill's own shape, position-free. */
+const pillShape: React.CSSProperties = {
+  padding: "0.2rem 0.7rem",
+  borderRadius: "999px",
+  border: "none",
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  textDecoration: "none",
+  lineHeight: 1.6,
+};
+
+/** Shared geometry for the "Discuss by voice" pill so the enabled link and the disabled wait state
+ *  occupy the identical spot — the control must not move as the status flips under the user. */
+function discussPillStyle(view: "grid" | "list"): React.CSSProperties {
+  return { ...pillAnchor(view), ...pillShape };
+}
+
+/** `label` overrides the palette's own word so a folder can say "12 of 300 read" in an EXISTING
+ *  palette. Deliberately not a new palette entry: the "processing" swatch is amber-looking
+ *  (#fef3c7/#92400e) and no new element on this surface may argue about amber (BRAND §2). The count
+ *  carries the meaning, never the colour (BRAND §6). */
+function StatusChip({ status, label }: { status: string; label?: string }) {
   const b = statusBadge(status);
   return (
     <span
@@ -76,9 +94,33 @@ function StatusChip({ status }: { status: string }) {
         fontWeight: 700,
       }}
     >
-      {b.label}
+      {label ?? b.label}
     </span>
   );
+}
+
+/**
+ * SEALED PROGRESS, off the folder row's LIVE counters. `listFolders` is a live Convex query, so
+ * `terminalCount` climbing 0 → memberCount re-renders this chip on its own — do NOT add a poll, a
+ * timer or a second query here either (the ban at the Discuss gate below applies surface-wide).
+ * Every arm reuses an existing statusBadge key; no new hex is introduced.
+ */
+function folderChip(f: VaultFolder): { status: string; label: string } {
+  switch (f.status) {
+    case "ingesting":
+      return { status: "pending_extraction", label: `${f.terminalCount} of ${f.memberCount} read` };
+    case "complete":
+      return {
+        status: "ready",
+        label: f.failedCount
+          ? `${f.memberCount} documents · ${f.failedCount} failed`
+          : `${f.memberCount} documents`,
+      };
+    case "refused":
+      return { status: "failed", label: "refused" };
+    default: // "reserving" — falls to statusBadge's neutral default palette
+      return { status: f.status, label: "preparing" };
+  }
 }
 
 /** PROVENANCE (ACTN-04): agent-authored vs user-uploaded, at a glance. Same markup and geometry as
@@ -106,19 +148,40 @@ function OriginChip() {
 export function DocGrid({
   docs,
   category,
+  folders,
   onOpen,
+  onOpenFolder,
 }: {
   docs: VaultDoc[];
   category: string;
+  /** PRESENCE IS THE SCOPE SIGNAL: an array (possibly empty) at the top level, OMITTED inside a
+   *  folder — a folder holds documents, not folders. That is what lets the empty state say "This
+   *  folder is empty." with no extra prop. */
+  folders?: VaultFolder[];
   onOpen?: (doc: VaultDoc) => void;
+  onOpenFolder?: (folderId: VaultFolder["_id"]) => void;
 }) {
   const search = useAction(api.vault.vaultSearch);
   const retry = useMutation(api.vaultSweep.retryExtraction);
+  const cancelFolder = useMutation(api.vaultFolders.cancelFolder);
   const [query, setQuery] = useState("");
   const [hitIds, setHitIds] = useState<Set<string> | null>(null);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [searching, setSearching] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  // Deliberately NOT retryingId: that is a GLOBAL one-at-a-time lock, so sharing it would
+  // cross-disable every failed document's Retry while a folder cancel is in flight.
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const folderCount = folders?.length ?? 0;
+
+  async function runCancel(f: VaultFolder) {
+    setCancellingId(f._id);
+    try {
+      await cancelFolder({ folderId: f._id }); // the card vanishes reactively via the subscription
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   async function runRetry(doc: VaultDoc) {
     setRetryingId(doc._id);
@@ -203,6 +266,9 @@ export function DocGrid({
             color: "var(--ink-soft)",
           }}
         >
+          {/* Folder cards share this grid, so "N ITEMS" alone would describe only part of what is
+              on screen. Both counts, named. */}
+          {folderCount > 0 ? `${folderCount} FOLDER${folderCount === 1 ? "" : "S"} · ` : ""}
           {rows.length} ITEM{rows.length === 1 ? "" : "S"}
         </span>
         <div style={{ display: "flex", gap: "0.25rem" }}>
@@ -232,11 +298,32 @@ export function DocGrid({
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {/* A SEARCH THAT MATCHED NO DOCUMENT MUST SAY SO EVEN WHEN FOLDER CARDS REMAIN ON SCREEN.
+          The zero test below is "nothing at all to show", which is right for the grid — but it also
+          meant that at the top level with folders present, a query matching nothing rendered three
+          folder cards and NO explanation. Folders are not searched (`rows` is filtered by `hitIds`,
+          `folders` is not), so the user saw cards after a search and was never told the search came
+          back empty — the one state they are most likely to misread (BRAND §1). */}
+      {hitIds && rows.length === 0 && folderCount > 0 && (
+        <p style={{ color: "var(--ink-soft)", textAlign: "center", margin: "1.25rem 0 0" }}>
+          No documents match. Folders aren&rsquo;t searched — open one to search inside it.
+        </p>
+      )}
+
+      {/* The zero test is "nothing at all to show", not "no documents" — gating on rows.length
+          alone would suppress the whole grid container and with it every folder card. */}
+      {rows.length === 0 && folderCount === 0 ? (
         <p style={{ color: "var(--ink-soft)", textAlign: "center", margin: "2.5rem 0" }}>
           {hitIds
-            ? "No matches in this category."
-            : "No documents yet — upload a file or paste a Brain Dump."}
+            ? // Inside a folder the tabs are gone, so there is no category to be talking about.
+              // OUTSIDE one the wording stays BYTE-IDENTICAL to pre-15.3-07 — "a tenant with no
+              // folders sees a vault page identical to today's" includes the words.
+              folders === undefined
+              ? "No matches here."
+              : "No matches in this category."
+            : folders === undefined
+              ? "This folder is empty."
+              : "No documents yet — upload a file or paste a Brain Dump."}
         </p>
       ) : (
         <div
@@ -251,6 +338,120 @@ export function DocGrid({
               : { display: "grid", gap: "0.5rem", marginTop: "1rem" }
           }
         >
+          {/* FOLDER CARDS — the SAME card unit, in the SAME grid container, with FolderIcon in
+              place of FileTextIcon. Not a FolderGrid and not a grid-CSS change: a folder is a
+              thing in the vault, so it sits in the vault's grid.
+
+              NO `href` and NO enabled Discuss ANYWHERE on this branch. A folder is not a grounded
+              document — its digest is; drill in and discuss a document. While the folder is still
+              being read the card carries the REAL disabled wait control instead (same pattern as
+              the doc cards below), never a link the reader can tab to and get nothing from. */}
+          {folders?.map((f) => {
+            const chip = folderChip(f);
+            const sealed = f.status === "reserving" || f.status === "ingesting";
+            return (
+              <div key={f._id} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => onOpenFolder?.(f._id)}
+                  className="clay-card"
+                  style={{
+                    display: "flex",
+                    gap: "0.75rem",
+                    textAlign: "left",
+                    width: "100%",
+                    height: view === "grid" ? "100%" : undefined,
+                    padding: "1rem",
+                    // In list view the pill row sits vertically centred at the right — reserve room.
+                    paddingRight: view === "list" && sealed ? "11rem" : "1rem",
+                    borderRadius: "0.85rem",
+                    cursor: onOpenFolder ? "pointer" : "default",
+                    flexDirection: view === "grid" ? "column" : "row",
+                    alignItems: view === "grid" ? "flex-start" : "center",
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="clay-badge"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "2.5rem",
+                      height: "2.5rem",
+                      borderRadius: "0.6rem",
+                      background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+                      color: "var(--teal-600)",
+                      flex: "none",
+                    }}
+                  >
+                    <FolderIcon />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, maxWidth: "100%" }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontWeight: 600,
+                        color: "var(--ink)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={f.name}
+                    >
+                      {f.name}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                      {f.source === "drive" ? "Google Drive folder" : "Uploaded folder"}
+                    </span>
+                  </span>
+                  <span style={{ display: "inline-flex", gap: "0.35rem", flex: "none" }}>
+                    <StatusChip status={chip.status} label={chip.label} />
+                  </span>
+                </button>
+                {sealed && (
+                  // A ROW, because unlike a document card these two controls coexist: a folder
+                  // being read is both cancellable and not yet discussable.
+                  <span
+                    style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void runCancel(f)}
+                      disabled={cancellingId !== null}
+                      aria-label={`Cancel folder upload: ${f.name}`}
+                      style={{
+                        ...pillShape,
+                        cursor: cancellingId ? "default" : "pointer",
+                        background: "var(--teal-600)",
+                        color: "#fff",
+                        opacity: cancellingId === f._id ? 0.6 : 1,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {/* A REAL disabled button — never a Link with pointer-events:none, which a
+                        screen reader reads as an actionable link that does nothing. */}
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      title="Still reading this folder — its documents become available as they finish"
+                      aria-label={`Still reading ${f.name} — ${f.terminalCount} of ${f.memberCount} documents read`}
+                      style={{
+                        ...pillShape,
+                        background: "var(--rule)",
+                        color: "var(--ink-soft)",
+                        cursor: "default",
+                      }}
+                    >
+                      Reading…
+                    </button>
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {rows.map((doc) => (
             // A relative wrapper so the failed-card Retry is a SIBLING button (never nested
             // inside the card button — invalid HTML + broken keyboard order), absolutely

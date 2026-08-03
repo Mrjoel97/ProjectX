@@ -8,7 +8,7 @@ import { resolveMimeType } from "@pikar/core/validateSubmit";
 import { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault/constants";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloudIcon } from "./icons";
 
 // The upload dropzone + Brain-Dump paste (brand-024242 / brand-024258). Upload flow mirrors the
@@ -19,6 +19,10 @@ import { UploadCloudIcon } from "./icons";
 // dedup key). The Brain-Dump textarea routes to vault.vaultIngestText({ source: "paste" }).
 //
 // The URL from generateUploadUrl is a short-lived upload capability — never logged (§4).
+//
+// TWO RAILS, one component. The SINGLE-FILE rail above ingests here, hash and all. The FOLDER rail
+// only PICKS: it hands a PickedFolder up and uploads nothing, because folder hashing moved
+// server-side (plan 04) and the pre-flight owns Start.
 
 // Convex storageId brand, derived from the mutation arg (no dataModel import — repo convention).
 type StorageId = FunctionArgs<typeof api.vault.vaultUpload>["storageId"];
@@ -28,6 +32,52 @@ const SEARCHABLE_MIME = new Set(["text/plain", "text/markdown", "text/csv"]);
 // Browser file.type is unreliable for .md/.csv (often empty) — the extension fallback lives in
 // @pikar/core/validateSubmit so this and the cockpit AttachmentPicker cannot drift apart.
 
+/** A picked directory. Produced here, HELD BY `VaultPage` (page.tsx's Refresh `key` would otherwise
+ *  destroy it and force a re-pick of a 1.5 GB tree), consumed by `PreFlight`. */
+export type PickedFolder = {
+  /** First segment of `File.webkitRelativePath` ("MyCompany/2025/pl.xlsx" → "MyCompany"). */
+  name: string;
+  /** File handles in pick order. Held so Start uploads without a re-pick. */
+  files: File[];
+  /** THE reserve manifest, INDEX-ALIGNED with `files` and built ONCE at pick time so the reference
+   *  (and therefore the Convex query token) is stable across renders. NO FILENAME EVER — a filename
+   *  would be content in an audit payload (guardrails.ts:464-466). This exact array is what
+   *  `folderEstimate` prices AND what `reserveFolder` receives, which is what makes the number on
+   *  the pre-flight card the number the reserve actually takes. */
+  manifest: { size: number; mimeType: string }[];
+  /** Sum of `manifest[].size`. */
+  totalBytes: number;
+};
+
+/** One file's result. Replaces the single `error` string the upload loop used to overwrite. */
+export type FileOutcome = { name: string; ok: boolean; note?: string };
+
+/** The surface's two pill geometries, lifted out of this file's own Brain-Dump buttons so
+ *  `PreFlight` and `FolderBreadcrumb` reuse them instead of re-typing the literal three times.
+ *  `--teal-600` is a FILL with `#fff` text only — never small teal body text (BRAND §6, ~2.9:1). */
+export const pillPrimary = (disabled: boolean): React.CSSProperties => ({
+  padding: "0.5rem 1.2rem",
+  borderRadius: "999px",
+  border: "none",
+  cursor: disabled ? "default" : "pointer",
+  background: "var(--teal-600)",
+  color: "#fff",
+  fontFamily: "inherit",
+  fontWeight: 600,
+  opacity: disabled ? 0.5 : 1,
+});
+
+export const pillSecondary = (disabled: boolean): React.CSSProperties => ({
+  padding: "0.5rem 1.2rem",
+  borderRadius: "999px",
+  border: "1px solid var(--rule)",
+  cursor: disabled ? "default" : "pointer",
+  background: "transparent",
+  color: "var(--ink-soft)",
+  fontFamily: "inherit",
+  opacity: disabled ? 0.5 : 1,
+});
+
 async function hashBytes(buf: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buf);
   return Array.from(new Uint8Array(digest))
@@ -35,14 +85,31 @@ async function hashBytes(buf: ArrayBuffer): Promise<string> {
     .join("");
 }
 
-export function Dropzone() {
+export function Dropzone({
+  onPickFolder,
+}: {
+  /** A directory was chosen. Handed straight up — this subtree is remounted by page.tsx's
+   *  `key={nonce}` on every Refresh, so Dropzone must never hold the selection itself. */
+  onPickFolder: (picked: PickedFolder) => void;
+}) {
   const generateUploadUrl = useMutation(api.requests.generateUploadUrl);
   const vaultUpload = useMutation(api.vault.vaultUpload);
   const ingestText = useMutation(api.vault.vaultIngestText);
   const inputRef = useRef<HTMLInputElement>(null);
+  // A SECOND hidden input: `webkitdirectory` makes an input directory-ONLY, so it cannot replace
+  // the file input above. React/TS does not type the attribute, hence the ref + setAttribute.
+  const dirRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    dirRef.current?.setAttribute("webkitdirectory", "");
+  }, []);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // `error` stays for the SINGLE-LINE notes (a Brain-Dump failure, a dropped directory).
+  // Per-file upload results are a LIST — see `outcomes`.
   const [error, setError] = useState<string | null>(null);
+  // One entry per file, accumulated. The old code wrote every failure into `error`, so nine
+  // failures out of ten files left only the last message and no record of which ones landed.
+  const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState("");
 
@@ -84,18 +151,52 @@ export function Dropzone() {
     if (picked.length === 0) return;
     setBusy(true);
     setError(null);
+    setOutcomes([]);
+    const results: FileOutcome[] = [];
     try {
       for (const file of picked) {
         try {
           await ingestOne(file);
+          results.push({ name: file.name, ok: true });
         } catch (e) {
-          setError(e instanceof Error ? e.message : `${file.name}: upload failed`);
+          // The loop CONTINUES: one bad file must not abandon the rest, and every result is kept
+          // so the user is told exactly which files landed and which did not (BRAND §1).
+          results.push({
+            name: file.name,
+            ok: false,
+            note: e instanceof Error ? e.message : "upload failed",
+          });
         }
+        setOutcomes([...results]);
       }
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  /** A directory was picked. This rail does NOT hash in the browser — `vaultUploadFolderFile`
+   *  hashes server-side (plan 04), and 400 client-side `arrayBuffer()` reads is exactly what that
+   *  move avoided. Nothing is uploaded here; the pre-flight owns Start. */
+  function handleFolderPick(files: FileList | null) {
+    const picked = Array.from(files ?? []);
+    if (picked.length === 0) return;
+    // Every File in one directory pick shares the first path segment, so the first file names it.
+    const name = picked[0]?.webkitRelativePath.split("/")[0] || "Folder";
+    const manifest = picked.map((f) => ({
+      size: f.size,
+      // The resolved type, never the raw `file.type` — the browser leaves it empty for .md/.csv.
+      mimeType: resolveMimeType(f.name, f.type),
+    }));
+    setError(null);
+    setOutcomes([]);
+    onPickFolder({
+      name,
+      files: picked,
+      manifest,
+      totalBytes: manifest.reduce((n, m) => n + m.size, 0),
+    });
+    if (dirRef.current) dirRef.current.value = "";
   }
 
   async function submitPaste() {
@@ -127,6 +228,16 @@ export function Dropzone() {
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
+          // A dropped DIRECTORY contributes nothing to `dataTransfer.files`, so this used to fall
+          // through to handleFiles' `picked.length === 0` early return and appear to do nothing at
+          // all — worse than not supporting it. Say so instead.
+          // ponytail: detect and redirect, no traversal. Upgrade path: walk the tree here with
+          // webkitGetAsEntry() + paginated readEntries().
+          // `webkitGetAsEntry()` is only valid synchronously inside the drop handler.
+          if (Array.from(e.dataTransfer.items).some((i) => i.webkitGetAsEntry()?.isDirectory)) {
+            setError("Folders can't be dropped — use “Choose a folder” below.");
+            return;
+          }
           void handleFiles(e.dataTransfer.files);
         }}
         aria-label="Click to upload or drag and drop"
@@ -183,29 +294,72 @@ export function Dropzone() {
         onChange={(e) => void handleFiles(e.target.files ?? [])}
       />
 
+      {/* The directory picker. `webkitdirectory` is set imperatively (see dirRef above) and makes
+          this input directory-ONLY, which is why it is a second input and not a flag on the first. */}
+      <input
+        ref={dirRef}
+        type="file"
+        multiple
+        hidden
+        aria-label="Choose a folder to upload"
+        onChange={(e) => handleFolderPick(e.target.files)}
+      />
+
       {error && (
         <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
           {error}
         </p>
       )}
 
+      {outcomes.some((o) => !o.ok) && (
+        <div role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
+          <p style={{ margin: 0 }}>
+            {outcomes.filter((o) => !o.ok).length} of {outcomes.length} file
+            {outcomes.length === 1 ? "" : "s"} couldn't be uploaded.
+          </p>
+          <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>
+            {outcomes.map((o, i) =>
+              o.ok ? null : (
+                // Two picked files can share a name across subdirectories, so the name alone is
+                // not unique. `outcomes` is append-only and never reordered, so the rule's
+                // reorder hazard cannot occur here.
+                // biome-ignore lint/suspicious/noArrayIndexKey: append-only list, never reordered
+                <li key={`${o.name}-${i}`}>
+                  {o.name}: {o.note}
+                </li>
+              ),
+            )}
+          </ul>
+        </div>
+      )}
+
       <div style={{ marginTop: "0.75rem" }}>
         {!pasteOpen ? (
-          <button
-            type="button"
-            onClick={() => setPasteOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--teal-600)",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              padding: 0,
-            }}
-          >
-            + Paste a Brain Dump
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => dirRef.current?.click()}
+              style={pillSecondary(busy)}
+            >
+              Choose a folder
+            </button>
+            <button
+              type="button"
+              onClick={() => setPasteOpen(true)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--teal-600)",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                padding: 0,
+              }}
+            >
+              + Paste a Brain Dump
+            </button>
+          </div>
         ) : (
           <div style={{ display: "grid", gap: "0.5rem" }}>
             <textarea
@@ -229,16 +383,7 @@ export function Dropzone() {
                 type="button"
                 disabled={busy || !paste.trim()}
                 onClick={() => void submitPaste()}
-                style={{
-                  padding: "0.5rem 1.2rem",
-                  borderRadius: "999px",
-                  border: "none",
-                  cursor: "pointer",
-                  background: "var(--teal-600)",
-                  color: "#fff",
-                  fontWeight: 600,
-                  opacity: busy || !paste.trim() ? 0.5 : 1,
-                }}
+                style={pillPrimary(busy || !paste.trim())}
               >
                 Save Brain Dump
               </button>
@@ -248,14 +393,7 @@ export function Dropzone() {
                   setPasteOpen(false);
                   setPaste("");
                 }}
-                style={{
-                  padding: "0.5rem 1.2rem",
-                  borderRadius: "999px",
-                  border: "1px solid var(--rule)",
-                  cursor: "pointer",
-                  background: "transparent",
-                  color: "var(--ink-soft)",
-                }}
+                style={pillSecondary(false)}
               >
                 Cancel
               </button>
