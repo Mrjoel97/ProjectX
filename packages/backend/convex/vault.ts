@@ -58,12 +58,13 @@ const byteLen = (s: string): number => new TextEncoder().encode(s).length;
  * read bytes decide — where `fail("unsupported_format")` has existed all along and was simply
  * unreachable.
  *
- * Every attempt also ARMS A WATCHDOG. That is what makes silent parking impossible rather than
- * merely rarer: format coverage only reduces how often the guarantee is needed. The watchdog is
- * per-attempt (a Retry arms a fresh one) and idempotent, so it cannot kill a racing success — the
- * onIngestComplete pattern. It is a scheduled function, NOT a cron over a table scan: no "status
- * began at" timestamp exists (createdAt is UPLOAD time, and a Retry on a 20-hour-old row would be
- * instantly killed by a createdAt-based cutoff), and no schema change is permitted.
+ * Every attempt still gets a WATCHDOG, but it is armed by `markExtracting` (below), NOT here.
+ * 15.3-04 moved it: arming at QUEUE time was survivable while every upload was one file, and is a
+ * fabricated-failure generator at folder scale — 400 documents behind VAULT_INGEST_PARALLELISM sit
+ * queued for an hour and every one of them is marked `extraction_stalled` while perfectly healthy,
+ * writing failures that never happened into the manifest the folder promises is honest. The
+ * watchdog is still per-attempt (a Retry arms a fresh one at ITS work-start) and still idempotent,
+ * so it cannot kill a racing success — the onIngestComplete pattern.
  *
  * This helper deliberately does NOT sniff (bytes are unreachable in a mutation) and does NOT
  * decide supportability (that is the action's job, and its refusal is terminal).
@@ -100,9 +101,6 @@ export async function scheduleExtraction(
     rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
     { vaultDocId, tenantId, spendRail, reserved },
   );
-  await ctx.scheduler.runAfter(EXTRACTION_WATCHDOG_MS, internal.vaultSweep.watchdogStalled, {
-    vaultDocId,
-  });
 }
 
 // ── Public ingest mutations ───────────────────────────────────────────────────
@@ -643,6 +641,18 @@ export const markFailed = internalMutation({
  * attempt (vaultExtract.ts / vaultTranscribe.ts, before any parsing): a new attempt has neither a
  * failure nor a truncation yet, so carrying either forward would report the last attempt's outcome
  * against this one.
+ *
+ * AND IT IS WHERE THE WATCHDOG IS ARMED (15.3-04, CONTEXT §B2). It used to be armed by
+ * `scheduleExtraction`, i.e. when the attempt was QUEUED, which at folder scale marks healthy
+ * queued documents `extraction_stalled`. This mutation is the ONE point every extraction rail
+ * passes through when work actually starts — `vaultExtract.extractDoc:321` and
+ * `vaultTranscribe.transcribeDoc:67` are its only non-test callers, and `scheduleExtraction` can
+ * only ever dispatch those two — so no rail loses its backstop by the move.
+ *
+ * ponytail: the armed watchdog's scheduled-function id is NOT persisted, so arms accumulate (one
+ * per attempt, and a Retry is another attempt). Every fire is status-idempotent, so extras are
+ * harmless. Upgrade path if the volume ever matters: store the id on the row and cancel it, the
+ * `voice.ts` `watchdogFnId` pattern — which needs a schema field this phase does not have.
  */
 export const markExtracting = internalMutation({
   args: { vaultDocId: v.id("vaultDocuments") },
@@ -651,6 +661,9 @@ export const markExtracting = internalMutation({
       status: "extracting",
       failureReason: undefined,
       extractionTruncated: undefined,
+    });
+    await ctx.scheduler.runAfter(EXTRACTION_WATCHDOG_MS, internal.vaultSweep.watchdogStalled, {
+      vaultDocId,
     });
   },
 });

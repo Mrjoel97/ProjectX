@@ -11,10 +11,15 @@
 // vaultTranscribe.transcribeDoc) by kind — never import Lane 1/4 modules.
 //
 // Phase 15.2 (15.2-03) added the NEVER-SILENT half: all three scheduling sites now route through
-// vault.scheduleExtraction, which schedules unconditionally and arms watchdogStalled per attempt.
-// The two tests that used to assert "an unrecognized mime schedules nothing" asserted the DEFECT
-// as a requirement; they are inverted here, and the watchdog gets its own idempotence suite.
-import { EXTRACTION_WATCHDOG_MS } from "@pikar/vault";
+// vault.scheduleExtraction, which schedules unconditionally. The two tests that used to assert
+// "an unrecognized mime schedules nothing" asserted the DEFECT as a requirement; they are inverted
+// here, and the watchdog gets its own idempotence suite.
+//
+// Phase 15.3 (15.3-04) moved the WATCHDOG ARM out of scheduleExtraction and into
+// vault.markExtracting: the clock now starts when work starts, so a document queued behind 400
+// folder members is not marked stalled while healthy. Every assertion below that used to read
+// "scheduling also armed a watchdog" therefore reads ZERO — the arm has its own coverage in
+// vaultFolders.test.ts, driven from markExtracting.
 import { convexTest } from "convex-test";
 import { getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -71,7 +76,8 @@ afterEach(() => vi.restoreAllMocks());
 /** The extraction actions enqueued so far. */
 const extractionScheduled = (_t?: unknown) => enqueuedExtractions;
 
-/** The per-attempt watchdogs armed so far — the other half of every scheduling decision. */
+/** The per-attempt watchdogs armed so far. Since 15.3-04 these are armed by vault.markExtracting
+ *  (work-start), NEVER by a scheduling mutation — which is what the zeroes below assert. */
 const watchdogScheduled = (t: ReturnType<typeof convexTest>) =>
   t.run(async (ctx) =>
     (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) =>
@@ -269,33 +275,47 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
     expect(doc?.status).toBe("pending_extraction");
     expect(doc?.failureReason).toBeUndefined();
 
-    // Observable work: the extraction rail AND a fresh per-attempt watchdog.
+    // Observable work: the extraction rail. The watchdog is NOT armed here any more — a Retry
+    // that queues behind a folder must not carry a clock that expires while it waits.
     const sched = await extractionScheduled(t);
     expect(sched).toHaveLength(1);
     expect(sched[0]?.name).toContain("vaultExtract");
-    expect(await watchdogScheduled(t)).toHaveLength(1);
+    expect(await watchdogScheduled(t)).toHaveLength(0);
   });
 });
 
 // ── The never-silent guarantee (Phase 15.2 SC#4) ─────────────────────────────
 
-describe("watchdogStalled — the per-attempt backstop for the non-terminal statuses", () => {
+describe("watchdogStalled — the per-attempt backstop for work that STARTED and hung", () => {
   const fire = (t: ReturnType<typeof convexTest>, vaultDocId: Id<"vaultDocuments">) =>
     t.mutation(internal.vaultSweep.watchdogStalled, { vaultDocId });
 
-  test.each(["pending_extraction", "extracting"] as const)(
-    "a row still at %s is flipped to failed(extraction_stalled)",
-    async (status) => {
-      const t = setup();
-      const docId = await seedDoc(t, { status });
+  test("a row still at extracting is flipped to failed(extraction_stalled)", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, { status: "extracting" });
 
-      await fire(t, docId);
+    await fire(t, docId);
 
-      const doc = await t.run((ctx) => ctx.db.get(docId));
-      expect(doc?.status).toBe("failed");
-      expect(doc?.failureReason).toBe("extraction_stalled");
-    },
-  );
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("failed");
+    expect(doc?.failureReason).toBe("extraction_stalled");
+  });
+
+  // THE 15.3-04 NARROWING, and the reason it is not a regression. The arm now fires from
+  // markExtracting, which sets `extracting` in the SAME transaction — so a fire that finds
+  // `pending_extraction` can only mean the row was RE-QUEUED after this clock started (a Retry, or
+  // the sweep). Killing that is the fabricated failure the phase exists to delete: a healthy retry
+  // sitting behind 400 folder members, executed by the previous attempt's stale clock.
+  test("a row re-queued to pending_extraction is NOT killed by the previous attempt's clock", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, { status: "pending_extraction" });
+
+    await fire(t, docId);
+
+    const doc = await t.run((ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("pending_extraction");
+    expect(doc?.failureReason).toBeUndefined();
+  });
 
   // The onIngestComplete idempotence property: a watchdog firing one second after a success (or
   // after an honest, more specific failure) must change NOTHING.
@@ -331,7 +351,7 @@ describe("watchdogStalled — the per-attempt backstop for the non-terminal stat
   });
 });
 
-describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => {
+describe("vaultUpload schedules permissively and arms NO watchdog (15.3-04)", () => {
   /** Upload through the REAL public mutation (the first of scheduleExtraction's three callers). */
   const upload = async (t: ReturnType<typeof convexTest>, mimeType: string, filename: string) => {
     const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["bytes"])));
@@ -359,17 +379,10 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
     expect(rail).toHaveLength(1);
     expect(rail[0]?.name).toContain("vaultExtract");
 
-    const watchdog = await watchdogScheduled(t);
-    expect(watchdog).toHaveLength(1);
-    expect(watchdog[0]?.args[0]).toMatchObject({ vaultDocId: docId });
-    // Per-attempt, and armed well past any honest run (the 480s call ceiling / 10-min action limit).
-    // A window, not an equality: the arm reads Date.now() itself, so the delta is the constant plus
-    // however many milliseconds elapsed since `before`.
-    const [watchdogEntry] = watchdog;
-    if (!watchdogEntry) throw new Error("a watchdog must be armed");
-    const delta = watchdogEntry.scheduledTime - before;
-    expect(delta).toBeGreaterThanOrEqual(EXTRACTION_WATCHDOG_MS);
-    expect(delta).toBeLessThan(EXTRACTION_WATCHDOG_MS + 1000);
+    // NO watchdog at queue time. The clock starts at markExtracting, and THAT arm (+15 min from
+    // work start, per attempt) is asserted in vaultFolders.test.ts.
+    expect(await watchdogScheduled(t)).toHaveLength(0);
+    expect(Date.now()).toBeGreaterThanOrEqual(before);
   });
 
   test("an EMPTY mimeType still schedules extractDoc (the allow-list no longer decides)", async () => {
@@ -379,16 +392,16 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
     const rail = await extractionScheduled(t);
     expect(rail).toHaveLength(1);
     expect(rail[0]?.name).toContain("vaultExtract");
-    expect(await watchdogScheduled(t)).toHaveLength(1);
+    expect(await watchdogScheduled(t)).toHaveLength(0);
   });
 
-  test("media still rides the transcribe rail by MIME — and is watched too", async () => {
+  test("media still rides the transcribe rail by MIME — and is queued, not watched", async () => {
     const t = setup();
     await upload(t, "video/mp4", "clip.mp4");
 
     const rail = await extractionScheduled(t);
     expect(rail).toHaveLength(1);
     expect(rail[0]?.name).toContain("vaultTranscribe");
-    expect(await watchdogScheduled(t)).toHaveLength(1);
+    expect(await watchdogScheduled(t)).toHaveLength(0);
   });
 });
