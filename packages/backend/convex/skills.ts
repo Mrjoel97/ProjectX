@@ -17,6 +17,7 @@ import {
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
+  FOLDER_DIGEST_SKILL,
   GATED_SKILLS,
   GRAPH_EXTRACTOR_SKILL,
   GROWTH_OS_DIAGNOSTIC_SKILL,
@@ -51,6 +52,7 @@ import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalys
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
+import { folderDigestSkillBody } from "@pikar/contracts/skills/folderDigest";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
@@ -349,6 +351,13 @@ export const seedSkills = internalMutation({
       // ffmpeg assembler is a repo file, and a runtime-mutable shell script executed in a VM is
       // remote code execution (llmRedaction.test.ts scans for exactly that).
       { name: MEDIA_DIRECTOR_SKILL, body: mediaDirectorSkillBody },
+      // UNGATED (15.3-06, VALT-08): the folder-digest synthesis body. APPEND-ONLY — this row goes
+      // LAST; do not reorder or touch the rows above. Same deadlock as content-drafter: the golden
+      // runner's --skill list is derived from GATED_SKILLS and it drives runCockpitAgent over TEXT
+      // fixtures, and no fixture can assemble a folder manifest plus per-member excerpts, so gating
+      // this would strand it at v1 on its first body edit. As a new name it takes the
+      // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
+      { name: FOLDER_DIGEST_SKILL, body: folderDigestSkillBody },
     ];
 
     for (const { name, body } of seeds) {

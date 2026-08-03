@@ -108,15 +108,25 @@ export const retryStuckIngests = internalMutation({
       // no folder left to settle against. An unresolvable folderId means "no folder" here exactly
       // as it does at every other folder read.
       const folder = d.folderId ? await ctx.db.get(d.folderId) : null;
+      // 15.3-06: A FOLDER DIGEST IS FOLDER WORK BUT HAS NO `folderId` — that absence is its
+      // recursion guard (it must never appear in its own member set), so the `folder` resolve above
+      // returns null for it and, without this branch, its re-ingest would silently charge the
+      // COCKPIT's $5 token window. It gets the ingest rail but NOT `reserved`: there is no
+      // reservation behind a digest, and `reserved` would wave it through on the kill switch alone.
+      const railFor = folder
+        ? // ponytail: `reserved: true` even though the folder's reservation may already have been
+          // settled (a folder that reached `complete` has `reservedCents: 0`), so a swept retry can
+          // spend the ingest window without a live reservation. The ceiling is a small over-spend on
+          // a recovery path; the upgrade path is reading `folder.reservedCents` here.
+          { rail: "ingest" as const, reserved: true }
+        : d.origin === "folder_digest"
+          ? { rail: "ingest" as const }
+          : {};
       await startIngest(ctx, {
         vaultDocId: d._id,
         tenantId: d.tenantId,
         correlationId: crypto.randomUUID(),
-        // ponytail: `reserved: true` even though the folder's reservation may already have been
-        // settled (a folder that reached `complete` has `reservedCents: 0`), so a swept retry can
-        // spend the ingest window without a live reservation. The ceiling is a small over-spend on
-        // a recovery path; the upgrade path is reading `folder.reservedCents` here.
-        ...(folder ? { rail: "ingest" as const, reserved: true } : {}),
+        ...railFor,
       });
       requeued++;
     }

@@ -1,5 +1,22 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-06 verify pass — **three defects found AFTER the suite was green,
+> all three the same root cause: the digest has no `folderId`, so it is invisible to every
+> mechanism that finds work by folder membership.** (1) `folderDigestState`'s staleness read bounded
+> ROWS but not BYTES and could throw the drill-in page; it now streams like `readVaultPage`.
+> (2) `cancelFolder` left the digest alive and unreachable — it now dies with its folder.
+> (3) A budget refusal was completely silent — it now writes one refs-only audit row. Plus the
+> digest's own re-ingest was charging the COCKPIT token rail. See *the verify pass* in
+> `### 15.3-06`.)
+
+> Last verified: 2026-08-03 (15.3-06 — **the folder digest is a vault document, and it grounds
+> ONLY because its insert calls `startIngest`.** `origin: "folder_digest"` is INERT — there is no
+> origin predicate anywhere in retrieval, so the observable check is `ragEntryId != null`, never
+> the literal. The digest carries NO `folderId` (the recursion guard), and staleness is a set
+> difference bounded by the folder's OWN `memberCount`, never the global 100-row drift cap. See
+> `### 15.3-06` at the END of this file. Proven by `convex/vaultDigest.test.ts` — 9 tests, EIGHT
+> mutations actually run RED, including the one that leaves every origin-literal assertion green. THREE of those nine came from an ADVERSARIAL PASS after the first cut was already green — see *the verify pass* at the end of the section; all three are consequences of the same correct design decision.)
+
 > Last verified: 2026-08-03 (15.3-05 — **sealing: a folder's members are excluded from retrieval
 > until the folder is `complete` — at THREE sites, not one.** One predicate (`vaultFolders.sealedIn`)
 > applied to grounding seeds AND graph neighbours, to the browse search box, and to the blueprint
@@ -1990,3 +2007,217 @@ decoration: the graph-neighbour test was VACUOUS on first run and its own contro
 `upsertGraph` dedups edges cross-doc, so two documents given the identical entity pair leave the
 second with no `graphEdges` row at all; documents must be linked by a SHARED NODE
 (`A(Alice—Bob)`, `B(Bob—Carol)`), the chain fixture `vaultGraph.test.ts` already uses.
+
+
+### 15.3-06 — the folder digest (`convex/vaultDigest.ts`)
+
+One completed folder → ONE synthesised vault document, plus the staleness diff that drives the
+Rebuild banner. `buildFolderDigest` (V8 `internalAction`, no `"use node"`) is scheduled from
+`vaultFolders.tryComplete` and from `rebuildDigest`; nothing else schedules it.
+
+#### ⚠ `origin: "folder_digest"` IS INERT — `startIngest` is the whole feature
+
+There is ZERO `origin` predicate anywhere in retrieval. The `origin: "agent"` exclusion works by
+the ABSENT `startIngest` call (`vault.ts:950-999`), not by a filter. So the digest is groundable
+**only** because `writeDigest` calls `startIngest` — delete that one line and the feature is
+silently dead **with every `origin === "folder_digest"` assertion still green**. The observable
+check is `ragEntryId != null`. Do not add an origin-based filter anywhere to "fix" this.
+
+#### The recursion guard is an ABSENT FIELD, not a predicate
+
+The digest carries **no `folderId`**; the folder points at it via `digestDocId`. Two things follow,
+and both are why no predicate is needed at any read site:
+
+- a digest can never enter a `by_tenant_folder` member query, so it can never be an input to its
+  own next synthesis, and it can never appear in its own stale set;
+- `vault.countTerminal` is gated on `before.folderId`, so the digest's own ingest completing can
+  never bump its folder's `terminalCount` past `memberCount`.
+
+#### The three-part contract, and part 3 is the one that gets dropped
+
+The `folder-digest` skill body (registry row, §5 — never hardcoded, fails closed unseeded) requires
+`## What this folder is`, `## What it says`, and `## What could not be read`. Part 3 names every
+non-ready member with the reason the manifest gives. It is stated in the OUTPUT CONTRACT, not in
+guidance prose, precisely because a long digest crowds it out otherwise — and a digest that
+silently drops a document it could not read makes the reader assume full coverage.
+
+Parts 1 and 3 are built from PROJECTED metadata only (title, kind, docType, identityLine, status,
+failureReason, size, createdAt). Part 2 gets a bounded head slice per member under a running total
+(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS`, mirroring `vaultGround.ts:29-30`). An ABSENT
+`docType` renders as `not classified` and is NOT collapsed into the `"unclassified"` literal
+(schema.ts:900 — never classified is not the same as classified and unplaceable).
+
+**Never `.collect()` the members.** `digestMembersPage` paginates at `VAULT_FOLDER_MEMBER_BATCH`,
+one page per transaction, and the ACTION carries the cursor. Convex has no projection, so a member
+read pulls its whole row including up to 400k chars of `text` — ~40 max-size rows exhaust the
+16 MiB per-transaction read cap, on the very feature meant to make a big folder usable.
+
+#### Staleness is bounded by the folder, never by the global drift cap
+
+`unincorporatedForFolder` clones `blueprint.unincorporatedFor`'s shape (a pure set difference, no
+detector, no cron) with three changes: index `by_tenant_folder`, filter
+`status === "ready" && !sourceSet.has(_id)`, and **`.take(folder.memberCount + 1)`**. Cloning
+blueprint's `DRIFT_SCAN_CAP = 100` onto a 300-member folder inspects an arbitrary hundred and can
+report 0 stale while dozens are — the banner then silently never fires. (`DRIFT_SCAN_CAP` is
+module-private to `blueprint.ts` and not importable anyway.) No `sealedIn` filter: a folder with a
+digest is `complete`, so nothing in it is sealed.
+
+Accepted ceiling, named in a `ponytail:` comment at the helper: those rows still carry `text`, so a
+folder of several hundred MAX-SIZE members can reach the read cap. Upgrade path is the same one
+`blueprint.unincorporatedFor` names — a maintained counter on `vaultFolders`, bumped when a member
+reaches `ready` outside the source set.
+
+The only shipped way a COMPLETE folder gains a new `ready` member is `vaultSweep.retryExtraction`
+(`vault.ts:205-211` refuses a new member on any folder that is not `reserving`), which is why the
+source set is exactly the READY members at build time.
+
+#### Money and ordering
+
+- Completion order is fixed and unchanged: **settle → schedule digest → flip to `complete`**. The
+  flip IS the unseal, so it stays last. The digest is SCHEDULED, so it observes the folder as
+  `complete` and its reservation already zeroed — `buildFolderDigest` therefore asserts `complete`
+  and must never assert `ingesting`.
+- The digest is folder work: `preCall`/`recordSpend` both pass `rail: "ingest"`, so it never eats
+  the cockpit's token window. It passes **no `reserved: true`** — the reservation is gone by then,
+  so `reserved` would wave the call through on the kill switch alone with no money behind it
+  (`guardrails.ts:294-298`). One small call can afford the honest two-window check.
+- A refused gate is a governed STOP: a typed `{ ok: false, reason }` return, never a throw.
+- **No model call fires until the user clicks.** `folderDigestState` is a pure read and nothing
+  reacts to it; `rebuildDigest` is a `tenantMutation` that SCHEDULES the action (a mutation cannot
+  run one).
+
+#### The offline seam
+
+`SMOKE::digest::` anywhere in the ASSEMBLED prompt (`.includes`, not `startsWith`) returns a
+deterministic fixture with NO model call. It may ride in the folder NAME, a member TITLE, or a
+member's TEXT — the name/title routes matter because a folder whose only member FAILED contributes
+no excerpt at all. **The fixture must start with `SMOKE::graph::`**: the digest is itself ingested,
+and that ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at
+position 0 (`vaultRag.embedDoc` is free on any `SMOKE::`).
+
+#### Gotchas
+
+- The skill is DELIBERATELY UNGATED and its version is **never pinned**: `seedSkills` lands a new
+  name at v1/active only when `rows.length === 0`, otherwise `maxVersion + 1`. Verify with
+  `getActiveSkill`, never assert a number.
+- A rebuild PATCHES the row the folder already points at rather than inserting a second digest —
+  two digests for one folder would both be groundable and the stale one would keep answering. The
+  previous rag entry is NOT deleted (`rag.add` keys on `contentHash`), so a stale PASSAGE of a
+  fresh document can still surface; ceiling named in a `ponytail:` comment, upgrade path is
+  `rag.deleteAsync` on the old `ragEntryId`.
+- convex-test never executes a `scheduler.runAfter` entry created inside the same test. Assert the
+  `_scheduled_functions` row matching `/buildFolderDigest/`, then invoke
+  `internal.vaultDigest.buildFolderDigest` directly. The harness must register `rateLimiter`
+  (preCall/recordSpend) and `workflow` + `workflow/workpool` (startIngest).
+
+#### How this is VERIFIED — `convex/vaultDigest.test.ts`
+
+Five guarantees, one describe block each: groundability, non-recursion, staleness fires and clears,
+staleness is exact at folder scale, and part 3 is present. Plus a sixth test pinning the fail-closed
+skill load. All offline, zero spend — the folder NAME carries `SMOKE::digest::`.
+
+**THE ONE SUITE IN THIS REPO THAT DRIVES THE INGEST WORKFLOW TO COMPLETION, and it has to.** Every
+other vault suite produces a `ready` row by calling `internal.vault.markReady` by hand
+(vault.test.ts, vaultFolders.test.ts, vaultSealing.test.ts). Doing that here would make
+`ragEntryId != null` VACUOUS — it would pass with the `startIngest` call deleted, which is exactly
+the defect the assertion exists to catch. So the digest test runs the real
+`vaultIngest.ingestDoc` instead:
+
+```ts
+beforeEach(() => vi.useFakeTimers());        // workpool steps go through the scheduler
+await t.action(internal.vaultDigest.buildFolderDigest, { tenantId, folderId });
+await t.finishAllScheduledFunctions(vi.runAllTimers);   // ← the whole chain actually runs
+```
+
+This QUALIFIES the "convex-test never runs a `scheduler.runAfter` entry" note above: that is true
+of a bare `runAfter` under real timers (vaultFolders.test.ts:84-88), and the digest scheduled by
+`tryComplete` is still asserted as a `_scheduled_functions` row and then invoked directly. But the
+workflow's own steps DO run under fake timers + `finishAllScheduledFunctions(vi.runAllTimers)`,
+and that is what turns `ragEntryId` into a real observable. Every step is free:
+`preCall` → `embedDoc` (SMOKE:: ⇒ fake entryId) → `extractGraph` (SMOKE::graph:: ⇒ fixture) →
+`upsertGraph` → `recordSpend($0)` → `markReady`.
+
+Skills are seeded with the REAL `internal.skills.seedSkills` and read back through
+`getActiveSkill` — no hand-written `skills` row, no version literal anywhere in the file.
+
+The staleness generator is the honest one: a member that was `failed` at build time and is later
+rescued, simulated through the terminal mutation `vaultSweep.retryExtraction` ends in
+(`internal.vault.markReady`). A raw insert into a `complete` folder would test a state the app
+cannot reach (`vault.ts:205-211`).
+
+The 120-member cap test depends on insert order BEING index order: `by_tenant_folder` is
+`["tenantId", "folderId"]`, so members order by `_creationTime` within the folder. The five that go
+stale are seeded last, which is why a `.take(100)` clone cannot see them.
+
+#### Mutations actually run against this section (not reasoned about)
+
+| Mutation | Observed |
+| --- | --- |
+| delete `await startIngest(...)` from `writeDigest` | `origin === "folder_digest"` **GREEN**, `ragEntryId` **RED** at the very next line. Grounding still returned the doc — the offline `SMOKE::` seam resolves seeds via `ownedDocsMeta` and never touches the index, so `ragEntryId` is the primary check and grounding the secondary one. |
+| add `folderId` to the digest insert | 3 RED. `folderDigestState` reads `stale` the instant the build finishes — the banner fires forever, and each rebuild creates the row that keeps it firing. |
+| `.take(folder.memberCount + 1)` → `.take(100)` | 1 RED, and ONLY the 120-member test: count `0` instead of `5`, reported as `fresh`. Exactly the silent "your digest is up to date" the bound exists to prevent. |
+| drop `!sourceSet.has(doc._id)` from the filter | 3 RED — every ready member reads as unincorporated forever. |
+| drop `failureReason` from `digestMembersPage`'s projection | 1 RED — the digest still NAMES the unreadable document but reports a bare status instead of the reason. Part 3 half-dies rather than disappearing, which is why the test asserts the reason string and not just the title. |
+
+Re-run: `cd packages/backend && npx vitest run convex/vaultDigest.test.ts` (6 passed).
+
+#### The verify pass — three defects found after the suite was already green
+
+An adversarial review ran against the shipped code (not the reports) once
+`vaultDigest.test.ts` was 6/6. It found three, and **all three are consequences of the one design
+decision this plan is proudest of: the digest carries NO `folderId`.** That absence is the correct
+recursion guard — and it also makes the digest invisible to every mechanism in the folder plane that
+locates work by folder membership. Read that as the general lesson: *a deliberate absence needs its
+own sweep of everything that used to find the thing by the field you removed.*
+
+**1. The staleness read bounded ROWS, not BYTES** (`unincorporatedForFolder`). `.take(memberCount + 1)`
+is a row bound; Convex has no projection, so each row arrives with its whole `text` (up to
+VAULT_EXTRACT_CHAR_CAP = 400,000 chars). ~40 max-size members already exhaust the 16 MiB
+per-transaction cap — and this runs inside `folderDigestState`, the drill-in **banner** read, so the
+failure was **the folder page throwing**, not a wrong number. This is the identical defect
+`readVaultPage` was written for in 15.3-02, on the identical index, so it now streams the identical
+way: stop on whichever bites first, rows or `VAULT_GRID_READ_BUDGET_BYTES`. **Newest-first
+(`.order("desc")`) is what makes the byte bound honest rather than merely safe** — unincorporated
+members are by construction the ones added since the last build, so they sort to the front and an
+early stop has already seen them. Residual, stated: a member rescued `failed → ready` by
+`vaultSweep.retryExtraction` is newly unincorporated but OLD by `_creationTime`, so in a folder whose
+text exceeds the budget it can be missed until the next build. **Under-reporting a rescued member is
+a stale banner; throwing is a dead page.**
+
+**2. `cancelFolder` orphaned the digest.** There is no status guard on cancel, so a `complete`
+folder — the only kind that HAS a digest — is cancellable, and `walkFolderMembers` keys on
+`folderId`, which the digest does not carry. The digest survived as a `ready`, embedded,
+**groundable** document answering questions about a folder the user had deleted (including the
+identity lines of members the walk had just failed as `folder_cancelled`), unreachable from every
+folder surface because the `digestDocId` pointer died with the row. `cancelFolder` now cascades it
+through `vault.deleteVaultDoc` BEFORE deleting the folder row. No counter moves: `bumpFolder` fires
+on `before.folderId`, which a digest has none of.
+
+**3. A refused build was completely silent.** `buildFolderDigest` is reached by
+`scheduler.runAfter` from `tryComplete`, which discards the return value, so a `preCall` refusal on
+the ingest rail left NO trace anywhere: `digestBuiltAt` unset (so the `already_built` belt does not
+apply and nothing retries) and the folder reading `complete` with no `digestDocId` — indistinguishable
+from a digest never attempted. A large folder that just drained the ingest window it holds no
+reservation against lands exactly there. The gate-refusal branch now writes ONE
+`folder.digest_refused` audit row, refs and ids only (§4). It is the only refusal audited, because
+it is the only one that leaves no other evidence.
+
+**Also fixed: the digest's own re-ingest was on the COCKPIT rail.** `vaultIngest.retryStuckIngests`
+derives the spend rail by resolving `d.folderId` — null for a digest — so an operator-run sweep
+would have charged `embedDoc` + `extractGraph` to the $5 token window. It now takes the ingest rail
+via `origin === "folder_digest"`, but deliberately **without** `reserved`: there is no reservation
+behind a digest, and `reserved` would wave it past the budget on the kill switch alone.
+
+Ruled SAFE by the same pass, with evidence, so nobody re-litigates them: the sealing interaction
+(three independent reasons a mid-ingest digest cannot leak — the action refuses a non-`complete`
+folder, the schedule commits with the transaction that flips the status, and the row is
+`processing` until `markReady` writes `ragEntryId`); the recursion guard on the REBUILD path as well
+as the first build; §2/§4/§5 compliance.
+
+**One test-seam wart, deliberately left.** The cancel test clears the digest's `ragEntryId` before
+cancelling. The offline embed returns a `smoke::<hash>` sentinel that is not an id of the rag
+component's `entries` table, so `deleteVaultDoc`'s `rag.deleteAsync` half rejects it with a validator
+error that cannot happen against a real entry id. The guarantee under test is that cancel REACHES
+the digest; the cascade itself is `deleteVaultDoc`'s own contract, covered in `vault.test.ts`.
+
+Re-run: `cd packages/backend && npx vitest run convex/vaultDigest.test.ts` (**9 passed**).

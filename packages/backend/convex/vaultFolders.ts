@@ -24,7 +24,7 @@
 // `reserveFolder` is therefore also the CLOSE SIGNAL: after it, `memberCount` is fixed.
 import { isSearchable, VAULT_FOLDER_MEMBER_BATCH, type EstimateInput } from "@pikar/vault";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { type FolderReserveResult, reserveFolderInner, vFileManifest } from "./guardrails";
@@ -336,12 +336,18 @@ async function tryComplete(ctx: MutationCtx, folderId: Id<"vaultFolders">): Prom
 
   await ctx.runMutation(internal.guardrails.settleFolder, { folderId });
 
-  // (2) THE DIGEST SLOT. Plan 15.3-06 owns the build and fills this in as
-  //     `ctx.scheduler.runAfter(0, internal.vaultDigest.buildFolderDigest, { folderId })`, plus the
-  //     17.1 Stage-2 drift call beside it — which needs an `internalAction` sibling of
-  //     `blueprint.buildBlueprintDraft`, because that one is a `tenantAction` and a scheduled
-  //     function has no identity (Pitfall 3). Deliberately NOT a dangling reference here: naming a
-  //     function that does not exist yet is a typecheck failure, not a marker.
+  // (2) THE DIGEST. SCHEDULED, not awaited: it is an ACTION (a model call) and a mutation cannot
+  //     run one. It therefore lands AFTER this transaction commits — i.e. after the folder is
+  //     already `complete` and after `settleFolder` has zeroed the reservation — which is why
+  //     `buildFolderDigest` asserts `complete` and never `ingesting`. `tenantId` is EXPLICIT
+  //     because a scheduled function has no identity (Pitfall 3).
+  //     STILL DEFERRED: the 17.1 Stage-2 drift call plan 04 named as a sibling here. It needs an
+  //     `internalAction` sibling of `blueprint.buildBlueprintDraft` (that one is a `tenantAction`)
+  //     which does not exist yet — naming it here would be a typecheck failure, not a marker.
+  await ctx.scheduler.runAfter(0, internal.vaultDigest.buildFolderDigest, {
+    tenantId: folder.tenantId,
+    folderId,
+  });
 
   await ctx.db.patch(folderId, { status: "complete" }); // (3) the unseal — always last
   return true;
@@ -395,6 +401,21 @@ export const cancelFolder = tenantMutation({
     // deletes another tenant's folder.
     if (!folder || folder.tenantId !== ctx.tenantId) return { ok: false };
     await ctx.runMutation(internal.guardrails.settleFolder, { folderId }); // BEFORE the delete
+
+    // 15.3-06: THE DIGEST DIES WITH ITS FOLDER, and it is the ONE member-ish row the walk below
+    // cannot reach. There is no status guard here, so a `complete` folder — the only kind that HAS
+    // a digest — is cancellable; and the digest deliberately carries NO `folderId` (that absence is
+    // the recursion guard), so `walkFolderMembers` keys on an id it does not have and skips it
+    // entirely. Left alone it survives as a `ready`, embedded, GROUNDABLE document that keeps
+    // answering questions about a folder the user deleted — including the identity lines of members
+    // the walk is about to fail as `folder_cancelled` — and is unreachable from every folder
+    // surface, because the `digestDocId` pointer dies with the row on the next line. `deleteVaultDoc`
+    // is the cascade (row + rag chunks + graphEdges with orphan-node GC), and it does NOT bump any
+    // counter here: `bumpFolder` fires on `before.folderId`, which a digest has none of.
+    if (folder.digestDocId) {
+      await ctx.runMutation(api.vault.deleteVaultDoc, { vaultDocId: folder.digestDocId });
+    }
+
     await ctx.db.delete(folderId);
     // AFTER the delete, and it carries the tenant because the row it would have read is gone.
     // Members already `ready` are untouched and become ordinary folder-less documents; members

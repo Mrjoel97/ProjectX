@@ -1,6 +1,31 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-03 (20-11 tasks 1-3 — **no registry row changed; the §5 EXEMPTION that
+> Last verified: 2026-08-03 (15.3-06 task 1 — **`folder-digest` added, DELIBERATELY UNGATED.**
+>
+> **`folder-digest`** is the folder-synthesis body: one model call turns a completed vault folder
+> into a three-part markdown digest. Its OUTPUT CONTRACT names all three parts — (1) what the
+> folder IS (manifest: counts, kinds, date range, a one-line identity per document), (2) what it
+> SAYS (cross-document synthesis), (3) what could NOT be read (failed / unsupported /
+> still-processing members, named with the reason the manifest gives). **Part 3 lives in the
+> contract section, not in guidance prose** — a model under length pressure drops guidance, and a
+> digest that silently omits an unreadable document is worse than no digest, because the reader
+> assumes full coverage.
+>
+> **UNGATED, the `content-drafter` / `business-blueprint` mechanism verbatim:**
+> `run-eval-golden.mjs` derives its `--skill` list from `GATED_SKILLS` and drives
+> `runCockpitAgent` over TEXT fixtures. A folder digest is fed a folder manifest plus bounded
+> per-member excerpts, which no text fixture can assemble — so gating it would deadlock it at v1
+> on its first body edit. `skillBodies.test.ts` asserts `isGatedSkill(FOLDER_DIGEST_SKILL)` is
+> false, so a "tidy up the gate list" edit fails there rather than in production.
+>
+> **There is no generator script for the derived body.** `src/skills/folderDigest.ts` is
+> hand-derived from `skills/folder-digest.md`; the `skillBodies.test.ts` drift row is the ONLY
+> thing that turns an edit to one side into a failure instead of a silently stale seeded prompt.
+>
+> **Never pin its version.** `seedSkills` inserts at v1 `active` only when `rows.length === 0`,
+> otherwise `maxVersion + 1`. Read the live version back with `getActiveSkill`; never assert v1.)
+>
+> Prior: Last verified: 2026-08-03 (20-11 tasks 1-3 — **no registry row changed; the §5 EXEMPTION that
 > two Phase-20 files rely on is now an ADR decision.**
 > [ADR-013](../decisions/013-the-render-worker.md) Decision 5 records that `assemble_final.sh` and
 > `burn_caps.sh` are **CODE, not registry rows**: §5 governs *prompts*, and a runtime-mutable shell

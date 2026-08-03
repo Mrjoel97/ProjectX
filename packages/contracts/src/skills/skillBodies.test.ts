@@ -1,10 +1,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { BUSINESS_BLUEPRINT_SKILL, isGatedSkill, MEDIA_DIRECTOR_SKILL } from "../skill";
+import {
+  BUSINESS_BLUEPRINT_SKILL,
+  FOLDER_DIGEST_SKILL,
+  isGatedSkill,
+  MEDIA_DIRECTOR_SKILL,
+} from "../skill";
 import { bmcSkillBody } from "./bmc";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
 import { documentAnalystSkillBody } from "./documentAnalyst";
+import { folderDigestSkillBody } from "./folderDigest";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
 import { leanCanvasSkillBody } from "./leanCanvas";
@@ -55,6 +61,11 @@ const bodies: [string, string][] = [
   // matters here because the synthesis action loads it FAIL-CLOSED: a stale derived constant seeds
   // a stale prompt rather than a loud error.
   ["business-blueprint", businessBlueprintSkillBody],
+  // 15.3-06 (VALT-08): the UNGATED folder-digest synthesis prompt. There is NO generator script —
+  // the .ts is hand-derived — so this row is the only thing that turns an edit to one side into a
+  // failure instead of a silently stale seeded prompt. It also guards the three-part OUTPUT
+  // CONTRACT (what the folder IS / SAYS / could NOT be read), which the digest test asserts against.
+  ["folder-digest", folderDigestSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {
@@ -85,5 +96,16 @@ describe("business-blueprint gating (17.1-02)", () => {
 describe("media-director gating (20-03)", () => {
   test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
     expect(isGatedSkill(MEDIA_DIRECTOR_SKILL)).toBe(false);
+  });
+});
+
+// 15.3-06 (VALT-08). Same mechanism, same deadlock: run-eval-golden.mjs derives its --skill list
+// from GATED_SKILLS and drives runCockpitAgent over TEXT fixtures. A folder digest is fed a folder
+// manifest plus bounded per-member excerpts, which no text fixture can assemble — so gating this
+// would strand it at v1 on its first body edit, with no runner able to clear the gate. A future
+// "tidy up the gate list" edit must fail HERE, not in production.
+describe("folder-digest gating (15.3-06)", () => {
+  test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
+    expect(isGatedSkill(FOLDER_DIGEST_SKILL)).toBe(false);
   });
 });

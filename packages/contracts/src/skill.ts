@@ -162,6 +162,22 @@ export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
  */
 export const BUSINESS_BLUEPRINT_SKILL = "business-blueprint" as const;
 
+/**
+ * Registry name of the folder-digest synthesis skill (15.3-06, VALT-08/09/10 — the one model call
+ * that turns a completed folder into a three-part digest: what the folder IS, what it SAYS, and
+ * what could NOT be read).
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (15.3-06).
+ *
+ * MECHANICAL reason, the `content-drafter` / `business-blueprint` mechanism verbatim:
+ * `run-eval-golden.mjs`'s SKILL_NAMES is DERIVED from GATED_SKILLS and it drives `runCockpitAgent`
+ * over TEXT fixtures. No fixture reaches a folder digest — the input is a folder manifest plus
+ * bounded per-member excerpts, which the runner structurally cannot assemble. Gating this row would
+ * therefore DEADLOCK it at v1 on its first body edit: a candidate no eval run could ever certify.
+ * Revisit when a fixture exists.
+ */
+export const FOLDER_DIGEST_SKILL = "folder-digest" as const;
+
 /** Registry name of the `direct` behaviour-preset style overlay (15.1 / design §7). */
 export const STYLE_DIRECT_SKILL = "style-direct" as const;
 
