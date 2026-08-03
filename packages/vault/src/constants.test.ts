@@ -5,6 +5,7 @@ import {
   GRAPH_EXTRACT_CHAR_CAP,
   VAULT_GRID_PAGE,
   VAULT_GRID_READ_BUDGET_BYTES,
+  VAULT_INGEST_PARALLELISM,
 } from "./constants";
 import { VAULT_EXTRACT_CHAR_CAP } from "./extractKind";
 
@@ -57,5 +58,21 @@ describe("the vault read bound", () => {
 
   test("a row cap alone would NOT bound the read — which is why the byte budget exists", () => {
     expect(VAULT_GRID_PAGE * VAULT_EXTRACT_CHAR_CAP).toBeGreaterThan(READ_CAP_BYTES);
+  });
+});
+
+// 15.3-04 / 15.3-CONTEXT "Scheduled-job concurrency, resolved 2026-08-03". The number itself is a
+// tuning choice; the BOUND is not. The smallest deployment scheduled-job concurrency class Convex
+// offers is 8, and a pool wider than its deployment's class cannot actually run that wide — it
+// just re-queues behind the class, which is the starvation the named pool exists to remove.
+describe("VAULT_INGEST_PARALLELISM", () => {
+  const SMALLEST_DEPLOYMENT_CONCURRENCY_CLASS = 8;
+
+  test("is strictly below the smallest deployment concurrency class (8 on S16)", () => {
+    expect(VAULT_INGEST_PARALLELISM).toBeLessThan(SMALLEST_DEPLOYMENT_CONCURRENCY_CLASS);
+  });
+
+  test("is at least 1 — a pool of 0 would never dispatch a folder", () => {
+    expect(VAULT_INGEST_PARALLELISM).toBeGreaterThanOrEqual(1);
   });
 });

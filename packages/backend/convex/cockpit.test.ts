@@ -19,8 +19,9 @@ import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
-// Register the delivery components so executePlan can reach workflow.start under convex-test
-// (workpool is a test-only devDep pinned to the version @convex-dev/workflow already resolves).
+// Register the delivery components so executePlan can reach workflow.start under convex-test.
+// (workpool is a first-class runtime dependency since 15.3-04 — the app registers its own
+// `vaultIngestPool` — but this suite only needs the copy @convex-dev/workflow nests under itself.)
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 // cancelScheduledPlan writes a refs-only plan.canceled audit; the SOLE audit-insert surface counts

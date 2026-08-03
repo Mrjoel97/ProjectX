@@ -16,10 +16,12 @@
 // as a requirement; they are inverted here, and the watchdog gets its own idempotence suite.
 import { EXTRACTION_WATCHDOG_MS } from "@pikar/vault";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { getFunctionName } from "convex/server";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { vaultIngestPool } from "./index";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -38,13 +40,36 @@ function setup() {
 const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
   t.withIdentity({ subject: tenantId });
 
-/** The extraction actions scheduled so far (vault.test.ts's system-table inspection pattern). */
-const extractionScheduled = (t: ReturnType<typeof convexTest>) =>
-  t.run(async (ctx) =>
-    (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) =>
-      /vaultExtract|vaultTranscribe/.test(s.name),
-    ),
+/**
+ * Every extraction `vault.scheduleExtraction` asked to run, in the SAME `{ name, args }` shape the
+ * `_scheduled_functions` rows had before 15.3-04.
+ *
+ * WHY A SPY AND NOT THE SYSTEM TABLE: the enqueue now goes to the named `vaultIngestPool`, and a
+ * workpool writes its `work` row and schedules its main loop INSIDE the component's own namespace.
+ * convex-test scopes `_scheduled_functions` per component and gives a test no component-scoped
+ * `t.run`, so the enqueue is simply unobservable from here. The REAL pool is exercised end-to-end
+ * by vaultExtract.test.ts / vaultTranscribe.test.ts / guardrails.test.ts, which register
+ * `vaultIngestPool` and drive vaultUpload through it; what these tests are about is the SCHEDULING
+ * DECISION (which rail, which args, and whether anything is dispatched at all), which is exactly
+ * what the spy records.
+ */
+const enqueuedExtractions: { name: string; args: [Record<string, unknown>] }[] = [];
+beforeEach(() => {
+  enqueuedExtractions.length = 0;
+  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
+    async (_ctx: unknown, fn: never, fnArgs: unknown) => {
+      enqueuedExtractions.push({
+        name: getFunctionName(fn),
+        args: [fnArgs as Record<string, unknown>],
+      });
+      return "workId_test" as never;
+    },
   );
+});
+afterEach(() => vi.restoreAllMocks());
+
+/** The extraction actions enqueued so far. */
+const extractionScheduled = (_t?: unknown) => enqueuedExtractions;
 
 /** The per-attempt watchdogs armed so far — the other half of every scheduling decision. */
 const watchdogScheduled = (t: ReturnType<typeof convexTest>) =>
@@ -322,6 +347,10 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
 
   test("the owner's .xlsm — previously scheduled NOTHING — now schedules extractDoc + a +15min watchdog", async () => {
     const t = setup();
+    // The reference point for the watchdog delta is WALL CLOCK, not the sibling scheduled row:
+    // 15.3-04 moved the extraction enqueue onto `vaultIngestPool`, so there is no app-side
+    // `_scheduled_functions` entry to measure against any more.
+    const before = Date.now();
     const docId = await upload(t, XLSM_MIME, "budget.xlsm");
 
     expect((await t.run((ctx) => ctx.db.get(docId)))?.status).toBe("pending_extraction");
@@ -334,12 +363,11 @@ describe("vaultUpload schedules permissively and ALWAYS arms a watchdog", () => 
     expect(watchdog).toHaveLength(1);
     expect(watchdog[0]?.args[0]).toMatchObject({ vaultDocId: docId });
     // Per-attempt, and armed well past any honest run (the 480s call ceiling / 10-min action limit).
-    // A window, not an equality: the two runAfter calls read Date.now() independently, so the delta
-    // is the constant plus however many milliseconds elapsed between them.
-    const [railEntry] = rail;
+    // A window, not an equality: the arm reads Date.now() itself, so the delta is the constant plus
+    // however many milliseconds elapsed since `before`.
     const [watchdogEntry] = watchdog;
-    if (!railEntry || !watchdogEntry) throw new Error("both must be scheduled");
-    const delta = watchdogEntry.scheduledTime - railEntry.scheduledTime;
+    if (!watchdogEntry) throw new Error("a watchdog must be armed");
+    const delta = watchdogEntry.scheduledTime - before;
     expect(delta).toBeGreaterThanOrEqual(EXTRACTION_WATCHDOG_MS);
     expect(delta).toBeLessThan(EXTRACTION_WATCHDOG_MS + 1000);
   });

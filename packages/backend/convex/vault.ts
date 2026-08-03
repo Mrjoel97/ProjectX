@@ -39,6 +39,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { vaultIngestPool } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { startIngest } from "./vaultIngest";
@@ -88,8 +89,14 @@ export async function scheduleExtraction(
   },
 ): Promise<void> {
   const rail = schedulingRailFor(mimeType, title);
-  await ctx.scheduler.runAfter(
-    0,
+  // THE POOL, not `ctx.scheduler.runAfter(0, …)` (15.3-04, CONTEXT §B15). The raw scheduler is
+  // bounded only by the deployment's scheduled-job concurrency class, so 400 queued extractions
+  // sit in front of every delivery and cron job in the deployment — "never starve the cockpit"
+  // arriving as latency rather than as budget. `vaultIngestPool` bounds it at
+  // VAULT_INGEST_PARALLELISM instead. The dispatch target is a TERNARY over two internalActions
+  // with byte-identical arg validators, not a single `extractDoc`.
+  await vaultIngestPool.enqueueAction(
+    ctx,
     rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
     { vaultDocId, tenantId, spendRail, reserved },
   );

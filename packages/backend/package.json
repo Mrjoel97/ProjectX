@@ -37,6 +37,7 @@
     "@convex-dev/rag": "0.7.5",
     "@convex-dev/rate-limiter": "0.3.2",
     "@convex-dev/workflow": "0.4.4",
+    "@convex-dev/workpool": "0.4.7",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
     "@pikar/cost": "workspace:*",
@@ -51,7 +52,6 @@
     "unpdf": "1.6.2"
   },
   "devDependencies": {
-    "@convex-dev/workpool": "0.4.7",
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^26.1.1",
     "convex-test": "0.0.54",

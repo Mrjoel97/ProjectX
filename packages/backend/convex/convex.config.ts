@@ -7,6 +7,7 @@ import actionRetrier from "@convex-dev/action-retrier/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
 import aggregate from "@convex-dev/aggregate/convex.config.js";
 import cache from "@convex-dev/action-cache/convex.config.js";
+import workpool from "@convex-dev/workpool/convex.config.js";
 
 const app = defineApp();
 
@@ -25,5 +26,12 @@ app.use(aggregate, { name: "auditCounts" });
 
 // Phase-3 component (GRDL-04). Pinned exact — do not bump casually (CLAUDE.md §6).
 app.use(cache);
+
+// Phase-15.3 (VALT-06). The named ingest pool — `{ name }` is REQUIRED: the component declares
+// itself `defineComponent("workpool")`, so without it the generated identifier is
+// `components.workpool` and a SECOND pool could never be registered beside it (the
+// `app.use(aggregate, { name: "auditCounts" })` precedent above). Pinned exact — do not bump
+// casually (CLAUDE.md §6). The client + its maxParallelism live in `index.ts`.
+app.use(workpool, { name: "vaultIngestPool" });
 
 export default app;

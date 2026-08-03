@@ -56,12 +56,38 @@ export const VAULT_GRID_PAGE = 200;
 export const VAULT_GRID_READ_BUDGET_BYTES = 8 * 1024 * 1024;
 
 /**
- * How long a doc may stay non-terminal (`pending_extraction`/`extracting`) after its attempt was
- * scheduled before a watchdog calls it stalled. 15 min is comfortably above the worst legitimate
- * run — the 480 s per-call ceiling plus Convex's 10-minute node-action limit bound any single
- * honest attempt — so it can never kill live work.
+ * How long a doc may stay `extracting` AFTER ITS WORK ACTUALLY STARTED before a watchdog calls it
+ * stalled. 15 min is comfortably above the worst legitimate RUN — the 480 s per-call ceiling plus
+ * Convex's 10-minute node-action limit bound any single honest attempt — so it can never kill live
+ * work.
+ *
+ * ⚠ MEASURED FROM WORK-START, NOT FROM SCHEDULE (15.3-04, CONTEXT §B2). It used to be armed by
+ * `vault.scheduleExtraction`, i.e. when the attempt was QUEUED. That was survivable while every
+ * upload was a single file; at folder scale, 400 documents behind `VAULT_INGEST_PARALLELISM`
+ * sit queued for an hour and a perfectly healthy document was marked `extraction_stalled` — a
+ * failure that never happened, written into the manifest the folder promises is honest. The
+ * 15-minute justification was ALWAYS about run time; the clock now starts where the justification
+ * always pointed (`vault.markExtracting`).
  */
 export const EXTRACTION_WATCHDOG_MS = 15 * 60_000;
+
+/**
+ * How many folder-ingest extractions may run at once. **WE set this number** — that is the whole
+ * reason ingest moved off the raw scheduler onto a named `vaultIngestPool` (15.3-CONTEXT §B15):
+ * the raw scheduler is bounded only by the DEPLOYMENT's scheduled-job concurrency class, so 400
+ * queued extractions sat in front of every delivery and cron job in the deployment.
+ *
+ * ⚠ MUST STAY STRICTLY BELOW 8, the smallest class Convex offers (S16). The deployment class is a
+ * CEILING, not the setting — and this project has no cloud deployment to read a class from
+ * (`convex deployments` reports Type: local), so staying under the smallest one is what makes the
+ * number safe everywhere. Raising it above 8 is a deployment-class decision, not a tuning
+ * decision; the bound is asserted in `constants.test.ts`.
+ *
+ * The pre-flight "ready in" estimate is computed from THIS number, never from an assumed class.
+ * ponytail: a hand-picked constant calibrated against observed throughput, not derived on paper —
+ * provisioning a cloud deployment is the point at which it may be revisited.
+ */
+export const VAULT_INGEST_PARALLELISM = 6;
 
 /**
  * Chars of document text sent to the graph extractor. ~120k chars ≈ 30k tokens, well inside the

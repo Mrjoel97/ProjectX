@@ -49,6 +49,8 @@ function setup(): T {
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  // 15.3-04: vault.scheduleExtraction now enqueues on the app's OWN named pool.
+  t.registerComponent("vaultIngestPool", workpoolSchema, workpoolModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return t;
 }
