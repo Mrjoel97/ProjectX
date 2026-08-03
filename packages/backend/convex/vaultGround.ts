@@ -91,6 +91,32 @@ async function runVaultGround(
     }
   }
 
+  // ── SEALING, half 1 of 2 (VALT-07) ─────────────────────────────────────────
+  // A folder's members are excluded from retrieval until the folder is `complete`. The predicate
+  // lives once in `vaultFolders.sealedIn`; here it is applied to the SEEDS, and deliberately BEFORE
+  // `expand` — filtering after would still let a sealed document's entities pull unsealed
+  // neighbours into the answer, which is the sealed folder steering the result without appearing
+  // in it. `hits` is filtered too, not just `seedDocIds`: `fuse` builds its output from the hit
+  // list, so dropping the seed alone would remove nothing.
+  //
+  // NOT filtered at `rag.search`: `vaultRag.ts` declares no `filterNames`, and a filter baked in at
+  // embed time could not change when the folder unseals without re-embedding every member.
+  //
+  // ACCEPTED LIMITATION, and it is structural, not content: ingest step 4 (`upsertGraph`) writes a
+  // sealed member's entities into the SHARED tenant graph, so a sealed folder still raises
+  // `graphNodes.degree` (which feeds `blueprint.topEntities`) and can create an edge joining two
+  // UNSEALED documents. No sealed text and no sealed doc id ever reaches a reader — the locked
+  // decision says "excluded from retrieval", which this satisfies literally. Closing the metadata
+  // half means deferring `upsertGraph` to folder completion, which breaks the per-document ingest
+  // workflow; that is the upgrade path, not a bug fix.
+  const sealedSeeds = new Set(
+    await ctx.runQuery(internal.vaultFolders.sealedDocIds, { tenantId, docIds: seedDocIds }),
+  );
+  if (sealedSeeds.size > 0) {
+    hits = hits.filter((h) => !sealedSeeds.has(h.docId as Id<"vaultDocuments">));
+    seedDocIds = seedDocIds.filter((id) => !sealedSeeds.has(id));
+  }
+
   // Hop-capped, tenant-scoped graph expansion → neighbor docs (pure BFS in @pikar/vault, §1).
   const neighborDocIds = await ctx.runQuery(internal.vaultGraph.expand, {
     tenantId,
@@ -98,8 +124,26 @@ async function runVaultGround(
     hopCap: GRAPH_HOP_CAP,
   });
 
+  // ── SEALING, half 2 of 2 ───────────────────────────────────────────────────
+  // `vaultGraph.expand` resolves neighbours straight out of `graphEdges` with no status, origin or
+  // folder filter of its own, so it is an INDEPENDENT leak path — a seeds-only filter cannot catch
+  // it, and the sealing test that proves this is the one that goes red on a seeds-only fix.
+  const sealedNeighbors = new Set(
+    await ctx.runQuery(internal.vaultFolders.sealedDocIds, {
+      tenantId,
+      docIds: neighborDocIds as Id<"vaultDocuments">[],
+    }),
+  );
+
   // Merge vector seeds with graph neighbors → one deduped, ranked context block (@pikar/vault).
-  return { ...fuse(hits, seedDocIds, neighborDocIds), matchedByDoc };
+  return {
+    ...fuse(
+      hits,
+      seedDocIds,
+      neighborDocIds.filter((id) => !sealedNeighbors.has(id as Id<"vaultDocuments">)),
+    ),
+    matchedByDoc,
+  };
 }
 
 export const vaultGround = tenantAction({

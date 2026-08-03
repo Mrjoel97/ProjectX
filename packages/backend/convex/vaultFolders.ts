@@ -26,7 +26,7 @@ import { isSearchable, VAULT_FOLDER_MEMBER_BATCH, type EstimateInput } from "@pi
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { type FolderReserveResult, reserveFolderInner, vFileManifest } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { scheduleExtraction } from "./vault";
@@ -406,6 +406,65 @@ export const cancelFolder = tenantMutation({
       cursor: null,
     });
     return { ok: true };
+  },
+});
+
+// ── Sealing (VALT-07) ────────────────────────────────────────────────────────
+
+/**
+ * THE seal predicate, in one place: **a document is sealed while the folder it belongs to is
+ * `ingesting`.**
+ *
+ * Sealing cannot be done the way `origin: "agent"` exclusion is done — that works by never calling
+ * `startIngest`, and a folder's members must genuinely embed and graph-extract during the sealed
+ * window so the folder is groundable the instant it completes. So sealing is an explicit filter,
+ * and it is applied at every site that can hand a doc id to a reader (see `docs/playbooks/vault.md`
+ * § 15.3-05).
+ *
+ * ⚠ THE STATUS TEST IS POSITIVE, AND THAT IS THE WHOLE DESIGN. Written as
+ * `folder?.status !== "complete"` it would be a one-word bug: `cancelFolder` DELETES the folder row
+ * (a cancelled folder's members stay as ordinary documents carrying a dangling `folderId`), so a
+ * missing row would read as `undefined !== "complete"` ⇒ sealed FOREVER. A missing folder means
+ * folder-less, never sealed — the same lenient join `readVaultPage` and `getFolder` already make.
+ *
+ * `"reserving"` needs no seal and `"refused"` needs no special case: `vault.vaultUpload` inserts a
+ * folder member at `pending_extraction` and dispatches nothing until `reserveFolder`, so members in
+ * either status carry no `ragEntryId` and no graph edges — structurally unreachable by every
+ * retrieval path. `ingesting` is exactly the window where a member is embedded but not yet ready to
+ * be read as part of a whole folder.
+ *
+ * The folder lookups are BATCHED through a Map: a per-document `ctx.db.get` in a retrieval hot path
+ * is the read amplification this phase has already been bitten by twice.
+ */
+export async function sealedIn(
+  ctx: QueryCtx,
+  docs: readonly { _id: Id<"vaultDocuments">; folderId?: Id<"vaultFolders"> }[],
+): Promise<Set<Id<"vaultDocuments">>> {
+  const byFolder = new Map<Id<"vaultFolders">, boolean>();
+  for (const doc of docs) {
+    if (doc.folderId && !byFolder.has(doc.folderId)) {
+      byFolder.set(doc.folderId, (await ctx.db.get(doc.folderId))?.status === "ingesting");
+    }
+  }
+  return new Set(docs.filter((d) => d.folderId && byFolder.get(d.folderId)).map((d) => d._id));
+}
+
+/**
+ * The registered hop for the two ACTION call sites (`vaultGround.runVaultGround`,
+ * `vault.vaultSearch`) — actions cannot read `ctx.db`. Tenant-scoped, and a foreign / missing id
+ * simply drops out: it is not this query's job to report one as sealed, and saying so would be an
+ * ownership oracle. `blueprint.unincorporatedFor` is a plain `QueryCtx` helper and calls `sealedIn`
+ * directly, on rows it has already read — no second doc read there.
+ */
+export const sealedDocIds = internalQuery({
+  args: { tenantId: v.string(), docIds: v.array(v.id("vaultDocuments")) },
+  handler: async (ctx, { tenantId, docIds }): Promise<Id<"vaultDocuments">[]> => {
+    const docs: Doc<"vaultDocuments">[] = [];
+    for (const id of docIds) {
+      const doc = await ctx.db.get(id);
+      if (doc && doc.tenantId === tenantId) docs.push(doc);
+    }
+    return [...(await sealedIn(ctx, docs))];
   },
 });
 

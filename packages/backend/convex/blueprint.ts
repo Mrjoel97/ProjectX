@@ -37,6 +37,7 @@ import {
 } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
@@ -567,8 +568,18 @@ async function unincorporatedFor(
     .query("vaultDocuments")
     .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "ready"))
     .take(DRIFT_SCAN_CAP);
+  // SEALING (VALT-07), site 3 of 3 — the one that is easiest to miss and most expensive to miss.
+  // A folder's members reach `status: "ready"` at ingest step 6 DURING the sealed window, and
+  // `spineForTenant` runs this helper on EVERY grounding call. Without the filter, uploading a
+  // folder makes the blueprint spine announce drift the user cannot act on, on every cockpit turn,
+  // for the whole ingest window — a user-visible lie about their own vault. The predicate is
+  // `vaultFolders.sealedIn`, called directly on rows already read here (no second doc read).
+  const sealed = await sealedIn(ctx, ready);
   const docIds = ready
-    .filter((doc) => doc.kind !== "business_blueprint" && !sourceSet.has(doc._id))
+    .filter(
+      (doc) =>
+        doc.kind !== "business_blueprint" && !sourceSet.has(doc._id) && !sealed.has(doc._id),
+    )
     .map((doc) => doc._id);
   return { count: docIds.length, docIds };
 }

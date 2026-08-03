@@ -1,5 +1,12 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-03 (15.3-05 — **sealing: a folder's members are excluded from retrieval
+> until the folder is `complete` — at THREE sites, not one.** One predicate (`vaultFolders.sealedIn`)
+> applied to grounding seeds AND graph neighbours, to the browse search box, and to the blueprint
+> drift count. See `### 15.3-05` at the END of this file — in particular why a MISSING folder row
+> means folder-less rather than sealed, which is one word away from sealing every cancelled
+> folder's documents forever.)
+
 > Last verified: 2026-08-03 (15.3-04 repair — **an empty manifest could price a folder at 0 cents and walk past the budget wall.** `reserveFolder` now refuses a manifest shorter than `memberCount` (`manifest_short`): dedup only ever REMOVES files, so a real manifest can never be shorter than the folder it describes. The sweep rails were the other half — `sweepPendingExtraction` and `retryExtraction` now both route through one `ingestRailFor` helper, so only an `ingesting` folder spends the pre-paid rail and a `reserving` folder is skipped entirely rather than dispatched against a reservation that does not exist yet.)
 >
 > Last verified: 2026-08-03 (15.3-04 — **folder ingest is orchestrated: a named pool, a
@@ -1891,3 +1898,95 @@ push, then typecheck.
 **Every `Mutation RUN:` comment in `vaultFolders.test.ts` names a mutation that was applied to the
 source, observed RED and reverted.** If you change this seam, re-run them — a green suite that does
 not sample its guarantee is how this phase shipped two false positives already.
+
+
+### 15.3-05 — sealing (VALT-07)
+
+**The locked rule: a folder's members are excluded from retrieval until the folder is `complete`.**
+
+Sealing could not be done the way `origin: "agent"` exclusion is done. That works by never calling
+`startIngest` — but folder members must genuinely embed and graph-extract *during* the sealed window,
+or the folder would not be groundable the moment it lands. So sealing is an explicit **filter**, and
+a filter has to be applied everywhere a doc id can reach a reader.
+
+#### The predicate
+
+```
+sealed(doc) === doc.folderId != null && folderRow(doc.folderId)?.status === "ingesting"
+```
+
+Lives once, in `vaultFolders.sealedIn` (a plain `QueryCtx` helper) with `vaultFolders.sealedDocIds`
+as the registered hop for the two ACTION call sites, which cannot read `ctx.db`.
+
+**The status test is POSITIVE, and that is the whole design.** Written as
+`folder?.status !== "complete"` it is a one-word bug: `cancelFolder` DELETES the folder row and
+writes zero document rows, so a cancelled folder's members stay as ordinary documents carrying a
+**dangling `folderId`**. `undefined !== "complete"` is `true`, so every one of them would be sealed
+FOREVER — silently, with no row left anywhere to explain why the user's documents stopped answering.
+A missing folder means folder-less, never sealed: the same lenient join `readVaultPage` and
+`getFolder` already make.
+
+`"reserving"` needs no seal and `"refused"` needs no special case. `vault.vaultUpload` inserts a
+folder member at `pending_extraction` and dispatches nothing until `reserveFolder` (`vault.ts`:
+`status: searchable && !folderId ? "processing" : "pending_extraction"`), so members in either status
+carry no `ragEntryId` and no graph edges — structurally unreachable by every retrieval path.
+`ingesting` is exactly the window in which a member is embedded but must not yet be read.
+`schema.ts` says the same thing on the table itself: `ingesting` is annotated *"SEALED from
+retrieval"*, `complete` *"unsealed"*.
+
+Folder lookups are batched through a Map. A per-document `ctx.db.get` in a retrieval hot path is the
+read amplification this phase has already been bitten by twice.
+
+#### Three sites, and why one is not enough
+
+1. **`runVaultGround` seeds** — filtered BEFORE `internal.vaultGraph.expand`, not after. Filtering
+   after would still let a sealed document's entities pull unsealed neighbours into the answer: the
+   sealed folder steering the result without appearing in it. Note `hits` is filtered too, not just
+   `seedDocIds` — `fuse` builds its output from the hit list, so dropping the seed alone removes
+   nothing.
+2. **`runVaultGround` graph neighbours** — `vaultGraph.expand` resolves neighbours straight out of
+   `graphEdges` with **no status, origin or folder filter of its own**. It is an INDEPENDENT leak
+   path and a seeds-only fix does not close it.
+3. **`blueprint.unincorporatedFor`** — the easiest to miss and the most expensive to miss. Members
+   reach `status: "ready"` at ingest step 6 *during* the sealed window, and `spineForTenant` runs
+   this helper on EVERY grounding call. Without it, uploading a folder makes the blueprint spine
+   announce drift the user cannot act on, on every cockpit turn, for the whole ingest window.
+
+Plus **`vault.vaultSearch`**, the browse search box — the same rag primitive on a separate code
+path. Without it the browse surface shows documents the agent cannot see, which reads as a bug in
+whichever of the two surfaces the user checks second.
+
+#### What was deliberately NOT done
+
+- **Not inside `ownedDocsMeta`**, the shared resolver both grounding paths funnel through.
+  `vaultGroundHydrated` keeps a `titles` array index-parallel to `docIds`; silently dropping rows
+  there desyncs titles from documents.
+- **Not a `rag.search` filter.** `vaultRag.ts` declares no `filterNames`, and a filter baked in at
+  embed time cannot change when a folder unseals without re-embedding every member.
+- **Not a `sealed` status.** Sealing is a property of the FOLDER. A status would seal nothing,
+  because retrieval never consults document status.
+
+#### Accepted limitation — structural, not content
+
+Ingest step 4 (`upsertGraph`) writes a sealed member's entities into the SHARED tenant graph, so a
+sealed folder still raises `graphNodes.degree` (which feeds `blueprint.topEntities`) and can create
+an edge joining two UNSEALED documents. **No sealed text and no sealed doc id ever reaches a
+reader** — the locked decision says "excluded from retrieval", which the doc-id filter satisfies
+literally. Closing the metadata half means deferring `upsertGraph` to folder completion, which
+breaks the per-document ingest workflow. That is the upgrade path, not a bug fix.
+
+#### How to verify
+
+```bash
+cd packages/backend && npx vitest run convex/vaultSealing.test.ts   # 6/6, offline, $0
+```
+
+Every `Mutation RUN:` comment in `vaultSealing.test.ts` names a mutation that was applied to the
+source, observed RED and reverted — all five, each hitting exactly the test it names. **This plan is
+entirely made of ABSENCES, and an absence test passes for free when the thing it guards was never
+reachable.** That is why every test first proves the document IS reachable (the unseal half, the
+unsealed-neighbour control, the pre-folder count) before proving it is not — and it is not
+decoration: the graph-neighbour test was VACUOUS on first run and its own control caught it.
+`upsertGraph` dedups edges cross-doc, so two documents given the identical entity pair leave the
+second with no `graphEdges` row at all; documents must be linked by a SHARED NODE
+(`A(Alice—Bob)`, `B(Bob—Carol)`), the chain fixture `vaultGraph.test.ts` already uses.

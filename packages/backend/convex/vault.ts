@@ -637,7 +637,19 @@ export const vaultSearch = tenantAction({
       tenantId: ctx.tenantId,
       docIds: candidateIds,
     });
-    return category ? owned.filter((d) => d.category === category) : owned;
+    // SEALING (VALT-07), site 2 of 3. The same predicate the agent's grounding applies — without it
+    // the browse search surfaces documents the agent cannot see, which reads as a bug in whichever
+    // of the two surfaces the user happens to check second. Applied HERE and not inside
+    // `ownedDocsMeta`: `vaultGroundHydrated` keeps a titles array index-parallel to its docIds, so
+    // silently dropping rows in the shared resolver would desync titles from documents.
+    const sealed = new Set(
+      await ctx.runQuery(internal.vaultFolders.sealedDocIds, {
+        tenantId: ctx.tenantId,
+        docIds: owned.map((d) => d._id),
+      }),
+    );
+    const visible = owned.filter((d) => !sealed.has(d._id));
+    return category ? visible.filter((d) => d.category === category) : visible;
   },
 });
 

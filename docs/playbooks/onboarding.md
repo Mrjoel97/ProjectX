@@ -1,5 +1,13 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-03 (15.3-05 — **incidental for this subsystem; nothing in the onboarding
+> or profile flow changed.** `blueprint.ts`'s private `unincorporatedFor` helper gained one filter
+> term so that vault-folder members SEALED mid-ingest (VALT-07) do not move the drift count.
+> `blueprintState` — the profile page's one read — reaches it through the same helper, so its
+> `unincorporatedCount` now excludes a folder that is still ingesting and includes it the moment
+> the folder completes. No signature, state machine, or profile field changed. Rationale:
+> `docs/playbooks/vault.md` § `### 15.3-05`.)
+
 > Last verified: 2026-08-02 (onboarding gate read — **`onboarding.status` no longer scans the tenant's whole vault.** It and `getProfile` both resolve through the single `currentProfileDoc` helper, which now reads `vaultDocuments.by_tenant_kind` (a NEW index, pinned to `(tenantId, "business_profile")`) instead of `by_tenant`. The old shape `.collect()`ed EVERY row of the tenant's vault — `text` blob included, on the table that holds book-sized uploads — to find at most a handful of profile rows, and blew the 1s query budget once a vault grew: a `Function execution timed out` on `onboarding:status`, which the app shell subscribes to on EVERY authenticated page, so the whole app failed to render. `status` is now literally `!(await currentProfileDoc(...))` — the same predicate, read once. Gate semantics are unchanged (a `failed` profile ingest still does not count) and all 26 onboarding + profile-redaction tests pass untouched. No profile field, writer or serializer changed.)
 >
 > Prior: 2026-08-02 (connections-tab fix wave — **the Connections tab's Google row no longer gates `<DisconnectGoogle />` on `status.connected`.** `ConnectionsPanel.tsx`'s `GoogleRow` used to mount the shared button only while connected; because `disconnectGoogle` deletes the local token row UNCONDITIONALLY before returning, `gmailStatus` flips to `connected: false` the instant a disconnect resolves — including a partial revoke — so the component (and any `revoked: false` warning it wanted to show) unmounted before a user could read it. `<DisconnectGoogle />` now renders unconditionally; it owns its own `gmailStatus` subscription and decides internally whether to show the button, the warning, or nothing. The "Connect" link still renders only when loaded-and-disconnected, so a failed revoke correctly shows both the warning and a Connect link. `connectionsSurface.test.ts` gained a mutation-verified reachability check replacing one that only asserted a string existed in the file. No profile field, writer, serializer or Convex function changed.)

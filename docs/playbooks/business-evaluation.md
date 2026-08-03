@@ -1,5 +1,16 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-03 (15.3-05 — **`unincorporatedFor` now excludes SEALED folder members.**
+> A vault folder's members are unretrievable until the folder is `complete` (VALT-07), but they
+> reach `status: "ready"` at ingest step 6 *during* that window — and `unincorporatedFor` reads
+> `by_tenant_status` ready docs. `spineForTenant` runs it on EVERY grounding call, so without the
+> filter, uploading a folder made the blueprint spine announce drift the user could not act on, on
+> every cockpit turn, for the whole ingest window — a user-visible lie about their own vault. The
+> predicate is `vaultFolders.sealedIn`, called on rows this helper has already read (no second doc
+> read); a MISSING folder row means folder-less, not sealed, so cancelled folders count normally.
+> Proven by `convex/vaultSealing.test.ts` § 4, mutation-verified RED. Full rationale and the other
+> two sealing sites: `docs/playbooks/vault.md` § `### 15.3-05`.)
+
 > Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
 > subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
 > — `// @ts-expect-error import.meta.glob …` — from watched test files (evaluations.test.ts, proactiveReview.test.ts).
