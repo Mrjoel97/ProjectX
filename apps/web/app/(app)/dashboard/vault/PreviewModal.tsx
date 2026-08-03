@@ -1,10 +1,12 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { DOC_TYPE_LABEL, DOC_TYPES, type DocType } from "@pikar/core";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { fmtSize, type VaultDoc } from "./DocGrid";
+import { field, label as labelStyle, primaryButton } from "../profile/styles";
+import { docLabel, fmtSize, type VaultDoc } from "./DocGrid";
 import { failureCopy } from "./failureCopy";
 import { DownloadIcon, TrashIcon, XIcon } from "./icons";
 
@@ -23,6 +25,16 @@ import { DownloadIcon, TrashIcon, XIcon } from "./icons";
 // readable (and the modal short) instead of dumping a whole document into the preview pane.
 const SNIPPET_CHARS = 1500;
 
+/** The tracked-caps section label (BRAND §3) — one object, both sections that use it. */
+const sectionLabel: React.CSSProperties = {
+  margin: "0 0 0.6rem",
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  color: "var(--ink-soft)",
+};
+
 function isImage(mime: string): boolean {
   return mime.startsWith("image/");
 }
@@ -35,9 +47,25 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const entities = useQuery(api.vault.docEntities, { vaultDocId: doc._id });
   const del = useMutation(api.vault.deleteVaultDoc);
   const retry = useMutation(api.vaultSweep.retryExtraction);
-  const [busy, setBusy] = useState<null | "download" | "delete" | "retry">(null);
+  const setIdentity = useMutation(api.vault.setDocIdentity);
+  // ONE busy state, WIDENED with "identity" rather than a second useState: every action in this
+  // modal already disables on `busy !== null`, so widening cross-disables Download/Delete/Retry
+  // while an identity save is in flight for free — which is the behaviour we want anyway.
+  const [busy, setBusy] = useState<null | "download" | "delete" | "retry" | "identity">(null);
   const [expanded, setExpanded] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // The identity form (VALT-12). `""` is "not classified" — the same absent-vs-unclassified
+  // distinction the schema draws, kept out of the union rather than smuggled into it.
+  const [docType, setDocType] = useState<DocType | "">("");
+  const [identityLine, setIdentityLine] = useState("");
+  const [identitySaved, setIdentitySaved] = useState(false);
+  // KEYED BY DOC ID, not a boolean. `page.tsx` renders this modal WITHOUT a `key`, so switching
+  // the selected document reuses the SAME component instance and a boolean guard stays armed —
+  // the form would keep document A's type and identity line while displaying document B, and Save
+  // would write A's identity onto B. Reachable without closing the modal: there is no focus trap,
+  // so Shift+Tab reaches a grid card behind it and Enter re-opens with a different doc.
+  const identitySeeded = useRef<string | null>(null);
 
   const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
   // Only subscribe to a signed URL when we actually render media; text docs never fetch one.
@@ -61,6 +89,50 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
       document.body.style.overflow = prev;
     };
   }, [onClose]);
+
+  // Seed the identity form ONCE (the `ShapePanel.tsx:108-122` guard). `doc` comes off
+  // `listVaultDocs`, a LIVE subscription, so re-seeding on every row update would clobber an edit
+  // in progress the moment any other write touched the row.
+  //
+  // A still-ingesting row is this surface's "still settling" case (ShapePanel's
+  // `tierRow === undefined`): classification lands DURING `processing`, so arming the guard before
+  // the row is terminal would pin both fields empty and never fill them. The OTHER arming path is
+  // the user's first keystroke (`armIdentityEdit`) — without it a document that finished reading
+  // mid-edit would seed straight over what they had typed.
+  useEffect(() => {
+    if (identitySeeded.current === doc._id) return;
+    // Terminal OR already classified. The status test alone was not enough: `applyClassification`
+    // patches these fields while the row is still `processing` (the classify step runs before
+    // `markReady`), so a row that stalls there — precisely what `vaultSweep` exists to recover —
+    // showed an EMPTY form despite carrying a classifier answer, and Save then wrote `""` with
+    // `identityUserSet: true`, blanking and LOCKING it for good.
+    const classified = doc.docType !== undefined || doc.identityLine !== undefined;
+    if (doc.status !== "ready" && doc.status !== "failed" && !classified) return;
+    identitySeeded.current = doc._id;
+    setDocType(doc.docType ?? "");
+    setIdentityLine(doc.identityLine ?? "");
+  }, [doc._id, doc.status, doc.docType, doc.identityLine]);
+
+  function armIdentityEdit() {
+    identitySeeded.current = doc._id;
+    setIdentitySaved(false);
+  }
+
+  async function handleSaveIdentity() {
+    setBusy("identity");
+    try {
+      // `""` ⇒ omit, never a written empty string: the schema field is optional and the mutation
+      // reads an absent one as "leave the type alone".
+      await setIdentity({
+        vaultDocId: doc._id,
+        docType: docType === "" ? undefined : docType,
+        identityLine,
+      });
+      setIdentitySaved(true);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function handleDownload() {
     setBusy("download");
@@ -103,6 +175,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const canDownload = Boolean(doc.storageId);
 
   const metaRows: [string, string][] = [
+    // The FILENAME, which the heading no longer shows once a document has an identity line. It is
+    // what Download hands the browser, so it must stay visible somewhere in the panel.
+    ["File", doc.title],
     ["Kind", doc.kind],
     ["Source", doc.source],
     ["Size", fmtSize(doc.size)],
@@ -114,7 +189,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Preview: ${doc.title}`}
+      aria-label={`Preview: ${docLabel(doc)}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -287,8 +362,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                 color: "var(--ink)",
                 wordBreak: "break-word",
               }}
+              title={doc.title}
             >
-              {doc.title}
+              {docLabel(doc)}
             </h2>
             <button
               type="button"
@@ -338,6 +414,90 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                 </div>
               ))}
             </dl>
+
+            {/* DOCUMENT IDENTITY (VALT-12) — the classifier's guess, and the user's correction of
+                it. Saving here is the ONE writer that flips `identityUserSet`, after which no
+                re-classification ever touches these two fields again; the guarantee is an ABSENCE
+                of any overwrite branch in `applyClassification`, not a rule in a prompt. The note
+                below makes that promise visible to the person it was made to. */}
+            <section style={{ marginTop: "1.5rem" }}>
+              <h3 style={sectionLabel}>Document identity</h3>
+              <div style={{ display: "grid", gap: "0.6rem" }}>
+                <label style={{ display: "grid", gap: "0.35rem" }}>
+                  <span style={labelStyle}>Type</span>
+                  <select
+                    style={field}
+                    value={docType}
+                    onChange={(e) => {
+                      armIdentityEdit();
+                      setDocType(e.target.value as DocType | "");
+                    }}
+                  >
+                    {/* Absent is a real state, not a missing one — every pre-15.3 row is here. */}
+                    <option value="">Not classified</option>
+                    {DOC_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {DOC_TYPE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: "grid", gap: "0.35rem" }}>
+                  <span style={labelStyle}>What this is</span>
+                  {/* ponytail: no `maxLength`. The length cap is the mutation's
+                      (`vault.ts sanitizeIdentityLine`), and re-typing it here is the exact
+                      single-source defect 15.3-02 recorded for the size caps. Ceiling: an
+                      over-long line is shortened on save without warning. Upgrade path: export
+                      the cap from `@pikar/core` and pass it as `maxLength`. */}
+                  <input
+                    style={field}
+                    value={identityLine}
+                    placeholder="2025 P&L"
+                    onChange={(e) => {
+                      armIdentityEdit();
+                      setIdentityLine(e.target.value);
+                    }}
+                  />
+                </label>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.75rem",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleSaveIdentity()}
+                    style={primaryButton(busy !== null)}
+                  >
+                    {busy === "identity" ? "Saving…" : "Save identity"}
+                  </button>
+                  {/* Cleared by the next keystroke, never by a timer — nothing on this surface is
+                      allowed to poll or self-dismiss. `--ink-soft`, not a green: the WORD carries
+                      the meaning (BRAND §6) and `--released` is ~2.7:1 at this size. */}
+                  {identitySaved && busy === null && (
+                    <span
+                      role="status"
+                      aria-live="polite"
+                      style={{ color: "var(--ink-soft)", fontWeight: 600, fontSize: "0.85rem" }}
+                    >
+                      Saved.
+                    </span>
+                  )}
+                </div>
+
+                {doc.identityUserSet === true && (
+                  <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                    You set this. Re-reading this document will never change it.
+                  </p>
+                )}
+              </div>
+            </section>
 
             {/* Failed: the honest refs-only reason + the same Retry the card carries (EXTR-F). */}
             {doc.status === "failed" && (
@@ -412,18 +572,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
 
             {/* Entities & relationships from this doc (VALT-02). */}
             <section style={{ marginTop: "1.5rem" }}>
-              <h3
-                style={{
-                  margin: "0 0 0.6rem",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "var(--ink-soft)",
-                }}
-              >
-                Entities & Relationships
-              </h3>
+              <h3 style={sectionLabel}>Entities & Relationships</h3>
               {entities === undefined ? (
                 <p style={{ fontSize: "0.85rem", color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
               ) : entities.nodes.length === 0 ? (
@@ -499,7 +648,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             {doc.status === "ready" && (
               <Link
                 href={`/dashboard/voice?doc=${doc._id}`}
-                aria-label={`Discuss by voice: ${doc.title}`}
+                aria-label={`Discuss by voice: ${docLabel(doc)}`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",

@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { DOC_TYPE_LABEL, type DocType } from "@pikar/core";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
@@ -47,6 +48,15 @@ export function fmtSize(n: number): string {
   if (n >= 1024) return `${Math.round(n / 1024)} KB`;
   return `${n} B`;
 }
+
+/** What a document is CALLED on screen (VALT-12): its identity line — *"2025 P&L"* — when it has
+ *  one, its filename otherwise. Exported so the card, the modal heading and every sibling pill's
+ *  accessible name name the SAME thing; an aria-label that still said the filename while the card
+ *  showed the identity would be the mismatch BRAND §6 forbids.
+ *
+ *  This is the DISPLAY name only. Wherever the filename IS the thing — the downloaded file, an
+ *  `<img alt>` — `doc.title` stays untouched. */
+export const docLabel = (d: VaultDoc): string => d.identityLine || d.title;
 
 /** WHERE a card's sibling pill sits (grid ⇒ bottom-right, list ⇒ vertically centred right) — the
  *  failed-card Retry placement, split out from the pill's own shape so a folder card can anchor a
@@ -141,6 +151,31 @@ function OriginChip() {
       }}
     >
       AGENT
+    </span>
+  );
+}
+
+/** The machine-derived document TYPE (VALT-12), reading as one row of chips with the two above.
+ *  Neutral paper tint rather than OriginChip's teal, so the two do not read as the same axis; the
+ *  LABEL carries the meaning, never the colour (BRAND §6), and no amber is spent here (§2).
+ *
+ *  ABSENT and `"unclassified"` both render NOTHING — the card falls back to the filename for both,
+ *  and only the folder digest's manifest distinguishes "never classified" from "classified and
+ *  unplaceable". A chip reading "Unclassified" on every pre-15.3 row would be noise, not honesty. */
+function DocTypeChip({ docType }: { docType: DocType }) {
+  return (
+    <span
+      style={{
+        background: "var(--canvas)",
+        color: "var(--ink-soft)",
+        border: "1px solid var(--rule)",
+        padding: "0.1rem 0.5rem",
+        borderRadius: "0.375rem",
+        fontSize: "0.72rem",
+        fontWeight: 700,
+      }}
+    >
+      {DOC_TYPE_LABEL[docType]}
     </span>
   );
 }
@@ -507,10 +542,23 @@ export function DocGrid({
                     }}
                     title={doc.title}
                   >
-                    {doc.title}
+                    {docLabel(doc)}
                   </span>
-                  <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
-                    {fmtSize(doc.size)}
+                  {/* The filename joins the secondary line ONLY when the identity line displaced it
+                      above — otherwise this would read "invoice.pdf · invoice.pdf · 12 KB". Same
+                      ellipsis treatment as the primary: this line now carries a filename, and a long
+                      one would paint past the card without it. */}
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      color: "var(--ink-soft)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {doc.identityLine ? `${doc.title} · ${fmtSize(doc.size)}` : fmtSize(doc.size)}
                   </span>
                   {/* What happened, in the user's words — the same failureCopy map PreviewModal
                       renders, so the card and the panel can never disagree. The raw reason code is
@@ -538,6 +586,9 @@ export function DocGrid({
                   )}
                 </span>
                 <span style={{ display: "inline-flex", gap: "0.35rem", flex: "none" }}>
+                  {doc.docType !== undefined && doc.docType !== "unclassified" && (
+                    <DocTypeChip docType={doc.docType} />
+                  )}
                   {doc.origin !== undefined && <OriginChip />}
                   <StatusChip status={doc.status} />
                 </span>
@@ -555,7 +606,7 @@ export function DocGrid({
               {doc.status === "ready" && (
                 <Link
                   href={`/dashboard/voice?doc=${doc._id}`}
-                  aria-label={`Discuss by voice: ${doc.title}`}
+                  aria-label={`Discuss by voice: ${docLabel(doc)}`}
                   style={{ ...discussPillStyle(view), background: "var(--teal-600)", color: "#fff" }}
                 >
                   Discuss
@@ -573,7 +624,7 @@ export function DocGrid({
                   disabled
                   aria-disabled="true"
                   title="Still reading your document — this becomes available when it's ready"
-                  aria-label={`Still reading ${doc.title} — voice discussion not ready yet`}
+                  aria-label={`Still reading ${docLabel(doc)} — voice discussion not ready yet`}
                   style={{
                     ...discussPillStyle(view),
                     background: "var(--rule)",
@@ -589,7 +640,7 @@ export function DocGrid({
                   type="button"
                   onClick={() => void runRetry(doc)}
                   disabled={retryingId !== null}
-                  aria-label={`Retry extraction: ${doc.title}`}
+                  aria-label={`Retry extraction: ${docLabel(doc)}`}
                   style={{
                     position: "absolute",
                     right: "0.85rem",

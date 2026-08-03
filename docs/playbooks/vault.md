@@ -1,5 +1,28 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (15.3-08 verify pass — **three defects, and the sharpest one is that
+> `identityLine` was the ONE field passed RAW from the model.** `docType` was coerced through
+> `isDocType`; `identityLine` was not, and the AI SDK's `jsonSchema()` without a `validate` fn does
+> not check the model object at runtime — so a missing or non-string value sailed through into
+> `applyClassification`'s `v.string()`, which throws INSIDE `step.runMutation`, OUTSIDE
+> `classifyDoc`'s try/catch. That fails the whole document: exactly the rule the try/catch exists
+> to keep, broken by the one field nobody coerced. Also fixed: `PreviewModal`'s seed guard was a
+> BOOLEAN on a modal rendered without a `key`, so switching documents kept the previous one's
+> identity in the form and Save would write A's identity onto B; and a still-`processing` row that
+> had already been classified seeded an EMPTY form, whose Save then blanked and permanently locked
+> it. See *the verify pass* in `### 15.3-08`.)
+
+> Last verified: 2026-08-03 (15.3-08 — **every document now carries a machine-derived `docType`
+> and a human-readable identity line, and a user-set one is never overwritten.** ONE classify step
+> at the single ingest convergence point, so single-file uploads are classified too — not only
+> folder members. Three facts that read backwards if you skim: `classifyDoc` is the one action in
+> this codebase that **NEVER THROWS** — `getActiveSkill` is fail-closed by contract everywhere
+> else, and here it must not be, because the fallback is a degraded LABEL and not a degraded
+> grounding corpus; the offline gate is the bare `SMOKE::`, **not** `SMOKE::classify::`, and
+> narrowing it to the classify prefix is a real-money leak on every existing fixture; and the
+> user-set guarantee is an **ABSENCE** — no branch anywhere writes over `identityUserSet === true`.
+> See `### 15.3-08` at the END of this file.)
+
 > Last verified: 2026-08-03 (15.3-07 verify pass — **the surface shipped green with FOUR major
 > defects, and the theme is that `apps/web` HAS NO TEST RUNNER.** (1) A `preflightCopy.test.ts`
 > sat next to the module executing nowhere — no `test` script, no vitest dep, no config — so the
@@ -2568,3 +2591,275 @@ tests in 16 files, matching the baseline.
 that must be observable about the web surface belongs in `packages/core/src/vaultSurface.test.ts`
 (a source scan, or a behavioural import when the module has no React/Next dependency) or in a
 backend suite. A test file placed under `apps/web` is decoration.
+
+### 15.3-08 — document identity (VALT-12)
+
+Every document gets a machine-derived `docType` off a closed 12-member union and a human-readable
+identity line — *"2025 P&L"*, not *"a spreadsheet"* — that the user can correct and that nothing
+ever overwrites. `packages/core/src/docType.ts` (the union), a `document-classifier` registry row,
+`vaultLlm.classifyDoc` + one new step in `vaultIngest.ingestDoc`, `vault.applyClassification` +
+`vault.setDocIdentity`, and the grid/preview surfaces.
+
+#### The union lives in `packages/core`, NOT `packages/vault`
+
+`apps/web` renders a `<select>` over `DOC_TYPES` and its labels, and the shipped precedent for
+exactly that shape is `ShapePanel.tsx` importing `REVENUE_STAGES` from `@pikar/core`. The vault
+package is the wrong home for a union the web surface drives: `Dropzone.tsx` and `CategoryTabs.tsx`
+both record that `apps/web` deliberately did not depend on `@pikar/vault`, and the **duplicated
+size caps** that 15.3-02 had to collapse into one declaration are the defect that split produced.
+Plan 02 has since added `@pikar/vault` as a web dep for constants, and the union still goes in core
+— *do not create a third local re-declaration.*
+
+The literals exist in two places by necessity, not by accident: the schema's `v.union` (the
+database's closed set) and `DOC_TYPES` (the domain's). They are bound by a **two-direction compile
+bridge** in `vaultLlm.ts` beside the classifier — `_docTypeToDoc` / `_docToDocType`, both wrapped
+in `NonNullable<>` because the schema field is `v.optional`. Without the wrap, `undefined` joins
+the array type and the bind passes in one direction while failing in the other. It lives in the
+convex file rather than in core because it needs the generated `Doc<>` type and core must stay
+Convex-free (§1). Mutation-verified: adding a literal to one side and not the other is a
+**typecheck failure**, not a runtime surprise.
+
+#### The skill row is DELIBERATELY UNGATED — and that is a mechanism, not an opinion
+
+`DOCUMENT_CLASSIFIER_SKILL` is **absent from `GATED_SKILLS`**, pinned by
+`expect(isGatedSkill(DOCUMENT_CLASSIFIER_SKILL)).toBe(false)` so a future *"tidy up the gate list"*
+edit fails in the suite rather than in production. The reason is the same deadlock three other
+skills already carry: `run-eval-golden.mjs` derives its `--skill` list FROM `GATED_SKILLS` and
+drives `runCockpitAgent` over TEXT fixtures. No fixture reaches vault ingest — this skill runs
+inside the `ingestDoc` workflow against a stored document's redacted head slice — so gating it
+would strand it at v1 on its first body edit, with a candidate no eval run could ever certify.
+Revisit when a fixture exists.
+
+As a NEW name it takes `seedSkills`' `rows.length === 0` branch and lands at v1 `active`: no eval
+cycle, no paid run. **Never pin a version anywhere** — an existing name gets `maxVersion + 1`.
+
+#### `classifyDoc` NEVER THROWS — the one deliberate inversion of the fail-closed rule
+
+Everywhere else in this codebase `getActiveSkill` failing closed is the point: an unseeded registry
+must stop the work rather than let a hardcoded prompt sneak in. Inside `classifyDoc` the same throw
+would be a catastrophe of a different order, and the blast radius is worth spelling out because
+nothing about it is visible at the call site:
+
+1. `step.runAction` retries on the shared `WorkflowManager`'s default behaviour — `maxAttempts: 3`,
+   `retryActionsByDefault: true` — so a throw is **three** attempts, not one.
+2. Attempts exhausted ⇒ the run terminates `failed`, and the later steps never run. `markReady` is
+   never reached, so the document keeps no `ragEntryId`: it loses its **embedding and its graph**,
+   not just its label.
+3. `onIngestComplete` then flips the still-`processing` row via `markFailed`, which calls
+   `countTerminal` ⇒ `bumpFolder(…, failed)` — **inflating the folder's failure count in the very
+   manifest the digest promises is honest.**
+
+One unseeded skill row would do all of that to EVERY document in the deployment, for a cosmetic
+label. So the whole handler sits in a try/catch and any throw returns
+`{docType: "unclassified", identityLine: "", costUsd: 0}`. **The fallback is a degraded LABEL, never
+a degraded grounding corpus.** The catch wraps the whole body and not merely the model call on
+purpose — the unseeded-registry throw comes from the skill LOAD, and that is the case the behaviour
+is specified against (*unseeded ⇒ the document still reaches `ready`, labelled `unclassified`*).
+
+The load still happens FIRST, and still BEFORE the offline seam (the `vaultDigest.ts:282` ordering)
+— the SMOKE path has to exercise the registry too, or the seam hides an unseeded backend. Only the
+*consequence* of the failure is degraded, never the ordering.
+
+`ponytail:` the failure is swallowed, not recorded — an unseeded deployment looks identical to a
+vault of genuinely unplaceable documents. Upgrade path is an ops query counting `unclassified`
+rows (the row is already re-classifiable), not a new column.
+
+#### A model string never reaches the database
+
+The `jsonSchema` carries `enum: [...DOC_TYPES]` so the PROVIDER constrains the output rather than
+the prompt's prose alone — but the TS type of that field is deliberately `string`, not `DocType`.
+Typing it `DocType` would make the compiler believe the provider and render the
+`isDocType(x) ? x : "unclassified"` coercion vacuous. The enum is a request; this file's job is to
+not believe it. The offline fixture's `docType` runs through the SAME guard — a hand-written
+fixture naming a type nobody defined must not be the one path that writes an out-of-union value.
+
+This matters beyond tidiness: the arg validator on `applyClassification` is the schema's closed
+`v.union`, so an uncoerced string throws *"invalid argument"* INSIDE the workflow — i.e. it takes
+the whole document down the failure path described above.
+
+#### The offline gate is the bare `SMOKE::`, not `SMOKE::classify::`
+
+The fixture grammar is `SMOKE::classify::<docType>|<identity line>`, but the test that decides
+*"no model call"* is the bare prefix — the `vaultRag.embedDoc` precedent. Classification now runs
+on every document on every ingest path, so **every existing offline fixture flows through here**,
+including the folder digest's own markdown, which is REQUIRED to start with `SMOKE::graph::` so the
+extractor stays free. A classify-only `startsWith` would miss all of them and drop each into a real
+`generateObject` call: green in convex-test with no API key (the try/catch swallows it) while
+silently attempting network I/O, and **actual money on the dev deployment, on exactly the path the
+seam exists to keep free.** Any other `SMOKE::` document is simply UNIDENTIFIED at zero cost.
+
+Narrowing that gate is a one-word edit with a spend consequence and no currently-red test outside
+the one written for it. Treat it as load-bearing.
+
+#### User-set precedence is an ABSENCE, and the paths that make it load-bearing already ship
+
+`applyClassification` reads `if (doc.identityUserSet === true) return null;` and only then patches.
+**The guarantee is that NO branch anywhere writes `docType`/`identityLine` over a user-set row —
+that absence is the guarantee**, in the exact sense `packages/core/src/blueprint.ts:356-374` records
+for `mergeBlueprint`: *a merge rule in a prompt is a request, a function with no overwrite branch is
+a guarantee.* (Note: the plan text points at `blueprint.ts:358-364`, which in the CONVEX file is an
+unrelated `vaultDocuments` insert. The precedent is the core file.)
+
+Re-classification is not hypothetical. `vault.ingestExtractedText` restarts `ingestDoc` on an
+EXISTING row for every deferred binary, and `vaultSweep.retryExtraction` re-enters the same node
+via `scheduleExtraction`. A user who names a document and then hits Retry must not lose the name.
+
+Verified as a repo-wide property, not a local one: of the vault-document insert/patch sites in
+`convex/`, **only** `setDocIdentity` and `applyClassification` write any of the three identity
+fields; ZERO insert sites write them (every row is born with all three absent); and `ctx.db.replace(`
+appears nowhere in `convex/`, so nothing can clobber them wholesale.
+
+Two smaller traps in the same pair of mutations:
+
+- `applyClassification` deliberately does **not** call `countTerminal`. A label is not a terminal
+  event and must never move a folder's read/unread manifest.
+- The schema field is `v.optional`, and Convex reads an explicit `undefined` in a `patch` as a field
+  **DELETE**. Both mutations therefore write `docType: docType ?? doc.docType`. Anyone
+  "simplifying" that to a bare `docType` reintroduces silent un-classification on an omitted arg.
+- Neither mutation throws on a missing or foreign row — they return. A throw from a workflow step
+  is the failure path above.
+
+#### The identity line is a TRUST BOUNDARY, not a cosmetic field
+
+It is rendered into the folder digest's manifest and therefore **into a model prompt**, so it is
+sanitised at the write boundary by `sanitizeIdentityLine` (cap 120), with `sanitizeAgentName`'s
+exact op order — strip `\p{C}` → collapse `\s+` → trim → slice → **trim again**, so a cut landing
+mid-whitespace cannot leave a dangling separator. Stripping control/format characters removes the
+two things that make an injected line dangerous: a newline lets it open what looks like a fresh
+instruction block, and a bidi override lets it render as something other than what it is.
+
+It is applied to **both** writers — the user's line AND the model's. The plan only named the user
+path, but both land in the same digest-prompt field, and one guard in the shared writer is smaller
+than a guard in each caller. `ponytail:` ceiling — it does not detect a plausible-English
+instruction; the structural defence is that the line sits in a LABELLED manifest field, never
+concatenated as a bare directive. Upgrade path: one exported `sanitizeLine(raw, max)` in
+`@pikar/core` when a third caller appears.
+
+`IDENTITY_LINE_MAX` is currently module-private in `convex/vault.ts`, which is why the preview
+`<input>` carries **no `maxLength`** — re-typing `120` in the web file would be the same
+single-source defect 15.3-02 fought over, and `packages/core/src/vaultSurface.test.ts` exists to
+punish exactly that. Export the cap from `@pikar/core` and the input can honour it.
+
+#### `"unclassified"` is NOT the same as ABSENT — and only the digest can tell
+
+ABSENT ⇒ never classified (every pre-15.3 row). `"unclassified"` ⇒ classified and genuinely
+unplaceable: *a document matching nothing is never forced to a nearest match, because a wrong type
+is worse than no type.*
+
+**The grid cannot distinguish them, on purpose.** `docLabel(doc) = doc.identityLine || doc.title`
+falls back to the filename for both, and the doc-type chip renders nothing for both — a chip reading
+"Unclassified" on every pre-15.3 row is noise. The only surface where the distinction is visible is
+the folder digest's manifest, which names each member's type or says it has none. If a future
+feature needs the difference (an ops count of what the classifier gave up on, a re-classify sweep),
+read the FIELD — do not add a third state, and do not backfill absent rows to `"unclassified"`,
+which would erase the distinction permanently.
+
+#### ONE `recordSpend` — a second call costs $3 per 300 documents in rounding alone
+
+`identity.costUsd` is folded into `ingestDoc`'s existing single `recordSpend` sum
+(`embed + graph + identity`). It is not a style preference: `guardrails.recordSpend` does
+`Math.ceil(costUsd * 100)`, so a separate call for ~$0.00034 rounds to **a full cent every time** —
+300 documents would charge **$3.00** against a $25 ingest window for $0.10 of real spend. Folded in,
+the classifier's cost rides inside the same ceil. Real cost ≈ $0.10 per 300 docs ≈ 0.4% of the
+window.
+
+For the same reason `classifyDoc` calls **neither** `preCall` nor `recordSpend` itself: the
+workflow's step (1) gate and its single spend call already cover it, and re-selecting the rail
+inside the action would let a pre-paid folder's classify spend land on the wrong window.
+
+#### Reach: this is not just uploads
+
+The plan says *"single-file uploads too"*, which understates it. `startIngest` is the sole
+`workflow.start` wrapper and its callers converge from `vault.ts` (×5, including
+`ingestExtractedText`), `vaultIngest.retryStuckIngests`, `vaultFolders`, `voice.ts`, `research.ts`,
+`onboarding.ts`, `evaluations.ts` — **and `vaultDigest.writeDigest`, so a folder digest classifies
+itself.** Anything that changes classifier cost, latency or failure behaviour changes it for voice
+transcripts, research reports and onboarding documents as well.
+
+#### Where the observable checks belong
+
+Behavioural claims (user-set-wins with its ABSENT twin, unseeded-degrades-not-fails, the union
+coercion, the offline end-to-end) live in `packages/backend/convex/vaultClassify.test.ts`. Anything
+about the WEB surface goes in `packages/core/src/vaultSurface.test.ts` — **`apps/web` still has no
+test runner**, and a `*.test.ts` placed there is decoration (the standing lesson from `### 15.3-07`).
+The compile guarantees — the label-table totality pair and the two-direction bridge — are sampled by
+`tsc --noEmit`, NOT by a green vitest run; a suite that passes says nothing about them.
+
+Two guards worth adding to `vaultSurface.test.ts` if they are not there yet, both one line and both
+currently unobserved: `a.download = doc.title` / `alt={doc.title}` must survive (a find-and-replace
+of `doc.title` → `docLabel(doc)` silently breaks *"the downloaded file keeps its real filename"*),
+and the `d.identityLine || d.title` fallback must keep its `||` or every unclassified card renders a
+blank primary line.
+
+#### Known gaps
+
+- `voice/DocPicker.tsx` still renders `doc.title`, so the voice picker shows FILENAMES while the
+  vault grid and preview show identity lines. Out of scope for this plan. `docLabel` is exported
+  from `DocGrid.tsx` and `projectVaultDoc` already returns `identityLine`, so it is a one-line
+  drop-in whenever the voice surface is next opened. Filed here so it arrives as a known gap rather
+  than a bug report.
+- The preview's seed-once guard has **two** arming paths, and both are needed. Classification lands
+  DURING `processing`, so a plain mount-time seed pins both fields empty forever; arming only when
+  the row goes terminal means a document that finishes reading mid-edit seeds over what the user
+  typed. So it refuses to arm until `status` is `ready`/`failed`, AND arms on the first keystroke.
+  The next person to "simplify" that to a bare `useRef` once-guard reintroduces one of the two bugs.
+
+
+
+#### The verify pass — three defects, and one flake that is NOT ours
+
+**1. `identityLine` was passed raw from the model.** `classifyDoc` coerced `docType` through
+`isDocType` and returned `identityLine: object.identityLine` untouched. The AI SDK's `jsonSchema()`
+is called without a `validate` fn, so **the SDK does not check the model object at runtime** — the
+inferred `string` type is a promise TypeScript makes and the provider keeps only usually. A missing
+or non-string value reaches `applyClassification`'s `identityLine: v.string()`, which throws inside
+`step.runMutation` — and that call sits **outside** `classifyDoc`'s try/catch. The throw exhausts
+the workflow's retries and `onIngestComplete` marks the document `failed`. Now coerced beside
+`docType`, where the trust-boundary comment already lived. **The lesson generalises: when you
+coerce one field out of a model object, coerce every field of it — the uncoerced sibling is the
+one that fails the document.**
+
+**2. The seed guard was per-MOUNT, not per-DOCUMENT.** `PreviewModal` is rendered from `page.tsx`
+without a `key`, so React reconciles same-type-same-position and switching the selected document
+reuses the same instance — a boolean `identitySeeded` stayed armed, and the form kept document A's
+type and identity line while displaying document B. Save would then write A's identity onto B. It
+is reachable without closing the modal: there is no focus trap (recorded at `PreFlight.tsx`'s
+header), so Shift+Tab reaches a grid card behind it and Enter re-opens with a different document.
+The ref now holds the seeded `doc._id`. Keying the guard inside the component rather than adding a
+`key` at the call site is deliberate: a future caller cannot reintroduce the bug by forgetting it.
+
+**3. A classified-but-still-`processing` row seeded an empty form — and Save locked it.** The seed
+gate was `status === "ready" || "failed"`, but `applyClassification` patches `docType` and
+`identityLine` while the row is still `processing` (the classify step runs before `markReady`). A
+row that stalls there — precisely what `vaultSweep` exists to recover — showed empty fields despite
+carrying a classifier answer, and pressing Save wrote `identityLine: ""` with
+`identityUserSet: true`, blanking it and locking it against every future re-classification. The
+gate is now "terminal OR already classified".
+
+#### The `crypto is not defined` flake is PRE-EXISTING — do not chase it into this wave
+
+The backend suite fails intermittently — roughly 3 runs in 8 — with `ReferenceError: crypto is not
+defined` (and sometimes `process is not defined`) inside `convex/onboarding.test.ts`, taking three
+profile tests down. The verify pass reported it as correlated with this wave's new 61st test file.
+**That correlation does not hold.** Reproduced with ONLY pre-existing files:
+
+```bash
+cd packages/backend && npx vitest run convex/onboarding.test.ts convex/vaultDigest.test.ts
+# run 2 of 3 failed with BOTH `crypto is not defined` and `process is not defined`
+```
+
+No 15.3-08 file is involved. It is a load-dependent `edge-runtime` instability: async work outlives
+the VM context and then executes against a disposed global scope, so the symptom surfaces in
+whichever file the worker runs next rather than in the one that caused it. Adding a test file makes
+it more likely to appear; it does not create it. The config comment in `vitest.config.mts` already
+records an earlier load-dependent flake in this same suite (timeouts crossing 5 s under parallel
+load) — this is the second of that family.
+
+**Two hypotheses were tested and are wrong, so nobody re-tests them:** it is not leaked fake timers
+(`vaultClassify.test.ts` pairs `beforeEach(vi.useFakeTimers)` with `afterEach(vi.useRealTimers)`,
+as `vaultDigest.test.ts` does), and stubbing `globalThis.process` does not fix it (the failing
+global is `crypto`, reached through `lib/hash.ts`'s `crypto.subtle.digest`). **A real fix means
+serialising file execution (`fileParallelism: false` or a single fork), which roughly doubles a
+140 s suite — an owner call, not a side effect of a feature wave.** Until then, a red
+`onboarding.test.ts` with a `not defined` ReferenceError is this flake, not a regression: re-run
+before investigating.

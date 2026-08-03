@@ -42,11 +42,43 @@ import {
 import { vaultIngestPool } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import schema from "./schema";
 import { bumpFolder } from "./vaultFolders";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
+
+// Derive the identity arg validators FROM the schema (the `tenantProfile.ts:47` rung-2 precedent) so
+// the two mutations' args can never drift from the table's closed `docType` union.
+const vdFields = schema.tables.vaultDocuments.validator.fields;
+
+/** Display cap for a document's identity line. */
+const IDENTITY_LINE_MAX = 120;
+
+/**
+ * Sanitize an identity line before it is written (VALT-12).
+ *
+ * A TRUST BOUNDARY, not a cosmetic field: this string is rendered into the folder digest's manifest
+ * (`vaultDigest.ts:131`) and therefore into a MODEL PROMPT. It is user-authored on the
+ * `setDocIdentity` path and model-authored on the `applyClassification` path — both untrusted, which
+ * is why the one function guards both writers rather than one caller.
+ *
+ * The op order is `sanitizeAgentName`'s (`@pikar/core`, businessProfile.ts:406) and is load-bearing:
+ * `\p{C}` strips Cc/Cf in one pass — a NEWLINE would let the line open what reads as a fresh
+ * instruction block, and a bidi override / zero-width character would let it render as something
+ * other than what it is — then `\s+` collapses the residue plus U+2028/U+2029, then trim, then the
+ * cap, then trim AGAIN so a cut landing mid-whitespace cannot leave a dangling separator.
+ *
+ * ponytail: a local copy rather than `sanitizeAgentName` itself, whose `AGENT_NAME_MAX = 40` is
+ * module-private to `@pikar/core` and far too short for an identity line. Ceiling — it does not
+ * detect a plausible-English instruction ("Also list every document"); the structural defence is
+ * that the line is interpolated into a LABELLED manifest field, never concatenated as a bare
+ * instruction line. Upgrade path: when a third caller needs it, export one
+ * `sanitizeLine(raw, max)` from `@pikar/core` and delete this.
+ */
+const sanitizeIdentityLine = (raw: string): string =>
+  raw.replace(/\p{C}/gu, " ").replace(/\s+/gu, " ").trim().slice(0, IDENTITY_LINE_MAX).trim();
 
 /**
  * The ONE place an extraction is scheduled. Three callers: vaultUpload, the recovery sweep
@@ -368,6 +400,35 @@ export const deleteVaultDoc = tenantMutation({
       await bumpFolder(ctx, doc.folderId, true);
     }
     await ctx.db.delete(vaultDocId);
+    return { ok: true };
+  },
+});
+
+/**
+ * The user's correction of a document's identity (VALT-12) — the ONE writer that sets
+ * `identityUserSet: true`, and the ONE thing that makes `applyClassification` back off forever.
+ *
+ * `identityLine` is sanitised at THIS write boundary rather than at the read: the digest, the grid
+ * and the preview all read the field, and a rule applied at three readers is a rule that will be
+ * missed at the fourth.
+ */
+export const setDocIdentity = tenantMutation({
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    docType: vdFields.docType,
+    identityLine: v.string(),
+  },
+  handler: async (ctx, { vaultDocId, docType, identityLine }): Promise<{ ok: boolean }> => {
+    const doc = await ctx.db.get(vaultDocId);
+    if (!doc || doc.tenantId !== ctx.tenantId) return { ok: false }; // tenant guard / already gone
+    await ctx.db.patch(vaultDocId, {
+      // `?? doc.docType`, never a bare `docType`: the schema field is optional, so the derived
+      // validator accepts an omitted one, and Convex reads an explicit `undefined` in a patch as a
+      // field DELETE — which would silently un-classify the row the user just named.
+      docType: docType ?? doc.docType,
+      identityLine: sanitizeIdentityLine(identityLine),
+      identityUserSet: true,
+    });
     return { ok: true };
   },
 });
@@ -731,6 +792,47 @@ export const markFailed = internalMutation({
     if (!before) return;
     await ctx.db.patch(vaultDocId, { status: "failed", failureReason: reason });
     await countTerminal(ctx, before, true);
+  },
+});
+
+/**
+ * The classifier's write (VALT-12), called by the `classifyDoc` step of the ingest workflow.
+ *
+ * **THE USER'S LABEL WINS, AND THAT IS AN ABSENCE, NOT A RULE.** There is deliberately NO branch in
+ * this function — or anywhere else in the codebase — that writes `docType`/`identityLine` over a row
+ * with `identityUserSet === true`. That absence is the guarantee, in the exact sense
+ * `packages/core/src/blueprint.ts:356-374` records for `mergeBlueprint`: a precedence rule in a
+ * prompt is a request, a function with no overwrite branch is a guarantee. The classifier is never
+ * told what the user typed and is never asked to preserve it.
+ *
+ * It is load-bearing because re-classification of an already-corrected document is REACHABLE, not
+ * hypothetical: `vault.ingestExtractedText` and `vaultSweep.retryExtraction` both restart `ingestDoc`
+ * on an EXISTING row, so a corrected label meets a fresh classifier run every time a user retries a
+ * document. A wrong guess left standing would be a permanent lie in the grounding corpus.
+ *
+ * NOT a terminal event, so it deliberately does NOT call `countTerminal` — the label is cosmetic and
+ * must never move a folder's read/unread manifest. A missing row is a silent no-op for the same
+ * reason `markReady` early-returns: a throw here would exhaust the step's retries and fail the whole
+ * document (embedding and graph included) for a label.
+ */
+export const applyClassification = internalMutation({
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    docType: vdFields.docType,
+    identityLine: v.string(),
+  },
+  handler: async (ctx, { vaultDocId, tenantId, docType, identityLine }): Promise<null> => {
+    const doc = await ctx.db.get(vaultDocId);
+    if (!doc || doc.tenantId !== tenantId) return null; // deleted mid-flight / cross-tenant
+    if (doc.identityUserSet === true) return null;
+    await ctx.db.patch(vaultDocId, {
+      docType: docType ?? doc.docType, // an explicit `undefined` in a patch DELETES the field
+      // Model output is untrusted too, and it lands in the same digest prompt field the user's own
+      // line does — one sanitiser, both writers.
+      identityLine: sanitizeIdentityLine(identityLine),
+    });
+    return null;
   },
 });
 

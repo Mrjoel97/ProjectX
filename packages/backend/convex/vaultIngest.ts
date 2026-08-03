@@ -2,7 +2,7 @@
 //
 // One `@convex-dev/workflow` per accepted searchable document, mirroring deliverApprovedPlan:
 // store (the row already exists at status:processing when this starts) → embed → extract →
-// upsertGraph → recordSpend → ready. `vault.ts`'s ingest mutations are this workflow's SOLE
+// upsertGraph → classify → recordSpend → ready. `vault.ts`'s ingest mutations are this workflow's SOLE
 // starters (the vault plane's zero-embed-before-accept invariant, mirroring executePlan).
 //
 // GOVERNANCE (reuses the guardrails/rate-limiter triad VERBATIM — no new guard path): a
@@ -168,14 +168,36 @@ export const ingestDoc = workflow.define({
       edges: graph.edges,
     });
 
-    // (5) Consume the ACTUAL spend against this run's rail (embed + extract).
+    // (5) Give the doc a type + a human-readable identity line (15.3-08, VALT-12). THIS IS THE
+    // SINGLE CONVERGENCE POINT, which is why it is one step here rather than a call per upload
+    // path: direct TXT/MD/CSV, every deferred binary via `vault.ingestExtractedText`, the sweep's
+    // re-entry, folder members and the folder digest itself all arrive at this workflow. So a
+    // single-file upload is classified exactly like a folder member, with no second code path.
+    //
+    // classifyDoc NEVER throws — a classifier failure returns `unclassified` and ingest continues
+    // (see its handler: a throw here would retry three times and then fail the whole document for
+    // a cosmetic label). `applyClassification` is the write boundary, and it is the thing that
+    // refuses to overwrite an identity the USER set.
+    const identity = await step.runAction(internal.vaultLlm.classifyDoc, { vaultDocId, tenantId });
+    await step.runMutation(internal.vault.applyClassification, {
+      vaultDocId,
+      tenantId,
+      docType: identity.docType,
+      identityLine: identity.identityLine,
+    });
+
+    // (6) Consume the ACTUAL spend against this run's rail (embed + extract + classify).
+    // ONE call, and the classify cost is FOLDED IN rather than recorded separately: recordSpend
+    // does `Math.ceil(costUsd * 100)`, so a second call would round $0.00034 up to a whole cent
+    // for every document — $3.00 charged against the ingest window for $0.10 of real spend over a
+    // 300-document folder. Inside this sum it rides along in the same ceil.
     await step.runMutation(internal.guardrails.recordSpend, {
       tenantId,
-      costUsd: embed.costUsd + graph.costUsd,
+      costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
       rail,
     });
 
-    // (6) Terminal: the doc is embedded + extracted → groundable.
+    // (7) Terminal: the doc is embedded + extracted → groundable.
     await step.runMutation(internal.vault.markReady, { vaultDocId, ragEntryId: embed.entryId });
     return null;
   },

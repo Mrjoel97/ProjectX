@@ -178,6 +178,28 @@ export const BUSINESS_BLUEPRINT_SKILL = "business-blueprint" as const;
  */
 export const FOLDER_DIGEST_SKILL = "folder-digest" as const;
 
+/**
+ * Registry name of the document-classifier skill (15.3-08, VALT-12 — the one model call per
+ * ingested document that returns its closed-union `docType` plus a short human-readable identity
+ * line, "2025 P&L" rather than "a spreadsheet").
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (15.3-08).
+ *
+ * MECHANICAL reason, the `content-drafter` / `folder-digest` mechanism verbatim:
+ * `run-eval-golden.mjs`'s SKILL_NAMES is DERIVED from GATED_SKILLS and it drives `runCockpitAgent`
+ * over TEXT fixtures. No fixture reaches vault ingest — this skill runs inside the `ingestDoc`
+ * workflow, on a stored document's redacted head slice, which the runner structurally cannot
+ * assemble. Gating this row would therefore DEADLOCK it at v1 on its first body edit: a candidate
+ * no eval run could ever certify. Revisit when a fixture exists.
+ *
+ * SUBSTANTIVE reason: the guarantee that matters is CODE, not prose. The returned `docType` is
+ * validated against the closed `DOC_TYPES` union and coerced to `unclassified` on any other
+ * string, so no body edit can widen what reaches the table; a classifier failure degrades the
+ * LABEL and never the document; and a user-set identity is never overwritten, because there is no
+ * branch that writes over one.
+ */
+export const DOCUMENT_CLASSIFIER_SKILL = "document-classifier" as const;
+
 /** Registry name of the `direct` behaviour-preset style overlay (15.1 / design §7). */
 export const STYLE_DIRECT_SKILL = "style-direct" as const;
 

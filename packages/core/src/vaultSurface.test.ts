@@ -70,6 +70,9 @@ describe("the vault surface", () => {
     expect(src).toContain("export function FolderBreadcrumb"); // FolderBreadcrumb.tsx
     expect(src).toContain("api.vaultFolders.folderEstimate"); // PreFlight.tsx
     expect(src).toContain('aria-disabled="true"'); // DocGrid.tsx — the real disabled pattern
+    // 15.3-08 added the display-name rule and the identity editor.
+    expect(src).toContain("export const docLabel"); // DocGrid.tsx
+    expect(src).toContain("Document identity"); // PreviewModal.tsx
     // …and the two files the `.tsx` filter cannot see.
     expect(preflightCopySrc).toContain("export function refusalCopy");
     expect(vaultFoldersSrc).toContain("export const folderEstimate");
@@ -97,6 +100,30 @@ describe("the vault surface", () => {
     expect(src).not.toContain("Up to 100 MB");
     // The raise is worthless if a string still promises the old number to the user.
     expect(src).not.toMatch(/100 MB/);
+  });
+
+  // ── Document identity is a DISPLAY name, never the file (15.3-08, VALT-12) ────────────────
+  //
+  // The whole surface now shows `identityLine` where it used to show `title`, which makes a
+  // find-and-replace of `doc.title` → `docLabel(doc)` a two-character mutation that silently
+  // renames every downloaded file to its identity line and rewrites every image's alt text. That
+  // is a shipped guarantee with NO other observer anywhere in the repo — `apps/web` has no test
+  // runner — so it is asserted here.
+  test("the download and the alt text still carry the real filename", () => {
+    expect(src).toContain("a.download = doc.title");
+    expect(src).toContain("alt={doc.title}");
+  });
+
+  test("the display name falls back to the filename, and the user-set promise is visible", () => {
+    // ONE rule, exported, so the card / heading / aria-labels cannot disagree. Losing the `||`
+    // leaves every unclassified row with a blank primary line.
+    expect(src).toContain("d.identityLine || d.title");
+    // The never-overwritten promise, made visible to the person it was made to. Deleting it is
+    // otherwise completely silent.
+    expect(src).toContain("identityUserSet === true");
+    // The identity-line cap lives at the write boundary (`vault.ts`). Re-typing it here is the
+    // same single-source defect the size-cap block above exists to punish.
+    expect(src).not.toMatch(/maxLength=\{120\}/);
   });
 
   // ── The read plane stays projected (15.3-02) ──────────────────────────────────────────────
@@ -272,7 +299,7 @@ describe("the vault surface", () => {
     // to read than the thing it matches. Biome formats this file, so the spacing is stable; if it
     // ever changes, the positive assertion below goes RED loudly rather than passing silently.
     const declOf = (atom: string) =>
-      `[${atom}, set${atom[0].toUpperCase()}${atom.slice(1)}] = useState`;
+      `[${atom}, set${atom.charAt(0).toUpperCase()}${atom.slice(1)}] = useState`;
 
     for (const atom of ["currentFolderId", "picked", "phase"]) {
       expect(page).toContain(declOf(atom));

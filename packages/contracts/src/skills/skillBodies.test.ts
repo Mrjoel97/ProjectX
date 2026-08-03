@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
   BUSINESS_BLUEPRINT_SKILL,
+  DOCUMENT_CLASSIFIER_SKILL,
   FOLDER_DIGEST_SKILL,
   isGatedSkill,
   MEDIA_DIRECTOR_SKILL,
@@ -10,6 +11,7 @@ import {
 import { bmcSkillBody } from "./bmc";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
 import { documentAnalystSkillBody } from "./documentAnalyst";
+import { documentClassifierSkillBody } from "./documentClassifier";
 import { folderDigestSkillBody } from "./folderDigest";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
 import { leadEngineSkillBody } from "./leadEngine";
@@ -66,6 +68,12 @@ const bodies: [string, string][] = [
   // failure instead of a silently stale seeded prompt. It also guards the three-part OUTPUT
   // CONTRACT (what the folder IS / SAYS / could NOT be read), which the digest test asserts against.
   ["folder-digest", folderDigestSkillBody],
+  // 15.3-08 (VALT-12): the UNGATED document-classifier prompt. Same hand-derived mirror, and the
+  // drift row carries more than freshness here — the .md's OUTPUT CONTRACT lists the twelve
+  // `DOC_TYPES` literals VERBATIM, so this row is what turns "the seeded prompt still names the
+  // union the schema accepts" into a failure rather than a silent mismatch the coercion layer
+  // absorbs as `unclassified`.
+  ["document-classifier", documentClassifierSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {
@@ -107,5 +115,18 @@ describe("media-director gating (20-03)", () => {
 describe("folder-digest gating (15.3-06)", () => {
   test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
     expect(isGatedSkill(FOLDER_DIGEST_SKILL)).toBe(false);
+  });
+});
+
+// 15.3-08 (VALT-12). Same mechanism, same deadlock: run-eval-golden.mjs derives its --skill list
+// from GATED_SKILLS and drives runCockpitAgent over TEXT fixtures. This skill runs INSIDE the
+// ingestDoc workflow on a stored document's redacted head slice, which no text fixture can reach —
+// so gating it would strand it at v1 on its first body edit, with no runner able to clear the gate.
+// And what matters here is CODE: the returned docType is coerced to `unclassified` unless it is a
+// member of the closed union, so no body edit can widen what reaches the table. A future "tidy up
+// the gate list" edit must fail HERE, not in production.
+describe("document-classifier gating (15.3-08)", () => {
+  test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
+    expect(isGatedSkill(DOCUMENT_CLASSIFIER_SKILL)).toBe(false);
   });
 });

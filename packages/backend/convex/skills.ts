@@ -14,6 +14,7 @@ import {
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   DOCUMENT_ANALYST_SKILL,
+  DOCUMENT_CLASSIFIER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
@@ -49,6 +50,7 @@ import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfil
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
 import { contentDrafterSkillBody } from "@pikar/contracts/skills/contentDrafter";
 import { documentAnalystSkillBody } from "@pikar/contracts/skills/documentAnalyst";
+import { documentClassifierSkillBody } from "@pikar/contracts/skills/documentClassifier";
 import { documentDrafterSkillBody } from "@pikar/contracts/skills/documentDrafter";
 import { emailDrafterSkillBody } from "@pikar/contracts/skills/emailDrafter";
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
@@ -358,6 +360,15 @@ export const seedSkills = internalMutation({
       // this would strand it at v1 on its first body edit. As a new name it takes the
       // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
       { name: FOLDER_DIGEST_SKILL, body: folderDigestSkillBody },
+      // UNGATED (15.3-08, VALT-12): the per-document classifier body. APPEND-ONLY — a new row goes
+      // at the END of this array; do not reorder or touch the rows above. Same deadlock as
+      // folder-digest: the golden runner's --skill list is derived from GATED_SKILLS and it drives
+      // runCockpitAgent over TEXT fixtures, and no fixture reaches vault ingest, so gating this
+      // would strand it at v1 on its first body edit. As a new name it takes the
+      // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
+      // SEED BEFORE THIS SHIPS: `classifyDoc` loads it fail-closed, and on an unseeded deployment
+      // every document classifies as `unclassified` (degraded label, never a failed document).
+      { name: DOCUMENT_CLASSIFIER_SKILL, body: documentClassifierSkillBody },
     ];
 
     for (const { name, body } of seeds) {

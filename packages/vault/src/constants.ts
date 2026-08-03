@@ -122,3 +122,28 @@ export const GRAPH_EXTRACT_CHAR_CAP = 120_000;
 export function capGraphText(text: string): string {
   return text.length > GRAPH_EXTRACT_CHAR_CAP ? text.slice(0, GRAPH_EXTRACT_CHAR_CAP) : text;
 }
+
+/**
+ * Chars of document text sent to the document CLASSIFIER (15.3-08, VALT-12). Deliberately ~15×
+ * smaller than the graph cap next door, and NOT a reuse of it: the two calls ask different
+ * questions. The extractor wants every entity in the document, so it wants as much of the document
+ * as the window allows; the classifier only has to answer "what IS this" — a title block, a
+ * letterhead, a statement header, the first rows of a table. That lives in the first page or two,
+ * so ~8k chars (≈2k tokens) is the whole useful signal and sending 120k would be a 15× bill for
+ * text that cannot change the answer. Classification runs on EVERY document on EVERY ingest path,
+ * so this is the multiplier that decides whether the feature costs cents or dollars per folder.
+ *
+ * That relationship (classify cap strictly below the graph cap) is asserted in constants.test.ts —
+ * raise it past the graph cap and the cheaper call has become the expensive one.
+ *
+ * ponytail: a HEAD SLICE, same shape as capGraphText. Ceiling — a document whose identity only
+ * becomes clear later (a scan with a cover sheet, a spreadsheet whose header row is buried) reads
+ * as `unclassified`, and the user's own edit is the recovery path. Upgrade path: head + tail slice,
+ * or a second pass on `unclassified` rows, once that miss is actually observed.
+ */
+export const DOC_CLASSIFY_CHAR_CAP = 8_000;
+
+/** Head-slice a classification prompt to DOC_CLASSIFY_CHAR_CAP. */
+export function capClassifyText(text: string): string {
+  return text.length > DOC_CLASSIFY_CHAR_CAP ? text.slice(0, DOC_CLASSIFY_CHAR_CAP) : text;
+}

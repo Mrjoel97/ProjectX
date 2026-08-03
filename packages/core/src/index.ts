@@ -5,6 +5,7 @@ export * from "./blueprintSegments";
 export * from "./briefing";
 export * from "./buildTelemetry";
 export * from "./businessProfile";
+export * from "./docType";
 export * from "./documentGen";
 export * from "./emailIntent";
 export * from "./fallback";

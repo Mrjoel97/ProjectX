@@ -1,7 +1,9 @@
 // The graph-extraction input cap + the vault read bound. Pure — no convex-test, no fixtures.
 import { describe, expect, test } from "vitest";
 import {
+  capClassifyText,
   capGraphText,
+  DOC_CLASSIFY_CHAR_CAP,
   GRAPH_EXTRACT_CHAR_CAP,
   VAULT_GRID_PAGE,
   VAULT_GRID_READ_BUDGET_BYTES,
@@ -41,6 +43,37 @@ describe("capGraphText", () => {
 
   test("empty text stays empty", () => {
     expect(capGraphText("")).toBe("");
+  });
+});
+
+// 15.3-08 (VALT-12). Same reasoning as the graph<extract assertion above, one rung down: the
+// classifier only has to answer "what IS this", which lives in the first page, so its slice must
+// stay strictly UNDER the extractor's. Invert it and the cheap call has quietly become the
+// expensive one — on a call that runs for every document on every ingest path.
+describe("DOC_CLASSIFY_CHAR_CAP", () => {
+  test("is strictly below the graph cap (or the cheap call is the expensive one)", () => {
+    expect(DOC_CLASSIFY_CHAR_CAP).toBeLessThan(GRAPH_EXTRACT_CHAR_CAP);
+  });
+});
+
+describe("capClassifyText", () => {
+  test("returns text under the cap unchanged", () => {
+    expect(capClassifyText("abc")).toBe("abc");
+  });
+
+  test("slices text over the cap down to the cap", () => {
+    expect(capClassifyText("x".repeat(DOC_CLASSIFY_CHAR_CAP + 1))).toHaveLength(
+      DOC_CLASSIFY_CHAR_CAP,
+    );
+  });
+
+  test("does not slice text EXACTLY at the cap (boundary)", () => {
+    const exact = "x".repeat(DOC_CLASSIFY_CHAR_CAP);
+    expect(capClassifyText(exact)).toBe(exact);
+  });
+
+  test("empty text stays empty", () => {
+    expect(capClassifyText("")).toBe("");
   });
 });
 

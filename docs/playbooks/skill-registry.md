@@ -1,5 +1,34 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-03 (15.3-08 task 2 — **`document-classifier` added, DELIBERATELY UNGATED.**
+>
+> **`document-classifier`** gives every vault document a machine-derived type and a short
+> human-readable identity line — *"2025 P&L"*, not *"a spreadsheet"*. It runs on ONE workflow step
+> at the single ingest convergence point, so single-file uploads are classified too, not only
+> folder members.
+>
+> **THE LITERAL ENUM KEYS LIVE IN THE OUTPUT CONTRACT SECTION, NOT IN GUIDANCE PROSE.** That is a
+> recorded lesson in this repo: guidance is what a model drops under length pressure, an output
+> contract is not. The body lists the `DOC_TYPES` literals verbatim and says *"use `unclassified`
+> when none fits — never force a nearest match"*, because a forced nearest match is worse than an
+> honest blank.
+>
+> **UNGATED, for the same MECHANICAL reason as `content-drafter` and `folder-digest`:**
+> `run-eval-golden.mjs` derives `--skill` from `GATED_SKILLS` and drives `runCockpitAgent` over
+> text fixtures, and no fixture reaches vault ingest — so gating this row would deadlock it at v1
+> on its first body edit. Pinned by `expect(isGatedSkill(DOCUMENT_CLASSIFIER_SKILL)).toBe(false)`.
+> FOUR skills now carry that warning; if a fifth appears, the eval harness is the thing to fix.
+>
+> **THE CONSUMER DEGRADES RATHER THAN FAILS, WHICH IS AN EXCEPTION WORTH KNOWING.** Everywhere
+> else `getActiveSkill` is fail-closed by contract. `vaultLlm.classifyDoc` catches INSIDE itself
+> and returns `unclassified` instead, because a throw there exhausts the workflow's retries and
+> `onIngestComplete` then marks the document `failed` — so an unseeded row would fail EVERY ingest
+> in the deployment, and by the honest-manifest rule would inflate a folder's failure count, for a
+> COSMETIC label. The fallback is a degraded LABEL, never a degraded grounding corpus.
+>
+> No version pinned anywhere, as always: `seedSkills` inserts v1/active only on an empty name and
+> otherwise `maxVersion + 1`. Verify with `getActiveSkill`, never by asserting a number.)
+
 > Last verified: 2026-08-03 (15.3-06 task 1 — **`folder-digest` added, DELIBERATELY UNGATED.**
 >
 > **`folder-digest`** is the folder-synthesis body: one model call turns a completed vault folder
