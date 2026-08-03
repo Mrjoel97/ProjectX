@@ -109,6 +109,9 @@ async function extractHosted(
   tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
+  // 15.3-03: which spend rail this page's cost lands on. Absent ⇒ the token rail (today's
+  // behaviour for every single-file upload). Under the OCR fan-out this fires ONCE PER PAGE.
+  spendRail?: "ingest",
 ): Promise<string> {
   const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
     name: ATTACHMENT_EXTRACTOR_SKILL,
@@ -122,7 +125,11 @@ async function extractHosted(
   });
   const priced = priceUsage("openai/gpt-4o-mini", usage);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      rail: spendRail,
+    });
   }
   return text;
 }
@@ -249,6 +256,7 @@ async function extractPdf(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   bytes: Uint8Array,
+  spendRail?: "ingest",
 ): Promise<Extracted> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   // pdf.js TRANSFERS (detaches) the buffer it is handed — pass a copy so the hosted-fallback
@@ -270,7 +278,7 @@ async function extractPdf(
   // `text` is already taken by the text-layer destructure above — the fan-out's own name.
   const { text: transcribed, okPages } = await fanOutPages(
     pages.length,
-    (i) => extractHosted(ctx, tenantId, pages[i]!, "application/pdf"),
+    (i) => extractHosted(ctx, tenantId, pages[i]!, "application/pdf", spendRail),
     {
       batchSize: PAGE_BATCH_SIZE,
       pageTimeoutMs: PAGE_TIMEOUT_MS,
@@ -287,14 +295,23 @@ async function extractPdf(
 }
 
 export const extractDoc = internalAction({
-  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId, tenantId }): Promise<null> => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    // 15.3-03 BUDGET rail (not the SCHEDULING rail, and not `resolveRail`'s format rail below).
+    // Absent ⇒ today's token-rail behaviour for every single-file upload.
+    spendRail: v.optional(v.literal("ingest")),
+    reserved: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { vaultDocId, tenantId, spendRail, reserved }): Promise<null> => {
     const fail = (reason: string): Promise<null> =>
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason });
     try {
       // 1. Governed gate BEFORE any work — a stop is a RETURN, never a throw (vaultIngest.ts).
+      //    Reserved folder work reaches the kill-switch branch ONLY: its OCR pages are pre-paid,
+      //    and refusing them on a drained window is the "refused halfway" failure this forbids.
       const gate: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-        await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+        await ctx.runMutation(internal.guardrails.preCall, { tenantId, rail: spendRail, reserved });
       if (!gate.ok) {
         await fail(gate.reason);
         return null;
@@ -330,7 +347,7 @@ export const extractDoc = internalAction({
       if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
       } else if (rail === "pdf") {
-        extracted = await extractPdf(ctx, tenantId, bytes);
+        extracted = await extractPdf(ctx, tenantId, bytes, spendRail);
       } else if (rail === "image") {
         // A SNIFFED image with an empty/wrong MIME must still be sent with a real mediaType, or
         // the model call is malformed — SC#1 would "work" right up to the point it silently didn't.
@@ -339,7 +356,7 @@ export const extractDoc = internalAction({
           : (({ png: "image/png", jpeg: "image/jpeg", gif: "image/gif" } as const)[
               sniffContainer(bytes) as "png" | "jpeg" | "gif"
             ] ?? "image/png");
-        extracted = { text: await extractHosted(ctx, tenantId, bytes, imageMediaType), path: "hosted" };
+        extracted = { text: await extractHosted(ctx, tenantId, bytes, imageMediaType, spendRail), path: "hosted" };
       } else if (rail === "zip") {
         // Every ZIP-based office format (DOCX/DOCM, XLSX/XLSM, PPTX/PPTM, ODT/ODS/ODP, EPUB) —
         // extractOfficeText dispatches on the archive's own marker entry, not on a mime type.

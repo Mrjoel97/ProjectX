@@ -74,13 +74,24 @@ export async function scheduleExtraction(
     tenantId,
     mimeType,
     title,
-  }: { vaultDocId: Id<"vaultDocuments">; tenantId: string; mimeType: string; title?: string },
+    spendRail,
+    reserved,
+  }: {
+    vaultDocId: Id<"vaultDocuments">;
+    tenantId: string;
+    mimeType: string;
+    title?: string;
+    /** 15.3-03 BUDGET rail — note this is NOT `rail` below, which is the SCHEDULING rail
+     *  (transcribe vs extract). Optional, so all three existing callers are unchanged. */
+    spendRail?: "ingest";
+    reserved?: boolean;
+  },
 ): Promise<void> {
   const rail = schedulingRailFor(mimeType, title);
   await ctx.scheduler.runAfter(
     0,
     rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
-    { vaultDocId, tenantId },
+    { vaultDocId, tenantId, spendRail, reserved },
   );
   await ctx.scheduler.runAfter(EXTRACTION_WATCHDOG_MS, internal.vaultSweep.watchdogStalled, {
     vaultDocId,

@@ -45,15 +45,22 @@ function decodeUtf8(bytes: Uint8Array): string {
  * are an unsupported container or the governed gate.
  */
 export const transcribeDoc = internalAction({
-  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId, tenantId }): Promise<null> => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    // 15.3-03 budget rail. Absent ⇒ today's token-rail behaviour.
+    spendRail: v.optional(v.literal("ingest")),
+    reserved: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { vaultDocId, tenantId, spendRail, reserved }): Promise<null> => {
     const fail = (reason: string): Promise<null> =>
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason }).then(() => null);
 
     try {
       // 1. Governed gate BEFORE any byte/model work — a stop is a visible failure, never a throw.
+      //    Reserved folder work reaches the kill-switch branch ONLY (guardrails.preCall).
       const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-        await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+        await ctx.runMutation(internal.guardrails.preCall, { tenantId, rail: spendRail, reserved });
       if (!pre.ok) return fail(pre.reason);
 
       // 2. Work actually starts → flip the visible pill (honest pill).
@@ -90,7 +97,11 @@ export const transcribeDoc = internalAction({
         });
         const priced = priceTranscription(result.durationInSeconds ?? 0);
         if (priced.ok) {
-          await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+          await ctx.runMutation(internal.guardrails.recordSpend, {
+            tenantId,
+            costUsd: priced.value,
+            rail: spendRail,
+          });
         }
         rawText = result.text;
         durationSeconds = result.durationInSeconds ?? 0;

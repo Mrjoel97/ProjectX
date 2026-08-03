@@ -33,12 +33,22 @@ export async function startIngest(
     vaultDocId,
     tenantId,
     correlationId,
-  }: { vaultDocId: Id<"vaultDocuments">; tenantId: string; correlationId: string },
+    rail,
+    reserved,
+  }: {
+    vaultDocId: Id<"vaultDocuments">;
+    tenantId: string;
+    correlationId: string;
+    /** 15.3-03 budget rail. OPTIONAL, so all eight existing call sites are unchanged and keep
+     *  today's token-rail behaviour. Folder ingest passes `"ingest"` + `reserved: true`. */
+    rail?: "ingest";
+    reserved?: boolean;
+  },
 ): Promise<void> {
   await workflow.start(
     ctx,
     internal.vaultIngest.ingestDoc,
-    { vaultDocId, tenantId, correlationId },
+    { vaultDocId, tenantId, correlationId, rail, reserved },
     {
       onComplete: internal.vaultIngest.onIngestComplete,
       context: { tenantId, vaultDocId, correlationId },
@@ -94,6 +104,13 @@ export const retryStuckIngests = internalMutation({
         vaultDocId: d._id,
         tenantId: d.tenantId,
         correlationId: crypto.randomUUID(),
+        // A folder member re-started by this sweep must NOT go back to spending the cockpit's
+        // budget — the rail is derived from the row, because the sweep has no other context.
+        // ponytail: `reserved: true` even though the folder's reservation may already have been
+        // settled, so a swept retry can spend the ingest window without a live reservation. The
+        // ceiling is a small over-spend on a recovery path; the upgrade path is reading the folder
+        // row's `reservedCents` here, which 15.3-04 owns along with the folder watchdog.
+        ...(d.folderId ? { rail: "ingest" as const, reserved: true } : {}),
       });
       requeued++;
     }
@@ -106,11 +123,16 @@ export const ingestDoc = workflow.define({
     vaultDocId: v.id("vaultDocuments"),
     tenantId: v.string(),
     correlationId: v.string(),
+    // 15.3-03: which spend rail this run charges. Absent ⇒ the token rail, i.e. exactly the
+    // behaviour every pre-15.3 caller had.
+    rail: v.optional(v.literal("ingest")),
+    reserved: v.optional(v.boolean()),
   },
-  handler: async (step, { vaultDocId, tenantId }): Promise<null> => {
+  handler: async (step, { vaultDocId, tenantId, rail, reserved }): Promise<null> => {
     // (1) Governed gate BEFORE any spend. A kill-switch / daily-budget stop marks the row failed
     // and returns — the governed stop halts ingest, never a DLQ throw (kill switch stops it).
-    const gate = await step.runMutation(internal.guardrails.preCall, { tenantId });
+    // Reserved folder work reaches only the kill-switch branch (guardrails.preCall).
+    const gate = await step.runMutation(internal.guardrails.preCall, { tenantId, rail, reserved });
     if (!gate.ok) {
       await step.runMutation(internal.vault.markFailed, { vaultDocId, reason: gate.reason });
       return null;
@@ -130,10 +152,11 @@ export const ingestDoc = workflow.define({
       edges: graph.edges,
     });
 
-    // (5) Consume the ACTUAL spend against the global daily window (embed + extract).
+    // (5) Consume the ACTUAL spend against this run's rail (embed + extract).
     await step.runMutation(internal.guardrails.recordSpend, {
       tenantId,
       costUsd: embed.costUsd + graph.costUsd,
+      rail,
     });
 
     // (6) Terminal: the doc is embedded + extracted → groundable.

@@ -266,22 +266,51 @@ export const saveInstruction = internalMutation({
  *  `prepare`, NEVER a throw: the llm wrapper propagates `{ ok: false }` and the
  *  pipeline routes the stop into the SAME `blocked` terminal a prepare stop gets
  *  (never a `failed` DLQ entry). */
+// ── THE RAIL SELECTOR (15.3-03, §B3) ──────────────────────────────────────────────────
+//
+// `rail` and `reserved` are OPTIONAL and that is MANDATORY, not stylistic: `preCall` and
+// `recordSpend` have ~15 call sites across blueprint.ts, intake.ts, llm.ts, dispatch.ts, media.ts,
+// voice.ts, voiceDoc.ts and the vault modules. A required argument would ripple through every one
+// of them, and `dispatch.ts:365` sizing sub-agent envelopes off `remainingDailyCents` must keep
+// reading the TOKEN window — folding another rail into it would silently resize every envelope.
+//
+// ABSENT ⇒ EXACTLY TODAY'S BEHAVIOUR, everywhere. Only folder ingest passes `rail: "ingest"`;
+// folder-less single-file uploads deliberately stay on the token rail (15.3-CONTEXT puts only
+// FOLDER ingest on the $25 window).
+const vRail = v.optional(v.literal("ingest"));
+
 export const preCall = internalMutation({
-  args: { tenantId: v.string() },
+  args: { tenantId: v.string(), rail: vRail, reserved: v.optional(v.boolean()) },
   handler: async (
     ctx,
-    { tenantId },
+    { tenantId, rail, reserved },
   ): Promise<
     | { ok: true }
     | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
   > => {
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
+
+    // RESERVED FOLDER WORK CHECKS THE KILL SWITCH ONLY, and this is the whole "a folder can never
+    // be refused halfway" guarantee. The money was already taken by `reserveFolder`, so checking
+    // the ingest window here would refuse the run precisely when its OWN reservation drove that
+    // window to 0. The kill switch still binds because an all-stop is an all-stop.
+    if (rail === "ingest" && reserved === true) return { ok: true };
+
+    // Unreserved ingest work (nothing routes here today — a future Drive probe would) still pays
+    // the normal two-window check, just on the ingest pair. The reason CODES are shared with the
+    // token rail on purpose: they mean the same thing to the caller, and minting parallel codes
+    // would widen three call sites' explicit return unions for no behavioural gain.
+    const [tenantRail, deploymentRail] =
+      rail === "ingest"
+        ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
+        : (["dailySpendCents", "deploymentSpendCents"] as const);
+
     // `count: 1` asks "is there ANY budget left", not "can I afford this call" — the real spend
     // is consumed after the fact by recordSpend. Both rails must still have room.
-    const spend = await rateLimiter.check(ctx, "dailySpendCents", { key: tenantId, count: 1 });
+    const spend = await rateLimiter.check(ctx, tenantRail, { key: tenantId, count: 1 });
     if (!spend.ok) return { ok: false, reason: "daily_budget_exhausted" };
-    const deployment = await rateLimiter.check(ctx, "deploymentSpendCents", { count: 1 });
+    const deployment = await rateLimiter.check(ctx, deploymentRail, { count: 1 });
     if (!deployment.ok) return { ok: false, reason: "deployment_budget_exhausted" };
     return { ok: true };
   },
@@ -292,14 +321,21 @@ export const preCall = internalMutation({
  *  under-counting — the NEXT prepare/preCall check then fails closed. Zero-cost
  *  runs (ZERO_USAGE smoke) skip, so they never drain the budget. */
 export const recordSpend = internalMutation({
-  args: { tenantId: v.string(), costUsd: v.number() },
-  handler: async (ctx, { tenantId, costUsd }) => {
+  args: { tenantId: v.string(), costUsd: v.number(), rail: vRail },
+  handler: async (ctx, { tenantId, costUsd, rail }) => {
     const cents = Math.ceil(costUsd * 100);
     if (cents <= 0) return;
+    // The rail selector applies HERE regardless of `reserved`: folder work skips the ingest CHECK
+    // (it is pre-paid) but its actual spend must still MOVE the ingest window, or the reservation
+    // would be released against a window that never recorded what the folder really cost.
+    const [tenantRail, deploymentRail] =
+      rail === "ingest"
+        ? (["ingestSpendCents", "deploymentIngestSpendCents"] as const)
+        : (["dailySpendCents", "deploymentSpendCents"] as const);
     // BOTH rails, always. Consuming only one would let the other be drained without seeing it —
     // the tenant window would stop policing real spend, or the ceiling would never bind.
-    await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: cents, reserve: true });
-    await rateLimiter.limit(ctx, "deploymentSpendCents", { count: cents, reserve: true });
+    await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: cents, reserve: true });
+    await rateLimiter.limit(ctx, deploymentRail, { count: cents, reserve: true });
   },
 });
 
