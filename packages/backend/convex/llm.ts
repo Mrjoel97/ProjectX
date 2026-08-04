@@ -744,6 +744,22 @@ const MEDIA_REFUSAL_REPLY: Record<
     "it. Nothing was started. Tell the user plainly, and offer to make the reel once the draft is " +
     "sent or discarded.",
 };
+const IMAGE_PROPOSED_REPLY =
+  "The image prompt is staged on a plan card for the user to review. Nothing has been generated " +
+  "and nothing has been charged; generation starts only when the user clicks Generate image.";
+const IMAGE_REFUSAL_REPLY: Record<
+  "image_in_flight" | "image_already_started" | "draft_in_progress" | "invalid_prompt",
+  string
+> = {
+  image_in_flight:
+    "An image is already being generated on this conversation. Nothing new was started. Tell the user it is still running.",
+  image_already_started:
+    "This conversation already has an image generation attempt. Nothing was replaced or charged. Tell the user a new image needs a new conversation.",
+  draft_in_progress:
+    "There is another draft on this conversation's plan card. Nothing was replaced or generated. Tell the user to finish or discard it first.",
+  invalid_prompt:
+    "The image prompt was empty or too long, so no proposal was staged. Ask the user for a concise visual description.",
+};
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -941,6 +957,31 @@ export function buildCockpitTools(
           skillVersions,
         });
         return MEDIA_UNDERWAY_REPLY;
+      },
+    }),
+  };
+
+  const proposeImageTool = {
+    proposeImage: tool({
+      description:
+        "Stage a standalone AI image proposal from a concise visual prompt. Use this for a still " +
+        "image, illustration, poster, social graphic or photo — not for a video reel. The prompt " +
+        "appears on a plan card for review. Staging is free; generation costs real money and only " +
+        "starts after the user clicks Generate image, which you cannot do for them.",
+      inputSchema: jsonSchema<{ prompt: string }>({
+        type: "object",
+        properties: { prompt: { type: "string" } },
+        required: ["prompt"],
+        additionalProperties: false,
+      }),
+      execute: async ({ prompt }): Promise<string> => {
+        const threadId = agentContext?.threadId as string;
+        const staged = await ctx.runMutation(internal.plans.stageImagePlan, {
+          tenantId,
+          threadId,
+          prompt,
+        });
+        return staged.ok ? IMAGE_PROPOSED_REPLY : IMAGE_REFUSAL_REPLY[staged.reason];
       },
     }),
   };
@@ -1196,8 +1237,8 @@ export function buildCockpitTools(
     // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
     // precedent above. Media can never become reachable in a context where research is not.
     ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
-      ? { ...dispatchResearchTool, ...dispatchMediaTool }
-      : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool)),
+      ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool }
+      : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool & typeof proposeImageTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({

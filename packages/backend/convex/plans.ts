@@ -331,6 +331,68 @@ export const persistDeck = internalMutation({
   },
 });
 
+/** Stage a standalone image proposal without spending. Unlike a reel, there is no specialist run:
+ * the reviewed prompt is the complete creative input. The live-job checks are the same protection
+ * as `stageMediaPlan` — recycling this unique thread row while a paid callback can still land would
+ * attach the asset to a different proposal. */
+export const stageImagePlan = internalMutation({
+  args: { tenantId: v.string(), threadId: v.string(), prompt: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId, prompt },
+  ): Promise<
+    | { ok: true; planId: Id<"plans"> }
+    | {
+        ok: false;
+        reason:
+          | "image_in_flight"
+          | "image_already_started"
+          | "draft_in_progress"
+          | "invalid_prompt";
+      }
+  > => {
+    const clean = prompt.trim();
+    if (clean.length === 0 || clean.length > 4_000) return { ok: false, reason: "invalid_prompt" };
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .unique();
+
+    let planId: Id<"plans">;
+    if (plan) {
+      if (plan.kind === "media") {
+        const jobs = await ctx.db
+          .query("mediaJobs")
+          .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", plan._id))
+          .collect();
+        const imageJobs = jobs.filter((job) => job.kind === "image");
+        if (imageJobs.some((job) => LIVE_JOB_STATUS.has(job.status))) {
+          return { ok: false, reason: "image_in_flight" };
+        }
+        if (imageJobs.length > 0) return { ok: false, reason: "image_already_started" };
+      }
+      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
+      const userWork = plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
+      if (userWork) return { ok: false, reason: "draft_in_progress" };
+      planId = plan._id;
+      await ctx.runMutation(internal.plans.resetPlan, { planId });
+    } else {
+      planId = await ctx.runMutation(internal.plans.insertPlan, { tenantId, threadId });
+    }
+
+    await ctx.db.patch(planId, {
+      kind: "media",
+      mediaMode: "image",
+      imagePrompt: clean,
+      recipients: [],
+      subject: `Image: ${clean}`.slice(0, 120),
+      body: "",
+      status: "proposed",
+    });
+    return { ok: true, planId };
+  },
+});
+
 /** A media run that produced prose but no usable deck. It lands as a MEMO — `kind` is left at what
  *  `stageMediaPlan` set, so nothing downstream reads this row as a reel — with the lever named in
  *  the body. The user sees WHY and what to ask for; they never see an empty canvas. */
@@ -526,6 +588,8 @@ export const resetPlan = internalMutation({
       // 20-02 MEDIA-01: the block deck AND the render plane, explicitly. Same Pitfall-6 class as
       // the staged event above, one rung worse for the render: a surviving `renderStorageId` would
       // show the PREVIOUS thread's reel under a brand-new proposal — a lie the user can watch.
+      mediaMode: undefined,
+      imagePrompt: undefined,
       artDirection: undefined,
       script: undefined,
       clipSeconds: undefined,

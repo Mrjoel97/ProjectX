@@ -1192,6 +1192,7 @@ const VERB: Record<string, [running: string, done: string]> = {
   // specialist PROPOSES — it does not generate, does not voice and does not render (D2) — so this
   // must never read "Generated" or "Reel ready".
   dispatchMedia: ["Writing the script and art direction…", "Storyboard ready"],
+  proposeImage: ["Composing the image prompt…", "Image proposal ready"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

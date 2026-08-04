@@ -1,4 +1,13 @@
-# Playbook: Media Canvas (finished reel)
+# Playbook: Media Canvas (finished reels and standalone images)
+
+> Last verified: 2026-08-04 (ADR-014 — **standalone images are now reachable without creating a
+> second media stack.** `proposeImage` stages a free `mediaMode:"image"` plan; the canvas shows the
+> pinned Flux Schnell 1080×1920 estimate and shared remaining budget before enabling **Generate
+> image**; `generateImage` reserves one image row through the same serializable money helper as the
+> reel and schedules the existing fal submit. The existing authenticated webhook, owned storage,
+> validation, reconciliation and moderation path lands the result. The reactive output card renders
+> the tenant-guarded URL through `<img>` and says `none_reported` is **not checked**, never safe.
+> Targeted backend media/routing/trace tests: 232 passed; no paid provider call was made.)
 
 > Registration note, 2026-08-02: `check-fal-catalog.mjs` was first registered here by a foreign
 > session (profile-tabs) that hit the §9 creation gap on it while it was still untracked, and
@@ -91,6 +100,35 @@
 
 The **finished-reel spine** (D8): script → art-direction → storyboard → generate → voiceover →
 assemble → captions. The deliverable is **ONE mp4**, not a bag of clips.
+
+The media subsystem also has one deliberately shorter deliverable under
+[ADR-014](../decisions/014-standalone-image-deliverable.md): prompt proposal → human Generate click →
+one fal image job → authenticated callback → owned image. It reuses the rail and landing plane below
+but does not enter the reel's voice, captions or sandbox stages.
+
+## Standalone image path (ADR-014)
+
+1. The executive's local `proposeImage({prompt})` tool calls `plans.stageImagePlan`. It writes
+   `kind:"media"`, `mediaMode:"image"`, the content-plane prompt and `status:"proposed"`. It writes
+   no job and consumes no media budget.
+2. `media.imageEstimate` constructs the pinned `MEDIA_DEFAULT_IMAGE` spec and calls
+   `chooseMediaBatch`. It is a tenant query and cannot consume a window. The canvas button is truly
+   disabled until this result resolves.
+3. The human clicks **Generate image**. `media.generateImage` checks ownership and the absence of an
+   existing image row in the same serializable mutation, then `reserveImageInner` passes its one
+   priced row through `reserveProviderLinesInner` — the same cap/check/consume/insert transaction
+   `reserveJobInner` uses for reels.
+4. The existing `submitBatch` claims the row before POST and reads text from `plan.imagePrompt`.
+   `buildSubmitBody` pins `{image_size:{width:1080,height:1920},num_images:1}` from the priced spec.
+5. `/fal/callback/*` follows the existing image arm: authenticate the HMAC+timestamp, download the
+   provider URL immediately, validate/store owned bytes, reconcile cost and persist the moderation
+   verdict. The provider URL is never stored.
+6. `assetUrls` mints the signed owned URL only after tenant ownership. `ImageCanvas` reacts without
+   polling and renders the result plus the honest verdict copy.
+
+Operationally, image failures use the same `mediaJobs` readers, spend reconciliation, kill switches
+and provider-drift procedure documented below. A second image attempt uses a new conversation; this
+keeps the unique plan row and its callback/history ownership unambiguous.
 
 The storyboard is a **BLOCK DECK**: N blocks, every block the same length, each carrying exactly one
 narration line. `packages/core/src/storyboard.ts` parses it; `packages/cost/src/media.ts` prices the

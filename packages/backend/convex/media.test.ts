@@ -2488,6 +2488,111 @@ async function seedDeck(
   return { planId, clipSeconds, shots };
 }
 
+async function seedImagePlan(t: T, tenantId = A, prompt = "A sunlit baobab at dawn") {
+  const planId = await seedPlan(t, tenantId);
+  await t.run(async (ctx) =>
+    ctx.db.patch(planId, { kind: "media", mediaMode: "image", imagePrompt: prompt }),
+  );
+  return { planId, prompt };
+}
+
+describe("standalone image: one reviewed prompt through the existing media rail", () => {
+  test("estimate consumes nothing and exactly matches the reservation", async () => {
+    const t = harness();
+    const { planId, prompt } = await seedImagePlan(t);
+    const before = await mediaLeft(t);
+
+    const estimate = await asA(t).query(api.media.imageEstimate, { planId });
+    expect(estimate).toMatchObject({
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+      refusal: null,
+    });
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await rows(t)).toHaveLength(0);
+
+    const generated = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(generated).toMatchObject({ ok: true, estCents: estimate.totalCents });
+    expect(await mediaLeft(t)).toBe(before - estimate.totalCents);
+    const [row] = await rows(t);
+    expect(row).toMatchObject({
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      blockIndex: 0,
+      spec: {
+        kind: "image",
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+      },
+    });
+    expect(row?.promptHash).toBe(await contentHash(prompt));
+
+    const batch = await t.query(internal.media.batchToSubmit, {
+      tenantId: A,
+      batchId: generated.ok ? generated.batchId : "unreachable",
+    });
+    expect(batch.imagePrompt).toBe(prompt);
+    expect(batch.shots).toEqual([]);
+  });
+
+  test("a racing second click cannot reserve or insert twice", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t);
+    const first = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(first.ok).toBe(true);
+    const afterFirst = await mediaLeft(t);
+
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toEqual({
+      ok: false,
+      reason: "already_started",
+    });
+    expect(await rows(t)).toHaveLength(1);
+    expect(await mediaLeft(t)).toBe(afterFirst);
+  });
+
+  test("proposal staging is free and reset clears both image fields", async () => {
+    const t = harness();
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: A,
+      threadId: "image_thread",
+    });
+    const before = await mediaLeft(t);
+    const staged = await t.mutation(internal.plans.stageImagePlan, {
+      tenantId: A,
+      threadId: "image_thread",
+      prompt: "  Editorial portrait in indigo light  ",
+    });
+    expect(staged).toEqual({ ok: true, planId });
+    expect(await planRowOf(t, planId)).toMatchObject({
+      kind: "media",
+      mediaMode: "image",
+      imagePrompt: "Editorial portrait in indigo light",
+      status: "proposed",
+    });
+    expect(await mediaLeft(t)).toBe(before);
+    expect(await rows(t)).toHaveLength(0);
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+    const reset = await planRowOf(t, planId);
+    expect(reset?.mediaMode).toBeUndefined();
+    expect(reset?.imagePrompt).toBeUndefined();
+  });
+
+  test("tenant boundaries cover both estimate and paid mutation", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t, A);
+    expect(await asB(t).query(api.media.imageEstimate, { planId })).toMatchObject({
+      totalCents: 0,
+      refusal: "no_image_plan",
+    });
+    await expect(asB(t).mutation(api.media.generateImage, { planId })).rejects.toThrow(
+      /plan not found/,
+    );
+    expect(await rows(t)).toHaveLength(0);
+  });
+});
+
 describe("the canvas READ plane: two states per block, and a url only when it is earned", () => {
   test("byPlan reports the clip and the voice INDEPENDENTLY", async () => {
     const t = harness();

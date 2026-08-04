@@ -28,7 +28,13 @@ import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./c
  * nothing beyond them.
  */
 
-type MediaPlan = { _id: string; artDirection?: ArtDirection | null; clipSeconds?: number | null };
+type MediaPlan = {
+  _id: string;
+  mediaMode?: "reel" | "image" | null;
+  imagePrompt?: string | null;
+  artDirection?: ArtDirection | null;
+  clipSeconds?: number | null;
+};
 type ArtDirection = {
   palette: string[];
   mood: string;
@@ -113,6 +119,14 @@ function refusalText(
 }
 
 export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
+  return plan.mediaMode === "image" ? (
+    <ImageCanvas plan={plan} />
+  ) : (
+    <ReelCanvas plan={plan} threadId={threadId} />
+  );
+}
+
+function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
   const planId = plan._id as never;
   const blocks = useQuery(api.media.byPlan, { planId });
   const assets = useQuery(api.media.assetUrls, { planId });
@@ -176,6 +190,139 @@ export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: st
         clipSeconds={clipSeconds}
         threadId={threadId}
       />
+    </div>
+  );
+}
+
+const IMAGE_STATUS: Record<string, string> = {
+  queued: "Waiting to start",
+  submitted: "Generating…",
+  succeeded: "Ready",
+  failed: "Generation failed",
+  blocked: "Refused by the provider's content check",
+};
+
+/** A standalone image proposal and its reactive output. The signed URL comes only from the
+ * tenant-guarded asset query; the provider URL never reaches this component. */
+function ImageCanvas({ plan }: { plan: MediaPlan }) {
+  const planId = plan._id as never;
+  const assets = useQuery(api.media.assetUrls, { planId });
+  const estimate = useQuery(api.media.imageEstimate, { planId });
+  const generateImage = useMutation(api.media.generateImage);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const asset = (assets ?? []).find((row) => row.kind === "image");
+  const prompt = plan.imagePrompt?.trim() ?? "";
+  const estimateReady = estimate !== undefined;
+  const canGenerate =
+    estimateReady && estimate.refusal === null && asset === undefined && !busy && prompt.length > 0;
+
+  async function generate() {
+    if (!canGenerate) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const result = await generateImage({ planId });
+      if (!result.ok) {
+        setNote(
+          result.reason === "already_started"
+            ? "Generation has already started."
+            : `Not started: ${result.reason.replaceAll("_", " ")}.`,
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="image-canvas">
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <p style={capsTeal}>Generated image</p>
+        <span style={typeBadge}>IMAGE</span>
+      </div>
+      <p style={{ ...dimText, marginTop: "0.45rem" }} aria-live="polite">
+        {asset
+          ? (IMAGE_STATUS[asset.status] ?? asset.status)
+          : "Proposal ready — not generated yet"}
+        {asset?.url ? " · Synced to workspace history" : ""}
+      </p>
+
+      <div
+        style={{
+          marginTop: "0.8rem",
+          minHeight: "14rem",
+          display: "grid",
+          placeItems: "center",
+          border: "1px solid var(--rule)",
+          borderRadius: "0.7rem",
+          background: "var(--canvas)",
+          overflow: "hidden",
+        }}
+      >
+        {asset?.url ? (
+          /* biome-ignore lint/performance/noImgElement: Next Image's optimizer cannot safely
+             retain or re-fetch this short-lived signed Convex bearer capability. */
+          <img
+            src={asset.url}
+            alt={`Generated result for: ${prompt}`}
+            style={{ display: "block", maxWidth: "100%", maxHeight: "34rem", objectFit: "contain" }}
+          />
+        ) : (
+          <p style={{ ...dimText, padding: "1rem", textAlign: "center" }}>
+            {asset?.status === "submitted"
+              ? "fal is generating the image. It will appear here when the webhook lands."
+              : asset?.status === "failed" || asset?.status === "blocked"
+                ? IMAGE_STATUS[asset.status]
+                : "The generated image will appear here."}
+          </p>
+        )}
+      </div>
+
+      <div style={snippetSheet}>{prompt}</div>
+      {asset?.verdict && (
+        <p style={{ ...dimText, marginTop: "0.55rem" }}>
+          {VERDICT_COPY[asset.verdict] ?? "Not checked — no moderation verdict was reported"}
+        </p>
+      )}
+
+      <div
+        style={{ borderTop: "1px solid var(--rule)", marginTop: "0.9rem", paddingTop: "0.8rem" }}
+      >
+        <p style={capsTeal}>Cost</p>
+        {!estimateReady ? (
+          <p style={{ ...dimText, marginTop: "0.45rem" }}>Working out what this image costs…</p>
+        ) : (
+          <>
+            <p style={{ ...dimText, marginTop: "0.45rem" }}>
+              1 image · {estimate.width}×{estimate.height} · Flux Schnell
+            </p>
+            <p style={{ ...dimText, marginTop: "0.25rem" }}>
+              Total {money(estimate.totalCents)} · {money(estimate.remainingCents)} of today's media
+              budget remains.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          disabled={!canGenerate}
+          onClick={() => void generate()}
+          data-testid="image-generate"
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.5rem 1rem",
+            borderRadius: "0.375rem",
+            cursor: canGenerate ? "pointer" : "not-allowed",
+            background: canGenerate ? "var(--teal-600)" : "var(--canvas)",
+            color: canGenerate ? "#fff" : "var(--ink-soft)",
+            border: canGenerate ? "none" : "1px solid var(--rule)",
+            fontWeight: 600,
+          }}
+        >
+          {busy ? "Starting…" : asset ? "Generation started" : "Generate image"}
+        </button>
+        {note && <p style={{ ...dimText, marginTop: "0.5rem" }}>{note}</p>}
+      </div>
     </div>
   );
 }
@@ -883,8 +1030,8 @@ export function CanvasPane({ threadId }: { threadId?: string }) {
   if (!threadId) {
     return (
       <p style={{ ...dimText, marginTop: "1rem" }}>
-        Start a conversation first — the canvas shows the reel the agent is building for this
-        thread.
+        Start a conversation first — the canvas shows the image or reel the agent is building for
+        this thread.
       </p>
     );
   }
@@ -892,8 +1039,8 @@ export function CanvasPane({ threadId }: { threadId?: string }) {
   if (plan?.kind !== "media") {
     return (
       <p style={{ ...dimText, marginTop: "1rem" }} data-testid="canvas-empty">
-        No reel in this thread yet. Ask the agent for a video — a storyboard, its art direction and
-        its blocks will appear here, and nothing is generated until you approve the cost.
+        No image or reel in this thread yet. Ask the agent for an image or video; nothing is
+        generated until you review the proposal and approve the cost.
       </p>
     );
   }

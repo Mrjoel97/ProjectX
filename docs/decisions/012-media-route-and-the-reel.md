@@ -1,6 +1,7 @@
 # ADR-012: The `media` route ships a FINISHED REEL — a dispatchable specialist whose product costs money and which cannot spend any
 
-- **Status**: Accepted (2026-08-03 — Phase 20, MEDIA-01; owner decision)
+- **Status**: Accepted; superseded in part by [ADR-014](014-standalone-image-deliverable.md)
+  (2026-08-04 — the reel remains unchanged, while “the reel is the only deliverable” no longer does)
 - **Recorded**: 2026-08-03 (plan 20-11, after waves 1–12 shipped; the arithmetic below is
   vendor-direct as of 2026-08-02, not the indicative third-party figures ADR-011 carried)
 - **Amends**: [ADR-011](011-media-provider-fal-wan25.md). ADR-011 is **Accepted and stays

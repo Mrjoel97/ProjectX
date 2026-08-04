@@ -34,6 +34,7 @@ import type { MediaSpec } from "@pikar/cost/media";
 import {
   chooseMediaBatch,
   estimateMediaUsd,
+  MEDIA_DEFAULT_IMAGE,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
@@ -75,6 +76,54 @@ type ProviderLine = {
 };
 
 const CLIP_SECONDS_SET = new Set<number>(CLIP_SECONDS);
+const standaloneImageSpec = (): Extract<MediaSpec, { kind: "image" }> => ({
+  kind: "image",
+  model: MEDIA_DEFAULT_IMAGE.model,
+  width: MEDIA_DEFAULT_IMAGE.width,
+  height: MEDIA_DEFAULT_IMAGE.height,
+});
+
+/** The shared budget transaction for every media deliverable. Callers construct fully-priced rows;
+ * this function caps the complete batch, checks and consumes both spend windows, then inserts all
+ * rows atomically. A standalone image is therefore not a second spending rail. */
+async function reserveProviderLinesInner(
+  ctx: MutationCtx,
+  tenantId: string,
+  batchId: string,
+  lines: readonly ProviderLine[],
+  specs: readonly MediaSpec[],
+): Promise<ReserveResult> {
+  // The cap, and the ONE flooring of cents (D12a). `chooseMediaBatch` floors the TOTAL exactly
+  // once; the per-line `estUsd` values stay unfloored on their rows.
+  const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+  if (!est.ok) return { ok: false, reason: est.error.code };
+  const { estUsd, estCents } = est.value;
+
+  // CHECK BOTH, THEN CONSUME BOTH in this one serializable mutation. Tenant first, so a tenant that
+  // is personally out is told so rather than blamed for a global pause.
+  const tenantWindow = await rateLimiter.check(ctx, "mediaSpendCents", {
+    key: tenantId,
+    count: estCents,
+  });
+  if (!tenantWindow.ok) return { ok: false, reason: "media_daily_exhausted" };
+  const deploymentWindow = await rateLimiter.check(ctx, "deploymentMediaSpendCents", {
+    count: estCents,
+  });
+  if (!deploymentWindow.ok) return { ok: false, reason: "deployment_media_exhausted" };
+
+  // CONSUME NOW, before any POST exists. There are deliberately no refunds: media's bounded,
+  // spec-priced over-reservation is cents, not the folder-ingest rail's unknowable dollars.
+  await rateLimiter.limit(ctx, "mediaSpendCents", {
+    key: tenantId,
+    count: estCents,
+    reserve: true,
+  });
+  await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
+
+  // Only now do rows exist. Every refusal above returned with zero inserts.
+  for (const line of lines) await ctx.db.insert("mediaJobs", line.row);
+  return { ok: true, batchId, estUsd, estCents, lineCount: lines.length };
+}
 
 /**
  * Reserve a WHOLE media job. Returns a governed refusal — it never throws for an expected stop.
@@ -252,58 +301,47 @@ export async function reserveJobInner(
   // render is a plan-row concern, with no falRequestId and no webhook.
   const specs: MediaSpec[] = [...lines.map((l) => l.spec), { kind: "render" }];
 
-  // 5. The cap, and the ONE flooring of cents (D12a). `chooseMediaBatch` floors the TOTAL exactly
-  //    once, so `estCents` is the single number that moves both windows; the per-line `estUsd`
-  //    values go onto the rows unfloored. Flooring per line would reserve 13 cents for a 13-line
-  //    sub-cent job instead of 1.
-  const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
-  if (!est.ok) return { ok: false, reason: est.error.code };
-  const { estUsd, estCents } = est.value;
+  // 5-9. The shared transaction floors the batch total once, checks and consumes BOTH windows, and
+  // inserts only after every refusal has passed. The standalone image path calls this exact helper.
+  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
+}
 
-  // 6-8. CHECK BOTH, THEN CONSUME BOTH — in THIS mutation, which is ONE serializable transaction.
-  // That is what makes the guarantee: two concurrent jobs cannot both pass a check against a window
-  // neither has consumed. Splitting the check from the limit across an action boundary is the exact
-  // defect this whole function exists to prevent. Tenant FIRST, so a tenant that is personally out
-  // is told so rather than blamed for a global pause (the `guardrails.prepare` ordering, verbatim).
-  const tenantWindow = await rateLimiter.check(ctx, "mediaSpendCents", {
-    key: a.tenantId,
-    count: estCents,
-  });
-  if (!tenantWindow.ok) return { ok: false, reason: "media_daily_exhausted" };
-  const deploymentWindow = await rateLimiter.check(ctx, "deploymentMediaSpendCents", {
-    count: estCents,
-  });
-  if (!deploymentWindow.ok) return { ok: false, reason: "deployment_media_exhausted" };
-
-  // CONSUME NOW, before any POST exists.
-  // ponytail: no refunds. If 3 of 6 blocks come back provider_blocked, the reserved cents stay
-  // consumed. Over-reservation is the fail-closed bias, same as `Math.max(1, Math.ceil(...))`.
-  // Refunding turns a rate-limiter window into a ledger; if drift ever proves material the upgrade
-  // path is a real spend table, not a credit call.
-  //
-  // ⚠ THE FOLDER-INGEST RAIL (15.3-03, `guardrails.settleFolder`) DELIBERATELY TAKES THE OPPOSITE
-  // POSITION, and neither rail is a bug. The difference is the SIZE of the over-reservation, not a
-  // change of mind:
-  //   · media over-reserves by CENTS — every line is priced from a known spec and the whole job is
-  //     bounded by MEDIA_JOB_CAP_USD ($3.50), so the drift a refund would recover is not worth a
-  //     ledger;
-  //   · ingest over-reserves by DOLLARS — the estimator cannot see page counts or audio duration
-  //     before the bytes land, so every unprobed PDF is priced as a 50-page scan. Not refunding
-  //     THAT would charge a tenant $25 for a $2 folder.
-  // Do not "harmonise" the two rails in either direction without re-reading both reasons;
-  // docs/playbooks/guardrails.md §15.3-03 states this from the ingest side.
-  await rateLimiter.limit(ctx, "mediaSpendCents", {
-    key: a.tenantId,
-    count: estCents,
-    reserve: true,
-  });
-  await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
-
-  // 9. Only now do rows exist. Every refusal above returned with ZERO inserts — the transaction is
-  //    all-or-nothing by construction, not by cleanup.
-  for (const line of lines) await ctx.db.insert("mediaJobs", line.row);
-
-  return { ok: true, batchId, estUsd, estCents, lineCount: lines.length };
+/** Reserve one standalone image through the same media money transaction as a reel. */
+export async function reserveImageInner(
+  ctx: MutationCtx,
+  a: { tenantId: string; planId: Id<"plans">; prompt: string },
+): Promise<ReserveResult> {
+  const cfg = await getGuardrailConfig(ctx);
+  if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
+  const spec = standaloneImageSpec();
+  const priced = estimateMediaUsd(spec);
+  if (!priced.ok) return { ok: false, reason: priced.error.code };
+  const now = Date.now();
+  const batchId = crypto.randomUUID();
+  const line: ProviderLine = {
+    spec,
+    estUsd: priced.value,
+    row: {
+      tenantId: a.tenantId,
+      planId: a.planId,
+      batchId,
+      provider: "fal",
+      blockIndex: 0,
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      spec: {
+        kind: "image",
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+      },
+      promptHash: await contentHash(a.prompt),
+      status: "queued",
+      estUsd: priced.value,
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, [line], [spec]);
 }
 
 /** The `internalMutation` face of `reserveJobInner`, for the canvas path (plan 20-09) and tests.
@@ -741,6 +779,7 @@ export const batchToSubmit = internalQuery({
   ): Promise<{
     lines: SubmitLine[];
     shots: Array<{ index: number; prompt: string; narration: string }>;
+    imagePrompt: string | null;
   }> => {
     const rows = await ctx.db
       .query("mediaJobs")
@@ -761,6 +800,7 @@ export const batchToSubmit = internalQuery({
         prompt: s.prompt,
         narration: s.narration,
       })),
+      imagePrompt: plan?.mediaMode === "image" ? (plan.imagePrompt ?? null) : null,
     };
   },
 });
@@ -828,7 +868,7 @@ export const submitBatch = internalAction({
   ): Promise<{ submitted: number; blocked: number; failed: number; skipped: number }> => {
     const siteUrl = requireEnvMedia("CONVEX_SITE_URL");
     const secret = requireEnvMedia("FAL_WEBHOOK_SECRET");
-    const { lines, shots } = await ctx.runQuery(internal.media.batchToSubmit, a);
+    const { lines, shots, imagePrompt } = await ctx.runQuery(internal.media.batchToSubmit, a);
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
     for (const line of lines) {
@@ -854,7 +894,8 @@ export const submitBatch = internalAction({
       // NARRATION. Either way the text goes to fal and to nothing else — never an audit row, never a
       // log, never onto the job row (only its `promptHash` lives there).
       const shot = shots.find((s) => s.index === line.blockIndex);
-      const text = shot && SUBMIT_TEXT[spec.kind]?.(shot);
+      const text =
+        spec.kind === "image" && imagePrompt ? imagePrompt : shot && SUBMIT_TEXT[spec.kind]?.(shot);
       if (text === undefined) {
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,
@@ -1425,6 +1466,49 @@ export const jobEstimate = tenantQuery({
   },
 });
 
+/** The standalone image estimate. It builds the exact pinned spec consumed by
+ * `reserveImageInner`, consumes nothing, and exposes the shared media-window remainder. */
+export const imageEstimate = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const capCents = Math.round(MEDIA_JOB_CAP_USD * 100);
+    const remainingCents = await mediaRemainingCentsInner(ctx, ctx.tenantId);
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (plan?.mediaMode !== "image" || !plan.imagePrompt) {
+      return {
+        model: MEDIA_DEFAULT_IMAGE.model,
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+        totalCents: 0,
+        capCents,
+        remainingCents,
+        refusal: "no_image_plan" as const,
+      };
+    }
+    const priced = chooseMediaBatch([standaloneImageSpec()], MEDIA_JOB_CAP_USD);
+    if (!priced.ok) {
+      return {
+        model: MEDIA_DEFAULT_IMAGE.model,
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+        totalCents: 0,
+        capCents,
+        remainingCents,
+        refusal: priced.error.code,
+      };
+    }
+    return {
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+      totalCents: priced.value.estCents,
+      capCents,
+      remainingCents,
+      refusal: null,
+    };
+  },
+});
+
 /** Reserve + schedule, shared by the two paid entry points. Returns the governed refusal rather
  *  than throwing — a refusal is an answer, not an error. */
 async function reserveAndSchedule(
@@ -1467,6 +1551,31 @@ export const generateReel = tenantMutation({
       blocks,
       clipSeconds: plan.clipSeconds,
     });
+  },
+});
+
+/** Generate one reviewed still image. The serializable existing-row check is the server-side
+ * double-click guard: once a reservation inserts its row, no second mutation can reserve again. */
+export const generateImage = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const prompt = plan.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
+    if (!prompt) return { ok: false as const, reason: "no_image_plan" as const };
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
+      .collect();
+    if (rows.some((row) => row.kind === "image")) {
+      return { ok: false as const, reason: "already_started" as const };
+    }
+    const reserved = await reserveImageInner(ctx, { tenantId: ctx.tenantId, planId, prompt });
+    if (!reserved.ok) return { ok: false as const, reason: reserved.reason };
+    await ctx.scheduler.runAfter(0, internal.media.submitBatch, {
+      tenantId: ctx.tenantId,
+      batchId: reserved.batchId,
+    });
+    return { ok: true as const, batchId: reserved.batchId, estCents: reserved.estCents };
   },
 });
 

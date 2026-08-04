@@ -298,6 +298,11 @@ export default defineSchema({
     // onto the NEXT plan (the `eventTitle` rule above), and a surviving render would show the
     // previous thread's reel under a brand-new proposal, which is worse: it is a lie the user can
     // watch. None of them are `patchPlan` args; see plans.ts for why that absence is the guarantee.
+    /** The media deliverable discriminator. Missing means the original reel path for rows written
+     *  before standalone images existed. `imagePrompt` is content-plane text: shown to the human,
+     *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
+    mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
+    imagePrompt: v.optional(v.string()),
     /** koda's fixed 9-field art-direction block, parsed. */
     artDirection: v.optional(
       v.object({
@@ -658,6 +663,10 @@ export default defineSchema({
       // prompt or a narration line. Without it the step insert throws inside a callback the AI SDK
       // SWALLOWS → no trace row in prod while every offline test passes (Research Pitfall 4).
       v.literal("dispatchMedia"),
+      // Standalone image proposals stage content only. The paid action remains a separate canvas
+      // click, but the local tool still needs a trace literal because AI-SDK callback failures are
+      // otherwise swallowed (the dispatchMedia rule immediately above).
+      v.literal("proposeImage"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

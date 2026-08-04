@@ -1,5 +1,13 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-04 (ADR-014 — **the cockpit can now propose a standalone image and still
+> cannot generate one.** The executive-only `proposeImage` tool stages `mediaMode:"image"` plus the
+> reviewed prompt on the unique plan row. It returns copy that explicitly says nothing was generated
+> or charged. `agentSteps.tool` and the `cards.tsx` VERB map gained `proposeImage` together. The
+> existing `plan.kind === "media"` canvas branch selects the new image output card; its **Generate
+> image** mutation is a separate human click and is absent from every agent tool set. See ADR-014 and
+> the media playbook's `Standalone image path` section.)
+
 > Last verified: 2026-08-05 (calendar scope honesty — **THE GRANT PERMITS READING EVENT DETAILS.
 > THE CODE DOES NOT. THAT GAP IS DELIBERATE AND IS A DIRECTION, NOT A GUARANTEE.** No code changed;
 > a claim was corrected.)

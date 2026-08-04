@@ -1733,10 +1733,13 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     // A withheld-but-constructed closure would still be reachable via invokeTool, and this tool
     // hardcodes depth 1 / ancestry [] — a re-entry there would bypass MAX_DEPTH and wouldCycle.
     expect(specialist, "a specialist can construct a dispatch").not.toContain("dispatchResearch");
-
-    expect(build({ grantDispatch: true, threadId: THREAD, rootRequestId: ROOT })).toContain(
-      "dispatchResearch",
+    expect(specialist, "a specialist can construct an image proposal").not.toContain(
+      "proposeImage",
     );
+
+    const executive = build({ grantDispatch: true, threadId: THREAD, rootRequestId: ROOT });
+    expect(executive).toContain("dispatchResearch");
+    expect(executive).toContain("proposeImage");
     // No turn identity ⇒ no lineage to dispatch under ⇒ structurally absent.
     expect(build({ grantDispatch: true })).not.toContain("dispatchResearch");
   });
