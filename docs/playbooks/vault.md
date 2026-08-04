@@ -1,5 +1,32 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (15.4-02 — **connected Nord Edge root/folder browse with honest
+> state handling and retained real actions.**) `/dashboard/vault` now uses a Vault-scoped plain
+> canvas, paper cards, semantic stat accents, responsive category/action rails and explicit
+> focus/disabled/reduced-motion states. The global `.pane-canvas` and `.clay-card` contracts were
+> not changed; every visual override is below `.vault-nord-edge` or uses a `vault-*` class.
+>
+> **Browse state matrix:** initial list loading, list failure, root empty, category empty, folder
+> empty, search loading, search failure and no search results are separate content states.
+> Processing/failed members are an independent partial-ingest axis, and unincorporated folder
+> members independently produce a stale-digest state, so warnings remain visible beside content.
+>
+> **Retained live controls:** single-file upload, folder upload, Google Drive browse/import, folder
+> open/cancel, failed-document retry, digest rebuild, Refresh, preview and load-bound copy remain
+> connected to the existing handlers. Folder search sends `folderId`; its request identity also
+> includes the folder so an older folder/query response cannot repaint the current scope. Category
+> tabs intentionally carry no counts because the backend exposes only bounded root statistics.
+>
+> **Focused verification:** `pnpm --filter @pikar/web test -- vault` (28/28),
+> `pnpm --filter @pikar/web typecheck`, `pnpm --filter @pikar/web build`, then
+> `node scripts/check-playbooks.mjs`. The retained-controls test is
+> `VaultBrowseControls.test.ts` (not `.tsx`) because the web Vitest include is intentionally
+> `.ts`-only; it uses `React.createElement` and `renderToStaticMarkup` with no new DOM dependency.
+>
+> **Rollback:** revert the 15.4-02 UI composition and scoped-style commits together. No schema,
+> stored-document, dependency or backend rollback is required; the Phase 15.4-01 optional
+> `folderId` search contract remains backward-compatible for older callers.
+
 > Last verified: 2026-08-04 (15.4-01 — **Vault search now honors the folder being browsed without
 > changing root search or the schema.**) `vaultSearch` accepts an optional `folderId`; its bounded
 > hybrid candidates resolve through search-only metadata, then pass tenant ownership, ingesting-folder
