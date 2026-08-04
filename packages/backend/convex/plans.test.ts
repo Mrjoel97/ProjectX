@@ -227,6 +227,131 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
   });
 });
 
+describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", () => {
+  async function seedCounterPlan(t: ReturnType<typeof convexTest>, complete = true) {
+    return t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_progress_${crypto.randomUUID()}`,
+        status: "delivering",
+        recipients: ["a@example.com", "b@example.com"],
+        recipientTotal: complete ? 2 : undefined,
+        queuedCount: complete ? 2 : undefined,
+        sentCount: complete ? 0 : undefined,
+        failedCount: complete ? 0 : undefined,
+        counterComplete: complete ? true : undefined,
+        createdAt: Date.now(),
+      });
+      const requestIds = await Promise.all(
+        ["a@example.com", "b@example.com"].map((recipient, index) =>
+          ctx.db.insert("requests", {
+            tenantId: TENANT,
+            correlationId: `progress_${index}_${crypto.randomUUID()}`,
+            goal: "Progress test",
+            recipient,
+            status: "delivering",
+            attachmentRefs: [],
+            planId,
+            createdAt: Date.now(),
+          }),
+        ),
+      );
+      return { planId, requestIds };
+    });
+  }
+
+  test("sent and failed terminals decrement queued and increment exactly once under replay", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t);
+    const first = requestIds[0]!;
+    const second = requestIds[1]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: true });
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: false });
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "failed",
+      }),
+    ).toEqual({ applied: false });
+
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: second,
+      outcome: "failed",
+    });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan).toMatchObject({
+      recipientTotal: 2,
+      queuedCount: 0,
+      sentCount: 1,
+      failedCount: 1,
+      counterComplete: true,
+    });
+    expect((plan?.sentCount ?? 0) + (plan?.failedCount ?? 0) + (plan?.queuedCount ?? 0)).toBe(
+      plan?.recipientTotal,
+    );
+    expect((await t.run((ctx) => ctx.db.get(first)))?.status).toBe("sent");
+    expect((await t.run((ctx) => ctx.db.get(second)))?.status).toBe("failed");
+  });
+
+  test("legacy plans transition request status but remain explicitly counter-partial", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t, false);
+    const requestId = requestIds[0]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: true });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.counterComplete).toBeUndefined();
+    expect(plan?.recipientTotal).toBeUndefined();
+    expect(plan?.queuedCount).toBeUndefined();
+    expect(plan?.sentCount).toBeUndefined();
+    expect(plan?.failedCount).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(requestId)))?.status).toBe("sent");
+  });
+
+  test("foreign or mismatched request refs cannot move plan counters", async () => {
+    const t = convexTest(schema, modules);
+    const a = await seedCounterPlan(t);
+    const b = await seedCounterPlan(t);
+
+    await expect(
+      t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId: a.planId,
+        requestId: b.requestIds[0]!,
+        outcome: "failed",
+      }),
+    ).rejects.toThrow(/delivery request not found/);
+
+    expect(await t.run((ctx) => ctx.db.get(a.planId))).toMatchObject({
+      queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+    });
+  });
+});
+
 describe("patchPlan reply threading + resetPlan clears it (03.11 RPLY-01, Pitfall 6)", () => {
   /** Seed a collecting plan; return its id. */
   async function seedPlan(t: ReturnType<typeof convexTest>) {
