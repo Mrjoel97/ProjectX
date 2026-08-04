@@ -5,6 +5,7 @@ export * from "./briefing";
 export * from "./buildTelemetry";
 export * from "./businessProfile";
 export * from "./calendar";
+export * from "./dashboard";
 export * from "./docType";
 export * from "./documentGen";
 export * from "./emailIntent";
