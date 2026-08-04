@@ -72,6 +72,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
 - [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail
 - [ ] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
+- [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget
 
 ### Live Voice Sessions
 
@@ -235,6 +236,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-12 | Phase 15.3 | Pending |
 | VALT-13 | Phase 15.3 | Pending |
 | VALT-14 | Phase 15.3 | Pending |
+| VALT-15 | Phase 20.1 | Pending |
 | VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
 | VOIC-02 | Phase 6 | Complete (server engine unit-verified 06-05: watchdog cap + clean/abnormal CAS + fail-closed metering; live 15:00 hangup at phase-gate human-verify) |
 | VOIC-03 | Phase 6 | Complete (server engine unit-verified 06-05: brief → vault ingest, refs-only session audit; live round-trip at phase-gate human-verify) |

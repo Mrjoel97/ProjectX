@@ -67,6 +67,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **S3 - Creation & Self-Extension**
 - [ ] **Phase 20: Media Canvas** - A finished short-form reel (clips + voiceover, assembled to one mp4) via fal.ai as async governed jobs with a separate cost cap
+- [ ] **Phase 20.1: Drive in the Cockpit** (INSERTED 2026-08-05) - the Executive Agent can browse and SEARCH the user's Google Drive to answer "which folder has the Q3 numbers", and provably cannot import from it. READ HALF ONLY: no new scope (drive.readonly, already granted and live-verified), no new consent, no write risk. **Numbered 20.1 because the constraint is the SKILL BODY, not the tools** — cockpit-agent is a GATED skill with ONE candidate stream and both 18-08 and 20-12 already edit it, so this runs after both. Agent-initiated import is deliberately OUT (it would need the Calendar propose-then-approve shape, a phase of its own); creating a Drive folder is IMPOSSIBLE without a restricted write scope behind a CASA assessment
 - [ ] **Phase 21: User-Authored Skills & Routines** - User authors business-adapted skills through the eval-gated registry (candidate-only); a routine is a skill body + a trigger row, and the pre-beta deliverable is a re-runnable pinned prompt (no routines table, no cron, no canvas)
 - [ ] **Phase 22: Owner Authorization Primitive** - `requireOwner` gates the three Phase-8 functions + admin controls (pulled EARLY - needed before Phase 23 and before multi-user)
 - [ ] **Phase 22.1: Beta Admission Readiness** (INSERTED) - Gmail disconnect + Google token revocation (the privacy policy currently promises a control that does not exist), per-tenant keying of the deployment-wide `dailySpendCents` window, and a green deployment/typecheck/CI gate
@@ -815,6 +816,43 @@ Plans:
 - [ ] 20-11-PLAN.md - ADR-012 (the route + the reel + the corrected, now vendor-direct arithmetic) and ADR-013 (the render worker), the REQUIREMENTS/ROADMAP/todo corrections, four playbooks, and the NON-NEGOTIABLE owner live gate at ~$0.75 that renders a REAL reel — Run A the Wan spine (~$0.29), Run B the LongCat 720p A/B (~$0.12) and Run C the 30 s block that empirically backs out fal's billed-seconds fps divisor (~$0.33) (Wave 13, has a blocking checkpoint)
 - [ ] 20-12-PLAN.md - Teach `cockpit-agent` the media route + regenerate its one-line mirror, PARKED behind Phase 16 closing the shared candidate stream (Wave 14, has a blocking checkpoint)
 - [x] 20-19-PLAN.md - NEW (authored 2026-08-02): vendor price + endpoint-health drift detection - a scheduled unauthenticated catalog check with THREE outcomes (agree / drift / unreachable), proven red before it is trusted; closes D5(b) and the `-preview` retirement blind spot (Wave 14)
+### Phase 20.1: Drive in the Cockpit (INSERTED)
+
+**Goal:** the Executive Agent can SEE the user's Google Drive — list folders, drill down, and answer
+"which folder has the Q3 numbers" — and provably cannot import from it or spend a cent doing so.
+
+**Requirement:** VALT-15.
+
+**Why 20.1 and not 18.1.** The tools are cheap; the constraint is the SKILL BODY. `cockpit-agent` is
+in `GATED_SKILLS` with ONE candidate stream, so teaching it a new tool mints a candidate at
+`maxVersion+1` that an eval must flip active. **Phase 18-08 and Phase 20-12 already edit that same
+body.** A concurrent edit would mint a candidate carrying two lanes' prose and the next eval would
+certify instructions nobody tested. This phase therefore runs AFTER both.
+
+**Scope — the READ half only.**
+- `vaultDrive.findInDrive` — the one genuinely new capability. The picker walks a tree; "where is
+  the Q3 folder" is a search, and `files.list` already answers it.
+- Two READ-ONLY cockpit tools (`listDriveFolders`, `findInDrive`), thin wrappers over the
+  tenantActions the vault picker already calls. No second Drive client.
+- A static guard proving `llm.ts` has NO reference to `importDriveFolder`, `reserveFolder`,
+  `openRun`, `exportOne` or `landFile` — not as a tool key, not inside an `execute`, not via the
+  scheduler.
+
+**Explicitly OUT, and why.**
+- **Agent-initiated import.** The import spends a governed budget and writes vault rows. If it is
+  ever wanted the shape is Calendar's — a `drive_import` plan kind the model STAGES and a human
+  approves through `executePlan` — which is a phase of its own, not a tool bolted on here. The
+  vault's Drive picker already gives the user a one-click import today.
+- **Creating a folder in Drive.** Not possible: `drive.readonly` is read-only by definition, and
+  writing needs `drive.file` or full `drive` — a RESTRICTED scope requiring a CASA assessment, the
+  same verification wall as the social integrations, itself blocked on the legal entity existing.
+
+**No new scope, no new consent, no new secret, no new HTTP route.** The whole phase runs inside the
+`drive.readonly` grant that shipped in 15.3-09 and has been live-verified against a real account.
+
+**Plans:**
+- [ ] 20.1-01-PLAN.md - Wave 1: findInDrive + two read-only cockpit tools + the no-paid-path guard + the SMOKE ops + the GATED cockpit-body edit (VALT-15)
+
 ### Phase 21: User-Authored Skills & Routines
 **Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim. A ROUTINE is that same thing plus a trigger row: it reuses `insertCandidate` (`skills.ts:386`), `activateSkillVersion` (`skills.ts:110`) and `GATED_SKILLS` (`skill.ts:170-194`) and introduces no authoring language. **Pre-beta deliverable: a re-runnable pinned prompt** — a saved chat message re-fired at `api.cockpit.sendCockpitMessage`. NOT a `routines` table, NOT a cron, NOT an authoring canvas, NOT a graph DSL; those are post-beta and evidence-gated on someone actually re-firing a pinned prompt twice.
 **Depends on**: Phases 16-19 (real specialist capability worth authoring skills for), Phase 3.6 (eval gate). User-authored first, agent-authored (Phase 23) last.
