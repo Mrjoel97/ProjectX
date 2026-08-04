@@ -21,7 +21,7 @@
  */
 import { DEFAULT_MODEL, estimateTokens, priceTranscription, priceUsage } from "@pikar/cost";
 import { GRAPH_EXTRACT_CHAR_CAP, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "./constants";
-import { VAULT_EXTRACT_PAGE_CAP, extractionKindFor } from "./extractKind";
+import { extractionKindFor, VAULT_EXTRACT_PAGE_CAP } from "./extractKind";
 
 /**
  * Embedding is FREE **today** — `text-embedding-3-small` is absent from `PRICING`, so
@@ -83,7 +83,8 @@ const GRAPH_INPUT_TOKENS = estimateTokens("x".repeat(GRAPH_EXTRACT_CHAR_CAP));
  * embed + graph-extract (`vaultIngest.ingestDoc` step 5). Graph extraction is a single
  * `gpt-4o-mini` call over at most `GRAPH_EXTRACT_CHAR_CAP` chars.
  */
-const perDocumentUsd = (): number => EMBED_USD_PER_MTOK + modelUsd(GRAPH_INPUT_TOKENS, GRAPH_OUTPUT_TOKENS);
+const perDocumentUsd = (): number =>
+  EMBED_USD_PER_MTOK + modelUsd(GRAPH_INPUT_TOKENS, GRAPH_OUTPUT_TOKENS);
 
 export type EstimateInput = {
   size: number;

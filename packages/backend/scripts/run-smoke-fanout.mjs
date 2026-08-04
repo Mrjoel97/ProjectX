@@ -35,7 +35,9 @@ const attachmentFilename = "smoke-proposal.pdf";
 console.log("[smoke:fanout] storing a fixed-bytes PDF for the shared attachment...");
 const { storageId, size } = parse(must("smoke:storeSmokePdf", { marker: pdfMarker }));
 
-console.log(`[smoke:fanout] seeding ${N} recipients (1 forced-fail: ${failCid}) + 1 shared attachment + distinct per-recipient bodies`);
+console.log(
+  `[smoke:fanout] seeding ${N} recipients (1 forced-fail: ${failCid}) + 1 shared attachment + distinct per-recipient bodies`,
+);
 must("smoke:seedFanout", {
   correlationIds: cids,
   recipients,
@@ -46,10 +48,14 @@ must("smoke:seedFanout", {
   attachment: { storageId, filename: attachmentFilename, size },
 });
 
-console.log("[smoke:fanout] asserting: the ONE attachment fanned to every recipient (shared ref, V6)...");
+console.log(
+  "[smoke:fanout] asserting: the ONE attachment fanned to every recipient (shared ref, V6)...",
+);
 must("smokeAssert:assertFanoutAttachmentShared", { correlationIds: cids });
 
-console.log("[smoke:fanout] asserting: DISTINCT per-recipient bodies under a SHARED subject (CKPT-03, inverse of the shared attachment)...");
+console.log(
+  "[smoke:fanout] asserting: DISTINCT per-recipient bodies under a SHARED subject (CKPT-03, inverse of the shared attachment)...",
+);
 must("smokeAssert:assertFanoutBodiesDistinct", { correlationIds: cids });
 
 console.log("[smoke:fanout] polling: every non-fail recipient reached awaiting_reauth|sent...");
@@ -61,8 +67,17 @@ await pollPass("smokeAssert:assertRecipientDeadLettered", { correlationId: failC
 console.log("[smoke:fanout] asserting: one terminal per recipient (write-once)...");
 await pollPass("smokeAssert:assertFanoutIdempotent", { correlationIds: cids });
 
-console.log("[smoke:fanout] asserting: no raw email content (incl. each distinct tailored body) OR attachment bytes in any log plane...");
-const needles = [subjectNeedle, bodyNeedle, ...recipientBodies, ...recipients, pdfMarker, pdfMarkerB64];
+console.log(
+  "[smoke:fanout] asserting: no raw email content (incl. each distinct tailored body) OR attachment bytes in any log plane...",
+);
+const needles = [
+  subjectNeedle,
+  bodyNeedle,
+  ...recipientBodies,
+  ...recipients,
+  pdfMarker,
+  pdfMarkerB64,
+];
 await pollPass("smokeAssert:assertNoRawPiiFanout", { correlationIds: cids, needles });
 
 console.log("[smoke:fanout] PASSED");

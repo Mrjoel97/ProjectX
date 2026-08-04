@@ -1,14 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { BRIEF_HEADERS, planSeedFromBrief } from "./brief";
-import {
-  REALTIME_CLIENT_EVENTS,
-  REALTIME_EVENTS,
-  REALTIME_FUNCTION_CALL,
-  SESSION_TOOL_KEYS,
-  TOOL_CHOICE_AUTO,
-} from "./realtime";
 import type { RawDocReview } from "./docSession";
 import {
+  buildDocDigest,
+  composeDocMemo,
   DIGEST_CHAR_CAP,
   DIGEST_FENCE_CLOSE,
   DIGEST_FENCE_OPEN,
@@ -20,12 +15,17 @@ import {
   RETRIEVAL_CHAR_CAP,
   RETRIEVAL_MAX_PASSAGES,
   SEARCH_DOCUMENT_TOOL,
-  VOICE_DOC_THREAD_PREFIX,
-  buildDocDigest,
-  composeDocMemo,
   shapeDocReview,
+  VOICE_DOC_THREAD_PREFIX,
   voiceDocThreadId,
 } from "./docSession";
+import {
+  REALTIME_CLIENT_EVENTS,
+  REALTIME_EVENTS,
+  REALTIME_FUNCTION_CALL,
+  SESSION_TOOL_KEYS,
+  TOOL_CHOICE_AUTO,
+} from "./realtime";
 
 /** Pull the fenced document slice back out — the cap applies to THIS, not to the whole string. */
 function fencedBody(digest: string): string {

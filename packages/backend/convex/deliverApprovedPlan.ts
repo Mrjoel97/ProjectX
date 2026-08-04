@@ -16,9 +16,9 @@
 // scheduler ctx (02-06). deliverApprovedPlan is the delivery lane's sole workflow;
 // executePlan (plan 07) is its sole starter (the zero-sends-before-Approve invariant).
 import { v } from "convex/values";
-import { workflow } from "./index";
-import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { internalMutation } from "./_generated/server";
+import { workflow } from "./index";
 
 export const deliverApprovedPlan = workflow.define({
   args: {
@@ -41,7 +41,13 @@ export const deliverApprovedPlan = workflow.define({
         await step.runMutation(internal.telemetry.writeTerminal, {
           requestId,
           correlationId,
-          outcome: { reviewOutcome: "sent", durationMs: 0, decisionCounts: {}, regenerateCount: 0, usages: [] },
+          outcome: {
+            reviewOutcome: "sent",
+            durationMs: 0,
+            decisionCounts: {},
+            regenerateCount: 0,
+            usages: [],
+          },
         });
       } catch (e) {
         // Per-recipient isolation (SC5): dead-letter THIS row on its own cid, keep the loop going.

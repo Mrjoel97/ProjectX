@@ -5,16 +5,16 @@ import {
   CALLS_URL,
   CAP_MS,
   graceExpired,
-  readUsage,
   REALTIME_CLIENT_EVENTS,
   REALTIME_EVENTS,
   REALTIME_FUNCTION_CALL,
+  readUsage,
   SEARCH_DOCUMENT_TOOL,
   SESSION_TOOL_KEYS,
   TOOL_CHOICE_AUTO,
 } from "@pikar/voice";
-import type { FunctionArgs } from "convex/server";
 import { useAction, useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // The voiceSessions row id, derived from the mutation's own args (the IntakeControls precedent) so
@@ -230,9 +230,15 @@ export function useVoiceSession(docId?: string): VoiceSession {
           const full = (ev.transcript ?? "").trim();
           setTranscript((t) => {
             const prev = id ? t.find((x) => x.id === id) : undefined;
-            if (prev) return t.map((x) => (x.id === prev.id ? { ...x, final: true, text: full || x.text } : x));
+            if (prev)
+              return t.map((x) =>
+                x.id === prev.id ? { ...x, final: true, text: full || x.text } : x,
+              );
             if (!full) return t;
-            return [...t, { id: `a-${Date.now()}-${t.length}`, speaker: "agent", text: full, final: true }];
+            return [
+              ...t,
+              { id: `a-${Date.now()}-${t.length}`, speaker: "agent", text: full, final: true },
+            ];
           });
           break;
         }
@@ -284,7 +290,9 @@ export function useVoiceSession(docId?: string): VoiceSession {
                 // searchDocument reads `docRef` off the server session row, so nothing the model
                 // says can widen the scope or name a different document.
                 const { query } = JSON.parse(item.arguments ?? "{}") as { query?: string };
-                output = JSON.stringify(await searchDocument({ sessionId: sid, query: query ?? "" }));
+                output = JSON.stringify(
+                  await searchDocument({ sessionId: sid, query: query ?? "" }),
+                );
               } catch {
                 output = JSON.stringify({ passages: [], found: false, error: "unavailable" });
               }
@@ -519,7 +527,12 @@ export function useVoiceSession(docId?: string): VoiceSession {
       // the session stays "active"; the server watchdog keeps its wall-clock count (Pattern 3).
       // Deferred while a response is in flight — sent mid-response the createResponse silently 400s,
       // so wrapSentRef stays false and the next tick (1s later) retries it in the gap.
-      if (left <= WRAP_UP_MS && !wrapSentRef.current && !responseActiveRef.current && status === "live") {
+      if (
+        left <= WRAP_UP_MS &&
+        !wrapSentRef.current &&
+        !responseActiveRef.current &&
+        status === "live"
+      ) {
         wrapSentRef.current = true;
         send({
           type: REALTIME_CLIENT_EVENTS.createResponse,

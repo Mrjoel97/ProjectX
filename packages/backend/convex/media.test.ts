@@ -1425,7 +1425,10 @@ describe("submitBatch: idempotent per line, and it returns without waiting", () 
     // BOTH kinds refuse the same way. A voice line with no block to read is the sharper case: an
     // empty `text` is a valid request that bills for nothing and returns silence.
     for (const kind of ["video", "tts"] as const) {
-      expect((await rows(t)).find((r) => r.kind === kind), kind).toMatchObject({
+      expect(
+        (await rows(t)).find((r) => r.kind === kind),
+        kind,
+      ).toMatchObject({
         status: "failed",
         failureReason: "missing_shot",
       });
@@ -1906,16 +1909,14 @@ describe("the happy path: the bytes land, the URL does not", () => {
     // 900,000 implies ~18.75 s — an overrun no ffprobe has run yet to catch.
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockImplementation(() =>
-          Promise.resolve(
-            new Response(new Uint8Array(900_000), {
-              status: 200,
-              headers: { "content-type": "audio/wav" },
-            }),
-          ),
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(new Uint8Array(900_000), {
+            status: 200,
+            headers: { "content-type": "audio/wav" },
+          }),
         ),
+      ),
     );
     stubMediaEnv();
     const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
@@ -1936,16 +1937,14 @@ describe("the happy path: the bytes land, the URL does not", () => {
     // difference between the two is the byte count.
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockImplementation(() =>
-          Promise.resolve(
-            new Response(new Uint8Array(500_000), {
-              status: 200,
-              headers: { "content-type": "audio/wav" },
-            }),
-          ),
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(new Uint8Array(500_000), {
+            status: 200,
+            headers: { "content-type": "audio/wav" },
+          }),
         ),
+      ),
     );
     stubMediaEnv();
     const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
@@ -1958,16 +1957,14 @@ describe("the happy path: the bytes land, the URL does not", () => {
     const t = harness();
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockImplementation(() =>
-          Promise.resolve(
-            new Response(new Uint8Array(900_000), {
-              status: 200,
-              headers: { "content-type": "audio/wav" },
-            }),
-          ),
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(new Uint8Array(900_000), {
+            status: 200,
+            headers: { "content-type": "audio/wav" },
+          }),
         ),
+      ),
     );
     stubMediaEnv();
     // No `clipSeconds` — there is no window to measure against, so there is nothing to compare.
@@ -2393,7 +2390,9 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     expect(JSON.stringify(audit[0]?.payload)).not.toMatch(/url|href|http/i);
     // `gatesPassed` comes from the RE-VALIDATED sidecar, not from what the route claimed: the
     // fixture above returns `gates: []` and this is 2.
-    expect((audit[0]?.payload as { gatesPassed: number }).gatesPassed).toBe(2);
+    const auditRow = audit[0];
+    if (auditRow === undefined) throw new Error("expected media.composed audit row");
+    expect((auditRow.payload as { gatesPassed: number }).gatesPassed).toBe(2);
   });
 
   test("a FAILED render writes no audit row at all — a stop is not an event to log", async () => {
@@ -2600,7 +2599,9 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     // Block 0: voice landed, clip still in flight. Block 1: the reverse. A single merged status
     // could not tell these apart, and they arrive minutes apart through two different webhooks.
     await t.run(async (ctx) => {
-      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      );
       const base = {
         tenantId: A,
         planId,
@@ -2612,17 +2613,29 @@ describe("the canvas READ plane: two states per block, and a url only when it is
         updatedAt: T0,
       };
       await ctx.db.insert("mediaJobs", {
-        ...base, blockIndex: 0, kind: "video", model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 }, status: "submitted",
+        ...base,
+        blockIndex: 0,
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        status: "submitted",
       });
       await ctx.db.insert("mediaJobs", {
-        ...base, blockIndex: 0, kind: "tts", model: MEDIA_DEFAULT_VOICE.model,
+        ...base,
+        blockIndex: 0,
+        kind: "tts",
+        model: MEDIA_DEFAULT_VOICE.model,
         spec: { kind: "tts", characters: 200, voice: "v", sampleRateHertz: 24000 },
-        status: "succeeded", assetStorageId: storageId,
+        status: "succeeded",
+        assetStorageId: storageId,
       });
       await ctx.db.insert("mediaJobs", {
-        ...base, blockIndex: 1, kind: "video", model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 }, status: "succeeded",
+        ...base,
+        blockIndex: 1,
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        status: "succeeded",
         assetStorageId: storageId,
       });
     });
@@ -2651,9 +2664,19 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     const { planId } = await seedDeck(t, { blocks: 1 });
     await t.run(async (ctx) => {
       await ctx.db.insert("mediaJobs", {
-        tenantId: A, planId, batchId: "b1", blockIndex: 0, provider: "fal", kind: "video",
-        model: MEDIA_DEFAULT_VIDEO.model, spec: { kind: "video", resolution: "480p", seconds: 10 },
-        promptHash: "0".repeat(64), status: "submitted", estUsd: 0.1, createdAt: T0, updatedAt: T0,
+        tenantId: A,
+        planId,
+        batchId: "b1",
+        blockIndex: 0,
+        provider: "fal",
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        estUsd: 0.1,
+        createdAt: T0,
+        updatedAt: T0,
       });
     });
     const rows = await asA(t).query(api.media.assetUrls, { planId });
@@ -2678,7 +2701,10 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     const { planId } = await seedDeck(t);
     await t.run(
       async (ctx) =>
-        await ctx.db.patch(planId, { renderStatus: "failed", renderReason: "speech_out_of_window" }),
+        await ctx.db.patch(planId, {
+          renderStatus: "failed",
+          renderReason: "speech_out_of_window",
+        }),
     );
     const r = await asA(t).query(api.media.reel, { planId });
     expect(r).toMatchObject({ status: "failed", url: null, reason: "speech_out_of_window" });
@@ -2690,7 +2716,9 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     // `recordRender` writes renderSummary in the SAME patch as the two ids, and only after the
     // sidecar parsed. A row hand-patched to `rendered` therefore cannot surface a reel.
     await t.run(async (ctx) => {
-      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      );
       await ctx.db.patch(planId, {
         renderStatus: "rendered",
         renderStorageId: storageId,
@@ -2704,7 +2732,9 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     const t = harness();
     const { planId } = await seedDeck(t);
     await t.run(async (ctx) => {
-      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      );
       await ctx.db.patch(planId, {
         renderStatus: "rendered",
         renderStorageId: storageId,
@@ -2835,7 +2865,9 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
     const t = harness();
     const { planId } = await seedDeck(t, { blocks: 2 });
     await t.run(async (ctx) => {
-      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      );
       await ctx.db.patch(planId, {
         renderStatus: "rendered",
         renderStorageId: storageId,
@@ -2869,12 +2901,20 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
     const before = await mediaLeft(t);
     await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: "rendered" }));
 
-    expect(await asA(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "new" })).toEqual({ ok: true });
+    expect(
+      await asA(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "new" }),
+    ).toEqual({ ok: true });
     expect((await planRowOf(t, planId))?.shots?.[0]?.prompt).toBe("new");
     expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
 
     const line = "y".repeat(minCharsFor(10));
-    expect(await asA(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 1, narration: line })).toEqual({ ok: true });
+    expect(
+      await asA(t).mutation(api.media.editBlockNarration, {
+        planId,
+        blockIndex: 1,
+        narration: line,
+      }),
+    ).toEqual({ ok: true });
     expect((await planRowOf(t, planId))?.shots?.[1]?.narration).toBe(line);
 
     expect(await mediaLeft(t)).toBe(before);
@@ -2888,7 +2928,11 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
     // Without this cure, `narration_too_long` from the rail is a dead end: the user is told the
     // line is too long and has no way to shorten it.
     expect(
-      await asA(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 0, narration: tooLong }),
+      await asA(t).mutation(api.media.editBlockNarration, {
+        planId,
+        blockIndex: 0,
+        narration: tooLong,
+      }),
     ).toMatchObject({ ok: false, reason: "narration_too_long", chars: tooLong.length });
     expect((await planRowOf(t, planId))?.shots?.[0]?.narration).not.toBe(tooLong);
   });
@@ -2898,17 +2942,26 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
     const { planId } = await seedDeck(t, { blocks: 3 });
     const promptsBefore = (await planRowOf(t, planId))?.shots?.map((s) => s.prompt);
 
-    expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: [2, 0, 1] })).toEqual({ ok: true });
+    expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: [2, 0, 1] })).toEqual({
+      ok: true,
+    });
     const after = await planRowOf(t, planId);
     expect(after?.shots?.map((s) => s.prompt)).toEqual([
-      promptsBefore?.[2], promptsBefore?.[0], promptsBefore?.[1],
+      promptsBefore?.[2],
+      promptsBefore?.[0],
+      promptsBefore?.[1],
     ]);
     expect(after?.shots?.map((s) => s.index)).toEqual([0, 1, 2]);
     expect(after?.shots?.map((s) => s.windowStartMs)).toEqual([0, 10_000, 20_000]);
 
-    for (const bad of [[0, 1], [0, 1, 5], [0, 0, 1]]) {
+    for (const bad of [
+      [0, 1],
+      [0, 1, 5],
+      [0, 0, 1],
+    ]) {
       expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: bad })).toEqual({
-        ok: false, reason: "not_a_permutation",
+        ok: false,
+        reason: "not_a_permutation",
       });
     }
   });
@@ -2916,10 +2969,13 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
   test("delete splices and renumbers, and refuses to empty the deck", async () => {
     const t = harness();
     const { planId } = await seedDeck(t, { blocks: 2 });
-    expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).toEqual({ ok: true });
+    expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).toEqual({
+      ok: true,
+    });
     expect((await planRowOf(t, planId))?.shots?.map((s) => s.index)).toEqual([0]);
     expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).toEqual({
-      ok: false, reason: "last_block",
+      ok: false,
+      reason: "last_block",
     });
   });
 
@@ -2928,9 +2984,19 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
     const { planId } = await seedDeck(t, { blocks: 2 });
     await t.run(async (ctx) => {
       await ctx.db.insert("mediaJobs", {
-        tenantId: A, planId, batchId: "b1", blockIndex: 0, provider: "fal", kind: "video",
-        model: MEDIA_DEFAULT_VIDEO.model, spec: { kind: "video", resolution: "480p", seconds: 10 },
-        promptHash: "0".repeat(64), status: "succeeded", estUsd: 0.1, createdAt: T0, updatedAt: T0,
+        tenantId: A,
+        planId,
+        batchId: "b1",
+        blockIndex: 0,
+        provider: "fal",
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        promptHash: "0".repeat(64),
+        status: "succeeded",
+        estUsd: 0.1,
+        createdAt: T0,
+        updatedAt: T0,
       });
     });
     await asA(t).mutation(api.media.reorderBlocks, { planId, order: [1, 0] });
@@ -2945,9 +3011,13 @@ describe("BETA-05 ISOLATION: tenant B cannot read, spend or edit tenant A's canv
     const t = harness();
     const { planId } = await seedDeck(t, { tenantId: A, blocks: 2 });
     await t.run(async (ctx) => {
-      const storageId = await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" }));
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      );
       await ctx.db.patch(planId, {
-        renderStatus: "rendered", renderStorageId: storageId, sidecarStorageId: storageId,
+        renderStatus: "rendered",
+        renderStorageId: storageId,
+        sidecarStorageId: storageId,
         renderSummary: { durationS: 20, blockCount: 2, gates: ["g"] },
       });
     });
@@ -2972,12 +3042,24 @@ describe("BETA-05 ISOLATION: tenant B cannot read, spend or edit tenant A's canv
     const before = await mediaLeft(t);
 
     const line = "y".repeat(minCharsFor(10));
-    await expect(asB(t).mutation(api.media.generateReel, { planId })).rejects.toThrow(/plan not found/);
-    await expect(asB(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 })).rejects.toThrow(/plan not found/);
-    await expect(asB(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "x" })).rejects.toThrow(/plan not found/);
-    await expect(asB(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 0, narration: line })).rejects.toThrow(/plan not found/);
-    await expect(asB(t).mutation(api.media.reorderBlocks, { planId, order: [1, 0] })).rejects.toThrow(/plan not found/);
-    await expect(asB(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.generateReel, { planId })).rejects.toThrow(
+      /plan not found/,
+    );
+    await expect(
+      asB(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 }),
+    ).rejects.toThrow(/plan not found/);
+    await expect(
+      asB(t).mutation(api.media.editBlockPrompt, { planId, blockIndex: 0, prompt: "x" }),
+    ).rejects.toThrow(/plan not found/);
+    await expect(
+      asB(t).mutation(api.media.editBlockNarration, { planId, blockIndex: 0, narration: line }),
+    ).rejects.toThrow(/plan not found/);
+    await expect(
+      asB(t).mutation(api.media.reorderBlocks, { planId, order: [1, 0] }),
+    ).rejects.toThrow(/plan not found/);
+    await expect(asB(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 })).rejects.toThrow(
+      /plan not found/,
+    );
 
     // Nothing moved: no rows, no budget, no edits.
     expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(0);
@@ -3102,9 +3184,19 @@ describe("the render TRIGGER: the last landing starts it, exactly once, with no 
     const { planId, batchId, jobIds } = await seedInFlight(t, { blocks: 1 });
     await t.run(async (ctx) => {
       await ctx.db.insert("mediaJobs", {
-        tenantId: A, planId, batchId, blockIndex: -1, provider: "fal", kind: "stt",
-        model: MEDIA_DEFAULT_STT.model, spec: { kind: "stt", audioMinutes: 0.5 },
-        promptHash: "0".repeat(64), status: "queued", estUsd: 0.01, createdAt: T0, updatedAt: T0,
+        tenantId: A,
+        planId,
+        batchId,
+        blockIndex: -1,
+        provider: "fal",
+        kind: "stt",
+        model: MEDIA_DEFAULT_STT.model,
+        spec: { kind: "stt", audioMinutes: 0.5 },
+        promptHash: "0".repeat(64),
+        status: "queued",
+        estUsd: 0.01,
+        createdAt: T0,
+        updatedAt: T0,
       });
     });
     for (const id of jobIds) await land(t, id as Id<"mediaJobs">);
@@ -3138,7 +3230,12 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
     const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
     const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
     const { planId, rows } = await renderThrough(t, {
-      ok: true, mp4StorageId, sidecarStorageId, renderMs: 1000, gates: [], blockCount: 2,
+      ok: true,
+      mp4StorageId,
+      sidecarStorageId,
+      renderMs: 1000,
+      gates: [],
+      blockCount: 2,
     });
 
     // The FIELDS are unset…
@@ -3186,7 +3283,12 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
     const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
     const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
     await renderThrough(t, {
-      ok: true, mp4StorageId, sidecarStorageId, renderMs: 1, gates: [], blockCount: 2,
+      ok: true,
+      mp4StorageId,
+      sidecarStorageId,
+      renderMs: 1,
+      gates: [],
+      blockCount: 2,
     });
     expect(await t.run(async (ctx) => await ctx.db.query("deadLetters").collect())).toHaveLength(0);
   });
@@ -3210,7 +3312,10 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
     const run = () =>
       t.run(async (ctx) =>
         ctx.runMutation(internal.render.renderReel.recordRender, {
-          tenantId: A, planId, batchId: "batch_render", result,
+          tenantId: A,
+          planId,
+          batchId: "batch_render",
+          result,
         }),
       );
     await run();
@@ -3282,7 +3387,9 @@ async function seedCaptionable(
     for (const id of jobIds) {
       const row = await ctx.db.get(id as Id<"mediaJobs">);
       if (row?.kind !== "tts") continue;
-      const storageId = await ctx.storage.store(new Blob([wavBytes(24_000)], { type: "audio/wav" }));
+      const storageId = await ctx.storage.store(
+        new Blob([wavBytes(24_000)], { type: "audio/wav" }),
+      );
       // `takesLanded` is the difference between the TRIGGER's precondition (rows still in flight,
       // so landing one is what fires it) and the SUBMIT's (the takes already exist, because that
       // is the only state from which a transcript can be bought).
@@ -3351,14 +3458,16 @@ describe("submitCaptions: the audio goes out, a signed storage URL never does", 
       takesLanded: true,
     });
     const fetchMock = vi.fn(
-      async () => new Response(JSON.stringify({ request_id: "req_stt_1" }), { status: 200 }),
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ request_id: "req_stt_1" }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv(); // FAL_FIXTURE deliberately NOT set: the body is what this test is about
 
     expect((await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).ok).toBe(true);
 
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const init = fetchMock.mock.calls[0]?.[1];
+    if (init === undefined) throw new Error("fal submission did not include request options");
     const body = JSON.parse(String(init.body)) as { audio_url: string };
     expect(body.audio_url.startsWith("data:audio/wav;base64,")).toBe(true);
     // THE ASSERTION THIS WHOLE STAGE IS SHAPED BY: no URL of ours reaches a third party. A
@@ -3495,9 +3604,9 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
       JSON.stringify({ ok: true, mp4StorageId: captionedId, renderMs: 4200 }),
     );
 
-    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
-      { ok: true },
-    );
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: true });
 
     const plan = await planRow(t, planId);
     expect(plan?.captionStatus).toBe("captioned");
@@ -3515,9 +3624,9 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     stubRenderEnv();
     vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify({ ok: false, code: "missing_binary" }));
 
-    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
-      { ok: false, reason: "missing_binary" },
-    );
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: false, reason: "missing_binary" });
 
     const plan = await planRow(t, planId);
     // THE HALF THAT MATTERS: a missing caption track is a degraded deliverable; an unpublished
@@ -3552,9 +3661,9 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     vi.stubGlobal("fetch", fetchMock);
     stubRenderEnv(); // no MEDIA_SANDBOX_FIXTURE: a real POST would be attempted if it got that far
 
-    expect(await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId })).toEqual(
-      { ok: false, reason: "caption_track_empty" },
-    );
+    expect(
+      await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
+    ).toEqual({ ok: false, reason: "caption_track_empty" });
     expect(fetchMock).toHaveBeenCalledTimes(0);
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
   });
@@ -3616,8 +3725,10 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     );
     expect(takes.length).toBeGreaterThan(0);
     for (const take of takes) {
-      expect(take.assetStorageId, "a voice take was deleted before its transcript was burned")
-        .toBeDefined();
+      expect(
+        take.assetStorageId,
+        "a voice take was deleted before its transcript was burned",
+      ).toBeDefined();
     }
   });
 
@@ -3670,7 +3781,10 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
-      expect(row.assetStorageId, "20-16's rule regressed for a deck with no captions").toBeUndefined();
+      expect(
+        row.assetStorageId,
+        "20-16's rule regressed for a deck with no captions",
+      ).toBeUndefined();
     }
   });
 });

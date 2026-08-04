@@ -7,7 +7,12 @@
 // internalMutation/internalQuery from ./_generated/server are NOT banned by the
 // import guard (telemetry.ts precedent — no allowlist entry needed). This module
 // touches ctx.db, so it must stay on the default runtime (no "use node").
-import { calculateRateLimit, HOUR, type RateLimitConfig, RateLimiter } from "@convex-dev/rate-limiter";
+import {
+  calculateRateLimit,
+  HOUR,
+  type RateLimitConfig,
+  RateLimiter,
+} from "@convex-dev/rate-limiter";
 import { chooseModel } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
@@ -176,7 +181,13 @@ export const prepare = internalMutation({
     ctx,
     { requestId },
   ): Promise<
-    | { ok: true; model: string; safeTextHash: string; piiCounts: Record<string, number>; estCents: number }
+    | {
+        ok: true;
+        model: string;
+        safeTextHash: string;
+        piiCounts: Record<string, number>;
+        estCents: number;
+      }
     | {
         ok: false;
         reason:
@@ -286,7 +297,10 @@ export const preCall = internalMutation({
     { tenantId, rail, reserved },
   ): Promise<
     | { ok: true }
-    | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      }
   > => {
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
@@ -355,7 +369,10 @@ export const recordSpend = internalMutation({
 export const remainingDailyCents = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<number> => {
-    const tenant = Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value);
+    const tenant = Math.max(
+      0,
+      (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value,
+    );
     const deployment = Math.max(0, (await rateLimiter.getValue(ctx, "deploymentSpendCents")).value);
     return Math.min(tenant, deployment);
   },
@@ -375,10 +392,7 @@ export const remainingDailyCents = internalQuery({
 /** The plain-function face, so a `tenantQuery` can read it — a Convex query cannot `runQuery`, and
  *  plan 20-09's `jobEstimate` must show today's remaining budget beside the estimate. The
  *  `reserveJobInner` / `reserveJob` split, for the same reason. */
-export async function mediaRemainingCentsInner(
-  ctx: QueryCtx,
-  tenantId: string,
-): Promise<number> {
+export async function mediaRemainingCentsInner(ctx: QueryCtx, tenantId: string): Promise<number> {
   const tenant = Math.max(
     0,
     (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
@@ -450,7 +464,14 @@ export type FolderReserveRefusal =
  * refusal copy interpolates: *"this folder needs ~$3.40; you have $1.10 left today."*
  */
 export type FolderReserveResult =
-  | { ok: true; estCents: number; remainingCents: number; reservedAt: number; fileCount: number; totalBytes: number }
+  | {
+      ok: true;
+      estCents: number;
+      remainingCents: number;
+      reservedAt: number;
+      fileCount: number;
+      totalBytes: number;
+    }
   | {
       ok: false;
       reason: FolderReserveRefusal;
@@ -510,7 +531,15 @@ export async function reserveFolderInner(
   // estCents/remainingCents are 0 here because the kill switch stops BEFORE pricing. The reason
   // discriminates, and kill-switch copy never names a figure.
   if (cfg.killSwitch) {
-    return { ok: false, reason: "kill_switch", estCents: 0, remainingCents: 0, shortfallCents: 0, fileCount, totalBytes };
+    return {
+      ok: false,
+      reason: "kill_switch",
+      estCents: 0,
+      remainingCents: 0,
+      shortfallCents: 0,
+      fileCount,
+      totalBytes,
+    };
   }
 
   const { estCents } = estimateFolderCents(a.files);

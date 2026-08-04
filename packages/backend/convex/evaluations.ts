@@ -18,12 +18,7 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import {
-  deserializeProfile,
-  resolveSpecialist,
-  specialistMemoBody,
-  type Tier,
-} from "@pikar/core";
+import { deserializeProfile, resolveSpecialist, specialistMemoBody, type Tier } from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -898,7 +893,9 @@ export const landSpecialistResult = internalMutation({
     incomplete: v.boolean(),
     /** D11: the governed stop that made a returned body incomplete. The shared memo formatter
      *  owns the three user-visible sentences; absent preserves the pre-Phase-16 cost default. */
-    incompleteReason: v.optional(v.union(v.literal("cost"), v.literal("steps"), v.literal("clock"))),
+    incompleteReason: v.optional(
+      v.union(v.literal("cost"), v.literal("steps"), v.literal("clock")),
+    ),
     /** a reason CODE (unknown_route|depth_exceeded|cycle_refused|budget_exhausted|error) — never
      *  prose, and never surfaced to the user (§4 + the refusal-reply precedent). */
     fallbackReason: v.optional(v.string()),

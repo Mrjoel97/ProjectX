@@ -1221,7 +1221,8 @@ export const byPlan = tenantQuery({
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
 
-    const maxChars = plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
+    const maxChars =
+      plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
     return (plan.shots ?? []).map((shot) => {
       // The job's OWN blockIndex is authoritative, never the array position — see the reorder
       // ceiling on `reorderBlocks`.
@@ -1514,7 +1515,9 @@ export const imageEstimate = tenantQuery({
 async function reserveAndSchedule(
   ctx: MutationCtx,
   a: { tenantId: string; planId: Id<"plans">; blocks: readonly Block[]; clipSeconds: number },
-): Promise<{ ok: true; batchId: string; estCents: number } | { ok: false; reason: ReserveRefusal }> {
+): Promise<
+  { ok: true; batchId: string; estCents: number } | { ok: false; reason: ReserveRefusal }
+> {
   const reserved = await reserveJobInner(ctx, {
     tenantId: a.tenantId,
     planId: a.planId,
@@ -1636,7 +1639,8 @@ export const editBlockPrompt = tenantMutation({
   handler: async (ctx, { planId, blockIndex, prompt }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     const shots = plan.shots ?? [];
-    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+    if (!shots.some((s) => s.index === blockIndex))
+      return { ok: false as const, reason: "no_block" };
     await patchShots(
       ctx,
       planId,
@@ -1662,12 +1666,18 @@ export const editBlockNarration = tenantMutation({
   handler: async (ctx, { planId, blockIndex, narration }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     const shots = plan.shots ?? [];
-    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+    if (!shots.some((s) => s.index === blockIndex))
+      return { ok: false as const, reason: "no_block" };
 
     const maxChars =
       plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
     if (narration.length > maxChars) {
-      return { ok: false as const, reason: "narration_too_long", chars: narration.length, maxChars };
+      return {
+        ok: false as const,
+        reason: "narration_too_long",
+        chars: narration.length,
+        maxChars,
+      };
     }
     await patchShots(
       ctx,
@@ -1718,7 +1728,8 @@ export const deleteBlock = tenantMutation({
   handler: async (ctx, { planId, blockIndex }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
     const shots = plan.shots ?? [];
-    if (!shots.some((s) => s.index === blockIndex)) return { ok: false as const, reason: "no_block" };
+    if (!shots.some((s) => s.index === blockIndex))
+      return { ok: false as const, reason: "no_block" };
     if (shots.length === 1) return { ok: false as const, reason: "last_block" };
     await patchShots(
       ctx,

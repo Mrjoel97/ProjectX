@@ -7,8 +7,8 @@
 // accept-but-defer status, the delete-cascade + orphan GC, and the tenant guard. The offline
 // embed/extract seams (SMOKE::) are exercised end-to-end by the live vault smoke gate (later plan).
 import { VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault";
-import { convexTest } from "convex-test";
 import { getFunctionName } from "convex/server";
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // Register the delivery components so the ingest mutations can reach workflow.start under convex-test.
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
@@ -75,15 +75,17 @@ beforeEach(() => {
   enqueuedExtractions.length = 0;
   // The generic signature of `enqueueAction` cannot be satisfied by a concrete stub, so the
   // implementation is cast once here rather than typed twice.
-  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
-    ((async (_ctx: unknown, fn: never, fnArgs: unknown) => {
-      enqueuedExtractions.push({
-        name: getFunctionName(fn),
-        args: [fnArgs as Record<string, unknown>],
-      });
-      return "workId_test" as never;
-    }) as never) as never,
-  );
+  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation((async (
+    _ctx: unknown,
+    fn: never,
+    fnArgs: unknown,
+  ) => {
+    enqueuedExtractions.push({
+      name: getFunctionName(fn),
+      args: [fnArgs as Record<string, unknown>],
+    });
+    return "workId_test" as never;
+  }) as never as never);
 });
 afterEach(() => vi.restoreAllMocks());
 

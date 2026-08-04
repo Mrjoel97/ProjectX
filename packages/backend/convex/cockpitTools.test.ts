@@ -5,36 +5,41 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
-import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
-import {
-  CALENDAR_HORIZON_MS,
-  parseSendTime,
-  PLAN_ATTACHMENT_CAP_BYTES,
-  SPECIALISTS,
-} from "@pikar/core";
-import { convexTest } from "convex-test";
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import {
+  CALENDAR_HORIZON_MS,
+  PLAN_ATTACHMENT_CAP_BYTES,
+  parseSendTime,
+  SPECIALISTS,
+} from "@pikar/core";
+import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
-import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { contentHash } from "./lib/hash";
-import { buildAgentContext, buildCockpitTools, buildHistoryBlock, parseAgentSmoke } from "./llm";
-import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
 // REAL audit path runs under convex-test instead of throwing "component not registered".
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 // runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { contentHash } from "./lib/hash";
+import { buildAgentContext, buildCockpitTools, buildHistoryBlock, parseAgentSmoke } from "./llm";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // NO @ts-expect-error on this one, unlike the three above: tsconfig.json includes vitest.config.mts,
 // which pulls Vite's global types in, so import.meta.glob typechecks and the directive is DEAD
 // (TS2578 — a real +1 on the backend's error count). Do not "restore" the sibling idiom here.
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
 const SMOKE = "SMOKE::route=direct_llm::";
 type T = ReturnType<typeof convexTest>;
@@ -43,7 +48,10 @@ async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   await t.mutation(internal.skills.seedSkills, {});
-  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
   return { t, planId };
 }
 
@@ -54,7 +62,10 @@ async function setupWithLimiter(): Promise<{ t: T; planId: Id<"plans"> }> {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   await t.mutation(internal.skills.seedSkills, {});
-  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
   return { t, planId };
 }
 
@@ -154,7 +165,9 @@ test("resolveContacts re-search of the SAME name REPLACES that name's matches (u
   await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" }); // re-resolve the same name
 
   const plan = await readPlan(t, planId);
-  const sarahEntries = (plan?.candidates ?? []).filter((c: { name: string }) => c.name === "SMOKE::Sarah");
+  const sarahEntries = (plan?.candidates ?? []).filter(
+    (c: { name: string }) => c.name === "SMOKE::Sarah",
+  );
   expect(sarahEntries.length).toBe(1); // upsert by name — never a duplicate section for one name
 });
 
@@ -220,7 +233,12 @@ test("the html branch shares the render-fail seam and the byte cap (one governed
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES,
+      },
     ],
   });
   const capped = await call(t, planId, "generateAttachment", {
@@ -236,7 +254,10 @@ test("regenerateAttachment supersedes in place and deletes the OLD bytes (O3, no
   await call(t, planId, "generateAttachment", { topic: `${ATTACH} first` });
   const oldId = (await readPlan(t, planId))!.attachments![0]!.storageId;
 
-  const res = await call(t, planId, "regenerateAttachment", { index: 1, topic: `${ATTACH} second` });
+  const res = await call(t, planId, "regenerateAttachment", {
+    index: 1,
+    topic: `${ATTACH} second`,
+  });
   expect(res).not.toMatch(/reject/i);
   const after = await readPlan(t, planId);
   expect(after?.attachments?.length).toBe(1);
@@ -283,7 +304,12 @@ test("generateAttachment over the byte cap sets attachmentError and stores NO ne
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES,
+      },
     ],
   });
 
@@ -307,7 +333,9 @@ async function fillProposable(t: T, planId: Id<"plans">): Promise<void> {
 test("proposePlan refuses when attachmentError is set (render-fail/over-cap → not approvable, V7)", async () => {
   const { t, planId } = await setup();
   await fillProposable(t, planId);
-  await call(t, planId, "generateAttachment", { topic: "SMOKE::route=direct_llm::render=fail:: x" });
+  await call(t, planId, "generateAttachment", {
+    topic: "SMOKE::route=direct_llm::render=fail:: x",
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/attachment|cannot propose/i);
@@ -321,7 +349,12 @@ test("proposePlan refuses when attachments exceed the byte cap (defense-in-depth
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES + 1 },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES + 1,
+      },
     ],
   }); // no attachmentError — the cap re-check must catch it on its own
 
@@ -484,9 +517,12 @@ test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ON
   const RECIPIENT_TOOLS = ["addRecipients", "setRecipients", "removeRecipient"];
 
   const full = Object.keys(buildCockpitTools(stubCtx, "t1", planId));
-  for (const name of RECIPIENT_TOOLS) expect(full, `${name} missing from the normal set`).toContain(name);
+  for (const name of RECIPIENT_TOOLS)
+    expect(full, `${name} missing from the normal set`).toContain(name);
 
-  const withheld = Object.keys(buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true));
+  const withheld = Object.keys(
+    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true),
+  );
   for (const name of RECIPIENT_TOOLS)
     expect(withheld, `${name} present on the post-pick continue turn`).not.toContain(name);
   // resolveContacts stays — it writes candidates, not recipients (proposePlan's pending-pick gate covers it).
@@ -582,7 +618,10 @@ test("proposePlan refuses a GROUP plan that carries personalization (individual 
   const { t, planId } = await setup();
   await fillTwoProposable(t, planId);
   await call(t, planId, "setMode", { mode: "group" });
-  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+  await call(t, planId, "personalizeRecipient", {
+    index: 1,
+    instructions: `${PERS} warmer for bob`,
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/individual/i); // tells the agent to switch to individual
@@ -593,7 +632,10 @@ test("proposePlan PROCEEDS for an INDIVIDUAL plan that carries personalization",
   const { t, planId } = await setup();
   await fillTwoProposable(t, planId);
   await call(t, planId, "setMode", { mode: "individual" });
-  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+  await call(t, planId, "personalizeRecipient", {
+    index: 1,
+    instructions: `${PERS} warmer for bob`,
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/proposed/i);
@@ -782,7 +824,10 @@ test("digestInbox (smoke) emits a non-empty cross-message synopsis + a collapse-
 
   // A non-empty synopsis string — the lede the briefings row will carry (never a count/sender/date).
   expect(typeof batch.synopsis).toBe("string");
-  expect(batch.synopsis.length, "digestInbox produced an empty synopsis on the smoke path").toBeGreaterThan(0);
+  expect(
+    batch.synopsis.length,
+    "digestInbox produced an empty synopsis on the smoke path",
+  ).toBeGreaterThan(0);
   // Exactly one newsletter row (the non-needsReply item #1) so collapseNoise has something to fold,
   // while item #0 stays the needsReply action row.
   expect(batch.items.filter((i) => i.category === "newsletter").length).toBe(1);
@@ -840,7 +885,10 @@ test("replyToMessage resolves ONE match by ref: recipient-by-ref + Re: subject +
   // Recipient set BY REF, no panel round-trip.
   expect(plan?.recipients).toEqual(["sarah.chen@example.com"]);
   expect(plan?.recipientNames?.["sarah.chen@example.com"]).toBe("Sarah Chen");
-  expect(plan?.candidates ?? [], "replyToMessage wrote candidates — it must NOT round-trip a panel").toEqual([]);
+  expect(
+    plan?.candidates ?? [],
+    "replyToMessage wrote candidates — it must NOT round-trip a panel",
+  ).toEqual([]);
   // Re: subject (not doubled) + the four threading fields, server-side.
   expect(plan?.subject).toBe("Re: Q3 numbers");
   expect(plan?.replyToMessageId).toBe("fix-reply");
@@ -1004,7 +1052,10 @@ test("searchVault writes a refs-only vault.searched audit — queryHash + result
 test("searchVault gives tenant B NOTHING of tenant A's corpus (BETA-05)", async () => {
   const { t } = await setup();
   const t1Doc = await seedVaultDoc(t, "t1", `Tenant A private: ${VAULT_NEEDLE}.`);
-  const t2Plan = await t.mutation(internal.plans.insertPlan, { tenantId: "t2", threadId: "thread2" });
+  const t2Plan = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t2",
+    threadId: "thread2",
+  });
 
   const reply = await t.action(internal.llm.__invokeCockpitTool, {
     tenantId: "t2",
@@ -1058,7 +1109,9 @@ const CALENDAR_ATTENDEE_NEEDLE = "private-attendee@example.com";
 const CALENDAR_DESCRIPTION_NEEDLE = "ZZQX private event description";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fmtCalendarInstant = (ms: number, tz = "UTC") =>
-  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(
+    ms,
+  );
 
 test("checkAvailability returns the busy-block count and every displayed block time, never event content", async () => {
   const { t, planId } = await setup();
@@ -1501,13 +1554,18 @@ test("SC2: the createDocument tool body has NO external side effect", () => {
   );
   expect(block, "createDocument reaches a mail surface").not.toMatch(/gmail/i);
   expect(block, "createDocument starts a workflow").not.toMatch(/workflow\.start/);
-  expect(block, "createDocument dispatches back into cockpit.ts").not.toMatch(/internal\.cockpit\./);
+  expect(block, "createDocument dispatches back into cockpit.ts").not.toMatch(
+    /internal\.cockpit\./,
+  );
 });
 
 test("renderAndStore's html branch renders through renderHtmlDocument — never raw markdown bytes", () => {
   const src = readLlmSource();
   const start = src.indexOf("const renderAndStore = async (");
-  expect(start, "renderAndStore not found — did it get renamed or extracted?").toBeGreaterThanOrEqual(0);
+  expect(
+    start,
+    "renderAndStore not found — did it get renamed or extracted?",
+  ).toBeGreaterThanOrEqual(0);
   const rest = src.slice(start);
   const end = rest.indexOf("\n  };\n");
   expect(end, "the renderAndStore close was not found — the slice is unbounded").toBeGreaterThan(0);

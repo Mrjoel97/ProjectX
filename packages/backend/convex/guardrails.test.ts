@@ -426,9 +426,7 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
       })),
     });
     expect(res.ok).toBe(true);
-    expect(
-      await t.query(internal.guardrails.ingestRemainingCents, { tenantId: TENANT }),
-    ).toBe(0);
+    expect(await t.query(internal.guardrails.ingestRemainingCents, { tenantId: TENANT })).toBe(0);
   }
 
   // THE CONTROL, and it is what makes the tests below mean anything: this is what folder ingest

@@ -225,7 +225,6 @@ describe("the vault surface", () => {
     expect(block).not.toContain("localStorage");
   });
 
-
   // The BEHAVIOURAL half of "the refusal names both numbers" moved OUT of this file on 2026-08-04,
   // to `apps/web/app/(app)/dashboard/vault/preflightCopy.test.ts`, once `apps/web` finally had a
   // runner (see `apps/web/vitest.config.mts`). It lived here only because a test file over there

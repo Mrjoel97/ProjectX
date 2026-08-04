@@ -5,7 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PasswordField, TextField } from "../fields";
-import { ArrowIcon, CheckCircleIcon, GoogleIcon, LockIcon, MailIcon, StarIcon, UserIcon } from "../icons";
+import {
+  ArrowIcon,
+  CheckCircleIcon,
+  GoogleIcon,
+  LockIcon,
+  MailIcon,
+  StarIcon,
+  UserIcon,
+} from "../icons";
 
 export default function SignUp() {
   const { signIn } = useAuthActions();

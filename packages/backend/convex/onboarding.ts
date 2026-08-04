@@ -631,7 +631,10 @@ export const commitProfile = tenantMutation({
  */
 export const __seedOnboardedTenant = internalMutation({
   args: { tenantId: v.string() },
-  handler: async (ctx, { tenantId }): Promise<{ vaultDocId: Id<"vaultDocuments">; tier: string }> => {
+  handler: async (
+    ctx,
+    { tenantId },
+  ): Promise<{ vaultDocId: Id<"vaultDocuments">; tier: string }> => {
     // The same fixture `extractProfile`'s SMOKE:: sentinel returns, so the seeded tenant and the
     // offline extraction path describe the same business rather than two invented ones.
     const profile = smokeProfileFixture();
@@ -654,7 +657,12 @@ export const __seedOnboardedTenant = internalMutation({
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .unique();
     if (existingRow) {
-      await ctx.db.patch(existingRow._id, { ...facts, tier, tierSource: "derived", derivedAt: Date.now() });
+      await ctx.db.patch(existingRow._id, {
+        ...facts,
+        tier,
+        tierSource: "derived",
+        derivedAt: Date.now(),
+      });
     } else {
       await ctx.db.insert("tenantProfiles", {
         tenantId,

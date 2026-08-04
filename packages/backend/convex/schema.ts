@@ -273,9 +273,7 @@ export default defineSchema({
     // Phase-20 (20-07, MEDIA-01) widened it a THIRD time: "media" = a reel staged as a BLOCK DECK,
     // reserved and started on Approve by the same `externalAction` arm. Still optional, still
     // closed, still no migration.
-    kind: v.optional(
-      v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media")),
-    ),
+    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).
@@ -1236,12 +1234,7 @@ export default defineSchema({
     blockIndex: v.number(), // index into plans.shots; -1 for a job that belongs to the whole deck (stt)
     provider: v.literal("fal"), // closed literal — a second provider is a deliberate schema edit
     // FOUR kinds, closed. A fifth member is a deliberate schema edit, the `provider` precedent.
-    kind: v.union(
-      v.literal("video"),
-      v.literal("image"),
-      v.literal("tts"),
-      v.literal("stt"),
-    ),
+    kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.

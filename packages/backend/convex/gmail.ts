@@ -1,5 +1,6 @@
 "use node";
 
+import { BODY_TRUNCATE_CHARS, type InboxMessageMeta } from "@pikar/core";
 // Gmail delivery send action (DLVR-01). "use node": this module holds ONLY the send
 // action — every DB touch goes through internal queries/mutations in gmailAuth.ts /
 // pipeline.ts / audit.ts via ctx.runQuery/runMutation (01-07 rule: a "use node" module
@@ -10,10 +11,9 @@
 // (retry) and a dead refresh token routes to awaiting_reauth WITHOUT throwing (the
 // approved draft is preserved and delivery resumes after the user reconnects).
 import { v } from "convex/values";
-import { BODY_TRUNCATE_CHARS, type InboxMessageMeta } from "@pikar/core";
+import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { contentHash } from "./lib/hash";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -253,7 +253,13 @@ function gq(name: string): string {
 /** Map a message's metadata headers into a HeaderRecord (headers only — no body ever leaves Google). */
 function toHeaderRecord(headers: { name: string; value: string }[]): HeaderRecord {
   const pick = (h: string) => headers.find((x) => x.name.toLowerCase() === h.toLowerCase())?.value;
-  return { from: pick("From"), to: pick("To"), cc: pick("Cc"), subject: pick("Subject"), date: pick("Date") };
+  return {
+    from: pick("From"),
+    to: pick("To"),
+    cc: pick("Cc"),
+    subject: pick("Subject"),
+    date: pick("Date"),
+  };
 }
 
 /**
@@ -283,8 +289,16 @@ export const search = internalAction({
     // no real PII. Lets the resolution E2E/smoke run with no live mailbox (Plan 04/05 drive it).
     if (name.startsWith("SMOKE::")) {
       const records: HeaderRecord[] = [
-        { from: "Sarah Smoke <sarah@example.com>", subject: "Invoice", date: "Mon, 01 Jan 2024 10:00:00 +0000" },
-        { from: "Sara Test <sara@example.org>", subject: "Hello", date: "Tue, 02 Jan 2024 09:00:00 +0000" },
+        {
+          from: "Sarah Smoke <sarah@example.com>",
+          subject: "Invoice",
+          date: "Mon, 01 Jan 2024 10:00:00 +0000",
+        },
+        {
+          from: "Sara Test <sara@example.org>",
+          subject: "Hello",
+          date: "Tue, 02 Jan 2024 09:00:00 +0000",
+        },
       ];
       await audit(records.length);
       return { ok: true, records };
@@ -338,7 +352,9 @@ export const search = internalAction({
             META_HEADERS.map((h) => `&metadataHeaders=${h}`).join(""),
           { headers: { Authorization: `Bearer ${access.token}` } },
         );
-        const msg = (await res.json()) as { payload?: { headers?: { name: string; value: string }[] } };
+        const msg = (await res.json()) as {
+          payload?: { headers?: { name: string; value: string }[] };
+        };
         return toHeaderRecord(msg.payload?.headers ?? []);
       }),
     );
@@ -421,7 +437,10 @@ export const listInbox = internalAction({
     range: v.string(),
     maxResults: v.optional(v.number()),
   },
-  handler: async (ctx, { tenantId, correlationId, range, maxResults }): Promise<ListInboxResult> => {
+  handler: async (
+    ctx,
+    { tenantId, correlationId, range, maxResults },
+  ): Promise<ListInboxResult> => {
     // ONE refs-only audit event per list, shared by the fixture + live paths (mirrors `search`).
     const audit = (resultCount: number) =>
       ctx.runMutation(internal.audit.log, {
@@ -616,7 +635,8 @@ export const getReplyTarget = internalAction({
       payload?: { headers?: { name: string; value: string }[] };
     };
     const headers = msg.payload?.headers ?? [];
-    const pick = (h: string) => headers.find((x) => x.name.toLowerCase() === h.toLowerCase())?.value;
+    const pick = (h: string) =>
+      headers.find((x) => x.name.toLowerCase() === h.toLowerCase())?.value;
     const messageIdHeader = pick("Message-ID");
     return {
       ok: true,
@@ -625,7 +645,9 @@ export const getReplyTarget = internalAction({
         subject: pick("Subject") ?? "",
         threadId: msg.threadId,
         inReplyTo: messageIdHeader,
-        references: messageIdHeader ? buildReferences(messageIdHeader, pick("References")) : undefined,
+        references: messageIdHeader
+          ? buildReferences(messageIdHeader, pick("References"))
+          : undefined,
       },
     };
   },

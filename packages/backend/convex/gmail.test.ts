@@ -1,19 +1,22 @@
 // buildMime self-check (V3 multipart structurally correct + V4 zero-attachment byte-identical),
 // plus the 03.7-02 inbox read plane: the fixture seam, the refs-only mailbox.listed audit, and
 // the pure MIME text/plain picker.
+
+import { BODY_TRUNCATE_CHARS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { BODY_TRUNCATE_CHARS } from "@pikar/core";
-import { internal } from "./_generated/api";
-import schema from "./schema";
-import { buildMime, pickPlainText } from "./gmail";
 // listInbox's refs-only mailbox.listed audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { internal } from "./_generated/api";
+import { buildMime, pickPlainText } from "./gmail";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 /** convex-test instance with the audit aggregate registered (every listInbox test audits). */
 function harness() {
@@ -130,11 +133,17 @@ describe("buildMime — reply threading headers (RPLY-01)", () => {
   });
 
   test("multipart: emits In-Reply-To + References after Subject in the attachment branch too", () => {
-    const mime = buildMime(TO, `Re: ${SUBJECT}`, BODY, [
-      { filename: "a.pdf", mimeType: "application/pdf", base64: "QQ==" },
-    ], threading);
+    const mime = buildMime(
+      TO,
+      `Re: ${SUBJECT}`,
+      BODY,
+      [{ filename: "a.pdf", mimeType: "application/pdf", base64: "QQ==" }],
+      threading,
+    );
     // The two threading lines sit between Subject and MIME-Version (the header block, before boundary).
-    expect(mime).toContain(`Subject: Re: ${SUBJECT}\r\nIn-Reply-To: ${MSG_ID}\r\nReferences: ${MSG_ID}\r\nMIME-Version: 1.0`);
+    expect(mime).toContain(
+      `Subject: Re: ${SUBJECT}\r\nIn-Reply-To: ${MSG_ID}\r\nReferences: ${MSG_ID}\r\nMIME-Version: 1.0`,
+    );
   });
 
   test("no threading arg: NEITHER header appears (a normal compose is unaffected)", () => {
@@ -189,7 +198,9 @@ describe("pickPlainText (MIME text/plain extraction)", () => {
   });
 
   test("a top-level text/plain body (no parts) decodes", () => {
-    expect(pickPlainText({ mimeType: "text/plain", body: { data: b64url("flat body") } })).toBe("flat body");
+    expect(pickPlainText({ mimeType: "text/plain", body: { data: b64url("flat body") } })).toBe(
+      "flat body",
+    );
   });
 
   test("base64url alphabet (- and _) decodes — NOT standard base64", () => {
@@ -207,7 +218,9 @@ describe("pickPlainText (MIME text/plain extraction)", () => {
   });
 
   test("a text/plain leaf with no data → null (never crashes)", () => {
-    expect(pickPlainText({ mimeType: "multipart/mixed", parts: [{ mimeType: "text/plain", body: {} }] })).toBeNull();
+    expect(
+      pickPlainText({ mimeType: "multipart/mixed", parts: [{ mimeType: "text/plain", body: {} }] }),
+    ).toBeNull();
   });
 });
 
@@ -235,7 +248,14 @@ describe("listInbox (fixture seam + refs-only audit)", () => {
     expect(res.messages.length).toBeGreaterThan(0);
     // Mapped to the @pikar/core InboxMessageMeta shape — and the fixture's `body` must NOT ride along.
     const m = res.messages[0]!;
-    expect(Object.keys(m).sort()).toEqual(["from", "id", "internalDate", "isUnread", "snippet", "subject"]);
+    expect(Object.keys(m).sort()).toEqual([
+      "from",
+      "id",
+      "internalDate",
+      "isUnread",
+      "snippet",
+      "subject",
+    ]);
     expect(typeof m.internalDate).toBe("number");
   });
 
@@ -271,7 +291,10 @@ describe("listInbox (fixture seam + refs-only audit)", () => {
     });
     expect(res).toEqual({ ok: false, reason: "not_connected" });
     const rows = await t.run((ctx) => ctx.db.query("audit").collect());
-    expect(rows.filter((r) => r.eventType === "mailbox.listed"), "a failed list must not audit").toHaveLength(0);
+    expect(
+      rows.filter((r) => r.eventType === "mailbox.listed"),
+      "a failed list must not audit",
+    ).toHaveLength(0);
   });
 });
 
@@ -340,7 +363,10 @@ describe("fetchInboxBodies (fixture bodies, truncated)", () => {
         ],
       });
     });
-    const res = await t.action(internal.gmail.fetchInboxBodies, { tenantId: TENANT, ids: ["long-1"] });
+    const res = await t.action(internal.gmail.fetchInboxBodies, {
+      tenantId: TENANT,
+      ids: ["long-1"],
+    });
     if (!res.ok) throw new Error("fixture bodies failed");
     expect(res.bodies[0]!.body).toHaveLength(BODY_TRUNCATE_CHARS);
   });
@@ -455,7 +481,10 @@ describe("getReplyTarget (target-header read over the fixture seam)", () => {
       offlineDigest: false,
       baseMs: BASE_MS,
     });
-    const res = await t.action(internal.gmail.getReplyTarget, { tenantId: TENANT, id: "fix-reply" });
+    const res = await t.action(internal.gmail.getReplyTarget, {
+      tenantId: TENANT,
+      id: "fix-reply",
+    });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.target.from).toBe("Sarah Chen <sarah.chen@example.com>");
@@ -475,7 +504,10 @@ describe("getReplyTarget (target-header read over the fixture seam)", () => {
       offlineDigest: false,
       baseMs: BASE_MS,
     });
-    const res = await t.action(internal.gmail.getReplyTarget, { tenantId: TENANT, id: "no-such-id" });
+    const res = await t.action(internal.gmail.getReplyTarget, {
+      tenantId: TENANT,
+      id: "no-such-id",
+    });
     expect(res).toEqual({ ok: false, reason: "not_found" });
   });
 
@@ -493,7 +525,11 @@ describe("seedInboxFixture (deterministic + idempotent)", () => {
   test("re-seeding replaces rather than appends (ONE row per tenant)", async () => {
     const t = harness();
     const seed = () =>
-      t.mutation(internal.smoke.seedInboxFixture, { tenantId: TENANT, offlineDigest: true, baseMs: BASE_MS });
+      t.mutation(internal.smoke.seedInboxFixture, {
+        tenantId: TENANT,
+        offlineDigest: true,
+        baseMs: BASE_MS,
+      });
     await seed();
     await seed();
     const rows = await t.run((ctx) => ctx.db.query("inboxFixtures").collect());
@@ -511,12 +547,18 @@ describe("seedInboxFixture (deterministic + idempotent)", () => {
     const messages = row!.messages;
     expect(messages).toHaveLength(5);
     expect(new Set(messages.map((m) => m.id)).size, "fixture ids must be unique").toBe(5);
-    expect(messages.every((m) => m.internalDate <= BASE_MS), "no fixture message may post-date the clock").toBe(true);
+    expect(
+      messages.every((m) => m.internalDate <= BASE_MS),
+      "no fixture message may post-date the clock",
+    ).toBe(true);
     expect(messages.some((m) => m.isUnread === true)).toBe(true);
     // Deterministic: seeded at a fixed baseMs, the buckets are pinned.
     const dayBefore = BASE_MS - 24 * 3_600_000;
     expect(messages.filter((m) => m.internalDate > dayBefore).length, "today's messages").toBe(3);
-    expect(messages.some((m) => m.internalDate < BASE_MS - 2 * 24 * 3_600_000), "an older-in-week message").toBe(true);
+    expect(
+      messages.some((m) => m.internalDate < BASE_MS - 2 * 24 * 3_600_000),
+      "an older-in-week message",
+    ).toBe(true);
   });
 
   test("fixtures are tenant-scoped (another tenant's list stays token-gated)", async () => {

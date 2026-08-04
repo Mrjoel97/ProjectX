@@ -181,7 +181,9 @@ describe("disconnectGoogle — revoke at Google, then delete locally", () => {
 
     // 400 means Google already considers the token invalid — same end state as 200.
     expect(
-      await t.withIdentity({ subject: `${userId}|session_a` }).action(api.gmailAuth.disconnectGoogle, {}),
+      await t
+        .withIdentity({ subject: `${userId}|session_a` })
+        .action(api.gmailAuth.disconnectGoogle, {}),
     ).toEqual({ revoked: true });
     // The assertion that matters: a non-200 must never leave the crown jewel at rest.
     expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toEqual([]);
@@ -780,10 +782,14 @@ describe("calendar tenant isolation (SC#3)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     expect(
-      await t.withIdentity({ subject: tenantA }).mutation(api.cockpit.executePlan, { planId: planA }),
+      await t
+        .withIdentity({ subject: tenantA })
+        .mutation(api.cockpit.executePlan, { planId: planA }),
     ).toEqual({ ok: true });
     expect(
-      await t.withIdentity({ subject: tenantB }).mutation(api.cockpit.executePlan, { planId: planB }),
+      await t
+        .withIdentity({ subject: tenantB })
+        .mutation(api.cockpit.executePlan, { planId: planB }),
     ).toEqual({ ok: true });
     await t.finishInProgressScheduledFunctions();
 
@@ -794,18 +800,22 @@ describe("calendar tenant isolation (SC#3)", () => {
     const bPlans = plans.filter((row) => row.tenantId === tenantB);
     const aAudits = audits.filter((row) => row.tenantId === tenantA);
     const bAudits = audits.filter((row) => row.tenantId === tenantB);
-    expect(aPlans.length, "tenant A wrote no plan rows — the isolation check is vacuous").toBeGreaterThan(
-      0,
-    );
-    expect(bPlans.length, "tenant B wrote no plan rows — the isolation check is vacuous").toBeGreaterThan(
-      0,
-    );
-    expect(aAudits.length, "tenant A wrote no audit rows — the isolation check is vacuous").toBeGreaterThan(
-      0,
-    );
-    expect(bAudits.length, "tenant B wrote no audit rows — the isolation check is vacuous").toBeGreaterThan(
-      0,
-    );
+    expect(
+      aPlans.length,
+      "tenant A wrote no plan rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
+    expect(
+      bPlans.length,
+      "tenant B wrote no plan rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
+    expect(
+      aAudits.length,
+      "tenant A wrote no audit rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
+    expect(
+      bAudits.length,
+      "tenant B wrote no audit rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
     expect(aPlans.every((row) => row.tenantId === tenantA)).toBe(true);
     expect(bPlans.every((row) => row.tenantId === tenantB)).toBe(true);
     expect(aAudits.every((row) => row.tenantId === tenantA)).toBe(true);
@@ -911,9 +921,10 @@ describe("calendar tenant isolation (SC#3)", () => {
     });
 
     const rows = await t.run((ctx) => ctx.db.query("deadLetters").collect());
-    expect(rows.length, "tenant A's run wrote no terminal row — the lookup check is vacuous").toBeGreaterThan(
-      0,
-    );
+    expect(
+      rows.length,
+      "tenant A's run wrote no terminal row — the lookup check is vacuous",
+    ).toBeGreaterThan(0);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       tenantId: tenantA,

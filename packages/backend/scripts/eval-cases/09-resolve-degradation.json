@@ -1,9 +1,7 @@
 {
   "id": "09-resolve-degradation",
   "description": "resolveContacts graceful degradation: a bare name matching NO correspondent — post-03.10-01 the eval tenant's seeded inbox fixture serves real HeaderRecords to gmail.search, so 'Alonzeva' exercises rankCandidates' no-match branch (returns [], never substitutes), not the not_connected path — no candidates written, recipients unchanged, the agent asks for the address directly",
-  "turns": [
-    "Can you email Alonzeva about the offsite venue options?"
-  ],
+  "turns": ["Can you email Alonzeva about the offsite venue options?"],
   "expect": {
     "statusAtMost": "proposed",
     "candidatesPending": false,

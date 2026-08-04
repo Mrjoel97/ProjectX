@@ -38,12 +38,14 @@ beforeEach(() => {
   enqueued.length = 0;
   // The generic signature of `enqueueAction` cannot be satisfied by a concrete stub, so the
   // implementation is cast once here rather than typed twice.
-  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
-    (async (_ctx: unknown, fn: never, fnArgs: unknown) => {
-      enqueued.push({ name: getFunctionName(fn), args: [fnArgs as Record<string, unknown>] });
-      return "workId_test" as never;
-    }) as never,
-  );
+  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation((async (
+    _ctx: unknown,
+    fn: never,
+    fnArgs: unknown,
+  ) => {
+    enqueued.push({ name: getFunctionName(fn), args: [fnArgs as Record<string, unknown>] });
+    return "workId_test" as never;
+  }) as never);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -89,8 +91,7 @@ const watchdogs = (t: ReturnType<typeof convexTest>) =>
  * every instance's first document has the SAME id. The tenant string is chosen by the test, so it
  * is the one field that cannot collide. Anything that COUNTS enqueues uses its own tenant.
  */
-const enqueuedFor = (tenantId: string) =>
-  enqueued.filter((e) => e.args[0]?.tenantId === tenantId);
+const enqueuedFor = (tenantId: string) => enqueued.filter((e) => e.args[0]?.tenantId === tenantId);
 
 const newFolder = async (
   t: ReturnType<typeof convexTest>,
@@ -350,9 +351,7 @@ describe("completion is O(1) — the probe never reads the member rows", () => {
       t.run(async (ctx) =>
         ctx.db
           .query("vaultDocuments")
-          .withIndex("by_tenant_folder", (q) =>
-            q.eq("tenantId", TENANT).eq("folderId", folderId),
-          )
+          .withIndex("by_tenant_folder", (q) => q.eq("tenantId", TENANT).eq("folderId", folderId))
           .collect(),
       ),
     ).rejects.toThrow(/read|bytes|limit/i);
@@ -535,13 +534,15 @@ describe("cancelFolder", () => {
     // ordinary documents".
     // Mutation RUN: drop the `folderId: undefined` from retryExtraction's patch -> RED on the
     // markExtracting assertion (folder_cancelled again, for ever).
-    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
-      { ok: true },
-    );
+    expect(
+      await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a }),
+    ).toEqual({ ok: true });
     expect((await t.run((ctx) => ctx.db.get(a)))?.folderId).toBeUndefined();
     expect(enqueuedFor(T)).toHaveLength(1);
     expect(enqueuedFor(T)[0]?.args[0]?.spendRail).toBeUndefined(); // no reservation left to spend
-    expect(await t.mutation(internal.vault.markExtracting, { vaultDocId: a })).toEqual({ ok: true });
+    expect(await t.mutation(internal.vault.markExtracting, { vaultDocId: a })).toEqual({
+      ok: true,
+    });
   });
 
   test("a foreign tenant cannot settle or delete another tenant's folder", async () => {
@@ -653,9 +654,9 @@ describe("a member reached from outside the walk", () => {
     await t.mutation(internal.vault.markFailed, { vaultDocId: a, reason: "unsupported_format" });
     expect(await folderRow(t, folderId)).toMatchObject({ terminalCount: 1, failedCount: 1 });
 
-    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
-      { ok: true },
-    );
+    expect(
+      await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a }),
+    ).toEqual({ ok: true });
     expect(await folderRow(t, folderId)).toMatchObject({ terminalCount: 0, failedCount: 0 });
     // and the retry rides the reservation the folder is already holding
     expect(enqueuedFor(T)).toHaveLength(1);
@@ -682,9 +683,9 @@ describe("a member reached from outside the walk", () => {
     const folderId = await newFolder(t, T);
     const a = (await upload(t, { folderId, hash: "pre-a", tenant: T })).vaultDocId;
 
-    expect(await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a })).toEqual(
-      { ok: false },
-    );
+    expect(
+      await asTenant(t, T).mutation(api.vaultSweep.retryExtraction, { vaultDocId: a }),
+    ).toEqual({ ok: false });
     expect(enqueuedFor(T)).toHaveLength(0);
     expect((await t.run((ctx) => ctx.db.get(a)))?.status).toBe("pending_extraction");
   });
@@ -785,7 +786,10 @@ describe("folderEstimate is the number the reserve actually takes", () => {
     expect(est.totalCents).toBeGreaterThan(0); // non-vacuity: 0 === 0 would pass for free
 
     const before = await remaining(t);
-    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files });
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files,
+    });
 
     expect(reserved).toMatchObject({ ok: true, estCents: est.totalCents });
     // The WINDOW moved by exactly the figure the card showed — the money, not just the return value.
@@ -822,7 +826,10 @@ describe("folderEstimate is the number the reserve actually takes", () => {
     const drained = await remaining(t);
 
     const est = await asTenant(t).query(api.vaultFolders.folderEstimate, { files });
-    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files });
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files,
+    });
 
     expect(est.refusal).not.toBeNull();
     expect(reserved).toMatchObject({ ok: false, reason: est.refusal?.reason });

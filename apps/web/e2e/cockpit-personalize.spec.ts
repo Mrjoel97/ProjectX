@@ -46,7 +46,9 @@ test("chat → 2 recipients → subject → body → personalize #1 → PLAN(2 d
   // personalize=<1-based index>:<intent> — the intent carries the SMOKE:: sentinel (split on the
   // FIRST colon after the index) so the tailored draft is deterministic offline AND differs from the
   // shared body (different safeText → different hash → different `Smoke draft for <hash>`).
-  await say("SMOKE::agent::personalize=1:SMOKE::route=direct_llm:: make Alice's note warmer and personal");
+  await say(
+    "SMOKE::agent::personalize=1:SMOKE::route=direct_llm:: make Alice's note warmer and personal",
+  );
   await say("SMOKE::agent::propose");
 
   // PLAN card: the PER-RECIPIENT BODY section shows BOTH recipients with DISTINCT bodies BEFORE the

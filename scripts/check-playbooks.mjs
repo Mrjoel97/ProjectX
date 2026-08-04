@@ -93,7 +93,7 @@ const hashHits = (hits) =>
             return `${f}:gone`;
           }
         })
-        .join("\n")
+        .join("\n"),
     )
     .digest("hex");
 
@@ -130,7 +130,7 @@ const uncovered = [...created].filter(
     /\.(ts|tsx|mjs)$/.test(f) &&
     !/\.test\.|\.spec\.|_generated\/|node_modules\//.test(f) &&
     !covered.some((p) => f.startsWith(p)) &&
-    !acknowledged.some((p) => f.startsWith(p))
+    !acknowledged.some((p) => f.startsWith(p)),
 );
 
 if (stale.length === 0 && uncovered.length === 0) process.exit(0);
@@ -141,15 +141,18 @@ if (stale.length)
     "Code changed in subsystems covered by playbooks, but the playbooks were not updated:\n" +
       stale.map((s) => `- ${s.pbPath} (changed: ${s.hits.join(", ")})`).join("\n") +
       '\nUpdate each playbook and bump its "Last verified" line. If the change genuinely does not ' +
-      'affect the playbook\'s content, bump only the "Last verified" line — touching the file clears this check.'
+      'affect the playbook\'s content, bump only the "Last verified" line — touching the file clears this check.',
   );
 if (uncovered.length)
   problems.push(
     "New code files are not covered by any playbook:\n" +
-      uncovered.slice(0, 10).map((f) => `- ${f}`).join("\n") +
+      uncovered
+        .slice(0, 10)
+        .map((f) => `- ${f}`)
+        .join("\n") +
       "\nEither add their paths to an existing playbook's entry in docs/playbooks/watch.json, " +
       "create a new playbook from docs/playbooks/TEMPLATE.md and register it in watch.json, " +
-      'or list the paths under "_unassigned" in watch.json if they genuinely need no playbook.'
+      'or list the paths under "_unassigned" in watch.json if they genuinely need no playbook.',
   );
 
 if (input.stop_hook_active) {
@@ -160,7 +163,7 @@ if (input.stop_hook_active) {
         ...stale.map((s) => s.pbPath),
         ...uncovered,
       ].join(", ")}`,
-    })
+    }),
   );
   process.exit(0);
 }
@@ -169,5 +172,5 @@ console.log(
   JSON.stringify({
     decision: "block",
     reason: `Playbook check (CLAUDE.md §9):\n\n${problems.join("\n\n")}`,
-  })
+  }),
 );

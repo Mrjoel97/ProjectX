@@ -443,8 +443,16 @@ test("a doc-scoped session leaves exactly ONE brief artifact, across repeat stor
     { speaker: "user", text: "SMOKE::route=direct_llm:: what does the report say about churn?" },
     { speaker: "assistant", text: "Churn concentrates in month two." },
   ];
-  const first = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
-  const second = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+  const first = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript,
+    language: "en",
+  });
+  const second = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript,
+    language: "en",
+  });
 
   // Same doc back both times — `briefRef` is the idempotence key, so a re-store (a re-click, or a
   // race between this and the watchdog's auto-store) can never mint a second artifact.

@@ -73,7 +73,9 @@ export function formatReport({ model, ok, err, sources, usage, steps, toolCalls,
   L.push(`sources: ${sources.length}`);
   L.push(`text: ${JSON.stringify((text ?? "").slice(0, 300))}`);
   for (const s of sources) L.push(`  url: ${s.url}`);
-  L.push(`usage: inputTokens=${usage?.inputTokens ?? "?"} outputTokens=${usage?.outputTokens ?? "?"}`);
+  L.push(
+    `usage: inputTokens=${usage?.inputTokens ?? "?"} outputTokens=${usage?.outputTokens ?? "?"}`,
+  );
   L.push(`steps: ${steps}`);
   // Load-bearing and easy to skip: we do NOT know whether the SDK surfaces a provider-executed
   // call under OUR record key (`webResearch`) or the provider's own name (`web_search`). 16-05's
@@ -181,7 +183,9 @@ async function main() {
       passed = model;
       break; // first PASS wins — that is what keeps this ~1 call / ~$0.01
     } catch (e) {
-      const head = String(e?.message ?? e).split("\n")[0].slice(0, 160);
+      const head = String(e?.message ?? e)
+        .split("\n")[0]
+        .slice(0, 160);
       console.log(formatReport({ model, ok: false, err: `${e?.name ?? "Error"}: ${head}` }));
     }
   }

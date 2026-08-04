@@ -40,7 +40,15 @@ export function diagnose(sc: Scorecard): Prescription {
     playbook: string,
     reason: string,
     proofMetric: string,
-  ): Prescription => ({ constraint, gate, route, playbook, reason, proofMetric, roadmapLevel: level });
+  ): Prescription => ({
+    constraint,
+    gate,
+    route,
+    playbook,
+    reason,
+    proofMetric,
+    roadmapLevel: level,
+  });
 
   // --- Gate 0: Market (a great offer to the wrong crowd falls on deaf ears) ---
   if (sc.identity.marketViable === false) {

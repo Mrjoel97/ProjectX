@@ -17,8 +17,8 @@
 import type { WorkflowId } from "@convex-dev/workflow";
 import { vWorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
 
@@ -46,8 +46,7 @@ export const reviewEventValidator = v.union(
 );
 
 /** Build the attempt-suffixed event name the gate awaits for this iteration. */
-const eventName = (correlationId: string, attempt: number) =>
-  `review:${correlationId}:${attempt}`;
+const eventName = (correlationId: string, attempt: number) => `review:${correlationId}:${attempt}`;
 
 /** Arm the scheduled timeout and record the bookkeeping row (called from a step). */
 export const armTimeout = internalMutation({
@@ -60,11 +59,11 @@ export const armTimeout = internalMutation({
   handler: async (ctx, { workflowId, correlationId, timeoutMs, attempt }) => {
     // The scheduler carries `attempt` to fireTimeout, so it targets the right
     // suffix without a schema column on pendingTimeouts.
-    const scheduledId = await ctx.scheduler.runAfter(
-      timeoutMs,
-      internal.review.fireTimeout,
-      { workflowId, correlationId, attempt },
-    );
+    const scheduledId = await ctx.scheduler.runAfter(timeoutMs, internal.review.fireTimeout, {
+      workflowId,
+      correlationId,
+      attempt,
+    });
     await ctx.db.insert("pendingTimeouts", { workflowId, correlationId, scheduledId, attempt });
   },
 });

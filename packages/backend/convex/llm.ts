@@ -35,16 +35,16 @@ import {
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
-  applyRecipientEdit,
   type AvailabilityRange,
-  type BriefingItem,
+  actionTypeOf,
+  applyRecipientEdit,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
-  CALENDAR_HORIZON_MS,
-  actionTypeOf,
+  type BriefingItem,
   bucket,
   buildDocFilename,
   buildRecipientView,
+  CALENDAR_HORIZON_MS,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
@@ -524,7 +524,9 @@ type PlanRow = {
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
 // and setSendTime's confirmation string (same zone rules, one place to change them).
 const fmtSendInstant = (ms: number, tz?: string) =>
-  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(
+    ms,
+  );
 
 /**
  * Format the current plan state for the model (Plan 04 feeds this into the loop each turn).
@@ -1415,11 +1417,15 @@ export function buildCockpitTools(
       inputSchema: jsonSchema<{ topic: string; format?: DocFormat }>({
         type: "object",
         properties: {
-          topic: { type: "string", description: "What the document should be about, in plain language." },
+          topic: {
+            type: "string",
+            description: "What the document should be about, in plain language.",
+          },
           format: {
             type: "string",
             enum: ["pdf", "html"],
-            description: "Output format. Omit for a PDF; use html only when the user asks for a web page.",
+            description:
+              "Output format. Omit for a PDF; use html only when the user asks for a web page.",
           },
         },
         required: ["topic"],
@@ -1705,7 +1711,7 @@ export function buildCockpitTools(
     briefInbox: tool({
       // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
-        'Summarize the user\'s inbox into a briefing for "what happened in my inbox / brief me / ' +
+        "Summarize the user's inbox into a briefing for \"what happened in my inbox / brief me / " +
         'catch me up" style asks. The briefing renders in the workspace panel — you get counts ' +
         "back, NOT the contents, so do not try to recite it. " +
         "Read-only: it cannot reply, forward, label, or send.",
@@ -2107,9 +2113,13 @@ export function buildCockpitTools(
         properties: {
           field: {
             type: "string",
-            description: "The scorecard field, e.g. financials.cac, financials.ltgp, identity.headlinePrice.",
+            description:
+              "The scorecard field, e.g. financials.cac, financials.ltgp, identity.headlinePrice.",
           },
-          value: { type: "string", description: "The value the user stated (a number or short fact)." },
+          value: {
+            type: "string",
+            description: "The value the user stated (a number or short fact).",
+          },
         },
         required: ["field", "value"],
         additionalProperties: false,
@@ -2145,8 +2155,8 @@ export function buildCockpitTools(
     // body. `range` is an ENUM (§4 — it flows into gmail.listInbox's refs-only mailbox.listed payload).
     replyToMessage: tool({
       description:
-        'Reply to a specific message the user points to by sender, subject, or timeframe (e.g. ' +
-        '"reply to Sarah\'s email about Q3 saying I\'ll send the figures Friday"). Resolves the ' +
+        "Reply to a specific message the user points to by sender, subject, or timeframe (e.g. " +
+        "\"reply to Sarah's email about Q3 saying I'll send the figures Friday\"). Resolves the " +
         "message server-side, sets the recipient and threads the reply — you never see the address " +
         "or message id. Drafts the reply body from the user's intent. Clarifies if 0 or 2+ match.",
       inputSchema: jsonSchema<{
@@ -2161,7 +2171,10 @@ export function buildCockpitTools(
             type: "string",
             description: "What the reply should say, in plain language (the user's reply intent).",
           },
-          sender: { type: "string", description: "The sender to reply to, as the user named them." },
+          sender: {
+            type: "string",
+            description: "The sender to reply to, as the user named them.",
+          },
           subject: { type: "string", description: "A word or phrase from the subject to match." },
           range: {
             type: "string",
@@ -2198,7 +2211,10 @@ export function buildCockpitTools(
         if (matches.length > 1) {
           const labels = matches
             .slice(0, REPLY_CANDIDATE_CAP)
-            .map((m, i) => `#${i + 1} ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`)
+            .map(
+              (m, i) =>
+                `#${i + 1} ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`,
+            )
             .join(", ");
           return `I found ${matches.length} messages that could match: ${labels}. Ask the user which one to reply to.`;
         }
@@ -2453,7 +2469,8 @@ async function runAgentLoop(
   // evaluation and truncate every executive turn, every Growth OS specialist turn and the scripted
   // cockpit shim at step 1.
   const softMs =
-    softCutoffMs ?? (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
+    softCutoffMs ??
+    (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
   const startedAt = Date.now();
   const outOfClock = (): boolean => softMs !== undefined && Date.now() - startedAt >= softMs;
   const run = async (
@@ -2586,7 +2603,8 @@ async function runAgentLoop(
       return (args as { scope?: unknown } | null)?.scope === "question";
     });
     const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
-    if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
+    if (feeUsd > 0)
+      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
     costUsd += feeUsd;
     // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
     // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
@@ -2596,7 +2614,9 @@ async function runAgentLoop(
     // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
     // gets a COUNT.
     const sources = (res.sources ?? [])
-      .filter((src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url")
+      .filter(
+        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
+      )
       .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
     // because `sources` is only built two lines up — and `sources`, not the model, is the half
@@ -2732,7 +2752,9 @@ export async function runSpecialistTurn(
     prompt,
     primary: {
       model: mock
-        ? (new MockLanguageModelV4({ doGenerate: mock.primary as never }) as unknown as LanguageModel)
+        ? (new MockLanguageModelV4({
+            doGenerate: mock.primary as never,
+          }) as unknown as LanguageModel)
         : resolveModel(primaryId),
       // The `id` is what priceUsage charges against AND — since 16-01 — what travels out as
       // modelId/fallbackModelId for 16-06 to assert. Leaving a literal here while the ternary picks
@@ -2845,7 +2867,9 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       return {
         kind: "evaluate",
         framework:
-          val === "swot" || val === "lean" || val === "bmc" || val === "growth-os" ? val : undefined,
+          val === "swot" || val === "lean" || val === "bmc" || val === "growth-os"
+            ? val
+            : undefined,
       };
     case "brief":
       // Same enum the tool's inputSchema enforces — an unknown range defaults to today rather
@@ -2858,7 +2882,11 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       // <1-based index>:<intent> — split on the FIRST colon (the intent may carry a SMOKE:: prefix).
       const c = val.indexOf(":");
       if (c < 0) return null;
-      return { kind: "personalize", index: Number(val.slice(0, c)), instructions: val.slice(c + 1) };
+      return {
+        kind: "personalize",
+        index: Number(val.slice(0, c)),
+        instructions: val.slice(c + 1),
+      };
     }
     case "create": {
       // <short|long>:<topic> — split on the FIRST colon. The topic MUST keep its own nested
@@ -3003,8 +3031,12 @@ export const runCockpitAgent = internalAction({
     costUsd?: number;
   }> => {
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
@@ -3100,7 +3132,10 @@ export const runCockpitAgent = internalAction({
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
       prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
-      fallback: { model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
+      fallback: {
+        model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
+        id: CHEAP_MODEL,
+      },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,
@@ -3195,8 +3230,29 @@ export const __runCockpitAgentWithScript = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, planId, primary, fallback, failPrimary, skillVersions, turnId, threadId, toolNames },
-  ): Promise<{ reply: string; costUsd: number; skillVersion: number }> => {
+    {
+      tenantId,
+      planId,
+      primary,
+      fallback,
+      failPrimary,
+      skillVersions,
+      turnId,
+      threadId,
+      toolNames,
+    },
+  ): Promise<{
+    reply: string;
+    costUsd: number;
+    skillVersion: number;
+    webSearchCalls: number;
+    declaredUnsupported: boolean;
+    truncated: boolean;
+    truncatedReason?: "steps" | "clock";
+    sources: readonly { url: string; title: string }[];
+    modelId: string;
+    fallbackModelId: string;
+  }> => {
     const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
     const skill: { body: string; version: number } =
       pin !== undefined
@@ -3270,8 +3326,12 @@ export const route = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EXECUTIVE_ROUTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const tStart = Date.now();
@@ -3323,8 +3383,12 @@ export const draft = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EMAIL_DRAFTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const args: {
@@ -3631,7 +3695,10 @@ export const draftReply = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type re-trips the "use node"
   // circular-inference cliff — the digestInbox/draftCockpit precedent).
-  handler: async (ctx, { tenantId, safeText, originalBody, skillVersion }): Promise<{ body: string }> => {
+  handler: async (
+    ctx,
+    { tenantId, safeText, originalBody, skillVersion },
+  ): Promise<{ body: string }> => {
     // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
     const skill: { body: string; version: number } =
@@ -3646,11 +3713,7 @@ export const draftReply = internalAction({
     // digest's per-body cap). The intent is the trusted instruction; the original is fenced as inert
     // context below so the model treats it as DATA, never a directive (skill body is defense in depth).
     const original = originalBody.slice(0, BODY_TRUNCATE_CHARS);
-    const prompt = [
-      safeText,
-      "--- ORIGINAL MESSAGE (context only) ---",
-      original,
-    ].join("\n\n");
+    const prompt = [safeText, "--- ORIGINAL MESSAGE (context only) ---", original].join("\n\n");
 
     const smoke = parseSmoke(safeText);
     if (smoke) {

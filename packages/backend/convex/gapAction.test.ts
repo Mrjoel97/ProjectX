@@ -71,10 +71,7 @@ function profileDocText(): string {
   return `${md}\n\nCAC: $150\nLTGP: $4500\n30-day cash: $200\n`;
 }
 
-async function seedDoc(
-  t: TestConvex<typeof schema>,
-  text: string,
-): Promise<Id<"vaultDocuments">> {
+async function seedDoc(t: TestConvex<typeof schema>, text: string): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
     ctx.db.insert("vaultDocuments", {
       tenantId: TENANT,

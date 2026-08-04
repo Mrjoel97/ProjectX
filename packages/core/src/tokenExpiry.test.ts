@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  EXPIRY_WARN_WINDOW_MS,
-  REFRESH_TOKEN_TTL_MS,
-  isDead,
-  isExpiringSoon,
-} from "./tokenExpiry";
+import { EXPIRY_WARN_WINDOW_MS, isDead, isExpiringSoon, REFRESH_TOKEN_TTL_MS } from "./tokenExpiry";
 
 const NOW = 1_000_000_000_000; // fixed reference clock
 const HOUR = 60 * 60 * 1000;

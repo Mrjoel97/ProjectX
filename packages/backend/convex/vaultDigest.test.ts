@@ -479,9 +479,9 @@ describe("the digest dies with its folder (cancel of a COMPLETE folder)", () => 
       ctx.db.patch(digestDocId as Id<"vaultDocuments">, { ragEntryId: undefined }),
     );
 
-    expect(
-      await asTenant(t, TENANT).mutation(api.vaultFolders.cancelFolder, { folderId }),
-    ).toEqual({ ok: true });
+    expect(await asTenant(t, TENANT).mutation(api.vaultFolders.cancelFolder, { folderId })).toEqual(
+      { ok: true },
+    );
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect(await folderRow(t, folderId)).toBeNull();

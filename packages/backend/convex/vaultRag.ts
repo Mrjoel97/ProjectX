@@ -50,7 +50,11 @@ const openaiEmbeddingV2 = {
       // that reads as though it set the auth header. `headers` is the optional bag from the
       // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
       // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
-      headers: { ...headers, "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: values, dimensions: EMBEDDING_DIM }),
       signal: abortSignal,
     });
@@ -102,7 +106,8 @@ export const embedDoc = internalAction({
     const safeText = scan.value.safeText;
 
     // Offline deterministic path: NO network call, a fixed fake entryId keyed to the content hash.
-    if (safeText.startsWith(SMOKE_PREFIX)) return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
+    if (safeText.startsWith(SMOKE_PREFIX))
+      return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
 
     // Dedup precheck (query-safe): a second ingest of identical content reuses the existing entry.
     const existing = await rag.findEntryByContentHash(ctx, {

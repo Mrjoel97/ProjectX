@@ -25,7 +25,9 @@ function smokeBlob(prefix: string, text: string): Buffer {
   return Buffer.from(`${prefix}${text}`, "utf-8");
 }
 
-test("attach a file -> classified content appears in the conversation (INTK-02)", async ({ page }) => {
+test("attach a file -> classified content appears in the conversation (INTK-02)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -51,7 +53,9 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
 
   // The extracted, redacted safeText merges into the SAME thread as a new turn — the framed
   // attachment content becomes visible in the conversation (attachToThread -> sendCockpitMessage).
-  await expect(chat.getByText(/Please review the attached budget for Q3\./)).toBeVisible({ timeout: 20_000 });
+  await expect(chat.getByText(/Please review the attached budget for Q3\./)).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async ({ page }) => {
@@ -78,5 +82,7 @@ test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async
     buffer: smokeBlob("SMOKE::transcribe::", "send an email to bob@example.com about lunch"),
   });
 
-  await expect(chat.getByText(/send an email to bob@example\.com about lunch/)).toBeVisible({ timeout: 20_000 });
+  await expect(chat.getByText(/send an email to bob@example\.com about lunch/)).toBeVisible({
+    timeout: 20_000,
+  });
 });

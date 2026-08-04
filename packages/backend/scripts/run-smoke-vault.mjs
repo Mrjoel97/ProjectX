@@ -24,10 +24,18 @@ try {
   console.log("[smoke:vault] polling: both briefs embedded + graph-extracted → ready...");
   await pollPass("vaultSmoke:assertReady", { tenantId: TENANT, docIds });
 
-  console.log("[smoke:vault] asserting: REAL hybrid search returns a ranked result with the seed doc...");
-  await pollPass("vaultSmoke:assertSearchReturns", { tenantId: TENANT, query, expectDocId: seedDocId });
+  console.log(
+    "[smoke:vault] asserting: REAL hybrid search returns a ranked result with the seed doc...",
+  );
+  await pollPass("vaultSmoke:assertSearchReturns", {
+    tenantId: TENANT,
+    query,
+    expectDocId: seedDocId,
+  });
 
-  console.log(`[smoke:vault] asserting: vaultGround merges the "${shared}" graph neighbor (hybrid vector+graph)...`);
+  console.log(
+    `[smoke:vault] asserting: vaultGround merges the "${shared}" graph neighbor (hybrid vector+graph)...`,
+  );
   await pollPass("vaultSmoke:assertGroundNeighbor", { tenantId: TENANT, query, neighborDocId });
 
   console.log("[smoke:vault] asserting: NO raw brief text in any audit/deadLetters row (§4)...");

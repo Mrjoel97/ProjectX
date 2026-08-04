@@ -5,7 +5,7 @@ import { api } from "@pikar/backend/api";
 import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
@@ -168,12 +168,12 @@ export default function WorkspacePage() {
     setThreadId(id);
   };
   // Open a past chat from the history menu — add a session tab if it isn't already showing.
-  const openThread = (id: string, label: string) => {
+  const openThread = useCallback((id: string, label: string) => {
     setTabs((t) =>
       t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }],
     );
     setThreadId(id);
-  };
+  }, []);
 
   // The voice brief→plan handoff (VOIC-04) navigates here as /workspace?thread=<id> — sendCockpitMessage
   // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
@@ -182,8 +182,7 @@ export default function WorkspacePage() {
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("thread");
     if (id) openThread(id, "Voice brief");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [openThread]);
   // THE CANVAS VIEW (20-10 follow-up). The right pane shows either the agent's work stream or the
   // media canvas, full-width. It is a VIEWPORT, not a route: the thread, the tab strip and every
   // in-flight cockpit subscription are untouched by the toggle, which is the whole reason it is

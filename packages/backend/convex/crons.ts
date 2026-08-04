@@ -40,7 +40,12 @@ crons.weekly(
 // stranded-.xlsm lesson, recorded in docs/playbooks/vault.md.
 // Each re-queued extraction still self-gates on the kill switch + the daily budget, so a large
 // backlog throttles itself rather than draining the window.
-crons.daily("vault-pending-extraction-sweep", { hourUTC: 5, minuteUTC: 0 }, internal.vaultSweep.runSweep, {
-  reset: true,
-});
+crons.daily(
+  "vault-pending-extraction-sweep",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.vaultSweep.runSweep,
+  {
+    reset: true,
+  },
+);
 export default crons;

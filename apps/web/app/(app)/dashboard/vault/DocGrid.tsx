@@ -447,9 +447,7 @@ export function DocGrid({
                 {sealed && (
                   // A ROW, because unlike a document card these two controls coexist: a folder
                   // being read is both cancellable and not yet discussable.
-                  <span
-                    style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}
-                  >
+                  <span style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}>
                     <button
                       type="button"
                       onClick={() => void runCancel(f)}
@@ -607,7 +605,11 @@ export function DocGrid({
                 <Link
                   href={`/dashboard/voice?doc=${doc._id}`}
                   aria-label={`Discuss by voice: ${docLabel(doc)}`}
-                  style={{ ...discussPillStyle(view), background: "var(--teal-600)", color: "#fff" }}
+                  style={{
+                    ...discussPillStyle(view),
+                    background: "var(--teal-600)",
+                    color: "#fff",
+                  }}
                 >
                   Discuss
                 </Link>

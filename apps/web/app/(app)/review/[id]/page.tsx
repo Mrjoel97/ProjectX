@@ -36,7 +36,10 @@ export default function ReviewGate() {
   const { request, canRegenerate } = gate;
   const draft = request.editedBody ?? request.draft ?? "";
 
-  async function send(decision: "approve" | "edit_text" | "regenerate" | "reject", extra: Record<string, string> = {}) {
+  async function send(
+    decision: "approve" | "edit_text" | "regenerate" | "reject",
+    extra: Record<string, string> = {},
+  ) {
     setBusy(true);
     try {
       await submitDecision({ correlationId: request.correlationId, decision, ...extra });
@@ -86,7 +89,9 @@ export default function ReviewGate() {
       </div>
 
       {!awaitingReview ? (
-        <p style={{ color: "#666" }}>This request is no longer awaiting review (status: {request.status}).</p>
+        <p style={{ color: "#666" }}>
+          This request is no longer awaiting review (status: {request.status}).
+        </p>
       ) : mode === "regenerate" ? (
         <div style={{ ...box, display: "grid", gap: "0.5rem" }}>
           <label htmlFor="instruction">What should change?</label>

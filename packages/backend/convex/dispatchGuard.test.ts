@@ -3,7 +3,7 @@
 // Static-scan enforcement of Phase 15's structural invariants (DISP-01 / ACTN-01). Mirrors the
 // llmRedaction.test.ts / auditImmutability.test.ts idiom: read the source off disk, strip comments
 // (prose may NAME the forbidden thing — that is the documentation), assert on what remains.
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -169,7 +169,9 @@ test("both Calendar actions check stored scope before the shared token refresh",
         `freshAccessToken. A refresh can succeed for a grant that cannot call Calendar.`,
     ).toBeLessThan(tokenAt);
     if (fn.endsWith("freeBusy")) {
-      expect(fixtureAt, "freeBusy never checks the calendarFixtures seam").toBeGreaterThanOrEqual(0);
+      expect(fixtureAt, "freeBusy never checks the calendarFixtures seam").toBeGreaterThanOrEqual(
+        0,
+      );
       expect(
         fixtureAt,
         "freeBusy must check the fixture before scope so offline reads need no Google grant.",
@@ -186,7 +188,10 @@ test("the externalAction arm wires each occupant's OWN retrier action and non-No
   const src = readExecutableCode("cockpit.ts");
   const tableStart = src.indexOf("const EXTERNAL_TARGETS = {");
   expect(tableStart, "cockpit.ts has no EXTERNAL_TARGETS table").toBeGreaterThanOrEqual(0);
-  const table = src.slice(tableStart, src.indexOf("} satisfies Record<ExternalActionType", tableStart));
+  const table = src.slice(
+    tableStart,
+    src.indexOf("} satisfies Record<ExternalActionType", tableStart),
+  );
 
   const start = src.indexOf('case "externalAction"');
   expect(start, "cockpit.ts has no externalAction case").toBeGreaterThanOrEqual(0);

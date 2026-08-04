@@ -8,7 +8,7 @@
 //
 // Runs in the `node` environment (overrides the edge-runtime default) because
 // it reads source files off disk with node:fs.
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -48,9 +48,7 @@ test("no PUBLIC function writes the audit table", () => {
     if (AUDIT_INSERT.test(src)) {
       // Any module that writes `audit` must expose NO public builder — only
       // internalMutation may write the audit table.
-      expect(src, `${file} writes audit but exposes a public builder`).not.toMatch(
-        PUBLIC_BUILDER,
-      );
+      expect(src, `${file} writes audit but exposes a public builder`).not.toMatch(PUBLIC_BUILDER);
     }
   }
 });

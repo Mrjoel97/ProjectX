@@ -1,6 +1,6 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified: 2026-08-02 (20-19 — `fal-catalog.yml`, the scheduled vendor-drift detector; the first workflow written after the `skillopt.yml` vacuity lesson and deliberately not a merge gate)
+> Last verified locally: 2026-08-04 (`pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` all exit 0)
 > PREVIOUSLY: 2026-08-01 against cc05d21
 > Build history: `.planning/phases/22.1-beta-admission-readiness-legal-deployment-ci-typechecking-and-identity-boundary-hardening/` · Related ADRs: none
 
@@ -9,8 +9,9 @@
 Everything this repo claims about its own health — "typecheck at the exact 150 baseline", "backend
 865/866" — was, until Phase 22.1-03, a number a human re-established by hand and compared by eye.
 This gate moves that burden onto the machine. Every push to `main` and every pull request installs
-the workspace, regenerates the Convex types, and runs typecheck, lint, unit tests and the production
-build. Red blocks. Nobody has to remember to run anything.
+the workspace and runs typecheck, lint, unit tests and the production build. Convex's generated
+application API types are committed, so a clean checkout can verify the code without credentials
+for a live deployment. Red blocks. Nobody has to remember to run anything.
 
 ## Key files
 
@@ -30,23 +31,14 @@ build. Red blocks. Nobody has to remember to run anything.
 
 Couplings that are not visible in the graph:
 
-- **`CONVEX_DEPLOY_KEY`** (repository *secret*) — without it `convex codegen` cannot resolve the
-  deployment and every subsequent step fails with
-  `✖ No CONVEX_DEPLOYMENT set, run 'npx convex dev' to configure a Convex project`.
-  **Verified ABSENT 2026-08-01** on the gate's first run (30702168095): `skillopt.yml` declares the
-  same secret but it has never been set. Set it with
-  `gh secret set CONVEX_DEPLOY_KEY` (value from the Convex dashboard → Settings → Deploy keys —
-  a deploy key, NOT the `CONVEX_DEPLOYMENT` string in `packages/backend/.env.local`).
-- **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by `next build` and declared in
-  `turbo.json`'s `globalEnv`. Also verified absent; `gh variable set NEXT_PUBLIC_CONVEX_URL`
-  (value = `CONVEX_URL` from `packages/backend/.env.local`).
-- **`convex/_generated/`** is gitignored (`.gitignore:11`, CLAUDE.md §7). It does not exist in a
-  fresh checkout and must be generated inside the job.
-- **The Convex deployment is a live dependency of CI.** `convex codegen` prints
-  `Downloading current deployment state... Uploading functions to Convex` even with the deployment
-  env stripped — it reads `packages/backend/.env.local` locally, and `CONVEX_DEPLOY_KEY` in CI. A
-  deployment outage therefore reads as a CI failure. This is precedent, not new exposure:
-  `skillopt.yml` already drives `convex run` against the same deployment.
+- **`packages/backend/convex/_generated/`** — the five application API/DataModel files are committed.
+  Convex's generated AI guidance directory remains ignored. When a Convex function or schema change
+  alters these files, regenerate them locally and commit the resulting diff with the source change.
+- **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by the deployed client when set and
+  declared in `turbo.json`'s `globalEnv`. The current production build succeeds without it, so an
+  unset variable does not prevent pull requests or forks from verifying the repository.
+- **No live Convex deployment is contacted by this gate.** Deployment credentials and availability
+  must not decide whether typecheck, lint, unit tests, or the web production build can run.
 
 ## Data flow
 
@@ -55,19 +47,16 @@ Couplings that are not visible in the graph:
 2. `corepack enable` — pins pnpm from `packageManager` *before* `setup-node`, so `cache: pnpm` can
    find the binary.
 3. `pnpm install --frozen-lockfile` — a drifted lockfile fails here, deliberately.
-4. `convex codegen --typecheck disable` in `packages/backend` — writes `convex/_generated/`.
-   `--typecheck disable` because codegen's own bundled `tsc` would run a second, differently
-   configured check and mask which step really failed.
-5. `pnpm typecheck` → `turbo run typecheck` → `tsc --noEmit` per package.
-6. `pnpm lint` → `biome ci .` — formatter, `organizeImports` and linter, no writes.
-7. `pnpm test` → `turbo run test` → `vitest run` per package.
-8. `pnpm build` → `turbo run build` → `next build`.
+4. `pnpm typecheck` → `turbo run typecheck` → `tsc --noEmit` per package.
+5. `pnpm lint` → `biome ci .` — formatter, `organizeImports` and linter, no writes.
+6. `pnpm test` → `turbo run test` → `vitest run` per package.
+7. `pnpm build` → `turbo run build` → `next build`.
 
 ## Invariants — what must never break
 
-- **Codegen precedes typecheck.** Enforced by step order in `ci.yml`. Without it every Convex
-  import fails. That failure is loud, not silent — but the tempting fix is to exclude `convex/**`
-  from typecheck, and *that* is silent. Never do it.
+- **Generated Convex application types stay committed.** Enforced by the `.gitignore` exceptions
+  for the five application files. Never restore a CI codegen step that requires deployment secrets,
+  and never exclude `convex/**` from typecheck to hide missing generated types.
 - **The typecheck baseline is ZERO.** Any nonzero count is a regression to fix, not a number to
   update in a summary. Historically the backend carried 150 test-file errors; 100 were a single
   dead `@ts-expect-error` and 50 were `noUncheckedIndexedAccess` fallout. Enforced by CI exit code.
@@ -100,7 +89,7 @@ Couplings that are not visible in the graph:
 
 | Command | Proves |
 |---|---|
-| `pnpm typecheck` | every package's `tsc --noEmit` is clean. Requires `convex/_generated/` locally (`npx convex dev` once). |
+| `pnpm typecheck` | every package's `tsc --noEmit` is clean, including the committed Convex generated types. |
 | `pnpm lint` | `biome ci .` — format, imports, lint rules. Exit 0 required. |
 | `pnpm format` | rewrites files to satisfy the formatter. **Never in the same commit as a semantic change.** |
 | `pnpm test` | vitest across all packages. |
@@ -115,9 +104,8 @@ assertion, and confirm CI goes red on each for the expected reason.
 
 - Runner is `ubuntu-latest`; local development is Windows. Path-case bugs surface in CI first —
   `forceConsistentCasingInFileNames` is on in `tsconfig.base.json`, which catches most of them.
-- `convex codegen` is invoked as `node node_modules/convex/bin/main.js` rather than via `npx`,
-  matching `skillopt.yml`.
-- If CI fails only at the codegen step, check the deployment is up before suspecting the code.
+- If a Convex API/schema change makes generated types stale, regenerate them in a configured local
+  development environment and commit all five application files with the source change.
 
 ## `skillopt.yml` has been passing vacuously — do not copy its pattern
 
@@ -170,7 +158,7 @@ Run it by hand any time: `cd packages/backend && pnpm check:fal-catalog`.
 
 - **Deployment is not automated.** The gate proves the artifact *builds*; it does not deploy.
   Vercel deployment, the custom-domain decision and the deploy pipeline belong to Phase 25.
-- **`convex deploy` is not run in CI.** Only `codegen`. Pushing functions from CI would need a
+- **`convex deploy` and `convex codegen` are not run in CI.** Pushing functions from CI would need a
   separate environment-gated job and is out of scope for the gate.
 - **No caching of turbo's task outputs across runs** — every run is cold. Acceptable at this repo
   size; revisit if the job crosses ~10 minutes.
@@ -179,7 +167,6 @@ Run it by hand any time: `cd packages/backend && pnpm check:fal-catalog`.
 - **`skillopt.yml`'s swallowed-failure gates are NOT fixed.** Diagnosed above, left alone
   deliberately: `.github/workflows/skillopt.yml` is `skill-registry.md`'s watched path and belongs to
   a different subsystem. Fix it there, not here.
-- **The gate has not yet been proven green.** As of 2026-08-01 it fails at the codegen step for want
-  of `CONVEX_DEPLOY_KEY`, and the typecheck/lint debt behind that (150 backend type errors, 323 biome
-  errors, one red `onboarding.test.ts §4.2`) is Tasks 2-7 of `22.1-03-PLAN.md`, blocked on a
-  quiescent tree. Until a run goes green end to end, the steps after codegen are unproven.
+- **A local pass is not the merge verdict.** The four gate commands were verified locally on
+  2026-08-04, but every pushed change still requires its own successful GitHub Actions run before
+  the gate can be called green for that commit.

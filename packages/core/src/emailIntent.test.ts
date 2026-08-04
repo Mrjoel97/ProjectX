@@ -203,7 +203,9 @@ describe("parseSendTime — pure NL time → resolved | ambiguous | past | none 
   test('empty / whitespace / no time expression → { kind: "none" } (immediate-send default, SC1)', () => {
     expect(parseSendTime("", NOW, TZ)).toEqual({ kind: "none" });
     expect(parseSendTime("   ", NOW, TZ)).toEqual({ kind: "none" });
-    expect(parseSendTime("please send the proposal to the team", NOW, TZ)).toEqual({ kind: "none" });
+    expect(parseSendTime("please send the proposal to the team", NOW, TZ)).toEqual({
+      kind: "none",
+    });
   });
 
   test('"in 2 hours" → resolved epoch exactly nowMs + 7_200_000 (tz-independent offset)', () => {
@@ -257,10 +259,14 @@ describe("parseSendTime — pure NL time → resolved | ambiguous | past | none 
     expect(r.kind).toBe("resolved");
     if (r.kind !== "resolved") return;
     const w = wallClock(r.epochMs);
-    expect({ day: w.day, hour: w.hour, minute: w.minute }).toEqual({ day: 10, hour: 16, minute: 0 });
+    expect({ day: w.day, hour: w.hour, minute: w.minute }).toEqual({
+      day: 10,
+      hour: 16,
+      minute: 0,
+    });
   });
 
-  test('a bare PM time already past today → rolls to tomorrow (never a past send)', () => {
+  test("a bare PM time already past today → rolls to tomorrow (never a past send)", () => {
     // now is noon; "9pm" is still future today, so use one that already passed: none in PM after noon.
     // Instead prove the roll with a morning-equivalent by pinning now to the evening.
     const evening = Date.UTC(2024, 5, 10, 23, 30, 0); // 19:30 EDT Monday
@@ -314,7 +320,10 @@ describe("parseSendTime — pure NL time → resolved | ambiguous | past | none 
   });
 
   test("within-horizon cases still resolve (no regression from the horizon check)", () => {
-    expect(parseSendTime("in 2 hours", NOW, TZ)).toEqual({ kind: "resolved", epochMs: NOW + 7_200_000 });
+    expect(parseSendTime("in 2 hours", NOW, TZ)).toEqual({
+      kind: "resolved",
+      epochMs: NOW + 7_200_000,
+    });
   });
 });
 

@@ -172,7 +172,9 @@ const hasFtypMagic = (mp4: Uint8Array): boolean =>
  * burn that skipped these checks would publish whatever the VM handed back over a reel that was
  * already validated.
  */
-export function validateMp4Bytes(mp4: Uint8Array | null): ({ ok: false } & RenderReturnError) | null {
+export function validateMp4Bytes(
+  mp4: Uint8Array | null,
+): ({ ok: false } & RenderReturnError) | null {
   if (mp4 === null) return { ok: false, code: "missing_output" };
   if (mp4.byteLength === 0) return { ok: false, code: "empty_output" };
   if (!hasFtypMagic(mp4)) return { ok: false, code: "not_an_mp4" };
@@ -395,7 +397,13 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     if (up === null || typeof up !== "object") return null;
     const { mp4 } = up as Record<string, unknown>;
     if (!sameOrigin(mp4)) return null;
-    return { mode: "caption", renderId: b.renderId, sourceId: b.sourceId, ass: b.ass, uploadUrls: { mp4 } };
+    return {
+      mode: "caption",
+      renderId: b.renderId,
+      sourceId: b.sourceId,
+      ass: b.ass,
+      uploadUrls: { mp4 },
+    };
   }
 
   if (typeof b.blockCount !== "number" || !Number.isInteger(b.blockCount) || b.blockCount < 1) {

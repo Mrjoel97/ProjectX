@@ -11,7 +11,7 @@
  * No node:crypto here — safeTextHash is the convex adapter's job (same SHA-256
  * pattern as requests.ts goalHash), keeping this package platform-neutral.
  */
-import { type Result, err, ok } from "@pikar/core/result";
+import { err, ok, type Result } from "@pikar/core/result";
 
 export type PiiType = "email" | "card" | "ssn" | "phone";
 
@@ -55,7 +55,10 @@ const DETECTORS: readonly { type: PiiType; re: RegExp; accept?: (raw: string) =>
   // E.164 (+15551234567) or US formatted ((555) 123-4567 / 555-123-4567 / 555.123.4567).
   // NOTE: no \b before "(" — a word boundary can't sit between two non-word chars,
   // so the parenthesized form gets its own alternative without one.
-  { type: "phone", re: /\+\d{7,15}\b|\(\d{3}\)\s?\d{3}[-.\s]\d{4}\b|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g },
+  {
+    type: "phone",
+    re: /\+\d{7,15}\b|\(\d{3}\)\s?\d{3}[-.\s]\d{4}\b|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g,
+  },
 ];
 
 function luhn(digits: string): boolean {

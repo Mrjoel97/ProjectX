@@ -163,7 +163,8 @@ export const getForDelivery = internalQuery({
     const attachments = [];
     for (const ref of r.attachmentRefs) {
       const a = await ctx.db.get(ref);
-      if (a) attachments.push({ filename: a.filename, mimeType: a.mimeType, storageId: a.storageId });
+      if (a)
+        attachments.push({ filename: a.filename, mimeType: a.mimeType, storageId: a.storageId });
     }
     return {
       tenantId: r.tenantId,

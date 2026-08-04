@@ -8,7 +8,11 @@ import { BoltIcon, BrainIcon, ShieldIcon, StarIcon } from "./icons";
 const FEATURES = [
   { icon: <BoltIcon />, title: "Lightning Speed", desc: "Processing power that keeps up" },
   { icon: <BrainIcon />, title: "Deep Intelligence", desc: "Adaptive learning that evolves" },
-  { icon: <ShieldIcon />, title: "Bank-Grade Security", desc: "Enterprise encryption & compliance" },
+  {
+    icon: <ShieldIcon />,
+    title: "Bank-Grade Security",
+    desc: "Enterprise encryption & compliance",
+  },
 ];
 
 export default function AuthLayout({ children }: { children: ReactNode }) {

@@ -19,7 +19,10 @@ const NOW = 1_800_000_000_000;
 type T = ReturnType<typeof convexTest>;
 
 /** Insert one briefing row through the real internal writer (never a raw db.insert). */
-function seed(t: T, over: { tenantId?: string; threadId?: string; createdAt?: number; gist?: string } = {}) {
+function seed(
+  t: T,
+  over: { tenantId?: string; threadId?: string; createdAt?: number; gist?: string } = {},
+) {
   return t.mutation(internal.briefings.insert, {
     tenantId: over.tenantId ?? TENANT,
     threadId: over.threadId ?? THREAD,
@@ -46,7 +49,9 @@ describe("briefings.byThread (content-plane read)", () => {
   test("the owning tenant reads back the briefing it inserted", async () => {
     const t = convexTest(schema, modules);
     await seed(t);
-    const row = await t.withIdentity({ subject: TENANT }).query(api.briefings.byThread, { threadId: THREAD });
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.briefings.byThread, { threadId: THREAD });
     expect(row).not.toBeNull();
     expect(row?.items[0]?.gist).toBe("asks for the Q3 numbers");
     expect(row?.listedCount).toBe(1);
@@ -55,7 +60,9 @@ describe("briefings.byThread (content-plane read)", () => {
   test("another tenant reading the same threadId gets null (no cross-tenant mailbox leak)", async () => {
     const t = convexTest(schema, modules);
     await seed(t); // owned by TENANT
-    const row = await t.withIdentity({ subject: OTHER }).query(api.briefings.byThread, { threadId: THREAD });
+    const row = await t
+      .withIdentity({ subject: OTHER })
+      .query(api.briefings.byThread, { threadId: THREAD });
     expect(row, "tenant_b read tenant_a's briefing").toBeNull();
   });
 
@@ -63,14 +70,18 @@ describe("briefings.byThread (content-plane read)", () => {
     const t = convexTest(schema, modules);
     await seed(t, { createdAt: NOW, gist: "the older briefing" });
     await seed(t, { createdAt: NOW + 60_000, gist: "the newer briefing" });
-    const row = await t.withIdentity({ subject: TENANT }).query(api.briefings.byThread, { threadId: THREAD });
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.briefings.byThread, { threadId: THREAD });
     expect(row?.items[0]?.gist).toBe("the newer briefing");
     expect(row?.createdAt).toBe(NOW + 60_000);
   });
 
   test("a thread with no briefing returns null (the card renders nothing)", async () => {
     const t = convexTest(schema, modules);
-    const row = await t.withIdentity({ subject: TENANT }).query(api.briefings.byThread, { threadId: "empty" });
+    const row = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.briefings.byThread, { threadId: "empty" });
     expect(row).toBeNull();
   });
 });

@@ -25,18 +25,26 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-import { internal } from "./_generated/api";
-import schema from "./schema";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
+import { internal } from "./_generated/api";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_transcribe";
 type T = ReturnType<typeof convexTest>;
@@ -84,7 +92,11 @@ describe("transcribeDoc — sentinel spine (EXTR-I offline)", () => {
   test("SMOKE::transcribe:: bytes walk the full spine to processing with a counts-only audit", async () => {
     const t = setup();
     // Distinctive needle so the transcript-absence scan below can't false-negative.
-    const vaultDocId = await seedDoc(t, "SMOKE::transcribe::the quarterly zebra forecast", "video/mp4");
+    const vaultDocId = await seedDoc(
+      t,
+      "SMOKE::transcribe::the quarterly zebra forecast",
+      "video/mp4",
+    );
 
     await runTranscribe(t, vaultDocId);
 
@@ -111,7 +123,12 @@ describe("transcribeDoc — sentinel spine (EXTR-I offline)", () => {
 
   test("audio/* container rides the same spine (stray audio uploads don't rot)", async () => {
     const t = setup();
-    const vaultDocId = await seedDoc(t, "SMOKE::transcribe::voice memo body", "audio/wav", "memo.wav");
+    const vaultDocId = await seedDoc(
+      t,
+      "SMOKE::transcribe::voice memo body",
+      "audio/wav",
+      "memo.wav",
+    );
 
     await runTranscribe(t, vaultDocId);
 
@@ -139,7 +156,10 @@ describe("transcribeDoc — sentinel spine (EXTR-I offline)", () => {
 
     const audits = await allAudit(t);
     const extracted = audits.find((r) => r.eventType === "vault.extracted");
-    expect(extracted?.payload).toMatchObject({ truncated: true, charCount: VAULT_EXTRACT_CHAR_CAP });
+    expect(extracted?.payload).toMatchObject({
+      truncated: true,
+      charCount: VAULT_EXTRACT_CHAR_CAP,
+    });
   });
 });
 
@@ -176,7 +196,11 @@ describe("transcribeDoc — honest failures (EXTR-I)", () => {
   test("a scanText Err fails closed: pii_scan_failed + exactly ONE refs-only audit row", async () => {
     const t = setup();
     // The poison sentinel routes into scanText's OWN non-string Err branch (intake.ts pattern).
-    const vaultDocId = await seedDoc(t, "SMOKE::transcribe::PII_POISON::secret transcript body", "video/mp4");
+    const vaultDocId = await seedDoc(
+      t,
+      "SMOKE::transcribe::PII_POISON::secret transcript body",
+      "video/mp4",
+    );
 
     await runTranscribe(t, vaultDocId);
 
@@ -188,7 +212,11 @@ describe("transcribeDoc — honest failures (EXTR-I)", () => {
     const audits = await allAudit(t);
     const failures = audits.filter((r) => r.eventType === "vault.extraction_failed");
     expect(failures).toHaveLength(1);
-    expect(failures[0]?.payload).toMatchObject({ vaultDocId, kind: "video", reason: "pii_scan_failed" });
+    expect(failures[0]?.payload).toMatchObject({
+      vaultDocId,
+      kind: "video",
+      reason: "pii_scan_failed",
+    });
     // Refs-only: no fragment of the transcript in ANY audit row.
     expect(JSON.stringify(audits)).not.toContain("secret transcript");
   });

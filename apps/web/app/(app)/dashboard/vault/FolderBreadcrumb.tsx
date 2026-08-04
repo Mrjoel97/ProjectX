@@ -75,10 +75,7 @@ export function FolderBreadcrumb({
         {/* Emphasis is weight and position, never a coloured pill and never amber (BRAND §5/§2).
             No aria-live: this is an ambient count, not an outcome. */}
         {unincorporated > 0 && (
-          <span
-            className="caps-label"
-            style={{ margin: 0, fontVariantNumeric: "tabular-nums" }}
-          >
+          <span className="caps-label" style={{ margin: 0, fontVariantNumeric: "tabular-nums" }}>
             {unincorporated} added since the last digest
           </span>
         )}

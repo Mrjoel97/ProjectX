@@ -1,6 +1,6 @@
+import { notificationMessage } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { notificationMessage } from "@pikar/core";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 

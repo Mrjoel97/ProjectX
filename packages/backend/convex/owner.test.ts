@@ -44,9 +44,7 @@ describe("owner.viewer — one boolean, fail-closed", () => {
     const t = harness();
     const userId = await t.run((ctx) => ctx.db.insert("users", {}));
 
-    const result = await t
-      .withIdentity({ subject: `${userId}|s` })
-      .query(api.owner.viewer, {});
+    const result = await t.withIdentity({ subject: `${userId}|s` }).query(api.owner.viewer, {});
 
     expect(result).toEqual({ isOwner: false });
     // Anti-vacuity: the row really exists and really has no owner field.
@@ -59,9 +57,9 @@ describe("owner.viewer — one boolean, fail-closed", () => {
     const t = harness();
     const userId = await t.run((ctx) => ctx.db.insert("users", { owner: false }));
 
-    expect(
-      await t.withIdentity({ subject: `${userId}|s` }).query(api.owner.viewer, {}),
-    ).toEqual({ isOwner: false });
+    expect(await t.withIdentity({ subject: `${userId}|s` }).query(api.owner.viewer, {})).toEqual({
+      isOwner: false,
+    });
 
     const row = await t.run((ctx) => ctx.db.get(userId));
     expect(row?.owner).toBe(false);
@@ -72,9 +70,9 @@ describe("owner.viewer — one boolean, fail-closed", () => {
     const userId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     await t.run((ctx) => ctx.db.delete(userId));
 
-    expect(
-      await t.withIdentity({ subject: `${userId}|s` }).query(api.owner.viewer, {}),
-    ).toEqual({ isOwner: false });
+    expect(await t.withIdentity({ subject: `${userId}|s` }).query(api.owner.viewer, {})).toEqual({
+      isOwner: false,
+    });
     // Anti-vacuity: the row is genuinely gone, so `false` came from the null read and not
     // from the fixture never having been an owner.
     expect(await t.run((ctx) => ctx.db.get(userId))).toBeNull();

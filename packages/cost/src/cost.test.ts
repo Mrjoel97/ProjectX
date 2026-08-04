@@ -3,18 +3,18 @@ import { scanText } from "@pikar/pii";
 import { describe, expect, it } from "vitest";
 import {
   CHEAP_MODEL,
-  DEFAULT_MODEL,
-  REALTIME_PRICING,
-  RESEARCH_FALLBACK_MODEL,
-  RESEARCH_MODEL,
-  TRANSCRIPTION_PRICING,
-  WEB_SEARCH_CALL_USD,
   chooseModel,
+  DEFAULT_MODEL,
   estimateCostUsd,
   estimateTokens,
   priceRealtime,
   priceTranscription,
   priceUsage,
+  REALTIME_PRICING,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+  TRANSCRIPTION_PRICING,
+  WEB_SEARCH_CALL_USD,
 } from "./cost";
 
 // SafeText only comes out of scanText — no cast, keeps the brand honest.
@@ -141,7 +141,6 @@ describe("priceRealtime", () => {
     expect(priceRealtime(0, Number.POSITIVE_INFINITY, 0, 0).ok).toBe(false);
   });
 });
-
 
 // ── Phase 16 (16-02, ACTN-03/D8) — the research model pins ───────────────────────────────────
 //

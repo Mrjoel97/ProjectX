@@ -47,7 +47,11 @@ describe("feedback capture (IMPR-01)", () => {
     const requestId = await seedRequest(t, { skillVersion: 7 });
     const asT = t.withIdentity({ subject: TENANT });
 
-    await asT.mutation(api.feedback.submitFeedback, { requestId, rating: "down", comment: "wrong tone" });
+    await asT.mutation(api.feedback.submitFeedback, {
+      requestId,
+      rating: "down",
+      comment: "wrong tone",
+    });
 
     let rows = await rowsFor(t, requestId);
     expect(rows).toHaveLength(1);

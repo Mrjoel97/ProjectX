@@ -243,7 +243,9 @@
   color: #fff;
   font-size: 0.92rem;
   font-family: inherit;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
 .auth-input::placeholder {
@@ -289,7 +291,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .auth-submit:hover {

@@ -413,7 +413,11 @@ describe("parseArtDirection", () => {
     expect(art?.environment).toBe("A working studio, mid-afternoon.");
     expect(art?.texture).toBe("35mm film grain over matte paper.");
     expect(art?.typography).toContain("humanist sans");
-    expect(art?.references).toEqual(["Gregory Crewdson", "the film Locke", "Apple's Shot on iPhone"]);
+    expect(art?.references).toEqual([
+      "Gregory Crewdson",
+      "the film Locke",
+      "Apple's Shot on iPhone",
+    ]);
     expect(art?.avoid).toContain("No stock-footage handshakes");
   });
 

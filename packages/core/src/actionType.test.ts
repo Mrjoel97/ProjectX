@@ -81,10 +81,12 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
 // if a future edit ever makes an incomplete arm table legal, this file stops compiling.
 
 /** A complete arm table compiles. */
-const _COMPLETE_ARMS = { email: "workflow", memo: "inline", calendar_event: "externalAction", media: "externalAction" } as const satisfies Record<
-  ActionType,
-  Arm
->;
+const _COMPLETE_ARMS = {
+  email: "workflow",
+  memo: "inline",
+  calendar_event: "externalAction",
+  media: "externalAction",
+} as const satisfies Record<ActionType, Arm>;
 
 // @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` and
 // `calendar_event` are missing).

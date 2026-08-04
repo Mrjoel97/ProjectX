@@ -19,12 +19,13 @@
 //
 // pipeline.ts is on the raw-builder allowlist (internalMutation, not a tenant
 // wrapper — the workflow carries no client identity).
-import { priceUsage } from "@pikar/cost";
+
 import { classifyReviewDecision, notificationMessage } from "@pikar/core";
-import { workflow } from "./index";
-import { internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { priceUsage } from "@pikar/cost";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { internalMutation } from "./_generated/server";
+import { workflow } from "./index";
 import { reviewEventValidator } from "./review";
 
 // The 13-member requests.status union (kept in sync with schema.ts).
@@ -47,6 +48,7 @@ export const REQUEST_STATUS = v.union(
 );
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
 // REVW-02: the regenerate cap is now @pikar/core's single source of truth —
 // classifyReviewDecision enforces it in the gate below (fail closed at the cap: escalate,
 // never deliver). Re-exported so requests.ts's `canRegenerate` hint and the review UI read
@@ -281,7 +283,10 @@ export const pipelineWorkflow = workflow.define({
 
       if (decisionAction.action === "terminate") {
         // reject → rejected terminal (unchanged).
-        await step.runMutation(internal.pipeline.saveDraft, { requestId, rejectReason: evt.reason });
+        await step.runMutation(internal.pipeline.saveDraft, {
+          requestId,
+          rejectReason: evt.reason,
+        });
         await setStatusStep("rejected");
         await audit("review.rejected");
         await writeTelemetry("rejected");
@@ -320,7 +325,10 @@ export const pipelineWorkflow = workflow.define({
 
       // decisionAction.action === "proceed": approve | edit_text → DELIVER.
       if (evt.decision === "edit_text") {
-        await step.runMutation(internal.pipeline.saveDraft, { requestId, editedBody: evt.editedText });
+        await step.runMutation(internal.pipeline.saveDraft, {
+          requestId,
+          editedBody: evt.editedText,
+        });
       }
       break;
     }
@@ -358,7 +366,8 @@ export const saveDraft = internalMutation({
     rejectReason: v.optional(v.string()),
   },
   handler: async (ctx, { requestId, route, draft, editedBody, rejectReason }) => {
-    const patch: { route?: string; draft?: string; editedBody?: string; rejectReason?: string } = {};
+    const patch: { route?: string; draft?: string; editedBody?: string; rejectReason?: string } =
+      {};
     if (route !== undefined) patch.route = route;
     if (draft !== undefined) patch.draft = draft;
     if (editedBody !== undefined) patch.editedBody = editedBody;

@@ -5,7 +5,7 @@
  * or an over-budget request surfaces as Err (never NaN/undefined/throw) and the
  * convex adapter can stop the request. Domain logic per CLAUDE.md §1.
  */
-import { type Result, err, ok } from "@pikar/core/result";
+import { err, ok, type Result } from "@pikar/core/result";
 import type { SafeText } from "@pikar/pii";
 
 export const DEFAULT_MODEL = "openai/gpt-4o-mini";

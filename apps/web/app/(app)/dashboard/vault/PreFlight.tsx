@@ -208,7 +208,11 @@ export function PreFlight({
       } catch (e) {
         // The loop CONTINUES — one bad file must not abandon the rest, and every result is kept so
         // the user is told exactly which files landed (BRAND §1).
-        results.push({ name: file.name, ok: false, note: e instanceof Error ? e.message : "upload failed" });
+        results.push({
+          name: file.name,
+          ok: false,
+          note: e instanceof Error ? e.message : "upload failed",
+        });
       }
       setOutcomes([...results]);
       onPhase({ kind: "uploading", folderId, done: results.length, total: ingestible.length });
@@ -270,7 +274,15 @@ export function PreFlight({
     });
   }
 
-  const copy = refused ? refusalCopy(phase) : est?.refusal ? refusalCopy({ reason: est.refusal.reason, estimateCents: est.totalCents, remainingCents: est.remainingCents }) : null;
+  const copy = refused
+    ? refusalCopy(phase)
+    : est?.refusal
+      ? refusalCopy({
+          reason: est.refusal.reason,
+          estimateCents: est.totalCents,
+          remainingCents: est.remainingCents,
+        })
+      : null;
   // `not_reserving` and `manifest_short` come back with NO `estCents`, so the refusal arm fills 0.
   // `preflightCopy` already suppresses both numbers in the PROSE for those codes; the tile has to
   // agree, or the panel says "your folder didn't match what reached us" beside a confident $0.00
@@ -306,7 +318,14 @@ export function PreFlight({
           <div className="caps-label">
             {skipped.length} file{skipped.length === 1 ? "" : "s"} won&rsquo;t be read
           </div>
-          <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+          <ul
+            style={{
+              margin: "0.4rem 0 0",
+              paddingLeft: "1.1rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.85rem",
+            }}
+          >
             {skipped.map((i) => (
               <li key={picked.files[i]?.name ?? i}>
                 {picked.files[i]?.name} — {skipCopy(perFile[i]?.reason ?? "")}
@@ -329,10 +348,16 @@ export function PreFlight({
             padding: "0.85rem 1rem",
           }}
         >
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>{copy.title}</p>
-          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>{copy.remedy}</p>
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
+            {copy.title}
+          </p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+            {copy.remedy}
+          </p>
           {refused && (
-            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>Nothing was read.</p>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+              Nothing was read.
+            </p>
           )}
         </div>
       )}
@@ -341,7 +366,11 @@ export function PreFlight({
         // The arm that only renders on a PARTIAL success — a clean run has already called
         // `onClear()` and unmounted this panel. Announced, because it is a terminal outcome the
         // user did not watch happen (the per-file counter above is deliberately not announced).
-        <p role="status" aria-live="polite" style={{ margin: 0, color: "var(--ink)", fontSize: "0.88rem" }}>
+        <p
+          role="status"
+          aria-live="polite"
+          style={{ margin: 0, color: "var(--ink)", fontSize: "0.88rem" }}
+        >
           Reading {phase.docCount} file{phase.docCount === 1 ? "" : "s"}. The rest are listed below
           and were not sent.
         </p>
@@ -356,7 +385,14 @@ export function PreFlight({
       {uploading && (
         // No aria-live on a counter that ticks once per file — the workspace ActivityCard sets that
         // precedent (ChatPane.tsx:208). The terminal outcome above is the announced one.
-        <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.88rem", fontVariantNumeric: "tabular-nums" }}>
+        <p
+          style={{
+            margin: 0,
+            color: "var(--ink-soft)",
+            fontSize: "0.88rem",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           Sending {phase.done} of {phase.total}…
         </p>
       )}

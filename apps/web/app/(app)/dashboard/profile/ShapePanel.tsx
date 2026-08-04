@@ -200,13 +200,13 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
         </p>
       )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(17rem, 1fr))",
-            gap: "1rem",
-          }}
-        >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(17rem, 1fr))",
+          gap: "1rem",
+        }}
+      >
         <LabeledField label="How many people work on this, including you?">
           <input
             style={field}
@@ -268,7 +268,7 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
             onChange={(e) => setYearsOperating(digits(e.target.value))}
           />
         </LabeledField>
-        </div>
+      </div>
 
       {/* Business tier — READ-ONLY (design §9). Text, never a control: a disabled picker still
           reads as "there is a control here". The reason and the source make it legible; editing
@@ -302,8 +302,8 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
             : "Fill in the facts above and I'll work it out."}
         </p>
         <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}>
-          This follows the facts — there is no setting for it. Change the numbers above and it
-          moves with them.
+          This follows the facts — there is no setting for it. Change the numbers above and it moves
+          with them.
         </p>
       </div>
 

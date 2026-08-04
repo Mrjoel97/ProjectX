@@ -131,7 +131,9 @@ export async function scheduleExtraction(
   // with byte-identical arg validators, not a single `extractDoc`.
   await vaultIngestPool.enqueueAction(
     ctx,
-    rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
+    rail === "transcribe"
+      ? internal.vaultTranscribe.transcribeDoc
+      : internal.vaultExtract.extractDoc,
     { vaultDocId, tenantId, spendRail, reserved },
   );
 }
@@ -337,10 +339,7 @@ export const vaultUploadFolderFile = tenantAction({
     size: v.number(),
     text: v.optional(v.string()),
   },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+  handler: async (ctx, args): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
     const blob = await ctx.storage.get(args.storageId);
     if (!blob) throw new Error("vault: uploaded bytes not found");
     const hash = await contentHash(new Uint8Array(await blob.arrayBuffer()));
@@ -470,9 +469,7 @@ async function readVaultPage(
   const stream = folderId
     ? ctx.db
         .query("vaultDocuments")
-        .withIndex("by_tenant_folder", (q) =>
-          q.eq("tenantId", tenantId).eq("folderId", folderId),
-        )
+        .withIndex("by_tenant_folder", (q) => q.eq("tenantId", tenantId).eq("folderId", folderId))
         .order("desc")
     : ctx.db
         .query("vaultDocuments")
@@ -556,10 +553,7 @@ export const listVaultDocs = tenantQuery({
  */
 export const vaultDocText = tenantQuery({
   args: { vaultDocId: v.id("vaultDocuments") },
-  handler: async (
-    ctx,
-    { vaultDocId },
-  ): Promise<{ text: string | null; status: string } | null> => {
+  handler: async (ctx, { vaultDocId }): Promise<{ text: string | null; status: string } | null> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return null;
     return { text: doc.text ?? null, status: doc.status };
@@ -1022,10 +1016,7 @@ const PROFILE_SEED_CHAR_CAP = 4000;
  */
 export const profileSeedDocs = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (
-    ctx,
-    { tenantId },
-  ): Promise<{ docId: string; title: string; text: string }[]> => {
+  handler: async (ctx, { tenantId }): Promise<{ docId: string; title: string; text: string }[]> => {
     const rows = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))

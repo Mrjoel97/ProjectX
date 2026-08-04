@@ -47,7 +47,9 @@ export function DocStrip({ docId }: { docId: string }) {
         minWidth: 0,
       }}
     >
-      <span style={{ fontSize: "0.72rem", color: "var(--ink-soft)", flex: "none" }}>Discussing</span>
+      <span style={{ fontSize: "0.72rem", color: "var(--ink-soft)", flex: "none" }}>
+        Discussing
+      </span>
 
       {/* A link to the vault rather than lifting <PreviewModal> onto this route: the modal owns
           download/delete/retry and a doc-entities subscription, and hoisting it into a live voice
@@ -76,7 +78,7 @@ export function DocStrip({ docId }: { docId: string }) {
           substitute: audio scrolls past, a badge stays for the whole call. */}
       {ctx.truncated && (
         <span
-          aria-label="Only the first part of this document could be read, so the discussion covers a partial report"
+          title="Only the first part of this document could be read, so the discussion covers a partial report"
           style={{
             flex: "none",
             padding: "0.1rem 0.45rem",

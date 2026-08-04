@@ -19,7 +19,9 @@ import { expect, type Page, test } from "@playwright/test";
 //
 // Assertions ride the plan-row-derived CARDS (stable), never the agent's reply prose (which varies).
 
-test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::agent::, nothing sent)", async ({ page }) => {
+test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::agent::, nothing sent)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -37,7 +39,9 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
 
   // 1. resolve a NAME → resolveContacts tool → offline gmail.search fixture → ResolutionCard.
   await say("SMOKE::agent::resolve=SMOKE::Sarah");
-  await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   const sarahChip = workspace.getByRole("button", { name: /sarah@example\.com/i });
   await expect(sarahChip).toBeVisible();
   await expect(sarahChip).toContainText(/1 msg/i); // header-level hint (count)
@@ -47,13 +51,17 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
   const msgsBeforePick = await page.getByTestId("chat-message").count();
   await sarahChip.click();
   await workspace.getByRole("button", { name: /use these contacts/i }).click();
-  await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toHaveCount(0, { timeout: 15_000 });
+  await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toHaveCount(0, {
+    timeout: 15_000,
+  });
 
   // A pick is an agent TURN, not a dead-end (regression guard for the blank-workspace/hanging-reply
   // bug): resolveRecipients re-enters the tool-loop and saves exactly ONE new assistant reply —
   // WITHOUT the user sending another message. Content varies (real reply vs offline error turn), so
   // assert on the count, not the prose. Before the fix this stayed flat and the conversation hung.
-  await expect(page.getByTestId("chat-message")).toHaveCount(msgsBeforePick + 1, { timeout: 20_000 });
+  await expect(page.getByTestId("chat-message")).toHaveCount(msgsBeforePick + 1, {
+    timeout: 20_000,
+  });
 
   // 3. a conversational EDIT: add a second recipient (addRecipients tool — validated, deduped).
   await say("SMOKE::agent::add=bob@example.com");
@@ -111,15 +119,21 @@ async function resolveTenantId(page: Page): Promise<string> {
     const key = Object.keys(window.localStorage).find((k) => k.startsWith("__convexAuthJWT"));
     return key ? window.localStorage.getItem(key) : null;
   });
-  if (!jwt) throw new Error("No Convex Auth JWT in localStorage — is the storageState session still valid?");
+  if (!jwt)
+    throw new Error(
+      "No Convex Auth JWT in localStorage — is the storageState session still valid?",
+    );
   const payload = jwt.split(".")[1];
   if (!payload) throw new Error("Malformed Convex Auth JWT (no payload segment).");
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
-  if (!claims.sub) throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
+  if (!claims.sub)
+    throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
   return claims.sub;
 }
 
-test("demotion: brief primary → candidates park → picker precedes the demoted brief (UAT-A)", async ({ page }) => {
+test("demotion: brief primary → candidates park → picker precedes the demoted brief (UAT-A)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -157,7 +171,8 @@ test("demotion: brief primary → candidates park → picker precedes the demote
   const briefHandle = await briefCard.elementHandle();
   if (!pickerHandle || !briefHandle) throw new Error("picker/brief element handle missing");
   const briefFollowsPicker = await pickerHandle.evaluate(
-    (pickerEl, briefEl) => Boolean(pickerEl.compareDocumentPosition(briefEl) & Node.DOCUMENT_POSITION_FOLLOWING),
+    (pickerEl, briefEl) =>
+      Boolean(pickerEl.compareDocumentPosition(briefEl) & Node.DOCUMENT_POSITION_FOLLOWING),
     briefHandle,
   );
   expect(briefFollowsPicker).toBe(true);
@@ -193,7 +208,9 @@ test("demotion: brief primary → candidates park → picker precedes the demote
 // spec here, the LIVE paint is owed to the connected human-verify session (composer gated on
 // `gmailAuth.status.connected`); the automated gate is typecheck + Playwright discovery.
 
-test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanCard (UAT-C)", async ({ page }) => {
+test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanCard (UAT-C)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -215,7 +232,8 @@ test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanC
   // 2. Read the plan id from the PlanCards grid hook, then flip status → proposed WITHOUT picking
   //    (proposeEmailPlan keeps candidates) — the deadlock ROW the backend guard now prevents live.
   const planId = await workspace.locator("[data-plan-id]").first().getAttribute("data-plan-id");
-  if (!planId) throw new Error("no data-plan-id on the PlanCards grid — cannot force the proposed state");
+  if (!planId)
+    throw new Error("no data-plan-id on the PlanCards grid — cannot force the proposed state");
   convexRun("cockpit:proposeEmailPlan", {
     planId,
     recipients: ["bob@example.com"],

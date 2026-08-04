@@ -36,7 +36,11 @@ describe("attachmentUrls (V5 — tenant-guarded signed download URLs)", () => {
       .query(api.plans.attachmentUrls, { planId });
 
     expect(urls).toHaveLength(1);
-    expect(urls[0]).toMatchObject({ filename: "report.pdf", mimeType: "application/pdf", size: 12 });
+    expect(urls[0]).toMatchObject({
+      filename: "report.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+    });
     expect(urls[0]?.url).toBeTruthy(); // getUrl resolved — the store→getUrl round-trip works
   });
 
@@ -203,7 +207,9 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
     const t = convexTest(schema, modules);
     const planId = await seedPlan(t); // tenant_a
     await expect(
-      t.withIdentity({ subject: "tenant_b" }).mutation(api.plans.setPlanSendTime, { planId, sendAt: 1 }),
+      t
+        .withIdentity({ subject: "tenant_b" })
+        .mutation(api.plans.setPlanSendTime, { planId, sendAt: 1 }),
     ).rejects.toThrow(/plan not found/);
   });
 

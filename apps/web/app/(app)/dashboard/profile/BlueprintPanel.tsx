@@ -279,7 +279,10 @@ function BlueprintReport({
         </h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "1.6rem" }}>
           <Kpi n={captured} k="facts captured" />
-          <Kpi n={BLUEPRINT_FIELDS.length - captured} k={built ? "still unknown" : "I could know"} />
+          <Kpi
+            n={BLUEPRINT_FIELDS.length - captured}
+            k={built ? "still unknown" : "I could know"}
+          />
           {unincorporatedCount > 0 && <Kpi n={unincorporatedCount} k="documents added since" />}
         </div>
       </div>
@@ -289,7 +292,11 @@ function BlueprintReport({
           <>
             {known.length > 0 && (
               <>
-                I know <strong>{joinPhrases(known.map((s) => SEGMENT_COPY[s.id]?.known ?? s.label))}</strong>.{" "}
+                I know{" "}
+                <strong>
+                  {joinPhrases(known.map((s) => SEGMENT_COPY[s.id]?.known ?? s.label))}
+                </strong>
+                .{" "}
               </>
             )}
             <span style={{ color: "var(--ink-soft)" }}>
@@ -300,8 +307,8 @@ function BlueprintReport({
           </>
         ) : (
           <>
-            Building it reads your profile and your vault documents and turns them into the
-            standing context every agent works from, split into the parts of your business below.{" "}
+            Building it reads your profile and your vault documents and turns them into the standing
+            context every agent works from, split into the parts of your business below.{" "}
             <strong>One model call.</strong>
           </>
         )}
@@ -339,7 +346,14 @@ function BlueprintReport({
 function Kpi({ n, k }: { n: number; k: string }) {
   return (
     <div>
-      <div style={{ fontSize: "1.45rem", fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+      <div
+        style={{
+          fontSize: "1.45rem",
+          fontWeight: 700,
+          lineHeight: 1,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
         {n}
       </div>
       <div
@@ -380,16 +394,31 @@ function NeedsYou({ segment }: { segment: BlueprintSegment }) {
       >
         Needs you
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.9rem", padding: "0.8rem 0.9rem" }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: "0.9rem", padding: "0.8rem 0.9rem" }}
+      >
         {/* A neutral stripe. Priority is weight and rule, never the approval amber — that token is
             the review gate's alone (BRAND §2), and this is a gap, not a thing awaiting approval. */}
         <span
           aria-hidden="true"
-          style={{ width: 3, alignSelf: "stretch", background: "var(--ink)", borderRadius: 2, flex: "none" }}
+          style={{
+            width: 3,
+            alignSelf: "stretch",
+            background: "var(--ink)",
+            borderRadius: 2,
+            flex: "none",
+          }}
         />
         <span style={{ flex: 1, minWidth: 0 }}>
           <strong style={{ display: "block", fontSize: "0.94rem" }}>{segment.label}</strong>
-          <span style={{ display: "block", fontSize: "0.83rem", color: "var(--ink-soft)", marginTop: "0.1rem" }}>
+          <span
+            style={{
+              display: "block",
+              fontSize: "0.83rem",
+              color: "var(--ink-soft)",
+              marginTop: "0.1rem",
+            }}
+          >
             I don't know {SEGMENT_COPY[segment.id]?.gap ?? segment.label.toLowerCase()} — everything
             after this rests on it.
           </span>
@@ -417,7 +446,8 @@ function AskSpecialist({ segment }: { segment: BlueprintSegment }) {
     setFailed(false);
     try {
       const { threadId } = await sendCockpitMessage({
-        text: SEGMENT_COPY[segment.id]?.seed ?? `Help me work out my ${segment.label.toLowerCase()}.`,
+        text:
+          SEGMENT_COPY[segment.id]?.seed ?? `Help me work out my ${segment.label.toLowerCase()}.`,
       });
       router.push(`/dashboard/workspace?thread=${encodeURIComponent(threadId)}`);
     } catch {
@@ -510,7 +540,14 @@ function SegmentLedger({
                 </em>
               )}
               {total > 0 && filled > 0 && filled < total && (
-                <span style={{ display: "block", fontSize: "0.76rem", color: "var(--ink-soft)", marginTop: "0.1rem" }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: "0.76rem",
+                    color: "var(--ink-soft)",
+                    marginTop: "0.1rem",
+                  }}
+                >
                   {filled} of {total} captured
                 </span>
               )}
@@ -575,7 +612,15 @@ function SegmentDetail({
   const populated = segment.fields.filter((f) => blueprint[f] !== null);
 
   return (
-    <section id={`segment-detail-${segment.id}`} style={{ display: "grid", gap: "0.65rem", paddingTop: "0.85rem", borderTop: "1px solid var(--rule)" }}>
+    <section
+      id={`segment-detail-${segment.id}`}
+      style={{
+        display: "grid",
+        gap: "0.65rem",
+        paddingTop: "0.85rem",
+        borderTop: "1px solid var(--rule)",
+      }}
+    >
       <h3 style={{ ...label, margin: 0 }}>{segment.label}</h3>
 
       {segment.fields.length === 0 ? (
@@ -613,7 +658,9 @@ function SegmentDetail({
                 {entry.values.join(" · ")}
               </span>
               <span style={{ color: "var(--ink-soft)", fontSize: "0.78rem" }}>
-                {entry.origin === "stated" ? "Your own words" : `From ${entry.source ?? "a vault document"}`}
+                {entry.origin === "stated"
+                  ? "Your own words"
+                  : `From ${entry.source ?? "a vault document"}`}
               </span>
             </div>
           </div>

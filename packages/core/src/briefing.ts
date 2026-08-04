@@ -218,7 +218,11 @@ export function suggestedMove(item: BriefingItem): string {
  * degrades to the counts-only lede with no dangling separator (the view never throws on a
  * pre-delta row that has no synopsis).
  */
-export function composeLede(items: readonly BriefingItem[], listedCount: number, synopsis?: string): string {
+export function composeLede(
+  items: readonly BriefingItem[],
+  listedCount: number,
+  synopsis?: string,
+): string {
   const needsYou = items.filter(isNeedsYou).length;
   const lede = `${listedCount} messages, ${needsYou} need you`;
   const clause = synopsis?.trim();
@@ -233,7 +237,10 @@ export function composeLede(items: readonly BriefingItem[], listedCount: number,
  * "other" is not hidden), and a needs-you row (needsReply or a deadline) is NEVER collapsed even
  * if mis-categorized `newsletter` — needs-you wins.
  */
-export function collapseNoise(items: readonly BriefingItem[]): { surfaced: BriefingItem[]; collapsedCount: number } {
+export function collapseNoise(items: readonly BriefingItem[]): {
+  surfaced: BriefingItem[];
+  collapsedCount: number;
+} {
   const surfaced: BriefingItem[] = [];
   let collapsedCount = 0;
   for (const item of items) {

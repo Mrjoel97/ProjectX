@@ -20,8 +20,9 @@
 // folder members is not marked stalled while healthy. Every assertion below that used to read
 // "scheduling also armed a watchdog" therefore reads ZERO — the arm has its own coverage in
 // vaultFolders.test.ts, driven from markExtracting.
-import { convexTest } from "convex-test";
+
 import { getFunctionName } from "convex/server";
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
@@ -73,15 +74,17 @@ beforeEach(() => {
   enqueuedExtractions.length = 0;
   // The generic signature of `enqueueAction` cannot be satisfied by a concrete stub, so the
   // implementation is cast once here rather than typed twice.
-  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
-    ((async (_ctx: unknown, fn: never, fnArgs: unknown) => {
-      enqueuedExtractions.push({
-        name: getFunctionName(fn),
-        args: [fnArgs as Record<string, unknown>],
-      });
-      return "workId_test" as never;
-    }) as never) as never,
-  );
+  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation((async (
+    _ctx: unknown,
+    fn: never,
+    fnArgs: unknown,
+  ) => {
+    enqueuedExtractions.push({
+      name: getFunctionName(fn),
+      args: [fnArgs as Record<string, unknown>],
+    });
+    return "workId_test" as never;
+  }) as never as never);
 });
 afterEach(() => vi.restoreAllMocks());
 

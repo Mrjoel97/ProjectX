@@ -24,9 +24,9 @@ import {
   VaultIcon,
   WalletIcon,
 } from "../(auth)/icons";
-import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 import { NotificationsBanner } from "./_components/NotificationsBanner";
 import { ReconnectBanner } from "./_components/ReconnectBanner";
+import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
@@ -59,10 +59,7 @@ function DeadLetterBadge() {
   const count = useQuery(api.deadLetters.newCount);
   if (!count) return null;
   return (
-    <span
-      className="rail-badge"
-      title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}
-    >
+    <span className="rail-badge" title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}>
       {count}
     </span>
   );
@@ -178,7 +175,12 @@ function Shell({ children }: { children: ReactNode }) {
             aria-expanded={!collapsed}
             title={collapsed ? "Expand" : undefined}
           >
-            <span style={{ display: "inline-flex", transform: collapsed ? "rotate(180deg)" : undefined }}>
+            <span
+              style={{
+                display: "inline-flex",
+                transform: collapsed ? "rotate(180deg)" : undefined,
+              }}
+            >
               <ChevronLeftIcon />
             </span>
             <span className="rail-label">Collapse</span>
@@ -257,14 +259,24 @@ function AuthGate({ variant }: { variant: "loading" | "signedout" }) {
   const showSignIn = variant === "signedout" || stalled;
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "2rem" }}>
-      <div style={{ textAlign: "center", maxWidth: "22rem", display: "grid", gap: "0.75rem", justifyItems: "center" }}>
+      <div
+        style={{
+          textAlign: "center",
+          maxWidth: "22rem",
+          display: "grid",
+          gap: "0.75rem",
+          justifyItems: "center",
+        }}
+      >
         {variant === "signedout" ? (
           <>
             <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Your session ended</h1>
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>Please sign in again to continue.</p>
           </>
         ) : (
-          <p style={{ color: "var(--ink-soft)", margin: 0 }}>{stalled ? "Still connecting…" : "Loading…"}</p>
+          <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+            {stalled ? "Still connecting…" : "Loading…"}
+          </p>
         )}
         {showSignIn && (
           <Link

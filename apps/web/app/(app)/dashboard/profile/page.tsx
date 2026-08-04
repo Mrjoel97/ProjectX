@@ -139,7 +139,14 @@ export default function ProfilePage() {
     <div style={page}>
       <header style={{ display: "grid", gap: "0.5rem" }}>
         <span style={label}>Business profile</span>
-        <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+        <h1
+          style={{
+            fontSize: "clamp(1.5rem, 4vw, 2rem)",
+            fontWeight: 700,
+            color: "var(--ink)",
+            margin: 0,
+          }}
+        >
           Your business profile
         </h1>
         <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
@@ -221,13 +228,28 @@ export default function ProfilePage() {
       <div role="tabpanel" id="panel-shape" aria-labelledby="tab-shape" hidden={tab !== "shape"}>
         <ShapePanel oneLineDescription={profile.oneLineDescription} />
       </div>
-      <div role="tabpanel" id="panel-business" aria-labelledby="tab-business" hidden={tab !== "business"}>
+      <div
+        role="tabpanel"
+        id="panel-business"
+        aria-labelledby="tab-business"
+        hidden={tab !== "business"}
+      >
         <NarrativePanel profile={profile} setProfile={setProfile} />
       </div>
-      <div role="tabpanel" id="panel-blueprint" aria-labelledby="tab-blueprint" hidden={tab !== "blueprint"}>
+      <div
+        role="tabpanel"
+        id="panel-blueprint"
+        aria-labelledby="tab-blueprint"
+        hidden={tab !== "blueprint"}
+      >
         <BlueprintPanel />
       </div>
-      <div role="tabpanel" id="panel-connections" aria-labelledby="tab-connections" hidden={tab !== "connections"}>
+      <div
+        role="tabpanel"
+        id="panel-connections"
+        aria-labelledby="tab-connections"
+        hidden={tab !== "connections"}
+      >
         <ConnectionsPanel />
       </div>
     </div>

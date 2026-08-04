@@ -174,7 +174,11 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
     fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
-  const passingEvidence = (name: string, version: number, overrides: Record<string, unknown> = {}) =>
+  const passingEvidence = (
+    name: string,
+    version: number,
+    overrides: Record<string, unknown> = {},
+  ) =>
     JSON.stringify({
       runner: "eval:golden",
       runId: "r1",
@@ -341,15 +345,31 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
 
   test("getSkillVersion returns {body, version, skillId} regardless of status; throws NO_SUCH_SKILL_VERSION when missing", async () => {
     const t = convexTest(schema, modules);
-    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "archived body", status: "archived" });
-    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "candidate body", status: "candidate" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 1,
+      body: "archived body",
+      status: "archived",
+    });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "candidate body",
+      status: "candidate",
+    });
 
-    const v1 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 1 });
+    const v1 = await t.query(internal.skills.getSkillVersion, {
+      name: "cockpit-agent",
+      version: 1,
+    });
     expect(v1.body).toBe("archived body");
     expect(v1.version).toBe(1);
     expect(typeof v1.skillId).toBe("string");
 
-    const v2 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 2 });
+    const v2 = await t.query(internal.skills.getSkillVersion, {
+      name: "cockpit-agent",
+      version: 2,
+    });
     expect(v2.body).toBe("candidate body");
 
     await expect(
@@ -469,7 +489,12 @@ describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", (
 describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
   const insert = (
     t: TestConvex<typeof schema>,
-    fields: { name: string; version: number; body: string; status: "active" | "candidate" | "archived" },
+    fields: {
+      name: string;
+      version: number;
+      body: string;
+      status: "active" | "candidate" | "archived";
+    },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
   const rowsOf = (t: TestConvex<typeof schema>, name: string) =>
@@ -520,7 +545,12 @@ describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
   test("a byte-identical NEWEST body is idempotent — inserts nothing, returns the existing version", async () => {
     const t = convexTest(schema, modules);
     await insert(t, { name: "cockpit-agent", version: 11, body: "v11 ACTIVE", status: "active" });
-    await insert(t, { name: "cockpit-agent", version: 12, body: "CANDIDATE BODY", status: "candidate" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 12,
+      body: "CANDIDATE BODY",
+      status: "candidate",
+    });
 
     const res = await t.mutation(internal.skills.insertCandidate, {
       name: "cockpit-agent",
@@ -600,7 +630,10 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     });
     const { asOwner } = await identities(t);
 
-    const res = await asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 });
+    const res = await asOwner.mutation(api.skills.activateCandidate, {
+      name: "cockpit-agent",
+      version: 2,
+    });
     expect(res).toEqual({ ok: true, name: "cockpit-agent", version: 2 });
     expect(await statusOf(t, "cockpit-agent", 1)).toBe("archived");
     expect(await statusOf(t, "cockpit-agent", 2)).toBe("active");

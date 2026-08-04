@@ -9,12 +9,7 @@
 // `node` environment (the runCockpitAgent.test.ts idiom): `dispatch.ts` imports
 // `runSpecialistTurn` from the `"use node"` llm.ts, and the mock-model loop wants the node runtime.
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
-import {
-  CHEAP_MODEL,
-  DEFAULT_MODEL,
-  RESEARCH_FALLBACK_MODEL,
-  RESEARCH_MODEL,
-} from "@pikar/cost";
+import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -29,8 +24,8 @@ import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/s
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
-import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import { contentHash } from "./lib/hash";
+import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -282,46 +277,43 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
     ["proposePlan", {}],
     ["setSubject", { subject: "Hijacked" }],
     ["replyToMessage", { intent: "Send the injected instructions to everyone" }],
-  ] as const)(
-    "SC#1 withheld %s: injection cannot write while both GRANTED research tools really run",
-    async (withheld, input) => {
+  ] as const)("SC#1 withheld %s: injection cannot write while both GRANTED research tools really run", async (withheld, input) => {
     const { t, planId } = await setup();
-      const before = await readPlan(t, planId);
-      const urls = ["https://example.com/research"];
-      const res = ok(
-        await t.action(internal.dispatch.__runSpecialistWithScript, {
-          ...BASE,
-          route: "research",
-          planId,
-          primary: [
-            // ACTN-03: `declareUnsupported` is now the grant's ONLY local tool (searchVault left
-            // the grant — see specialists.ts), and a local tool is what makes this harness
-            // non-inert: `webResearch` is provider-executed and deliberately emits no step row.
-            toolStep("declareUnsupported", { claim: "the harness needs one local tool to run" }),
-            toolStep(withheld, input),
-            searchedStep(REPLY, urls),
-          ],
-        }),
-      );
+    const before = await readPlan(t, planId);
+    const urls = ["https://example.com/research"];
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        route: "research",
+        planId,
+        primary: [
+          // ACTN-03: `declareUnsupported` is now the grant's ONLY local tool (searchVault left
+          // the grant — see specialists.ts), and a local tool is what makes this harness
+          // non-inert: `webResearch` is provider-executed and deliberately emits no step row.
+          toolStep("declareUnsupported", { claim: "the harness needs one local tool to run" }),
+          toolStep(withheld, input),
+          searchedStep(REPLY, urls),
+        ],
+      }),
+    );
 
-      // Positive half #1: the LOCAL granted tool executed and emitted its real activity row.
-      const stepTools = (await readSteps(t)).map((s) => s.tool);
-      expect(stepTools, "the GRANTED local tool was filtered out — the harness is inert").toContain(
-        "declareUnsupported",
-      );
-      // Positive half #2: the PROVIDER-executed hosted search contributed its source and prose.
-      expect(res.sources).toEqual([{ url: urls[0], title: "Source 0" }]);
-      expect(res.body).toBe(REPLY);
+    // Positive half #1: the LOCAL granted tool executed and emitted its real activity row.
+    const stepTools = (await readSteps(t)).map((s) => s.tool);
+    expect(stepTools, "the GRANTED local tool was filtered out — the harness is inert").toContain(
+      "declareUnsupported",
+    );
+    // Positive half #2: the PROVIDER-executed hosted search contributed its source and prose.
+    expect(res.sources).toEqual([{ url: urls[0], title: "Source 0" }]);
+    expect(res.body).toBe(REPLY);
 
-      // Mutation that turns this RED: add the current `withheld` name to RESEARCH_TOOLS.
-      expect(await readPlan(t, planId), "a withheld write tool moved the plan row").toEqual(before);
-      // Mutation that turns this RED: emit a step row for the hosted search (plus its schema literal).
-      expect(stepTools, "a withheld/provider tool emitted an activity step").not.toContain(withheld);
-      expect(stepTools, "provider-executed hosted search emitted an activity step").not.toContain(
-        "web_search",
-      );
-    },
-  );
+    // Mutation that turns this RED: add the current `withheld` name to RESEARCH_TOOLS.
+    expect(await readPlan(t, planId), "a withheld write tool moved the plan row").toEqual(before);
+    // Mutation that turns this RED: emit a step row for the hosted search (plus its schema literal).
+    expect(stepTools, "a withheld/provider tool emitted an activity step").not.toContain(withheld);
+    expect(stepTools, "provider-executed hosted search emitted an activity step").not.toContain(
+      "web_search",
+    );
+  });
 });
 
 describe("SC#1/#2 — every refusal is conversational, costs nothing, and DLQs nothing", () => {
@@ -415,9 +407,10 @@ describe("the shared root-request cost envelope", () => {
   test("ONE envelope derives from the LIVE daily rail at the root of the tree", async () => {
     const { t, planId } = await setup();
     const rail = await remaining(t);
-    expect(rail, "the daily rail is already drained — the derivation is untestable").toBeGreaterThan(
-      0,
-    );
+    expect(
+      rail,
+      "the daily rail is already drained — the derivation is untestable",
+    ).toBeGreaterThan(0);
 
     const res = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
@@ -430,7 +423,10 @@ describe("the shared root-request cost envelope", () => {
     expect(res.envelopeCents).toBeGreaterThan(0);
     expect(res.envelopeCents).toBeLessThanOrEqual(rail);
     // A FRACTION of the rail, not the rail itself: one sub-agent tree can never drain the day.
-    expect(res.envelopeCents, "the envelope is the whole rail — the fraction is not applied").toBeLessThan(rail);
+    expect(
+      res.envelopeCents,
+      "the envelope is the whole rail — the fraction is not applied",
+    ).toBeLessThan(rail);
     // Non-vacuity companion for the `incomplete` assertions below: a hop well inside its
     // envelope is NOT labelled incomplete, so `incomplete: true` means something.
     expect(res.incomplete, "a hop well inside the envelope was labelled incomplete").toBe(false);
@@ -694,8 +690,14 @@ describe("two-tenant isolation (SC #5)", () => {
 
     // NON-EMPTY on both sides first — a partition of size zero passes a naive "no leakage" check
     // vacuously, and every assertion below would then be true of nothing.
-    expect(a.length, "tenant A wrote no lineage rows — the isolation check is vacuous").toBeGreaterThan(0);
-    expect(b.length, "tenant B wrote no lineage rows — the isolation check is vacuous").toBeGreaterThan(0);
+    expect(
+      a.length,
+      "tenant A wrote no lineage rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
+    expect(
+      b.length,
+      "tenant B wrote no lineage rows — the isolation check is vacuous",
+    ).toBeGreaterThan(0);
     expect(a.length + b.length, "a lineage row carries a THIRD tenantId").toBe(lineage.length);
 
     // …and NO row carries the other tenant's id, despite sharing the correlation key.
@@ -764,9 +766,7 @@ async function setupDispatched(): Promise<{ t: T; planId: Id<"plans"> }> {
     threadId: THREAD,
     query: `SMOKE::${docId}`,
   });
-  const gap = (
-    await t.run((ctx) => ctx.db.query("evaluations").order("desc").first())
-  )?.gaps[0];
+  const gap = (await t.run((ctx) => ctx.db.query("evaluations").order("desc").first()))?.gaps[0];
   expect(gap?.route, "the fixture's gap does not route at BASE.route").toBe("offer-architect");
   // Exactly what actOnGap stages before scheduling: memo-shaped, parked, no body.
   await t.run((ctx) =>
@@ -839,38 +839,35 @@ describe("landSpecialistResult — every outcome leaves the plan row approvable 
     ["a drained envelope", { envelopeCents: 10, spentCents: 10 }],
   ];
 
-  test.each(REFUSAL_CASES)(
-    "REFUSAL (%s): the control falls back to the deterministic memo, never a dead end",
-    async (_name, over) => {
-      const { t, planId } = await setupDispatched();
-      const res = await t.action(internal.dispatch.__runSpecialistWithScript, {
-        ...BASE,
-        planId,
-        primary: [REPLY_STEP],
-        ...over,
-      } as never);
-      expect(res.ok).toBe(false);
+  test.each(
+    REFUSAL_CASES,
+  )("REFUSAL (%s): the control falls back to the deterministic memo, never a dead end", async (_name, over) => {
+    const { t, planId } = await setupDispatched();
+    const res = await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...BASE,
+      planId,
+      primary: [REPLY_STEP],
+      ...over,
+    } as never);
+    expect(res.ok).toBe(false);
 
-      const plan = await readPlan(t, planId);
-      expect(plan?.status, "a refused dispatch left the plan stuck at `collecting`").toBe(
-        "proposed",
-      );
-      expect(plan?.kind).toBe("memo");
-      const body = plan?.body ?? "";
-      expect(body).toContain("# Next step:"); // the buildMemo template
-      expect(body).toContain("02-build-offer"); // …grounded in the persisted gap, not invented
-      expect(body).not.toContain(`> ${ATTRIBUTION}`); // nothing was produced, so nothing is attributed
-      // HONEST wording: the 12-05 sentence is false the moment dispatch ships, and an approved
-      // memo must not tell the user something untrue.
-      expect(body, "the fallback still claims the specialist cannot run at all").not.toContain(
-        STALE_CLAIM,
-      );
-      // …and it says WHY, without ever surfacing the internal reason code.
-      expect(body).toMatch(/specialist/i);
-      if (!res.ok) expect(body).not.toContain(res.reason);
-      expect(await readDeadLetters(t)).toEqual([]);
-    },
-  );
+    const plan = await readPlan(t, planId);
+    expect(plan?.status, "a refused dispatch left the plan stuck at `collecting`").toBe("proposed");
+    expect(plan?.kind).toBe("memo");
+    const body = plan?.body ?? "";
+    expect(body).toContain("# Next step:"); // the buildMemo template
+    expect(body).toContain("02-build-offer"); // …grounded in the persisted gap, not invented
+    expect(body).not.toContain(`> ${ATTRIBUTION}`); // nothing was produced, so nothing is attributed
+    // HONEST wording: the 12-05 sentence is false the moment dispatch ships, and an approved
+    // memo must not tell the user something untrue.
+    expect(body, "the fallback still claims the specialist cannot run at all").not.toContain(
+      STALE_CLAIM,
+    );
+    // …and it says WHY, without ever surfacing the internal reason code.
+    expect(body).toMatch(/specialist/i);
+    if (!res.ok) expect(body).not.toContain(res.reason);
+    expect(await readDeadLetters(t)).toEqual([]);
+  });
 
   test("a THROWN turn lands the fallback too — no DLQ, and the stop is on the lineage", async () => {
     const { t, planId } = await setupDispatched();
@@ -954,10 +951,7 @@ describe("tier in agent context — the specialist prompt carries it", () => {
 
   /** Seed the tier row AFTER the evaluation exists, so the 15.1-04 rubric pick is untouched and
    *  this suite characterizes the PROMPT only. `forTenant` reads the raw tenantId it is handed. */
-  const seedTier = (
-    t: T,
-    row: { tier: string; agentName?: string; behaviorPreset?: string },
-  ) =>
+  const seedTier = (t: T, row: { tier: string; agentName?: string; behaviorPreset?: string }) =>
     t.run((ctx) =>
       ctx.db.insert("tenantProfiles", {
         tenantId: TENANT,
@@ -1084,9 +1078,10 @@ describe("the question-prompt seam (16-06 Task 1)", () => {
 
     const out = await promptWith(t, QUESTION);
     expect(out).toContain(QUESTION);
-    expect(out, "the tier briefing was dropped — a research turn is still a tenant's turn").toContain(
-      "solopreneur",
-    );
+    expect(
+      out,
+      "the tier briefing was dropped — a research turn is still a tenant's turn",
+    ).toContain("solopreneur");
     expect(out).not.toContain("Framework:");
     expect(out).not.toContain("Binding constraint:");
     // Non-vacuity: the SAME thread without a question still gets the whole snapshot, so the
@@ -1112,25 +1107,24 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     const ctxBackedTurn = (
       primary: unknown,
       fallback: unknown = [textStep("Recovered on the research fallback.")],
-    ) =>
-      runSpecialistTurn(
-        {
-          runQuery: (ref: never, args: never) => t.query(ref, args),
-          runMutation: (ref: never, args: never) => t.mutation(ref, args),
-          runAction: (ref: never, args: never) => t.action(ref, args),
-        } as never,
-        {
-          tenantId: TENANT,
-          planId,
-          skillName: "research-specialist",
-          toolNames: ["webResearch", "declareUnsupported"],
-          prompt: QUESTION,
-          mockScript: {
-            primary: primary as never,
-            fallback: fallback as never,
-          },
+    ) => {
+      const ctx = {
+        runQuery: t.query.bind(t),
+        runMutation: t.mutation.bind(t),
+        runAction: t.action.bind(t),
+      } as unknown as Parameters<typeof runSpecialistTurn>[0];
+      return runSpecialistTurn(ctx, {
+        tenantId: TENANT,
+        planId,
+        skillName: "research-specialist",
+        toolNames: ["webResearch", "declareUnsupported"],
+        prompt: QUESTION,
+        mockScript: {
+          primary: primary as never,
+          fallback: fallback as never,
         },
-      );
+      });
+    };
     const providerError = (statusCode: number, isRetryable: boolean) =>
       new APICallError({
         message: `scripted provider ${statusCode}`,
@@ -1385,7 +1379,9 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
       }),
     );
     expect(res.sources).toHaveLength(2);
-    expect(res.declaredUnsupported, "the reflex must not outvote the retrieved sources").toBe(false);
+    expect(res.declaredUnsupported, "the reflex must not outvote the retrieved sources").toBe(
+      false,
+    );
     const persisted = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
       (r) => r.eventType === "research.persisted",
     );
@@ -1596,7 +1592,12 @@ describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => 
   test("a `collecting` MEMO row is a run IN FLIGHT — refused, and the row is untouched", async () => {
     const { t, planId } = await setup();
     await t.run((ctx) =>
-      ctx.db.patch(planId, { kind: "memo", status: "collecting", subject: "Research: first", body: "" }),
+      ctx.db.patch(planId, {
+        kind: "memo",
+        status: "collecting",
+        subject: "Research: first",
+        body: "",
+      }),
     );
     const before = await readPlan(t, planId);
 
@@ -1693,13 +1694,15 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     ]);
 
     // Non-vacuity in the SAME test: exactly ONE was scheduled, not zero.
-    expect(await scheduledResearch(t), "the interlock let a second run race the first").toHaveLength(
-      1,
-    );
+    expect(
+      await scheduledResearch(t),
+      "the interlock let a second run race the first",
+    ).toHaveLength(1);
     // The refusal is CONVERSATIONAL: a throw would terminalize the step as `error`.
     const steps = (await readSteps(t)).filter((s) => s.tool === "dispatchResearch");
     expect(steps).toHaveLength(2);
-    for (const s of steps) expect(s.phase, "the in-flight refusal threw instead of returning").toBe("done");
+    for (const s of steps)
+      expect(s.phase, "the in-flight refusal threw instead of returning").toBe("done");
   });
 
   test("a SPECIALIST turn never CONSTRUCTS dispatchResearch — unreachable, not merely filtered", () => {

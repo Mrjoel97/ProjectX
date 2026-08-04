@@ -137,7 +137,8 @@ test("gmail.ts mailbox.searched audit payload is refs-only ({ queryHash, resultC
   const src = readSource("gmail.ts");
   const m = src.match(/eventType:\s*["']mailbox\.searched["'][\s\S]*?payload:\s*(\{[^}]*\})/);
   expect(m, "mailbox.searched audit payload not found").not.toBeNull();
-  const payload = m![1];
+  const payload = m?.[1];
+  if (payload === undefined) throw new Error("mailbox.searched audit payload not found");
   expect(payload).toMatch(/queryHash/);
   expect(payload).toMatch(/resultCount/);
   // queryHash: contentHash(name) is a HASH of the name (refs-only) — strip the wrapper, then the
@@ -368,7 +369,8 @@ test("llm.ts briefing.created audit payload is refs-only ({ briefingId, range, l
   const src = readSource("llm.ts");
   const m = src.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
   expect(m, "briefing.created audit payload not found").not.toBeNull();
-  const payload = m![1];
+  const payload = m?.[1];
+  if (payload === undefined) throw new Error("briefing.created audit payload not found");
   expect(payload).toMatch(/briefingId/);
   expect(payload).toMatch(/listedCount/);
   expect(payload).toMatch(/digestedCount/);
@@ -1406,9 +1408,10 @@ test("NOTHING FORBIDDEN crosses into the sandbox — not a key, not a tenant, no
   // And no URL of any kind: the runner is handed opaque job ids and builds every blob URL itself
   // from OUR derived origin. The two `uploadUrls` are the deliberate exception and are named.
   expect(body).toMatch(/uploadUrls/);
-  expect(body?.replace(/uploadUrls/g, ""), "a URL other than the upload pair crosses in").not.toMatch(
-    /url|href|http/i,
-  );
+  expect(
+    body?.replace(/uploadUrls/g, ""),
+    "a URL other than the upload pair crosses in",
+  ).not.toMatch(/url|href|http/i);
 });
 
 test("NO VERCEL ACCESS TOKEN EXISTS ANYWHERE — D11's headline property, asserted not asserted-about", () => {
@@ -1457,9 +1460,10 @@ test("Sandbox.create appears TWICE and the render one is never an inline literal
   // "deny-all"` assertable without a real VM — an inline literal could only be tested by booting
   // one. Deleting either field is a mutation check in packages/core's render.test.ts.
   expect(stripCode(readAt(renderRoute))).toMatch(/Sandbox\.create\(options\)/);
-  expect(stripCode(readAt(renderRoute)), "the route builds its own sandbox options inline").not.toMatch(
-    /Sandbox\.create\(\s*\{/,
-  );
+  expect(
+    stripCode(readAt(renderRoute)),
+    "the route builds its own sandbox options inline",
+  ).not.toMatch(/Sandbox\.create\(\s*\{/);
 });
 
 test("no `name:` and no `persistent: true` anywhere in the render diff", () => {
@@ -1492,9 +1496,9 @@ test("ffmpeg's stderr is READ exactly once, and on the same line it becomes a co
   expect(reads, "no stderr read found - the scan is vacuous").toHaveLength(2);
   // …and EVERY one of them is an ARGUMENT to reasonCodeFor, never a value bound to anything else.
   // Counting the call sites is what turns "it is" into "every one is": two reads, two calls.
-  expect(
-    [...code.matchAll(/reasonCodeFor\(\s*run\.exitCode,\s*await run\.stderr\(\)\s*\)/g)],
-  ).toHaveLength(2);
+  expect([
+    ...code.matchAll(/reasonCodeFor\(\s*run\.exitCode,\s*await run\.stderr\(\)\s*\)/g),
+  ]).toHaveLength(2);
 
   // Nowhere else on the render path may read it at all.
   for (const [rel, path] of [
@@ -1521,7 +1525,11 @@ test("the route's maxDuration LITERAL still equals the exported constant", () =>
   expect(literal, "route maxDuration has drifted from RENDER_MAX_DURATION_S").toBe(constant);
 
   // And the sandbox timeout is STRICTLY below it, in the same units.
-  const timeoutMs = Number(readAt(coreRender).match(/RENDER_SANDBOX_TIMEOUT_MS = ([\d_]+)/)?.[1]?.replace(/_/g, ""));
+  const timeoutMs = Number(
+    readAt(coreRender)
+      .match(/RENDER_SANDBOX_TIMEOUT_MS = ([\d_]+)/)?.[1]
+      ?.replace(/_/g, ""),
+  );
   expect(timeoutMs).toBeGreaterThan(0);
   expect(timeoutMs).toBeLessThan(Number(literal) * 1000);
 });
@@ -1585,7 +1593,10 @@ test("storage.delete has exactly ONE site in the media subsystem — the retenti
   // …and it is inside the SUCCESS arm. The failure arm returns before reaching it, which is what
   // makes "the intermediates are the only debugging evidence a failed render leaves" true.
   const src = stripCode(readSource("render/renderReel.ts"));
-  const failureArm = src.slice(src.indexOf("if (!a.result.ok)"), src.indexOf("renderStatus: \"rendered\""));
+  const failureArm = src.slice(
+    src.indexOf("if (!a.result.ok)"),
+    src.indexOf('renderStatus: "rendered"'),
+  );
   expect(failureArm, "the failure arm deletes an intermediate").not.toMatch(/storage\.delete/);
   // The CAPTION terminal's failure arm, held to the same rule: a failed burn deletes nothing at
   // all — not the uncaptioned reel it failed to replace, and not the takes that fed it.

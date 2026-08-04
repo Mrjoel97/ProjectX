@@ -185,14 +185,14 @@ const surviving = (values: readonly string[]): string[] =>
 export function statedFromProfile(
   profile: BusinessProfile,
   tier: Tier,
-  entities: readonly string[]
+  entities: readonly string[],
 ): Partial<Record<BlueprintField, BlueprintEntry>> {
   const out: Partial<Record<BlueprintField, BlueprintEntry>> = {};
   const put = (
     field: BlueprintField,
     raw: readonly string[],
     origin: BlueprintEntry["origin"],
-    source?: string
+    source?: string,
   ): void => {
     const values = surviving(raw);
     if (values.length === 0) return;
@@ -219,7 +219,7 @@ export function statedFromProfile(
  * `BusinessBlueprint` (a `null` field reads as blank), so the drift rebuild uses the same function.
  */
 export function probesFor(
-  stated: Partial<Record<BlueprintField, BlueprintEntry | null>>
+  stated: Partial<Record<BlueprintField, BlueprintEntry | null>>,
 ): { field: BlueprintField; query: string }[] {
   const probes: { field: BlueprintField; query: string }[] = [];
   for (const field of BLUEPRINT_FIELDS) {
@@ -277,7 +277,7 @@ const isBlueprintField = (f: unknown): f is BlueprintField =>
  */
 export function validateCandidates(
   candidates: readonly DerivedCandidate[],
-  sources: readonly { docId: string; title: string }[]
+  sources: readonly { docId: string; title: string }[],
 ): {
   derived: Partial<Record<BlueprintField, BlueprintEntry>>;
   dropped: readonly DroppedCandidate[];
@@ -375,7 +375,7 @@ const sameValues = (a: readonly string[], b: readonly string[]): boolean =>
 export function mergeBlueprint(
   stated: Partial<Record<BlueprintField, BlueprintEntry>>,
   derived: Partial<Record<BlueprintField, BlueprintEntry>>,
-  live?: BusinessBlueprint | null
+  live?: BusinessBlueprint | null,
 ): { blueprint: BusinessBlueprint; diff: BlueprintDiffRow[] } {
   const out: Partial<Record<BlueprintField, BlueprintEntry | null>> = {};
   const diff: BlueprintDiffRow[] = [];
@@ -531,7 +531,7 @@ export function deserializeBlueprint(markdown: string): BusinessBlueprint {
     BLUEPRINT_FIELDS.map((field) => {
       const spec = FIELD_SPEC[field];
       return [field, spec.list ? section(spec.label) : scalar(spec.label)];
-    })
+    }),
     // `Object.fromEntries` cannot express the per-key mapped type; the map above is driven off
     // BLUEPRINT_FIELDS, so every key is present by construction.
   ) as unknown as BusinessBlueprint;
@@ -590,7 +590,7 @@ function spineLine(field: BlueprintField, entry: BlueprintEntry): string {
  */
 export function renderSpine(
   blueprint: BusinessBlueprint,
-  opts: { unincorporatedCount: number }
+  opts: { unincorporatedCount: number },
 ): string {
   const lines: string[] = [];
   for (const field of BLUEPRINT_FIELDS) {
@@ -621,7 +621,7 @@ export function renderSpine(
   if (out.length > SPINE_CHAR_CAP) {
     throw new Error(
       `blueprint spine is ${out.length} chars, over SPINE_CHAR_CAP (${SPINE_CHAR_CAP}) — the ` +
-        "FIELD_SPEC caps no longer sum under the total"
+        "FIELD_SPEC caps no longer sum under the total",
     );
   }
   return out;

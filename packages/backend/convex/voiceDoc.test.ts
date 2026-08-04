@@ -2,7 +2,7 @@
 // 14-01 schema widening actually reached the SCHEMA-DERIVED write validator, with zero edits to
 // `insertEvaluation`. SC1 / SC2 / BETA-05 assertions land here in plans 14-03 and 14-05.
 
-import { serializeBlueprint, type BusinessBlueprint } from "@pikar/core";
+import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import {
   CAP_MS,
   DOC_REVIEW_FRAMEWORK,
@@ -743,9 +743,7 @@ describe("voiceDoc.reviewSession (SC2 — the persisted, cited findings row)", (
 
     // The row exists — and is invisible to tenant B on the very same synthetic thread id.
     const threadId = voiceDocThreadId(sessionId);
-    expect(
-      await asTenant(t, TENANT).query(api.evaluations.byThread, { threadId }),
-    ).not.toBeNull();
+    expect(await asTenant(t, TENANT).query(api.evaluations.byThread, { threadId })).not.toBeNull();
     expect(await asTenant(t, TENANT_B).query(api.evaluations.byThread, { threadId })).toBeNull();
   });
 });

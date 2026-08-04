@@ -1,7 +1,7 @@
 import { GOOGLE_SCOPES, notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { verifyState } from "./gmailAuth";
 import { contentHash } from "./lib/hash";
@@ -22,7 +22,8 @@ http.route({
     // the cockpit (gmailStatus is reactive, so the composer unlocks on arrival); any failure →
     // the connect page carrying a readable reason. See connect-gmail/page.tsx (?gmailError=).
     const site = process.env.SITE_URL ?? "http://localhost:3111";
-    const seeOther = (path: string) => new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
+    const seeOther = (path: string) =>
+      new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
     const fail = (msg: string) => seeOther(`/connect-gmail?gmailError=${encodeURIComponent(msg)}`);
 
     const url = new URL(req.url);
@@ -133,10 +134,13 @@ http.route({
     // Route the optimized body through the registry gate. A non-gated name throws here → 500 (rejected).
     // The skill registry is GLOBAL (insertCandidate is tenant-agnostic), so the candidate lands
     // regardless — only the tenant-scoped audit/notify below depend on a trusted owner tenant.
-    const { fromVersion, toVersion, inserted } = await ctx.runMutation(internal.skills.insertCandidate, {
-      name,
-      body,
-    });
+    const { fromVersion, toVersion, inserted } = await ctx.runMutation(
+      internal.skills.insertCandidate,
+      {
+        name,
+        body,
+      },
+    );
 
     // Only a genuinely NEW candidate is an optimization: an idempotent repost writes no audit/notify (no churn).
     // Skip the tenant-scoped audit/notify when no trusted owner tenant is configured rather than
@@ -159,7 +163,13 @@ http.route({
       });
     }
 
-    return Response.json({ ok: true, fromVersion, toVersion, inserted, notified: inserted && !!ownerTenant });
+    return Response.json({
+      ok: true,
+      fromVersion,
+      toVersion,
+      inserted,
+      notified: inserted && !!ownerTenant,
+    });
   }),
 });
 

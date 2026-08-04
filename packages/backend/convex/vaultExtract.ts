@@ -152,7 +152,10 @@ export async function slicePdfToPageCap(bytes: Uint8Array): Promise<Uint8Array> 
   const src = await PDFDocument.load(bytes);
   if (src.getPageCount() <= VAULT_EXTRACT_PAGE_CAP) return bytes;
   const out = await PDFDocument.create();
-  const pages = await out.copyPages(src, Array.from({ length: VAULT_EXTRACT_PAGE_CAP }, (_, i) => i));
+  const pages = await out.copyPages(
+    src,
+    Array.from({ length: VAULT_EXTRACT_PAGE_CAP }, (_, i) => i),
+  );
   for (const p of pages) out.addPage(p);
   return out.save();
 }
@@ -310,8 +313,16 @@ export const extractDoc = internalAction({
       // 1. Governed gate BEFORE any work — a stop is a RETURN, never a throw (vaultIngest.ts).
       //    Reserved folder work reaches the kill-switch branch ONLY: its OCR pages are pre-paid,
       //    and refusing them on a drained window is the "refused halfway" failure this forbids.
-      const gate: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-        await ctx.runMutation(internal.guardrails.preCall, { tenantId, rail: spendRail, reserved });
+      const gate:
+        | { ok: true }
+        | {
+            ok: false;
+            reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+          } = await ctx.runMutation(internal.guardrails.preCall, {
+        tenantId,
+        rail: spendRail,
+        reserved,
+      });
       if (!gate.ok) {
         await fail(gate.reason);
         return null;
@@ -325,8 +336,12 @@ export const extractDoc = internalAction({
       if (!started.ok) return null;
 
       // 3. Metadata (fail-closed tenant guard) + bytes from storage.
-      const meta: { storageId: Id<"_storage"> | undefined; mimeType: string; title: string; status: string } =
-        await ctx.runQuery(internal.vault.getDocForExtraction, { vaultDocId, tenantId });
+      const meta: {
+        storageId: Id<"_storage"> | undefined;
+        mimeType: string;
+        title: string;
+        status: string;
+      } = await ctx.runQuery(internal.vault.getDocForExtraction, { vaultDocId, tenantId });
       if (!meta.storageId) {
         await fail("no_stored_bytes");
         return null;
@@ -360,7 +375,10 @@ export const extractDoc = internalAction({
           : (({ png: "image/png", jpeg: "image/jpeg", gif: "image/gif" } as const)[
               sniffContainer(bytes) as "png" | "jpeg" | "gif"
             ] ?? "image/png");
-        extracted = { text: await extractHosted(ctx, tenantId, bytes, imageMediaType, spendRail), path: "hosted" };
+        extracted = {
+          text: await extractHosted(ctx, tenantId, bytes, imageMediaType, spendRail),
+          path: "hosted",
+        };
       } else if (rail === "zip") {
         // Every ZIP-based office format (DOCX/DOCM, XLSX/XLSM, PPTX/PPTM, ODT/ODS/ODP, EPUB) —
         // extractOfficeText dispatches on the archive's own marker entry, not on a mime type.

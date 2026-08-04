@@ -19,7 +19,7 @@ import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { priceTranscription, priceUsage } from "@pikar/cost";
 import { classify, frameForConversation, type IntakeKind } from "@pikar/extraction";
 import { scanText } from "@pikar/pii";
-import { experimental_transcribe as transcribe, generateText } from "ai";
+import { generateText, experimental_transcribe as transcribe } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
@@ -64,7 +64,8 @@ async function transcribeAudio(
   bytes: Uint8Array,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
-  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX)) return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
+  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX))
+    return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
   const result = await transcribe({
     model: openai.transcription("gpt-4o-transcribe"),
@@ -138,8 +139,12 @@ async function runIntake(
 
   // 1. Governed gate BEFORE any model call (kill-switch/budget) — a stop is conversational
   // data, never a throw/DLQ. NO artifact row is created past this point (no extraction ran).
-  const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-    await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+  const pre:
+    | { ok: true }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
   if (!pre.ok) return respond(PAUSED_TEXT);
 
   // 2. Load bytes (a missing blob is a client-visible failure, not a bug — respond, don't throw).
@@ -151,22 +156,27 @@ async function runIntake(
   // gate) — before any model call.
   if (bytes.byteLength > INTAKE_UPLOAD_CAP_BYTES) {
     const capMb = Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024));
-    return respond(`That file is too large to process (over ${capMb}MB). Please try a smaller file.`);
+    return respond(
+      `That file is too large to process (over ${capMb}MB). Please try a smaller file.`,
+    );
   }
 
   // 3. classify (dictation forces the audio path — the MediaRecorder blob is already known-audio).
   const kind: IntakeKind = isDictation ? "audio" : classify(bytes, mimeType, filename).kind;
 
   // 4. insertArtifact (uploaded) -> patch (extracting).
-  const artifactId: Id<"intakeArtifacts"> = await ctx.runMutation(internal.intakeDb.insertArtifact, {
-    tenantId,
-    threadId,
-    storageId,
-    filename,
-    mimeType,
-    size: bytes.byteLength,
-    kind,
-  });
+  const artifactId: Id<"intakeArtifacts"> = await ctx.runMutation(
+    internal.intakeDb.insertArtifact,
+    {
+      tenantId,
+      threadId,
+      storageId,
+      filename,
+      mimeType,
+      size: bytes.byteLength,
+      kind,
+    },
+  );
   await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "extracting" });
 
   // 5. EXTRACTION MODEL CALL (the bounded GRDL-01 exception) -> rawText.
@@ -179,7 +189,9 @@ async function runIntake(
     rawText = decodeUtf8(bytes); // NO model, NO spend — the bytes already ARE the text.
   } else {
     await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "failed" });
-    return respond(`I don't recognize the file type of ${filename} — I can't process it. Please try a different file.`);
+    return respond(
+      `I don't recognize the file type of ${filename} — I can't process it. Please try a different file.`,
+    );
   }
 
   // 6. scanText FAIL-CLOSED on the EXTRACTED OUTPUT (redact BEFORE any audit write or merge, §4).
@@ -195,12 +207,18 @@ async function runIntake(
       actor: "system",
       payload: { artifactId, kind, reason: "pii_scan_failed" },
     });
-    return respond(`I couldn't safely process ${filename} — the content failed a safety scan. Please try again or paste the text directly.`);
+    return respond(
+      `I couldn't safely process ${filename} — the content failed a safety scan. Please try again or paste the text directly.`,
+    );
   }
   const { safeText, counts } = scan.value;
 
   // 7. Persist REDACTED safeText only (content plane; §4 keeps it out of audit).
-  await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "extracted", extracted: safeText });
+  await ctx.runMutation(internal.intakeDb.patchArtifact, {
+    artifactId,
+    status: "extracted",
+    extracted: safeText,
+  });
 
   // 8. Refs/counts-only audit (§4) — NEVER rawText/safeText.
   await ctx.runMutation(internal.audit.log, {
@@ -254,8 +272,18 @@ export const attachToThread = tenantAction({
     mimeType: v.string(),
     size: v.number(),
   },
-  handler: async (ctx, { threadId, storageId, filename, mimeType }): Promise<{ threadId: string }> =>
-    runIntake(ctx, { tenantId: ctx.tenantId, threadId, storageId, filename, mimeType, isDictation: false }),
+  handler: async (
+    ctx,
+    { threadId, storageId, filename, mimeType },
+  ): Promise<{ threadId: string }> =>
+    runIntake(ctx, {
+      tenantId: ctx.tenantId,
+      threadId,
+      storageId,
+      filename,
+      mimeType,
+      isDictation: false,
+    }),
 });
 
 /** Dictate a request via audio — transcribed VERBATIM into the conversation (INTK-03). */

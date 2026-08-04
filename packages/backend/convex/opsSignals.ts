@@ -34,9 +34,7 @@ export const evalSignals = tenantQuery({
     // count at beta scale; windowed via the compound index.
     const telemetryRows = await ctx.db
       .query("telemetry")
-      .withIndex("by_tenant_created", (q) =>
-        q.eq("tenantId", ctx.tenantId).gte("createdAt", since),
-      )
+      .withIndex("by_tenant_created", (q) => q.eq("tenantId", ctx.tenantId).gte("createdAt", since))
       .collect();
 
     const decisionCounts: Record<string, number> = {

@@ -61,14 +61,12 @@ const ledger: [string, string, string, boolean][] = [
   ["09:43:27", "review.approved", "actor=user", true],
   ["09:43:27", "email.sent", "msg=1a7c0e55", true],
 ];
+const structuredDataJson = JSON.stringify(structuredData).replace(/</g, "\\u003c");
 
 export default function Home() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      />
+      <script type="application/ld+json">{structuredDataJson}</script>
 
       <div className="shell">
         <header className="hero">
@@ -78,8 +76,8 @@ export default function Home() {
               It plans and executes. <em>You</em> hold the gate.
             </h1>
             <p className="lede">
-              Say what you want done. Pikar plans it, shows you the plan, and runs it end to
-              end once you approve — reporting every step, and stopping the moment you say so.
+              Say what you want done. Pikar plans it, shows you the plan, and runs it end to end
+              once you approve — reporting every step, and stopping the moment you say so.
             </p>
             <div className="cta-row">
               <a className="cta" href="/signin">
@@ -96,7 +94,7 @@ export default function Home() {
 
           {/* Signature element: the gate. A draft is held, stamped, released, and the
               act is appended to a log that cannot be edited. */}
-          <div className="gate" aria-label="A draft email held at the approval gate">
+          <section className="gate" aria-label="A draft email held at the approval gate">
             <div className="gate-head">
               <span>draft &middot; awaiting review</span>
               <span>cid 8f2a41c9</span>
@@ -105,8 +103,8 @@ export default function Home() {
             <article className="draft">
               <p className="draft-to">to: procurement@northwind.example</p>
               <p className="draft-body">
-                Following up on the Q3 renewal — I&rsquo;ve attached the revised terms, and
-                can walk through them Thursday if that helps.
+                Following up on the Q3 renewal — I&rsquo;ve attached the revised terms, and can walk
+                through them Thursday if that helps.
               </p>
               <span className="stamp">APPROVED</span>
             </article>
@@ -116,7 +114,7 @@ export default function Home() {
             <p className="gate-audit">
               + audit.append &nbsp;email.sent&nbsp; msg=1a7c0e55 &nbsp;immutable
             </p>
-          </div>
+          </section>
         </header>
 
         <section className="section" id="how">
@@ -138,8 +136,8 @@ export default function Home() {
               <div>
                 <strong>Guardrails run first</strong>
                 <p>
-                  Cost ceilings, quality checks, and PII redaction apply before anything is
-                  prepared for sending — not after.
+                  Cost ceilings, quality checks, and PII redaction apply before anything is prepared
+                  for sending — not after.
                 </p>
               </div>
             </li>
@@ -147,8 +145,8 @@ export default function Home() {
               <div>
                 <strong>It stops at the gate</strong>
                 <p>
-                  You see the plan before it runs. Approve, edit, or reject — nothing
-                  executes without your explicit sign-off.
+                  You see the plan before it runs. Approve, edit, or reject — nothing executes
+                  without your explicit sign-off.
                 </p>
               </div>
             </li>
@@ -156,9 +154,8 @@ export default function Home() {
               <div>
                 <strong>Pikar runs it, and reports</strong>
                 <p>
-                  Approved steps execute on your behalf. You are notified as each completes,
-                  every action is written to an append-only log, and you can halt it at any
-                  time.
+                  Approved steps execute on your behalf. You are notified as each completes, every
+                  action is written to an append-only log, and you can halt it at any time.
                 </p>
               </div>
             </li>
@@ -171,23 +168,20 @@ export default function Home() {
             <div>
               <h3>Start without you</h3>
               <p>
-                Pikar shows you the plan and waits. Nothing runs until you approve it, and
-                you can halt a running automation at any time.
+                Pikar shows you the plan and waits. Nothing runs until you approve it, and you can
+                halt a running automation at any time.
               </p>
             </div>
             <div>
               <h3>Delete your email</h3>
               <p>
-                Pikar can read, draft, send, and organise. It cannot permanently delete a
-                message — we never ask Google for that permission.
+                Pikar can read, draft, send, and organise. It cannot permanently delete a message —
+                we never ask Google for that permission.
               </p>
             </div>
             <div>
               <h3>Quietly rewrite history</h3>
-              <p>
-                The audit log is append-only. Records can be added, never edited or
-                deleted.
-              </p>
+              <p>The audit log is append-only. Records can be added, never edited or deleted.</p>
             </div>
           </div>
         </section>
@@ -209,9 +203,8 @@ export default function Home() {
             </table>
           </div>
           <p className="ledger-note">
-            The log stores references, identifiers, and counts — never the content of your
-            messages. It is built so that it can never become a place where your private
-            text accumulates.
+            The log stores references, identifiers, and counts — never the content of your messages.
+            It is built so that it can never become a place where your private text accumulates.
           </p>
         </section>
 

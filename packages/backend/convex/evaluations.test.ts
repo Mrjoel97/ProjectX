@@ -9,10 +9,10 @@
 // end-to-end block below drives `internal.dispatch.__runSpecialistWithScript`, and `dispatch.ts`
 // imports `runSpecialistTurn` from the `"use node"` llm.ts — a Convex-runtime module cannot load it.
 import {
-  serializeBlueprint,
-  serializeProfile,
   type BusinessBlueprint,
   type BusinessProfile,
+  serializeBlueprint,
+  serializeProfile,
 } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -241,8 +241,9 @@ describe("runEvaluation (SC#4 — web research citations retain their retrieval 
       .query(api.evaluations.byThread, {
         threadId: `${THREAD}_without_web_research`,
       });
-    expect(withoutResearch?.findings.some((finding) => finding.citationTitle.includes("retrieved ")))
-      .toBe(false);
+    expect(
+      withoutResearch?.findings.some((finding) => finding.citationTitle.includes("retrieved ")),
+    ).toBe(false);
   });
 });
 
@@ -287,13 +288,11 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
       query: `SMOKE::${docId}`,
     });
 
-    await t
-      .withIdentity({ subject: TENANT })
-      .mutation(api.evaluations.recordScorecardAnswer, {
-        threadId: THREAD,
-        field: "financials.cac",
-        value: 150,
-      });
+    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
 
     const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
       threadId: THREAD,
@@ -413,7 +412,9 @@ describe("two-tenant isolation (SC #5)", () => {
 
     // tenant_a sees its row; tenant_b sees null through the same tenant-scoped query.
     expect(
-      await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, { threadId: THREAD }),
+      await t
+        .withIdentity({ subject: TENANT })
+        .query(api.evaluations.byThread, { threadId: THREAD }),
     ).not.toBeNull();
     expect(
       await t
@@ -809,48 +810,50 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
   // The other terminal: there is no specialist to run, so the 12-05 behaviour IS the right answer.
   // `""` is diagnose()'s deliberate not-enough-data emission; `scale` is its healthy branch. Both
   // persist as `v.string()` on gaps[].route, so the runtime resolve is the real guard.
-  test.each(["", "scale"])(
-    "a gap routed at %j runs nothing — the 12-05 memo lands `proposed` immediately",
-    async (route) => {
-      const t = newTest();
-      const asT = t.withIdentity({ subject: TENANT });
-      await seedGapEvaluation(t);
-      const row = await asT.query(api.evaluations.byThread, { threadId: THREAD });
-      // Re-point the persisted gap at a non-specialist route (the engine only emits these on
-      // branches that carry no gap, so the row is edited directly rather than contrived upstream).
-      await t.run((ctx) =>
-        ctx.db.patch(row?._id as Id<"evaluations">, {
-          gaps: (row?.gaps ?? []).map((g) => ({ ...g, route })),
-        }),
-      );
+  test.each([
+    "",
+    "scale",
+  ])("a gap routed at %j runs nothing — the 12-05 memo lands `proposed` immediately", async (route) => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedGapEvaluation(t);
+    const row = await asT.query(api.evaluations.byThread, { threadId: THREAD });
+    // Re-point the persisted gap at a non-specialist route (the engine only emits these on
+    // branches that carry no gap, so the row is edited directly rather than contrived upstream).
+    await t.run((ctx) =>
+      ctx.db.patch(row?._id as Id<"evaluations">, {
+        gaps: (row?.gaps ?? []).map((g) => ({ ...g, route })),
+      }),
+    );
 
-      const res = await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
-      expect(res.ok).toBe(true);
+    const res = await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    expect(res.ok).toBe(true);
 
-      const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
-      expect(plan?.status).toBe("proposed"); // approvable at once — nothing is coming
-      expect(plan?.kind).toBe("memo");
-      expect(plan?.body).toContain("## The next step"); // the deterministic buildMemo template
-      expect(await readScheduled(t)).toHaveLength(0);
-    },
-  );
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+    expect(plan?.status).toBe("proposed"); // approvable at once — nothing is coming
+    expect(plan?.kind).toBe("memo");
+    expect(plan?.body).toContain("## The next step"); // the deterministic buildMemo template
+    expect(await readScheduled(t)).toHaveLength(0);
+  });
 
   test("the 12-05 refusals are unchanged: gap_not_found and plan_busy still queue nothing", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });
     await seedGapEvaluation(t);
 
-    expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 99 })).toEqual(
-      { ok: false, reason: "gap_not_found" },
-    );
+    expect(
+      await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 99 }),
+    ).toEqual({ ok: false, reason: "gap_not_found" });
 
     await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
     const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
     await t.run((ctx) => ctx.db.patch(plan?._id as Id<"plans">, { status: "delivering" }));
-    expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 })).toEqual({
-      ok: false,
-      reason: "plan_busy",
-    });
+    expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 })).toEqual(
+      {
+        ok: false,
+        reason: "plan_busy",
+      },
+    );
     expect(await readScheduled(t)).toHaveLength(1); // only the first (successful) call queued one
     await cancelQueued(t);
   });
@@ -908,17 +911,17 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
     // a network call against the replay below (and win, landing the error fallback).
     await t.run((ctx) => ctx.scheduler.cancel((queued[0] as ScheduledRow)._id));
     await t.action(internal.dispatch.__runSpecialistWithScript, {
-      ...(args as never),
+      ...args,
       primary: [scriptedReply(SPECIALIST_REPLY)],
-    });
+    } as never);
 
     // 3. The specialist's work is now on the plan row, attributed, at the ONE Approve gate.
     const proposed = await asT.query(api.plans.byThread, { threadId: THREAD });
     expect(proposed?.status).toBe("proposed");
     expect(proposed?.kind).toBe("memo");
-    expect(proposed?.body?.startsWith("> Produced by the **money-model-designer** specialist.")).toBe(
-      true,
-    );
+    expect(
+      proposed?.body?.startsWith("> Produced by the **money-model-designer** specialist."),
+    ).toBe(true);
     expect(proposed?.body).toContain(SPECIALIST_REPLY);
 
     // 4. Approve now works, and takes the MEMO terminal.
@@ -940,10 +943,7 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
         .withIndex("by_correlation", (q) => q.eq("correlationId", rootRequestId))
         .collect(),
     );
-    expect(lineage.map((r) => r.eventType)).toEqual([
-      "subagent.dispatched",
-      "subagent.completed",
-    ]);
+    expect(lineage.map((r) => r.eventType)).toEqual(["subagent.dispatched", "subagent.completed"]);
     // TENANT carries no `|sessionId` suffix, so the injected tenantId is the constant
     // itself — the old stableTenant() wrapping here was a no-op.
     for (const r of lineage) expect(r.tenantId).toBe(TENANT);

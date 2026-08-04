@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { utils, write } from "xlsx";
 import { describe, expect, test } from "vitest";
+import { utils, write } from "xlsx";
 import { xlsText } from "./xlsText";
 
 /**
@@ -80,7 +80,15 @@ describe("xlsText", () => {
   });
 
   test("a formula cell yields its cached VALUE, not the formula string", () => {
-    const wb = workbook([{ name: "Calc", rows: [["a", 2], ["b", 3]] }]);
+    const wb = workbook([
+      {
+        name: "Calc",
+        rows: [
+          ["a", 2],
+          ["b", 3],
+        ],
+      },
+    ]);
     const ws = wb.Sheets.Calc;
     if (!ws) throw new Error("fixture sheet missing");
     ws.C1 = { t: "n", f: "B1+B2", v: 5 };
@@ -122,7 +130,7 @@ describe("xlsText", () => {
     expect(text).toContain("98120");
   });
 
-  test("an empty workbook THROWS rather than returning \"\"", () => {
+  test('an empty workbook THROWS rather than returning ""', () => {
     // Same rule as oleText: an empty extraction that "succeeds" becomes a `ready` document with
     // 0 chars. SheetJS reads an empty workbook happily and sheet_to_csv returns "" — measured —
     // so this guard is load-bearing, not defensive decoration.

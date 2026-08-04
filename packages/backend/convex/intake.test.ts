@@ -25,21 +25,31 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
+import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
-import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
-import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
-import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts");
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
+const agentModules = import.meta.glob(
+  "../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts",
+);
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_intake";
 type T = ReturnType<typeof convexTest>;
@@ -70,7 +80,10 @@ async function seedThread(t: T, tenantId = TENANT) {
 }
 
 const allMessages = (asT: ReturnType<T["withIdentity"]>, threadId: string) =>
-  asT.query(api.cockpit.listThreadMessages, { threadId, paginationOpts: { numItems: 20, cursor: null } });
+  asT.query(api.cockpit.listThreadMessages, {
+    threadId,
+    paginationOpts: { numItems: 20, cursor: null },
+  });
 
 describe("intakeDb round-trip (Wave-0 seed check)", () => {
   test("generateUploadUrl + insertArtifact round-trip", async () => {
@@ -92,7 +105,12 @@ describe("intakeDb round-trip (Wave-0 seed check)", () => {
     });
 
     const row = await t.run((ctx) => ctx.db.get(artifactId));
-    expect(row).toMatchObject({ tenantId: TENANT, status: "uploaded", filename: "a.txt", kind: "document" });
+    expect(row).toMatchObject({
+      tenantId: TENANT,
+      status: "uploaded",
+      filename: "a.txt",
+      kind: "document",
+    });
   });
 });
 
@@ -105,7 +123,9 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     const RAW_EMAIL = "john@example.com";
     const RAW_SSN = "123-45-6789";
     const bytes = `SMOKE::extract::Contact John at ${RAW_EMAIL} or SSN ${RAW_SSN}`;
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: "image/png" })));
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([bytes], { type: "image/png" })),
+    );
 
     const res = await asT.action(api.intake.attachToThread, {
       threadId,
@@ -153,7 +173,9 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     // Document kind (plain UTF-8 decode, no model) so the poison sentinel is the rawText verbatim —
     // intake.ts routes it into scanText's real non-string Err branch (never a fabricated Err).
     const POISON = "PII_POISON::this content must never reach audit or the conversation";
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([POISON], { type: "text/plain" })));
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([POISON], { type: "text/plain" })),
+    );
 
     const res = await asT.action(api.intake.attachToThread, {
       threadId,
@@ -173,7 +195,11 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     const auditRows = await t.run((ctx) => ctx.db.query("audit").collect());
     const failureRows = auditRows.filter((r) => r.eventType === "intake.extraction_failed");
     expect(failureRows).toHaveLength(1);
-    expect(failureRows[0]?.payload).toEqual({ artifactId: artifact?._id, kind: "document", reason: "pii_scan_failed" });
+    expect(failureRows[0]?.payload).toEqual({
+      artifactId: artifact?._id,
+      kind: "document",
+      reason: "pii_scan_failed",
+    });
     expect(JSON.stringify(failureRows[0]?.payload)).not.toContain("PII_POISON");
 
     // NO "intake.extracted" row and no framed-content merge — only the conversational refusal.
@@ -187,10 +213,16 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     const t = setup();
     const { asT, threadId } = await seedThread(t);
     await t.run((ctx) =>
-      ctx.db.insert("guardrailConfig", { killSwitch: true, budgetUsdPerRequest: 0.05, updatedAt: Date.now() }),
+      ctx.db.insert("guardrailConfig", {
+        killSwitch: true,
+        budgetUsdPerRequest: 0.05,
+        updatedAt: Date.now(),
+      }),
     );
     const bytes = "SMOKE::extract::should never be processed";
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: "image/png" })));
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([bytes], { type: "image/png" })),
+    );
 
     const res = await asT.action(api.intake.attachToThread, {
       threadId,
@@ -219,14 +251,20 @@ describe("dictateToThread (INTK-03) — transcribe -> redact -> merge VERBATIM a
     // contract is what this test isolates, per 04-VALIDATION.md's exact fixture.
     const TRANSCRIPT = "send an email to [EMAIL] about lunch";
     const bytes = `SMOKE::transcribe::${TRANSCRIPT}`;
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: "audio/webm" })));
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([bytes], { type: "audio/webm" })),
+    );
 
     const res = await asT.action(api.intake.dictateToThread, { threadId, storageId });
     expect(res).toEqual({ threadId });
 
     const artifacts = await t.run((ctx) => ctx.db.query("intakeArtifacts").collect());
     expect(artifacts).toHaveLength(1);
-    expect(artifacts[0]).toMatchObject({ kind: "audio", status: "extracted", extracted: TRANSCRIPT });
+    expect(artifacts[0]).toMatchObject({
+      kind: "audio",
+      status: "extracted",
+      extracted: TRANSCRIPT,
+    });
 
     const auditRows = await t.run((ctx) => ctx.db.query("audit").collect());
     const extractedAudit = auditRows.find((r) => r.eventType === "intake.extracted");
@@ -314,7 +352,9 @@ describe("attachToThread -> vault (attachments persist, not one-shot prompt cont
     const t = setup();
     const { asT, threadId } = await seedThread(t);
     const bytes = "SMOKE::transcribe::remind me to call the lab";
-    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([bytes], { type: "audio/webm" })));
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([bytes], { type: "audio/webm" })),
+    );
 
     await asT.action(api.intake.dictateToThread, { threadId, storageId });
 

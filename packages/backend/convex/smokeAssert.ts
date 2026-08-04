@@ -73,7 +73,9 @@ export const assertPipelineDelivered = internalQuery({
       .first();
     if (!req) throw new Error(`no request for ${correlationId}`);
     if (req.status !== "awaiting_reauth" && req.status !== "sent") {
-      throw new Error(`pipeline ${correlationId} at "${req.status}", expected awaiting_reauth|sent`);
+      throw new Error(
+        `pipeline ${correlationId} at "${req.status}", expected awaiting_reauth|sent`,
+      );
     }
     if (req.status === "sent") {
       const tel = await ctx.db
@@ -112,7 +114,9 @@ export const assertDeadLetterReason = internalQuery({
       .first();
     if (!req) throw new Error(`no request for ${correlationId}`);
     if (req.status !== "failed") {
-      throw new Error(`request ${correlationId} at "${req.status}", expected failed (no-stuck-status)`);
+      throw new Error(
+        `request ${correlationId} at "${req.status}", expected failed (no-stuck-status)`,
+      );
     }
 
     // OPSG-05: a dead-letter with a requestId ref fires a user-facing `deadletter` notification beside
@@ -259,7 +263,9 @@ export const assertBlocked = internalQuery({
       .withIndex("by_status", (q) => q.eq("status", "new"))
       .collect();
     if (news.some((r) => r.correlationId === correlationId)) {
-      throw new Error(`deadLetters row for ${correlationId} — a governed stop must not dead-letter`);
+      throw new Error(
+        `deadLetters row for ${correlationId} — a governed stop must not dead-letter`,
+      );
     }
     return { ok: true, reason };
   },
@@ -415,7 +421,9 @@ export const assertFanoutReachedAll = internalQuery({
         .first();
       if (!req) throw new Error(`fanout: no request for ${cid}`);
       if (req.status !== "awaiting_reauth" && req.status !== "sent") {
-        throw new Error(`fanout recipient ${cid} at "${req.status}", expected awaiting_reauth|sent`);
+        throw new Error(
+          `fanout recipient ${cid} at "${req.status}", expected awaiting_reauth|sent`,
+        );
       }
       reached++;
     }
@@ -467,7 +475,9 @@ export const assertRecipientDeadLettered = internalQuery({
     // isolation — none of them may have dead-lettered.
     for (const sib of siblingCids) {
       if (news.some((r) => r.correlationId === sib)) {
-        throw new Error(`isolation breach: sibling ${sib} dead-lettered alongside ${correlationId}`);
+        throw new Error(
+          `isolation breach: sibling ${sib} dead-lettered alongside ${correlationId}`,
+        );
       }
     }
     return { ok: true };
@@ -485,7 +495,9 @@ export const assertFanoutIdempotent = internalQuery({
         .withIndex("by_correlation", (q) => q.eq("correlationId", cid))
         .collect();
       if (tels.length > 1) {
-        throw new Error(`recipient ${cid} has ${tels.length} telemetry rows — terminal not write-once`);
+        throw new Error(
+          `recipient ${cid} has ${tels.length} telemetry rows — terminal not write-once`,
+        );
       }
     }
     return { ok: true };
@@ -552,7 +564,9 @@ export const assertFanoutAttachmentShared = internalQuery({
       refs.add(String(req.attachmentRefs[0]));
     }
     if (refs.size !== 1) {
-      throw new Error(`fanout-attach: ${refs.size} distinct attachment refs across rows, expected 1 (shared)`);
+      throw new Error(
+        `fanout-attach: ${refs.size} distinct attachment refs across rows, expected 1 (shared)`,
+      );
     }
     return { ok: true, sharedRef: [...refs][0] };
   },
@@ -601,17 +615,23 @@ export const assertNoAttachmentStored = internalQuery({
     const plan = await ctx.db.get(planId);
     if (!plan) throw new Error(`no plan ${planId}`);
     if ((plan.attachments ?? []).length !== 0) {
-      throw new Error(`plan ${planId} stored ${plan.attachments?.length} attachment(s) under a governed stop`);
+      throw new Error(
+        `plan ${planId} stored ${plan.attachments?.length} attachment(s) under a governed stop`,
+      );
     }
     if (plan.attachmentError !== undefined) {
-      throw new Error(`plan ${planId} set attachmentError under a governed stop (expected a clean pause)`);
+      throw new Error(
+        `plan ${planId} set attachmentError under a governed stop (expected a clean pause)`,
+      );
     }
     const dls = await ctx.db
       .query("deadLetters")
       .withIndex("by_status", (q) => q.eq("status", "new"))
       .collect();
     if (dls.some((r) => r.tenantId === tenantId)) {
-      throw new Error(`deadLetters row for ${tenantId} — a governed pause during generation must not dead-letter`);
+      throw new Error(
+        `deadLetters row for ${tenantId} — a governed pause during generation must not dead-letter`,
+      );
     }
     return { ok: true };
   },
@@ -664,7 +684,9 @@ export const assertEvalCaseClean = internalQuery({
       for (let n = 0; n < needles.length; n++) {
         const needle = needles[n];
         if (needle && blobs.some((b) => b.includes(needle))) {
-          throw new Error(`refs-only leak: needle #${n} found in ${table} for eval tenant ${tenant}`);
+          throw new Error(
+            `refs-only leak: needle #${n} found in ${table} for eval tenant ${tenant}`,
+          );
         }
       }
     }

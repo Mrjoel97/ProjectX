@@ -9,7 +9,11 @@ describe("frameForConversation — attachment kinds (image/pdf/document)", () =>
   });
 
   it("image: names the file and presents its content", () => {
-    const out = frameForConversation("image", "whiteboard.png", "Sprint plan: ship auth by Friday.");
+    const out = frameForConversation(
+      "image",
+      "whiteboard.png",
+      "Sprint plan: ship auth by Friday.",
+    );
     expect(out).toContain("whiteboard.png");
     expect(out).toContain("Sprint plan: ship auth by Friday.");
   });

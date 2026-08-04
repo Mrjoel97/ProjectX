@@ -16,9 +16,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 try {
-  process.chdir(
-    execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
-  );
+  process.chdir(execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim());
 } catch {
   process.exit(0);
 }
@@ -116,7 +114,8 @@ if (existsSync(SCHEMA)) {
       });
       nodeIds.add(id);
     }
-    if (schemaFileId) addLink(schemaFileId, id, "contains", undefined, SCHEMA, lineAt(text, m.index));
+    if (schemaFileId)
+      addLink(schemaFileId, id, "contains", undefined, SCHEMA, lineAt(text, m.index));
   }
 }
 
@@ -149,7 +148,7 @@ for (const f of files) {
       "references",
       op === "insert" ? "db_write" : "db_read",
       f,
-      lineAt(text, m.index)
+      lineAt(text, m.index),
     );
   }
 }
@@ -158,5 +157,5 @@ writeFileSync(GRAPH, JSON.stringify(g, null, raw.includes('\n  "') ? 2 : 0));
 console.log(
   `graph-fixup: -${dropped.size} noise nodes | +${convexEdges} convex edges | ` +
     `+${tableEdges} table edges (${tableId.size} tables)` +
-    (unresolved.size ? ` | unresolved: ${[...unresolved].join(", ")}` : "")
+    (unresolved.size ? ` | unresolved: ${[...unresolved].join(", ")}` : ""),
 );

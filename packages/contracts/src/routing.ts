@@ -35,7 +35,5 @@ export type ParseRoutingResult =
  */
 export function parseRouting(value: unknown): ParseRoutingResult {
   const result = routingSchema.safeParse(value);
-  return result.success
-    ? { ok: true, value: result.data }
-    : { ok: false, reason: "unknown_route" };
+  return result.success ? { ok: true, value: result.data } : { ok: false, reason: "unknown_route" };
 }

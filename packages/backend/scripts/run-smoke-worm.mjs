@@ -24,11 +24,15 @@ if (!process.env.WORM_BUCKET) {
   }
   console.log("[smoke:worm] PASSED — worm:exportAudit logged 'worm export skipped (stub)'");
 } else {
-  console.log("[smoke:worm] WORM_BUCKET set — running worm:exportAudit (expecting a real export)...");
+  console.log(
+    "[smoke:worm] WORM_BUCKET set — running worm:exportAudit (expecting a real export)...",
+  );
   const out = must("worm:exportAudit", {});
   if (SKIP_LINE.test(out)) {
     console.error(out);
-    throw new Error("[smoke:worm] took the stub-skip path but WORM_BUCKET is set (deployment env missing?)");
+    throw new Error(
+      "[smoke:worm] took the stub-skip path but WORM_BUCKET is set (deployment env missing?)",
+    );
   }
   // The action returns { exported: N, ... }; `convex run` prints it to stdout.
   const m = out.match(/"exported":\s*(\d+)/);

@@ -11,7 +11,9 @@ import { expect, test } from "@playwright/test";
 // and every recipient row settles at `awaiting_reauth` — the automatable half of DLVR-01. A REAL
 // send to real addresses is the manual human-verify checkpoint (03.1-VALIDATION Manual-Only).
 
-test("chat → plan → one approve → live per-recipient report (offline SMOKE:: path)", async ({ page }) => {
+test("chat → plan → one approve → live per-recipient report (offline SMOKE:: path)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   // The chat pane only renders once Gmail is connected (workspace/page.tsx gate). If the harness
@@ -33,11 +35,15 @@ test("chat → plan → one approve → live per-recipient report (offline SMOKE
 
   // 2. subject → next: body intent.
   await say("Quarterly update");
-  await expect(page.getByText(/what do you want the email to say/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/what do you want the email to say/i)).toBeVisible({
+    timeout: 15_000,
+  });
 
   // 3. body intent WITH the offline sentinel → next: mode (fires only for >1 recipient).
   await say("SMOKE::route=direct_llm:: Share the quarterly numbers with the team.");
-  await expect(page.getByText(/individually, or as one group thread/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/individually, or as one group thread/i)).toBeVisible({
+    timeout: 15_000,
+  });
 
   // 4. mode → ready → offline draft (no AI key) → PLAN proposed.
   await say("individual");

@@ -3,14 +3,14 @@ import { describe, expect, test } from "vitest";
 import { BEHAVIOR_PRESETS, TIERS } from "./businessProfile";
 import * as specialists from "./specialists";
 import {
+  evidenceVerdict,
   INSUFFICIENT_EVIDENCE_LABEL,
   NOT_RESEARCHED_LABEL,
   PRESET_SKILL,
-  SPECIALISTS,
-  SPECIALIST_ROUTES,
-  evidenceVerdict,
   researchFindingsFence,
   resolveSpecialist,
+  SPECIALIST_ROUTES,
+  SPECIALISTS,
   specialistMemoBody,
   tierBriefing,
   wouldCycle,
@@ -485,13 +485,18 @@ describe("tier", () => {
   });
 });
 
-
 // ── Phase 16 (16-03) — the provenance fence + the three-reason incomplete marker ──────────────
 describe("researchFindingsFence (SC#2 — the fence we CAN actually place)", () => {
   const ISO = "2026-07-27T00:00:00.000Z";
 
   test("wraps the body, and keeps provenance OUTSIDE the fence", () => {
-    const out = researchFindingsFence({ body: "Competitor X charges $49.", sourceCount: 3, webSearchCalls: 2, declaredUnsupported: false, retrievedIso: ISO });
+    const out = researchFindingsFence({
+      body: "Competitor X charges $49.",
+      sourceCount: 3,
+      webSearchCalls: 2,
+      declaredUnsupported: false,
+      retrievedIso: ISO,
+    });
     expect(out).toContain("<research_findings ");
     expect(out).toContain("</research_findings>");
     expect(out).toContain("Competitor X charges $49.");
@@ -600,7 +605,12 @@ describe("evidenceVerdict (22.1 — 'never looked' is not 'looked and found noth
     },
     // a5dfafc2 attempt 2: no search at all, $0.00088 — answered from memory.
     { webSearchCalls: 0, sourceCount: 0, declaredUnsupported: false, expected: "not_researched" },
-    { webSearchCalls: 2, sourceCount: 0, declaredUnsupported: false, expected: "insufficient_evidence" },
+    {
+      webSearchCalls: 2,
+      sourceCount: 0,
+      declaredUnsupported: false,
+      expected: "insufficient_evidence",
+    },
     { webSearchCalls: 3, sourceCount: 4, declaredUnsupported: false, expected: "sourced" },
     // Fixture 32's measured grounded shape — a diligent, well-sourced run that made NO declaration
     // must stay `sourced`. This is the CALIBRATION row: it is what proves the channel is not a
@@ -608,12 +618,12 @@ describe("evidenceVerdict (22.1 — 'never looked' is not 'looked and found noth
     { webSearchCalls: 20, sourceCount: 68, declaredUnsupported: false, expected: "sourced" },
     // provider drift — fail closed.
     { webSearchCalls: 0, sourceCount: 5, declaredUnsupported: false, expected: "not_researched" },
-  ])(
-    "$webSearchCalls calls / $sourceCount sources / declared=$declaredUnsupported ⇒ $expected",
-    ({ expected, ...inputs }) => {
-      expect(evidenceVerdict(inputs)).toBe(expected);
-    },
-  );
+  ])("$webSearchCalls calls / $sourceCount sources / declared=$declaredUnsupported ⇒ $expected", ({
+    expected,
+    ...inputs
+  }) => {
+    expect(evidenceVerdict(inputs)).toBe(expected);
+  });
 
   test("the zero-search shape is NOT a legitimate insufficient-evidence verdict", () => {
     expect(
@@ -643,7 +653,11 @@ describe("evidenceVerdict (22.1 — 'never looked' is not 'looked and found noth
     for (const webSearchCalls of [0, 1, 5]) {
       for (const sourceCount of [0, 1, 9]) {
         const quiet = evidenceVerdict({ webSearchCalls, sourceCount, declaredUnsupported: false });
-        const declared = evidenceVerdict({ webSearchCalls, sourceCount, declaredUnsupported: true });
+        const declared = evidenceVerdict({
+          webSearchCalls,
+          sourceCount,
+          declaredUnsupported: true,
+        });
         expect(
           RANK[declared],
           `declaring STRENGTHENED ${webSearchCalls}/${sourceCount}: ${quiet} → ${declared}`,

@@ -87,14 +87,18 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
   return (
     <div
       ref={containerRef}
-      style={{ display: "grid", gridTemplateColumns: `${pct}% 6px 1fr`, height: "100%", minHeight: 0 }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: `${pct}% 6px 1fr`,
+        height: "100%",
+        minHeight: 0,
+      }}
     >
       <div data-testid="split-left" style={{ minWidth: 0, overflow: "auto" }}>
         {left}
       </div>
-      <div
+      <hr
         data-testid="split-handle"
-        role="separator"
         aria-orientation="vertical"
         aria-valuenow={Math.round(pct)}
         aria-valuemin={MIN}
@@ -107,8 +111,12 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
         // Quiet seam (brand-024149): a 1px hairline centered in the 6px grab zone —
         // the panes read as one surface; the divider is felt, not seen.
         style={{
+          border: 0,
+          margin: 0,
+          padding: 0,
           cursor: "col-resize",
-          background: "linear-gradient(to right, transparent 2px, var(--rule) 2px, var(--rule) 3px, transparent 3px)",
+          background:
+            "linear-gradient(to right, transparent 2px, var(--rule) 2px, var(--rule) 3px, transparent 3px)",
           touchAction: "none",
         }}
       />
