@@ -34,15 +34,24 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (completed 2026-07-23)
 - [~] **Phase 9: Private Beta Productionization** - **SUPERSEDED (2026-07-24) -> absorbed into Phase 25.** Productionization moves to the END of milestone v2.0 (executes LAST, after all Phase 10+ platform work). `09-CONTEXT.md` remains the spec for that final phase.
 
-### Phase 26: Pending product pages and Vault redesign integration
+### Phase 26: Connected product pages
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 25
+**Goal:** Replace every remaining `pending-pages.html` placeholder with a tenant-safe, bounded and fully connected product surface, enabling each navigation entry only after its read model, governed actions, failure states, audit boundary and production verification path are real.
+**Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, PIPE-01, HOME-01
+**Depends on:** Phase 15.4 for the connected product-shell/design baseline. There is **no blanket Phase 25 dependency**. Plan-specific dependencies remain explicit: Pipeline pairs with Phase 19; Content consumes landed Phase 18/20 artifacts without blocking their unrelated work; Command Center follows the Phase 26 source surfaces.
+**Execution position:** Pulled forward 2026-08-05. Start after Phase 15.4; run independent plans alongside existing lanes where file ownership does not overlap. Phase 25 consumes these finished surfaces rather than blocking them.
+**Success Criteria** (what must be TRUE):
+  1. Shared dashboard contracts enforce tenant/owner authorization, bounded pagination/time windows, honest loading/empty/partial/error states, IANA time, USD cost semantics and refs/counts-only audit before any new route is enabled.
+  2. Approvals exposes a tenant-wide, indexed queue whose approve/schedule/cancel/discard/revise paths are state-guarded, idempotent and race-tested; unsupported inline calendar edits route back to the cockpit.
+  3. Finance reports only durable estimated/reserved/actual/refunded spend recorded after an explicit coverage start, exposes tenant versus owner-global rails correctly, and never fabricates historical zeroes.
+  4. Content unifies bounded projections over Vault artifacts, rendered media and sent mail with provenance, ownership-checked signed URLs and cockpit-prefill reuse; it does not duplicate content silently.
+  5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
+  6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
+  7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 26 to break down)
+- [ ] Planning in progress — approved order: shared contracts → Approvals → Finance → Content → Reports → Pipeline with Phase 19 → Command Center v2
 
 ---
 

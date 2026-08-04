@@ -161,6 +161,19 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 *(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
 
+### Connected Product Surfaces — Pulled Before Private Beta
+
+*Added 2026-08-05 from the approved `pending-pages.html` integration map. Phase 26 is no longer
+blanket-blocked by Phase 25; each surface carries only its real dependency.*
+
+- [ ] **DASH-01**: Every new dashboard route uses tenant-safe or owner-safe public projections, bounded pagination/time windows, honest loading/empty/partial/error/refusal states, named IANA timezone formatting, USD cost semantics, refs/counts-only audit for mutations, and remains disabled in navigation until connected browser verification passes
+- [ ] **APRV-01**: The user can review a tenant-wide approvals queue covering awaiting, scheduled, in-flight, decided and cleared work; approve, schedule, cancel, discard and revise actions have explicit server-side state guards, idempotent outcomes and scheduler-race handling, with calendar revisions returning to the originating cockpit until a safe inline availability/CAS contract exists
+- [ ] **FIN-01**: The user can inspect truthful reasoning, media and ingest spend as estimated, reserved, actual, refunded and unlanded movements from an append-only ledger with an explicit coverage start; tenant rails and owner-only deployment rails remain distinct, and missing history is shown as unknown rather than zero
+- [ ] **CONT-01**: The user can browse a bounded unified library of Vault artifacts, rendered media and sent mail with stable provenance, ownership-checked signed downloads and processing states; reuse opens/prefills the cockpit and never silently duplicates or sends an artifact
+- [ ] **RPRT-01**: The user can view bounded business, operations and governance reports for a selected half-open time window, including a server-sanitized audit projection; WORM, active-skill and deployment-budget facts remain owner-only, and board-pack generation lands as a governed downloadable artifact
+- [ ] **PIPE-01**: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in the common send path and the first release does not invent opportunities, deal stages or monetary pipeline values
+- [ ] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
@@ -284,6 +297,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GOVN-02 | Phase 24 | Pending |
 | GOVN-03 | Phase 22.1 | Pending |
 | BETA-05 | Phase 25 | Complete |
+| DASH-01 | Phase 26 | Pending |
+| APRV-01 | Phase 26 | Pending |
+| FIN-01 | Phase 26 | Pending |
+| CONT-01 | Phase 26 | Pending |
+| RPRT-01 | Phase 26 | Pending |
+| PIPE-01 | Phase 26 (paired with Phase 19) | Pending |
+| HOME-01 | Phase 26 | Pending |
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)
