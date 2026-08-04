@@ -164,6 +164,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
     .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"])
@@ -244,6 +245,19 @@ export default defineSchema({
     // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
     sendAt: v.optional(v.number()),
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
+    // scheduled cancellation; every new cancel writes the discriminator explicitly.
+    cancelKind: v.optional(
+      v.union(v.literal("scheduled_cancel"), v.literal("discarded")),
+    ),
+    canceledAt: v.optional(v.number()),
+    // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
+    // keeps legacy reads on the bounded partial projection instead of inventing exact progress.
+    recipientTotal: v.optional(v.number()),
+    sentCount: v.optional(v.number()),
+    failedCount: v.optional(v.number()),
+    queuedCount: v.optional(v.number()),
+    counterComplete: v.optional(v.boolean()),
     // Reply threading (03.11 RPLY-01). Set by the replyToMessage tool (Plan 04) when a plan is a
     // reply, copied to the per-recipient `requests` rows at executePlan (Plan 03). All optional →
     // no migration; a non-reply send simply carries none (append-only, like sendAt/attachments).
@@ -402,6 +416,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
@@ -448,7 +463,9 @@ export default defineSchema({
     // lede degrades to counts-only (@pikar/core composeLede handles the absent case).
     synopsis: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
   // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
@@ -866,6 +883,10 @@ export default defineSchema({
     // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
     // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
+    // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
+    // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
+    sourceThreadId: v.optional(v.string()),
+    sourcePlanId: v.optional(v.id("plans")),
     // Phase-18 (ACTN-04). ABSENT ⇒ user-supplied (every row that exists today; ZERO backfill).
     // "agent" ⇒ agent-authored: excluded from vault retrieval (structurally — it is never
     // ingested) and from the blueprint drift signal. "agent_promoted" ⇒ the user promoted it to
@@ -960,6 +981,7 @@ export default defineSchema({
     // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
     // this tenant?" — answered without scanning the partition.
     .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
+    .index("by_tenant_origin_createdAt", ["tenantId", "origin", "createdAt"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
@@ -1119,6 +1141,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
 
   // The optimizer kill switch + tunable thresholds (IMPR-02). SINGLE row, upserted by
@@ -1210,6 +1233,40 @@ export default defineSchema({
     blueprintConfirmedAt: v.optional(v.number()),
   }).index("by_tenant", ["tenantId"]),
 
+  // ── Phase-26 connected dashboard accounting foundation ────────────────────
+  // Append-only reporting facts. Enforcement remains in the rate limiter; these rows retain
+  // refs, code-owned identifiers and integer cents only — never prompts, provider prose or URLs.
+  spendEvents: defineTable({
+    tenantId: v.string(),
+    rail: v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest")),
+    phase: v.union(
+      v.literal("estimated"),
+      v.literal("reserved"),
+      v.literal("actual"),
+      v.literal("refunded"),
+      v.literal("adjustment"),
+    ),
+    amountCents: v.number(),
+    correlationId: v.string(),
+    planId: v.optional(v.id("plans")),
+    requestId: v.optional(v.id("requests")),
+    folderId: v.optional(v.id("vaultFolders")),
+    mediaJobId: v.optional(v.id("mediaJobs")),
+    model: v.optional(v.string()),
+    kind: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
+    .index("by_correlation", ["correlationId"]),
+
+  // One durable start per tenant, created before the first paid movement. A missing row means
+  // coverage has not begun; it never means historical spend was zero.
+  spendCoverage: defineTable({
+    tenantId: v.string(),
+    coverageStartedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+
   // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
   // `mediaAssets` table would be a 1:1 join forever. A new table needs no migration.
@@ -1284,5 +1341,6 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_plan", ["tenantId", "planId"])
-    .index("by_batch", ["tenantId", "batchId"]),
+    .index("by_batch", ["tenantId", "batchId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 });
