@@ -37,7 +37,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 26: Connected product pages
 
 **Goal:** Replace every remaining `pending-pages.html` placeholder with a tenant-safe, bounded and fully connected product surface, enabling each navigation entry only after its read model, governed actions, failure states, audit boundary and production verification path are real.
-**Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, PIPE-01, HOME-01
+**Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, HOME-01
+**External gate**: Phase 19 owns ACTN-05 and PIPE-01; Phase 26 consumes its approved Pipeline route/contracts only at the Pipeline integration wave.
 **Depends on:** Phase 15.4 for the connected product-shell/design baseline. There is **no blanket Phase 25 dependency**. Plan-specific dependencies remain explicit: Pipeline pairs with Phase 19; Content consumes landed Phase 18/20 artifacts without blocking their unrelated work; Command Center follows the Phase 26 source surfaces.
 **Execution position:** Pulled forward 2026-08-05. Start after Phase 15.4; run independent plans alongside existing lanes where file ownership does not overlap. Phase 25 consumes these finished surfaces rather than blocking them.
 **Success Criteria** (what must be TRUE):
@@ -803,7 +804,7 @@ Plans:
 ### Phase 19: Contacts, CRM & Follow-ups
 **Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
 **Depends on**: Phase 15 (dispatch + executor)
-**Requirements**: ACTN-05
+**Requirements**: ACTN-05, PIPE-01
 **Success Criteria** (what must be TRUE):
   1. The agent reads contact/CRM state in-loop to resolve people and surface follow-up context; a CRM write (add contact, log a follow-up) stages into the plan and executes only via the human Approve gate.
   2. Contact/CRM data is tenant-scoped and unreachable across tenants (isolation assertion ships with the surface).
@@ -812,6 +813,7 @@ Plans:
   5. **The suppression check lives in the SEND path, not in the contacts module.** `executePlan`/`startFanout` refuses every suppressed target address, checked address-by-address against `plans.recipients` (`schema.ts:189`) — a raw address array resolved from Gmail headers that never touches the contacts table. A contacts-row-only check is defeated by a user typing an unsubscribed person's name in chat, so the guard goes in the one place all sends converge, with a test that proves it there.
   6. `tenantProfiles` gains a physical postal address field (CAN-SPAM requires one in the body of every commercial email) and the drafter cannot omit the footer that renders it.
   7. The phase states IN WRITING — in the playbook, not only in a plan summary — why a contacts table does not violate the "no contacts cache at rest" invariant at `schema.ts:210-211`.
+  8. A narrow connected Pipeline route shows contacts needing attention, follow-ups due, consent and suppression states from this one store; it does not invent opportunities, stages, monetary value or a second CRM data plane.
 **Plans**: TBD
 
 ### Phase 20: Media Canvas

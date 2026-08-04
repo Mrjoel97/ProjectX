@@ -171,7 +171,7 @@ blanket-blocked by Phase 25; each surface carries only its real dependency.*
 - [ ] **FIN-01**: The user can inspect truthful reasoning, media and ingest spend as estimated, reserved, actual, refunded and unlanded movements from an append-only ledger with an explicit coverage start; tenant rails and owner-only deployment rails remain distinct, and missing history is shown as unknown rather than zero
 - [ ] **CONT-01**: The user can browse a bounded unified library of Vault artifacts, rendered media and sent mail with stable provenance, ownership-checked signed downloads and processing states; reuse opens/prefills the cockpit and never silently duplicates or sends an artifact
 - [ ] **RPRT-01**: The user can view bounded business, operations and governance reports for a selected half-open time window, including a server-sanitized audit projection; WORM, active-skill and deployment-budget facts remain owner-only, and board-pack generation lands as a governed downloadable artifact
-- [ ] **PIPE-01**: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in the common send path and the first release does not invent opportunities, deal stages or monetary pipeline values
+- [ ] **PIPE-01** *(Phase 19 companion)*: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in every product-email terminal and the first release does not invent opportunities, deal stages or monetary pipeline values
 - [ ] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
 
 ## v2 Requirements
@@ -302,7 +302,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FIN-01 | Phase 26 | Pending |
 | CONT-01 | Phase 26 | Pending |
 | RPRT-01 | Phase 26 | Pending |
-| PIPE-01 | Phase 26 (paired with Phase 19) | Pending |
+| PIPE-01 | Phase 19 (consumed by Phase 26 nav/integration gate) | Pending |
 | HOME-01 | Phase 26 | Pending |
 
 **Coverage:**
