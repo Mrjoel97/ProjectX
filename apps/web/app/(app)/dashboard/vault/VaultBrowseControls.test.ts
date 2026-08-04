@@ -67,8 +67,11 @@ describe("folder and digest controls", () => {
     const html = renderToStaticMarkup(
       createElement(
         FolderOpenControl,
-        { name: "Client contracts", onOpen },
-        createElement("span", null, "Client contracts"),
+        {
+          name: "Client contracts",
+          onOpen,
+          children: createElement("span", null, "Client contracts"),
+        },
       ),
     );
 

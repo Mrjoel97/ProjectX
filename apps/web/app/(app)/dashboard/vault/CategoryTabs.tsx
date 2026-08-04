@@ -36,14 +36,7 @@ export function CategoryTabs({
     <div
       role="tablist"
       aria-label="Vault categories"
-      className="clay-card"
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.4rem",
-        padding: "0.4rem",
-        borderRadius: "1rem",
-      }}
+      className="vault-category-tabs"
     >
       {VAULT_TABS.map(({ label, category, Icon }) => {
         const on = active === category;
@@ -54,19 +47,7 @@ export function CategoryTabs({
             role="tab"
             aria-selected={on}
             onClick={() => onChange(category)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.6rem 1.1rem",
-              borderRadius: "999px",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.95rem",
-              fontWeight: on ? 700 : 500,
-              background: on ? "var(--teal-600)" : "transparent",
-              color: on ? "#fff" : "var(--ink-soft)",
-            }}
+            className={`vault-category-tab${on ? " is-active" : ""}`}
           >
             <Icon size={18} />
             {label}

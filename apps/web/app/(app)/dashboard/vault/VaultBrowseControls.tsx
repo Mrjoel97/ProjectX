@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { type CSSProperties, type ReactNode } from "react";
 
 export type VaultBrowseHandlers = {
   onUpload: () => void;
@@ -74,17 +74,20 @@ export function FolderOpenControl({
   disabled = false,
   children,
   className,
+  style,
 }: {
   name: string;
   onOpen: () => void;
   disabled?: boolean;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <button
       type="button"
       className={className}
+      style={style}
       disabled={disabled}
       aria-label={`Open folder: ${name}`}
       onClick={onOpen}
