@@ -1,5 +1,38 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-05 (15.4-04 automated close — **the connected Nord Edge Vault route ran
+> in Playwright, not only in component tests.**) `apps/web/e2e/vault-redesign.spec.ts` passed 2/2
+> against the real authenticated `/dashboard/vault` route and a live local Convex deployment. It
+> proves root/category browse, brain-dump ingest, directory pre-flight/upload, folder completion,
+> folder-scoped search exclusion, no-results recovery, preview identity/provenance/download,
+> close/Escape/focus restoration, confirmed removal and empty-folder recovery. Drive success and
+> folder-digest AI success remain honest external/live capabilities; the spec asserts the Drive
+> entry point but does not fake either one.
+>
+> **Harness contract:** run persistent `convex dev` plus Next on `127.0.0.1:3111`, seed the
+> committed skill registry, and provide a real local password user. The spec calls the internal,
+> idempotent `onboarding:__seedOnboardedTenant` seam for the JWT's stable user-id segment before
+> revisiting the Vault route. `PIKAR_E2E_BACKEND_DIR` is an optional isolated-worktree override;
+> ordinary runs resolve `packages/backend` from the repository. Do not seed the whole JWT `sub`:
+> its session suffix changes on each login, while `tenantQuery` uses `getAuthUserId`.
+>
+> **Defect caught by the executed gate:** offline ingest records `smoke::<contentHash>` as a
+> synthetic `ragEntryId`, but `deleteVaultDoc` passed it to the RAG component's branded ID
+> validator. Confirmed removal therefore left the dialog open. Deletion now skips RAG cleanup only
+> for that explicit sentinel and still removes the Vault row/graph ownership; real entry IDs retain
+> the existing `rag.deleteAsync` cascade. `vault.test.ts` and `vaultDigest.test.ts` pin direct delete
+> and complete-folder cancellation without clearing the sentinel (43/43 focused backend tests).
+>
+> **Verification commands:**
+> `pnpm --filter @pikar/web test:e2e -- e2e/vault-redesign.spec.ts`;
+> `pnpm --filter @pikar/backend test`; `pnpm --filter @pikar/web test`;
+> `pnpm --filter @pikar/backend typecheck`; `pnpm --filter @pikar/web typecheck`;
+> `pnpm --filter @pikar/web build`; `node scripts/check-playbooks.mjs`.
+>
+> **Rollback:** revert the 15.4-04 E2E/playbook commit and the isolated
+> `fix(vault): delete smoke-ingested documents safely` commit together. No schema, index, migration,
+> backfill, stored production row, Drive scope or dependency rollback is required.
+
 > Last verified: 2026-08-04 (15.4-03 — **connected Nord Edge preview and import surfaces with
 > governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
 > URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through

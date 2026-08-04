@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (15.4-04 watch-map acknowledgement — **no cockpit behavior changed;
+> the watched `apps/web/e2e/` path gained an actually executed Vault regression spec.**)
+> `vault-redesign.spec.ts` passed 2/2 against the authenticated local stack and covers the connected
+> Vault route from root/category browse through folder-scoped search, preview and confirmed removal.
+> It reuses `auth.setup.ts` storage state, seeds onboarding through the repository's internal E2E
+> seam, and deliberately does not fake Drive import or folder-digest AI success. Run it with
+> `pnpm --filter @pikar/web test:e2e -- e2e/vault-redesign.spec.ts`; the full close also runs both
+> package test suites/typechecks, the web production build and `node scripts/check-playbooks.mjs`.
+> Rollback is limited to the Vault E2E/playbook commit plus its isolated SMOKE-delete backend fix;
+> no cockpit route, tool, plan, send gate or stored cockpit row changes.
+
 > Last verified: 2026-08-04 (ADR-014 — **the cockpit can now propose a standalone image and still
 > cannot generate one.** The executive-only `proposeImage` tool stages `mediaMode:"image"` plus the
 > reviewed prompt on the unique plan row. It returns copy that explicitly says nothing was generated
