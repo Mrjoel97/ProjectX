@@ -489,6 +489,56 @@ export const setPlanStatus = internalMutation({
 });
 
 /**
+ * Own one per-recipient delivery terminal and its plan counters in the same transaction. Request
+ * status is the idempotency key: once a row is `sent` or `failed`, workflow/action retries cannot
+ * increment it again or flip it to the opposite terminal. Legacy plans still receive the request
+ * terminal but keep their missing counters, which is the explicit partial-progress signal.
+ */
+export const recordDeliveryTerminal = internalMutation({
+  args: {
+    planId: v.id("plans"),
+    requestId: v.id("requests"),
+    outcome: v.union(v.literal("sent"), v.literal("failed")),
+  },
+  handler: async (ctx, { planId, requestId, outcome }): Promise<{ applied: boolean }> => {
+    const [plan, request] = await Promise.all([ctx.db.get(planId), ctx.db.get(requestId)]);
+    if (
+      !plan ||
+      !request ||
+      request.planId !== planId ||
+      request.tenantId !== plan.tenantId
+    ) {
+      throw new Error("delivery request not found");
+    }
+    if (request.status === "sent" || request.status === "failed") return { applied: false };
+
+    await ctx.db.patch(requestId, { status: outcome });
+    if (
+      plan.counterComplete !== true ||
+      plan.recipientTotal === undefined ||
+      plan.sentCount === undefined ||
+      plan.failedCount === undefined ||
+      plan.queuedCount === undefined
+    ) {
+      return { applied: true };
+    }
+
+    const total = Math.max(0, Math.floor(plan.recipientTotal));
+    const sentCount = Math.min(total, plan.sentCount + (outcome === "sent" ? 1 : 0));
+    const failedCount = Math.min(
+      total - sentCount,
+      plan.failedCount + (outcome === "failed" ? 1 : 0),
+    );
+    await ctx.db.patch(planId, {
+      sentCount,
+      failedCount,
+      queuedCount: Math.max(0, total - sentCount - failedCount),
+    });
+    return { applied: true };
+  },
+});
+
+/**
  * TRANSIENT candidate writer (cockpit calls after a name search). Holds fetched
  * candidates + same-turn pendingValid addresses on the content plane so the resolution
  * card renders across turns. Content-plane only — never audited (CLAUDE.md §4).

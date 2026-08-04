@@ -763,6 +763,17 @@ export const executePlan = tenantMutation({
     const body = plan.body ?? "";
     const targets = mode === "group" ? [recipients.join(", ")] : recipients;
 
+    // Phase 26 exact-progress baseline. These counters describe frozen delivery work units (one
+    // request row per target), not raw addresses. Their presence plus counterComplete=true is what
+    // lets Approvals distinguish new exact rows from bounded legacy fallback.
+    await ctx.db.patch(planId, {
+      recipientTotal: targets.length,
+      queuedCount: targets.length,
+      sentCount: 0,
+      failedCount: 0,
+      counterComplete: true,
+    });
+
     // Materialize the plan's generated attachments (inline refs on the plan row → the pre-approval
     // source of truth) into `attachments` table rows ONCE, then share their ids across EVERY
     // recipient's request (this slice sends one document set to all — no per-recipient duplication,

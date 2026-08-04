@@ -36,7 +36,11 @@ export const deliverApprovedPlan = workflow.define({
       try {
         const result = await step.runAction(internal.gmail.send, { requestId }); // workpool retries
         if (!result.delivered) continue; // held at awaiting_reauth — a hold, not a failure
-        await step.runMutation(internal.pipeline.setStatus, { requestId, status: "sent" });
+        await step.runMutation(internal.plans.recordDeliveryTerminal, {
+          planId,
+          requestId,
+          outcome: "sent",
+        });
         // No LLM ran in a pure delivery fan-out → empty usage/decision accumulators.
         await step.runMutation(internal.telemetry.writeTerminal, {
           requestId,
@@ -51,6 +55,13 @@ export const deliverApprovedPlan = workflow.define({
         });
       } catch (e) {
         // Per-recipient isolation (SC5): dead-letter THIS row on its own cid, keep the loop going.
+        // The terminal transition runs first and is idempotent on request.status, so workflow or
+        // action retries can never double-increment the plan's failed counter.
+        await step.runMutation(internal.plans.recordDeliveryTerminal, {
+          planId,
+          requestId,
+          outcome: "failed",
+        });
         await step.runMutation(internal.deadLetter.deadLetterRecipient, {
           tenantId,
           requestId,

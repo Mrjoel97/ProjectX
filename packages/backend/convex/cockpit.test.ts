@@ -777,7 +777,14 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       for (const r of reqs) expect(r.status).toBe("approved");
 
       const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan?.status).toBe("scheduled");
+      expect(plan).toMatchObject({
+        status: "scheduled",
+        recipientTotal: 2,
+        queuedCount: 2,
+        sentCount: 0,
+        failedCount: 0,
+        counterComplete: true,
+      });
       expect(plan?.scheduledFunctionId).toBeDefined();
 
       // A live scheduled-function system row exists (the scheduler is armed).
@@ -1133,6 +1140,16 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("the delivery workflow routes both sent and failed terminals through the idempotent plan progress helper", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "deliverApprovedPlan.ts"),
+      "utf8",
+    );
+    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(2);
+    expect(src).toContain('outcome: "sent"');
+    expect(src).toContain('outcome: "failed"');
   });
 });
 

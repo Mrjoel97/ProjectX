@@ -1,5 +1,49 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (Phase 26 Plan 03 — Approvals write semantics). The existing human
+> `executePlan` gate remains the only email fan-out starter. This change adds guarded discard,
+> current-schedule movement and exact new-plan delivery progress without creating a second send
+> path.
+>
+> | Current state | Control | Result | Stored transition |
+> |---|---|---|---|
+> | `proposed` | Discard | `{ok:true, discarded:true}` | `canceled`, `cancelKind:"discarded"`, `canceledAt`; one refs-only `plan.discarded` |
+> | any other state | Discard | `{ok:true, alreadyResolved:true}` | no write, no audit |
+> | `scheduled` + current handle | Move | `{result:"moved"}` | old callback canceled; `sendAt` + handle replaced atomically; one refs-only `plan.rescheduled` |
+> | `delivering` / `done` | Move | `{result:"already_fired"}` | no write; the scheduler won and the UI must show In Flight, never “Rescheduled” |
+> | canceled, proposed, or otherwise unscheduled | Move | `{result:"not_scheduled"}` | no write |
+> | `scheduled` | Cancel | `{ok:true, canceled:true}` | `canceled`, `cancelKind:"scheduled_cancel"`, `canceledAt`, handle cleared |
+>
+> **Discard never re-arms.** `reschedulePlan` accepts only an explicit `scheduled_cancel` or a
+> legacy canceled row with missing provenance. A newly written `discarded` row always no-ops there.
+> Missing provenance remains the backward-compatible historical scheduled-cancel case; new writers
+> must never omit `cancelKind`.
+>
+> **The scheduler race has one truthful winner.** Every new callback carries `scheduledFor`; the
+> callback reads the row and starts fan-out only while status is `scheduled` and `sendAt` still
+> equals that token. A moved callback therefore no-ops even if it was already dequeued. Legacy
+> callbacks have no token and may proceed only when the row is still due (`sendAt <= now`). Because
+> cancel, move and fire all read/write the same plan row, Convex serializability yields canceled,
+> moved, or already-fired — never a successful move after delivery started. Replaying the same move
+> returns `moved` without adding a second callback or audit row.
+>
+> **Progress is exact only when the row says it is.** New email approvals seed
+> `recipientTotal`, `queuedCount`, `sentCount`, `failedCount` and `counterComplete:true` from the
+> frozen request targets. `plans.recordDeliveryTerminal` owns the request terminal and plan counters
+> in one transaction. Request status is the replay key: a `sent`/`failed` row cannot increment again
+> or flip terminal. Held `awaiting_reauth` rows remain queued. Legacy plans carry no completeness bit
+> and keep their counters absent, so the later Approvals reader must use only its bounded partial
+> fallback and must never present a fabricated exact zero.
+>
+> Focused verification:
+> `pnpm --filter @pikar/backend test -- cockpit plans`,
+> `pnpm --filter @pikar/backend typecheck`, and `node scripts/check-playbooks.mjs`.
+>
+> **Rollback boundary:** hide/disable the Approvals route and its mutations while retaining the
+> existing workspace, `/review`, `/requests`, `executePlan`, stored cancellation provenance and
+> progress fields. Do not erase provenance, reopen discarded rows, remove the stale-callback guard,
+> or stop terminal instrumentation during UI rollback.
+
 > Last verified: 2026-08-05 (15.4-04 watch-map acknowledgement — **no cockpit behavior changed;
 > the watched `apps/web/e2e/` path gained an actually executed Vault regression spec.**)
 > `vault-redesign.spec.ts` passed 2/2 against the authenticated local stack and covers the connected
