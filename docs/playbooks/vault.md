@@ -1,5 +1,34 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (15.4-03 — **connected Nord Edge preview and import surfaces with
+> governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
+> URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through
+> `setDocIdentity`. Removal is now a two-step presenter state: the destructive `deleteVaultDoc`
+> adapter is absent until the user opens the explicit irreversible-action confirmation.
+>
+> **Preview state matrix:** ready extracted text, expandable long text, server-truncated extraction,
+> ready image/video, unsupported/no-inline-preview, missing stored bytes, lazy loading, each
+> processing stage and extraction failure are explicit pure states. A missing/foreign projection
+> fails closed with no identity, citation, download, delete, retry or voice capability. Failure
+> retains the reason-specific copy and retry; ready text and binary documents retain Download when
+> `storageId` exists, provenance/entities, workspace navigation and identity correction.
+>
+> **Dialog and import invariants:** the labelled modal traps Tab, closes on Escape/backdrop/X,
+> locks background scroll and restores the invoking grid control on unmount. Upload, directory
+> pre-flight and the custom Drive breadcrumb browser use the existing Plan-02 Vault-scoped tokens.
+> Do not replace the Drive browser with Google's Picker SDK, and do not reorder folder pricing:
+> estimate from the pick, upload sequentially, then reserve using the original manifest; Drive
+> remains scope-check → enumerate metadata → reserve → download.
+>
+> **Focused verification:** `pnpm --filter @pikar/web test -- vault` (43/43),
+> `pnpm --filter @pikar/web typecheck`, `pnpm --filter @pikar/web build`, then
+> `node scripts/check-playbooks.mjs`. `PreviewControls.test.ts` deliberately uses
+> `React.createElement` plus `renderToStaticMarkup`: the web Vitest include remains `.test.ts`-only,
+> with no DOM dependency or shared runner widening.
+>
+> **Rollback:** revert the three 15.4-03 task commits together. No schema, stored-document,
+> dependency, Drive scope, budget/reservation or backend rollback is required.
+
 > Last verified: 2026-08-04 (15.4-02 — **connected Nord Edge root/folder browse with honest
 > state handling and retained real actions.**) `/dashboard/vault` now uses a Vault-scoped plain
 > canvas, paper cards, semantic stat accents, responsive category/action rails and explicit

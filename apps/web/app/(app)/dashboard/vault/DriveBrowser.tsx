@@ -81,19 +81,21 @@ export function DriveBrowser() {
   if (status === undefined) return null;
 
   const box: React.CSSProperties = {
-    marginTop: "0.75rem",
-    padding: "0.9rem 1rem",
-    borderRadius: "12px",
-    border: "1px solid var(--rule)",
-    background: "var(--card)",
+    marginTop: "1rem",
+    padding: "clamp(1rem, 2.5vw, 1.5rem)",
+    borderRadius: "1rem",
+    border: "1px solid var(--vault-border)",
+    background: "var(--vault-paper)",
+    boxShadow: "var(--vault-shadow)",
     color: "var(--ink)",
     fontSize: "0.9rem",
   };
 
   if (!driveReady) {
     return (
-      <div style={box}>
-        <strong style={{ fontWeight: 600 }}>Import from Google Drive</strong>
+      <section className="clay-card" style={box} aria-labelledby="vault-drive-heading">
+        <p className="caps-label">Connected import</p>
+        <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>Import from Google Drive</h2>
         <p style={{ margin: "0.35rem 0 0.7rem", color: "var(--ink-soft)" }}>
           {status.connected
             ? "Your Google connection was made before Drive access existed. Reconnect to add it — nothing else changes."
@@ -101,6 +103,7 @@ export function DriveBrowser() {
         </p>
         <Link
           href="/connect-gmail"
+          className="vault-button vault-button-primary"
           style={{
             display: "inline-block",
             padding: "0.5rem 1rem",
@@ -113,7 +116,7 @@ export function DriveBrowser() {
         >
           {status.connected ? "Reconnect Google" : "Connect Google"}
         </Link>
-      </div>
+      </section>
     );
   }
 
@@ -163,8 +166,9 @@ export function DriveBrowser() {
   };
 
   return (
-    <div style={box}>
-      <strong style={{ fontWeight: 600 }}>Import from Google Drive</strong>
+    <section className="clay-card" style={box} aria-labelledby="vault-drive-heading">
+      <p className="caps-label">Connected import</p>
+      <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>Import from Google Drive</h2>
 
       {/* The trail. Every crumb is a button, including the current one — climbing back to where you
           already are is a harmless re-read, and disabling it costs an explanation. */}
@@ -193,6 +197,7 @@ export function DriveBrowser() {
             {i > 0 && <span aria-hidden>›</span>}
             <button
               type="button"
+              className="vault-button"
               onClick={() => climbTo(i)}
               style={{
                 border: "none",
@@ -239,6 +244,7 @@ export function DriveBrowser() {
           <li key={n.id} style={{ borderTop: "1px solid var(--rule)" }}>
             <button
               type="button"
+              className="vault-button"
               onClick={() => open(n)}
               style={{
                 display: "flex",
@@ -322,6 +328,7 @@ export function DriveBrowser() {
       >
         <button
           type="button"
+          className="vault-button vault-button-primary"
           onClick={runImport}
           disabled={busy || here.id === null}
           title={here.id === null ? "Open a folder first" : undefined}
@@ -358,6 +365,6 @@ export function DriveBrowser() {
           {note.text}
         </p>
       )}
-    </div>
+    </section>
   );
 }
