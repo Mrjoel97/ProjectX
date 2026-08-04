@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-05 against 112461e
+> Last verified: 2026-08-05 against 48c622b
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -107,6 +107,35 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
     consent or postal-footer enforcement.
 12. **Command Center only composes summaries.** Source loading/error/partial/unavailable semantics
     survive composition; a Pipeline error cannot erase or zero other cards.
+
+### Approvals read contract
+
+- `approvals.summary` is the single page-and-rail subscription. It reads only `proposed` rows through
+  `plans.by_tenant_status_createdAt`, returns the exact oldest timestamp, and reports at most `100`
+  as `awaitingCount` with `awaitingCountCapped: true` when more exist. The badge renders `100+`; it
+  must not start a second count query.
+- `listAwaiting`, `listScheduled`, and `listInFlight` use Convex's opaque index cursor and clamp every
+  requested page to `1..50`. Timestamp ties are therefore carried by the database cursor instead of
+  a timestamp-only cursor that could skip work. The public row is refs/enums/timestamps/counts only:
+  no tenant id, subject, body, recipients, candidate hints, attachment capability or raw plan row.
+- Scheduled rows with no legacy `sendAt` are `scheduleState: "legacy-unknown"`. In-flight and cleared
+  rows are exact only when `counterComplete` is true and all four counters form a valid total;
+  otherwise progress is `partial/legacy-window`, never inferred as zero.
+- `listCleared` requires an absolute `sinceMs`, queries `done` and `canceled` separately through the
+  same tenant/status/time index, merges them in the shared stable order, and caps the merged result at
+  50. A cap is returned as `partialReason: "row-cap"`. A canceled row without `cancelKind` is
+  `legacy-unknown`; cost remains `{state:"unknown"}` until the spend ledger owns coverage.
+- `listDecisions` scans at most 100 recent tenant evaluation rows and emits only code-owned financial
+  questions whose closed Scorecard field is still empty. `answerDecision` accepts three numeric paths
+  and one boolean path through a discriminated validator, rechecks that the latest tenant/thread row
+  still exposes the question, and then patches it atomically. Rendered text can never choose a field.
+- `blockedSummary` reads at most 21 unresolved tenant DLQs and returns only a capped count, oldest and
+  newest timestamps, and `/ops`. It never returns DLQ ids, correlation/workflow ids, payload, error,
+  notification body or a resolution control. Ops remains the only browser resolution surface.
+
+**Approvals rollback:** disable the route/nav and fall back to the originating cockpit thread,
+`/review`, `/requests`, and `/ops`. Keep the compound index, cancellation provenance, delivery
+counters and read adapter deployed; rollback never rewrites a legacy row or fabricates cost/progress.
 
 ## How to change safely
 
