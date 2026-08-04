@@ -12,6 +12,7 @@
       "!**/_generated",
       "!**/.next",
       "!**/dist",
+      "!.planning",
       "!docs/design/mockups",
       "!graphify-out",
       "!packages/core/src/__fixtures__/assembly/empty.json",
