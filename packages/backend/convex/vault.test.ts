@@ -187,8 +187,9 @@ describe("vaultSearch folder boundary", () => {
     const docA = await seedDoc(t, { title: "A doc", folderId: folderA });
     const docB = await seedDoc(t, { title: "B doc", folderId: folderB });
     const loose = await seedDoc(t, { title: "Loose doc" });
+    const foreign = await seedDoc(t, { title: "Foreign doc" }, "tenant_b");
 
-    const found = await smokeSearch(t, [docA, docB, loose]);
+    const found = await smokeSearch(t, [docA, docB, loose, foreign]);
 
     expect(found.map((doc) => doc._id)).toEqual([docA, docB, loose]);
   });
