@@ -35,7 +35,7 @@ patterns-established:
 
 requirements-completed: [DASH-01]
 
-duration: 9min
+duration: 13min
 completed: 2026-08-05
 ---
 
@@ -45,9 +45,9 @@ completed: 2026-08-05
 
 ## Performance
 
-- **Duration:** 9 min
+- **Duration:** 13 min
 - **Started:** 2026-08-04T22:42:00Z
-- **Completed:** 2026-08-04T22:51:07Z
+- **Completed:** 2026-08-04T22:55:49Z
 - **Tasks:** 2
 - **Files modified:** 5
 
@@ -56,7 +56,8 @@ completed: 2026-08-05
 - Added mutation-resistant coverage for half-open windows, explicit browser timezone fallback,
   coverage clamping, invalid bounds and all five USD money phases.
 - Added bounded-result honesty, deterministic newest-first ordering, versioned cursor round-trips and
-  code-owned loading/empty/ready/partial/busy/error/refusal copy.
+  a named `DashboardResult<T>` union with code-owned loading/empty/ready/partial/busy/error/refusal
+  states.
 - Registered an operational playbook for the exact new backend modules, route folders, Command Center
   files and six Phase 26 E2E specs without absorbing existing Cockpit, Vault, Media, Guardrails or
   Phase-19 Pipeline source ownership.
@@ -67,13 +68,14 @@ Each task was committed atomically:
 
 1. **Task 1 RED: Define contract boundaries** - `08073b3` (test)
 2. **Task 1 GREEN: Implement and export primitives** - `112461e` (feat)
-3. **Task 2: Register the operational boundary** - `7c4ae44` (docs)
+3. **Task 1 REFACTOR: Close the generic result vocabulary** - `0e510c5` (refactor)
+4. **Task 2: Register the operational boundary** - `7c4ae44` (docs)
 
 ## Files Created/Modified
 
 - `packages/core/src/dashboard.ts` - Pure window, timezone, money, bounded-result, cursor/order and
   page-state contracts.
-- `packages/core/src/dashboard.test.ts` - 20 boundary, mutation and non-vacuity tests.
+- `packages/core/src/dashboard.test.ts` - 21 boundary, mutation and non-vacuity tests.
 - `packages/core/src/index.ts` - Exports the dashboard contract module.
 - `docs/playbooks/dashboard-pages.md` - Authorization, data flow, rollout, verification and per-page
   rollback boundary.
@@ -106,7 +108,7 @@ None - plan implementation executed exactly as written.
 ## Verification
 
 - TDD RED: `pnpm --filter @pikar/core test -- dashboard` failed because `./dashboard` did not exist.
-- TDD GREEN/final: `pnpm --filter @pikar/core test -- dashboard` — 20/20 passed.
+- TDD GREEN/final: `pnpm --filter @pikar/core test -- dashboard` — 21/21 passed.
 - `pnpm --filter @pikar/core typecheck` — passed.
 - Watch registration assertion — passed all required exact prefixes and rejected broad/existing
   Cockpit, Vault, Media and Pipeline source ownership.
@@ -127,7 +129,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All five owned implementation/playbook files exist and are committed.
-- Task commits `08073b3`, `112461e` and `7c4ae44` exist in history.
+- Task commits `08073b3`, `112461e`, `0e510c5` and `7c4ae44` exist in history.
 - Summary claims match the executed test, typecheck and watcher outputs.
 
 ---
