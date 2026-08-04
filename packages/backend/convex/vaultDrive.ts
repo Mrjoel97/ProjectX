@@ -291,60 +291,54 @@ async function enumerateFolder(
  * imports. The default arm is `no_text_export`, not "import it anyway": an unrecognised native kind
  * is a kind we cannot export, and guessing produces an empty document rather than an error.
  */
+function classifyOne(f: DriveFile): Importable | { skip: DriveSkipCode } {
+  if (f.capabilities?.canDownload === false) return { skip: "no_download_permission" };
+  // A shortcut is a pointer, not content. `targetId` would need a second resolution pass and the
+  // target may live outside the folder the user picked — importing it would pull in a document
+  // they did not choose.
+  if (f.shortcutDetails !== undefined || f.mimeType === "application/vnd.google-apps.shortcut")
+    return { skip: "shortcut_unresolved" };
+  if (NO_TEXT_EXPORT.has(f.mimeType)) return { skip: "no_text_export" };
+
+  const isNative = f.mimeType.startsWith("application/vnd.google-apps.");
+  const exportMime = EXPORT_TARGET[f.mimeType];
+  // The explicit default — an unrecognised native kind is never silently skipped.
+  if (isNative && exportMime === undefined) return { skip: "no_text_export" };
+
+  const size = f.size === undefined ? undefined : Number(f.size);
+  // §A6: THE CAP, BEFORE THE BYTES. A native file has no size and is bounded instead by Drive's
+  // own 10 MB export limit, enforced at export time; everything else is a real download into a
+  // ~512 MB action and is refused here, on metadata, while refusing is still free.
+  if (!isNative && size !== undefined && Number.isFinite(size)) {
+    const isVideo = f.mimeType.startsWith("video/");
+    if (size > (isVideo ? VAULT_VIDEO_CAP_BYTES : VAULT_FILE_CAP_BYTES))
+      return { skip: isVideo ? "over_video_cap" : "over_file_cap" };
+  }
+
+  return {
+    driveFileId: f.id,
+    name: f.name,
+    mimeType: exportMime ?? f.mimeType,
+    exportMime,
+    estBytes: estimatedBytesFor({ mimeType: f.mimeType, size }),
+    modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : 0,
+  };
+}
+
+const isSkip = (r: Importable | { skip: DriveSkipCode }): r is { skip: DriveSkipCode } =>
+  "skip" in r;
+
 function classify(files: DriveFile[]): {
   importable: Importable[];
   skipped: { code: DriveSkipCode }[];
 } {
   const importable: Importable[] = [];
   const skipped: { code: DriveSkipCode }[] = [];
-
   for (const f of files) {
-    if (f.capabilities?.canDownload === false) {
-      skipped.push({ code: "no_download_permission" });
-      continue;
-    }
-    // A shortcut is a pointer, not content. `targetId` would need a second resolution pass and the
-    // target may live outside the folder the user picked — importing it would pull in a document
-    // they did not choose.
-    if (f.shortcutDetails !== undefined || f.mimeType === "application/vnd.google-apps.shortcut") {
-      skipped.push({ code: "shortcut_unresolved" });
-      continue;
-    }
-    if (NO_TEXT_EXPORT.has(f.mimeType)) {
-      skipped.push({ code: "no_text_export" });
-      continue;
-    }
-
-    const isNative = f.mimeType.startsWith("application/vnd.google-apps.");
-    const exportMime = EXPORT_TARGET[f.mimeType];
-    if (isNative && exportMime === undefined) {
-      skipped.push({ code: "no_text_export" }); // the explicit default — never a silent skip
-      continue;
-    }
-
-    const size = f.size === undefined ? undefined : Number(f.size);
-    // §A6: THE CAP, BEFORE THE BYTES. A native file has no size and is bounded instead by Drive's
-    // own 10 MB export limit, enforced at export time; everything else is a real download into a
-    // ~512 MB action and is refused here, on metadata, while refusing is still free.
-    if (!isNative && size !== undefined && Number.isFinite(size)) {
-      const isVideo = f.mimeType.startsWith("video/");
-      const cap = isVideo ? VAULT_VIDEO_CAP_BYTES : VAULT_FILE_CAP_BYTES;
-      if (size > cap) {
-        skipped.push({ code: isVideo ? "over_video_cap" : "over_file_cap" });
-        continue;
-      }
-    }
-
-    importable.push({
-      driveFileId: f.id,
-      name: f.name,
-      mimeType: exportMime ?? f.mimeType,
-      exportMime,
-      estBytes: estimatedBytesFor({ mimeType: f.mimeType, size }),
-      modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : 0,
-    });
+    const r = classifyOne(f);
+    if (isSkip(r)) skipped.push({ code: r.skip });
+    else importable.push(r);
   }
-
   return { importable, skipped };
 }
 
@@ -355,8 +349,16 @@ function classify(files: DriveFile[]): {
  *  drive as a drive rather than as a folder; both are addressable as a `parents` id. */
 export type DriveNode = { id: string; name: string; kind: "folder" | "shared_drive" };
 
+/** One FILE in the browsed level. `readable` is the pre-flight verdict from the SAME classifier the
+ *  import runs, so what the picker promises and what the import does cannot drift apart. */
+export type DriveEntry = { id: string; name: string; readable: boolean; code?: DriveSkipCode };
+
 const FOLDER_Q = `mimeType='${FOLDER_MIME}' and trashed=false`;
 const NODE_FIELDS = "nextPageToken,files(id,name)";
+/** Everything `classifyOne` reads, so a browsed level can answer "can this be read?" without a
+ *  second round-trip per file. */
+const BROWSE_FIELDS =
+  "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload)";
 
 /** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
  *  reading a list, and 100 folders in one directory is already past what anyone scans. */
@@ -372,7 +374,7 @@ async function folderPage(token: string, q: string): Promise<DriveNode[]> {
 
 export type DriveBrowseResult =
   | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" }
-  | { ok: true; folders: DriveNode[] };
+  | { ok: true; folders: DriveNode[]; files: DriveEntry[]; truncated: boolean };
 
 /**
  * List the folders the user can pick, one level at a time. **THIS IS THE PICKER**, and we render it
@@ -412,11 +414,43 @@ export const listDriveFolders = tenantAction({
         reason: access.reason === "not_connected" ? "not_connected" : "refresh_failed",
       };
 
+    // INSIDE A FOLDER: ONE `files.list`, NOT TWO, and deliberately WITHOUT the folder filter.
+    //
+    // The first cut filtered on `mimeType='...folder'` and returned folders alone — which threw
+    // away exactly the information the user needs to choose. There was then no way to tell an empty
+    // folder from one holding 200 documents until you pressed Import and were told. Dropping the
+    // filter and splitting the result here is the SAME single request, not an extra one.
     if (parentId !== undefined) {
-      return {
-        ok: true,
-        folders: await folderPage(access.token, `'${parentId}' in parents and ${FOLDER_Q}`),
-      };
+      const res = await driveFetch(
+        driveUrl("", {
+          q: `'${parentId}' in parents and trashed=false`,
+          fields: BROWSE_FIELDS,
+          pageSize: "200",
+          includeItemsFromAllDrives: "true",
+        }),
+        access.token,
+      );
+      if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+      const body = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
+      const entries = body.files ?? [];
+
+      const folders: DriveNode[] = [];
+      const files: DriveEntry[] = [];
+      for (const f of entries) {
+        if (f.mimeType === FOLDER_MIME) {
+          folders.push({ id: f.id, name: f.name, kind: "folder" });
+          continue;
+        }
+        // The SAME classifier the import runs, so "can't be read" here and "skipped" there can
+        // never disagree — the count the user approves is the count that imports.
+        const r = classifyOne(f);
+        files.push({
+          id: f.id,
+          name: f.name,
+          ...(isSkip(r) ? { readable: false, code: r.skip } : { readable: true }),
+        });
+      }
+      return { ok: true, folders, files, truncated: body.nextPageToken !== undefined };
     }
 
     const [drives, mine, shared] = await Promise.all([
@@ -439,7 +473,10 @@ export const listDriveFolders = tenantAction({
     // Dedup by id: a folder can legitimately appear in more than one of the three lists.
     const byId = new Map<string, DriveNode>();
     for (const n of [...drives, ...mine, ...shared]) if (!byId.has(n.id)) byId.set(n.id, n);
-    return { ok: true, folders: [...byId.values()] };
+    // No files at the ROOT level: the root is a merged view of three lists and is not itself
+    // importable (there is no folder id to import), so loose files there would be shown with no
+    // action attached to them.
+    return { ok: true, folders: [...byId.values()], files: [], truncated: false };
   },
 });
 

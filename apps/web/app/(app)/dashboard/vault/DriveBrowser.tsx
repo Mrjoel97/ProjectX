@@ -18,7 +18,18 @@ import { useCallback, useEffect, useState } from "react";
 // Drive. A picker that trusted `connected` would open, fire a request, and 403 on the first click.
 
 type Node = { id: string; name: string; kind: "folder" | "shared_drive" };
+type Entry = { id: string; name: string; readable: boolean; code?: string };
 type Crumb = { id: string | null; name: string };
+
+/** Why a file cannot be read, in the user's words. The codes are the server's; these are not.
+ *  An unmapped code falls back to the honest generic rather than printing an identifier. */
+const WHY: Record<string, string> = {
+  no_download_permission: "you do not have permission to download it",
+  shortcut_unresolved: "it is a shortcut, not a file",
+  no_text_export: "this Google file type has no text to extract",
+  over_file_cap: "it is over the 200 MB limit",
+  over_video_cap: "video is capped at 25 MB",
+};
 
 /** What the import returned, as one sentence. */
 type Note = { tone: "ok" | "warn"; text: string };
@@ -32,6 +43,7 @@ export function DriveBrowser() {
   // root sentinel (`id: null`) — Drive's root is not a folder id we own, it is three merged lists.
   const [trail, setTrail] = useState<Crumb[]>([{ id: null, name: "Drive" }]);
   const [nodes, setNodes] = useState<Node[] | null>(null);
+  const [files, setFiles] = useState<Entry[]>([]);
   const [note, setNote] = useState<Note | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,6 +53,7 @@ export function DriveBrowser() {
   const load = useCallback(
     async (parentId: string | null) => {
       setNodes(null);
+      setFiles([]);
       const r = await listFolders(parentId === null ? {} : { parentId });
       if (!r.ok) {
         setNodes([]);
@@ -54,6 +67,7 @@ export function DriveBrowser() {
         return;
       }
       setNodes(r.folders);
+      setFiles(r.files);
     },
     [listFolders],
   );
@@ -212,8 +226,14 @@ export function DriveBrowser() {
         {nodes === null && (
           <li style={{ padding: "0.7rem 0.85rem", color: "var(--ink-soft)" }}>Reading Drive…</li>
         )}
-        {nodes?.length === 0 && (
-          <li style={{ padding: "0.7rem 0.85rem", color: "var(--ink-soft)" }}>No folders here.</li>
+        {/* "No folders here" ONLY when there are no files either. Saying it beside a list of
+            twelve documents reads as "this folder is empty" and it is not — that ambiguity is
+            what sent two perfectly good imports down the empty_folder path before files were
+            listed at all. */}
+        {nodes?.length === 0 && files.length === 0 && (
+          <li style={{ padding: "0.7rem 0.85rem", color: "var(--ink-soft)" }}>
+            Nothing here — no folders and no files.
+          </li>
         )}
         {nodes?.map((n) => (
           <li key={n.id} style={{ borderTop: "1px solid var(--rule)" }}>
@@ -247,7 +267,49 @@ export function DriveBrowser() {
             </button>
           </li>
         ))}
+
+        {/* Files are SHOWN, never clickable: the unit of import is the folder, so a file row that
+            looked pressable would promise a selection this rail does not have. Their only job is to
+            answer "is there anything in here, and will it come across?" before the button is
+            pressed. */}
+        {files.map((f) => (
+          <li
+            key={f.id}
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: "0.5rem",
+              padding: "0.55rem 0.85rem",
+              borderTop: "1px solid var(--rule)",
+              color: f.readable ? "var(--ink)" : "var(--ink-soft)",
+            }}
+          >
+            <span aria-hidden>{f.readable ? "📄" : "⃠"}</span>
+            <span style={{ flex: 1 }}>{f.name}</span>
+            {!f.readable && (
+              <span style={{ fontSize: "0.75rem" }}>
+                can’t be read — {(f.code && WHY[f.code]) ?? "this file type is not supported"}
+              </span>
+            )}
+          </li>
+        ))}
       </ul>
+
+      {/* ⚠ THE COUNT IS THIS LEVEL; THE IMPORT IS THE WHOLE TREE. Enumeration recurses, so a
+          folder with subfolders takes across more than what is listed above. Saying only "N files
+          here" beside a button that pulls in five subfolders would be a quiet lie. */}
+      {nodes !== null && (files.length > 0 || (nodes.length > 0 && here.id !== null)) && (
+        <p style={{ margin: "0.5rem 0 0", color: "var(--ink-soft)", fontSize: "0.82rem" }}>
+          {files.length > 0
+            ? `${files.length} file${files.length === 1 ? "" : "s"} here`
+            : "No files at this level"}
+          {files.some((f) => !f.readable) &&
+            ` (${files.filter((f) => !f.readable).length} can’t be read)`}
+          {nodes.length > 0 &&
+            `, plus everything inside ${nodes.length} subfolder${nodes.length === 1 ? "" : "s"} — importing takes all of it`}
+          .
+        </p>
+      )}
 
       <div
         style={{

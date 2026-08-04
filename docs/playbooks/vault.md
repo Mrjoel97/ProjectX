@@ -1,5 +1,31 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-05 (15.3-09 follow-up 2 — **THE PICKER NOW SHOWS THE FILES, from the SAME
+> single request.**)
+>
+> The folder-only browse threw away exactly the information the user needs to choose: there was no
+> way to tell an empty folder from one holding 200 documents until you pressed Import and were told
+> `empty_folder`. Two real folders were probed that way during the live run before this landed. The
+> fix is CHEAPER than what it replaces — drop the `mimeType='...folder'` filter, keep ONE
+> `files.list` per level, and split folders from files server-side.
+>
+> Files are SHOWN, never clickable: the unit of import is the folder, so a pressable file row would
+> promise a selection this rail does not have. Each file carries a `readable` verdict from
+> `classifyOne` — **the SAME function the import runs**, extracted from `classify` for this reuse.
+> That is what stops the picker and the import from disagreeing, and a test pins `classifyOne` at
+> three-plus call sites so growing a second copy goes red.
+>
+> **⚠ THE COUNT IS THE LEVEL; THE IMPORT IS THE TREE.** Enumeration recurses, so the copy reads
+> "N files here, plus everything inside M subfolders — importing takes all of it". Print the count
+> alone beside that button and it is a quiet lie.
+>
+> **⚠ THE MUTATION THAT CAUGHT THE TEST, AND THE RULE IT LEAVES.** Restoring the folder-only filter
+> left all 13 tests GREEN. A stub answers with whatever it was told to answer, so asserting on the
+> RESPONSE cannot see a query that changed — the split is client-side and the fixture was unchanged.
+> The test now reads the `q` parameter off `fetchSpy.mock.calls` and asserts the folder filter is
+> absent. **When a stubbed test covers behaviour that lives in the REQUEST, assert on the request.**
+> Same class as the shared-drive params, which is why those are a source scan rather than a stub.
+
 > Last verified: 2026-08-05 (15.3-09 follow-up — **WE RENDER THE DRIVE PICKER OURSELVES, and the
 > link-paste entry point is DELETED.**)
 >

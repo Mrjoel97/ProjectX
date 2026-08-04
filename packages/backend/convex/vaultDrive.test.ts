@@ -5,6 +5,7 @@
 // its failure mode has no observable behaviour to assert on — Drive answers a param-less request
 // with HTTP 200 and an empty file list, so the bug looks exactly like an empty folder. A stub
 // cannot catch what a stub is free to return.
+import { readFileSync } from "node:fs";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -139,12 +140,10 @@ describe("a pre-widening grant reauths BEFORE any Drive network call", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     expect(
-      await t
-        .withIdentity({ subject: TENANT })
-        .action(api.vaultDrive.importDriveFolder, {
-          driveFolderId: DRIVE_FOLDER,
-          name: "Q3",
-        }),
+      await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.importDriveFolder, {
+        driveFolderId: DRIVE_FOLDER,
+        name: "Q3",
+      }),
     ).toEqual({ ok: false, reason: "not_connected" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -158,14 +157,86 @@ describe("a pre-widening grant reauths BEFORE any Drive network call", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     expect(
-      await t
-        .withIdentity({ subject: TENANT })
-        .action(api.vaultDrive.importDriveFolder, {
-          driveFolderId: "abc' or '1'='1",
-          name: "Q3",
-        }),
+      await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.importDriveFolder, {
+        driveFolderId: "abc' or '1'='1",
+        name: "Q3",
+      }),
     ).toEqual({ ok: false, reason: "bad_folder_id" });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── 1b. Browsing: one request, split into folders and files ───────────────────
+
+describe("a browsed level shows what is in it, not just its subfolders", () => {
+  // The picker's first cut filtered on `mimeType='...folder'` and returned folders alone, so a
+  // folder holding 200 documents and an empty one looked identical until you pressed Import. The
+  // fix is the SAME single request with the filter dropped, split here.
+  test("folders navigate, files are listed, and unreadable files say so", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+
+    // URL-AWARE, because `freshAccessToken` POSTs the token endpoint first. A stub that answers
+    // every request with the same body hands the refresh a file list, and `updateAccess` then
+    // rejects the undefined access_token — which looks like a Drive bug and is not one.
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (!String(url).includes("/drive/v3/"))
+        return Response.json({ access_token: "fresh", expires_in: 3600 });
+      return Response.json({
+        files: [
+          { id: "sub", name: "Sub", mimeType: "application/vnd.google-apps.folder" },
+          { id: "doc", name: "Strategy", mimeType: DOC_MIME, modifiedTime: "2026-01-01T00:00:00Z" },
+          { id: "form", name: "Survey", mimeType: "application/vnd.google-apps.form" },
+          {
+            id: "huge",
+            name: "Raw.mp4",
+            mimeType: "video/mp4",
+            size: String(900 * 1000 * 1000),
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const r = await t
+      .withIdentity({ subject: TENANT })
+      .action(api.vaultDrive.listDriveFolders, { parentId: DRIVE_FOLDER });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.folders.map((f) => f.id)).toEqual(["sub"]);
+    expect(r.files).toEqual([
+      { id: "doc", name: "Strategy", readable: true },
+      { id: "form", name: "Survey", readable: false, code: "no_text_export" },
+      { id: "huge", name: "Raw.mp4", readable: false, code: "over_video_cap" },
+    ]);
+
+    // ⚠ ASSERT ON THE REQUEST, NOT ONLY ON THE RESPONSE. A stub answers with whatever it was told
+    // to answer, so every assertion above still passes if the query goes back to asking for
+    // folders ONLY — the split is client-side and the fixture is unchanged. The mutation run
+    // proved that: restoring `mimeType='...folder'` left all 13 tests green. The query itself is
+    // the thing that regressed, so the query itself is what has to be checked.
+    const driveCalls = fetchSpy.mock.calls.filter((c) => String(c[0]).includes("/drive/v3/files"));
+    expect(driveCalls, "the level must cost ONE request, not one per kind").toHaveLength(1);
+
+    const q = new URL(String(driveCalls[0]?.[0])).searchParams.get("q") ?? "";
+    expect(q, "the browse query lost its parent scope").toContain("in parents");
+    expect(
+      q,
+      "the browse query filters to folders — mutation: put `mimeType='...folder'` back. The user " +
+        "then cannot tell an empty folder from one holding 200 documents until they press Import.",
+    ).not.toContain("google-apps.folder");
+  });
+
+  // The classifier is SHARED with the import on purpose: what the picker promises and what the
+  // import does cannot drift apart if there is only one function deciding.
+  test("the browse verdict is the import's verdict — one classifier, not two", () => {
+    const src = readFileSync(new URL("./vaultDrive.ts", import.meta.url), "utf8");
+    expect(
+      (src.match(/classifyOne\(/g) ?? []).length,
+      "classifyOne has fewer than two call sites — the browse and the import have drifted apart, " +
+        "so a file the picker calls readable can still be skipped at import time.",
+    ).toBeGreaterThanOrEqual(3); // 1 definition + the import's classify() + the browse
   });
 });
 
