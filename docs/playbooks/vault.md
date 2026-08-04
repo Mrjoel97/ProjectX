@@ -1,5 +1,26 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-04 (15.4-01 — **Vault search now honors the folder being browsed without
+> changing root search or the schema.**) `vaultSearch` accepts an optional `folderId`; its bounded
+> hybrid candidates resolve through search-only metadata, then pass tenant ownership, ingesting-folder
+> sealing, folder equality and optional category intersection before the public refs-only projection.
+> A foreign and a missing folder ID both return `[]`, so the widened contract is not an ownership
+> oracle. Omitting `folderId` preserves tenant-wide root search and candidate order.
+>
+> **Public shape and shared-resolver invariant:** results remain exactly `{ _id, title, category }` —
+> never `text`, `tenantId`, content hashes, filenames or resolver-only `folderId`. Grounding's shared
+> `ownedDocsMeta` resolver is unchanged because its order is index-parallel with title arrays.
+>
+> **Focused verification:**
+> `pnpm --filter @pikar/backend test -- vault.test.ts vaultFolders.test.ts vaultSealing.test.ts`
+> (61/61). Mutation proof: deleting only `d.folderId === folderId` returned folder B from a folder-A
+> search and made the same-tenant cross-folder test red. Backend typecheck and
+> `node scripts/check-playbooks.mjs` are the static gates.
+>
+> **Rollback:** revert the 15.4-01 search implementation and regression-test commits together. No
+> migration, backfill, index or stored-document rollback is required; callers that omit `folderId`
+> retain the prior contract throughout.
+
 > Last verified: 2026-08-05 (15.3-09 follow-up 2 — **THE PICKER NOW SHOWS THE FILES, from the SAME
 > single request.**)
 >
