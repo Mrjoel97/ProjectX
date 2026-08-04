@@ -47,3 +47,21 @@ graphify-out/20[0-9][0-9]-*/
 
 # 16-09: detached eval run logs + pid files (launch-detached.ps1)
 packages/backend/.eval-runs/
+
+# Backups of the local env file. `.env.local` is ignored above, but a `.bak-*` suffix escapes
+# both patterns — which is how two of them ended up untracked-but-visible. Close the class, so a
+# future backup of a file that DOES hold secrets cannot be committed by accident.
+.env.local.bak*
+.env.*.bak*
+
+# Python bytecode from the Skills/ scripts.
+__pycache__/
+*.pyc
+
+# Source ebooks under Skills/. The authored skill content (SKILL.md, the playbooks, the scripts)
+# IS committed; the PDFs they were written from are not. Three reasons, in order: they are ~31 MB
+# of binaries that would sit in git history permanently and irreversibly; they are commercially
+# published books; and nothing in the build reads them — `growth-os-skill-suite` already records
+# that the PDFs are deliberately not ingested.
+Skills/**/*.pdf
+Skills/*.pdf
