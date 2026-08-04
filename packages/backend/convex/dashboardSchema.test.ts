@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import { readFileSync } from "node:fs";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
