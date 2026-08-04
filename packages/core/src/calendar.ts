@@ -7,9 +7,25 @@
 // alphabet is a few lines and stays synchronous.
 
 /** Read-only free/busy. Deliberately NOT `calendar.readonly`: `freeBusy.query` returns only busy
- *  `{start,end}` intervals, so event titles and attendee addresses never enter the system at all.
- *  That deletes the §4 / §2-D PII problem BY CONSTRUCTION rather than by a redaction layer. */
+ *  `{start,end}` intervals, so event titles and attendee addresses cannot come back from THAT CALL
+ *  whatever anyone writes downstream. Taking `calendar.readonly` would have handed us the details on
+ *  every availability check. That decision stands.
+ *
+ *  ⚠ **THIS COMMENT USED TO CLAIM THE PII PROBLEM WAS DELETED "BY CONSTRUCTION". IT IS NOT, AND THE
+ *  OVERSTATEMENT WAS THE DANGEROUS PART.** The scope below is READ-WRITE and permits viewing event
+ *  titles, attendees and descriptions. What keeps event details out of the system today is that
+ *  NOBODY WROTE THE CALL — there is no `events.list`, no `events.get` and no GET against the events
+ *  URL anywhere. That is a property of the CODE, not a ceiling of the grant, so it holds only as
+ *  long as it keeps being true. `dispatchGuard.test.ts` does NOT cover it: its calendar tests count
+ *  POST targets, and an `events.list` GET satisfies them.
+ *
+ *  Reading event details is a direction this product intends to take (owner, 2026-08-05), so the
+ *  gap is open on purpose. It needs NO new consent — which is exactly why the obligations that come
+ *  with it are written down in `docs/playbooks/cockpit.md` rather than left to be rediscovered:
+ *  the consent copy must widen, and the §4 redaction rails become live for that path. */
 export const CALENDAR_FREEBUSY_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+/** Read-WRITE on events. Used today ONLY for `events.insert` (the approved-plan write). See the
+ *  warning above before adding any read against it. */
 export const CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 

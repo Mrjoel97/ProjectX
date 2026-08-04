@@ -1,5 +1,54 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (calendar scope honesty — **THE GRANT PERMITS READING EVENT DETAILS.
+> THE CODE DOES NOT. THAT GAP IS DELIBERATE AND IS A DIRECTION, NOT A GUARANTEE.** No code changed;
+> a claim was corrected.)
+>
+> `calendar.ts:9-11` said the free/busy scope choice deletes the §4 / §2-D PII problem "BY
+> CONSTRUCTION". **That was overstated, and the overstatement is the dangerous part.** What is true:
+>
+> - **`calendar.freebusy` genuinely does bound the availability path.** `freeBusy.query` returns only
+>   `{start,end}` intervals, so event titles and attendee addresses cannot come back from THAT call
+>   whatever anyone writes downstream. Taking `calendar.readonly` instead would have handed us the
+>   details on every availability check. That decision stands and should not be revisited.
+> - **But the grant also carries `CALENDAR_EVENTS_SCOPE`, and `calendar.events` is READ-WRITE.** It
+>   permits viewing and editing events — titles, attendees, descriptions. The ceiling is not where
+>   the comment implied it was.
+> - **What actually keeps event details out of the system today is that NOBODY WROTE THE CALL.**
+>   `calendar/v3/calendars` appears in exactly ONE non-test module on ONE line, used only by the
+>   insert POST; there is no `events.list`, no `events.get`, no GET against that URL anywhere. That
+>   is a property of the CODE, not of the scope.
+>
+> **⚠ THE CONSEQUENCE, WHICH IS WHY THIS IS WRITTEN DOWN.** Reading event details needs **NO new
+> consent, no re-authorisation and no user-visible signal** — the existing grant already permits it.
+> A single `events.list` call would work on the next deploy against every already-connected tenant.
+>
+> **⚠ AND `dispatchGuard.test.ts` WOULD NOT CATCH IT.** Its calendar tests count POST targets and
+> assert the events URL has exactly one owning module. An `events.list` **GET** inside `calendar.ts`
+> satisfies both and lands silently. Do not read those tests as covering event reads; they do not.
+>
+> **THE DIRECTION, decided by the owner 2026-08-05:** reading event details IS somewhere this
+> product intends to go — "what does my Tuesday look like", "move my 3pm" need the event, not the
+> interval. So the gap is left open on purpose rather than closed with a guard. **What must happen
+> when it lands, none of which is optional:**
+>
+> 1. **The consent copy changes.** `connect-gmail/page.tsx` currently promises "check calendar
+>    availability" — reading titles and attendees is materially more than that, and the user agreed
+>    to the smaller sentence. `connectionsSurface.test.ts` sweeps capability NAMES, not granularity,
+>    so it will NOT fail on this. It is a human obligation, not a test-caught one.
+> 2. **The PII rails become live for this path.** Event titles and attendee addresses are user
+>    content: they may never reach an `audit` payload, a `deadLetters` payload or a step-trace row
+>    (CLAUDE.md §3/§4), and they must be redacted before any model call that is not the one
+>    consuming them. Free/busy made a redaction layer unnecessary; event reads make it necessary.
+> 3. **The scope stops being enough of an answer.** Today "we only see busy intervals" is honest
+>    because of the absent call. The moment the call exists, that sentence must come out of every
+>    surface that says it — including this playbook.
+>
+> Unchanged and still true: the model can STAGE a calendar event and can never book one
+> (`llm.ts` references `internal.calendar.freeBusy` and nothing else — one line, 1540), and event
+> bodies can carry neither `attendees` nor `sendUpdates`. Both remain test-enforced with named
+> mutations.
+
 > Last verified: 2026-08-05 (15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
 > GRANT, AND THAT IS A CONSENT DEFECT, NOT A WORDING ONE.**)
 >
