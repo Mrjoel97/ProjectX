@@ -596,7 +596,7 @@ Plans:
   3. Search within an open folder cannot return documents from another folder; root/category search retains its current tenant-scoped behavior.
   4. Category tabs do not claim exact counts until a bounded counter contract exists, and all loading, error, empty, partial-ingest and stale-digest states remain honest.
   5. Backend/component tests, production build and browser UAT cover the redesigned states and scoped-search boundary.
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 - [x] 15.4-01-PLAN.md — Server-scoped folder search contract with isolation/sealing regression tests (Wave 1)

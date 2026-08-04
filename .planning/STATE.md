@@ -2,9 +2,24 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_plan: 7 (done)
+status: verifying
+stopped_at: Completed 15.4-02-PLAN.md
+last_updated: "2026-08-04T18:54:21.493Z"
+progress:
+  total_phases: 45
+  completed_phases: 29
+  total_plans: 252
+  completed_plans: 238
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 15.3
 current_plan: 9 (done)
-status: in_progress
+status: Phase complete — ready for verification
 stopped_at: "**PHASE 15.3 IS 9/9 AND OWNER-APPROVED. THE LIVE GATE IS PARTIAL — READ THE SECOND HALF OF THIS BEFORE CLAIMING VALT-13.** 15.3-09 shipped the Google Drive rail (commit cf675c7) plus TWO owner-directed follow-ups. **(1) d677d84 — WE RENDER THE DRIVE PICKER OURSELVES.** The plan shipped a paste-a-Drive-link field; the owner rejected it on sight and was right — if the user must open Drive, navigate and copy a URL, they are already in Drive and may as well drag the files in. DriveBrowser.tsx is a breadcrumb + one-level-at-a-time folder list over a new listDriveFolders. **Google's Picker SDK is deliberately NOT mounted and that is not a compromise:** the Picker exists to make the NARROW drive.file scope usable, and we took drive.readonly, so files.list already returns the folders and we draw them with our own tokens — no external apis.google.com script, no API key, no app id, no CSP hole. THE SCOPE CHOICE IS WHAT MADE THE PICKER CHEAP; do not restore the Picker without re-opening the scope decision. **THE ROOT LEVEL IS THREE LISTS, NOT ONE** (drives.list + 'root' in parents + sharedWithMe) — collapse them and a user whose company runs on a shared drive is told they have no folders; drives.list 403s on a personal account and degrades to empty, which is an ordinary shape of this feature. dispatchGuard now LOOPS over BOTH Drive actions for scope-before-refresh, because the browse is what a pre-widening tenant hits FIRST. **(2) 39522a1 — THE PICKER SHOWS THE FILES, FROM THE SAME SINGLE REQUEST.** Folder-only browsing meant an empty folder and one holding 200 documents looked identical until you pressed Import; TWO REAL FOLDERS WERE PROBED THAT WAY DURING THE GATE. The fix is CHEAPER than what it replaced — drop the mimeType folder filter, keep ONE files.list per level, split server-side. Files are shown but NEVER clickable (the unit of import is the folder), each carrying a readable verdict from classifyOne — THE SAME FUNCTION THE IMPORT RUNS, extracted for this reuse so the picker and the import cannot disagree; a test pins classifyOne at 3+ call sites. The count is the LEVEL and the import is the TREE, and the copy says so. **A MUTATION CAUGHT MY OWN TEST BEING VACUOUS TWICE IN THIS PLAN.** (a) the audit name-leak scan tested for `name:` and the SHORTHAND `name,` walked straight through; (b) restoring the folder-only filter left all 13 tests GREEN, because a stub answers with whatever it was told to answer, so asserting on the RESPONSE cannot see a QUERY that changed. **RULE, now in vault.md: when a stubbed test covers behaviour that lives in the REQUEST, assert on the request** — same class as the shared-drive params, which is why those are a source scan. **WHAT THE LIVE RUN PROVED (real Google account, local deployment, 2026-08-05):** the scope widening reaches a real consent; **the reauth gate fired against a genuinely pre-widening token** (the vault said 'your Google connection was made before Drive access existed' while Gmail and Calendar kept working — driveReady distinguishing connected from Drive-ready, live); files.list returned TEN REAL ROOT FOLDERS; drill-down and the breadcrumb work against real subfolders; the empty_folder guard refused rather than creating an empty folder and calling it complete; the file listing reads 'No files at this level, plus everything inside 18 subfolders' and 'Nothing here — no folders and no files', WHICH IS WHAT SETTLED THAT THE EARLIER empty_folder RETURNS WERE CORRECT AND NOT AN ENUMERATION BUG. **WHAT HAS NEVER RUN, AND IS STILL OWED — DO NOT READ OWNER APPROVAL AS THESE BEING DONE:** (1) **THE IMPORT PATH ITSELF.** No document has ever been exported from Drive and landed in the vault; every folder opened during the gate was empty, so exportOne -> landFile -> the fan-in -> walkFolderMembers -> the digest has NEVER executed against real bytes, and ZERO CENTS have been spent on this rail. The reservation, the dedup branch, the re-import diff and folder completion are unit-proven and live-UNproven. (2) **THE SHARED-DRIVE HALF.** No shared drive surfaced for that account, so supportsAllDrives/includeItemsFromAllDrives have still never been exercised against a real one — the failure whose live symptom is a SILENTLY EMPTY FOLDER, and the reason the source scan exists. A stub proves we SEND them; only a real shared drive proves Google honours them. **VALT-13 and the Phase-15.3 checkbox stay UNTICKED** (the Phase-17 human_needed convention): one import of a POPULATED folder closes item 1, access to ANY shared drive closes item 2. Full suite 9/9 packages (backend 1177/1177), backend typecheck at the exact 15-error baseline with zero non-test, apps/web typecheck 0, web build green, check-playbooks exit 0. Servers left running during the session: convex dev on :3210 and next start on :3000."
 last_updated: "2026-08-05T02:55:00.000Z"
 progress:
@@ -1709,6 +1724,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
 | Phase 17 P04 | 12h 1m | 3 tasks | 5 files |
 | Phase 17.1 P09 | 25 min | 2 tasks | 5 files |
+| Phase 15.4 P02 | 40min | 4 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -1891,6 +1907,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: BlueprintPanel owns its Blueprint query and build action, leaving both existing profile writers untouched.
 - [Phase 17.1]: Turning the all-additions group off blocks confirmation; discard is the backend-supported all-or-nothing rejection path.
 - [Phase 17.1]: Contradiction selections update only the confirmed Blueprint and never rewrite the narrative profile.
+- [Phase 15.4]: Folder browse sends folderId without root category context so search matches the complete member list.
+- [Phase 15.4]: Browse content, partial ingest, and stale digest remain independent view-state axes.
+- [Phase 15.4]: Nord Edge styling stays beneath the Vault root and does not change shared pane or clay semantics.
 
 ### Pending Todos
 
@@ -1922,8 +1941,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-04T17:13:43Z
-Stopped at: Completed 15.4-01-PLAN.md; next 15.4-02
+Last session: 2026-08-04T18:54:21.467Z
+Stopped at: Completed 15.4-02-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
@@ -1934,4 +1953,4 @@ Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: .planning/phases/15.3-vault-folders-folder-ingest-synthesis-and-drill-in/15.3-CONTEXT.md
+Resume file: None
