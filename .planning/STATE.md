@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: verifying
-stopped_at: Completed 15.4-02-PLAN.md
-last_updated: "2026-08-04T18:54:21.493Z"
+stopped_at: Completed 15.4-03-PLAN.md
+last_updated: "2026-08-04T19:25:30.749Z"
 progress:
   total_phases: 45
   completed_phases: 29
   total_plans: 252
-  completed_plans: 238
+  completed_plans: 239
 ---
 
 ---
@@ -1725,6 +1725,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17 P04 | 12h 1m | 3 tasks | 5 files |
 | Phase 17.1 P09 | 25 min | 2 tasks | 5 files |
 | Phase 15.4 P02 | 40min | 4 tasks | 11 files |
+| Phase 15.4 P03 | 23 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -1910,6 +1911,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 15.4]: Folder browse sends folderId without root category context so search matches the complete member list.
 - [Phase 15.4]: Browse content, partial ingest, and stale digest remain independent view-state axes.
 - [Phase 15.4]: Nord Edge styling stays beneath the Vault root and does not change shared pane or clay semantics.
+- [Phase 15.4]: Preview content state and action capability are derived independently so unavailable data cannot arm a governed control.
+- [Phase 15.4]: The destructive Vault delete adapter exists only after explicit confirmation is visible.
+- [Phase 15.4]: Preview and import styling reuses Vault-scoped Plan-02 tokens without widening global CSS, Drive scope, budget, reservation, or backend contracts.
 
 ### Pending Todos
 
@@ -1941,8 +1945,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-04T18:54:21.467Z
-Stopped at: Completed 15.4-02-PLAN.md
+Last session: 2026-08-04T19:25:30.713Z
+Stopped at: Completed 15.4-03-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
