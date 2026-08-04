@@ -49,11 +49,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
   6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
   7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
-**Plans:** 20 plans in 16 waves — verified 2026-08-05
+**Plans:** 2/20 plans executed
 
 Plans:
-- [ ] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
-- [ ] 26-02-PLAN.md — Single-owner additive schema and index foundation (Wave 1)
+- [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
+- [x] 26-02-PLAN.md — Single-owner additive schema and index foundation (Wave 1)
 - [ ] 26-03-PLAN.md — Approvals discard, schedule move and progress state machines (Wave 2)
 - [ ] 26-04-PLAN.md — Bounded tenant-safe Approvals read models (Wave 2)
 - [ ] 26-05-PLAN.md — Connected Approvals route, executed browser gate, owner UAT, then nav activation (Wave 3)
