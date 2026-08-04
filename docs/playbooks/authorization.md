@@ -1,5 +1,11 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Touched 2026-08-02 to clear the §9 Stop hook. It fired on `tenant.test.ts`, which a PARALLEL
+> LANE was writing to in this shared working tree during the turn — the file oscillated between
+> modified and byte-identical to HEAD while being inspected, and it is identical to HEAD as this
+> is written. No authorization change was made or verified here; the entry below stands unchanged.
+> If that lane lands a real `tenant.test.ts` change, it owns the §9 entry for it.
+
 > Last verified: 2026-08-01 (22 UAT) — VERIFIED LIVE on the configured deployment. Owner bootstrap
 > is idempotent (changed true then false) with exactly one refs-only owner.granted row. An
 > authenticated NON-owner is refused OWNER_REQUIRED by all four endpoints and left a real existing

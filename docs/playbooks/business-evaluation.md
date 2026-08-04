@@ -18,6 +18,7 @@
 > types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
 > only, zero additions, no assertion, invariant or product line touched anywhere. Backend
 > typecheck 150 → 50; full suite 54/54.
+> **Re-verified 2026-08-02** (a later session, closing the ⚠ above for THIS subsystem): evaluations.test.ts + proactiveReview.test.ts run green under vitest as part of a 10-file, 212/212 pass. The sweep's claim of behaviour-freedom now has evidence here, not just a typecheck delta.
 >
 > Last verified: 2026-07-31 (ACTN-03) — **`applyScorecardAnswer` now COERCES before it writes, and
 > `actOnGapInternal` forwards a skill pin.** (1) The cockpit's `recordScorecardAnswer` tool types

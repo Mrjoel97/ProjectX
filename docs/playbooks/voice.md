@@ -7,6 +7,7 @@
 > types in, so TypeScript reported all 100 occurrences as TS2578 *unused directive*. Deletions
 > only, zero additions, no assertion, invariant or product line touched anywhere. Backend
 > typecheck 150 → 50; full suite 54/54.
+> **Re-verified 2026-08-02** (a later session, closing the ⚠ above for THIS subsystem): voice.test.ts + voiceDoc.test.ts + voiceToken.test.ts run green under vitest as part of a 10-file, 212/212 pass. The sweep's claim of behaviour-freedom now has evidence here, not just a typecheck delta.
 >
 > Last verified: 2026-08-01 (22.1-02 — per-tenant budget keying). MECHANICAL for this subsystem: `voice.recordUsage` passes `ctx.tenantId` to `recordSpend`, and `voiceDoc`'s private `modelDocReview` gained a leading `tenantId` parameter supplied by `reviewDocument`, which already had it. The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). Realtime pricing, metering and the brief/doc-review paths are otherwise untouched — but note a voice session's spend now lands on the SPEAKER's tenant rail, so a long call can exhaust that tenant's day without touching anyone else's.
 >
