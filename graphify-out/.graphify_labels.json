@@ -286,6 +286,7 @@
   "284": "provUsage",
   "285": "proactiveReview.ts",
   "286": "xlsText.test.ts",
+  "287": "isGatedSkill",
   "291": "audit.test.ts",
   "292": "ADR-004: Agents and humans are peer actors over shared governed state; irreversible actions are human-only mutations",
   "293": "optimizerEligibility.test.ts",

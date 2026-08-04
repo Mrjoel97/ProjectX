@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4798 nodes · 6856 edges · 395 communities (362 shown, 33 thin omitted)
+- 4798 nodes · 6855 edges · 396 communities (362 shown, 34 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 32 edges (avg confidence: 0.67)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7d01085f`
+- Built from commit: `f9cecb70`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -263,6 +263,7 @@
 - provUsage
 - proactiveReview.ts
 - xlsText.test.ts
+- isGatedSkill
 - ADR-004: Agents and humans are peer actors over shared governed state; irreversible actions are human-only mutations
 - Document Drafter (v1)
 - vaultSurface.test.ts
@@ -376,8 +377,8 @@
 6. `Playbook: Media Canvas (finished reel)` - 22 edges
 7. `contentHash()` - 21 edges
 8. `Playbook: Email Chat Cockpit` - 20 edges
-9. `tenantQuery` - 19 edges
-10. `Voice-doc sessions (Phase 14, DOCV-01)` - 19 edges
+9. `Voice-doc sessions (Phase 14, DOCV-01)` - 19 edges
+10. `tenantQuery` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `buildCockpitTools()` --indirect_call--> `today()`  [INFERRED]
@@ -394,19 +395,19 @@
 ## Import Cycles
 - None detected.
 
-## Communities (395 total, 33 thin omitted)
+## Communities (396 total, 34 thin omitted)
 
 ### Community 0 - "functions.ts"
 Cohesion: 0.11
 Nodes (27): buildSpecialistPrompt(), cap(), Ctx, deckRefusalBody(), dispatchAndLand(), DispatchArgs, DispatchRefusal, DispatchResult (+19 more)
 
 ### Community 1 - "package.json"
-Cohesion: 0.14
-Nodes (19): discussPillStyle(), DocGrid(), docLabel(), fmtSize(), folderChip(), pillAnchor(), pillShape, statusBadge() (+11 more)
+Cohesion: 0.13
+Nodes (20): discussPillStyle(), DocGrid(), docLabel(), fmtSize(), folderChip(), pillAnchor(), pillShape, statusBadge() (+12 more)
 
 ### Community 2 - "page.tsx"
 Cohesion: 0.04
-Nodes (49): Activity, ActivityCard(), attRow, badge(), box, Briefing, BriefingItem, BriefingRow() (+41 more)
+Nodes (53): Activity, attRow, badge(), box, Briefing, BriefingItem, BriefingRow(), btn (+45 more)
 
 ### Community 3 - "biome.json"
 Cohesion: 0.12
@@ -417,8 +418,8 @@ Cohesion: 0.13
 Nodes (22): chooseMediaBatch(), CLIP_SET, counted(), estimateBatchUsd(), estimateMediaUsd(), MEDIA_DEFAULT_IMAGE, MEDIA_DEFAULT_STT, MEDIA_DEFAULT_VIDEO (+14 more)
 
 ### Community 5 - "skills.ts"
-Cohesion: 0.06
-Nodes (33): preCall, recordSpend, applyClassification, getDocForExtraction, ingestExtractedText, insertCreatedDoc, markExtracting, markFailed (+25 more)
+Cohesion: 0.10
+Nodes (15): ingestFromAttachment, insertCreatedDoc, markFailed, patchCreatedDoc, profileSeedDocs, scheduleExtraction(), vaultIngestText, vaultSearch (+7 more)
 
 ### Community 6 - "Phase 03.2 Plan 03: Gmail Headers-Only Search Summary"
 Cohesion: 0.08
@@ -433,8 +434,8 @@ Cohesion: 0.10
 Nodes (12): aggregateModules, cancelQueued(), migrationsModules, modules, profileFor(), queuedJobs(), seedProfileDoc(), SME_FACTS (+4 more)
 
 ### Community 9 - "emailIntent.ts"
-Cohesion: 0.15
-Nodes (19): applyRecipientEdit(), classify(), ContactMatch, dedupeAppend(), HeaderRecord, NameCandidates, parseAddress(), parseSendTime() (+11 more)
+Cohesion: 0.13
+Nodes (24): buildAgentContext(), buildCockpitTools(), fmtSendInstant(), stripRePrefix(), applyRecipientEdit(), buildRecipientView(), classify(), ContactMatch (+16 more)
 
 ### Community 10 - "Project State"
 Cohesion: 0.06
@@ -446,15 +447,15 @@ Nodes (27): getGuardrailConfig(), batchToSubmit, buildSubmitBody(), captionsToSu
 
 ### Community 12 - "guardrails.ts"
 Cohesion: 0.14
-Nodes (22): buildCockpitTools(), layoutRuns(), markdownToPdf(), stripRePrefix(), wrapText(), buildDocFilename(), DocFormat, DocToken (+14 more)
+Nodes (20): layoutRuns(), markdownToPdf(), wrapText(), buildDocFilename(), DocFormat, DocToken, esc(), exceedsByteCap() (+12 more)
 
 ### Community 13 - "Phase 03.7 — Validation Strategy"
 Cohesion: 0.10
 Nodes (23): ACTABLE_PLAN_STATUS, actOnGap, actOnGapInternal, ActOnGapResult, applyActOnGap(), applyScorecardAnswer(), buildMemo(), coerceScorecardValue() (+15 more)
 
 ### Community 14 - "page.tsx"
-Cohesion: 0.10
-Nodes (15): CardList(), ErrorBoundary, CanvasPane(), capsTeal, panel, REVIEW_TAB, Tab, clamp() (+7 more)
+Cohesion: 0.11
+Nodes (12): CardList(), ErrorBoundary, CanvasPane(), capsTeal, panel, REVIEW_TAB, Tab, clamp() (+4 more)
 
 ### Community 15 - "layout.tsx"
 Cohesion: 0.10
@@ -477,28 +478,28 @@ Cohesion: 0.11
 Nodes (10): ADR-0004, RFC-5322, aggregateModules, modules, modules, modules, modules, RFC-3339 (+2 more)
 
 ### Community 20 - "buildCockpitTools"
-Cohesion: 0.10
-Nodes (22): cancelScheduledPlan, cockpitAgent, executePlan, ExternalActionType, ExternalArgs, FanoutArgs, listThreadMessages, proposeEmailPlan (+14 more)
+Cohesion: 0.09
+Nodes (24): finish, latestTurn, record, StepView, cancelScheduledPlan, cockpitAgent, executePlan, ExternalActionType (+16 more)
 
 ### Community 21 - "cockpit-resolve.spec.ts"
-Cohesion: 0.06
-Nodes (45): Tab, VAULT_TABS, base(), DownloadIcon(), FileDocIcon(), FileTextIcon(), FolderIcon(), GridIcon() (+37 more)
+Cohesion: 0.07
+Nodes (44): Tab, VAULT_TABS, base(), DownloadIcon(), FileDocIcon(), FileTextIcon(), FolderIcon(), GridIcon() (+36 more)
 
 ### Community 22 - "tokenExpiry.ts"
 Cohesion: 0.17
 Nodes (19): BriefingCard(), BriefingItem, BriefingView, bucket, BUCKET_ORDER, buildBriefingView(), collapseNoise(), composeLede() (+11 more)
 
 ### Community 23 - "guardrails.test.ts"
-Cohesion: 0.10
-Nodes (18): aggregateModules, auditRows(), call(), convexSrcDir, createdAudit(), createDocumentBlock(), expectCalendarStageEmpty(), fillProposable() (+10 more)
+Cohesion: 0.09
+Nodes (20): aggregateModules, auditRows(), call(), convexSrcDir, createdAudit(), createDocumentBlock(), expectCalendarStageEmpty(), fillProposable() (+12 more)
 
 ### Community 24 - "Dropzone.tsx"
 Cohesion: 0.07
 Nodes (23): BLUEPRINT_FIELD_SET, BlueprintDraft, BlueprintStateResult, BuildBlueprintDraftResult, candidatesSchema, ConfirmBlueprintResult, deriveCandidates, DeriveCandidatesResult (+15 more)
 
 ### Community 25 - "classify.ts"
-Cohesion: 0.12
-Nodes (13): ownerMutation, ownerQuery, ConfigPatch, DEFAULT_OPTIMIZER_CONFIG, getOptimizerConfig, setOptimizerConfig, optimizerEligibility, BreachConfig (+5 more)
+Cohesion: 0.29
+Nodes (6): BreachConfig, BreachInput, BreachReason, BreachResult, classifyBreach(), cfg
 
 ### Community 26 - "index.ts"
 Cohesion: 0.17
@@ -509,12 +510,12 @@ Cohesion: 0.10
 Nodes (19): After a pick completes, Assessing the business, Attachments, Cancel and start over, Creating a document or a post, Decision principles, Executive Agent — Cockpit (v1), Grounding in your knowledge vault (+11 more)
 
 ### Community 28 - "Validation Architecture"
-Cohesion: 0.13
-Nodes (17): Container, ExtractRail, indexOfBytes(), isPrintable(), looksTextual(), MARKUP_MIME, OLE2_PREFIX, OLE2_STREAMS (+9 more)
+Cohesion: 0.10
+Nodes (21): rows(), Container, ExtractRail, indexOfBytes(), isPrintable(), looksTextual(), MARKUP_MIME, OLE2_PREFIX (+13 more)
 
 ### Community 29 - "tenant.ts"
-Cohesion: 0.04
-Nodes (47): ADR-005: Live voice is browser-direct OpenAI Realtime over WebRTC, bounded by a single server wall-clock watchdog, with metering as telemetry, Alternatives rejected, Consequences, Context, Decision, §4 — the log plane, quoted verbatim, Accepted ceilings, each with its upgrade path, Char budgets (`packages/voice/src/docSession.ts`) (+39 more)
+Cohesion: 0.05
+Nodes (42): §4 — the log plane, quoted verbatim, Accepted ceilings, each with its upgrade path, Char budgets (`packages/voice/src/docSession.ts`), Citations: document-level always, quoted passage where available, Data flow, Dependencies & blast radius, File ownership + how to verify, Gap routing is code-owned (+34 more)
 
 ### Community 30 - "vaultLlm.ts"
 Cohesion: 0.07
@@ -601,8 +602,8 @@ Cohesion: 0.07
 Nodes (44): abortEnv(), applyOnly(), argv, attemptCase(), casesDir, evaluateExpect(), EXPECT_KEYS, formatCost() (+36 more)
 
 ### Community 61 - "guardrails.test.ts"
-Cohesion: 0.18
-Nodes (11): NAV, base(), ChevronDownIcon(), ChevronLeftIcon(), FileIcon(), GlobeIcon(), GridIcon(), PieIcon() (+3 more)
+Cohesion: 0.13
+Nodes (15): recordSpend, getActiveSkill, getDocForExtraction, ingestExtractedText, markExtracting, extractDoc, Extracted, extractHosted() (+7 more)
 
 ### Community 62 - "smoke.ts"
 Cohesion: 0.08
@@ -610,7 +611,7 @@ Nodes (23): 1. Push Filters To Storage, 2. Minimize Data Sources, 3. Minimize Ro
 
 ### Community 63 - "notificationMessage"
 Cohesion: 0.12
-Nodes (16): buildTrajectoryExport, scrub(), getDoc, embedDoc, openaiEmbeddingV2, rag, RagEmbeddingModel, DETECTORS (+8 more)
+Nodes (15): buildTrajectoryExport, scrub(), Err, Ok, Result, unwrap(), DETECTORS, Match (+7 more)
 
 ### Community 64 - "vault.test.ts"
 Cohesion: 0.22
@@ -646,11 +647,11 @@ Nodes (5): modules, loadSkill(), modules, SkillStatus, CONTENT_DRAFTER_SKILL
 
 ### Community 72 - "getActiveSkill"
 Cohesion: 0.23
-Nodes (11): bubble(), ChatPane(), messageText(), IntakeControls(), StorageId, MicIcon(), PaperclipIcon(), SendIcon() (+3 more)
+Nodes (11): ActivityCard(), stepText(), bubble(), ChatPane(), messageText(), IntakeControls(), StorageId, PaperclipIcon() (+3 more)
 
 ### Community 73 - "list"
-Cohesion: 0.22
-Nodes (8): deadLetterRecipient, onPipelineComplete, buildTelemetry(), LlmUsage, ReviewOutcome, TelemetryRow, TerminalOutcome, OPSG01_KEYS
+Cohesion: 0.32
+Nodes (6): buildTelemetry(), LlmUsage, ReviewOutcome, TelemetryRow, TerminalOutcome, OPSG01_KEYS
 
 ### Community 75 - "buildTelemetry.test.ts"
 Cohesion: 0.11
@@ -733,8 +734,8 @@ Cohesion: 0.10
 Nodes (12): __collectGroundedSources(), aggregateModules, DraftBlob, FULL_LIVE_BLUEPRINT_TEXT, insertBusinessProfile(), insertLiveBlueprint(), insertTenantProfile(), insertVaultDocument() (+4 more)
 
 ### Community 98 - "index.ts"
-Cohesion: 0.26
-Nodes (11): persistNextStepMemo(), contentHash(), writeProfileDoc(), isoDate(), persistFindings, researchDocumentText(), researchTitle(), startIngest() (+3 more)
+Cohesion: 0.16
+Nodes (15): persistNextStepMemo(), contentHash(), writeProfileDoc(), isoDate(), persistFindings, researchDocumentText(), researchTitle(), startIngest() (+7 more)
 
 ### Community 99 - "review.ts"
 Cohesion: 0.17
@@ -769,8 +770,8 @@ Cohesion: 0.12
 Nodes (11): BLUEPRINT_TEXT, code, modules, sources, terminalOutcome, BLUEPRINT_TEXT, modules, seedChain() (+3 more)
 
 ### Community 107 - "http.ts"
-Cohesion: 0.16
-Nodes (17): decodeUtf8(), extractVisual(), runIntake(), RunIntakeArgs, transcribeAudio(), tenantAction, ingestFromAttachment, asciiAt() (+9 more)
+Cohesion: 0.17
+Nodes (16): decodeUtf8(), extractVisual(), runIntake(), RunIntakeArgs, transcribeAudio(), tenantAction, asciiAt(), classify() (+8 more)
 
 ### Community 108 - "plans.test.ts"
 Cohesion: 0.22
@@ -817,12 +818,12 @@ Cohesion: 0.18
 Nodes (10): Cockpit attachments persist to the Knowledge Vault, Decisions (owner-approved), Design, Failure handling, Known cost, New function, Out of scope, Problem (+2 more)
 
 ### Community 119 - "vaultGround.test.ts"
-Cohesion: 0.12
-Nodes (13): markReady, EDGE, expand, NODE, upsertGraph, assertGroundNeighbor, assertNoRawText, assertReady (+5 more)
+Cohesion: 0.10
+Nodes (17): getDoc, markReady, EDGE, expand, NODE, upsertGraph, embedDoc, openaiEmbeddingV2 (+9 more)
 
 ### Community 120 - "guardrails.ts"
-Cohesion: 0.24
-Nodes (12): PasswordField(), TextField(), ArrowIcon(), CheckCircleIcon(), EyeIcon(), EyeOffIcon(), GoogleIcon(), IconProps (+4 more)
+Cohesion: 0.10
+Nodes (35): NAV, PasswordField(), TextField(), ArrowIcon(), base(), BellIcon(), BoltIcon(), BrainIcon() (+27 more)
 
 ### Community 121 - "buildTelemetry.ts"
 Cohesion: 0.33
@@ -877,8 +878,8 @@ Cohesion: 0.40
 Nodes (4): Extraction principles, Graph Extractor (v1), Inputs, Output contract
 
 ### Community 134 - "deadLetter.ts"
-Cohesion: 0.10
-Nodes (26): VaultFolder, Dropzone(), FileOutcome, PickedFolder, pillPrimary(), pillSecondary(), SEARCHABLE_MIME, StorageId (+18 more)
+Cohesion: 0.13
+Nodes (21): Dropzone(), FileOutcome, PickedFolder, pillPrimary(), pillSecondary(), SEARCHABLE_MIME, StorageId, FolderBreadcrumb() (+13 more)
 
 ### Community 135 - "Convex"
 Cohesion: 0.40
@@ -901,8 +902,8 @@ Cohesion: 0.43
 Nodes (7): asTenant(), ground(), Harness, modules, seedDoc(), seedEdge(), seedFolder()
 
 ### Community 145 - "vaultLlm.ts"
-Cohesion: 0.12
-Nodes (19): DEFAULT_CONFIG, FolderReserveRefusal, FolderReserveResult, getSafeTextByHash, ingestRemainingCents, ingestRemainingCentsInner(), mediaRemainingCents, mediaRemainingCentsInner() (+11 more)
+Cohesion: 0.11
+Nodes (22): DEFAULT_CONFIG, FolderReserveRefusal, FolderReserveResult, getSafeTextByHash, ingestRemainingCents, ingestRemainingCentsInner(), mediaRemainingCents, mediaRemainingCentsInner() (+14 more)
 
 ### Community 146 - "ADR-006: Vault chunks are trusted-as-own — they enter the agent loop directly, not through the toolless-ingestion invariant"
 Cohesion: 0.33
@@ -921,8 +922,8 @@ Cohesion: 0.05
 Nodes (40): A second stager, and a memo that stops lying (16-06, DISP-02), "Act on this" now RUNS the specialist (15-04, DISP-01), Blueprint standing context and the provenance ceiling, Data flow, Dependencies & blast radius, How to change it safely, How to change safely, How to verify (+32 more)
 
 ### Community 151 - "page.tsx"
-Cohesion: 0.10
-Nodes (19): ATTACHMENTS, attachmentUrls, byThread, CANDIDATES, clearCandidates, LIVE_JOB_STATUS, LIVE_RENDER_STATUS, patchPlan (+11 more)
+Cohesion: 0.09
+Nodes (20): ATTACHMENTS, attachmentUrls, byThread, CANDIDATES, clearCandidates, insertPlan, LIVE_JOB_STATUS, LIVE_RENDER_STATUS (+12 more)
 
 ### Community 152 - "evaluations.test.ts"
 Cohesion: 0.12
@@ -949,8 +950,8 @@ Cohesion: 0.13
 Nodes (14): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Historical Position — Phase 14 (SUPERSEDED, kept for context), Lane Status, Milestone v2.0 Phase Map, Pending Todos (+6 more)
 
 ### Community 159 - "VaultStats.tsx"
-Cohesion: 0.16
-Nodes (10): auditCounts, backfillAuditCounts, countAudit, log, bootstrapOwner, viewer, AuditHash, AuditPayload (+2 more)
+Cohesion: 0.24
+Nodes (7): auditCounts, backfillAuditCounts, countAudit, AuditHash, AuditPayload, AuditPayloadValue, AuditRef
 
 ### Community 160 - "feedback.ts"
 Cohesion: 0.07
@@ -969,8 +970,8 @@ Cohesion: 0.15
 Nodes (12): Data flow, Dependencies & blast radius, `fal-catalog.yml` — the scheduled detector (plan 20-19, 2026-08-02), How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work (+4 more)
 
 ### Community 164 - "routing.ts"
-Cohesion: 0.15
-Nodes (10): bumpFolder(), cancelFolder, createFolder, folderEstimate, FolderEstimateLine, FolderView, listFolders, reserveFolder (+2 more)
+Cohesion: 0.14
+Nodes (11): bumpFolder(), cancelFolder, createFolder, folderEstimate, FolderEstimateLine, FolderView, getFolder, listFolders (+3 more)
 
 ### Community 165 - "Onboarding Conversation (v1)"
 Cohesion: 0.29
@@ -994,7 +995,7 @@ Nodes (14): aggregateModules, code, modules, profileText(), sources, aggregateMo
 
 ### Community 171 - "llm.ts"
 Cohesion: 0.04
-Nodes (64): ACCENT, AgentSmokeOp, Att, briefSchema, BriefTurn, buildAgentContext(), buildHistoryBlock(), buildTurnPrompt() (+56 more)
+Nodes (56): ACCENT, AgentSmokeOp, Att, briefSchema, BriefTurn, callTimeoutMsFor(), __cockpitTurnPrompt, digestInbox (+48 more)
 
 ### Community 172 - "proactiveReview.ts"
 Cohesion: 0.33
@@ -1025,8 +1026,8 @@ Cohesion: 0.33
 Nodes (5): apps/web E2E (Playwright), Auth (storageState), Prerequisite: the local dev backend must be running, Running, Specs
 
 ### Community 181 - "vaultLlm.ts"
-Cohesion: 0.20
-Nodes (11): diagnose(), gateOrder(), leverageRank(), Prescription, cfa(), ltgpCac(), round2(), emptyScorecard (+3 more)
+Cohesion: 0.26
+Nodes (8): diagnose(), gateOrder(), leverageRank(), Prescription, emptyScorecard, Scorecard, ValueEquation, SpecialistRoute
 
 ### Community 182 - "cockpitBlueprint.test.ts"
 Cohesion: 0.29
@@ -1041,8 +1042,8 @@ Cohesion: 0.18
 Nodes (11): 15.3-01 — schema, 15.3-02 — read-surface survivability + cap single-source, 15.3-03 — the budget rail selector (ingest stops spending the cockpit's $5), 15.3-05 — sealing (VALT-07), 15.3-09 — the Google Drive rail (VALT-13), Accepted limitation — structural, not content, How to verify, Phase 15.3 — vault folders (+3 more)
 
 ### Community 188 - "tokenExpiry.ts"
-Cohesion: 0.10
-Nodes (18): BusyRange, createEvent, CreateEventResult, freeBusy, FreeBusyResult, GoogleError, GoogleFreeBusy, RFC-3339 (+10 more)
+Cohesion: 0.12
+Nodes (16): BusyRange, createEvent, freeBusy, FreeBusyResult, GoogleError, GoogleFreeBusy, RFC-3339, getById (+8 more)
 
 ### Community 189 - "Phase Details"
 Cohesion: 0.12
@@ -1053,8 +1054,8 @@ Cohesion: 0.11
 Nodes (19): cleaned(), DOC_GAP_PLAYBOOK, DOC_GAP_ROUTE, DocReviewConfidence, DocReviewSection, isConfidence(), isSection(), normalizeExcerpt() (+11 more)
 
 ### Community 191 - "vaultSmoke.ts"
-Cohesion: 0.24
-Nodes (14): Err, Ok, Result, unwrap(), chooseModel(), CostError, estimateCostUsd(), estimateTokens() (+6 more)
+Cohesion: 0.21
+Nodes (19): chooseModel(), CostError, estimateCostUsd(), estimateTokens(), priceRealtime(), priceTranscription(), priceUsage(), PRICING (+11 more)
 
 ### Community 192 - "SenderCell"
 Cohesion: 0.33
@@ -1069,8 +1070,8 @@ Cohesion: 0.12
 Nodes (18): insertEvaluation, DOC_IN_PROGRESS, docReviewSchema, docScopedPassages(), forMatch(), modelDocReview(), NO_REVIEW, resolveModel() (+10 more)
 
 ### Community 196 - "blueprint.ts"
-Cohesion: 0.18
-Nodes (14): isSearchable(), SEARCHABLE_MIME, VaultCategory, VaultSource, ExtractionKind, extractionKindFor(), OFFICE_MIME, SchedulingRail (+6 more)
+Cohesion: 0.14
+Nodes (15): capClassifyText(), capGraphText(), capMB(), ExtractionKind, extractionKindFor(), OFFICE_MIME, SchedulingRail, schedulingRailFor() (+7 more)
 
 ### Community 197 - "Phase 3.10: Cockpit Conversation Repair - Research"
 Cohesion: 0.13
@@ -1113,8 +1114,8 @@ Cohesion: 0.13
 Nodes (15): ⚠ `extractionTruncated` will now start appearing on long scans — EXPECTED, not a regression, INVARIANT — never let a non-empty string stand in for "we got content", INVARIANT — `""`, not a throw, and the two endings must not be merged, INVARIANT — the PPTX entry list, positive AND negative, Live result — 2026-07-27, `local-joel_feruzi-pikar_ai_50c69-1`, Live result — 2026-07-27, `local-joel_feruzi-pikar_ai_50c69-1`, Phase 15.2 — 15.2-06 (per-page fan-out: scanned PDFs are TRANSCRIBED, not summarised), Phase 15.2 — 15.2-08 (the false-ready FAMILY, and the entries already in the archive) (+7 more)
 
 ### Community 209 - "classify.ts"
-Cohesion: 0.07
-Nodes (45): modules, activateSkill, activateSkillVersion(), archiveSkill, getSkillVersion, recordEvalEvidence, seedSkills, ADR-0007 (+37 more)
+Cohesion: 0.10
+Nodes (34): activateSkill, archiveSkill, recordEvalEvidence, seedSkills, ADR-0007, ATTACHMENT_EXTRACTOR_SKILL, BMC_SKILL, BUSINESS_PROFILE_SKILL (+26 more)
 
 ### Community 210 - "Phase 7: Resilience & Operations Hardening - Research"
 Cohesion: 0.33
@@ -1125,24 +1126,24 @@ Cohesion: 0.29
 Nodes (6): Connections Tab Implementation Plan, Global Constraints, Self-Review, Task 1: Extract the shared DisconnectGoogle button, Task 2: The Connections panel and its tab, Task 3: Point the rail at it
 
 ### Community 213 - "COCKPIT_AGENT_SKILL"
-Cohesion: 0.16
-Nodes (10): aggregateModules, asTenant(), harness(), ingest(), modules, rateLimiterModules, seeded(), workflowModules (+2 more)
+Cohesion: 0.18
+Nodes (9): aggregateModules, asTenant(), harness(), ingest(), modules, rateLimiterModules, seeded(), workflowModules (+1 more)
 
 ### Community 214 - "dependencies"
 Cohesion: 0.40
 Nodes (5): Phase 15.2 — 15.2-01 (pure recognition layer), Phase 15.2 — 15.2-02 (format coverage, pure layer), Phase 15.2 — 15.2-03 (permissive scheduling + in-action dispatch), Phase 15.2 — 15.2-04 (staleness, the graph cap, failure copy), Phase 15.2 — universal format recognition
 
 ### Community 215 - "009-tier-shapes-the-specialist-prompt-not-the-offer-set.md"
-Cohesion: 0.08
-Nodes (27): byThread, insert, ADR-0004, listNew, markResolved, addItem, listItems, myFeedback (+19 more)
+Cohesion: 0.07
+Nodes (30): byThread, insert, ADR-0004, addItem, listItems, myFeedback, submitFeedback, undoFeedback (+22 more)
 
 ### Community 216 - "notifications.test.ts"
 Cohesion: 0.27
 Nodes (8): aggregateModules, evaluateWithGap(), modules, profileDocText(), seedDoc(), seedDocReview(), workflowModules, workpoolModules
 
 ### Community 217 - "intakeDb.ts"
-Cohesion: 0.31
-Nodes (4): capClassifyText(), capGraphText(), capMB(), bfsNeighbors()
+Cohesion: 0.18
+Nodes (8): log, CreateEventResult, onCreateComplete, deadLetterRecipient, onPipelineComplete, notify, bootstrapOwner, viewer
 
 ### Community 218 - "ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits"
 Cohesion: 0.21
@@ -1153,8 +1154,8 @@ Cohesion: 0.33
 Nodes (5): Milestone v2.0 - Platform -> Private Beta (Phases 10-25), Overview, Phases, Progress, Roadmap: Pikar-AI
 
 ### Community 223 - "plans.test.ts"
-Cohesion: 0.17
-Nodes (9): OptimizerPanel(), REVIEW_OUTCOMES, unifiedDiff(), BellIcon(), WalletIcon(), getOptimizerStatus, setOptimizerEnabled, activateCandidate (+1 more)
+Cohesion: 0.13
+Nodes (11): OptimizerPanel(), REVIEW_OUTCOMES, unifiedDiff(), listNew, markResolved, DECISION_KEYS, evalSignals, getOptimizerStatus (+3 more)
 
 ### Community 224 - "notifications.test.ts"
 Cohesion: 0.17
@@ -1217,8 +1218,8 @@ Cohesion: 0.29
 Nodes (7): BETA-05 isolation, shipped WITH the surface, D7's rule is a BACKEND requirement before it is a UI one, EVERY structural edit clears the render, through ONE helper, The canvas plane (20-09), The free editor: five affordances, floor AND ceiling, The reorder ceiling, stated, The url guarantee, and where it actually lives
 
 ### Community 247 - "agentSteps.ts"
-Cohesion: 0.23
-Nodes (12): refundableCents(), centsFor(), clampRefundCents(), estimateFile(), estimateFolderCents(), EstimateInput, FileEstimate, FolderEstimate (+4 more)
+Cohesion: 0.25
+Nodes (5): BUSINESS_BLUEPRINT_SKILL, DOCUMENT_CLASSIFIER_SKILL, FOLDER_DIGEST_SKILL, MEDIA_DIRECTOR_SKILL, bodies
 
 ### Community 248 - "voice-doc.spec.ts"
 Cohesion: 0.25
@@ -1237,8 +1238,8 @@ Cohesion: 0.40
 Nodes (4): Document Classifier (v1), Inputs, Never invent, Output contract
 
 ### Community 259 - "extractKind.ts"
-Cohesion: 0.22
-Nodes (5): BoltIcon(), BrainIcon(), ShieldIcon(), FEATURES, newCount
+Cohesion: 0.33
+Nodes (5): ADR-005: Live voice is browser-direct OpenAI Realtime over WebRTC, bounded by a single server wall-clock watchdog, with metering as telemetry, Alternatives rejected, Consequences, Context, Decision
 
 ### Community 260 - "vaultFolders.test.ts"
 Cohesion: 0.13
@@ -1277,12 +1278,8 @@ Cohesion: 0.48
 Nodes (5): canTransition(), capEndsAt(), graceExpired(), isEnded(), SessionStatus
 
 ### Community 279 - "stepText"
-Cohesion: 0.40
-Nodes (6): CanceledCard(), formatAbsolute(), pad(), PlanCard(), ScheduledCard(), toLocalInputValue()
-
-### Community 281 - "agentSteps.ts"
-Cohesion: 0.40
-Nodes (4): finish, latestTurn, record, StepView
+Cohesion: 0.47
+Nodes (4): parseRouting(), ParseRoutingResult, RoutingDecision, routingSchema
 
 ### Community 282 - "validateSubmit.ts"
 Cohesion: 0.18
@@ -1293,12 +1290,16 @@ Cohesion: 0.14
 Nodes (14): classifySchema, DocIdentity, _docToDocType, ExtractedGraph, getDocText, GraphEdge, GraphNode, graphSchema (+6 more)
 
 ### Community 285 - "proactiveReview.ts"
-Cohesion: 0.15
-Nodes (10): getActiveSkill, BuildDigestResult, buildFolderDigest, digestMembersPage, digestPrompt(), folderForDigest, isoDate(), MemberMeta (+2 more)
+Cohesion: 0.09
+Nodes (18): preCall, applyClassification, BuildDigestResult, buildFolderDigest, digestMembersPage, digestPrompt(), FolderDigestState, folderForDigest (+10 more)
 
 ### Community 286 - "xlsText.test.ts"
+Cohesion: 0.80
+Nodes (3): cfa(), ltgpCac(), round2()
+
+### Community 287 - "isGatedSkill"
 Cohesion: 0.50
-Nodes (4): rows(), SALES, workbook(), xlsBytes()
+Nodes (4): activateSkillVersion(), GATED_SKILLS, hasPassingEvidence(), isGatedSkill()
 
 ### Community 292 - "ADR-004: Agents and humans are peer actors over shared governed state; irreversible actions are human-only mutations"
 Cohesion: 0.33
@@ -1669,24 +1670,24 @@ Cohesion: 0.33
 Nodes (6): ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits, Alternatives rejected, Consequences, Context, Decision, Why research is not a gap remedy
 
 ## Knowledge Gaps
-- **2302 isolated node(s):** `The suite`, `How they connect`, `The loop (owned by growth-os)`, `Using it`, `Structure of each skill` (+2297 more)
+- **2302 isolated node(s):** `Purpose`, `Key files`, `Dependencies & blast radius`, `Data flow (one agent turn)`, `Invariants — what must never break` (+2297 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **33 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `log` connect `VaultStats.tsx` to `functions.ts`, `skills.ts`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `Project State`, `Phase 03.7 — Validation Strategy`, `buildCockpitTools`, `Dropzone.tsx`, `session.ts`, `proactiveReview.ts`, `Phase 10: Vault→Agent Grounding - Research`, `llm.ts`, `Pikar-AI`, `Project State`, `tokenExpiry.ts`, `16-06-PLAN.md`, `list`, `notificationMessage`, `classify.ts`, `index.ts`, `http.ts`, `deadLetters.test.ts`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Why does `contentHash()` connect `index.ts` to `feedback.ts`, `16-06-PLAN.md`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `Phase 10: Vault→Agent Grounding - Research`, `metering.ts`, `Project State`, `llm.ts`, `guardrails.ts`, `Phase 03.7 — Validation Strategy`, `scan.ts`, `notificationMessage`, `vaultLlm.ts`, `vaultGround.test.ts`, `guardrails.test.ts`, `session.ts`, `deadLetters.test.ts`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
+- **Why does `log` connect `intakeDb.ts` to `functions.ts`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `Project State`, `Phase 03.7 — Validation Strategy`, `buildCockpitTools`, `Dropzone.tsx`, `session.ts`, `proactiveReview.ts`, `VaultStats.tsx`, `Phase 10: Vault→Agent Grounding - Research`, `llm.ts`, `Pikar-AI`, `Project State`, `tokenExpiry.ts`, `guardrails.test.ts`, `16-06-PLAN.md`, `notificationMessage`, `classify.ts`, `index.ts`, `http.ts`, `deadLetters.test.ts`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
 - **Why does `page` connect `buildCockpitTools` to `Project State`?**
-  _High betweenness centrality (0.008) - this node is a cross-community bridge._
+  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+- **Why does `contentHash()` connect `index.ts` to `feedback.ts`, `16-06-PLAN.md`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `Phase 10: Vault→Agent Grounding - Research`, `metering.ts`, `emailIntent.ts`, `Project State`, `llm.ts`, `scan.ts`, `Phase 03.7 — Validation Strategy`, `notificationMessage`, `vaultLlm.ts`, `vaultGround.test.ts`, `guardrails.test.ts`, `session.ts`, `deadLetters.test.ts`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `buildCockpitTools()` (e.g. with `today()` and `isNeedsYou()`) actually correct?**
   _`buildCockpitTools()` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `The suite`, `How they connect`, `The loop (owned by growth-os)` to the rest of the system?**
+- **What connects `Purpose`, `Key files`, `Dependencies & blast radius` to the rest of the system?**
   _2333 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `functions.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.11375661375661375 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
-  _Cohesion score 0.1422924901185771 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.13405797101449277 - nodes in this community are weakly interconnected._
