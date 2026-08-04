@@ -42,6 +42,7 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
+| V4 | **15.4** Vault Redesign | 1/4 plans complete | 15.4-02 (Nord Edge root/folder browse) | **15.4-01 COMPLETE** (`5d98f01`, `2c56d74`, `925b092`, `9779865`) — `vaultSearch({ folderId? })` now filters bounded hybrid candidates after tenant ownership and ingesting-folder sealing, intersects category, and preserves the root/public result contracts. Mutation proof returned folder B when only the equality predicate was removed. Focused gate 61/61; backend typecheck clean. Global playbook watcher remains blocked only by the concurrent formatter lane's unrelated stale playbooks; see Phase 15.4 `deferred-items.md`. VALT-16 remains Pending until plans 02-04 finish the UI and UAT. |
 | F | **15.3** Vault Folders | 4/9 plans (wave 4 of 9) | 15.3-05 (wave 5 — sealing: a folder's members are excluded from retrieval until it is `complete`) | **15.3-02 COMPLETE** (`fefb9e4`, `034e28a`, `36d2944`, `e0a2c5e`, `bc72c41`, `8f3ec57`) — the B1 read-cap blocker is closed and the phase's acceptance demo can now render. **THE BOUND IS ROWS AND BYTES, AND THE BYTE HALF IS THE ONE THAT MATTERS:** the plan specified `.take(200)`, which does NOT bound the read (200 rows × 400k chars ≈ 80 MB against a 16 MiB cap), so `readVaultPage` streams `by_tenant`/`by_tenant_folder` and breaks on `VAULT_GRID_PAGE` (200) rows OR `VAULT_GRID_READ_BUDGET_BYTES` (8 MiB) of text, whichever bites first — `constants.test.ts` asserts BOTH directions, so deleting the byte budget as a 'simplification' fails. **NEVER put `text` back on `listVaultDocs`**: it now returns a projection (no `text`, no `tenantId`, no `contentHash`) and one document's words come from the new `vault.vaultDocText`. Three shipped consumers were repaired onto it — `PreviewModal`, the onboarding intake poll, and voice `AbnormalBriefBanner`; **the banner is the cautionary one, it CAST the query result to a local type so the break would NOT have typechecked and would have seeded an empty cockpit plan** (the cast is deleted, the row type now comes from the query). `vaultStats` shares the same window and returns `capped`, rendered as `200+` plus one plain sentence (a '+' alone encodes meaning in a glyph, BRAND §6). **THE CAP IS 200 MB AND IS DECLARED ONCE** — five literal sites deleted; `Dropzone.tsx` imports `@pikar/vault/constants` (the SUBPATH — verified via a prod build that SheetJS does NOT enter the client bundle, chunks 1.7 MB), `apps/web` gained `@pikar/vault`, and copy is derived through `capMB()` because `DocGrid`'s binary `fmtSize` would print '190.7 MB' for the 200 MB constant. **`VAULT_VIDEO_CAP_BYTES` IS UNCHANGED AT 25 MB** — the transcription API's number, pinned with the strict `video < file` relationship. 200 MB is reachable only on a fast link (Convex's upload POST times out at 2 min ⇒ ~13.3 Mbit/s); plan 04 owns the manifest outcome. **KNOWN CEILING, ACCEPTED:** the `category` filter runs over the bounded window (no `by_tenant_category` index, `schema.ts` closed) so a narrow tab can under-report at scale. `packages/core/src/vaultSurface.test.ts` is the FIRST test ever to read the vault UI — 6 tests, non-vacuity anchors first, **mutation-verified RED** (reintroducing `100 * 1024 * 1024` + `max 100 MB` failed 2 of 6). Verified: `pnpm test` 8/8 green (backend 1109/1109), `pnpm typecheck` delta ZERO against the 15-error all-test baseline, `pnpm --filter @pikar/web build` succeeds, `check-playbooks` exit 0. **`gsd-tools state advance-plan` CLOBBERED the first frontmatter block AGAIN** — it dropped `current_phase` entirely and rewrote `current_plan`/`stopped_at` from a stale pre-15.3-01 source (`current_plan: 7 (done)`, `stopped_at: Phase 15.3 context gathered`); hand-restored. `update-progress` worked (229 from disk). VALT-05/VALT-14 deliberately left Pending |
 | — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
@@ -1655,6 +1656,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
+| 15.4 | 01 | 35 min | 2 | 3 |
 | 10 | 01 | 5 min | 2 | 3 |
 | 10 | 02 | 20 min | 3 | 7 |
 | 10 | 03 | 12 min | 2 | 2 |
@@ -1756,6 +1758,9 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
+- [Phase 15.4 / 15.4-01]: Vault search uses a dedicated search-only metadata resolver so grounding's order-sensitive `ownedDocsMeta` remains byte-identical.
+- [Phase 15.4 / 15.4-01]: Foreign and missing folder scopes return the same empty result; optional `folderId` is not an ownership oracle.
+- [Phase 15.4 / 15.4-01]: VALT-16 stays Pending after plan 1/4 because its requirement text includes the full redesign and retained-control UAT.
 - [Phase 17 / 17-03]: **Calendar tools stop at the staging boundary.** `checkAvailability` returns content-free busy ranges from the trusted client clock; `proposeCalendarEvent` atomically patches all four event fields at `status: "proposed"` and cannot create an event. ACTN-02 stays pending for 17-04 and the recorded deferred-manage scope.
 - [Phase 17 / 17-02]: **Calendar uses one widened Google grant and a two-module terminal split.** `calendar.ts` is a Node actions-only adapter; `calendarComplete.ts` is non-Node and the sole writer of Calendar plan status, audit, reconnect notifications, and dead letters. Stored scope is checked before refresh, and deterministic event IDs make Google 409 duplicate an idempotent success. ACTN-02 stays pending until the later Phase-17 plans wire the complete action surface.
 - [Phase 17.1 / 17.1-01]: **The blueprint field set is closed and bound by ONE `as const satisfies Record<BlueprintField, FieldSpec>` table** carrying `label`/`list`/`cap`/`derivable`/`probe`. Deliberately NOT a switch — a `default` branch makes a new field silently inherit another's behaviour and makes the coverage test vacuous forever. Mutation-verified: a 12th field with no spec entry ⇒ `TS2741`. Every later 17.1 plan (diff, serializer, spine caps, candidate gate) indexes this one table rather than re-enumerating the fields.
@@ -1917,6 +1922,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-04T17:13:43Z
+Stopped at: Completed 15.4-01-PLAN.md; next 15.4-02
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
