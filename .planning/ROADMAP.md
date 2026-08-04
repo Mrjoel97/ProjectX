@@ -596,13 +596,13 @@ Plans:
   3. Search within an open folder cannot return documents from another folder; root/category search retains its current tenant-scoped behavior.
   4. Category tabs do not claim exact counts until a bounded counter contract exists, and all loading, error, empty, partial-ingest and stale-digest states remain honest.
   5. Backend/component tests, production build and browser UAT cover the redesigned states and scoped-search boundary.
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed — complete 2026-08-05
 
 Plans:
 - [x] 15.4-01-PLAN.md — Server-scoped folder search contract with isolation/sealing regression tests (Wave 1)
-- [ ] 15.4-02-PLAN.md — Nord Edge root/folder browse, honest state model, retained-action component tests and scoped styles (Wave 2)
-- [ ] 15.4-03-PLAN.md — Nord Edge preview/import surfaces with lifecycle and control-retention tests (Wave 3)
-- [ ] 15.4-04-PLAN.md — Executed Playwright/full gates, watched playbooks and authenticated owner UAT (Wave 4)
+- [x] 15.4-02-PLAN.md — Nord Edge root/folder browse, honest state model, retained-action component tests and scoped styles (Wave 2)
+- [x] 15.4-03-PLAN.md — Nord Edge preview/import surfaces with lifecycle and control-retention tests (Wave 3)
+- [x] 15.4-04-PLAN.md — Executed Playwright/full gates, watched playbooks and authenticated owner UAT (Wave 4)
 
 ### Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED)
 
@@ -994,6 +994,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |
 | 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 9/9 | Implementation complete + OWNER-APPROVED 2026-08-05. Drive rail shipped, plus a picker we render OURSELVES (the paste-a-link entry point is deleted; Google's Picker SDK is deliberately not mounted because drive.readonly already returns the folders). **LIVE GATE IS PARTIAL** — the scope widening, the reauth gate against a real pre-widening token, real folder listing/drill-in and the empty_folder guard are all live-verified; **the IMPORT PATH and the SHARED-DRIVE half have never run** ($0 spent on this rail). VALT-13 stays Pending | - |
+| 15.4 Vault Redesign & Scoped Browse Correctness (INSERTED) | 4/4 | Complete (full gates + connected Playwright 2/2 + owner-approved UAT) | 2026-08-05 |
 | 16. Research Sub-Agent & Web Research | 8/9 | In Progress (16-09 live model-backed eval awaits a securely available `OPENAI_API_KEY`) | 2026-07-30 |
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
