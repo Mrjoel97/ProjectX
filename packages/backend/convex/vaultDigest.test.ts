@@ -469,15 +469,8 @@ describe("the digest dies with its folder (cancel of a COMPLETE folder)", () => 
     });
     expect((await docRow(t, digestDocId as Id<"vaultDocuments">))?.ragEntryId).toBeDefined();
 
-    // TEST-SEAM ONLY, and it does not weaken what is under test. The offline embed hands back a
-    // `smoke::<hash>` sentinel, which is not an id of the rag component's `entries` table, so the
-    // `rag.deleteAsync` half of `deleteVaultDoc`'s cascade rejects it with a validator error that
-    // could never happen against a real entry id. The guarantee here is that CANCEL REACHES THE
-    // DIGEST AT ALL; the rag/graph cascade itself is `deleteVaultDoc`'s own contract and is covered
-    // in vault.test.ts. Clearing the sentinel first keeps this test about the former.
-    await t.run((ctx) =>
-      ctx.db.patch(digestDocId as Id<"vaultDocuments">, { ragEntryId: undefined }),
-    );
+    // Keep the offline `smoke::<hash>` ragEntryId attached. `deleteVaultDoc` must recognise that
+    // test-seam sentinel as having no component entry while still removing the owning vault row.
 
     expect(await asTenant(t, TENANT).mutation(api.vaultFolders.cancelFolder, { folderId })).toEqual(
       { ok: true },

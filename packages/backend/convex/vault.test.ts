@@ -589,6 +589,16 @@ describe("extraction lifecycle internals (Phase 3.8 Wave 0 seam)", () => {
 });
 
 describe("deleteVaultDoc (cascade + orphan GC + tenant guard)", () => {
+  test("deletes an offline SMOKE-ingested row without calling RAG with a synthetic entry id", async () => {
+    const t = withIngest();
+    const doc = await seedDoc(t, { status: "ready", ragEntryId: "smoke::content-hash" });
+
+    expect(await asTenant(t).mutation(api.vault.deleteVaultDoc, { vaultDocId: doc })).toEqual({
+      ok: true,
+    });
+    expect(await t.run((ctx) => ctx.db.get(doc))).toBeNull();
+  });
+
   test("removes the row + its edges; orphan nodes GC'd, shared nodes survive", async () => {
     const t = withIngest();
     const doc1 = await seedDoc(t, { contentHash: "c1" });
