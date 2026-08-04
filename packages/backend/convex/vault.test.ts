@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { vaultIngestPool } from "./index";
 import schema from "./schema";
 
@@ -110,6 +111,112 @@ const seedDoc = (
       ...overrides,
     }),
   );
+
+const seedFolder = (
+  t: ReturnType<typeof convexTest>,
+  name: string,
+  tenantId = TENANT,
+  status: "reserving" | "ingesting" | "complete" | "refused" = "complete",
+) =>
+  t.run((ctx) =>
+    ctx.db.insert("vaultFolders", {
+      tenantId,
+      name,
+      source: "upload" as const,
+      status,
+      memberCount: 1,
+      terminalCount: 1,
+      failedCount: 0,
+      reservedCents: 0,
+      spentCents: 0,
+      createdAt: Date.now(),
+    }),
+  );
+
+const smokeSearch = (
+  t: ReturnType<typeof convexTest>,
+  candidates: Id<"vaultDocuments">[],
+  args: { category?: string; folderId?: Id<"vaultFolders"> } = {},
+) =>
+  asTenant(t).action(api.vault.vaultSearch, {
+    query: `SMOKE::${candidates.join(",")}`,
+    ...args,
+  });
+
+describe("vaultSearch folder boundary", () => {
+  test("a folder-scoped search excludes a same-tenant candidate from another folder", async () => {
+    const t = convexTest(schema, modules);
+    const folderA = await seedFolder(t, "A");
+    const folderB = await seedFolder(t, "B");
+    const docA = await seedDoc(t, { title: "A doc", folderId: folderA });
+    const docB = await seedDoc(t, { title: "B doc", folderId: folderB });
+
+    const found = await smokeSearch(t, [docA, docB], { folderId: folderA });
+
+    expect(found.map((doc) => doc._id)).toEqual([docA]);
+  });
+
+  test("folder and category filters intersect", async () => {
+    const t = convexTest(schema, modules);
+    const folderA = await seedFolder(t, "A");
+    const folderB = await seedFolder(t, "B");
+    const matching = await seedDoc(t, {
+      title: "A brain dump",
+      category: "brain-dumps",
+      folderId: folderA,
+    });
+    const wrongCategory = await seedDoc(t, { title: "A upload", folderId: folderA });
+    const wrongFolder = await seedDoc(t, {
+      title: "B brain dump",
+      category: "brain-dumps",
+      folderId: folderB,
+    });
+
+    const found = await smokeSearch(t, [matching, wrongCategory, wrongFolder], {
+      folderId: folderA,
+      category: "brain-dumps",
+    });
+
+    expect(found.map((doc) => doc._id)).toEqual([matching]);
+  });
+
+  test("omitting folderId preserves tenant-wide root search", async () => {
+    const t = convexTest(schema, modules);
+    const folderA = await seedFolder(t, "A");
+    const folderB = await seedFolder(t, "B");
+    const docA = await seedDoc(t, { title: "A doc", folderId: folderA });
+    const docB = await seedDoc(t, { title: "B doc", folderId: folderB });
+    const loose = await seedDoc(t, { title: "Loose doc" });
+
+    const found = await smokeSearch(t, [docA, docB, loose]);
+
+    expect(found.map((doc) => doc._id)).toEqual([docA, docB, loose]);
+  });
+
+  test("foreign and missing folder IDs both return no scoped results", async () => {
+    const t = convexTest(schema, modules);
+    const ownedFolder = await seedFolder(t, "Owned");
+    const foreignFolder = await seedFolder(t, "Foreign", "tenant_b");
+    const missingFolder = await seedFolder(t, "Deleted");
+    const owned = await seedDoc(t, { title: "Owned doc", folderId: ownedFolder });
+    await t.run((ctx) => ctx.db.delete(missingFolder));
+
+    expect(await smokeSearch(t, [owned], { folderId: foreignFolder })).toEqual([]);
+    expect(await smokeSearch(t, [owned], { folderId: missingFolder })).toEqual([]);
+  });
+
+  test("an ingesting folder member remains sealed from scoped search", async () => {
+    const t = convexTest(schema, modules);
+    const folder = await seedFolder(t, "Ingesting", TENANT, "ingesting");
+    const member = await seedDoc(t, {
+      title: "Sealed member",
+      folderId: folder,
+      ragEntryId: "entry-sealed",
+    });
+
+    expect(await smokeSearch(t, [member], { folderId: folder })).toEqual([]);
+  });
+});
 
 describe("vaultIngestText (paste / brain-dump ingest)", () => {
   test("inserts a processing brain-dump row and starts the ingest workflow", async () => {
