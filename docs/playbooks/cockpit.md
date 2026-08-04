@@ -1,5 +1,36 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
+> GRANT, AND THAT IS A CONSENT DEFECT, NOT A WORDING ONE.**)
+>
+> 15.3-09 appended `drive.readonly` to `GOOGLE_SCOPES` and updated **none** of the three surfaces
+> that tell a human what the grant covers. The user was asked to grant read access to their entire
+> Google Drive on a consent page that did not mention Drive; told, on disconnect, that they would
+> lose "your mail AND your calendar"; and shown a connections row still labelled "Gmail & Calendar".
+> All three are now correct:
+>
+> - **`connect-gmail/page.tsx`** — the consent paragraph names Drive and states the limit that makes
+>   `drive.readonly` worth having: "it can never change or delete anything in your Drive".
+> - **`DisconnectGoogle.tsx`** — the confirm names mail, calendar AND Drive, and says what actually
+>   happens to imported folders (they stay in the vault, they stop refreshing).
+> - **`ConnectionsPanel.tsx`** — relabelled "Google — Gmail, Calendar & Drive", and it now reads
+>   `driveReady`. **A CONNECTED GRANT IS NOT NECESSARILY A COMPLETE ONE**: `include_granted_scopes`
+>   is forward-only, so a tenant who connected before 15.3-09 is fully connected for mail and
+>   calendar and holds no Drive scope, which `connected` alone reports as healthy. Without that
+>   branch the shortfall was visible ONLY inside the vault's Drive panel — a user who never opens
+>   the vault never learns why. The Connect link now also appears (as "Reconnect") for a connected
+>   tenant whose grant lacks Drive.
+>
+> **`connectionsSurface.test.ts` now sweeps all three** against a CAPABILITIES list kept in step with
+> `GOOGLE_SCOPES`. Add a fourth scope and the suite is red until every surface names it.
+>
+> **⚠ THE MUTATION CAUGHT THAT SCAN BEING VACUOUS, AND THE REASON GENERALISES.** The first version
+> read the raw file, so the ⚠ comment sitting beside the consent copy — which naturally says
+> "Drive" several times while explaining the rule — satisfied every assertion by itself. Deleting
+> Drive from the actual sentence left all 16 tests GREEN. The scan now strips comments first.
+> **Prose that NAMES the thing is documentation, not evidence.** Same idiom and same reason as
+> `readExecutableCode` in `dispatchGuard.test.ts`, whose header says exactly this.
+
 > Last verified: 2026-08-05 (15.3-09 follow-up — **no cockpit code changed; one TEST file did.**
 > `dispatchGuard.test.ts`’s scope-before-refresh pin now LOOPS over both Drive actions rather than
 > pinning `importDriveFolder` alone, because `listDriveFolders` (the folder picker) is what a

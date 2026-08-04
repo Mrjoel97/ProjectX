@@ -29,7 +29,15 @@ export default function ConnectGmailPage() {
           approval gate alone), and globals.css hardcodes #dc2626 for the DLQ badge on the same
           reasoning. Minting a --danger token is scope this change did not ask for. */}
       {gmailError && (
-        <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: "0.5rem", padding: "1rem", color: "#991b1b" }}>
+        <div
+          style={{
+            border: "1px solid #fecaca",
+            background: "#fef2f2",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+            color: "#991b1b",
+          }}
+        >
           {gmailError}
         </div>
       )}
@@ -37,7 +45,14 @@ export default function ConnectGmailPage() {
       {status === undefined ? (
         <p>Loading…</p>
       ) : status.connected ? (
-        <div style={{ border: "1px solid var(--released)", background: "var(--card)", borderRadius: "0.5rem", padding: "1rem" }}>
+        <div
+          style={{
+            border: "1px solid var(--released)",
+            background: "var(--card)",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+          }}
+        >
           <div style={{ fontWeight: 700, color: "var(--released)" }}>Google connected</div>
           {status.expiresAt && (
             <div style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
@@ -49,9 +64,15 @@ export default function ConnectGmailPage() {
           </p>
         </div>
       ) : (
+        // ⚠ THIS PARAGRAPH IS THE CONSENT. It must name EVERY capability in `GOOGLE_SCOPES`: a
+        // user granting read access to their whole Drive deserves to have been told so on the page
+        // where they grant it. 15.3-09 widened the grant and left this untouched.
+        // `connectionsSurface.test.ts` now fails until every surface names every capability.
         <p style={{ color: "var(--ink-soft)" }}>
           Pikar needs your consent to read, draft, and send email, check calendar availability,
-          and create approved calendar events. It can never permanently delete your mail.
+          create approved calendar events, and read files from your Google Drive so you can import
+          folders into your vault. It can never permanently delete your mail, and it can never
+          change or delete anything in your Drive.
         </p>
       )}
 

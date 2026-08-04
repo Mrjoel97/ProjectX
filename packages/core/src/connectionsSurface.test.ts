@@ -14,7 +14,8 @@ const data = read(`${WEB}/dashboard/profile/connections.ts`);
 const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
 
 // The exact user-facing sentence. If the Google scope changes, this string changes in ONE place.
-const CONFIRM = "Disconnect Google? Pikar will lose access to your mail AND your calendar.";
+const CONFIRM =
+  "Disconnect Google? Pikar will lose access to your mail, your calendar AND your Drive.";
 
 describe("DisconnectGoogle is the single writer of the disconnect copy", () => {
   // Non-vacuity FIRST. Every assertion below is a `not.toContain`, and a `not.toContain` over an
@@ -134,5 +135,77 @@ describe("the blocked rows are information, not decoration", () => {
   test("the profile page mounts the tab", () => {
     expect(profilePage).toContain('id: "connections"');
     expect(profilePage).toContain("<ConnectionsPanel />");
+  });
+});
+
+// ── The scope-copy sweep (15.3-09 follow-up) ─────────────────────────────────
+//
+// THE DEFECT THIS EXISTS FOR, WHICH ALREADY HAPPENED ONCE. 15.3-09 appended `drive.readonly` to
+// GOOGLE_SCOPES and updated NONE of the three surfaces that tell a human what the grant covers:
+// the consent page still promised only mail and calendar, the disconnect confirm still named only
+// mail and calendar, and the connections row was still labelled "Gmail & Calendar". The user was
+// therefore asked to grant read access to their entire Drive on a page that did not mention Drive.
+//
+// A scope is a PROMISE to a person, not a config value. These assertions make the promise and the
+// grant fail together: add a fourth capability to GOOGLE_SCOPES and this suite is red until every
+// surface that speaks to the user has been told about it.
+
+describe("every user-facing surface names every capability in the Google grant", () => {
+  // Keep this list in step with `GOOGLE_SCOPES` in calendar.ts.
+  const CAPABILITIES = ["mail", "calendar", "Drive"] as const;
+
+  // ⚠ COMMENTS STRIPPED, and the mutation run is why. The first version of this scan read the raw
+  // file, so the ⚠ comment sitting BESIDE the consent copy — which naturally says the word "Drive"
+  // several times while explaining the rule — satisfied every assertion on its own. Deleting Drive
+  // from the actual sentence left all 16 tests green. Prose that NAMES the thing is documentation,
+  // not evidence; only the rendered copy counts. Same idiom, and the same reason, as
+  // `readExecutableCode` in dispatchGuard.test.ts.
+  const copyOnly = (src: string): string =>
+    src.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, "").replace(/\/\/[^\n]*/g, "");
+
+  const connectCopy = copyOnly(connectPage);
+  const panelCopy = copyOnly(panel);
+
+  test("the scan is reading real copy, not an empty string", () => {
+    expect(connectCopy).toContain("Pikar needs your consent");
+    expect(panelCopy).toContain("Google —");
+  });
+
+  test("the consent page names all of them — it IS the consent", () => {
+    for (const capability of CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(connectCopy),
+        `the connect page never says "${capability}" — a user cannot consent to a capability the ` +
+          `consent screen does not mention. Widen GOOGLE_SCOPES, widen this sentence.`,
+      ).toBe(true);
+    }
+  });
+
+  test("the disconnect confirm names all of them — it is what the user gives up", () => {
+    for (const capability of CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(CONFIRM),
+        `the disconnect copy never says "${capability}" — someone reading "disconnect Gmail" would ` +
+          `not expect that capability to stop working.`,
+      ).toBe(true);
+    }
+  });
+
+  test("the connections row names all of them, and reports Drive separately", () => {
+    for (const capability of CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(panelCopy),
+        `the connections row never says "${capability}" — this tab is the answer to "what is Pikar ` +
+          `connected to", so an unnamed capability is invisible.`,
+      ).toBe(true);
+    }
+    // `connected` alone cannot distinguish a pre-widening grant from a complete one:
+    // `include_granted_scopes` is FORWARD-only, so an old token refreshes fine and holds no Drive
+    // scope. Without this branch the shortfall is visible only inside the vault.
+    expect(
+      panel,
+      "the connections row does not read driveReady — a tenant connected before the Drive widening " +
+        "is then reported as healthy while every Drive import 403s.",
+    ).toContain("driveReady");
   });
 });

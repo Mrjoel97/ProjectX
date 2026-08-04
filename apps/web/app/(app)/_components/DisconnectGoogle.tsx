@@ -25,11 +25,14 @@ export function DisconnectGoogle() {
     // ponytail: window.confirm — this app has no dialog pattern (BRAND §5 defines none). Native is
     // keyboard-accessible and costs no component. Build a real dialog when a SECOND destructive
     // control needs one.
-    // The copy names calendar deliberately: it is ONE Google grant covering mail and calendar, so
-    // a user who reads "disconnect Gmail" would not expect their events to stop working.
+    // The copy names every capability deliberately: it is ONE Google grant covering mail, calendar
+    // AND Drive, so a user who reads "disconnect Gmail" would not expect their events to stop
+    // working or their Drive imports to stop refreshing. Widen the grant, widen this sentence —
+    // `connectionsSurface.test.ts` fails until you do.
     const ok = window.confirm(
-      "Disconnect Google? Pikar will lose access to your mail AND your calendar. " +
-        "Any scheduled send will be held until you reconnect.",
+      "Disconnect Google? Pikar will lose access to your mail, your calendar AND your Drive. " +
+        "Any scheduled send will be held until you reconnect, and Drive folders already imported " +
+        "stay in your vault but stop refreshing.",
     );
     if (!ok) return;
     setBusy(true);
@@ -47,7 +50,9 @@ export function DisconnectGoogle() {
       }
     } catch {
       // A thrown fetch aborts the action BEFORE deleteTokens, so the connection really is intact.
-      setNote("Disconnect failed — your connection is unchanged. Check your network and try again.");
+      setNote(
+        "Disconnect failed — your connection is unchanged. Check your network and try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -81,7 +86,10 @@ export function DisconnectGoogle() {
         </button>
       )}
       {note && (
-        <p role="status" style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-soft)", maxWidth: "34rem" }}>
+        <p
+          role="status"
+          style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-soft)", maxWidth: "34rem" }}
+        >
           {note}
         </p>
       )}

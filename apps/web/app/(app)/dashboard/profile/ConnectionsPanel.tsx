@@ -65,7 +65,9 @@ function GoogleRow() {
   return (
     <div style={row}>
       <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
-        <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>Google — Gmail &amp; Calendar</strong>
+        <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>
+          Google — Gmail, Calendar &amp; Drive
+        </strong>
         <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
           {/* `undefined` = still loading. Rendering "Not connected" here would be a FALSE NEGATIVE
               inviting the user to reconnect an already-connected account — the flash-of-wrong-state
@@ -79,6 +81,18 @@ function GoogleRow() {
                 ? `Access token expires ${new Date(status.expiresAt).toLocaleString()}`
                 : "Connected"}
         </span>
+        {/* ⚠ A CONNECTED GRANT IS NOT NECESSARILY A COMPLETE ONE, and this is the only surface that
+            can say so. `include_granted_scopes` is forward-only, so a tenant who connected before
+            15.3-09 is fully connected for mail and calendar and holds NO Drive scope — `connected`
+            alone reports that as healthy. Without this line the vault's Drive panel is the only
+            place the shortfall is visible, and a user who never opens the vault never learns why
+            their imports are missing. */}
+        {status?.connected && !status.driveReady && (
+          <span style={{ fontSize: "0.85rem", color: "var(--ink)" }}>
+            Drive is not included in this connection — it was made before Drive access existed.
+            Reconnect to add it; mail and calendar keep working either way.
+          </span>
+        )}
       </div>
       {/* `<DisconnectGoogle />` renders UNCONDITIONALLY — never gated on `status.connected` here.
           It carries its own `gmailStatus` subscription and decides for itself whether to show the
@@ -87,7 +101,7 @@ function GoogleRow() {
           returning, which would unmount the component before its warning could render. After a
           failed revoke the user correctly sees BOTH the warning below AND the Connect link. */}
       <div style={{ display: "grid", gap: "0.4rem", justifyItems: "end" }}>
-        {status !== undefined && !status.connected && (
+        {status !== undefined && (!status.connected || !status.driveReady) && (
           <a
             href="/connect-gmail"
             style={{
@@ -101,7 +115,7 @@ function GoogleRow() {
               whiteSpace: "nowrap",
             }}
           >
-            Connect
+            {status.connected ? "Reconnect" : "Connect"}
           </a>
         )}
         <DisconnectGoogle />
