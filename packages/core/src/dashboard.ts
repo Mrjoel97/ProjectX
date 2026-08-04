@@ -198,3 +198,30 @@ export const DASHBOARD_STATE_COPY = {
 } as const;
 
 export type DashboardPageState = keyof typeof DASHBOARD_STATE_COPY;
+
+export type DashboardRefusalReason =
+  | "unauthenticated"
+  | "forbidden"
+  | "owner-required"
+  | "reauthorization-required"
+  | "governed";
+
+type CompleteDashboardBound = DashboardBound & {
+  partial: false;
+  partialReason?: never;
+};
+
+type PartialDashboardBound = DashboardBound & {
+  partial: true;
+  partialReason: DashboardPartialReason;
+};
+
+/** Closed page-result vocabulary; data-bearing success never shares a shape with failure/refusal. */
+export type DashboardResult<Data> =
+  | { state: "loading" }
+  | { state: "empty" }
+  | { state: "ready"; data: Data; bound: CompleteDashboardBound }
+  | { state: "partial"; data: Data; bound: PartialDashboardBound }
+  | { state: "busy" }
+  | { state: "error"; code: "query-failed" | "timed-out"; retryable: true }
+  | { state: "refusal"; reason: DashboardRefusalReason };

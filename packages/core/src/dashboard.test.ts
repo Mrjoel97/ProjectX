@@ -8,6 +8,7 @@ import {
   parseDashboardCursor,
   resolveDashboardWindow,
 } from "./dashboard";
+import type { DashboardResult } from "./dashboard";
 
 const DAY_MS = 86_400_000;
 
@@ -151,5 +152,32 @@ describe("dashboard page contracts", () => {
     ]);
     expect(DASHBOARD_STATE_COPY.error.retry).toBe(true);
     expect(DASHBOARD_STATE_COPY.refusal.retry).toBe(false);
+  });
+
+  it("keeps data, partial success, errors and refusals in closed result shapes", () => {
+    const results: DashboardResult<readonly string[]>[] = [
+      { state: "loading" },
+      { state: "empty" },
+      {
+        state: "ready",
+        data: [],
+        bound: { returned: 0, limit: 20, nextCursor: null, partial: false },
+      },
+      {
+        state: "partial",
+        data: ["row"],
+        bound: {
+          returned: 1,
+          limit: 20,
+          nextCursor: null,
+          partial: true,
+          partialReason: "coverage-gap",
+        },
+      },
+      { state: "busy" },
+      { state: "error", code: "query-failed", retryable: true },
+      { state: "refusal", reason: "owner-required" },
+    ];
+    expect(results.map((result) => result.state)).toEqual(Object.keys(DASHBOARD_STATE_COPY));
   });
 });
