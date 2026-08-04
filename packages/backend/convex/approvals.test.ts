@@ -92,10 +92,13 @@ describe("Approvals summary and plan lanes", () => {
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
-      const page = await asTenant.query(api.approvals.listAwaiting, {
+      const page: {
+        items: Array<{ planId: string }>;
+        nextCursor: string | null;
+      } = await asTenant.query(api.approvals.listAwaiting, {
         paginationOpts: { numItems: 1, cursor },
       });
-      seen.push(...page.items.map((row) => row.planId));
+      seen.push(...page.items.map((row: { planId: string }) => row.planId));
       cursor = page.nextCursor;
     } while (cursor !== null);
 
@@ -132,8 +135,13 @@ describe("Approvals summary and plan lanes", () => {
     const inFlight = await asTenant.query(api.approvals.listInFlight, {
       paginationOpts: { numItems: 10, cursor: null },
     });
-    expect(inFlight.items.map((row) => row.progress.state).sort()).toEqual(["exact", "partial"]);
-    expect(inFlight.items.find((row) => row.progress.state === "exact")?.progress).toEqual({
+    expect(
+      inFlight.items.map((row: { progress: { state: string } }) => row.progress.state).sort(),
+    ).toEqual(["exact", "partial"]);
+    expect(
+      inFlight.items.find((row: { progress: { state: string } }) => row.progress.state === "exact")
+        ?.progress,
+    ).toEqual({
       state: "exact",
       total: 4,
       sent: 2,
