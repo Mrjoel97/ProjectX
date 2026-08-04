@@ -250,13 +250,13 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1785713950.4235785,
-    "ast_hash": "e09fbf10e5841c032030336d1a71ba69",
+    "mtime": 1785805985.0416257,
+    "ast_hash": "98f80e97c3d957f9f32f083c92540b11",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1785802998.0572171,
-    "ast_hash": "2ff403b4a76b2eb0faa1b109a585fa0a",
+    "mtime": 1785806030.7087276,
+    "ast_hash": "05ab412c7b089ffe55684717347eeeb8",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
@@ -6942,6 +6942,11 @@
   "apps/web/app/(app)/dashboard/vault/DriveBrowser.tsx": {
     "mtime": 1785801452.6311288,
     "ast_hash": "c8e6873eb96bb1310630f62b93e1ca80",
+    "semantic_hash": ""
+  },
+  ".planning/phases/20.1-drive-in-the-cockpit/20.1-01-PLAN.md": {
+    "mtime": 1785805942.1908538,
+    "ast_hash": "24b6e44695ebedfa7c48d29bbecc5298",
     "semantic_hash": ""
   }
 }
