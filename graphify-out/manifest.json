@@ -1115,8 +1115,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/connect-gmail/page.tsx": {
-    "mtime": 1785683896.5610836,
-    "ast_hash": "068e3ba6457afec6b58a40ab19845c7f",
+    "mtime": 1785805205.9904914,
+    "ast_hash": "b193261c54a23aa79e2225abe20ae062",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/ops/page.tsx": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1785799613.043391,
-    "ast_hash": "45b0be6fc942af953df24aceeafe5f52",
+    "mtime": 1785805190.0703535,
+    "ast_hash": "922eab7bb2a6332695aad0a58bd5a1d3",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -4085,8 +4085,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/onboarding.md": {
-    "mtime": 1785766090.406849,
-    "ast_hash": "793eec68787cacc9a42d6e953df40b88",
+    "mtime": 1785805190.0703535,
+    "ast_hash": "b358f54f33f4fd3be1680636a57d262d",
     "semantic_hash": ""
   },
   "packages/core/src/businessProfile.test.ts": {
@@ -6625,13 +6625,13 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/_components/DisconnectGoogle.tsx": {
-    "mtime": 1785683896.5595703,
-    "ast_hash": "757214bd88cc5517f11d8b1a0998736b",
+    "mtime": 1785805205.974867,
+    "ast_hash": "8cb2b0f201c4a28236b6fd57c671f7f7",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/ConnectionsPanel.tsx": {
-    "mtime": 1785683896.5610836,
-    "ast_hash": "7d1e726a44285406707febdb3f90723f",
+    "mtime": 1785805205.974867,
+    "ast_hash": "2ea9c90cda908490e9d7e4972edeefba",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/connections.ts": {
@@ -6640,8 +6640,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/connectionsSurface.test.ts": {
-    "mtime": 1785683896.5767286,
-    "ast_hash": "63a74346261890017a4e411d5e42037b",
+    "mtime": 1785805205.9904914,
+    "ast_hash": "9ae7618953d34ba251f10c44a0150566",
     "semantic_hash": ""
   },
   ".planning/phases/15.3-vault-folders-folder-ingest-synthesis-and-drill-in/15.3-CONTEXT.md": {
