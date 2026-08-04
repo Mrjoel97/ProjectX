@@ -34,6 +34,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (completed 2026-07-23)
 - [~] **Phase 9: Private Beta Productionization** - **SUPERSEDED (2026-07-24) -> absorbed into Phase 25.** Productionization moves to the END of milestone v2.0 (executes LAST, after all Phase 10+ platform work). `09-CONTEXT.md` remains the spec for that final phase.
 
+### Phase 26: Pending product pages and Vault redesign integration
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 25
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26 to break down)
+
 ---
 
 ## Milestone v2.0 - Platform -> Private Beta (Phases 10-25)
@@ -574,6 +584,25 @@ Plans:
 - [ ] 15-04-PLAN.md - Lane A: "Act on this" handoff - `collecting` staging, scheduled dispatch, attribution/incomplete body, honest fallback
 - [ ] 15-05-PLAN.md - Lane B: generalized action executor - exhaustive arm table in `executePlan`, `deliverApprovedPlan.ts` byte-unchanged, Approve-not-a-tool scan
 - [ ] 15-06-PLAN.md - Lane A: rewritten specialist bodies, multi-pin eval runner, 3 golden fixtures, one eval-gate run (ship dark on red)
+
+### Phase 15.4: Vault redesign and scoped browse correctness (INSERTED)
+
+**Goal:** Ship the approved Nord Edge Vault experience on the real vault data plane, preserving every existing governed action while making browse and search honestly folder-scoped.
+**Requirements**: VALT-16
+**Depends on:** Phase 15.3
+**Success Criteria** (what must be TRUE):
+  1. The root browse, inside-folder, document-preview and empty states match the approved mockup using shared product tokens rather than page-local hardcoded colors.
+  2. Existing upload, folder upload, Google Drive import, folder digest/rebuild, identity correction, citations, download and delete controls remain reachable and functional.
+  3. Search within an open folder cannot return documents from another folder; root/category search retains its current tenant-scoped behavior.
+  4. Category tabs do not claim exact counts until a bounded counter contract exists, and all loading, error, empty, partial-ingest and stale-digest states remain honest.
+  5. Backend/component tests, production build and browser UAT cover the redesigned states and scoped-search boundary.
+**Plans:** 4 plans
+
+Plans:
+- [ ] 15.4-01-PLAN.md — Server-scoped folder search contract with isolation/sealing regression tests (Wave 1)
+- [ ] 15.4-02-PLAN.md — Nord Edge root/folder browse, honest state model, retained-action component tests and scoped styles (Wave 2)
+- [ ] 15.4-03-PLAN.md — Nord Edge preview/import surfaces with lifecycle and control-retention tests (Wave 3)
+- [ ] 15.4-04-PLAN.md — Executed Playwright/full gates, watched playbooks and authenticated owner UAT (Wave 4)
 
 ### Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED)
 
