@@ -31,12 +31,14 @@ import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
 // pages don't exist yet render disabled with a "Soon" tag — honest, no dead links.
+// Approvals is live for owner preview while its explicit UAT checkpoint remains pending; route
+// accessibility and owner acceptance are separate facts.
 // Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
 const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
   { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
-  { label: "Approvals", icon: <BellIcon />, soon: true },
+  { label: "Approvals", href: "/dashboard/approvals", icon: <BellIcon /> },
   { label: "Finance", icon: <WalletIcon />, soon: true },
   { label: "Content", icon: <FileIcon />, soon: true },
   { label: "Sales Pipeline", icon: <TrendIcon />, soon: true },

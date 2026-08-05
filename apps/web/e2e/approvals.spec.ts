@@ -156,10 +156,11 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   await page.reload();
   await expect(page.getByRole("heading", { name: "Clear the gate" })).toBeVisible({ timeout: 20_000 });
 
-  // Rollout gate: direct route is reachable while the rail remains a real disabled/Soon entry.
-  const approvalsNav = page.locator(".rail-item.is-soon", { hasText: "Approvals" });
-  await expect(approvalsNav).toHaveAttribute("aria-disabled", "true");
-  await expect(approvalsNav).toContainText("Soon");
+  // Owner-preview gate: the route must be discoverable from the product while acceptance remains
+  // a separate manual checkpoint. Enabling this link does not claim provider or UAT success.
+  const approvalsNav = page.getByRole("link", { name: "Approvals", exact: true });
+  await expect(approvalsNav).toHaveAttribute("href", "/dashboard/approvals");
+  await expect(approvalsNav).toHaveClass(/is-active/);
 
   const awaiting = page.getByRole("region", { name: /Awaiting you/i });
   for (const kind of ["Email", "Reel", "Calendar event", "Next-step memo"]) {

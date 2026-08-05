@@ -76,9 +76,10 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
 7. A state-changing control calls the existing governed mutation. The mutation rechecks tenant/owner
    authorization and current state, is retry-idempotent, and audits refs/hashes/counts only.
 8. Attachment/report downloads request a newly ownership-checked signed URL on demand.
-9. Navigation remains disabled/Soon until focused tests, authenticated Playwright, responsive and
-   keyboard checks, rollback proof and blocking owner UAT all pass. The owner-approved route plan
-   activates only that page.
+9. Navigation normally remains disabled/Soon until focused tests, authenticated Playwright,
+   responsive and keyboard checks, rollback proof and blocking owner UAT all pass. An explicit
+   owner-directed preview may activate one implemented route so UAT is reachable from the product;
+   that link is access, not approval, and the checkpoint remains open.
 
 ## Invariants — what must never break
 
@@ -101,8 +102,9 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
    clicks have one terminal effect and refs/counts-only audit. A discarded plan never rearms.
 9. **External success is never seeded.** Seeded terminal rows can prove UI/accounting states only.
    Provider delivery, charge, render or storage success requires separately executed live evidence.
-10. **Page rollout is independent.** Direct hidden routes support gates; nav activates only after
-    that page's blocking owner UAT. Incomplete pages never receive fake data to unlock navigation.
+10. **Page rollout is independent.** Direct routes support gates; nav normally activates after that
+    page's blocking owner UAT. A named owner-preview exception may expose an implemented route while
+    its UAT stays pending. Incomplete pages never receive fake data to unlock navigation.
 11. **Pipeline safety is never a UI rollback.** Hiding Pipeline cannot remove Phase-19 suppression,
     consent or postal-footer enforcement.
 12. **Command Center only composes summaries.** Source loading/error/partial/unavailable semantics
@@ -137,11 +139,12 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
 `/review`, `/requests`, and `/ops`. Keep the compound index, cancellation provenance, delivery
 counters and read adapter deployed; rollback never rewrites a legacy row or fabricates cost/progress.
 
-### Approvals hidden-route gate (Plan 26-05, pre-owner UAT)
+### Approvals owner-preview gate (Plan 26-05, pre-owner UAT)
 
-- `/dashboard/approvals` is directly reachable behind the authenticated shell while its serialized
-  rail entry remains `aria-disabled="true"` with `Soon`. Do not add the href or badge before the
-  blocking owner checkpoint passes.
+- `/dashboard/approvals` is directly reachable behind the authenticated shell and its serialized
+  rail entry links to the route. The owner explicitly rejected the disabled `Soon` entry on
+  2026-08-05 because it made the page inaccessible for UAT. This preview link does not close the
+  blocking owner checkpoint or prove an external-provider result.
 - The page composes `approvals.summary`, bounded Awaiting/Scheduled/In-flight/Cleared lanes,
   decisions and the sanitized Ops aggregate. Detail content is fetched through the existing
   tenant-owned `plans.byThread`; attachment capabilities are requested only after the user opens
@@ -162,7 +165,8 @@ counters and read adapter deployed; rollback never rewrites a legacy row or fabr
 only `.test.ts` in its DOM-free runner) and passes 13/13. Web typecheck passes. The authenticated
 Playwright spec is authored and reached the real local Convex seeding/route run, but this shell has
 no `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and the saved storage state is expired; the page correctly
-redirected to Sign in. Therefore browser/UAT/navigation evidence is still **pending**, not green.
+redirected to Sign in. Therefore authenticated browser/UAT evidence is still **pending**, not green;
+the owner-preview navigation link is active only to make that verification reachable.
 Resume with both runtimes active and credentials set:
 
 ```text
@@ -183,11 +187,14 @@ media-provider success; any such claim requires a separately executed live resul
    access, a guessed foreign id, timestamp ties, empty, cap/partial, retry and legacy rows.
 4. For money/action terminals, instrument every success/refund/failure branch and replay before
    building Finance/UI copy. Never weaken the enforcement limiter to make reporting easier.
-5. Build the direct route with navigation still disabled. Cover every page state in component tests,
-   then run authenticated Playwright without claiming seeded provider outcomes are live outcomes.
+5. Build the direct route with navigation normally disabled. If the owner explicitly requires an
+   in-product preview link for UAT, record that exception without claiming checkpoint completion.
+   Cover every page state in component tests, then run authenticated Playwright without claiming
+   seeded provider outcomes are live outcomes.
 6. Exercise desktop/tablet/mobile, keyboard/focus, no color-only meaning and the rollback boundary.
-7. After owner approval, change the one serialized nav entry, rerun the page browser spec, web
-   typecheck/build and watcher, then record approval/evidence here.
+7. After owner approval, rerun the page browser spec, web typecheck/build and watcher, then record
+   approval/evidence here. If an owner-preview link is already active, approval changes the recorded
+   rollout state rather than silently treating link activation as sign-off.
 
 ## How to verify
 

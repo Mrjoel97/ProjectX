@@ -1,7 +1,10 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-05 (Phase 26 Plan 05 pre-UAT — **the connected Approvals route exists but
-> navigation remains disabled.**) `/dashboard/approvals` reuses the one `executePlan` gate plus the
+> Last verified: 2026-08-05 (Phase 26 Plan 05 owner preview — **the connected Approvals route is
+> accessible from navigation while authenticated browser evidence and owner UAT remain pending.**)
+> The owner rejected the disabled `Soon` item because it prevented in-product access to the page;
+> activating `/dashboard/approvals` is an access correction, not an approval claim. The route reuses
+> the one `executePlan` gate plus the
 > shipped discard/schedule/cancel/move mutations; it does not add a fan-out starter. Initial email
 > scheduling resolves browser-local `datetime-local` to an absolute instant, displays the resolved
 > IANA timezone for confirmation, writes `setPlanSendTime`, and only then calls `executePlan`.
@@ -18,7 +21,8 @@
 > mutations prove CAS/idempotency/races. No seeded row proves Gmail delivery, Calendar creation or
 > media generation. Roll back by disabling the hidden Approvals route and retaining workspace,
 > `/review`, `/requests`, `/ops`, all plan provenance/counters and the existing cockpit terminals.
-> Owner UAT and nav activation remain blocking Task 2/Task 3 work.
+> Authenticated browser evidence and owner UAT remain blocking; the preview link can be disabled
+> independently if rollback is needed.
 
 > Last verified: 2026-08-05 (Phase 26 Plan 03 — Approvals write semantics). The existing human
 > `executePlan` gate remains the only email fan-out starter. This change adds guarded discard,
