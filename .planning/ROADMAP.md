@@ -73,6 +73,134 @@ Plans:
 - [ ] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15)
 - [ ] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16)
 
+## Post-Beta Knowledge-Work Expansion (Phases 27-30)
+
+These phases are the reviewed expansion queue after Phase 25 opens the private beta. They do not
+become new beta-admission blockers, and they extend the same Executive Agent, business memory,
+approval model, tenant boundary and outcome-measurement philosophy rather than adding a plugin
+catalogue or parallel runtime.
+
+### Phase 27: Curated Knowledge-Work Pack Pilot
+
+**Goal:** Prove that six high-value external workflow patterns can become native, governed Pikar packs without importing a second plugin runtime, router, memory plane or capability boundary.
+**Requirements**: PACK-01, PACK-02, PACK-03, PACK-04
+**Depends on:** Phase 25 for the live private-beta identity/connector baseline; consumes landed Phase 16 research, Phase 17 calendar, Phase 18 content, Phase 19 contacts and Phase 26 source summaries. This is queued post-beta work and does not block Phase 25.
+**Success Criteria** (what must be TRUE):
+  1. An exact upstream commit/file manifest and Apache-2.0 attribution/modification record exist for every adapted source; updates require a reviewed diff and cannot auto-activate.
+  2. Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review are native Pikar skills/workflows using one Executive Agent, one Business Blueprint/Vault memory and existing artifact/plan surfaces.
+  3. Every operation is classified as existing, explicitly missing or forbidden; code-owned grants and structural tool absence enforce the matrix, untrusted connector content cannot reach writes, and no workflow bypasses the plan gate.
+  4. All six candidates pass outcome-state/adversarial evals and authenticated responsive browser gates before becoming discoverable, with honest missing-source and partial-result states.
+  5. The shared refs/counts-only measurement layer reports time-to-first-outcome, recommendation acceptance, plan decisions, missing-connector surprises, evidence quality, completion, cost and latency per workflow.
+**Plans:** 9 plans across 5 waves
+
+Plans:
+- [ ] 27-01-PLAN.md — Pin upstream sources, Apache-2.0 provenance and reviewed-update controls (Wave 1)
+- [ ] 27-02-PLAN.md — Native pack contracts, code-owned grants, candidate lifecycle and fixture runner (Wave 1)
+- [ ] 27-03-PLAN.md — Privacy-bounded workflow outcome measurement (Wave 2)
+- [ ] 27-04-PLAN.md — Business Pulse and Campaign Plan adaptations/evals (Wave 2)
+- [ ] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
+- [ ] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
+- [ ] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
+- [ ] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4)
+- [ ] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5)
+
+### Phase 28: Connector-Backed Revenue Pack
+
+**Goal:** Add the read-only business-data rails that turn the pilot into measurable revenue and cash outcomes, while keeping mutations structurally behind Pikar's approved-plan executor.
+**Requirements**: REVN-01, REVN-02, REVN-03, REVN-04, REVN-05, REVN-06
+**Depends on:** Phase 27 and completed Phase 19 ACTN-05/PIPE-01. Provider adapters additionally require Phase 25's production secret/OAuth posture. No MCP endpoint is assumed suitable until its execution-time review passes.
+**Success Criteria** (what must be TRUE):
+  1. HubSpot, QuickBooks, Stripe and PayPal each pass server-side endpoint/OAuth/security/data-processing/rate-limit/terms review and expose tenant-scoped read-only projections with encrypted, revocable credentials and honest re-auth/error states.
+  2. Lead triage, call lists, pipeline reviews and customer pulse consume Phase 19's one person/consent/suppression store and never invent or duplicate CRM state.
+  3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
+  4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
+  5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
+**Plans:** 29 plans across 20 waves
+
+Plans:
+- [ ] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1)
+- [ ] 28-01-PLAN.md — Independent provider suitability, OAuth, security and terms decisions (Wave 2)
+- [ ] 28-18-PLAN.md — Operational playbook and watch ownership (Wave 2)
+- [ ] 28-02-PLAN.md — Normalized deterministic finance core (Wave 2)
+- [ ] 28-03-PLAN.md — Encrypted credentials and additive connector schema (Wave 3)
+- [ ] 28-04-PLAN.md — Shared OAuth/revocation/security mechanics without a generic runtime (Wave 4)
+- [ ] 28-26-PLAN.md — Durable machine-readable provider eligibility gate (Wave 5)
+- [ ] 28-05-PLAN.md — Independent read-only HubSpot rail (Wave 6)
+- [ ] 28-06-PLAN.md — Independent read-only QuickBooks rail (Wave 6)
+- [ ] 28-07-PLAN.md — Independent read-only Stripe rail (Wave 6)
+- [ ] 28-08-PLAN.md — Independent read-only PayPal rail (Wave 6)
+- [ ] 28-22-PLAN.md — HubSpot judgment and machine gate sealing (Wave 7)
+- [ ] 28-23-PLAN.md — QuickBooks judgment and machine gate sealing (Wave 7)
+- [ ] 28-24-PLAN.md — Stripe judgment and machine gate sealing (Wave 7)
+- [ ] 28-25-PLAN.md — PayPal judgment and machine gate sealing (Wave 7)
+- [ ] 28-09-PLAN.md — Eligible-provider callback, status and connection integration (Wave 8)
+- [ ] 28-10-PLAN.md — Phase 19-native CRM outcome projections (Wave 9)
+- [ ] 28-11-PLAN.md — Available-rail cash-flow and payroll-confidence composition (Wave 9)
+- [ ] 28-12-PLAN.md — Minimal read-only revenue specialist grant (Wave 10)
+- [ ] 28-13-PLAN.md — Invoice reminders behind existing approval and suppression (Wave 11)
+- [ ] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12)
+- [ ] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13)
+- [ ] 28-19-PLAN.md — State-based golden outcome and adversarial eval suite (Wave 14)
+- [ ] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15)
+- [ ] 28-15-PLAN.md — Privacy-safe revenue outcome measurement (Wave 16)
+- [ ] 28-21-PLAN.md — Provider/workflow terminal telemetry wiring (Wave 17)
+- [ ] 28-29-PLAN.md — Plan-decision and observed-recovery telemetry wiring (Wave 18)
+- [ ] 28-16-PLAN.md — Automated live/browser/repository exposure evidence (Wave 19)
+- [ ] 28-27-PLAN.md — Owner subset decision and strict named-provider phase sealing (Wave 20)
+
+### Phase 29: Unified Knowledge and Routines
+
+**Goal:** Turn connected Pikar knowledge into one cited cross-source search experience and turn Phase 21 from a generic prompt editor into safe workflow-pack customization and repeatable routines.
+**Requirements**: KNOW-01, ROUT-01, ROUT-02
+**Depends on:** Phase 28 and Phase 21's tenant-scoped candidate/eval authoring seam. Recurrence remains gated on an explicit standing-instruction/OAuth decision and is not implied by this phase's existence.
+**Success Criteria** (what must be TRUE):
+  1. One bounded tenant-scoped query decomposes across available native adapters, synthesizes cited/deduplicated answers, scores authority/freshness/confidence and identifies unavailable/partial sources without an arbitrary MCP client.
+  2. Users customize approved workflow-pack templates as immutable tenant-scoped candidates; templates can change instructions/preferences but cannot widen code-owned tools or publish executable code.
+  3. Candidate activation uses outcome-based held-out evals and authenticated UAT; provenance identifies upstream template, user edits, version, evidence and rollback target.
+  4. The manually re-runnable pinned workflow remains the safe baseline. Recurrence ships only if approval-template semantics, token expiry/re-auth, timezone/DST, missed runs, idempotency, pause/revoke and audit behavior are all decided and proven.
+  5. Search and routine telemetry reports evidence coverage, unsupported claims, repeat use, completion, cost and latency through refs/counts-only events.
+**Plans:** 13 plans across 9 waves
+
+Plans:
+- [ ] 29-01-PLAN.md — Dependency audit, pure contracts, schema and playbook boundary (Wave 1)
+- [ ] 29-02-PLAN.md — Vault and Drive native knowledge adapters (Wave 2)
+- [ ] 29-03-PLAN.md — Gmail and landed CRM/support adapters behind toolless ingestion (Wave 2)
+- [ ] 29-04-PLAN.md — Registry-owned toolless query planning and cited synthesis (Wave 2)
+- [ ] 29-05-PLAN.md — Schema-driven tenant pack candidates through Phase 21 (Wave 3)
+- [ ] 29-06-PLAN.md — Bounded cited cross-source search coordinator (Wave 3)
+- [ ] 29-09-PLAN.md — Unified knowledge workspace UI and browser gate (Wave 4)
+- [ ] 29-07-PLAN.md — Pack customization UI and held-out eval corpus (Wave 4)
+- [ ] 29-08-PLAN.md — Version-pinned manual workflow reruns (Wave 5)
+- [ ] 29-10-PLAN.md — Authenticated customization/manual-rerun release gate (Wave 6)
+- [ ] 29-11-PLAN.md — Fail-closed recurrence governance and live-evidence decision (Wave 7)
+- [ ] 29-12-PLAN.md — Deferred-absence proof or approved recurrence backend (Wave 8)
+- [ ] 29-13-PLAN.md — Branch-correct routine UI, live evidence and final owner gate (Wave 9)
+
+### Phase 30: Optional Vertical Workflow Packs
+
+**Goal:** Offer selectively relevant Legal, HR, Product, Design, Engineering and Data workflow packs without turning the core solopreneur product into a catalogue or weakening high-stakes safeguards.
+**Requirements**: VERT-01, VERT-02, VERT-03, VERT-04
+**Depends on:** Phase 29's native pack authoring/search substrate and behavioral evidence from Phases 27-29. Each external connector has an independent suitability gate.
+**Success Criteria** (what must be TRUE):
+  1. Tier/profile/capability rules recommend at most the relevant packs and never alter tool authority; users can inspect why a pack is available or blocked.
+  2. Legal, HR, Product, Design, Engineering and Data each have separately versioned native templates, provenance, outcome contracts, disclaimers, adversarial evals and authenticated UAT before exposure.
+  3. High-stakes Legal/HR/Data outputs are explicitly assistive, grounded and review-required; Data begins file-first/read-only and external system execution is absent until a dedicated adapter gate passes.
+  4. Vertical metrics prove useful outcomes and repeat use rather than install count; a pack can be disabled independently without damaging shared memory or artifacts.
+  5. Bio Research remains excluded until behavioral demand and a separate scientific, licensing, data and regulated-risk plan exist.
+**Plans:** 10 plans across 6 waves
+
+Plans:
+- [ ] 30-01-PLAN.md — Shared vertical safety/relevance contracts and structural Bio exclusion (Wave 1)
+- [ ] 30-02-PLAN.md — Tenant discovery, evidence, telemetry and independent controls (Wave 2)
+- [ ] 30-03-PLAN.md — Deterministic file-first Data pack (Wave 3)
+- [ ] 30-04-PLAN.md — Product and Design artifact-only candidates (Wave 3)
+- [ ] 30-05-PLAN.md — Legal issue-spotting candidate and high-stakes boundary (Wave 3)
+- [ ] 30-06-PLAN.md — HR hiring/onboarding candidate and employment-decision boundary (Wave 3)
+- [ ] 30-07-PLAN.md — Engineering architecture/runbook candidate without production authority (Wave 3)
+- [ ] 30-08-PLAN.md — Shared candidate publication, provenance and eval integration (Wave 4)
+- [ ] 30-09-PLAN.md — Authenticated UAT and evidence-based exposure of at most two packs (Wave 5)
+- [ ] 30-10-PLAN.md — Six-pack activation/rollback drills, Bio scan and final owner gate (Wave 6)
+
 ---
 
 ## Milestone v2.0 - Platform -> Private Beta (Phases 10-25)

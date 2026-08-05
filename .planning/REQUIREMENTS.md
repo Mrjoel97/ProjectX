@@ -174,6 +174,42 @@ blanket-blocked by Phase 25; each surface carries only its real dependency.*
 - [ ] **PIPE-01** *(Phase 19 companion)*: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in every product-email terminal and the first release does not invent opportunities, deal stages or monetary pipeline values
 - [ ] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
 
+## Post-Beta Knowledge-Work Pack Requirements
+
+*Added 2026-08-05 from the owner-approved knowledge-work plugin rollout. These phases are planned
+now but execute after Phase 25 opens the private beta; they do not become a new beta-admission gate.
+Anthropic's repository is an upstream workflow source, never a second plugin runtime or capability
+boundary inside Pikar.*
+
+### Curated Pack Pilot
+
+- [ ] **PACK-01**: Every adapted upstream workflow pins an exact source commit and file set, retains Apache-2.0 attribution and modification notices, records a source hash/provenance manifest, and can update only through an explicit reviewed diff — never an automatic production sync
+- [ ] **PACK-02**: Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review run as native Pikar workflows over the existing Executive Agent, Business Blueprint, Vault, research, document/content, calendar, inbox and approval surfaces; no second router, memory store, plugin runtime or duplicate output plane is introduced
+- [ ] **PACK-03**: Each pilot workflow has a complete operation-to-tool matrix; skill bodies remain registry-owned while every capability grant is code-owned and structurally absent when not allowed; connector content is fenced as untrusted, writes remain behind the plan gate, and each skill publishes as a candidate that must pass outcome-state evals plus an authenticated browser gate before exposure
+- [ ] **PACK-04**: Workflow-pack telemetry measures time-to-first-useful-outcome, recommendation acceptance, plan approve/edit/reject, missing-connector surprise rate, citation/unsupported-claim rate, completion outcome, cost and latency without placing raw content or PII in telemetry
+
+### Connector-Backed Revenue Pack
+
+- [ ] **REVN-01**: A server-side HubSpot adapter provides tenant-scoped read-only account, contact and pipeline projections after endpoint, OAuth, data-processing, rate-limit and commercial-terms review; no generic tenant-supplied MCP client is introduced
+- [ ] **REVN-02**: A server-side QuickBooks adapter provides tenant-scoped read-only reports required for cash, receivables, payables and revenue analysis after the same suitability and terms gate
+- [ ] **REVN-03**: Server-side Stripe and PayPal adapters provide tenant-scoped read-only payments, invoices, settlements and dispute context; tokens use revocable provider grants and encrypted storage, with honest partial/unavailable states
+- [ ] **REVN-04**: Lead triage, call lists, pipeline review and customer pulse consume the Phase 19 person/consent/suppression substrate plus read-only connector projections without creating a second CRM or fabricating deal values/stages
+- [ ] **REVN-05**: Cash-flow and payroll-confidence results are computed in deterministic, tested pure TypeScript over validated normalized financial inputs with explicit provenance, coverage windows, confidence semantics and accountant-review disclaimers — never by LLM arithmetic
+- [ ] **REVN-06**: Invoice reminders are drafts until a user approves a governed plan; sending, refunds, credits, CRM mutations and financial writes are unreachable from read-only revenue specialists
+
+### Unified Knowledge and Routines
+
+- [ ] **KNOW-01**: One tenant-scoped search experience decomposes a query across native Pikar sources (Vault, Drive, Gmail and landed CRM/support sources), returns cited and deduplicated answers with source authority/freshness/confidence, and names unavailable or partial sources honestly
+- [ ] **ROUT-01**: Phase 21's authoring seam becomes a user-facing workflow-pack authoring layer: users customize approved native templates and publish immutable tenant-scoped candidates through the existing eval gate, never arbitrary tool grants or executable code
+- [ ] **ROUT-02**: Recurring routines ship only after the standing-instruction approval model, OAuth lifetime/re-auth behavior, missed-run semantics, timezone/DST handling, idempotency and pause/revoke controls are explicitly decided and tested; until then the safe deliverable remains a manually re-runnable pinned workflow
+
+### Optional Vertical Packs
+
+- [ ] **VERT-01**: Legal, HR, Product, Design, Engineering and Data packs are discoverable only when tenant tier, business profile and connected capabilities make them relevant; selection changes guidance and templates, never tool authority
+- [ ] **VERT-02**: Each vertical pack is a separately versioned, provenance-tracked and eval-gated native pack with vertical-specific disclaimers, output contracts, failure states and authenticated UAT; high-stakes results remain assistive and require qualified human review
+- [ ] **VERT-03**: Data analysis starts file-first and read-only; warehouse execution, HRIS/ATS, legal-system, design, source-control and monitoring connectors require their own server-side suitability/security/terms gate before activation
+- [ ] **VERT-04**: Bio Research remains outside the general product and roadmap execution until behavioral demand, a named target persona, scientific validation, data/licensing review and a separate regulated-risk plan justify a dedicated vertical
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
@@ -304,6 +340,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RPRT-01 | Phase 26 | Pending |
 | PIPE-01 | Phase 19 (consumed by Phase 26 nav/integration gate) | Pending |
 | HOME-01 | Phase 26 | Pending |
+| PACK-01 | Phase 27 | Pending |
+| PACK-02 | Phase 27 | Pending |
+| PACK-03 | Phase 27 | Pending |
+| PACK-04 | Phase 27 | Pending |
+| REVN-01 | Phase 28 | Pending |
+| REVN-02 | Phase 28 | Pending |
+| REVN-03 | Phase 28 | Pending |
+| REVN-04 | Phase 28 | Pending |
+| REVN-05 | Phase 28 | Pending |
+| REVN-06 | Phase 28 | Pending |
+| KNOW-01 | Phase 29 | Pending |
+| ROUT-01 | Phase 29 | Pending |
+| ROUT-02 | Phase 29 | Pending |
+| VERT-01 | Phase 30 | Pending |
+| VERT-02 | Phase 30 | Pending |
+| VERT-03 | Phase 30 | Pending |
+| VERT-04 | Phase 30 | Pending |
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)
@@ -315,6 +368,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Mapped to phases 10-25: 27
 - Unmapped: 0 ✓
 - Each v2.0 requirement maps to exactly one phase; no orphans, no duplicates.
+
+**Post-beta knowledge-work pack coverage (planned 2026-08-05):**
+- Requirements: **17 total** (PACK-01..04; REVN-01..06; KNOW-01; ROUT-01..02; VERT-01..04)
+- Mapped to phases 27-30: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
