@@ -37,7 +37,8 @@ describe("Approvals connected state contracts", () => {
     expect(parseScheduleInput("not-a-time", now)).toEqual({ state: "invalid" });
     expect(parseScheduleInput("2020-01-01T10:00", now)).toEqual({ state: "past" });
 
-    const future = parseScheduleInput("2030-01-01T10:00", now);
+    expect(parseScheduleInput("2030-01-01T10:00", now)).toEqual({ state: "too-far" });
+    const future = parseScheduleInput("2026-08-06T10:00", now);
     expect(future.state).toBe("ready");
     if (future.state === "ready") expect(Number.isFinite(future.epochMs)).toBe(true);
   });

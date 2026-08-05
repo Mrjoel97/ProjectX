@@ -137,6 +137,43 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
 `/review`, `/requests`, and `/ops`. Keep the compound index, cancellation provenance, delivery
 counters and read adapter deployed; rollback never rewrites a legacy row or fabricates cost/progress.
 
+### Approvals hidden-route gate (Plan 26-05, pre-owner UAT)
+
+- `/dashboard/approvals` is directly reachable behind the authenticated shell while its serialized
+  rail entry remains `aria-disabled="true"` with `Soon`. Do not add the href or badge before the
+  blocking owner checkpoint passes.
+- The page composes `approvals.summary`, bounded Awaiting/Scheduled/In-flight/Cleared lanes,
+  decisions and the sanitized Ops aggregate. Detail content is fetched through the existing
+  tenant-owned `plans.byThread`; attachment capabilities are requested only after the user opens
+  the attachment list.
+- Initial email scheduling is deliberately two-step: the browser parses `datetime-local` in its
+  resolved IANA timezone, rejects invalid/past/out-of-horizon values, displays the resulting absolute
+  instant, then confirmation calls `setPlanSendTime` followed by the existing `executePlan` gate.
+  Scheduled cancel and move call `cancelScheduledPlan`/`moveScheduledPlan`; `alreadyResolved` and
+  `already_fired` are rendered as stale/in-flight outcomes, never successful cancellation/movement.
+- Every awaiting row links to `/dashboard/workspace?thread=<id>` for revision or calendar-time
+  changes. Destructive discard requires an inline confirmation and keeps the permanent
+  `cancelKind:"discarded"` non-rearm boundary. Compliance details remain at `/ops`.
+- Loading, successful empty, bounded partial, retryable exception, busy, stale and governed refusal
+  copy are distinct. Cost stays “not recorded”; legacy delivery progress stays partial.
+
+**Automation status (2026-08-05):** the executable pure/server-render contract is
+`approvalsView.test.ts` (not `.test.tsx`, because `apps/web/vitest.config.mts` intentionally discovers
+only `.test.ts` in its DOM-free runner) and passes 13/13. Web typecheck passes. The authenticated
+Playwright spec is authored and reached the real local Convex seeding/route run, but this shell has
+no `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and the saved storage state is expired; the page correctly
+redirected to Sign in. Therefore browser/UAT/navigation evidence is still **pending**, not green.
+Resume with both runtimes active and credentials set:
+
+```text
+pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts
+```
+
+The spec seeds plan rows for UI-state evidence only. Public mutations prove schedule replay,
+idempotent cancel, no duplicate request fan-out, lost cancel/move races, permanent discard and a
+provider-free memo double-approve. It never treats seeded done/delivering rows as Gmail, Calendar or
+media-provider success; any such claim requires a separately executed live result.
+
 ## How to change safely
 
 1. Add optional fields and compound indexes before readers. Keep legacy rows readable as

@@ -1,5 +1,25 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-05 (Phase 26 Plan 05 pre-UAT — **the connected Approvals route exists but
+> navigation remains disabled.**) `/dashboard/approvals` reuses the one `executePlan` gate plus the
+> shipped discard/schedule/cancel/move mutations; it does not add a fan-out starter. Initial email
+> scheduling resolves browser-local `datetime-local` to an absolute instant, displays the resolved
+> IANA timezone for confirmation, writes `setPlanSendTime`, and only then calls `executePlan`.
+> Revise/change-time links reopen the originating cockpit thread. Attachment URLs remain on-demand.
+>
+> Automated evidence currently green: `pnpm --filter @pikar/web test -- approvals` (13/13) and web
+> typecheck. The authenticated `approvals.spec.ts` is authored and actually entered its Convex-backed
+> run, but the canonical setup stopped because this shell lacks `E2E_USER_EMAIL` and
+> `E2E_USER_PASSWORD`; reuse of the saved state reached Sign in because that token is expired. Do not
+> cite the browser gate as passed. With local Convex plus Next on `:3111` and the two credentials set,
+> resume exactly: `pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts`.
+>
+> The browser fixture boundary is strict: internally seeded plan rows prove page states only; public
+> mutations prove CAS/idempotency/races. No seeded row proves Gmail delivery, Calendar creation or
+> media generation. Roll back by disabling the hidden Approvals route and retaining workspace,
+> `/review`, `/requests`, `/ops`, all plan provenance/counters and the existing cockpit terminals.
+> Owner UAT and nav activation remain blocking Task 2/Task 3 work.
+
 > Last verified: 2026-08-05 (Phase 26 Plan 03 — Approvals write semantics). The existing human
 > `executePlan` gate remains the only email fan-out starter. This change adds guarded discard,
 > current-schedule movement and exact new-plan delivery progress without creating a second send
