@@ -59,3 +59,10 @@ export function joinPhrases(parts: string[]): string {
   if (parts.length <= 1) return parts[0] ?? "";
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
+
+/** Which BLOCKED connection ids (connections.ts) are relevant to a segment's work. Only `leads`
+ *  today: social posting is the lead engine's missing actuator. A segment absent here shows no
+ *  blocked rows — absence of a blocker is not a fact worth a row. */
+export const SEGMENT_BLOCKED: Record<string, readonly string[]> = {
+  leads: ["social"],
+};
