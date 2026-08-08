@@ -81,6 +81,22 @@
 > `fix(vault): delete smoke-ingested documents safely` commit together. No schema, index, migration,
 > backfill, stored production row, Drive scope or dependency rollback is required.
 
+> **THE EVAL VAULT CORPUS MUST CARRY GROUND FOR EVERY SPECIALIST THAT SEARCHES IT (2026-08-08).**
+> `vaultSmoke:seedCorpus` seeded exactly two briefs — a LAUNCH note and a STAFFING plan — while
+> fixtures 29/30/31 assert `citesVaultDoc`: the needle must reach a specialist's memo, which it can
+> only do through a live `searchVault`. But `offer-architect` and `lead-engine` search their OWN
+> domains, and the corpus said nothing about offers, pricing or lead channels, so retrieval honestly
+> returned nothing, the memo correctly said so ("the vault does not contain information on lead
+> channels"), and the fixture reddened. Pass/fail was a coin flip on whether the specialist happened
+> to author a query near "launch"/"staffing" — recorded in `cost.ts` as suspected "retrieval
+> variance" and misread for a while as MODEL-dependence (a Gemini-vs-OpenAI pin was tried and
+> reverted chasing it). The corpus now carries one brief per specialist domain: offer, money model,
+> lead channels. **This does NOT weaken the assertion** — the needle still appears in no fixture turn
+> (`--self-check` pins that), so it can still only arrive via a real retrieval; what changed is that
+> each specialist now has ground to find. **Keep one brief per specialist**; deleting one re-opens
+> that specialist's flake. `seedDocId`/`neighborDocId` remain `docIds[0]`/`[1]`, so the graph smoke
+> is unaffected — APPEND new briefs, never prepend.
+>
 > Last verified: 2026-08-08 (15.4-03, plus the media-preview ordering fix below — **connected Nord Edge preview and import surfaces with
 > governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
 > URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through
