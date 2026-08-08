@@ -8,6 +8,8 @@ import {
   type BusinessBlueprint,
   composeReadout,
   firstGap,
+  type Goal,
+  goalsForSegment,
   type PulseGlobals,
   type SegmentPulse,
   segmentFill,
@@ -60,6 +62,7 @@ export function BlueprintPanel() {
     return () => clearInterval(t);
   }, []);
   const pulse = useQuery(api.blueprint.blueprintPulse, { now });
+  const goals = useQuery(api.goals.listGoals);
 
   async function onBuild() {
     setBuilding(true);
@@ -135,6 +138,7 @@ export function BlueprintPanel() {
           built={false}
           action={buildButton("Build blueprint", true)}
           pulse={pulse}
+          goals={goals}
         />
       ) : (
         <BlueprintReport
@@ -146,6 +150,7 @@ export function BlueprintPanel() {
           rebuild={buildButton("Rebuild", blueprintState.state === "live_stale")}
           built={true}
           pulse={pulse}
+          goals={goals}
         />
       )}
 
@@ -181,6 +186,7 @@ function BlueprintReport({
   built,
   action,
   pulse,
+  goals,
 }: {
   blueprint: BusinessBlueprint;
   confirmedAt: number | null;
@@ -192,6 +198,8 @@ function BlueprintReport({
   /** The primary call to action for this state, rendered under the lede. */
   action?: React.ReactNode;
   pulse?: { segments: Record<string, SegmentPulse>; globals: PulseGlobals };
+  /** undefined while `listGoals` is loading; SegmentAnatomy tells "Checking…" apart from "none". */
+  goals?: readonly Goal[];
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
@@ -319,6 +327,15 @@ function BlueprintReport({
           segment={openSegment}
           blueprint={blueprint}
           pulse={pulse?.segments[openSegment.id]}
+          goals={
+            goals === undefined
+              ? undefined
+              : goalsForSegment(
+                  goals,
+                  openSegment.id,
+                  BLUEPRINT_SEGMENTS.map((s) => s.id),
+                )
+          }
         />
       )}
 
