@@ -42,7 +42,9 @@
     "apps/web/app/(app)/dashboard/onboarding/",
     "apps/web/app/(app)/dashboard/profile/",
     "packages/core/src/blueprintSegments.ts",
-    "packages/core/src/blueprintSegments.test.ts"
+    "packages/core/src/blueprintSegments.test.ts",
+    "packages/core/src/blueprintPulse.ts",
+    "packages/core/src/blueprintPulse.test.ts"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",

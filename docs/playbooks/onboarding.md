@@ -1,5 +1,23 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-08 (blueprint-pulse task 2 — `packages/core/src/blueprintPulse.ts`, TDD,
+> 8/8 green.) The ACTIVITY layer the blueprint-anatomy note above forward-referenced ("Outcomes
+> stays an honest 'Not measured yet' placeholder until slice 2's pulse aggregates land"). Pure
+> aggregation over narrowed `agentSteps`-shaped rows (`PulseStep`: tool/phase/startedAt/endedAt/
+> durationMs — counts and timestamps only, never content): `dispatchToolFor(segment)` maps a
+> specialist-owned segment to its `stepTool` dispatch-trace literal (null for Foundation/Direction,
+> which have no agent); `aggregatePulse(steps, now)` returns one `SegmentPulse` (inFlight,
+> lastActivityAt, runs30d, medianRunMs) per specialist segment over a 30-day window
+> (`PULSE_WINDOW_MS`), with a 15-minute staleness cutoff (`STALE_RUN_MS`) so a `running` step whose
+> end-patch was swallowed does not pulse forever; `recencyLevel` steps lastActivityAt into
+> fresh/recent/quiet at 7/30 days; `composeReadout` is the deterministic one-sentence summary
+> (in-flight runs, then plans in motion, then emails sent, then the single quietest ≥7-day-idle
+> section), returning `null` when nothing has ever moved rather than a fake sentence. Attribution is
+> the dispatch trace (`tool` literal), never `requests.route`. No Convex import — pure `@pikar/core`
+> per CLAUDE.md §1. Backend wiring (Task 3: a Convex query narrowing `agentSteps` rows into
+> `PulseStep`s) and UI consumption (Outcomes band) are NOT yet done — this task lands the core
+> aggregation module only.
+>
 > Last verified: 2026-08-08 (blueprint-anatomy task 1 — behaviour-free extraction of `SegmentAnatomy.tsx`/`segmentCopy.ts` from `BlueprintPanel.tsx`; carries forward 15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
 > GRANT, AND THAT IS A CONSENT DEFECT, NOT A WORDING ONE.**)
 >
