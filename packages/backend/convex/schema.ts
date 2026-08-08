@@ -689,7 +689,8 @@ export default defineSchema({
     // thread: the UI subscribes to latestTurn (no threadId — the first-turn window) and filters
     // client-side on the returned threadId.
     .index("by_tenant", ["tenantId"])
-    // Pulse layer (living-map §3): per-specialist range read — 5 indexed queries instead of a
+    // Pulse layer (living-map §3): per-specialist range read — 4 indexed queries (segments with a
+    // specialist; media has a dispatch tool but no segment) instead of a
     // tenant-wide scan that grows with every cockpit turn.
     .index("by_tenant_tool_startedAt", ["tenantId", "tool", "startedAt"]),
 

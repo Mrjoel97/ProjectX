@@ -105,7 +105,7 @@ describe("composeReadout", () => {
     );
     const text = composeReadout(pulse, { sent30d: 4, plansDone30d: 1, plansInFlight: 2 }, NOW);
     expect(text).toBe(
-      "Offer run in flight · 2 plans in motion · 4 emails sent in 30 days · Leads quiet 20 days",
+      "Offer run in flight · 2 plans in motion · 1 plan completed in 30 days · 4 emails sent in 30 days · Leads quiet 20 days",
     );
   });
 

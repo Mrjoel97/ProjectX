@@ -577,6 +577,8 @@ export const blueprintPulse = tenantQuery({
         .withIndex("by_tenant_tool_startedAt", (q) =>
           q
             .eq("tenantId", ctx.tenantId)
+            // Safe: dispatchToolFor returns SPECIALISTS[*].stepTool, each a member of the closed
+            // agentSteps.tool union (core's totality test asserts distinctness+shape).
             .eq("tool", tool as never)
             .gt("startedAt", since),
         )
@@ -591,6 +593,9 @@ export const blueprintPulse = tenantQuery({
         });
     }
 
+    // Windowed on createdAt (the existing index), not on reaching the status — a send/plan created
+    // >30d ago that completes today is missed. Day-granular readout; the approximation is acceptable
+    // and named.
     const sent = await ctx.db
       .query("requests")
       .withIndex("by_tenant_status_createdAt", (q) =>

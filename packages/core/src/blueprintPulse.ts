@@ -101,6 +101,8 @@ export function composeReadout(
     if ((pulse[segment.id]?.inFlight ?? 0) > 0) parts.push(`${segment.label} run in flight`);
   }
   if (globals.plansInFlight > 0) parts.push(`${n(globals.plansInFlight, "plan")} in motion`);
+  if (globals.plansDone30d > 0)
+    parts.push(`${n(globals.plansDone30d, "plan")} completed in 30 days`);
   if (globals.sent30d > 0) parts.push(`${n(globals.sent30d, "email")} sent in 30 days`);
   let quietest: { label: string; days: number } | null = null;
   for (const segment of BLUEPRINT_SEGMENTS) {

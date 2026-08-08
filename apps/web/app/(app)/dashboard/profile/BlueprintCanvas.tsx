@@ -486,7 +486,7 @@ export function BlueprintCanvas({
                           draft.additions > 0 ? `${draft.additions} new` : null,
                         ]
                           .filter(Boolean)
-                          .join(" · ")
+                          .join(" · ") + flight
                       : total === 0
                         ? `not tracked yet${flight}`
                         : !built
