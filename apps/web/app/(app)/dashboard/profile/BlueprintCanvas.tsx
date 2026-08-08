@@ -7,7 +7,9 @@ import {
   type BlueprintField,
   type BlueprintSegment,
   type BusinessBlueprint,
+  recencyLevel,
   SEGMENT_FLOW,
+  type SegmentPulse,
   segmentFill,
 } from "@pikar/core";
 import { useQuery } from "convex/react";
@@ -83,6 +85,7 @@ export function BlueprintCanvas({
   onSelect,
   draftRows,
   acceptedContradictions,
+  pulse,
 }: {
   blueprint: BusinessBlueprint;
   built: boolean;
@@ -97,6 +100,7 @@ export function BlueprintCanvas({
    */
   draftRows?: readonly BlueprintDiffRow[];
   acceptedContradictions?: ReadonlySet<BlueprintField>;
+  pulse?: Record<string, SegmentPulse>;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Layout>(() =>
@@ -362,6 +366,11 @@ export function BlueprintCanvas({
             const contradicted = draft !== null && draft.contradictions.length > 0;
             const isGap = built && segment.id === gapId;
             const selected = segment.id === selectedId;
+
+            const segPulse = pulse?.[segment.id];
+            const breathing = (segPulse?.inFlight ?? 0) > 0;
+            const recency = recencyLevel(segPulse?.lastActivityAt ?? null, Date.now());
+
             return (
               <button
                 key={segment.id}
@@ -414,7 +423,11 @@ export function BlueprintCanvas({
                       ? 0.3
                       : total === 0 && !selected
                         ? 0.62
-                        : 1,
+                        : recency === "quiet"
+                          ? 0.7
+                          : recency === "recent"
+                            ? 0.85
+                            : 1,
                   boxShadow:
                     dragId === segment.id
                       ? "0 22px 40px -18px rgb(0 0 0 / 85%)"
@@ -436,18 +449,21 @@ export function BlueprintCanvas({
                 >
                   <span
                     aria-hidden="true"
+                    className={breathing ? "bp-node-pulse" : undefined}
                     style={{
                       width: 7,
                       height: 7,
                       borderRadius: "50%",
                       flex: "none",
-                      background: done
+                      background: breathing
                         ? "var(--teal-400)"
-                        : isGap
-                          ? selected
-                            ? "var(--teal-600)"
-                            : "#fff"
-                          : "rgb(255 255 255 / 30%)",
+                        : done
+                          ? "var(--teal-400)"
+                          : isGap
+                            ? selected
+                              ? "var(--teal-600)"
+                              : "#fff"
+                            : "rgb(255 255 255 / 30%)",
                     }}
                   />
                   {segment.label.toUpperCase()}
@@ -474,7 +490,7 @@ export function BlueprintCanvas({
                         ? "not tracked yet"
                         : !built
                           ? "not built yet"
-                          : `${filled} of ${total}${isGap ? " · needs you" : ""}`}
+                          : `${filled} of ${total}${isGap ? " · needs you" : ""}${breathing ? " · run in flight" : ""}`}
                   </span>
 
                   {/* A contradicted node splits: your side and the document's side, with the ticked

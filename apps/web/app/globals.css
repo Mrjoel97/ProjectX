@@ -1997,3 +1997,26 @@ button.clay-card:hover {
     animation: none;
   }
 }
+
+/* Node status dot while that section's specialist is running RIGHT NOW (living-map §3.2).
+   State, not decoration: the class is applied only while a fresh `running` dispatch step
+   exists, so the breath stops when the run does. */
+@keyframes bp-node-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.bp-node-pulse {
+  animation: bp-node-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp-node-pulse {
+    animation: none;
+    outline: 2px solid var(--teal-400);
+    outline-offset: 1px;
+  }
+}
