@@ -60,6 +60,13 @@ describe("renderGoalLines", () => {
     expect(line?.endsWith("[due 2026-09-07]")).toBe(true);
   });
 
+  it("collapses embedded newlines and tabs to a single line, never forging spine structure", () => {
+    const [line] = renderGoalLines([goal({ text: "Reach 10\ncustomers\tfast" })]);
+    expect(line?.split("\n")).toHaveLength(1);
+    expect(line).not.toContain("\n");
+    expect(line?.length).toBeLessThanOrEqual(GOAL_LINE_CAP);
+  });
+
   it("worst case fits the block budget the spine reserves", () => {
     const lines = renderGoalLines(
       Array.from({ length: GOALS_SPINE_MAX }, (_, i) =>
