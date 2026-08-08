@@ -60,6 +60,7 @@ import type * as skilloptExport from "../skilloptExport.js";
 import type * as skills from "../skills.js";
 import type * as smoke from "../smoke.js";
 import type * as smokeAssert from "../smokeAssert.js";
+import type * as spendLedger from "../spendLedger.js";
 import type * as telemetry from "../telemetry.js";
 import type * as tenantProfile from "../tenantProfile.js";
 import type * as vault from "../vault.js";
@@ -141,6 +142,7 @@ declare const fullApi: ApiFromModules<{
   skills: typeof skills;
   smoke: typeof smoke;
   smokeAssert: typeof smokeAssert;
+  spendLedger: typeof spendLedger;
   telemetry: typeof telemetry;
   tenantProfile: typeof tenantProfile;
   vault: typeof vault;
