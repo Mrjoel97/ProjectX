@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-05 (15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
+> Last verified: 2026-08-08 (blueprint-anatomy task 1 — behaviour-free extraction of `SegmentAnatomy.tsx`/`segmentCopy.ts` from `BlueprintPanel.tsx`) (15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
 > GRANT, AND THAT IS A CONSENT DEFECT, NOT A WORDING ONE.**)
 >
 > 15.3-09 appended `drive.readonly` to `GOOGLE_SCOPES` and updated **none** of the three surfaces
