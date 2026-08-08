@@ -136,18 +136,40 @@ lists its goals in a fifth band, **Direction**, with add/achieve/drop inline. Go
 
 ### 5.3 Spine — the agent half
 
-`renderSpine` gains one optional trailing section, budgeted like every field line:
+**Amended 2026-08-08 (pre-implementation).** The original text ("3 goals, each line capped like a
+field line", with a `part of: <parent>` clause) is unimplementable: it costs ~600–720 chars against
+a MEASURED headroom of 210. The spine's worst case today is 2290 of `SPINE_CHAR_CAP` = 2500 —
+11 field lines (caps sum 1960) + framing and the staleness warning (314) + newlines (16) — and
+`renderSpine` THROWS above the cap, so an overflow is a live outage on every cockpit turn and every
+vault-grounding call, not a cosmetic bug.
+
+`renderSpine` gains one optional trailing section, budgeted to fit the existing headroom with the
+cap unchanged:
 
 ```
 Goals:
 - Reach 10 paying customers [due 2026-09-15]
-- Ship the landing page [due 2026-08-20, part of: Reach 10 paying customers]
+- Ship the landing page [due 2026-08-20]
 ```
 
-Capped at the **3** nearest-deadline active goals, each line capped like a field line, so the
-section's worst case stays inside the existing `SPINE_CHAR_CAP` arithmetic — the cap stays
-provable, not hopeful. Every agent surface
-now knows what the business is driving toward and by when, at zero prompt-engineering cost.
+Constants (pure core, `packages/core/src/goals.ts`):
+
+- `GOALS_SPINE_MAX = 3` — the three nearest deadlines among ACTIVE goals.
+- `GOAL_LINE_CAP = 64` — the cap on the WHOLE rendered line, the `FIELD_SPEC` idiom. The date
+  suffix costs 17 (` [due YYYY-MM-DD]`) and the bullet 2, so a goal's text shows ~45 chars and is
+  clipped visibly with `…` (the existing `clip` helper), never silently.
+- Worst case therefore costs `6 ("Goals:") + 3 × 64 + 5 newlines = 203 ≤ 210`. The arithmetic is
+  asserted by a test that renders a FULL blueprint plus three max-length goals plus the staleness
+  warning and checks the total against `SPINE_CHAR_CAP` — the same mutation-verified tripwire
+  discipline as the field caps.
+
+**Parentage is UI-only.** `part of: <parent>` cannot fit a 64-char line and is dropped from the
+spine; `parentId` still exists on the row and still groups goals in the Direction band. An agent
+needs to know what is due and when, not the tree shape.
+
+A goal with no `targetDate` never reaches the spine: the section is about deadlines, and an
+undated intention would displace a dated one from the three slots.
+
 `serializeBlueprint` (the stored doc) is untouched — goals live in their own table, not the
 blueprint markdown, so the `- **Persona:**` detector constraint is never at risk.
 
