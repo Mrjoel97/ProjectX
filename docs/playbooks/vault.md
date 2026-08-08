@@ -111,7 +111,8 @@
 > that specialist's flake. `seedDocId`/`neighborDocId` remain `docIds[0]`/`[1]`, so the graph smoke
 > is unaffected — APPEND new briefs, never prepend.
 >
-> Last verified: 2026-08-08 (15.4-03, plus the media-preview ordering fix below — **connected Nord Edge preview and import surfaces with
+> Last verified: 2026-08-08 (15.4-03, the media-preview ordering fix below, plus the surface-scan
+> repair described at the end of this subsection — **connected Nord Edge preview and import surfaces with
 > governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
 > URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through
 > `setDocIdentity`. Removal is now a two-step presenter state: the destructive `deleteVaultDoc`
@@ -153,6 +154,26 @@
 >
 > **Rollback:** revert the three 15.4-03 task commits together. No schema, stored-document,
 > dependency, Drive scope, budget/reservation or backend rollback is required.
+>
+> **THE REDESIGN LEFT TWO SURFACE-SCAN ASSERTIONS POINTING AT DELETED SPELLINGS, AND NOBODY SAW IT**
+> — `packages/core/src/vaultSurface.test.ts` was red on `main` for three days because the 15.4 work
+> and the media-preview fix were gated with `pnpm --filter @pikar/web test`, which does not run the
+> `@pikar/core` scan that watches the web surface. Repaired 2026-08-08 (Plan 26-06 session, an
+> out-of-lane fix): the download guard bound to the local name `a` and 15.4 renamed it to `anchor`,
+> so it now matches `/\.download\s*=\s*doc\.title/` — **the guarantee is the assigned VALUE, never
+> the variable holding the anchor.** The stale-digest guard read one `FolderBreadcrumb` block, but
+> 15.4 split derivation (`FolderBreadcrumb`) from the emphasis flip (`DigestRebuildControl` in
+> `VaultBrowseControls.tsx`); the RENDERED flip is now owned by
+> `apps/web/.../VaultBrowseControls.test.ts`, exactly the migration `preflightCopy.test.ts` made,
+> and the scan keeps only what a whole-surface scan can uniquely prove — that staleness is DERIVED
+> (`viewState.digest.kind === "stale"`), that there is exactly ONE definition, ONE mount and ONE
+> label across every `.tsx`, and that no dismissible banner exists. **The banner assertion strips
+> comments first:** the only `localStorage` on the surface is inside the comment BANNING it, so a
+> raw scan punishes its own explanation (`importGuard.test.ts` strips comments for this reason).
+> Both repaired assertions were mutation-checked — constant-folding the derived flag and adding a
+> second control each turn the test red. **Rule this leaves behind: when a UI change moves a
+> guarded spelling, gate it with `pnpm --filter @pikar/core test` too — a scan that lives in
+> another package is invisible to that package's own gate.**
 
 > Last verified: 2026-08-04 (15.4-02 — **connected Nord Edge root/folder browse with honest
 > state handling and retained real actions.**) `/dashboard/vault` now uses a Vault-scoped plain
