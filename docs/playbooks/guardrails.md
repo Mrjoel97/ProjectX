@@ -1,6 +1,6 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-08 (concurrent spend-tracking additions; playbook scope unchanged)
+> Last verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
 > started watching that table.** `packages/cost/src/cost.ts` was watched by NO playbook until now —
 > a gap worth naming, because that file is where a model becomes billable: `PRICING` is keyed on the
 > full model id, an id missing from it makes `priceUsage` return `unknown_model`, `recordModelSpend`
