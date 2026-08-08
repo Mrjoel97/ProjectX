@@ -1216,6 +1216,23 @@ export default defineSchema({
     blueprintConfirmedAt: v.optional(v.number()),
   }).index("by_tenant", ["tenantId"]),
 
+  // Living-map slice 3 (§5.1). The intention plane: what the business is driving toward and by
+  // when. Deliberately NOT blueprint fields — the 11-field set is closed (D3), and a goal is a
+  // claim with a lifecycle, not a fact about the business.
+  goals: defineTable({
+    tenantId: v.string(),
+    segmentId: v.string(), // a BLUEPRINT_SEGMENTS id, validated at write
+    text: v.string(), // user content — content plane ONLY, never audited (CLAUDE.md §4)
+    targetDate: v.optional(v.number()),
+    // One level only, enforced at write: a parent may not itself have a parent.
+    parentId: v.optional(v.id("goals")),
+    status: v.union(v.literal("active"), v.literal("achieved"), v.literal("dropped")),
+    createdAt: v.number(),
+    // Stamped on every transition. `statusChangedAt - createdAt` on an achieved goal IS the cycle
+    // time — no history table until something needs more than the last transition.
+    statusChangedAt: v.number(),
+  }).index("by_tenant_status", ["tenantId", "status"]),
+
   // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
   // `mediaAssets` table would be a 1:1 join forever. A new table needs no migration.
