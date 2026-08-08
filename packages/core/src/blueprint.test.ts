@@ -16,6 +16,7 @@ import {
   validateCandidates,
 } from "./blueprint";
 import type { BusinessProfile } from "./businessProfile";
+import { GOALS_SPINE_MAX, type Goal } from "./goals";
 
 /** A fully-typed profile. Overrides let a case blank exactly the fields it cares about. */
 const profile = (over: Partial<BusinessProfile> = {}): BusinessProfile => ({
@@ -610,6 +611,55 @@ describe("renderSpine — a blueprint with nothing in it", () => {
     expect(spine).toContain("(nothing confirmed about this business yet)");
     // Pinned: it does NOT throw, because a grounding call must never crash on a sparse tenant.
     expect(spine.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
+  });
+});
+
+describe("renderSpine — the goals block (17.1 goals slice, task 3)", () => {
+  it("omits the goals block entirely when no goals are passed", () => {
+    expect(renderSpine(FULL, { unincorporatedCount: 0 })).not.toContain("Goals:");
+  });
+
+  it("renders the nearest deadlines under a Goals heading", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const now = Date.UTC(2026, 7, 8);
+    const g = (id: string, text: string, inDays: number): Goal => ({
+      id,
+      segmentId: "direction",
+      text,
+      targetDate: now + inDays * day,
+      status: "active",
+      createdAt: now,
+      statusChangedAt: now,
+    });
+    const spine = renderSpine(FULL, {
+      unincorporatedCount: 0,
+      goals: [g("b", "Ship the landing page", 12), g("a", "Reach 10 paying customers", 3)],
+    });
+    expect(spine).toContain("Goals:");
+    // Nearest first, and the block sits inside the fence.
+    expect(spine.indexOf("Reach 10 paying customers")).toBeLessThan(
+      spine.indexOf("Ship the landing page"),
+    );
+    expect(spine.trimEnd().endsWith("</business_blueprint>")).toBe(true);
+  });
+
+  it("stays under the char cap at the worst case: full blueprint, staleness warning, max goals", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const now = Date.UTC(2026, 7, 8);
+    const goals: Goal[] = Array.from({ length: GOALS_SPINE_MAX + 2 }, (_, i) => ({
+      id: `g${i}`,
+      segmentId: "direction",
+      text: "z".repeat(400),
+      targetDate: now + i * day,
+      status: "active" as const,
+      createdAt: now,
+      statusChangedAt: now,
+    }));
+    // Does not throw — the tripwire inside renderSpine is the assertion.
+    const spine = renderSpine(FULL, { unincorporatedCount: 99, goals });
+    expect(spine.length).toBeLessThanOrEqual(SPINE_CHAR_CAP);
+    // Only GOALS_SPINE_MAX lines survive, and the block never exceeds its reserved budget.
+    expect(spine.split("\n").filter((l) => l.includes("[due "))).toHaveLength(GOALS_SPINE_MAX);
   });
 });
 
