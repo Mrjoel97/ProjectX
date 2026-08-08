@@ -19,7 +19,17 @@ export type PreviewContentState =
       canExpand: boolean;
       extractionTruncated: boolean;
     }
-  | { kind: "ready-binary"; title: string; detail: string; media: "image" | "video" }
+  | {
+      kind: "ready-binary";
+      title: string;
+      detail: string;
+      media: "image" | "video";
+      /** The vision description / transcript, shown BENEATH the media. Null while its lazy
+       *  query settles — the bytes are already signed, so the picture never waits on it. */
+      text: string | null;
+      excerpt: string;
+      canExpand: boolean;
+    }
   | { kind: "unsupported"; title: string; detail: string }
   | { kind: "missing-bytes"; title: string; detail: string };
 
@@ -66,6 +76,13 @@ function processingCopy(status: PreviewStatus): Pick<PreviewContentState, "title
         detail: "Pikar AI is making this document searchable and groundable.",
       };
   }
+}
+
+/** The one truncation rule, shared by extracted text and by a media description. */
+function snippet(text: string | null): { excerpt: string; canExpand: boolean } {
+  if (!text) return { excerpt: "", canExpand: false };
+  const canExpand = text.length > PREVIEW_SNIPPET_CHARS;
+  return { excerpt: canExpand ? `${text.slice(0, PREVIEW_SNIPPET_CHARS)}…` : text, canExpand };
 }
 
 export function previewCapabilities({
@@ -117,6 +134,36 @@ export function derivePreviewState(input: PreviewStateInput): PreviewState {
     return { capabilities, content: { kind: "processing", ...processingCopy(input.status) } };
   }
 
+  // MEDIA BEFORE TEXT, and this ordering is the whole feature. The hosted vision rail describes
+  // every image and vaultTranscribe transcribes every video, so a READY media document ALWAYS
+  // carries text; deciding on text first (as 15.4-03 did) made these two branches unreachable and
+  // silently replaced the picture with a paragraph about the picture. The description is not lost —
+  // it rides along below. Both branches sit ABOVE the lazy-text gate so the signed bytes paint
+  // immediately rather than waiting on a second query.
+  const mediaKind = input.mimeType.startsWith("image/")
+    ? ("image" as const)
+    : input.mimeType.startsWith("video/")
+      ? ("video" as const)
+      : null;
+
+  if (mediaKind && input.hasStoredBytes) {
+    const text = input.text ?? null;
+    return {
+      capabilities,
+      content: {
+        kind: "ready-binary",
+        media: mediaKind,
+        title: mediaKind === "image" ? "Image preview" : "Video preview",
+        detail:
+          mediaKind === "image"
+            ? "Loading the stored image through a short-lived signed URL."
+            : "Loading the stored video through a short-lived signed URL.",
+        text,
+        ...snippet(text),
+      },
+    };
+  }
+
   if (input.text === undefined) {
     return {
       capabilities,
@@ -129,15 +176,13 @@ export function derivePreviewState(input: PreviewStateInput): PreviewState {
   }
 
   if (input.text) {
-    const canExpand = input.text.length > PREVIEW_SNIPPET_CHARS;
     return {
       capabilities,
       content: {
         kind: "ready-text",
         title: "Extracted text",
         text: input.text,
-        excerpt: canExpand ? `${input.text.slice(0, PREVIEW_SNIPPET_CHARS)}…` : input.text,
-        canExpand,
+        ...snippet(input.text),
         extractionTruncated: input.extractionTruncated === true,
       },
     };
@@ -154,30 +199,9 @@ export function derivePreviewState(input: PreviewStateInput): PreviewState {
     };
   }
 
-  if (input.mimeType.startsWith("image/")) {
-    return {
-      capabilities,
-      content: {
-        kind: "ready-binary",
-        media: "image",
-        title: "Image preview",
-        detail: "Loading the stored image through a short-lived signed URL.",
-      },
-    };
-  }
-
-  if (input.mimeType.startsWith("video/")) {
-    return {
-      capabilities,
-      content: {
-        kind: "ready-binary",
-        media: "video",
-        title: "Video preview",
-        detail: "Loading the stored video through a short-lived signed URL.",
-      },
-    };
-  }
-
+  // No media branch here: a media document with stored bytes returned above, and one WITHOUT them
+  // has already fallen through to ready-text or missing-bytes — which is the honest answer, since
+  // there are no bytes left to render.
   return {
     capabilities,
     content: {

@@ -238,7 +238,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           className="vault-preview-main"
           style={{
             minHeight: 0,
-            overflow: preview.content.kind === "ready-binary" ? "hidden" : "auto",
+            // Media alone is floated in a fixed pane; media WITH a description has to scroll.
+            overflow:
+              preview.content.kind === "ready-binary" && !preview.content.text ? "hidden" : "auto",
             padding: "clamp(1.25rem, 3vw, 2rem)",
             background: "var(--canvas)",
           }}
@@ -281,31 +283,69 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               )}
             </>
           ) : preview.content.kind === "ready-binary" && mediaUrl ? (
-            preview.content.media === "image" ? (
-              <div style={{ display: "grid", placeItems: "center", gap: "0.75rem", height: "100%" }}>
-                {/* biome-ignore lint/performance/noImgElement: signed blob URL cannot be handled by next/image */}
-                <img
-                  ref={imgRef}
+            // The media itself leads; its description/transcript rides beneath it. The media is
+            // capped rather than stretched to the pane so the text below is reachable without
+            // scrolling past a full-height picture.
+            <div style={{ display: "grid", gap: "1.25rem", height: preview.content.text ? undefined : "100%" }}>
+              {preview.content.media === "image" ? (
+                <div style={{ display: "grid", placeItems: "center", gap: "0.75rem", minHeight: 0 }}>
+                  {/* biome-ignore lint/performance/noImgElement: signed blob URL cannot be handled by next/image */}
+                  <img
+                    ref={imgRef}
+                    src={mediaUrl}
+                    alt={doc.title}
+                    style={{ display: "block", maxWidth: "100%", maxHeight: "60vh", objectFit: "contain" }}
+                  />
+                  <button
+                    type="button"
+                    className="vault-button"
+                    onClick={() => void imgRef.current?.requestFullscreen?.()}
+                  >
+                    View full screen
+                  </button>
+                </div>
+              ) : (
+                // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
+                <video
                   src={mediaUrl}
-                  alt={doc.title}
-                  style={{ display: "block", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                  controls
+                  style={{ display: "block", width: "100%", maxHeight: "60vh", objectFit: "contain" }}
                 />
-                <button
-                  type="button"
-                  className="vault-button"
-                  onClick={() => void imgRef.current?.requestFullscreen?.()}
-                >
-                  View full screen
-                </button>
-              </div>
-            ) : (
-              // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
-              <video
-                src={mediaUrl}
-                controls
-                style={{ display: "block", width: "100%", maxHeight: "100%", objectFit: "contain" }}
-              />
-            )
+              )}
+              {preview.content.text && (
+                <section style={{ borderTop: "1px solid var(--vault-border)", paddingTop: "1rem" }}>
+                  <p className="caps-label" style={{ marginBottom: "0.5rem" }}>
+                    {preview.content.media === "image" ? "What Pikar read in this image" : "Transcript"}
+                  </p>
+                  <pre
+                    style={{
+                      margin: 0,
+                      whiteSpace: "pre-wrap",
+                      overflowWrap: "anywhere",
+                      fontFamily: "var(--font-sans), system-ui, sans-serif",
+                      fontSize: "0.92rem",
+                      lineHeight: 1.7,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    {expanded ? preview.content.text : preview.content.excerpt}
+                  </pre>
+                  {preview.content.canExpand && (
+                    <button
+                      type="button"
+                      className="vault-button"
+                      aria-expanded={expanded}
+                      onClick={() => setExpanded((value) => !value)}
+                      style={{ marginTop: "1rem" }}
+                    >
+                      {expanded
+                        ? "Show less"
+                        : `Show full text (${Math.ceil(preview.content.text.length / 1000)}k chars)`}
+                    </button>
+                  )}
+                </section>
+              )}
+            </div>
           ) : preview.content.kind === "failure" ? (
             <div className="vault-state vault-state-error" role="alert">
               <h3>{failureCopy(doc.failureReason).title}</h3>

@@ -1,5 +1,53 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-07 (embedding provider swap — **THE VAULT NO LONGER DEPENDS ON OPENAI**).
+> `vaultRag.ts` moved from `text-embedding-3-small` to `gemini-embedding-001`, both at 1536 dims, so
+> the Convex vector index and `schema.ts` are UNCHANGED. WHY: the OpenAI balance is $0
+> (`credit_balance_exhausted` on chat AND embeddings, verified directly), and this file was the LAST
+> OpenAI dependency in a cockpit turn — every vault-touching turn and every golden-gate run died
+> here, before case one, no matter which chat model was pinned. Gemini embeddings are free-tier
+> eligible on the key the deployment already holds, so this is what makes the test loop cost $0.
+>
+> **THREE PROVIDER DIFFERENCES, TWO OF WHICH FAIL SILENTLY — read `vaultRag.test.ts` before editing:**
+> **(1) Vectors arrive UNNORMALISED and must be scaled.** Measured live: `gemini-embedding-001`
+> returns a unit vector at its native 3072 dims (L2 = 1.000000) but **L2 ≈ 0.6976 at
+> `outputDimensionality: 1536`** — Matryoshka truncation drops the tail and does not re-scale the
+> remainder. OpenAI always returned unit vectors, so nothing here ever had to care. An unnormalised
+> vector does not error; ranking just quietly degrades. `l2Normalize` at the adapter boundary is the
+> fix, and a zero vector is passed through untouched because dividing by its norm emits NaN into the
+> index and poisons every later comparison. **(2) Dedup identity is now MODEL-SCOPED.** `rag.add`
+> replaces on `key` but deduplicates on `contentHash`; the document TEXT did not change when the
+> provider did, so a bare text hash would mark every existing document already-embedded and it would
+> keep its OpenAI vector forever — invisible to searches against Gemini vectors, since the two are
+> different embedding spaces. `embeddingContentHash` prefixes the model id, so this swap and every
+> future one invalidate dedup automatically while same-model dedup still saves the re-ingest cost.
+> `key` stays the bare hash so the re-embed REPLACES the stale entry rather than orphaning it.
+> **(3) Batch cap is 100, not 2048.** Google refuses 101+ with `at most 100 requests can be in one
+> batch`, so `maxEmbeddingsPerCall` is a hard API limit the RAG component reads — overstating it
+> turns a large ingest into a 400. A length-mismatch guard now fails closed too: the component pairs
+> vectors to chunks POSITIONALLY, so a short response would attach the wrong vector to a chunk, a
+> corruption no later query could tell apart from bad retrieval.
+>
+> `batchEmbedContents` reports NO usage at all, so `usage.tokens` is 0 — honest rather than invented,
+> and inert because `priceUsage` has no embeddings row either way. Add a pricing row and a token
+> count TOGETHER if embedding spend ever matters; one without the other is the silent under-draw
+> `packages/cost/src/cost.ts` exists to prevent.
+>
+> **LIVE-VERIFIED, not just unit-green.** `vaultSmoke:seedCorpus` embedded 2 docs for real (the exact
+> call the golden gate died on), and `pnpm smoke:vault` PASSED end to end against the live
+> deployment: real embed, REAL hybrid search returning the seed doc ranked, `vaultGround` merging the
+> graph neighbour, and the §4 no-raw-text audit scan clean. A full 2-turn cockpit fixture
+> (01-happy-single) also reached `status: proposed` with correct recipient/subject/body on free-tier
+> Gemini with ZERO OpenAI credit. Backend 1217/1217, typecheck 0.
+>
+> **MIGRATION STILL OWED FOR EXISTING DOCUMENTS.** Docs embedded before this change keep their OpenAI
+> vectors until they are re-ingested; the model-scoped hash guarantees a re-ingest re-embeds and
+> REPLACES in place, but nothing re-ingests them spontaneously. Until then those rows return noise
+> scores against Gemini queries. There are no real users yet, so the cheap fix is to delete and
+> re-upload dev content; a `reembed` action over `vaultDocuments.ragEntryId` is the real fix and is
+> NOT written. Note the `@convex-dev/migrations` harness is the WRONG tool for it — `migrateOne` runs
+> in a mutation ctx and embedding needs an action.
+
 > Last verified: 2026-08-05 (15.4-04 automated close — **the connected Nord Edge Vault route ran
 > in Playwright, not only in component tests.**) `apps/web/e2e/vault-redesign.spec.ts` passed 2/2
 > against the real authenticated `/dashboard/vault` route and a live local Convex deployment. It
@@ -33,7 +81,7 @@
 > `fix(vault): delete smoke-ingested documents safely` commit together. No schema, index, migration,
 > backfill, stored production row, Drive scope or dependency rollback is required.
 
-> Last verified: 2026-08-04 (15.4-03 — **connected Nord Edge preview and import surfaces with
+> Last verified: 2026-08-08 (15.4-03, plus the media-preview ordering fix below — **connected Nord Edge preview and import surfaces with
 > governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
 > URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through
 > `setDocIdentity`. Removal is now a two-step presenter state: the destructive `deleteVaultDoc`
@@ -45,6 +93,20 @@
 > fails closed with no identity, citation, download, delete, retry or voice capability. Failure
 > retains the reason-specific copy and retry; ready text and binary documents retain Download when
 > `storageId` exists, provenance/entities, workspace navigation and identity correction.
+>
+> **MEDIA BEATS TEXT IN `derivePreviewState`, AND THE ORDER IS THE FEATURE.** The hosted vision rail
+> describes EVERY image (`vaultExtract.ts` `rail === "image"`) and `vaultTranscribe.transcribeDoc`
+> transcribes EVERY video, so a READY media document ALWAYS carries `text`. 15.4-03 decided on
+> `text` before `mimeType`, which made `ready-binary` unreachable in production and silently
+> replaced the picture with a paragraph ABOUT the picture — shipped green, because the only media
+> tests passed `text: null`, an input the pipeline cannot produce. The image/video branches now sit
+> ABOVE both the text branch and the lazy-text gate, so the signed bytes paint without waiting on a
+> second query, and the description/transcript renders BENEATH the media instead of replacing it.
+> Do not reorder these branches, and **never assert a media preview state with `text: null` alone** —
+> a media fixture must carry text or the regression is invisible again. `ready-binary` therefore
+> carries `text`/`excerpt`/`canExpand`; `snippet()` is the ONE truncation rule shared with
+> `ready-text`. A media document whose bytes are gone falls through to its text, not to a binary
+> state promising bytes that no longer exist.
 >
 > **Dialog and import invariants:** the labelled modal traps Tab, closes on Escape/backdrop/X,
 > locks background scroll and restores the invoking grid control on unmount. Upload, directory
@@ -298,7 +360,7 @@
 > migration, no test result changed. See `## Phase 15.3 — vault folders` at the END of this file
 > — in particular the INERT-LITERAL warning, which is the single most misreadable fact in the
 > phase.)
-
+
 > Last verified: 2026-08-02 (18-07 — **agent-authored documents carry provenance in the grid, and
 > the vault-search ceiling on them is REAL.** Documenting shipped surface that landed WITHOUT a
 > playbook bump; `check-playbooks` was green only because a foreign lane had bumped this file.)
