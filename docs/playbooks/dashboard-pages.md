@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-08 against 48c622b (+ Approvals type-scale alignment, owner-reported)
+> Last verified: 2026-08-08 against 9c9555b (+ Plan 26-06 spend ledger core)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -17,6 +17,8 @@ additive data, safety instrumentation or provenance.
 
 - `packages/core/src/dashboard.ts` — `resolveDashboardWindow`, `DashboardMoney`, bounded-result,
   stable-order/cursor and code-owned page-state contracts shared before JSX formatting.
+- `packages/core/src/spend.ts` — closed rail/phase vocabulary, movement validation at the trust
+  boundary, and window aggregation that returns Unknown rather than a fabricated zero.
 
 ### Backend page adapters
 
@@ -202,6 +204,44 @@ The spec seeds plan rows for UI-state evidence only. Public mutations prove sche
 idempotent cancel, no duplicate request fan-out, lost cancel/move races, permanent discard and a
 provider-free memo double-approve. It never treats seeded done/delivering rows as Gmail, Calendar or
 media-provider success; any such claim requires a separately executed live result.
+
+### Finance ledger contract
+
+`spendEvents` is the reporting/reconciliation plane. **The limiter stays enforcement truth**: it
+decides whether a spend may happen, and nothing here may be relaxed to make a report easier.
+
+- **Correlation construction.** A `correlationId` is server-minted from refs and matches
+  `^[A-Za-z0-9._:@/-]{1,128}$` — no whitespace, so a pasted sentence cannot enter the table (§4).
+  It must be **stable** across every retry of one logical movement and **distinct** between logical
+  movements; a random per-attempt id silently defeats replay suppression.
+- **Identity is `(tenantId, correlationId, phase)`, not the correlation alone.** A reservation and
+  its later actual charge deliberately share one correlation — that shared key is what makes them
+  reconcilable — so a correlation-only guard would swallow the actual as a duplicate of the
+  reserve. `by_correlation` is not tenant-scoped, so the tenant comparison is part of the identity
+  check in `spendLedger.record`, never an assumption.
+- **First write wins.** A replay returns the stored id and ignores the replayed amount. A retry
+  reporting a different number is an upstream bug; letting it through would rewrite recorded money.
+  Drift is corrected by appending an `adjustment` (owed more) or `refunded` (money back) movement.
+- **Direction lives in the phase, never the sign.** Every `amountCents` is a positive safe integer,
+  so no consumer has to guess whether a negative is a credit or a bug.
+- **Indexes.** `by_tenant_createdAt` (window reads), `by_tenant_rail_createdAt` (one-rail reads),
+  `by_correlation` (idempotence). A reader that needs a fourth access pattern adds an index; it
+  does not filter a wider scan.
+- **Retention.** There is no purge, TTL or archival path in this module and adding one is a
+  separate, deliberate design — this is financial history, and the insert-only source scan
+  (`db.patch`/`db.replace`/`db.delete`) fails the build if an edit path appears (§3).
+- **Reconstruction limits — what the ledger cannot tell you.** A window opening before
+  `spendCoverage.coverageStartedAt`, or a tenant with no coverage row at all, is **Unknown**; it is
+  never rendered as `$0`, and it can never be backfilled because the events were never observed.
+  `listEvents` caps at 500 rows, so a window that fills the cap is partial and must carry
+  `partialReason: "row-cap"`. The idempotence scan reads at most 32 rows per correlation, which is
+  safe only while every writer keeps to one row per `(tenant, correlation, phase)`.
+- **Disagreement with the limiter is a signal, not a defect.** Unlanded money — reserved, then
+  neither charged nor refunded — is exactly what reconciliation is for. Do not hide it by folding
+  it into another phase.
+- **Rollback rule, non-negotiable.** Finance may hide its route and owner controls. It may **not**
+  stop ledger instrumentation: an append-only history has no backfill, so a dark window is a
+  permanent hole in the record.
 
 ## How to change safely
 
