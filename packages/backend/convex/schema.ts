@@ -247,9 +247,7 @@ export default defineSchema({
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
     // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
     // scheduled cancellation; every new cancel writes the discriminator explicitly.
-    cancelKind: v.optional(
-      v.union(v.literal("scheduled_cancel"), v.literal("discarded")),
-    ),
+    cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"))),
     canceledAt: v.optional(v.number()),
     // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
     // keeps legacy reads on the bounded partial projection instead of inventing exact progress.
@@ -719,7 +717,10 @@ export default defineSchema({
     // NOT generalize to a partial prefix. There is no by_thread index because nothing reads by
     // thread: the UI subscribes to latestTurn (no threadId — the first-turn window) and filters
     // client-side on the returned threadId.
-    .index("by_tenant", ["tenantId"]),
+    .index("by_tenant", ["tenantId"])
+    // Pulse layer (living-map §3): per-specialist range read — 5 indexed queries instead of a
+    // tenant-wide scan that grows with every cockpit turn.
+    .index("by_tenant_tool_startedAt", ["tenantId", "tool", "startedAt"]),
 
   // The test seam that lets a briefing run with NO Gmail token: gmail.listInbox /
   // fetchInboxBodies check this table BEFORE freshAccessToken and serve these messages when a
