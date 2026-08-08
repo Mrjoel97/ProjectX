@@ -25,7 +25,7 @@ import { contentHash } from "./lib/hash";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
 // window moved with no record, and an append-only table has no backfill to repair that.
-import { recordMovement } from "./spendLedger";
+import { ensureCoverage, recordMovement } from "./spendLedger";
 
 // TWO spend rails, and the difference between them is the whole point (22.1-02).
 //
@@ -207,6 +207,10 @@ export const prepare = internalMutation({
     const req = await ctx.db.get(requestId);
     if (!req) throw new Error("guardrails.prepare: request not found"); // bug, not a governed stop
 
+    // FIN-01 coverage opens HERE, before any refusal can return. Reaching this gate is what makes
+    // the tenant observable; a kill-switch stop is a CONFIDENT nothing, not an unknown.
+    await ensureCoverage(ctx, req.tenantId, Date.now());
+
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
 
@@ -325,6 +329,8 @@ export const preCall = internalMutation({
         reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
       }
   > => {
+    // FIN-01: the gate itself is the moment we start watching this tenant (see ensureCoverage).
+    await ensureCoverage(ctx, tenantId, Date.now());
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
 
@@ -591,6 +597,9 @@ export async function reserveFolderInner(
 ): Promise<FolderReserveResult> {
   const fileCount = a.files.length;
   const totalBytes = a.files.reduce((s, f) => s + Math.max(0, f.size), 0);
+
+  // FIN-01: watching starts at the gate, not at the money (see ensureCoverage).
+  await ensureCoverage(ctx, a.tenantId, Date.now());
 
   const cfg = await getGuardrailConfig(ctx);
   // estCents/remainingCents are 0 here because the kill switch stops BEFORE pricing. The reason

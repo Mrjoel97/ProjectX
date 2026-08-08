@@ -563,8 +563,42 @@ describe("ledger parity: reasoning and ingest movements", () => {
       ok: false,
     });
     expect(await events(t)).toHaveLength(0);
-    // Coverage never opened either, so this tenant reports Unknown — not an honest-looking zero.
-    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeNull();
+
+    // BUT COVERAGE IS OPEN, and that distinction is the point. Reaching the gate is what makes a
+    // tenant observable, so from this instant a zero is a CONFIDENT zero rather than ignorance —
+    // a kill-switch stop is positive knowledge that no money moved. Opening coverage only on the
+    // first recorded movement would invert the lie this field exists to prevent: instead of a fake
+    // zero it would report fake ignorance for a tenant we had been gating all along.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeGreaterThan(0);
+  });
+
+  test("a tenant that is gated but never spends reports a CONFIDENT zero, not unknown", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+
+    // One gate call, no spend. This is the ordinary shape of a new tenant's first day.
+    expect(await t.mutation(internal.guardrails.preCall, { tenantId: T })).toEqual({ ok: true });
+
+    const startedAt = await t.query(internal.spendLedger.coverage, { tenantId: T });
+    expect(startedAt).toBeGreaterThan(0);
+    expect(await events(t)).toHaveLength(0);
+
+    // Coverage + zero movements is exactly what `aggregateSpend` needs to say "covered, $0"
+    // instead of "unknown". A tenant who has never been gated still, correctly, reports null.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: "never_seen" })).toBeNull();
+  });
+
+  test("a second gate call never moves the coverage start forward", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+
+    await t.mutation(internal.guardrails.preCall, { tenantId: T });
+    const first = await t.query(internal.spendLedger.coverage, { tenantId: T });
+    await t.mutation(internal.guardrails.preCall, { tenantId: T });
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+
+    // A later start would silently turn every already-covered window into `unknown`.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBe(first);
   });
 
   test("recordSpend writes ONE actual movement carrying the cents the limiter consumed", async () => {
@@ -620,6 +654,9 @@ describe("ledger parity: reasoning and ingest movements", () => {
     await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0 });
 
     expect(await events(t)).toHaveLength(0);
+    // `recordSpend` is NOT a gate — it runs AFTER one, so in production coverage is already open
+    // by the time it is reached and it deliberately does not open coverage itself. Driven in
+    // isolation here, a zero-cost call is therefore a complete no-op on both planes.
     expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeNull();
   });
 

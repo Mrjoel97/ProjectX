@@ -81,9 +81,37 @@ export type SpendTotals = {
   [Phase in DashboardMoneyPhase]: Extract<DashboardMoney, { phase: Phase }>;
 };
 
+/**
+ * Whether a rail's `unlanded` money can still RESOLVE — land as spend, or come back as a refund.
+ *
+ * **`unlanded` does not mean the same thing on every rail, and a page that renders one number for
+ * all three will describe media spend wrongly.** On reasoning and ingest it is money in flight: a
+ * reservation whose work has not finished, or whose refund is still owed. On MEDIA it is permanent
+ * by construction — that rail consumes the whole job estimate up front and has NO refund path at
+ * all (plan 20-04), so the difference between the estimate and what the lines actually cost is
+ * never returned. "Pending" is the correct word for the first two and a lie for the third.
+ *
+ * This is code-owned rather than prose in a playbook precisely so a reader cannot get it wrong
+ * without ignoring an explicit fact.
+ */
+export const UNLANDED_RESOLVES: Record<SpendRail, boolean> = {
+  reasoning: true,
+  ingest: true,
+  media: false,
+};
+
 export type SpendAggregate =
   | { coverage: "unknown"; reason: "not-started" | "window-precedes-coverage" }
-  | { coverage: "covered"; totals: SpendTotals };
+  | {
+      coverage: "covered";
+      /** Blended across every rail in the window. Safe for `estimated`/`reserved`/`actual`/`refunded`; see `byRail` before rendering `unlanded`. */
+      totals: SpendTotals;
+      /**
+       * Per-rail totals, because `unlanded` is NOT summable across rails with one meaning.
+       * Read this — with `UNLANDED_RESOLVES` — whenever the number reaches a person.
+       */
+      byRail: Record<SpendRail, SpendTotals>;
+    };
 
 export interface SpendAggregateInput {
   /** Movements already restricted to the reported window by the caller's indexed read. */
@@ -110,32 +138,65 @@ export function aggregateSpend(input: SpendAggregateInput): SpendAggregate {
     return { coverage: "unknown", reason: "window-precedes-coverage" };
   }
 
-  const sums: Record<SpendPhase, number> = {
+  const zero = (): Record<SpendPhase, number> => ({
     estimated: 0,
     reserved: 0,
     actual: 0,
     refunded: 0,
     adjustment: 0,
+  });
+
+  const all = zero();
+  const perRail: Record<SpendRail, Record<SpendPhase, number>> = {
+    reasoning: zero(),
+    ingest: zero(),
+    media: zero(),
   };
   for (const raw of input.movements) {
     const movement = validateSpendMovement(raw);
-    sums[movement.phase] += movement.amountCents;
+    all[movement.phase] += movement.amountCents;
+    perRail[movement.rail][movement.phase] += movement.amountCents;
   }
 
-  // An adjustment corrects what was charged, so landed cost is actual + adjustment.
-  const landed = sums.actual + sums.adjustment;
-  // Reserved money that neither landed nor came back. Clamped: a landing larger than its
-  // reservation is a reconciliation signal, not a negative balance to display.
-  const unlanded = Math.max(0, sums.reserved - landed - sums.refunded);
-
-  return {
-    coverage: "covered",
-    totals: {
+  // `unlanded` is DERIVED PER RAIL and only then summed. Deriving it from the blended sums instead
+  // would let one rail's refund cancel another rail's reservation — reasoning money "returning"
+  // media money that can never come back — and the total would be arithmetically smaller than the
+  // truth. The clamp has to bite per rail for the same reason.
+  const totalsFor = (sums: Record<SpendPhase, number>): SpendTotals => {
+    // An adjustment corrects what was charged, so landed cost is actual + adjustment.
+    const landed = sums.actual + sums.adjustment;
+    // Reserved money that neither landed nor came back. Clamped: a landing larger than its
+    // reservation is a reconciliation signal, not a negative balance to display.
+    const unlanded = Math.max(0, sums.reserved - landed - sums.refunded);
+    return {
       estimated: createDashboardMoney("estimated", sums.estimated),
       reserved: createDashboardMoney("reserved", sums.reserved),
       actual: createDashboardMoney("actual", landed),
       refunded: createDashboardMoney("refunded", sums.refunded),
       unlanded: createDashboardMoney("unlanded", unlanded),
+    };
+  };
+
+  const byRail = {
+    reasoning: totalsFor(perRail.reasoning),
+    ingest: totalsFor(perRail.ingest),
+    media: totalsFor(perRail.media),
+  };
+  const blended = totalsFor(all);
+
+  return {
+    coverage: "covered",
+    totals: {
+      ...blended,
+      // The blended `unlanded` is the SUM of the per-rail figures, never a re-derivation from the
+      // blended sums. See the comment on `totalsFor`.
+      unlanded: createDashboardMoney(
+        "unlanded",
+        byRail.reasoning.unlanded.amountCents +
+          byRail.ingest.unlanded.amountCents +
+          byRail.media.unlanded.amountCents,
+      ),
     },
+    byRail,
   };
 }

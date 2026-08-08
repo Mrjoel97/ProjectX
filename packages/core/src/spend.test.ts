@@ -4,6 +4,7 @@ import {
   SPEND_PHASES,
   SPEND_RAILS,
   type SpendMovement,
+  UNLANDED_RESOLVES,
   validateSpendMovement,
 } from "./spend";
 
@@ -140,6 +141,63 @@ describe("spend aggregation", () => {
     if (covered.coverage !== "covered") throw new Error("expected covered");
     expect(covered.totals.unlanded.amountCents).toBe(0);
     expect(covered.totals.actual.amountCents).toBe(260);
+  });
+
+  it("derives unlanded PER RAIL, so one rail's refund cannot cancel another's reservation", () => {
+    const covered = aggregateSpend({
+      movements: [
+        // Ingest: reserved 900, nothing landed, 900 refunded -> fully resolved, 0 unlanded.
+        movement({ rail: "ingest", phase: "reserved", amountCents: 900, correlationId: "f:1" }),
+        movement({ rail: "ingest", phase: "refunded", amountCents: 900, correlationId: "f:1" }),
+        // Media: reserved 300, only 100 landed, and this rail NEVER refunds -> 200 unlanded.
+        movement({ rail: "media", phase: "reserved", amountCents: 300, correlationId: "m:1" }),
+        movement({ rail: "media", phase: "actual", amountCents: 100, correlationId: "m:2" }),
+      ],
+      windowSinceMs: coverageStartedAt,
+      coverageStartedAt,
+    });
+    if (covered.coverage !== "covered") throw new Error("expected covered");
+
+    expect(covered.byRail.ingest.unlanded.amountCents).toBe(0);
+    expect(covered.byRail.media.unlanded.amountCents).toBe(200);
+    expect(covered.byRail.reasoning.reserved.amountCents).toBe(0); // untouched rails are zero
+
+    // THE BUG THIS PREVENTS: derived from the BLENDED sums, unlanded would be
+    // max(0, 1200 - 100 - 900) = 200 by coincidence here, but the ingest rail's 900 refund is
+    // cancelling the media rail's reservation — money that can never come back being "returned"
+    // by money from an unrelated rail. Summing the per-rail figures keeps each rail's clamp its own.
+    expect(covered.totals.unlanded.amountCents).toBe(200);
+  });
+
+  it("sums the blended unlanded from the rails rather than re-deriving it", () => {
+    const covered = aggregateSpend({
+      movements: [
+        // Reasoning over-runs its reservation: clamped to 0 unlanded on its own rail.
+        movement({ rail: "reasoning", phase: "reserved", amountCents: 100, correlationId: "r:1" }),
+        movement({ rail: "reasoning", phase: "actual", amountCents: 500, correlationId: "r:2" }),
+        // Media leaves 400 permanently unlanded.
+        movement({ rail: "media", phase: "reserved", amountCents: 400, correlationId: "m:1" }),
+      ],
+      windowSinceMs: coverageStartedAt,
+      coverageStartedAt,
+    });
+    if (covered.coverage !== "covered") throw new Error("expected covered");
+
+    expect(covered.byRail.reasoning.unlanded.amountCents).toBe(0);
+    expect(covered.byRail.media.unlanded.amountCents).toBe(400);
+    // Re-derived from blended sums this would be max(0, 500 - 500 - 0) = 0 — the reasoning rail's
+    // overspend silently eating media's stuck money. The per-rail sum keeps it visible.
+    expect(covered.totals.unlanded.amountCents).toBe(400);
+  });
+
+  it("says which rails can still resolve their unlanded money", () => {
+    // Media consumes the whole job estimate up front and has NO refund path (plan 20-04), so its
+    // unlanded money is permanent. Calling it "pending" on a Finance page would be a lie.
+    expect(UNLANDED_RESOLVES.media).toBe(false);
+    expect(UNLANDED_RESOLVES.reasoning).toBe(true);
+    expect(UNLANDED_RESOLVES.ingest).toBe(true);
+    // Every rail has an answer — a new rail must make this decision explicitly.
+    for (const rail of SPEND_RAILS) expect(typeof UNLANDED_RESOLVES[rail]).toBe("boolean");
   });
 
   it("refuses to sum a movement that would not have been allowed into the ledger", () => {

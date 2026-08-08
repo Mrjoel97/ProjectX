@@ -95,7 +95,15 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
 4. **Time windows are half-open.** Persist epoch milliseconds, filter `>= sinceMs` and `< untilMs`,
    and format with the returned named timezone. Tests pin reversed, equal and oversized refusal.
 5. **Money is integer USD cents.** Estimated, reserved, actual, refunded and unlanded are distinct;
-   pre-coverage history is Unknown, never fabricated `$0`.
+   pre-coverage history is Unknown, never fabricated `$0`. **`unlanded` IS NOT ONE NUMBER ACROSS
+   RAILS.** On reasoning and ingest it is money in flight that can still land or be refunded; on
+   MEDIA it is permanent — that rail consumes the whole job estimate up front and has no refund
+   path, so the gap between estimate and actual is never returned. `aggregateSpend` therefore
+   derives `unlanded` PER RAIL and returns `byRail` beside the blended `totals`; read `byRail` with
+   `UNLANDED_RESOLVES` before the figure reaches a person. Calling the blend "pending" describes
+   media wrongly, and re-deriving it from blended sums is worse — one rail's refund would cancel
+   another rail's reservation, money that can never come back being "returned" by money from an
+   unrelated rail.
 6. **Failure is not emptiness.** Loading, successful empty, partial, retryable error, busy/stale and
    governed refusal remain distinct. Health is Healthy only when every required loaded signal is.
 7. **Signed URLs are on demand.** Ownership is checked before minting; capabilities never enter

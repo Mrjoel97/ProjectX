@@ -378,6 +378,20 @@ the sub-cent fidelity limit already recorded in `guardrails.md` "Known gaps", an
 hardest** because tts lines are routinely fractions of a cent while clips are not. Five tests
 caught this the moment the ledger went in; do not "fix" it by padding.
 
+**`unlanded` MEANS SOMETHING DIFFERENT ON THIS RAIL, and `UNLANDED_RESOLVES.media === false` says
+so in code rather than in prose.** On reasoning and ingest, unlanded money is in flight — work not
+finished, or a refund still owed. Here it is PERMANENT: the whole job estimate is consumed up front
+and never returned, so the gap between the reservation and what the lines actually cost is the
+tenant's cost of the over-reservation, not a pending balance. `aggregateSpend` derives `unlanded`
+per rail and returns `byRail`; a Finance surface that renders the blended figure as "pending" is
+describing this rail wrongly. Never present media's unlanded as recoverable.
+
+**Coverage opens at the GATE.** `reserveJobInner` calls `ensureCoverage` ABOVE the kill-switch
+check — so a tenant paused by the media kill switch reports a confident zero rather than `unknown`
+for the whole pause. That placement is load-bearing and a test caught it being wrong once: the
+kill-switch refusal returns above `reserveProviderLinesInner`, so a gate placed in the inner
+function missed exactly the refusal it most needed to cover.
+
 **Rollback:** the Finance UI may be disabled; these two writers may not be. An append-only history
 has no backfill, so a dark window is a permanent hole. Same rule as `dashboard-pages.md` and
 `guardrails.md` state from their own sides.

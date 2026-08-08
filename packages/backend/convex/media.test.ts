@@ -3868,6 +3868,33 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(JOB_41_CENTS * 3);
   });
 
+  test("even a REFUSED media job opens coverage — a refusal is a confident zero", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    await t.run((ctx) =>
+      ctx.db.insert("guardrailConfig", {
+        killSwitch: false,
+        mediaKillSwitch: true,
+        budgetUsdPerRequest: 0.05,
+        updatedAt: Date.now(),
+      }),
+    );
+
+    const refused = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: JOB_41(),
+      clipSeconds: 10,
+      withCaptions: true,
+    });
+
+    expect(refused).toMatchObject({ ok: false, reason: "kill_switch" });
+    expect(await events(t)).toHaveLength(0); // a governed stop is not a spend
+    // ...but we WERE watching, and we know for certain nothing was spent. Without this, a tenant
+    // paused by the media kill switch would report `unknown` for the whole pause.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: A })).toBeGreaterThan(0);
+  });
+
   test("each landed line writes ONE actual movement carrying that line's own cents", async () => {
     const t = harness();
     const { jobIds } = await seedInFlight(t, { blocks: 2 });

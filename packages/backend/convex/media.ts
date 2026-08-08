@@ -51,7 +51,7 @@ import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
-import { recordMovement } from "./spendLedger";
+import { ensureCoverage, recordMovement } from "./spendLedger";
 
 /** Every way a job can be refused BEFORE a cent moves. Distinct codes because they send the user
  *  to distinct levers: rewrite a line, cut blocks, wait for tomorrow, or call the operator. */
@@ -96,6 +96,10 @@ async function reserveProviderLinesInner(
   lines: readonly ProviderLine[],
   specs: readonly MediaSpec[],
 ): Promise<ReserveResult> {
+  // FIN-01: watching starts at the gate, not at the money (see ensureCoverage). A media job that
+  // is refused for price or budget is still a tenant we can report a confident zero for.
+  await ensureCoverage(ctx, tenantId, Date.now());
+
   // The cap, and the ONE flooring of cents (D12a). `chooseMediaBatch` floors the TOTAL exactly
   // once; the per-line `estUsd` values stay unfloored on their rows.
   const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
@@ -176,6 +180,12 @@ export async function reserveJobInner(
     withCaptions: boolean;
   },
 ): Promise<ReserveResult> {
+  // 0. FIN-01 coverage, ABOVE every refusal below — including the kill switch. This is the
+  //    outermost media gate, and `reserveProviderLinesInner` (which also opens coverage, for the
+  //    standalone-image entry point) is never reached once any check here returns. A tenant paused
+  //    by the media kill switch must still report a CONFIDENT zero rather than `unknown`.
+  await ensureCoverage(ctx, a.tenantId, Date.now());
+
   // 1. BOTH switches. They are independent by construction (a media pause must not stop the email
   //    cockpit) but an all-stop is an all-stop, so either one refuses here.
   const cfg = await getGuardrailConfig(ctx);

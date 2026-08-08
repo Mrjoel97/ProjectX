@@ -34,8 +34,19 @@ const EVENT_PAGE_LIMIT = 500;
 /**
  * Insert-if-absent coverage start. Returns the EXISTING start when there is one — a later call
  * must never move it forward, or every window before the new start silently becomes unknown.
+ *
+ * **CALL THIS AT A SPEND GATE, NOT ONLY AT A MOVEMENT.** Coverage answers "from when does this
+ * ledger see everything for this tenant", and the answer is "from when we started watching" — not
+ * "from when money first moved". Opening it only on the first recorded movement inverts the very
+ * lie the field exists to prevent: instead of a fake zero it reports fake ignorance, so a tenant we
+ * have been gating all week reads as `unknown` when the truth is a confident nothing. A REFUSED
+ * gate is positive knowledge that no money moved, so it opens coverage too.
  */
-async function ensureCoverage(ctx: MutationCtx, tenantId: string, nowMs: number): Promise<number> {
+export async function ensureCoverage(
+  ctx: MutationCtx,
+  tenantId: string,
+  nowMs: number,
+): Promise<number> {
   const existing = await ctx.db
     .query("spendCoverage")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))

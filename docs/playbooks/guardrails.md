@@ -372,6 +372,30 @@ work that is already paid for. Confirmed on the public `RunOptions` type in
 Droppable only once nothing started before that deploy can still be parked. **Any future change to
 a journaled step's args carries the same hazard.**
 
+### Coverage opens at the GATE, not at the money
+
+`spendCoverage` answers "from when does this ledger see everything for this tenant". The answer is
+**from when we started watching**, not from when money first moved — so `ensureCoverage` is called
+at the top of every spend gate: `prepare`, `preCall`, `reserveFolderInner` and `reserveJobInner`.
+**Above every refusal, including the kill switches.**
+
+Opening it only on the first recorded movement inverts the very lie the field exists to prevent:
+instead of a fake zero it reports fake *ignorance*. A tenant we have been gating all week, who
+simply has not spent, would read as `unknown` when the truth is a confident nothing — and a tenant
+paused by the kill switch would read as `unknown` for the whole pause, which is the period we know
+most about.
+
+A refused gate is **positive knowledge that no money moved**, so it opens coverage and writes no
+movement. Those are two different statements and both are needed.
+
+Placement is load-bearing and a test caught it being wrong: `reserveJobInner`'s kill-switch check
+returns *above* `reserveProviderLinesInner`, so a gate placed in the inner function missed exactly
+the refusal it most needed to cover. `ensureCoverage` is insert-if-absent and never moves an
+existing start forward, so calling it at both an outer and an inner gate is free.
+
+`recordSpend` deliberately does NOT open coverage — it runs *after* a gate, so coverage is already
+open by the time it is reached, and a zero-cost call stays a complete no-op on both planes.
+
 **A NEW CALL SITE CANNOT SHIP UNINSTRUMENTED.** `correlationId` is optional, so the compiler will
 not catch a missing one — a static scan in `guardrails.test.ts` ("every recordSpend call site passes
 a correlation") balances braces from each call's argument object and fails the build instead. It
