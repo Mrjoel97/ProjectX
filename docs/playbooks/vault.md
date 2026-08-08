@@ -1,5 +1,22 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-08 (26-07 follow-up — **all four vault spend sites now name themselves in
+> the ledger, and the PDF one is the reason this mattered.**)
+> `vaultExtract` uses `vault:extract:<vaultDocId>:<attemptId>` **plus `:p<i>` on the per-page PDF
+> fan-out** — a document-level correlation would have recorded ONE page's cost for a 50-page scan
+> and left the ledger far below the limiter. The image branch omits the `:p` segment entirely
+> rather than faking `:p0`; never emit `:pundefined`. `vaultTranscribe` uses
+> `vault:transcribe:<vaultDocId>:<attemptId>` and `vaultDigest` uses
+> `vault:digest:<folderId>:<runId>`, both with a per-execution `attemptId`/`runId` nonce, because a
+> daily-sweep retry or a digest rebuild is a REAL second charge, not a replay.
+> **`vaultIngest` is the exception and must stay one:** it is a JOURNALED WORKFLOW STEP, so it
+> DERIVES `vault:ingest:<vaultDocId>:<step.workflowId>` — a nonce there would mint a second row for
+> money that moved once. It deliberately does NOT reuse the handler's own `correlationId` argument,
+> because `vaultSweep.retryExtraction` passes that as a CONSTANT and every retry would collide.
+> That step also carries `{ unstableArgs: true }`: its args grew, and an ingest already in flight
+> would otherwise die on `Journal entry mismatch` at deploy. The policy and the full per-site table
+> live in `docs/playbooks/guardrails.md` §"Phase 26".
+>
 > Last verified: 2026-08-08 (26-07 — **the folder rail's money is now double-entered.**
 > `vaultFolders.reserveFolder` passes its `folderId` down to `reserveFolderInner`, which writes a
 > `reserved` spend movement correlated `f:<folderId>:<reservedAt>`; `settleFolder` writes the

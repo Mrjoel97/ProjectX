@@ -673,3 +673,43 @@ test("a NON-research scripted turn runs all four tool steps and is NOT truncated
   expect(res.webSearchCalls).toBe(0);
   expect(res.sources).toEqual([]);
 });
+
+// ── FIN-01: every llm.ts spend correlation is DISTINCT ───────────────────────
+// A SOURCE check, for the same reason guardrails.test.ts's sibling scan is one: llm.ts spends at
+// eight places and no runtime test can observe a call site nobody scripted. Six of the eight are
+// one of three PRIMARY/FALLBACK pairs and a seventh is the web-search FEE that fires in the SAME
+// attempt as the loop's token cost — all of them fully billed, none of them replays. The ledger
+// identity is (tenantId, correlationId, phase), so a copy-pasted template makes the second charge
+// return the first row and vanish, leaving the ledger BELOW the limiter. That is the direction
+// that cannot be reconstructed, and a duplicated literal is exactly how it would happen.
+test("every llm.ts spend correlation template is distinct and charset-legal", () => {
+  // `Object.values(...).join` rather than indexing the glob by key: the key shape is a bundler
+  // detail, and an index that missed would hand this scan an empty string it would pass on.
+  const raw = Object.values(
+    import.meta.glob("./llm.ts", { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >,
+  ).join("\n");
+  // Comments first — this block DISCUSSES the templates in prose, and a scan that read its own
+  // documentation would report a collision that does not exist (the importGuard.test.ts trap).
+  const code = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  const templates = [
+    // The helper's 6th argument. `[^`]*?` up to the FIRST backtick works for the single-line
+    // callers and the wrapped one alike: no other backtick appears inside these arg lists.
+    ...[...code.matchAll(/recordModelSpend\([^`]*?`([^`]+)`/g)].map((m) => m[1] ?? ""),
+    // ...and the fee, which calls recordSpend directly rather than through the helper.
+    ...[...code.matchAll(/correlationId:\s*`([^`]+)`/g)].map((m) => m[1] ?? ""),
+  ];
+  // Anti-vacuity: a renamed helper would otherwise make an empty list pass for free.
+  expect(templates.length).toBe(8);
+  expect(new Set(templates).size, `duplicate spend correlation: ${templates.join(", ")}`).toBe(
+    templates.length,
+  );
+  for (const t of templates) {
+    // The interpolations are all crypto.randomUUID()s / a 0|1 attempt index, so a base32 stand-in
+    // is faithful. This catches a future template that reaches for something with whitespace in it.
+    const sample = t.replace(/\$\{[^}]+\}/g, "abc123");
+    expect(sample, `illegal correlation charset: ${t}`).toMatch(/^[A-Za-z0-9._:@/-]{1,128}$/);
+  }
+});

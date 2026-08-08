@@ -1,6 +1,20 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
+> Last verified: 2026-08-08 (Phase-26 spend instrumentation, LANE NOTE ONLY.) `blueprint.ts`'s
+> `deriveCandidates` action is a `recordSpend` call site, so it falls in scope of the 26-07 spend
+> ledger: every reasoning charge must pass a `correlationId`, and re-running that action is a
+> GENUINE re-spend, so its correlation must be a per-execution nonce minted at the top of the
+> handler — never a tenant-scoped constant, which would record only the first run of the day and
+> leave the ledger below the limiter. The policy is in `docs/playbooks/guardrails.md` §"Phase 26";
+> a static scan in `guardrails.test.ts` fails the build if any `recordSpend` call site ships
+> without a correlation, so this cannot silently regress.
+>
+> ⚠ **The `BlueprintCanvas` / `BlueprintPanel` / `SegmentAnatomy` / `blueprintPulse` changes dated
+> today are the CONCURRENT BLUEPRINT LANE's, not this entry's** — that lane shares this working
+> tree and should replace this paragraph with its own account. Recorded here only because the
+> watcher flagged the shared path; do not read it as a review of that work.
+>
+> Previously verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
 > end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
 > (`STALE_RUN_MS`, with a reduced-motion fallback that swaps the breath for a static indicator),
 > recency dims in the same stepped fresh/recent/quiet bands `aggregatePulse` already computes, and

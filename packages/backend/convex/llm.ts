@@ -2570,7 +2570,8 @@ export function buildCockpitTools(
             await ctx.storage.delete(res.oldStorageId);
           titles = titles.map((t, j) => (j === effectiveReplace - 1 ? draft.title : t));
         }
-        const vaultDocId = docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
+        const vaultDocId =
+          docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -2601,7 +2602,10 @@ export function buildCockpitTools(
         });
         // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
         // URL, never an _id.
-        const saved = effectiveReplace === undefined ? "saved to your vault" : `rewritten as #${effectiveReplace}`;
+        const saved =
+          effectiveReplace === undefined
+            ? "saved to your vault"
+            : `rewritten as #${effectiveReplace}`;
         return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
       },
     }),
@@ -2868,15 +2872,31 @@ function invokeTool(
 // cost skip; recordSpend itself also no-ops at cents<=0, so a ZERO_USAGE turn never drains budget).
 // Returns the priced USD (0 on the guarded paths) so the loop can surface per-turn cost (EVAL-01
 // Pattern 4 — the rate-limiter window is global and unreadable from the eval runner).
+// FIN-01: `kind` and `correlationId` are REQUIRED, deliberately — this helper has seven call sites
+// and six of them are one of three PRIMARY/FALLBACK PAIRS that are BOTH fully billed. A default
+// would let a new site inherit its neighbour's correlation, and the ledger identity is
+// (tenantId, correlationId, phase): the second charge would return the first row and be dropped,
+// leaving the ledger BELOW the limiter — the unrecoverable direction. Making the caller type the
+// discriminator is the only way the compiler can ask the question.
+// `model` is `id` — the model that ACTUALLY ran (the fallback on a retried call), never the
+// DEFAULT_MODEL constant the call site names, for the same reason searchFeeUsd keys on `m.id`.
 async function recordModelSpend(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   id: string,
   usage: { inputTokens?: number; outputTokens?: number },
+  kind: string,
+  correlationId: string,
 ): Promise<number> {
   const priced = priceUsage(id, usage);
   if (!priced.ok) return 0;
-  await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+  await ctx.runMutation(internal.guardrails.recordSpend, {
+    tenantId,
+    costUsd: priced.value,
+    correlationId,
+    model: id,
+    kind,
+  });
   return priced.value;
 }
 
@@ -3023,9 +3043,21 @@ async function runAgentLoop(
     (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
   const startedAt = Date.now();
   const outOfClock = (): boolean => softMs !== undefined && Date.now() - startedAt >= softMs;
+  // FIN-01: the ledger correlation for everything this loop spends. `turnId` is ALREADY a
+  // per-execution nonce — cockpit.ts:121/278 and dispatch.ts:378 each mint it with
+  // crypto.randomUUID() inside the driver action — so reusing it costs nothing and makes the
+  // spendEvents row joinable to the same turn's agentSteps trace. The shims (and any caller that
+  // wants no trace) pass none, and they get a fresh nonce rather than a shared constant: this
+  // function ALWAYS re-runs generateText when it is re-entered, so a re-entry is real money and
+  // must never be suppressed as a replay.
+  const loopId = turnId ?? crypto.randomUUID();
   const run = async (
     m: PricedModel,
     maxRetries: number,
+    // The PRIMARY/FALLBACK discriminator. NOT `m.id`: the two PricedModel bags may carry the SAME
+    // pricing id (16-05's RESEARCH_MODEL can be DEFAULT_MODEL — see modelId in the FREEZE below),
+    // and then both attempts would correlate identically and the fallback's charge would vanish.
+    attempt: 0 | 1,
   ): Promise<{
     reply: string;
     costUsd: number;
@@ -3092,7 +3124,14 @@ async function runAgentLoop(
         });
       },
     });
-    costUsd += await recordModelSpend(ctx, tenantId, m.id, res.usage);
+    costUsd += await recordModelSpend(
+      ctx,
+      tenantId,
+      m.id,
+      res.usage,
+      "agent_loop",
+      `agentloop:${loopId}:a${attempt}`,
+    );
     // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
     // ONLY — so without this the shared envelope under-counts exactly the capability this phase
     // adds. NOT res.sources.length: one search yields many sources.
@@ -3164,8 +3203,18 @@ async function runAgentLoop(
     // guards against everywhere else. `searchFeeUsd` fails safe to the higher rate on any id it
     // does not recognise.
     const feeUsd = webSearchCalls * searchFeeUsd(m.id);
+    // FIN-01: `:search` is not decoration. This is a SECOND, INDEPENDENT money movement in the
+    // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
+    // be that row's identity, so the fee would return the token row and be silently dropped,
+    // under-drawing the ledger by exactly the per-call fee this block exists to charge.
     if (feeUsd > 0)
-      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
+      await ctx.runMutation(internal.guardrails.recordSpend, {
+        tenantId,
+        costUsd: feeUsd,
+        correlationId: `agentloop:${loopId}:a${attempt}:search`,
+        model: m.id,
+        kind: "web_search_fee",
+      });
     costUsd += feeUsd;
     // READ FROM THE TOOL'S OWN RESULTS, not `res.sources` (changed 2026-08-07 with Tavily).
     // `res.sources` is populated from provider `url_citation` annotations, which ONLY a hosted tool
@@ -3215,11 +3264,11 @@ async function runAgentLoop(
     };
   };
   try {
-    return await run(primary, 1);
+    return await run(primary, 1, 0);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     try {
-      return await run(fallback, 0);
+      return await run(fallback, 0, 1);
     } catch (e2) {
       // AGNT-04: BOTH the primary AND the CHEAP_MODEL fallback failed. If the exhausted failure is a
       // timeout/abort class, re-throw a CONTENT-FREE ConvexError marker so the cockpit driver can fire
@@ -4163,6 +4212,10 @@ export const digestInbox = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
   // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
   handler: async (ctx, { tenantId, messages, skillVersion, smoke }): Promise<DigestBatch> => {
+    // FIN-01: this action has NO stable ref to correlate on — no requestId, no planId, and the
+    // message list is content-plane (§4). A nonce is the RIGHT answer anyway: re-entering this
+    // action re-runs generateObject, so the second digest is real money and must get its own row.
+    const runId = crypto.randomUUID();
     // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
     const skill: { body: string; version: number } =
@@ -4229,7 +4282,17 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` below — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not
+      // a replay of this one. Sharing `digest:${runId}` would make the ledger record whichever
+      // landed first and drop the other.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a0`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -4241,7 +4304,14 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        CHEAP_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a1`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -4273,6 +4343,10 @@ export const draftReply = internalAction({
     ctx,
     { tenantId, safeText, originalBody, skillVersion },
   ): Promise<{ body: string }> => {
+    // FIN-01: no stable ref here either (the caller owns correlation, as the header says), and
+    // `safeText`/`originalBody` are content-plane — a nonce is both the safe and the correct
+    // choice: a re-entry re-drafts and is billed again. digestInbox precedent.
+    const runId = crypto.randomUUID();
     // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
     const skill: { body: string; version: number } =
@@ -4307,7 +4381,15 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed draft, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "reply_draft",
+        `reply:${runId}:a0`,
+      );
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -4318,7 +4400,7 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "reply_draft", `reply:${runId}:a1`);
       return { body: text.trim() };
     }
   },
@@ -4377,6 +4459,9 @@ export const draftVoiceBrief = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
   // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
   handler: async (ctx, { tenantId, transcript, language }): Promise<string> => {
+    // FIN-01: no stable ref (the transcript is content-plane), and a re-entry re-writes the brief
+    // for real money — nonce, same as digestInbox and draftReply.
+    const runId = crypto.randomUUID();
     // Load the voice-brief skill FIRST (no hardcoded prompt — §5); fails closed (NO_ACTIVE_SKILL
     // unseeded), and the load runs BEFORE the smoke short-circuit so it is exercised offline.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -4406,7 +4491,15 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed brief, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "voice_brief",
+        `brief:${runId}:a0`,
+      );
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -4418,7 +4511,7 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "voice_brief", `brief:${runId}:a1`);
       return buildBriefMarkdown(object, transcript, language);
     }
   },

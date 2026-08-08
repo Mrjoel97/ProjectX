@@ -737,3 +737,84 @@ describe("ledger parity: folder reservation, refund and the rolled window", () =
     expect(res.reason).toBe("settled_window_rolled");
   });
 });
+
+// ── 26-07 follow-up: NO CALL SITE MAY SHIP UNINSTRUMENTED ──────────────────────────────
+//
+// `recordSpend`'s `correlationId` is deliberately OPTIONAL (owner decision, 2026-08-08 — a required
+// arg would have rippled through ~10 source files and ~6 playbooks in a plan that owned six files).
+// The cost of that choice is that the COMPILER no longer enumerates the call sites for us, and a
+// site added later would silently fall back to the nonce: recorded, but with no replay suppression,
+// and nobody would ever notice.
+//
+// This scan is what buys that enforcement back, for the price of one regex and a brace counter. It
+// is a SOURCE check rather than a behavioural one on purpose: no runtime test can observe a call
+// site that nobody wrote a test for, which is precisely the case being defended against.
+describe("every recordSpend call site passes a correlation", () => {
+  const sources = import.meta.glob("./**/*.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  const CALL = "internal.guardrails.recordSpend";
+
+  /**
+   * The ARGUMENT OBJECT of the call, found by balancing BRACES from the `{` that follows the callee
+   * name — not by a fixed character window, which would read a LATER call's `correlationId` and
+   * pass for the wrong reason on any file with two adjacent sites (llm.ts and intake.ts both have
+   * exactly that).
+   *
+   * BRACES, NOT PARENS, and the first draft of this helper got it wrong in a way that passed:
+   * the call is `ctx.runMutation(internal.guardrails.recordSpend, { ... })`, so the enclosing
+   * paren opens BEFORE the callee name. Scanning for the next `(` AFTER the name therefore found
+   * some unrelated call further down the file and returned a garbage span — which for `voice.ts`
+   * contained the word `correlationId` by coincidence and reported an uninstrumented site as
+   * green. A scan that can pass for a reason unrelated to its subject is worse than no scan.
+   */
+  function argsOf(code: string, from: number): string | null {
+    const open = code.indexOf("{", from);
+    const close = code.indexOf(")", from);
+    if (open === -1 || (close !== -1 && close < open)) return null; // not an object literal
+    let depth = 0;
+    for (let i = open; i < code.length; i += 1) {
+      if (code[i] === "{") depth += 1;
+      else if (code[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return code.slice(open, i + 1);
+      }
+    }
+    return null;
+  }
+
+  const callSites = Object.entries(sources)
+    .filter(([path]) => !path.endsWith(".test.ts") && !path.includes("/_generated/"))
+    .flatMap(([path, raw]) => {
+      // Strip comments first: three files DISCUSS `guardrails.recordSpend` in prose, and a scan
+      // that counted those would demand a correlation inside a sentence (the importGuard.test.ts
+      // trap — a guard must not punish its own documentation).
+      const code = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+      const found: { path: string; args: string | null }[] = [];
+      for (let i = code.indexOf(CALL); i !== -1; i = code.indexOf(CALL, i + 1)) {
+        found.push({ path, args: argsOf(code, i + CALL.length) });
+      }
+      return found;
+    });
+
+  test("the scan found the call sites it is supposed to guard", () => {
+    // Anti-vacuity: every assertion below is a per-site loop, so an empty list passes for free —
+    // exactly what happens if the glob key shape or the callee name ever changes.
+    expect(callSites.length).toBeGreaterThanOrEqual(10);
+  });
+
+  for (const [index, site] of callSites.entries()) {
+    test(`${site.path} site ${index} passes a correlationId`, () => {
+      // A call that does not spread an object literal cannot be read by this scan; spelling the
+      // args inline is the house style at all 12 sites, and a caller that changes that must say so.
+      expect(
+        site.args,
+        `${site.path}: recordSpend args are not an inline object literal`,
+      ).not.toBeNull();
+      expect(site.args).toContain("correlationId");
+    });
+  }
+});

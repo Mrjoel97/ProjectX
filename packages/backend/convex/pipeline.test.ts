@@ -2,6 +2,7 @@ import { classifyReviewDecision, MAX_REGENERATE, notificationMessage } from "@pi
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
+import { llmSpendCorrelation } from "./pipeline";
 import schema from "./schema";
 
 // convex-test discovers Convex modules via import.meta.glob; exclude *.test.ts.
@@ -124,5 +125,26 @@ describe("REVW-02 fail-closed review gate (classifyReviewDecision wiring)", () =
     );
     expect(tels).toHaveLength(1);
     expect(tels[0]?.reviewOutcome).toBe("escalated");
+  });
+});
+
+describe("FIN-01 llm spend correlation (recordLlm replay identity)", () => {
+  test("every real charge in one request gets its own correlation, and a replay reuses it", () => {
+    const requestId = "kn7abc123def456ghi789jkl"; // shape of a Convex id — base32 alphanumerics
+    // The exact (stage, seq) sequence recordLlm produces for route → draft → regenerate ×2.
+    // `seq` is `usages.length` before the push, so it advances once per real model call.
+    const cids = [
+      llmSpendCorrelation(requestId, "route", 0),
+      llmSpendCorrelation(requestId, "draft", 1),
+      llmSpendCorrelation(requestId, "draft", 2),
+      llmSpendCorrelation(requestId, "draft", 3),
+    ];
+    // THE BUG THIS GUARDS: without `seq`, the three drafts collapse to one correlation, the
+    // ledger suppresses two real charges the limiter already consumed, and money goes missing.
+    expect(new Set(cids).size).toBe(cids.length);
+    // Deterministic — a journaled replay derives the SAME string and is correctly suppressed.
+    expect(llmSpendCorrelation(requestId, "draft", 2)).toBe(cids[2]);
+    // recordMovement's correlationId contract: no whitespace, ≤128 chars.
+    for (const cid of cids) expect(cid).toMatch(/^[A-Za-z0-9._:@/-]{1,128}$/);
   });
 });

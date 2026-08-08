@@ -1,7 +1,9 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-08 (26-07 — the spend ledger now rides alongside every reasoning and
-> ingest limiter movement; see the Phase 26 section below.)
+> Last verified: 2026-08-08 (26-07 + its follow-up sweep — the spend ledger rides alongside every
+> reasoning and ingest limiter movement, and **all twelve `recordSpend` call sites now pass a
+> stable correlation**; see the Phase 26 section below for the per-site table and the discriminator
+> each one needs.)
 >
 > Previously verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
 > started watching that table.** `packages/cost/src/cost.ts` was watched by NO playbook until now —
@@ -342,6 +344,39 @@ from `folder.reservedAt` and would never match.
   `settled_window_rolled` rather than `settled` so the reason is distinguishable from a clamp that
   happened to land on zero.
 
+### Every call site, and the discriminator that keeps it honest
+
+All twelve `recordSpend` call sites now pass a correlation. **The discriminator column is the point
+of this table** — it names the second real charge that would have been swallowed without it.
+
+| call site | correlation | discriminator earns its place because… |
+|---|---|---|
+| `pipeline.ts` `recordLlm` | `req:<requestId>:<stage>:<seq>` | `seq` (= `usages.length` read BEFORE the push): `stage` alone collapses every regenerate onto the first draft, and each regenerate is a real second model call. **Derived, not minted — journaled step.** |
+| `intake.ts` transcribe / extract | `intake:transcribe:<artifactId>` / `intake:extract:<artifactId>` | `runIntake` inserts a FRESH `intakeArtifacts` row per attempt, so a re-entry gets a new id; the verb token keeps a video's audio and frame charges apart |
+| `llm.ts` agent loop | `agentloop:<loopId>:a<attempt>` | `loopId = turnId ?? randomUUID()`; `attempt` separates the primary from the fully-billed CHEAP_MODEL fallback |
+| `llm.ts` web-search fee | `agentloop:<loopId>:a<attempt>:search` | a SEPARATE payment in the SAME turn — bare would collide with that turn's token cost |
+| `llm.ts` digest / reply / voice-brief | `digest\|reply\|brief:<runId>:a0` / `:a1` | each is a try/catch pair of TWO fully-billed calls, not a retry of one |
+| `blueprint.ts` `deriveCandidates` | `blueprint:derive:<runId>` | re-running the action is a genuine re-spend; a tenant-scoped constant would record only the first run of the day |
+| `vaultExtract.ts` | `vault:extract:<vaultDocId>:<attemptId>[:p<i>]` | the PDF fan-out bills PER PAGE — a document-level correlation records one page's cost for a 50-page scan. The image branch omits `:p` entirely rather than faking `:p0` |
+| `vaultIngest.ts` | `vault:ingest:<vaultDocId>:<step.workflowId>` | **Derived, not minted — journaled step.** Deliberately NOT the handler's `correlationId` arg, which a sweep retry passes as a constant |
+| `vaultDigest.ts` | `vault:digest:<folderId>:<runId>` | a rebuild is a real second charge |
+| `vaultTranscribe.ts` | `vault:transcribe:<vaultDocId>:<attemptId>` | a sweep retry re-transcribes for real |
+| `voice.ts` metering | `voice:usage:<sessionId>:<offset>` | the cumulative token offset — one session meters repeatedly, and `sessionId` alone would record only the first slice |
+| `voiceDoc.ts` review | `voicedoc:review:<sessionId>:<nonce>` | re-reviewing a doc re-spends |
+
+**`{ unstableArgs: true }` IS LOAD-BEARING at the two journaled sites** (`pipeline.ts`,
+`vaultIngest.ts`). Their step args GREW, and a workflow already mid-flight replays the step against
+a journal entry recorded with the old args and dies on `Journal entry mismatch` — killing in-flight
+work that is already paid for. Confirmed on the public `RunOptions` type in
+`@convex-dev/workflow@0.4.4` (`dist/client/workflowContext.d.ts`), not merely on an internal type.
+Droppable only once nothing started before that deploy can still be parked. **Any future change to
+a journaled step's args carries the same hazard.**
+
+**A NEW CALL SITE CANNOT SHIP UNINSTRUMENTED.** `correlationId` is optional, so the compiler will
+not catch a missing one — a static scan in `guardrails.test.ts` ("every recordSpend call site passes
+a correlation") balances braces from each call's argument object and fails the build instead. It
+carries a non-vacuity floor (≥10 sites) because a per-site loop over an empty list passes for free.
+
 ### How to verify
 
 ```text
@@ -362,15 +397,6 @@ a dark window is a permanent hole in the record.
 
 ## Known gaps & deferred work
 
-- **The other ~15 `recordSpend` call sites pass no correlation yet, so they have no replay
-  suppression** — they rely on the nonce, which cannot under-count but can duplicate under a
-  replay-without-respend. A 19-site correlation design (per-turn, per-page, per-fallback
-  discriminators for `llm.ts`, `pipeline.ts`, `intake.ts`, `blueprint.ts`, `vaultExtract.ts`,
-  `vaultIngest.ts`, `vaultTranscribe.ts`, `vaultDigest.ts`) was produced and adversarially reviewed
-  during 26-07 and is recorded in that plan's SUMMARY. It was scoped OUT because it edits ~10 files
-  and ~6 playbooks this plan does not own. **Two of those sites need `{ unstableArgs: true }` on
-  their `step.runMutation` when they change** (`pipeline.ts` and `vaultIngest.ts`) or in-flight
-  journaled workflows die on deploy.
 - **Charges the pricer never sees are invisible to BOTH planes.** `draftUncached` runs
   `maxRetries: 1` and then a whole CHEAP_MODEL fallback but returns only the surviving attempt's
   usage; `!priced.ok` (an id missing from `PRICING`) records nothing anywhere. Ledger and limiter

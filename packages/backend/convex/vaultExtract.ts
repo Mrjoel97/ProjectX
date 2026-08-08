@@ -109,6 +109,11 @@ async function extractHosted(
   tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
+  // FIN-01 ledger identity for THIS call's spend row. Required, not optional: this helper fires
+  // ONCE PER PAGE under the fan-out, so a caller that forgot it would book a 50-page scan as one
+  // page's cost — the under-count direction that is indistinguishable from money never spent.
+  // The caller owns the page segment; see extractPdf.
+  correlationId: string,
   // 15.3-03: which spend rail this page's cost lands on. Absent ⇒ the token rail (today's
   // behaviour for every single-file upload). Under the OCR fan-out this fires ONCE PER PAGE.
   spendRail?: "ingest",
@@ -129,6 +134,9 @@ async function extractHosted(
       tenantId,
       costUsd: priced.value,
       rail: spendRail,
+      correlationId,
+      model: "openai/gpt-4o-mini",
+      kind: "vault.extract", // code-owned token, refs/counts only (§4)
     });
   }
   return text;
@@ -259,6 +267,8 @@ async function extractPdf(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   bytes: Uint8Array,
+  // Per-ATTEMPT base (extractDoc mints it); this function appends the PAGE segment below.
+  correlation: string,
   spendRail?: "ingest",
 ): Promise<Extracted> {
   const { extractText, getDocumentProxy } = await import("unpdf");
@@ -281,7 +291,12 @@ async function extractPdf(
   // `text` is already taken by the text-layer destructure above — the fan-out's own name.
   const { text: transcribed, okPages } = await fanOutPages(
     pages.length,
-    (i) => extractHosted(ctx, tenantId, pages[i]!, "application/pdf", spendRail),
+    // `:p${i}` is the discriminator that keeps the ledger honest: every page is its OWN hosted
+    // call and its OWN recordSpend, so a document-level correlation would collapse all 50 pages
+    // into ONE `actual` row carrying one page's cents while the limiter consumed all 50 — the
+    // ledger would sit below the limiter, the unrecoverable direction.
+    (i) =>
+      extractHosted(ctx, tenantId, pages[i]!, "application/pdf", `${correlation}:p${i}`, spendRail),
     {
       batchSize: PAGE_BATCH_SIZE,
       pageTimeoutMs: PAGE_TIMEOUT_MS,
@@ -309,6 +324,12 @@ export const extractDoc = internalAction({
   handler: async (ctx, { vaultDocId, tenantId, spendRail, reserved }): Promise<null> => {
     const fail = (reason: string): Promise<null> =>
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason });
+    // FIN-01 ledger identity. The doc id alone is NOT enough: the daily sweep and the user-facing
+    // Retry both genuinely RE-EXTRACT a document, and a re-extraction pays the hosted call again —
+    // real second money, not a replay. This action is never journaled, so an attempt nonce is the
+    // honest discriminator (a workflow step would derive instead). Convex ids and a UUID are both
+    // safe to interpolate; nothing model- or user-supplied ever enters this string (§4).
+    const correlation = `vault:extract:${vaultDocId}:${crypto.randomUUID()}`;
     try {
       // 1. Governed gate BEFORE any work — a stop is a RETURN, never a throw (vaultIngest.ts).
       //    Reserved folder work reaches the kill-switch branch ONLY: its OCR pages are pre-paid,
@@ -366,7 +387,7 @@ export const extractDoc = internalAction({
       if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
       } else if (rail === "pdf") {
-        extracted = await extractPdf(ctx, tenantId, bytes, spendRail);
+        extracted = await extractPdf(ctx, tenantId, bytes, correlation, spendRail);
       } else if (rail === "image") {
         // A SNIFFED image with an empty/wrong MIME must still be sent with a real mediaType, or
         // the model call is malformed — SC#1 would "work" right up to the point it silently didn't.
@@ -376,7 +397,9 @@ export const extractDoc = internalAction({
               sniffContainer(bytes) as "png" | "jpeg" | "gif"
             ] ?? "image/png");
         extracted = {
-          text: await extractHosted(ctx, tenantId, bytes, imageMediaType, spendRail),
+          // NO page segment here on purpose: an image is ONE call, so there is no second charge
+          // to separate. Inventing a `:p0` would claim a fan-out that does not exist.
+          text: await extractHosted(ctx, tenantId, bytes, imageMediaType, correlation, spendRail),
           path: "hosted",
         };
       } else if (rail === "zip") {

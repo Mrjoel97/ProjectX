@@ -377,6 +377,7 @@ function withVerifiedExcerpts(raw: RawDocReview, docText: string): RawDocReview 
 async function modelDocReview(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
+  sessionId: Id<"voiceSessions">,
   transcript: { speaker: string; text: string }[],
   doc: { title: string; text: string | undefined; extractionTruncated: boolean },
 ): Promise<RawDocReview> {
@@ -409,7 +410,18 @@ async function modelDocReview(
   // charged against the same daily spend limiter, so a doc review cannot spend off-budget.
   const priced = priceUsage(DEFAULT_MODEL, usage);
   if (priced.ok)
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    // FIN-01 correlation. `sessionId` names WHICH review this money bought; the per-execution
+    // `runId` is the discriminator. `reviewDocument` is an ACTION, so a re-entry re-runs the
+    // `generateObject` above for real money — a correlation of session alone would suppress that
+    // second row and leave the ledger below the limiter, the unrecoverable direction. The
+    // idempotence a re-review needs already lives in `reviewSession`'s read-guard, not here.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `voicedoc:review:${sessionId}:${crypto.randomUUID()}`,
+      model: DEFAULT_MODEL,
+      kind: "docReview",
+    });
   return object;
 }
 
@@ -456,7 +468,7 @@ export const reviewDocument = internalAction({
     const raw: RawDocReview =
       offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)
         ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
-        : await modelDocReview(ctx, tenantId, transcript, doc);
+        : await modelDocReview(ctx, tenantId, sessionId, transcript, doc);
 
     // Citations, gap route/playbook, the leverage rank, the excerpt cap and the honesty verdict all
     // land in pure tested code (14-02). Do NOT re-derive any of them here, and never pass a verdict.

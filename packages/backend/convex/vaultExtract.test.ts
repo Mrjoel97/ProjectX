@@ -1020,6 +1020,29 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     );
   });
 
+  test("every hosted page books its OWN ledger row (FIN-01 — the per-page discriminator)", () => {
+    // recordSpend mints `auto:<uuid>` when correlationId is absent, so this is NOT about a row
+    // existing — it is about the row COUNT. The failure this scan stands against is a
+    // document-level correlation: 50 pages, 50 hosted calls, 50 limiter movements, but ONE
+    // `actual` row carrying one page's cents. The ledger would then sit BELOW the limiter, and a
+    // missing movement is indistinguishable from money never spent.
+    expect(src, "the hosted call must take an explicit correlation").toContain("correlationId,");
+    expect(src, "each page needs its OWN correlation segment").toMatch(
+      /pages\[i\]!,\s*"application\/pdf",\s*`\$\{correlation\}:p\$\{i\}`/,
+    );
+    // The attempt nonce: the daily sweep / Retry genuinely RE-EXTRACT a document and pay again.
+    // Derive from the doc id alone and the second extraction is suppressed as a replay — free OCR
+    // in the ledger, real OCR on the invoice.
+    expect(src, "the attempt nonce must be minted per handler run").toMatch(
+      /vault:extract:\$\{vaultDocId\}:\$\{crypto\.randomUUID\(\)\}/,
+    );
+    // An image is ONE call — a `:p0` there would claim a fan-out that does not exist.
+    expect(src, "the image branch must not fake a page segment").toMatch(
+      /imageMediaType,\s*correlation,/,
+    );
+    expect(src).not.toContain(":pundefined");
+  });
+
   test("unpdf gets a COPY — pdf.js detaches the buffer the fan-out emitter then reads", () => {
     expect(src).toContain("getDocumentProxy(bytes.slice())");
   });

@@ -11,6 +11,52 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-09 (26-07 follow-up, `llm.ts` — **the agent loop's eight spend sites now
+> carry correlations, and every one of them needed a discriminator beyond the obvious ref.**)
+> `recordModelSpend` gained REQUIRED `kind` and `correlationId` parameters — required at the HELPER
+> even though `recordSpend`'s own arg is optional, because seven call sites reach it and the
+> compiler is the only thing that can enumerate them. The agent loop uses
+> `agentloop:<loopId>:a<attempt>` where `loopId = turnId ?? crypto.randomUUID()`: **`attempt`
+> separates the primary model from the CHEAP_MODEL fallback, which is a SECOND fully-billed call
+> and not a retry of the first** — without it the fallback's charge returns the primary's row and
+> vanishes. The web-search fee is a separate payment inside the SAME turn, so it appends `:search`
+> rather than sharing the turn's token-cost correlation. The digest, reply and voice-brief helpers
+> each mint a per-execution `runId` and suffix `:a0` / `:a1` across their try/catch pair for the
+> same reason. **Deliberately NOT used as a discriminator: the AI SDK's `toolCallId`** — it is
+> provider-supplied and unvalidated, so interpolating it could throw the ledger's charset check
+> AFTER the money was spent, and on at least one path it degenerates to a hardcoded literal. A
+> minted nonce is both shorter and safer. Policy and the full per-site table:
+> `docs/playbooks/guardrails.md` §"Phase 26".
+>
+> Last verified: 2026-08-08 (26-07 follow-up — **the pipeline's LLM charges now carry a DERIVED
+> spend correlation, and adding it needed a deploy guard.**) `recordLlm` passes
+> `correlationId: req:<requestId>:<stage>:<seq>` (exported as `llmSpendCorrelation` so a collision
+> is testable rather than inlined), plus `model`, `kind: pipeline.<stage>` and the `requestId` ref.
+>
+> **DERIVED, never minted.** `recordSpend` runs here as a JOURNALED WORKFLOW STEP, so a workflow
+> replay re-runs it WITHOUT re-spending; a `crypto.randomUUID()` would mint a second `actual` row
+> for money that moved once. The opposite rule applies at every action call site — see
+> `docs/playbooks/guardrails.md` §"Phase 26" for why the policy splits on that one question.
+>
+> **`requestId`, NOT the handler's `correlationId`.** The latter is a bare `v.string()` that the
+> smoke seeder supplies freely, so it could carry whitespace or exceed 128 chars and would throw
+> the ledger's charset check AFTER the model call was billed. A Convex id is regex-safe by
+> construction.
+>
+> **`seq` is the discriminator that matters.** It is `usages.length` read BEFORE the push — the
+> array is append-only and appended only there, so it is 0 for route, 1 for the first draft, 2 for
+> the first regenerate: deterministic on replay, distinct for every real charge. `stage` alone
+> would collapse every regenerate onto the first draft's row, and each regenerate IS a real second
+> model call.
+>
+> **`{ unstableArgs: true }` IS MANDATORY HERE AND IS NOT COSMETIC.** These step args grew, and this
+> pipeline parks for up to `SEVEN_DAYS` at the review gate. A workflow already mid-flight replays
+> the step against a journal entry recorded with the OLD args and dies on `Journal entry mismatch`
+> — killing an in-flight request whose money is already spent. The option is present in the pinned
+> `@convex-dev/workflow` (verified in `dist/client/step.d.ts`). It is droppable only once nothing
+> started before that deploy can still be parked, i.e. `SEVEN_DAYS` after it ships. **Any future
+> change to a journaled step's args carries the same hazard.**
+>
 > Last verified: 2026-08-08 — **A MODEL-SUPPLIED ARGUMENT IS NOT CONTROL FLOW: `createDocument`'s
 > `replace`.** The live model sends `replace` on EVERY call, including the FIRST, when the
 > conversation holds no created documents at all. The tool obeyed it, routed a create down

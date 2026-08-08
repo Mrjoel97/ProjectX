@@ -268,6 +268,14 @@ export const deriveCandidates = internalAction({
     sources: v.array(v.object({ title: v.string(), text: v.string() })),
   },
   handler: async (ctx, { tenantId, fields, sources }): Promise<DeriveCandidatesResult> => {
+    // FIN-01 replay identity, MINTED not derived. Nothing journaled reaches here: the only ref in
+    // scope is `tenantId`, and `buildBlueprintDraft` (a plain tenantAction) can be re-run — or
+    // re-entered on action retry — as often as the user presses "Build blueprint". Each re-entry
+    // re-runs the generateObject below, so the second charge is REAL; a tenant-scoped constant
+    // would collapse every rebuild after the first onto one `actual` row and put the ledger below
+    // the limiter, the unrecoverable direction. There is exactly one model call per run, so the
+    // runId alone separates run N from run N+1.
+    const runId = crypto.randomUUID();
     const skill: { body: string; version: number } = await ctx.runQuery(
       internal.skills.getActiveSkill,
       { name: BUSINESS_BLUEPRINT_SKILL },
@@ -294,7 +302,13 @@ export const deriveCandidates = internalAction({
     });
     const priced = priceUsage(DEFAULT_MODEL, usage);
     if (priced.ok) {
-      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+      await ctx.runMutation(internal.guardrails.recordSpend, {
+        tenantId,
+        costUsd: priced.value,
+        correlationId: `blueprint:derive:${runId}`,
+        model: DEFAULT_MODEL,
+        kind: "blueprint.derive", // code-owned token, refs only (§4)
+      });
     }
     return { ok: true, candidates: object.candidates };
   },
