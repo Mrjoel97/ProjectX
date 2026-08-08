@@ -2,11 +2,12 @@
 
 import { api } from "@pikar/backend/api";
 import { type BlueprintSegment, type BusinessBlueprint, FIELD_SPEC, SPECIALISTS } from "@pikar/core";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SEGMENT_COPY, joinPhrases } from "./segmentCopy";
+import { SEGMENT_BLOCKED, SEGMENT_COPY, joinPhrases } from "./segmentCopy";
 import { label } from "./styles";
+import { BLOCKED } from "./connections";
 
 const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" };
 
@@ -38,6 +39,71 @@ const TOOL_LABELS: Record<string, string> = {
   searchVault: "your vault documents",
   webResearch: "live web research",
 };
+
+function ToolRow({ name, state, detail }: { name: string; state: string; detail?: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "0.75rem",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span style={{ fontSize: "0.88rem", color: "var(--ink)", fontWeight: 600 }}>{name}</span>
+        {detail !== undefined && (
+          <span style={{ display: "block", fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+            {detail}
+          </span>
+        )}
+      </span>
+      <span
+        style={{
+          fontSize: "0.68rem",
+          fontWeight: 700,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: "var(--ink-soft)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {state}
+      </span>
+    </div>
+  );
+}
+
+function ToolsBand({ segment }: { segment: BlueprintSegment }) {
+  // `undefined` = still loading. "Checking…" — never "Not connected" — while undefined: the
+  // false-negative would invite reconnecting an already-connected account (ConnectionsPanel's
+  // flash-of-wrong-state discipline).
+  const gmail = useQuery(api.gmailAuth.gmailStatus);
+  const blocked = BLOCKED.filter((b) => (SEGMENT_BLOCKED[segment.id] ?? []).includes(b.id));
+
+  if (segment.specialist === null) {
+    return <ToolRow name="Your profile & vault documents" state="Built in" />;
+  }
+
+  const grant = SPECIALISTS[segment.specialist];
+  return (
+    <div style={{ display: "grid", gap: "0.4rem" }}>
+      {grant.tools.map((t) => {
+        const name = TOOL_LABELS[t];
+        return name === undefined ? null : <ToolRow key={t} name={name} state="Built in" />;
+      })}
+      <ToolRow
+        name="Google — Gmail, Calendar & Drive"
+        state={gmail === undefined ? "Checking…" : gmail.connected ? "Connected" : "Not connected"}
+        detail="How approved work leaves the building."
+      />
+      {blocked.map((b) => (
+        <ToolRow key={b.id} name={b.label} state="Not available" detail={b.blocker} />
+      ))}
+    </div>
+  );
+}
 
 function ProcessBand({ segment }: { segment: BlueprintSegment }) {
   if (segment.specialist === null) {
@@ -145,6 +211,10 @@ export function SegmentAnatomy({
 
       <Band title="Process">
         <ProcessBand segment={segment} />
+      </Band>
+
+      <Band title="Tools">
+        <ToolsBand segment={segment} />
       </Band>
     </section>
   );
