@@ -4,11 +4,15 @@ import { api } from "@pikar/backend/api";
 import {
   type BlueprintSegment,
   type BusinessBlueprint,
+  countdown,
+  cycleTimeDays,
   FIELD_SPEC,
+  type Goal,
   type SegmentPulse,
   SPECIALISTS,
 } from "@pikar/core";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BLOCKED } from "./connections";
@@ -16,6 +20,33 @@ import { joinPhrases, SEGMENT_BLOCKED, SEGMENT_COPY } from "./segmentCopy";
 import { label } from "./styles";
 
 const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" };
+
+// Convex id brand derived from the mutation arg (no dataModel import — repo convention,
+// `PreFlight.tsx:27`).
+type GoalId = FunctionArgs<typeof api.goals.setGoalStatus>["id"];
+
+const goalButton = (disabled: boolean): React.CSSProperties => ({
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  color: "var(--ink)",
+  background: "var(--card)",
+  border: "1px solid var(--rule)",
+  padding: "0.3rem 0.65rem",
+  borderRadius: "999px",
+  cursor: disabled ? "default" : "pointer",
+  opacity: disabled ? 0.5 : 1,
+  whiteSpace: "nowrap",
+});
+
+const goalInput: React.CSSProperties = {
+  font: "inherit",
+  fontSize: "0.85rem",
+  padding: "0.4rem 0.6rem",
+  borderRadius: "0.5rem",
+  border: "1px solid var(--rule)",
+  background: "var(--card)",
+  color: "var(--ink)",
+};
 
 /** One titled region of the anatomy. Every segment renders the same four, in the same order —
  *  the anatomy is a fixed shape populated by what's real, never a per-segment layout (spec D4). */
@@ -162,14 +193,196 @@ function ProcessBand({ segment, pulse }: { segment: BlueprintSegment; pulse?: Se
   );
 }
 
+/** The muted line under a goal's text: what it's waiting on, or what it cost. Achieved and dropped
+ *  goals never show a countdown against their (now moot) target date — the status word replaces
+ *  it rather than sitting beside a stale "3d over". */
+function goalMeta(goal: Goal): string {
+  if (goal.status === "achieved") {
+    const days = cycleTimeDays(goal);
+    return days === null ? "Achieved" : `Achieved in ${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (goal.status === "dropped") return "Dropped";
+  return goal.targetDate === undefined ? "no deadline" : countdown(goal.targetDate, Date.now());
+}
+
+/**
+ * One goal, with its own busy/failure state — mirrors `AskSpecialist`'s pattern so a failed
+ * Achieved/Drop leaves the row exactly as it was (no optimistic flip, spec §7) rather than
+ * flashing a status the mutation never actually committed.
+ */
+function GoalRow({ goal }: { goal: Goal }) {
+  const setGoalStatus = useMutation(api.goals.setGoalStatus);
+  const [busy, setBusy] = useState<"achieved" | "dropped" | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const act = async (status: "achieved" | "dropped") => {
+    if (busy !== null) return;
+    setBusy(status);
+    setFailed(false);
+    try {
+      await setGoalStatus({ id: goal.id as GoalId, status });
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "0.2rem",
+        // One level only (enforced at write time) — a `parentId` always means "one step under".
+        paddingLeft: goal.parentId === undefined ? 0 : "1.25rem",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <span style={{ display: "block", fontSize: "0.88rem", color: "var(--ink)" }}>
+            {goal.text}
+          </span>
+          <span style={{ ...soft, fontSize: "0.76rem" }}>{goalMeta(goal)}</span>
+        </span>
+        {goal.status === "active" && (
+          <span style={{ display: "flex", gap: "0.4rem", flex: "none" }}>
+            <button
+              type="button"
+              onClick={() => void act("achieved")}
+              disabled={busy !== null}
+              style={goalButton(busy !== null)}
+            >
+              {busy === "achieved" ? "Saving…" : "Achieved"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void act("dropped")}
+              disabled={busy !== null}
+              style={goalButton(busy !== null)}
+            >
+              {busy === "dropped" ? "Saving…" : "Drop"}
+            </button>
+          </span>
+        )}
+      </div>
+      {failed && (
+        <span role="alert" style={{ fontSize: "0.72rem", color: "var(--ink-soft)" }}>
+          Couldn't save that. Try again.
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** One text input, one optional date, one button — reuses `AskSpecialist`'s busy/failure pattern.
+ *  Inputs clear on success and stay filled on failure, so a failed submit never costs the typing. */
+function AddGoalForm({ segmentId }: { segmentId: string }) {
+  const addGoal = useMutation(api.goals.addGoal);
+  const [text, setText] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const submit = async () => {
+    const trimmed = text.trim();
+    if (busy || trimmed.length === 0) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      await addGoal({
+        segmentId,
+        text: trimmed,
+        // UTC midnight, matching the spine's UTC `isoDay` rendering (`goals.ts`) — a
+        // local-midnight parse would shift the displayed due date by a day for anyone west of UTC.
+        targetDate: targetDate === "" ? undefined : Date.parse(`${targetDate}T00:00:00Z`),
+      });
+      setText("");
+      setTargetDate("");
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "0.35rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          value={text}
+          maxLength={500}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Set a goal…"
+          disabled={busy}
+          style={{ ...goalInput, flex: "1 1 12rem" }}
+        />
+        <input
+          type="date"
+          value={targetDate}
+          onChange={(e) => setTargetDate(e.target.value)}
+          disabled={busy}
+          style={goalInput}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || text.trim().length === 0}
+          style={goalButton(busy || text.trim().length === 0)}
+        >
+          {busy ? "Adding…" : "Add goal"}
+        </button>
+      </div>
+      {failed && (
+        <span role="alert" style={{ fontSize: "0.72rem", color: "var(--ink-soft)" }}>
+          Couldn't save that. Try again.
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DirectionBand({ segment, goals }: { segment: BlueprintSegment; goals?: readonly Goal[] }) {
+  // `undefined` = still loading. "Checking…" — never a false "no goals" — while undefined (the
+  // Tools/Outcomes precedent above).
+  if (goals === undefined) {
+    return <p style={{ ...soft, fontSize: "0.83rem" }}>Checking…</p>;
+  }
+  return (
+    <div style={{ display: "grid", gap: "0.7rem" }}>
+      {goals.length === 0 ? (
+        <p style={{ ...soft, fontSize: "0.83rem" }}>No goals set for this section yet.</p>
+      ) : (
+        <div style={{ display: "grid", gap: "0.6rem" }}>
+          {goals.map((g) => (
+            <GoalRow key={g.id} goal={g} />
+          ))}
+        </div>
+      )}
+      <AddGoalForm segmentId={segment.id} />
+    </div>
+  );
+}
+
 export function SegmentAnatomy({
   segment,
   blueprint,
   pulse,
+  goals,
 }: {
   segment: BlueprintSegment;
   blueprint: BusinessBlueprint;
   pulse?: SegmentPulse;
+  /** undefined while `listGoals` is loading — distinct from an empty (loaded) list. */
+  goals?: readonly Goal[];
 }) {
   const populated = segment.fields.filter((f) => blueprint[f] !== null);
 
@@ -257,6 +470,10 @@ export function SegmentAnatomy({
             {pulse.medianRunMs !== null ? ` · typical run ${fmtDuration(pulse.medianRunMs)}` : ""}.
           </p>
         )}
+      </Band>
+
+      <Band title="Direction">
+        <DirectionBand segment={segment} goals={goals} />
       </Band>
     </section>
   );
