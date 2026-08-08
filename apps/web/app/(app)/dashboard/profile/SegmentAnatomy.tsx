@@ -350,6 +350,34 @@ function AddGoalForm({ segmentId }: { segmentId: string }) {
   );
 }
 
+/** Reorders `goals` so each child renders immediately after its own parent — `listGoals` groups
+ *  by status then creation time, which never places a child next to its parent, so the indented
+ *  row (`GoalRow`'s `padding-left`) could land under an unrelated goal. Walks parentless goals in
+ *  their existing order, appending each one's children (also in existing order) right after it;
+ *  orphans — a child whose parent isn't in this segment's list — append at the end so nothing
+ *  disappears. No new sort key: only regroups, never reorders within a group. */
+function withChildrenGrouped(goals: readonly Goal[]): Goal[] {
+  const ids = new Set(goals.map((g) => g.id));
+  const childrenOf = new Map<string, Goal[]>();
+  const orphans: Goal[] = [];
+  for (const g of goals) {
+    if (g.parentId === undefined) continue;
+    if (!ids.has(g.parentId)) {
+      orphans.push(g);
+      continue;
+    }
+    const siblings = childrenOf.get(g.parentId) ?? [];
+    siblings.push(g);
+    childrenOf.set(g.parentId, siblings);
+  }
+  const ordered: Goal[] = [];
+  for (const g of goals) {
+    if (g.parentId !== undefined) continue; // placed after its parent below, or as an orphan
+    ordered.push(g, ...(childrenOf.get(g.id) ?? []));
+  }
+  return [...ordered, ...orphans];
+}
+
 function DirectionBand({ segment, goals }: { segment: BlueprintSegment; goals?: readonly Goal[] }) {
   // `undefined` = still loading. "Checking…" — never a false "no goals" — while undefined (the
   // Tools/Outcomes precedent above).
@@ -362,7 +390,7 @@ function DirectionBand({ segment, goals }: { segment: BlueprintSegment; goals?: 
         <p style={{ ...soft, fontSize: "0.83rem" }}>No goals set for this section yet.</p>
       ) : (
         <div style={{ display: "grid", gap: "0.6rem" }}>
-          {goals.map((g) => (
+          {withChildrenGrouped(goals).map((g) => (
             <GoalRow key={g.id} goal={g} />
           ))}
         </div>
