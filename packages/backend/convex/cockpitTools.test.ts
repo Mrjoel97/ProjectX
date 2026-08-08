@@ -27,7 +27,16 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
-import { buildAgentContext, buildCockpitTools, buildHistoryBlock, parseAgentSmoke } from "./llm";
+import {
+  buildAgentContext,
+  buildCockpitTools,
+  buildHistoryBlock,
+  buildWebResearchTool,
+  parseAgentSmoke,
+  parseWebResults,
+  sourcesFromToolOutput,
+  WEB_RESULT_MIN_SCORE,
+} from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -566,6 +575,105 @@ test("every tool the research specialist is granted is actually built under its 
   // …and it stays OFF the executive's set: `grantWebResearch` is false whenever `toolNames` is
   // undefined, so the cockpit agent can never reach the specialist's refusal channel.
   expect(Object.keys(buildCockpitTools(stubCtx, "t1", planId))).not.toContain("declareUnsupported");
+});
+
+// ── `webResearch` is a LOCAL tool now, and the whole plane depends on that ────────────────────
+//
+// Rewritten 2026-08-07: this test asserted the PROVIDER-EXECUTED contract (a `{type:
+// "provider-defined"}` marker with no `execute`, vendor-matched to RESEARCH_MODEL). That contract
+// is gone — `webResearch` is a local Tavily-backed tool — and three call-site behaviours hang off
+// the difference, each of which fails SILENTLY if this regresses:
+//   • `runAgentLoop` counts searches by NAME (a local tool has providerExecuted false, so the old
+//     flag-based count would be 0 forever and the search fee would never draw the rail);
+//   • sources come from this tool's RESULT parts (`res.sources` only fills for hosted tools);
+//   • `onToolExecutionStart` fires, so `agentSteps.tool` needs the `webResearch` literal.
+//
+// MUTATION that turns this RED: drop `execute` from the tool in llm.ts — it silently reverts to a
+// non-executable descriptor and every web search returns nothing.
+test("buildWebResearchTool exposes exactly `webResearch`, and it is LOCALLY executable", () => {
+  const built = buildWebResearchTool();
+  // The key is OURS and `SPECIALISTS.research.tools` filters on it. Unlike the hosted era, it is
+  // ALSO the name the SDK emits on the tool-call part — which is what makes the by-name count safe.
+  expect(Object.keys(built)).toEqual(["webResearch"]);
+  // The load-bearing bit: a local tool HAS an execute. Without it nothing is called, and the tool
+  // silently degrades to a no-op the model still believes it invoked.
+  expect(typeof (built.webResearch as { execute?: unknown }).execute).toBe("function");
+  // No provider-defined marker: it is not any vendor's tool, which is exactly why research is no
+  // longer pinned to RESEARCH_MODEL's vendor.
+  expect((built.webResearch as { id?: string }).id).toBeUndefined();
+});
+
+// The pure mapper is where the mistakes live — the network half needs a key, this half does not.
+// Anything without a parseable absolute URL is dropped: a source the reader cannot open is not
+// evidence, and `sources.length` is half of the honesty verdict.
+test("parseWebResults keeps parseable URLs, drops the rest, and never invents fields", () => {
+  const rows = parseWebResults({
+    results: [
+      { url: "https://example.com/a", title: "A", content: "alpha" },
+      { url: "not a url", title: "B", content: "beta" }, // unparseable → dropped
+      { title: "C", content: "gamma" }, // no url at all → dropped
+      { url: "https://example.com/d" }, // missing title/content → kept, empty strings
+    ],
+  });
+  expect(rows.map((r) => r.url)).toEqual(["https://example.com/a", "https://example.com/d"]);
+  expect(rows[0]).toEqual({ url: "https://example.com/a", title: "A", snippet: "alpha" });
+  expect(rows[1]).toEqual({ url: "https://example.com/d", title: "", snippet: "" });
+});
+
+// ── The relevance floor — what restores the honesty verdict ──────────────────
+//
+// MEASURED against live Tavily: real research results score 0.60–0.81; the invented entity in
+// fixture 33 returns NOTHING for exact-name searches and tops out at 0.51 for a loose one. The floor
+// sits in that gap. It matters because `sources` aggregates across every search in a run, so one
+// loose sub-question would otherwise drag near-misses in and make
+// `declaredQuestionScope && sources.length === 0` unfireable — a run that found nothing reporting
+// itself as sourced.
+//
+// MUTATION that turns this RED: drop the score check in parseWebResults.
+test("parseWebResults drops near-miss results below the measured relevance floor", () => {
+  const rows = parseWebResults({
+    results: [
+      { url: "https://example.com/real", title: "R", content: "x", score: 0.6022 }, // lowest real
+      { url: "https://example.com/edge", title: "E", content: "x", score: WEB_RESULT_MIN_SCORE },
+      { url: "https://example.com/near", title: "N", content: "x", score: 0.51 }, // fixture 33's best
+      { url: "https://example.com/junk", title: "J", content: "x", score: 0.0409 },
+    ],
+  });
+  expect(rows.map((r) => r.url)).toEqual([
+    "https://example.com/real",
+    "https://example.com/edge", // the floor is inclusive — only strictly-below is dropped
+  ]);
+});
+
+test("parseWebResults keeps a result with NO score — absence is not low relevance", () => {
+  // Discarding unscored rows would turn a provider change into an empty evidence list, which is the
+  // silent-zero failure this path exists to avoid. Only an explicit low score drops a row.
+  const rows = parseWebResults({ results: [{ url: "https://example.com/a", title: "A" }] });
+  expect(rows).toHaveLength(1);
+});
+
+// The tool-result shape is NOT the API shape: `snippet` vs `content`, and no `score` (already
+// filtered at execute time). Conflating them is one field rename away from emptying every source
+// list, which is why this has its own mapper and its own test.
+test("sourcesFromToolOutput reads our own tool output shape and drops unusable URLs", () => {
+  expect(
+    sourcesFromToolOutput({
+      results: [
+        { url: "https://example.com/a", title: "A", snippet: "alpha" },
+        { url: "not a url", title: "B", snippet: "beta" },
+        { title: "C", snippet: "gamma" },
+      ],
+    }),
+  ).toEqual([{ url: "https://example.com/a", title: "A" }]);
+  expect(sourcesFromToolOutput(undefined)).toEqual([]);
+});
+
+test("parseWebResults returns [] for junk rather than throwing into the agent loop", () => {
+  // A tool that throws ends the specialist's whole run, so a malformed provider response must
+  // degrade to "found nothing" — which the evidence verdict then reports honestly.
+  for (const junk of [undefined, null, {}, { results: null }, { results: "nope" }, 42]) {
+    expect(parseWebResults(junk)).toEqual([]);
+  }
 });
 
 // ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────

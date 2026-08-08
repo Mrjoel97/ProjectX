@@ -1,6 +1,48 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-03 (15.3-03 - **the THIRD rail: folder ingest.** Two new windows
+> Last verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
+> started watching that table.** `packages/cost/src/cost.ts` was watched by NO playbook until now —
+> a gap worth naming, because that file is where a model becomes billable: `PRICING` is keyed on the
+> full model id, an id missing from it makes `priceUsage` return `unknown_model`, `recordModelSpend`
+> then records 0, and the run draws down NOTHING against `DAILY_BUDGET_CENTS`. **A free-looking model
+> is the failure mode this rail exists to prevent**, so the table is now under the same watch as the
+> rails it feeds. Added to `watch.json` under this playbook.
+>
+> Gemini rows landed with their constants (`GEMINI_MODEL`, `GEMINI_CHEAP_MODEL`), obeying the file's
+> own standing rule that a model constant and its `PRICING` row ship in the same commit.
+>
+> **THE PINS ARE NOW CROSS-VENDOR, AND THAT IS THE WHOLE FEATURE.** Owner decision 2026-08-07: the
+> aim is NOT to replace OpenAI but for both vendors to alternate, so work continues when either runs
+> out of credit. `DEFAULT_MODEL` = `google/gemini-2.5-flash`, `CHEAP_MODEL` = `openai/gpt-4.1-nano`.
+> Because `CHEAP_MODEL` is already the failure-fallback target and `runAgentLoop` already runs
+> primary → fallback, pointing it at the OTHER vendor turns the shipped mechanism into provider
+> failover with **no new retry layer, no router and no config**. A same-vendor fallback structurally
+> cannot do this — an exhausted key just fails twice.
+>
+> **The honest limit: failover only fires on a FALLBACK-ELIGIBLE error.** `isFallbackEligible`
+> returns `APICallError.isRetryable`, so an out-of-credits 429 rolls to the other vendor, but a 403
+> (Vertex billing not enabled) does NOT — a config error stays a config error rather than silently
+> spending the other vendor's money. Gemini leads only because the OpenAI account is the one at $0;
+> the pair is symmetric and swapping the leader is a two-line edit.
+>
+> **`GOOGLE_SEARCH_CALL_USD` (0.035) is a THIRD-hand estimate and ~3.5x OpenAI's hosted-search fee.**
+> `searchFeeUsd(model)` picks the rate from the model that ACTUALLY ran (`m.id`, not the pin — the
+> fallback may be executing) and fails safe to the higher rate on an unrecognised prefix.
+>
+> **Cost went UP, not down.** `gemini-2.5-flash` is 2x `gpt-4o-mini` on input and 4.2x on output.
+> This surfaced as five red tests: the folder-ingest fixtures had treated files and cents as the same
+> number because one 1 KB file cost exactly 1 cent. It now costs 2, so `CENTS_PER_FILE` is pinned as
+> a literal in both `guardrails.test.ts` and `vaultFolders.test.ts` (a future rate change SHOULD
+> redden them). Deriving it from `PRICING` would make those tests agree with themselves.
+>
+> **THE GEMINI RATES ARE UNVERIFIED AGAINST A LIVE PRICE PAGE** and are pinned from published-rate
+> knowledge, rounded UP where uncertain. The direction is deliberate and asymmetric: over-pricing
+> throttles a tenant early (fail-safe), under-pricing silently under-draws the rail (the failure
+> above). Verify against Google's Vertex pricing page and correct the two rows before real spend.
+> DIFF-REVIEWED ONLY: `pnpm --filter @pikar/cost test` 56/56 and backend typecheck 0 errors were
+> run; no live Gemini call has ever been made from this repo.
+>
+> PREVIOUSLY: 2026-08-03 (15.3-03 - **the THIRD rail: folder ingest.** Two new windows
 > (`ingestSpendCents` $25/tenant, `deploymentIngestSpendCents` $250 keyless), a whole-folder
 > `reserveFolder`/`settleFolder` pair whose refund is a CLAMPED negative `count`, and an
 > OPTIONAL `rail` selector on `preCall`/`recordSpend`. Every pre-15.3 call site is unchanged:
@@ -157,7 +199,7 @@ because the agent then grounds on it confidently without knowing what is missing
 **$25/day per tenant**, deliberately the largest of the three per-tenant windows: a folder upload
 is a bursty one-off onboarding-shaped event, not a daily habit. Owner decision; accepted
 consequence is $40 worst-case per-tenant daily exposure. The number is calibrated to the
-**scanned-PDF OCR path and to nothing else** — ~$0.005/page � a 50-page cap – which is the only
+**scanned-PDF OCR path and to nothing else** — ~$0.005/page � a 50-page cap – which is the only
 work in the pipeline that costs real money at folder scale. Extraction of text/office/text-layer
 PDF is free, embedding is free today, graph extraction is ~$0.006/doc.
 

@@ -644,14 +644,18 @@ export default defineSchema({
       v.literal("dispatchOfferArchitect"),
       v.literal("dispatchMoneyModelDesigner"),
       v.literal("dispatchLeadEngine"),
-      // Phase-16 (DISP-02): the research sub-agent's dispatch step. ONE literal — there is
-      // deliberately NO `webResearch` companion. `openai.tools.webSearch()` is a
-      // PROVIDER-EXECUTED tool, and ai@7.0.20's `executeToolCall` returns early at
-      // `if (!isExecutableTool(tool)) return undefined;` BEFORE it fires `onToolExecutionStart`,
-      // so a hosted search emits no step row at all. A declared-and-never-written literal is
-      // worse than none: it reads as a trace that exists and would send the next reader hunting
-      // for the insert that writes it.
+      // Phase-16 (DISP-02): the research sub-agent's dispatch step.
       v.literal("dispatchResearch"),
+      // ...and `webResearch`, whose ABSENCE used to be deliberate — THAT REASONING INVERTED on
+      // 2026-08-07. It was a PROVIDER-EXECUTED hosted tool, and ai@7.0.20's `executeToolCall`
+      // returns early at `if (!isExecutableTool(tool)) return undefined;` BEFORE firing
+      // `onToolExecutionStart`, so it emitted no step row and a declared-but-never-written literal
+      // would have read as a trace that exists. It is now a LOCAL Tavily-backed tool (llm.ts), so
+      // `onToolExecutionStart` DOES fire and the insert DOES need this literal — the same swallow
+      // trap as every literal above, which this codebase has already been bitten by at searchVault
+      // and evaluateBusiness. Still no text field: §4 on this path stays enforced by the ABSENCE of
+      // anywhere to put a query string or a retrieved URL.
+      v.literal("webResearch"),
       // Phase-17 (ACTN-02): the in-loop availability READ and the plan-staging WRITE. Two literals,
       // no text field — §4 on this path stays enforced by the ABSENCE of anywhere to put an event
       // title or an attendee address. Without these literals the step insert throws and the AI SDK

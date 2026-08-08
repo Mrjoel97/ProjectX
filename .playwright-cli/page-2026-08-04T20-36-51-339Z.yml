@@ -1,0 +1,50 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]: Pikar AI
+    - generic [ref=e8]:
+      - heading [level=1] [ref=e9]:
+        - text: Join the
+        - emphasis [ref=e10]: AI Revolution
+      - paragraph [ref=e11]: Next-gen AI interfaces. Fast, secure, beautiful.
+      - generic [ref=e12]:
+        - generic [ref=e17]:
+          - generic [ref=e18]: Lightning Speed
+          - text: Processing power that keeps up
+        - generic [ref=e26]:
+          - generic [ref=e27]: Deep Intelligence
+          - text: Adaptive learning that evolves
+        - generic [ref=e33]:
+          - generic [ref=e34]: Bank-Grade Security
+          - text: Enterprise encryption & compliance
+    - paragraph [ref=e35]: © 2026 Pikar AI. All rights reserved.
+  - generic [ref=e37]:
+    - heading "Create Account" [level=2] [ref=e41]
+    - paragraph [ref=e42]: Start your AI journey today
+    - generic [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]: Full Name
+        - textbox "Full Name" [ref=e47]:
+          - /placeholder: John Doe
+      - generic [ref=e48]:
+        - generic [ref=e49]: Email Address
+        - textbox "Email Address" [ref=e51]:
+          - /placeholder: name@company.com
+      - generic [ref=e52]:
+        - generic [ref=e53]: Password
+        - generic [ref=e54]:
+          - textbox "Password" [ref=e55]:
+            - /placeholder: Create a password
+          - button "Show password" [ref=e56] [cursor=pointer]
+      - generic [ref=e60]:
+        - generic [ref=e61]: Confirm Password
+        - generic [ref=e62]:
+          - textbox "Confirm Password" [ref=e63]:
+            - /placeholder: Confirm password
+          - button "Show password" [ref=e64] [cursor=pointer]
+      - button "Create Account" [ref=e68] [cursor=pointer]
+    - generic [ref=e71]: OR
+    - button "Continue with Google" [ref=e72] [cursor=pointer]
+    - paragraph [ref=e78]:
+      - text: Already have an account?
+      - link "Sign in" [ref=e79] [cursor=pointer]:
+        - /url: /signin

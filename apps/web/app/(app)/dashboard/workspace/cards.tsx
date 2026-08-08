@@ -1500,6 +1500,10 @@ const VERB: Record<string, [running: string, done: string]> = {
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
   dispatchResearch: ["Researching…", "Research finished"],
+  // The individual web search INSIDE a research run (llm.ts `webResearch`). It emits step rows only
+  // since 2026-08-07, when it stopped being a provider-executed hosted tool and became a local
+  // Tavily call — a hosted tool never fired onToolExecutionStart, so there was nothing to label.
+  webResearch: ["Searching the web…", "Search finished"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
   // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts

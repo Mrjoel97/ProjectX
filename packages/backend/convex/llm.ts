@@ -19,6 +19,8 @@ import { createHash } from "node:crypto";
 // uncached actions carry the model id in their args (guardrails.prepare chose it), fall back
 // to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced action cache
 // (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
+import { createVertex, vertex } from "@ai-sdk/google-vertex";
 import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
@@ -68,10 +70,11 @@ import {
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
+  GEMINI_MODEL,
   priceUsage,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
-  WEB_SEARCH_CALL_USD,
+  searchFeeUsd,
 } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
@@ -82,6 +85,7 @@ import {
   type LanguageModel,
   RetryError,
   stepCountIs,
+  type ToolSet,
   tool,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
@@ -138,10 +142,526 @@ export function callTimeoutMsFor(skillName: string): number {
   return skillName === RESEARCH_SPECIALIST_SKILL ? RESEARCH_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
 }
 
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel.
-// The `openai/` prefix is the gateway namespace; the @ai-sdk/openai provider wants the bare
-// name and reads OPENAI_API_KEY from the deployment env. Pricing/audit keep the full id.
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
+// Google Gemini via Vertex AI (2026-08-07). LAZY AND MEMOIZED, and both properties are
+// load-bearing rather than tidiness:
+//
+// LAZY — building the provider at module scope would read the GCP env on IMPORT, so a deployment
+// with no Google credentials would fail every OpenAI call too. Gemini was added ALONGSIDE OpenAI,
+// not in front of it; a tenant that never asks for a `google/` model must never be able to notice
+// that the credential is absent. The throw below can only fire on a request that named Gemini.
+//
+// CREDENTIALS COME FROM AN ENV VAR, NOT A FILE. `GOOGLE_APPLICATION_CREDENTIALS` is a FILE PATH and
+// Convex has no filesystem — the service-account JSON on a developer's disk is unreachable from the
+// deployed backend. Set the whole JSON as one deployment secret instead:
+//   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(cat <key>.json)"
+// `project` is read from the credential's own `project_id`, so it cannot drift from the key.
+// TWO DOORS TO THE SAME MODELS, AND THE CHEAP ONE WINS.
+//
+// Google serves `gemini-2.5-flash` through BOTH Vertex AI (service account, GCP project, **requires
+// a linked billing account — there is no free tier**) and AI Studio (a plain API key, with a free
+// rate-limited tier). The model NAMES are identical, so only the transport differs and `google/…`
+// stays one namespace either way.
+//
+// `GOOGLE_GENERATIVE_AI_API_KEY` is checked FIRST because it is the door that works on no budget.
+// Proven the hard way on 2026-08-07: two separate GCP projects were tried with a service account
+// and BOTH refused with BILLING_DISABLED before generating a single token. Vertex remains wired and
+// takes over the moment a billing account exists — it is the only door to Imagen/Veo (ADR-016).
+let genaiProvider: ReturnType<typeof createGoogleGenerativeAI> | undefined;
+const googleAiStudio = (): ReturnType<typeof createGoogleGenerativeAI> | undefined => {
+  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key) return undefined;
+  genaiProvider ??= createGoogleGenerativeAI({ apiKey: key });
+  return genaiProvider;
+};
+
+let vertexProvider: ReturnType<typeof createVertex> | undefined;
+const googleVertex = (): ReturnType<typeof createVertex> => {
+  if (vertexProvider) return vertexProvider;
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error(
+      "No Google credential on this deployment. Set GOOGLE_GENERATIVE_AI_API_KEY (AI Studio, free tier) or GOOGLE_SERVICE_ACCOUNT_JSON (Vertex, needs billing).",
+    );
+  }
+  // BASE64 IS ACCEPTED AND IS THE RECOMMENDED FORM. A service-account key is multi-line JSON whose
+  // `private_key` is full of escapes, and `convex env set` on Windows mangles that — observed
+  // 2026-08-07, and the quirk is already on record for this repo. Base64 is alphanumeric, so no
+  // shell can corrupt it. Detect rather than configure: real JSON always starts with `{`.
+  //   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(node -e "console.log(Buffer.from(require('fs').readFileSync(process.argv[1])).toString('base64'))" <key>.json)"
+  const trimmed = raw.trim();
+  const decoded = trimmed.startsWith("{")
+    ? trimmed
+    : Buffer.from(trimmed, "base64").toString("utf8");
+  let credentials: { project_id?: string; client_email?: string; private_key?: string };
+  try {
+    credentials = JSON.parse(decoded);
+  } catch {
+    // Never echo `raw` or `decoded` — they hold a private key. The SHAPE is the diagnosis; the
+    // value never is. Length is safe and is the one clue that separates "truncated by the shell"
+    // from "pasted the wrong thing entirely".
+    // Kept under skills.test.ts's 200-char inline-literal ceiling (the no-hardcoded-prompts guard,
+    // CLAUDE.md §5) — it fired on the longer first draft of this message.
+    const form = trimmed.startsWith("{") ? "raw" : "base64";
+    throw new Error(
+      `GOOGLE_SERVICE_ACCOUNT_JSON did not parse (${trimmed.length} chars, ${form}). A real key is ~2300; shorter means the shell truncated it — set it base64-encoded.`,
+    );
+  }
+  const project = credentials.project_id;
+  if (!project || !credentials.client_email || !credentials.private_key) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key — it is not a service-account key.",
+    );
+  }
+  vertexProvider = createVertex({
+    project,
+    location: process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1",
+    googleAuthOptions: { credentials },
+  });
+  return vertexProvider;
+};
+
+// Map a pricing/audit model id to a LanguageModel. Two vendors, one id scheme: the prefix
+// ("openai/gpt-4o-mini", "google/gemini-2.5-flash") selects the provider and the bare name goes to
+// it. The FULL id stays the pricing/audit key in both cases — `PRICING` is keyed on it, so a model
+// that resolves here but is missing from that table would run and bill NOTHING against the daily
+// rail (see the fail-closed note in packages/cost/src/cost.ts). Resolve and price move together.
+// The @ai-sdk/openai provider reads OPENAI_API_KEY from the deployment env.
+const resolveModel = (id: string): LanguageModel => {
+  if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
+  const bare = id.replace(/^google\//, "");
+  // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
+  // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.
+  return (googleAiStudio() ?? googleVertex())(bare);
+};
+
+/** One retrieved web result. `snippet` is Tavily's extracted page text, NOT model prose. */
+export type WebResult = { url: string; title: string; snippet: string };
+
+/** How many results one search returns to the model. Small on purpose: each snippet is ~1.4k chars
+ *  and they all ride `inputTokens` on the NEXT step, so this is the main lever on research cost. */
+export const WEB_RESULTS_PER_SEARCH = 5;
+
+/**
+ * The relevance floor a Tavily result must clear to count as EVIDENCE.
+ *
+ * **MEASURED, not guessed (2026-08-07).** Real research queries and the deliberately-invented entity
+ * from fixture 33 separate cleanly on Tavily's own `score`:
+ *   real (fixture 32, two queries):  0.8145 0.8052 0.7879 0.7730 0.7376 / 0.7409 … 0.6022
+ *   invented (fixture 33):           exact-name searches return NOTHING AT ALL (n=0); only a loose
+ *                                    query mixing real words returns anything, topping out at 0.5100
+ *                                    before a cliff to 0.0962, 0.0466, 0.0446, 0.0409.
+ * 0.55 sits in the gap: above every near-miss, below every genuine result.
+ *
+ * WHY A FLOOR IS NEEDED AT ALL, given exact-name searches already return zero. `sources` is
+ * AGGREGATED ACROSS EVERY SEARCH IN A RUN, and the specialist is instructed to search once per
+ * sub-question. One loose sub-question drags near-misses into the aggregate, and the honesty verdict
+ * (`declaredQuestionScope && sources.length === 0`) then can never fire — a run that found nothing
+ * reports itself as sourced. The hosted OpenAI search never exposed this because it returned no
+ * sources for an unanswerable query; that property has to be reconstructed here.
+ *
+ * ponytail: one flat threshold. The margin (0.51 → 0.60) is real but THIN and rests on five sampled
+ * queries — fixtures 32 and 33 are its regression test, and they pull in opposite directions, which
+ * is what makes them a calibration set rather than two unrelated cases. If a genuine result ever
+ * lands below this, prefer raising `max_results` or splitting the query over lowering the floor.
+ */
+export const WEB_RESULT_MIN_SCORE = 0.55;
+
+/**
+ * Map Tavily's `/search` response to our result shape. Pure and exported for the offline test —
+ * the network half is untestable without a key, this half is where the mistakes live.
+ *
+ * Two things are DROPPED rather than passed through, both because a source list is the evidence half
+ * of the research verdict: anything without a parseable absolute URL (the reader cannot open it), and
+ * anything below `WEB_RESULT_MIN_SCORE` (a near-miss is not evidence, however topical it looks).
+ */
+export const parseWebResults = (payload: unknown): WebResult[] => {
+  const rows = (payload as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: WebResult[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url); // absolute + parseable, or it is not a citation
+    } catch {
+      continue;
+    }
+    // A MISSING score is kept, deliberately: absence means the provider did not rank this response,
+    // and silently discarding everything would turn a provider change into an empty evidence list —
+    // the same silent-zero failure this whole path is built to avoid. Only an EXPLICIT low score
+    // drops a row.
+    const score = (r as { score?: unknown })?.score;
+    if (typeof score === "number" && score < WEB_RESULT_MIN_SCORE) continue;
+    out.push({
+      url,
+      title: String((r as { title?: unknown })?.title ?? ""),
+      snippet: String((r as { content?: unknown })?.content ?? ""),
+    });
+  }
+  return out;
+};
+
+/**
+ * The sources carried by ONE `webResearch` tool-result part.
+ *
+ * Separate from `parseWebResults` because the shapes differ and conflating them hid a latent bug:
+ * the API response calls the text `content` while our own tool output calls it `snippet`, and the
+ * stored output has no `score` at all (already filtered at execute time). Re-running the API parser
+ * over our own output happened to work only because the call site reads url/title — one field rename
+ * away from silently emptying every source list.
+ */
+export const sourcesFromToolOutput = (output: unknown): { url: string; title: string }[] => {
+  const rows = (output as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: { url: string; title: string }[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url);
+    } catch {
+      continue;
+    }
+    out.push({ url, title: String((r as { title?: unknown })?.title ?? "") });
+  }
+  return out;
+};
+
+/**
+ * ACTN-03. The web-research tool record.
+ *
+ * **LOCAL AND PROVIDER-EXECUTED ARE DIFFERENT ANIMALS, AND THIS ONE IS NOW LOCAL (2026-08-07).**
+ * It used to be `openai.tools.webSearch` / `vertex.tools.googleSearch` — a hosted tool the VENDOR
+ * ran. That coupled research to whichever vendor `RESEARCH_MODEL` named (sending one vendor's
+ * hosted tool to the other is a 400), and it died outright when the only funded vendor ran out:
+ * OpenAI hit $0 and Gemini's free tier grants ZERO Google Search entitlement, so fixtures
+ * 32/33/34 could not pass on either door. Tavily is a plain HTTP API we call ourselves, so
+ * research now works on ANY model — the vendor-matching constraint documented at `RESEARCH_MODEL`
+ * in @pikar/cost is retired by construction, not worked around.
+ *
+ * **THREE CONSEQUENCES AT THE CALL SITE, all of which had to change together:**
+ *   1. `providerExecuted` is FALSE for a local tool, so `runAgentLoop` can no longer count searches
+ *      by that flag. It counts `toolName === "webResearch"` instead — and the literal is safe now
+ *      precisely BECAUSE we own the tool: the old comment warned against a name literal because the
+ *      PROVIDER chose the emitted name (`web_search`) and could rename it. Nobody renames this one.
+ *   2. `res.sources` is empty — that array is populated from provider `url_citation` annotations,
+ *      which only a hosted tool emits. Sources are now read from this tool's own RESULT parts,
+ *      which is strictly better evidence: still structured, still provider-supplied (Tavily's JSON),
+ *      still never parsed out of model prose.
+ *   3. `onToolExecutionStart` DOES fire for a local tool, so `agentSteps.tool` needs the
+ *      `webResearch` literal — schema.ts said "deliberately NO webResearch companion" and that
+ *      reasoning inverted with this change. Without the literal the step insert throws inside a
+ *      callback the AI SDK SWALLOWS: no trace in prod, every offline test still green.
+ *
+ * Module scope and exported so `probeGemini` and `cockpitTools.test.ts` use THE SAME record the
+ * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
+ * lesson).
+ */
+export const buildWebResearchTool = (): ToolSet => ({
+  webResearch: tool({
+    description:
+      "Search the live web and get back real pages with their URLs. Use it for anything you " +
+      "cannot answer from the conversation or the vault — recent events, external companies, " +
+      "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
+      "call is a fresh independent query. Every claim you make from a result must cite that " +
+      "result's URL.",
+    inputSchema: jsonSchema<{ query: string }>({
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "A focused natural-language search query for ONE sub-question.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    }),
+    execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
+      const apiKey = process.env.TAVILY_API_KEY;
+      // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
+      // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
+      // model finish and say it found nothing — which the evidence verdict then reports honestly.
+      if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
+      // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
+      // and could echo tenant content from the prompt. The hosted tools had the same exposure to
+      // their own vendor; Tavily is one more party, so the same rule that governs every other
+      // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
+      const scan = scanText(query);
+      if (!scan.ok) return { results: [], note: "web search skipped: query failed redaction scan" };
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          query: scan.value.safeText,
+          max_results: WEB_RESULTS_PER_SEARCH,
+          search_depth: "basic",
+        }),
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      });
+      // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
+      // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
+      if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
+      return { results: parseWebResults(await res.json()) };
+    },
+  }),
+});
+
+/**
+ * probeGemini — prove the `google/` half of `resolveModel` end to end before anything routes to it.
+ *
+ * Gemini was added ALONGSIDE OpenAI (owner decision 2026-08-07): `DEFAULT_MODEL`/`CHEAP_MODEL` still
+ * point at OpenAI, so NO product path reaches Vertex. That is the safe order, but it means the
+ * wiring is unexercised — typechecking proves the code compiles, not that a request returns. This
+ * action is the smallest thing that can fail if the path is broken.
+ *
+ * It runs INSIDE the deployment on purpose. A standalone node script proves a credential works on a
+ * laptop; only this proves the DEPLOYMENT can use it — the env var Convex actually holds, the real
+ * `resolveModel`, the installed provider version, the deployment's own network egress.
+ *
+ * **It never throws.** Every failure is classified and returned, so the caller can distinguish
+ * "Gemini refused us" from "we never asked" — the distinction `docs/playbooks/ci-gate.md` records
+ * `skillopt.yml` losing, where `|| true` turned a call that never happened into a green check.
+ *
+ * `unpriced` is the subtlest verdict and the reason pricing is asserted here at all: a model that
+ * ANSWERS but is missing from `PRICING` makes `priceUsage` return `unknown_model` → `recordSpend`
+ * records 0 → the model bills NOTHING against `DAILY_BUDGET_CENTS`. A free-looking model is worse
+ * than a broken one, so a working call with no price is a FAILED probe, not a passing one.
+ *
+ * Deliberately does NOT draw down the guardrail rails: this is an operator tool, not tenant work,
+ * and it reports the cost it WOULD have drawn instead of silently spending someone's daily budget.
+ * The prompt is a fixed constant carrying no tenant text, so nothing here can leak PII (§4).
+ *
+ * ── `grounded: true` (2026-08-07) — THE RESEARCH HALF, AND THE REASON THIS ACTION EXISTS NOW ──
+ *
+ * The plain probe proves the model ANSWERS. It says nothing about the path Phase 16 actually runs,
+ * and the Gemini research pins were repointed having been proven to accept NOTHING (see the debt
+ * paragraph at `RESEARCH_MODEL` in packages/cost/src/cost.ts). `grounded: true` attaches
+ * `buildWebResearchTool()` — THE SAME RECORD `buildCockpitTools` hands the specialist, never a
+ * re-derived one — and measures the three things the eval silently depends on. Each is a FAILING
+ * verdict, because each fails QUIETLY in production:
+ *
+ *   `provider_refused`  the model rejected the tool. The cast in `buildWebResearchTool` is an SDK
+ *                       typing gap the compiler cannot check, so a 400 on tool shape can only be
+ *                       found by sending one. This is that send.
+ *   `no_search_call`    it answered from memory without searching, OR the SDK never surfaced the
+ *                       hosted call with `providerExecuted: true`. `runAgentLoop` counts hosted
+ *                       calls on that flag ALONE and multiplies by `searchFeeUsd`, so a missing
+ *                       flag makes every research run bill $0 of search fee against a $5/day rail —
+ *                       a research plane that looks FREE, the failure 16-02's probe was written to
+ *                       prevent for OpenAI and which is unproven for Google.
+ *   `no_sources`        it searched but `res.sources` carried no `sourceType: "url"` entry. This is
+ *                       the sharpest one: the specialist's honesty verdict is
+ *                       `declaredQuestionScope && sources.length === 0`, so if Google returns its
+ *                       citations in a shape the SDK does not map to `sources`, EVERY Gemini
+ *                       research run reports "I found nothing" and fixtures 32/34 redden for a
+ *                       reason that has nothing to do with the skill body.
+ *
+ * Run it against BOTH research pins before trusting a gate — `RESEARCH_FALLBACK_MODEL` is exercised
+ * by `isFallbackEligible` and has never been probed either.
+ */
+export const probeGemini = internalAction({
+  args: { model: v.optional(v.string()), grounded: v.optional(v.boolean()) },
+  handler: async (
+    _ctx,
+    { model, grounded },
+  ): Promise<{
+    verdict:
+      | "ok"
+      | "no_credential"
+      | "bad_credential"
+      | "provider_refused"
+      | "unpriced"
+      | "empty_text"
+      | "tool_vendor_mismatch"
+      | "no_search_call"
+      | "no_sources";
+    model: string;
+    detail: string;
+    text?: string;
+    usage?: { inputTokens?: number; outputTokens?: number };
+    costUsd?: number;
+    /** Grounded runs only. Hosted calls counted EXACTLY as `runAgentLoop` counts them. */
+    searchCalls?: number;
+    /** Grounded runs only. Verbatim, because the record KEY is ours (`webResearch`) and the emitted
+     *  name is the PROVIDER's — 16-02 observed `web_search` for OpenAI, and every offline mock
+     *  fixture has to match whatever Google actually emits or we ship tests that pass on a fiction. */
+    toolCalls?: { toolName: string; providerExecuted: boolean }[];
+    /** Grounded runs only. Content-plane URLs (§4): printed to an operator terminal, NEVER audited. */
+    sources?: { url: string; title: string }[];
+    /** Grounded runs only. What the rail WOULD have been charged on top of tokens. */
+    feeUsd?: number;
+  }> => {
+    const id = model ?? (grounded ? RESEARCH_MODEL : GEMINI_MODEL);
+    if (!id.startsWith("google/")) {
+      return { verdict: "bad_credential", model: id, detail: `not a google/ model id: ${id}` };
+    }
+    // `buildWebResearchTool` picks its vendor from `RESEARCH_MODEL`, not from the id being probed —
+    // that is deliberate in production (the tool must match the pin, and the research fallback
+    // shares its vendor), but it means probing a Gemini id while the pin sits on OpenAI would send
+    // `openai.tools.webSearch` to Gemini and report a 400 that says nothing about Gemini. Refuse
+    // instead of manufacturing a misleading FAIL. Reachable after a two-line revert of the pins.
+    if (grounded && !RESEARCH_MODEL.startsWith("google/")) {
+      return {
+        verdict: "tool_vendor_mismatch",
+        model: id,
+        detail: `RESEARCH_MODEL is "${RESEARCH_MODEL}", so buildWebResearchTool yields OpenAI's hosted search — it cannot be sent to ${id}`,
+      };
+    }
+
+    let resolved: LanguageModel;
+    try {
+      resolved = resolveModel(id);
+    } catch (e) {
+      // The two credential errors are raised by googleVertex() above and are the only ones that can
+      // reach here — they are already worded for an operator and carry no key material.
+      const detail = e instanceof Error ? e.message : String(e);
+      return {
+        verdict: detail.includes("is not set") ? "no_credential" : "bad_credential",
+        model: id,
+        detail,
+      };
+    }
+
+    let result: Awaited<ReturnType<typeof generateText>>;
+    try {
+      result = await generateText({
+        model: resolved,
+        // Fixed, tiny, and verifiable: a wrong answer is as diagnostic as an error, and the token
+        // count stays small enough that a probe is never a meaningful cost.
+        //
+        // The grounded prompt is DATED ON PURPOSE (the 16-02 probe's design, kept): the answer
+        // cannot come from model memory, so an empty `sources` array is a real signal rather than
+        // an artefact of an easy question. Still a fixed constant with no tenant text (§4).
+        prompt: grounded
+          ? "Using web search, name one specific news item published in the last 30 days about" +
+            " Google's Gemini API pricing or model lineup. Give the headline, the publication and" +
+            " the date. If you cannot find one, say exactly: NO RESULTS."
+          : "Reply with exactly one word: OK",
+        // 512, not 16. **Gemini 3.x REASONS BY DEFAULT and its thinking tokens are drawn from this
+        // same budget**, so a tight cap returns 200-OK with EMPTY text and a nonzero output-token
+        // count — observed here 2026-08-07 at 16 (12 output tokens, `text: ""`). A probe that
+        // reported "ok" on an empty answer would be exactly the vacuous green this script exists to
+        // avoid, which is why `emptyText` below is a FAILING verdict rather than a footnote.
+        // Grounded runs get 4x: search results land IN the context and are reasoned over, so the
+        // same cap that suffices for one word would produce an `empty_text` FAIL that is an artefact
+        // of the budget rather than a fact about grounding.
+        maxOutputTokens: grounded ? 2048 : 512,
+        // Only when grounded — an unused tools record still ships a tool declaration to the
+        // provider, and the plain probe's job is to isolate "can it answer at all".
+        ...(grounded ? { tools: buildWebResearchTool(), stopWhen: stepCountIs(4) } : {}),
+      });
+    } catch (e) {
+      // NAME only, matching the llm.fallback audit convention — a provider error body can echo
+      // request content, and this string is printed to a terminal and may be pasted into a ticket.
+      const name = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      return { verdict: "provider_refused", model: id, detail: name };
+    }
+
+    const usage = {
+      inputTokens: result.usage?.inputTokens,
+      outputTokens: result.usage?.outputTokens,
+    };
+    // Extracted with the SAME two expressions `runAgentLoop` uses (the `providerExecuted` filter and
+    // the `sourceType === "url"` narrowing). Copied rather than shared because the loop's versions
+    // are welded into a 200-line handler; if either ever changes, THIS is the probe that must change
+    // with it — the whole point is that the probe measures what production counts, not what looks
+    // equivalent. Empty on a plain run, which is why every grounded field below is optional.
+    const toolCalls = result.steps
+      .flatMap((st) => st.content)
+      .filter((p) => p.type === "tool-call")
+      .map((p) => ({ toolName: p.toolName, providerExecuted: p.providerExecuted === true }));
+    const searchCalls = toolCalls.filter((c) => c.providerExecuted).length;
+    const sources = (result.sources ?? [])
+      .filter(
+        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
+      )
+      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const feeUsd = searchCalls * searchFeeUsd(id);
+    const groundedFields = grounded ? { searchCalls, toolCalls, sources, feeUsd } : {};
+
+    // Priced AFTER the grounded extraction, deliberately (reordered 2026-08-07). `unpriced` is the
+    // verdict a model gets on the run where it is being EVALUATED for adoption — which is exactly
+    // the run whose grounding evidence you need in order to decide whether to add the PRICING row
+    // at all. Returning early on `unpriced` threw that evidence away and forced a second paid run.
+    const priced = priceUsage(id, usage);
+    if (!priced.ok) {
+      return {
+        verdict: "unpriced",
+        model: id,
+        detail: `answered, but PRICING has no row for "${id}" — this model would bill $0 against the daily rail`,
+        text: result.text,
+        usage,
+        ...groundedFields,
+      };
+    }
+
+    // A 200 with no text is NOT a pass. Gemini 3.x spends thinking tokens from the output budget, so
+    // an exhausted cap yields empty text, a nonzero output count and no error at all — the failure
+    // shape most likely to be mistaken for success by anything downstream that expects prose.
+    if (result.text.trim() === "") {
+      return {
+        verdict: "empty_text",
+        model: id,
+        detail: `answered with ${usage.outputTokens ?? 0} output tokens but EMPTY text — Gemini 3.x reasoning likely consumed maxOutputTokens`,
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    // ── The two grounded verdicts. Both are 200-OK responses that READ as success. ──
+    //
+    // Checked AFTER `empty_text` on purpose: an exhausted output budget is the more specific cause
+    // and would otherwise be reported as "it never searched".
+    if (grounded && searchCalls === 0) {
+      return {
+        verdict: "no_search_call",
+        model: id,
+        // The distinction is not decidable from here and the operator needs both branches, because
+        // the fixes are unrelated: a model that chose not to search is a PROMPT problem, while a
+        // hosted call the SDK failed to flag is a PROVIDER-MAPPING problem that silently zeroes the
+        // search fee for every research run.
+        detail:
+          `answered without any provider-executed call (${toolCalls.length} tool-call part(s) total). ` +
+          "Either the model declined to search, or @ai-sdk/google does not set providerExecuted on " +
+          "the grounded call — and runAgentLoop counts hosted calls on that flag ALONE, so the " +
+          "second case bills $0 of search fee on every research run.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+    if (grounded && sources.length === 0) {
+      return {
+        verdict: "no_sources",
+        model: id,
+        detail:
+          `searched ${searchCalls}x but res.sources carried no sourceType:"url" entry. ` +
+          "The specialist's honesty verdict is `declaredQuestionScope && sources.length === 0`, so " +
+          "this shape makes EVERY Gemini research run report that it found nothing — fixtures 32 " +
+          "and 34 would redden for a reason unrelated to the skill body.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    return {
+      verdict: "ok",
+      model: id,
+      detail: grounded
+        ? `the model searched ${searchCalls}x, returned ${sources.length} source(s), and the response is priceable`
+        : "the model answered and the response is priceable",
+      text: result.text,
+      usage,
+      costUsd: priced.value,
+      ...groundedFields,
+    };
+  },
+});
 
 // ── Smoke seam ──────────────────────────────────────────────────────────────
 // A dev-deployment smoke must drive the REAL spine deterministically and offline
@@ -811,8 +1331,7 @@ export function buildCockpitTools(
     rootRequestId?: string;
   },
 ) {
-  // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
-  const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+  const webResearchTool = buildWebResearchTool();
 
   // 22.1b: the specialist's ONE structured channel for a SEMANTIC judgement — "I searched, and what
   // I found does not SUPPORT the claim". THE SIGNAL IS THE CALL: `runAgentLoop` reads the SDK's own
@@ -2552,7 +3071,13 @@ async function runAgentLoop(
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
     const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
-    const webSearchCalls = toolCalls.filter((p) => p.providerExecuted === true).length;
+    // COUNTED BY NAME, not by `providerExecuted` (changed 2026-08-07 with the move to Tavily).
+    // The old comment above was right FOR A HOSTED TOOL: the provider chose the emitted name
+    // (`web_search`, not our key `webResearch`) and could rename it, so the flag was the stable
+    // signal. `webResearch` is now a LOCAL tool we define, so `providerExecuted` is false on every
+    // part and the flag would count ZERO — billing $0 of search fee forever, the exact silent
+    // under-draw @pikar/cost exists to prevent. The name is now the stable signal because we own it.
+    const webSearchCalls = toolCalls.filter((p) => p.toolName === "webResearch").length;
     // 22.1b: the STRUCTURAL declaration (the semantic half of the evidence verdict). `ai` throws
     // NoSuchToolError before `execute` on a name that is not a key of our `tools` record, so this
     // literal can only ever match a tool we actually built. `.some()`, deliberately not a count — a
@@ -2602,22 +3127,36 @@ async function runAgentLoop(
       }
       return (args as { scope?: unknown } | null)?.scope === "question";
     });
-    const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
+    // Fee is keyed on the model that ACTUALLY ran (`m.id`), not on RESEARCH_MODEL: `runAgentLoop`
+    // may be executing the fallback, and Google Search grounding is ~3.5x OpenAI's hosted-search
+    // rate. Charging the wrong vendor's rate under-draws the rail — the silent failure this file
+    // guards against everywhere else. `searchFeeUsd` fails safe to the higher rate on any id it
+    // does not recognise.
+    const feeUsd = webSearchCalls * searchFeeUsd(m.id);
     if (feeUsd > 0)
       await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
     costUsd += feeUsd;
-    // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
-    // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
-    // provider-supplied — NEVER parse URLs out of the model's prose.
+    // READ FROM THE TOOL'S OWN RESULTS, not `res.sources` (changed 2026-08-07 with Tavily).
+    // `res.sources` is populated from provider `url_citation` annotations, which ONLY a hosted tool
+    // emits — with a local tool it is permanently empty, and an empty `sources` array silently makes
+    // `declaredUnsupported` below true on every single run. Reading the tool-RESULT parts keeps the
+    // property that mattered about `res.sources`: still structured, still supplied by the search
+    // provider's own JSON, still NEVER parsed out of the model's prose.
+    // De-duplicated by URL — the specialist is instructed to search once per sub-question, so the
+    // same page legitimately comes back from several searches and would otherwise inflate the count
+    // that the honesty verdict reads.
     // §4 BOUNDARY: these URLs are CONTENT-PLANE data. They may reach the vault document body and a
     // tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
     // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
     // gets a COUNT.
-    const sources = (res.sources ?? [])
-      .filter(
-        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
-      )
-      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const byUrl = new Map<string, { url: string; title: string }>();
+    for (const part of res.steps.flatMap((st) => st.content)) {
+      if (part.type !== "tool-result" || part.toolName !== "webResearch") continue;
+      for (const r of sourcesFromToolOutput((part as { output?: unknown }).output)) {
+        if (!byUrl.has(r.url)) byUrl.set(r.url, r);
+      }
+    }
+    const sources = [...byUrl.values()];
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
     // because `sources` is only built two lines up — and `sources`, not the model, is the half
     // of this conjunction that cannot be talked into anything.
@@ -2743,8 +3282,12 @@ export async function runSpecialistTurn(
   // resolved; a `models?` / `maxSteps?` arg would be a second mechanism for a decision with exactly
   // one owner, and would drag dispatch.ts into model selection for no gain.
   const isResearch = skillName === RESEARCH_SPECIALIST_SKILL;
-  const primaryId = isResearch ? RESEARCH_MODEL : DEFAULT_MODEL;
-  const fallbackId = isResearch ? RESEARCH_FALLBACK_MODEL : CHEAP_MODEL;
+  // A TWO-TIER LOOKUP rather than a ternary: research has its own pair, everything else takes the
+  // repo defaults. A growth-specialist third tier was tried and reverted on 2026-08-08 — see the
+  // tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost for the measurements, so nobody re-derives it.
+  const [primaryId, fallbackId] = isResearch
+    ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
+    : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,

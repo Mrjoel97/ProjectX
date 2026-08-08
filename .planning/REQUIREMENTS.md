@@ -210,6 +210,19 @@ boundary inside Pikar.*
 - [ ] **VERT-03**: Data analysis starts file-first and read-only; warehouse execution, HRIS/ATS, legal-system, design, source-control and monitoring connectors require their own server-side suitability/security/terms gate before activation
 - [ ] **VERT-04**: Bio Research remains outside the general product and roadmap execution until behavioral demand, a named target persona, scientific validation, data/licensing review and a separate regulated-risk plan justify a dedicated vertical
 
+### Marketing (minted 2026-08-07 — Phases 31-32, PULLED PRE-BETA per ADR-015)
+
+*Admitted by explicit owner override of the admission rule at `PROJECT.md:51-53`, not by a Validated
+line. ADR-015 is the override record. MKTG-04/05/06 are gated on the legal entity — see the EXTERNAL
+BLOCKER section of `ROADMAP.md`.*
+
+- [ ] **MKTG-01**: A Marketing surface renders every planned outbound channel with an honest state — connected, connectable, or blocked-with-reason naming the external gate — and never renders an unconnectable channel as a zero; the Executive Agent assists on this surface by proposing, never by publishing
+- [ ] **MKTG-02**: Funnel v0 is link-only on the Convex `httpAction` plane: one unguessable token increments three integer counters (visits/claims/downloads) with `?s=` source attribution and 302s to stored bytes; it is the product's first unauthenticated read and does not widen `apps/web/middleware.ts`, add a public write, or ship an event table
+- [ ] **MKTG-03**: A captured lead writes into Phase 19's single tenant-scoped person store with `origin`, `consentAt` and `consentSource` — never a second CRM plane — and the SEND-path suppression guard continues to refuse suppressed addresses in every product-email terminal
+- [ ] **MKTG-04** *(gated on the legal entity)*: Each social channel passes an independent suitability/OAuth/security/terms review and exposes tenant-scoped, encrypted, revocable credentials with honest re-auth and error states, plus provider-side revocation on disconnect (GOVN-03's standard)
+- [ ] **MKTG-05** *(gated on the legal entity)*: Publishing and scheduling to a channel stage into the existing plan gate and reuse the shipped deferred-send machinery; no new unattended authority is minted and approve-once-for-many remains deferred per ADR-004
+- [ ] **MKTG-06** *(gated on the legal entity)*: Per-post engagement metrics store provider-issued ids, counts and timestamps only — never post text or recipient identity — under the same refs-and-counts contract that governs audit, and the table arrives with a connected channel rather than empty and ahead of one
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
@@ -357,6 +370,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VERT-02 | Phase 30 | Pending |
 | VERT-03 | Phase 30 | Pending |
 | VERT-04 | Phase 30 | Pending |
+| MKTG-01 | Phase 31 | Pending |
+| MKTG-02 | Phase 31 | Pending |
+| MKTG-03 | Phase 31 | Pending |
+| MKTG-04 | Phase 32 | **BLOCKED** (legal entity) |
+| MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
+| MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |
+
+**Marketing coverage (minted 2026-08-07, pulled pre-beta per ADR-015):**
+- Requirements: **6 total** (MKTG-01..06)
+- Mapped to phases 31-32: 6
+- Unmapped: 0 ✓
+- Of these, **3 are externally blocked** on a non-code prerequisite that has not started.
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)

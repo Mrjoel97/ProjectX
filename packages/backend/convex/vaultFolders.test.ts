@@ -67,10 +67,18 @@ const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
 const remaining = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
   t.query(internal.guardrails.ingestRemainingCents, { tenantId });
 
-/** The estimator prices a 1 KB text file at exactly 1 cent (guardrails.test.ts pins this), so a
- *  manifest of N files reserves N cents and the arithmetic below stays readable. */
+/** Cents the estimator charges for one 1 KB text file at the CURRENT `DEFAULT_MODEL` input rate —
+ *  the same constant `guardrails.test.ts` pins, and it must be read together with that one. It was
+ *  1 under `gpt-4o-mini` ($0.15/MTok); the 2026-08-07 Gemini repoint doubled the rate to $0.30; the
+ *  2026-08-08 revert to `gpt-4o-mini` (OpenAI balance topped up) halved it BACK, so a manifest of N
+ *  files reserves N cents again. Kept a literal on purpose: derived from
+ *  `PRICING` it would agree with itself and stop testing the arithmetic. */
+const CENTS_PER_FILE = 1;
+/** A manifest of N 1 KB text files. Its reservation is `N * CENTS_PER_FILE`. */
 const manifestOf = (files: number) =>
   Array.from({ length: files }, () => ({ size: 1_000, mimeType: "text/plain" }));
+/** Cents a manifest of `files` files reserves — use this instead of writing the number twice. */
+const costOf = (files: number) => files * CENTS_PER_FILE;
 
 /** The per-attempt watchdogs armed so far. */
 const watchdogs = (t: ReturnType<typeof convexTest>) =>
@@ -205,8 +213,8 @@ describe("a folder completes exactly once, and only after its last member goes t
       folderId,
       files: manifestOf(3),
     });
-    expect(reserved).toMatchObject({ ok: true, estCents: 3 });
-    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - 3);
+    expect(reserved).toMatchObject({ ok: true, estCents: costOf(3) });
+    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(3));
     expect(await folderRow(t, folderId)).toMatchObject({
       status: "ingesting",
       memberCount: 3,
@@ -442,7 +450,7 @@ describe("cancelFolder", () => {
     await upload(t, { folderId, hash: "c-b" });
     await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files: manifestOf(2) });
     await t.mutation(internal.vault.markReady, { vaultDocId: a, ragEntryId: "entry_a" });
-    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - 2);
+    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(2));
 
     const docsBefore = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
 
@@ -556,7 +564,10 @@ describe("cancelFolder", () => {
     ).toEqual({ ok: false });
     // `settleFolder` takes a bare folderId and has no tenant guard of its own, so this assertion is
     // the whole protection: the reservation is untouched and the row is still there.
-    expect(await folderRow(t, folderId)).toMatchObject({ status: "ingesting", reservedCents: 1 });
+    expect(await folderRow(t, folderId)).toMatchObject({
+      status: "ingesting",
+      reservedCents: costOf(1),
+    });
   });
 });
 
@@ -709,7 +720,7 @@ describe("a member reached from outside the walk", () => {
     // does not need the `rag` component registered — a ready row carries a ragEntryId and
     // `deleteVaultDoc` cascades into rag.
     await t.mutation(internal.vault.markFailed, { vaultDocId: a, reason: "unsupported_format" });
-    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS - 2);
+    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(2));
 
     expect(await asTenant(t, T).mutation(api.vault.deleteVaultDoc, { vaultDocId: b })).toEqual({
       ok: true,

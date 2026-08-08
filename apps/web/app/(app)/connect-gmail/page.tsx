@@ -11,7 +11,7 @@ import { DisconnectGoogle } from "../_components/DisconnectGoogle";
 // resumes any awaiting_reauth delivery, and grants Calendar to pre-17 connections.
 export default function ConnectGmailPage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
-  const connectUrl = useQuery(api.gmailAuth.gmailConnectUrl);
+  const connect = useQuery(api.gmailAuth.gmailConnectUrl);
 
   // The OAuth callback (backend http.ts) redirects failures back here as ?gmailError=<reason>
   // so the user never dead-ends on the Convex-site domain. Read once on mount (client-only —
@@ -83,9 +83,9 @@ export default function ConnectGmailPage() {
         <DisconnectGoogle />
       </div>
 
-      {connectUrl ? (
+      {connect?.url ? (
         <a
-          href={connectUrl}
+          href={connect.url}
           style={{
             display: "inline-block",
             padding: "0.6rem 1.2rem",
@@ -99,6 +99,20 @@ export default function ConnectGmailPage() {
         >
           {status?.connected ? "Reconnect Google" : "Connect Google"}
         </a>
+      ) : connect?.configured === false ? (
+        <div
+          role="alert"
+          style={{
+            border: "1px solid #fecaca",
+            background: "#fef2f2",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+            color: "#991b1b",
+          }}
+        >
+          Google connection is temporarily unavailable because OAuth has not been configured for
+          this deployment. Ask an administrator to configure it, then reload this page.
+        </div>
       ) : (
         <p style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>Preparing consent link…</p>
       )}

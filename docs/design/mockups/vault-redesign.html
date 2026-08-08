@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pikar AI — Knowledge Vault redesign mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* existing tokens — unchanged, copied from apps/web/app/globals.css */
+  --ink:#0e1419; --ink-soft:#55606c; --rule:#d8dbe0;
+  --held:#f0a22e; --held-text:#8f5406; --released:#3e9e75;
+  --teal-900:#0b4f4a; --teal-600:#009689; --teal-400:#40cad0;
+  --canvas:#f8fafc; --card:#ffffff;
+
+  /* PROPOSED accent set — complementary, each with exactly ONE job.
+     Nothing here replaces a token; these are the "icon badge" accents BRAND §2 already allows,
+     made semantic instead of decorative and desaturated so teal stays the loudest colour. */
+  --a-slate:#5b6b7c;  --a-slate-bg:#eef2f6;   /* neutral counts, documents            */
+  --a-blue:#3b82f6;   --a-blue-bg:#e8f1fe;    /* storage, video, Drive                */
+  --a-violet:#6366f1; --a-violet-bg:#eceefe;  /* structure: categories, images        */
+  --a-green:#3e9e75;  --a-green-bg:#e7f4ed;   /* processed / ready  (= --released)    */
+  --a-sand:#b07d2e;   --a-sand-bg:#fbf3e4;    /* brain dumps, in-progress             */
+  --danger:#dc2626;   --danger-bg:#fdecec; --danger-text:#991b1b;
+
+  --font-display:'Bricolage Grotesque'; --font-body:'Public Sans'; --font-mono:'JetBrains Mono';
+  --shadow:0 14px 40px -30px rgb(14 20 25 / 40%);
+  --sp-1:.5rem; --sp-2:.75rem; --sp-3:1rem; --sp-4:1.25rem; --sp-5:1.5rem; --sp-6:2rem; --sp-7:2.75rem;
+  --mockbar-h:46px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:var(--font-body),system-ui,sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--font-display),system-ui,sans-serif;letter-spacing:-.03em;margin:0}
+code,.mono{font-family:var(--font-mono),ui-monospace,monospace}
+
+/* ── mockup chrome ── */
+.mockbar{position:sticky;top:0;z-index:60;background:#0e1419;color:#fff;min-height:var(--mockbar-h);
+  display:flex;align-items:center;gap:.5rem;padding:.55rem var(--sp-3);flex-wrap:wrap;font-size:.8rem;border-bottom:1px solid #2b3a4a}
+.mockbar strong{font-family:var(--font-display);letter-spacing:-.02em;margin-right:.5rem}
+.mockbar .spacer{flex:1}
+.tab{border:1px solid #2b3a4a;background:transparent;color:#c8d0d8;border-radius:999px;
+  padding:.32rem .85rem;font:inherit;font-size:.78rem;cursor:pointer}
+.tab:hover{border-color:var(--teal-400);color:#fff}
+.tab[aria-selected="true"]{background:var(--teal-600);border-color:var(--teal-600);color:#fff;font-weight:600}
+.srctoggle{display:inline-flex;align-items:center;gap:.4rem;color:#8c96a3;font-size:.75rem;cursor:pointer}
+
+.rationale{display:none;background:#fff;border-bottom:1px solid var(--rule);padding:var(--sp-5) var(--sp-6)}
+body.show-why .rationale{display:block}
+.rat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--sp-4);max-width:1220px}
+.rat{border:1px solid var(--rule);border-radius:.8rem;padding:var(--sp-3) var(--sp-4);font-size:.83rem;line-height:1.6}
+.rat b{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-soft);margin-bottom:.35rem}
+.swatches{display:flex;gap:.35rem;margin-top:.6rem}
+.sw{width:26px;height:26px;border-radius:.4rem;border:1px solid rgb(0 0 0 / 8%)}
+
+/* ── app shell ── */
+.frame{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
+.rail{background:var(--teal-900);color:#dff2f0;padding:var(--sp-4) var(--sp-2);display:flex;flex-direction:column;gap:.15rem;
+  position:sticky;top:var(--mockbar-h);height:calc(100vh - var(--mockbar-h));overflow-y:auto}
+.rail-brand{display:flex;align-items:center;gap:.6rem;padding:.3rem .5rem var(--sp-4)}
+.rail-logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(140deg,var(--teal-400),var(--teal-600));
+  display:grid;place-items:center;color:#03302d;font-weight:800;font-family:var(--font-display)}
+.rail-word{font-family:var(--font-display);font-weight:700;color:#fff;font-size:1.08rem;letter-spacing:-.02em}
+.rail-item{display:flex;align-items:center;gap:.7rem;padding:.58rem .7rem;border-radius:.65rem;color:#bfe0dc;font-size:.87rem}
+.rail-item.is-active{background:var(--teal-600);color:#fff;font-weight:600}
+.rail-item.is-soon{color:#6f9d98}
+.rail-soon{margin-left:auto;font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;background:rgb(255 255 255 / 10%);padding:.1rem .34rem;border-radius:.3rem}
+.ico{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* THE SURFACE CHANGE: no teal radial wash. Plain neutral canvas, so white cards read as
+   objects on paper — the same figure/ground the Approvals and Finance pages get right. */
+.vault{padding:var(--sp-6) var(--sp-6) 5rem;max-width:1220px;width:100%;min-width:0}
+.view{display:none}
+.view.is-on{display:block}
+
+.caps{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-soft);margin:0}
+.card{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-5)}
+.sec{display:grid;gap:var(--sp-4);margin-bottom:var(--sp-7)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;margin-bottom:var(--sp-6)}
+.head h1{font-size:clamp(1.9rem,1.4rem + 1.8vw,2.6rem);font-weight:800}
+.head .caps{margin-bottom:.3rem}
+
+.btn{border:none;border-radius:999px;padding:.6rem 1.3rem;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;gap:.5rem}
+.btn-primary{background:var(--teal-600);color:#fff}
+.btn-ghost{background:var(--card);color:var(--ink);border:1px solid var(--rule)}
+.btn-sm{padding:.34rem .8rem;font-size:.78rem}
+
+/* ── stat tiles: soft tinted badge, saturated glyph. Semantic, not decorative. ── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:var(--sp-4)}
+.tile{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-5);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-3)}
+.tile .lbl{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.tile .val{font-family:var(--font-display);font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-top:.45rem;line-height:1}
+.tile .sub{font-size:.74rem;color:var(--ink-soft);margin-top:.35rem}
+.badge{width:2.6rem;height:2.6rem;border-radius:.8rem;display:grid;place-items:center;flex:none}
+.badge .ico{width:19px;height:19px;stroke-width:1.9}
+
+/* ── category tabs: ONE teal pill, the rest quiet ── */
+.tabs{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:.4rem;display:flex;flex-wrap:wrap;gap:.35rem}
+.ctab{display:inline-flex;align-items:center;gap:.5rem;padding:.6rem 1.05rem;border-radius:999px;border:none;
+  background:transparent;color:var(--ink-soft);font:inherit;font-size:.92rem;font-weight:500;cursor:pointer}
+.ctab:hover{background:#f1f4f7;color:var(--ink)}
+.ctab[aria-selected="true"]{background:var(--teal-600);color:#fff;font-weight:700}
+.ctab .n{font-family:var(--font-mono);font-size:.72rem;opacity:.75}
+
+/* ── ingest sources ── */
+.dz{border:1.5px dashed #c3ccd6;border-radius:1rem;background:#fcfcfd;padding:var(--sp-7) var(--sp-5);
+  text-align:center;display:grid;gap:.45rem;justify-items:center}
+.dz:hover{border-color:var(--teal-600);background:#fbfefe}
+.dz .glyph{width:3.4rem;height:3.4rem;border-radius:1rem;background:var(--a-slate-bg);display:grid;place-items:center;
+  color:var(--a-slate);margin-bottom:.35rem}
+.dz .glyph .ico{width:24px;height:24px}
+.dz .lead{font-size:1rem}
+.dz .lead b{color:var(--teal-600)}
+.dz .fine{font-size:.8rem;color:var(--ink-soft)}
+.dz .fine.dim{color:#8e98a3}
+.dz .row{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:var(--sp-2)}
+
+.srcrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--sp-4)}
+.srccard{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-4) var(--sp-5);
+  display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.srccard .badge{width:2.2rem;height:2.2rem;border-radius:.65rem}
+.srccard .t{flex:1 1 10rem;min-width:0}
+.srccard .t b{display:block;font-weight:650;font-size:.92rem}
+.srccard .t span{font-size:.78rem;color:var(--ink-soft)}
+
+/* ── search / view bar ── */
+.searchbar{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-2) var(--sp-3);
+  display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.searchbox{flex:1 1 16rem;display:flex;align-items:center;gap:.6rem;padding:.55rem .9rem;
+  background:#f4f6f9;border:1px solid transparent;border-radius:999px;color:var(--ink-soft);min-width:0}
+.searchbox:focus-within{border-color:var(--teal-600);background:#fff}
+.searchbox input{border:none;background:none;font:inherit;font-size:.9rem;outline:none;flex:1;min-width:0;color:var(--ink)}
+.searchbox .ico{color:var(--a-slate)}
+.count{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);white-space:nowrap}
+.viewtog{display:flex;gap:.25rem;background:#f4f6f9;border-radius:.6rem;padding:.2rem}
+.viewtog button{border:none;background:none;padding:.4rem .5rem;border-radius:.45rem;cursor:pointer;color:var(--ink-soft);display:grid;place-items:center}
+.viewtog button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgb(14 20 25 / 14%)}
+
+/* ── document grid: a type-coloured spine gives the grid variety without adding hue noise ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:var(--sp-4)}
+.doc{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-4);
+  display:grid;gap:var(--sp-2);align-content:start;border-left:3px solid var(--a-slate);cursor:pointer}
+.doc:hover{box-shadow:0 18px 44px -26px rgb(14 20 25 / 46%)}
+.doc.t-image{border-left-color:var(--a-violet)}
+.doc.t-video{border-left-color:var(--a-blue)}
+.doc.t-sheet{border-left-color:var(--a-green)}
+.doc.t-dump{border-left-color:var(--a-sand)}
+.doc.t-folder{border-left-color:var(--teal-600)}
+.doc-top{display:flex;align-items:flex-start;gap:var(--sp-2)}
+.doc-glyph{width:2.3rem;height:2.3rem;border-radius:.65rem;display:grid;place-items:center;flex:none;
+  background:var(--a-slate-bg);color:var(--a-slate)}
+.t-image .doc-glyph{background:var(--a-violet-bg);color:var(--a-violet)}
+.t-video .doc-glyph{background:var(--a-blue-bg);color:var(--a-blue)}
+.t-sheet .doc-glyph{background:var(--a-green-bg);color:var(--a-green)}
+.t-dump  .doc-glyph{background:var(--a-sand-bg);color:var(--a-sand)}
+.t-folder .doc-glyph{background:#e2f2f0;color:var(--teal-600)}
+.doc h4{font-family:var(--font-body);font-size:.92rem;font-weight:650;line-height:1.4;letter-spacing:0;
+  overflow-wrap:anywhere}
+.doc .meta{font-size:.75rem;color:var(--ink-soft)}
+.chips{display:flex;gap:.35rem;flex-wrap:wrap}
+.chip{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-radius:.35rem;padding:.14rem .45rem}
+.c-ready{background:var(--a-green-bg);color:#256d4e}
+.c-proc{background:var(--a-sand-bg);color:var(--held-text)}
+.c-pend{background:var(--a-slate-bg);color:#334155}
+.c-extr{background:var(--a-blue-bg);color:#1d4ed8}
+.c-fail{background:var(--danger-bg);color:var(--danger-text)}
+.c-type{background:transparent;border:1px solid var(--rule);color:var(--ink-soft);font-weight:600}
+.c-agent{background:#efe9fd;color:#5b21b6}
+
+/* progress bar for a folder card */
+.bar{height:6px;border-radius:999px;background:#eef1f4;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--teal-600);border-radius:999px}
+
+/* breadcrumb (drill-in state) */
+.crumb{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-3) var(--sp-4);
+  display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;font-size:.9rem}
+.crumb a{color:var(--teal-600);text-decoration:none;font-weight:600;cursor:pointer}
+.crumb .sep{color:var(--ink-soft)}
+
+/* preview modal */
+.scrim{position:fixed;inset:0;background:rgb(14 20 25 / 46%);display:grid;place-items:center;padding:var(--sp-5);z-index:40}
+.modal{background:var(--card);border-radius:1.1rem;box-shadow:0 30px 80px -30px rgb(14 20 25 / 60%);
+  width:min(980px,100%);max-height:86vh;overflow:auto}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-3);
+  padding:var(--sp-5);border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--card);flex-wrap:wrap}
+.modal-grid{display:grid;grid-template-columns:minmax(0,1fr) 268px;gap:0}
+@media(max-width:800px){.modal-grid{grid-template-columns:minmax(0,1fr)}}
+.modal-main{padding:var(--sp-5);font-size:.9rem;line-height:1.75;color:var(--ink-soft);min-width:0}
+.modal-main h5{font-family:var(--font-body);color:var(--ink);font-size:.95rem;margin:0 0 .5rem}
+.modal-side{padding:var(--sp-5);border-left:1px solid var(--rule);background:#fcfdfe;display:grid;gap:var(--sp-4);align-content:start}
+.kv{display:grid;gap:.15rem}
+.kv b{font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-soft);font-weight:700}
+.kv span{font-size:.86rem;overflow-wrap:anywhere}
+.xbtn{border:1px solid var(--rule);background:#fff;border-radius:.6rem;width:2rem;height:2rem;cursor:pointer;
+  display:grid;place-items:center;color:var(--ink-soft);flex:none}
+
+.note{background:#f4f7fa;border:1px solid #e0e6ec;border-left:3px solid var(--a-slate);
+  border-radius:.7rem;padding:var(--sp-3) var(--sp-4);font-size:.83rem;line-height:1.6;color:#3b4652}
+.empty{color:var(--ink-soft);font-size:.9rem;padding:var(--sp-6) 0;text-align:center}
+
+@media(max-width:900px){.frame{grid-template-columns:minmax(0,1fr)}.rail{display:none}
+  .vault{padding:var(--sp-5) var(--sp-4) 4rem}}
+</style>
+</head>
+<body class="show-why">
+
+<div class="mockbar">
+  <strong>Knowledge Vault · redesign mock</strong>
+  <button class="tab" aria-selected="true" data-v="browse">Browse</button>
+  <button class="tab" data-v="folder">Inside a folder</button>
+  <button class="tab" data-v="preview">Preview open</button>
+  <button class="tab" data-v="empty">Empty vault</button>
+  <span class="spacer"></span>
+  <label class="srctoggle"><input type="checkbox" id="whybox" checked> show colour rationale</label>
+</div>
+
+<div class="rationale">
+  <p class="caps" style="margin-bottom:var(--sp-3)">What changed — colour only. Every feature, control and copy line is the one already shipped.</p>
+  <div class="rat-grid">
+    <div class="rat"><b>1 · The canvas stops being teal</b>
+      The vault currently sits on <code>.pane-canvas</code> — two teal radial washes behind the cards. Removed. Plain <code>--canvas</code>, so white cards read as objects on paper, exactly like Approvals and Finance.
+      <div class="swatches"><span class="sw" style="background:#eef7f6"></span><span class="sw" style="background:#f8fafc"></span></div></div>
+    <div class="rat"><b>2 · Teal gets one job</b>
+      Today teal is the rail, the Refresh button, the active tab, the upload link, the search icon and the aura — six jobs, so none of them read as <i>the</i> action. Now: primary button + active tab. That is all.
+      <div class="swatches"><span class="sw" style="background:#009689"></span></div></div>
+    <div class="rat"><b>3 · Badges become semantic, not decorative</b>
+      The four stat badges were saturated solids picked for variety (<code>#22c55e</code> lime clashes with brand teal). Now soft tint + saturated glyph, each hue meaning something: neutral = a count, green = healthy, blue = storage, violet = structure.
+      <div class="swatches"><span class="sw" style="background:#eef2f6"></span><span class="sw" style="background:#e7f4ed"></span><span class="sw" style="background:#e8f1fe"></span><span class="sw" style="background:#eceefe"></span></div></div>
+    <div class="rat"><b>4 · Documents carry their type in colour</b>
+      A left spine + tinted glyph per document type. This is what breaks the green monotony — variety comes from the <i>content</i>, not from decoration.
+      <div class="swatches"><span class="sw" style="background:#5b6b7c"></span><span class="sw" style="background:#6366f1"></span><span class="sw" style="background:#3b82f6"></span><span class="sw" style="background:#3e9e75"></span><span class="sw" style="background:#b07d2e"></span></div></div>
+    <div class="rat"><b>5 · Status chips untouched</b>
+      ready / processing / pending / extracting / failed keep the exact palette already in <code>DocGrid.tsx</code>. They were never the problem — they were drowning in the surrounding green. The label still carries the meaning, never the colour alone (BRAND §6).
+      <div class="swatches"><span class="sw" style="background:#e7f4ed"></span><span class="sw" style="background:#fbf3e4"></span><span class="sw" style="background:#eef2f6"></span><span class="sw" style="background:#e8f1fe"></span><span class="sw" style="background:#fdecec"></span></div></div>
+    <div class="rat"><b>6 · Amber stays reserved</b>
+      <code>--held</code> is the approval gate's alone (BRAND §2). The vault's "processing" chip uses a warmer sand (<code>#b07d2e</code> on <code>#fbf3e4</code>) so it never competes with a held approval — and it passes contrast on paper, which raw <code>--held</code> does not.
+      <div class="swatches"><span class="sw" style="background:#f0a22e"></span><span class="sw" style="background:#b07d2e"></span></div></div>
+  </div>
+</div>
+
+<div class="frame">
+  <nav class="rail">
+    <div class="rail-brand"><span class="rail-logo">◕</span><span class="rail-word">Pikar AI</span></div>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Command Center</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Approvals</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/></svg>Finance</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Content</span>
+    <span class="rail-item is-soon"><svg class="ico" viewBox="0 0 24 24"><path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>Sales Pipeline<span class="rail-soon">Soon</span></span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>Compliance</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></svg>My Workspace</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></svg>Live Voice</span>
+    <span class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M21.2 15.9A10 10 0 1 1 8.1 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Reports</span>
+    <span class="rail-item is-active"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>Knowledge Vault</span>
+  </nav>
+
+  <div class="vault">
+
+    <!-- ══════════ BROWSE ══════════ -->
+    <div class="view is-on" id="v-browse">
+      <div class="head">
+        <div><p class="caps">Grounding for every agent</p><h1>Knowledge Vault</h1></div>
+        <button class="btn btn-primary"><svg class="ico" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Refresh</button>
+      </div>
+
+      <!-- stat tiles -->
+      <div class="sec">
+        <div class="stats">
+          <div class="tile">
+            <div><div class="lbl">Total files</div><div class="val">148</div><div class="sub">across 6 categories</div></div>
+            <span class="badge" style="background:var(--a-slate-bg);color:var(--a-slate)">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg></span>
+          </div>
+          <div class="tile">
+            <div><div class="lbl">Processed</div><div class="val">141</div><div class="sub">embedded &amp; groundable</div></div>
+            <span class="badge" style="background:var(--a-green-bg);color:var(--a-green)">
+              <svg class="ico" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>
+          </div>
+          <div class="tile">
+            <div><div class="lbl">Storage used</div><div class="val">312 MB</div><div class="sub">of your workspace</div></div>
+            <span class="badge" style="background:var(--a-blue-bg);color:var(--a-blue)">
+              <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h.01M10 12h6"/></svg></span>
+          </div>
+          <div class="tile">
+            <div><div class="lbl">Categories</div><div class="val">6</div><div class="sub">1 still empty</div></div>
+            <span class="badge" style="background:var(--a-violet-bg);color:var(--a-violet)">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- category tabs -->
+      <div class="sec">
+        <div class="tabs" role="tablist">
+          <button class="ctab" role="tab" aria-selected="true"><svg class="ico" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3.5 3.5M12 8l3.5 3.5"/><path d="M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.2"/></svg>My Uploads <span class="n">96</span></button>
+          <button class="ctab" role="tab"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>Workspace Docs <span class="n">21</span></button>
+          <button class="ctab" role="tab"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Images <span class="n">14</span></button>
+          <button class="ctab" role="tab"><svg class="ico" viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Videos <span class="n">3</span></button>
+          <button class="ctab" role="tab"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Google Docs <span class="n">9</span></button>
+          <button class="ctab" role="tab"><svg class="ico" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 0 6 3 3 0 0 0 3 3 3 3 0 0 0 6 0 3 3 0 0 0 3-3 3 3 0 0 0 0-6 3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/></svg>Brain Dumps <span class="n">5</span></button>
+        </div>
+      </div>
+
+      <!-- ingest -->
+      <div class="sec">
+        <div class="dz">
+          <span class="glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3.5 3.5M12 8l3.5 3.5"/><path d="M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.2"/></svg></span>
+          <p class="lead" style="margin:0"><b>Click to upload</b> or drag and drop</p>
+          <p class="fine" style="margin:0">Searchable: PDF, DOCX, XLSX, CSV, TXT, Markdown</p>
+          <p class="fine dim" style="margin:0">Storage-only: Images, Videos (not embedded)</p>
+          <div class="row">
+            <button class="btn btn-ghost btn-sm">Upload a folder</button>
+            <button class="btn btn-ghost btn-sm">Write a brain dump</button>
+          </div>
+        </div>
+
+        <div class="srcrow">
+          <div class="srccard">
+            <span class="badge" style="background:var(--a-blue-bg);color:var(--a-blue)">
+              <svg class="ico" viewBox="0 0 24 24"><path d="m8 3 8 13H8L4 9z"/><path d="m16 3 4 6-4 7"/><path d="M8 16h12l-2 5H10z"/></svg></span>
+            <div class="t"><b>Import from Google Drive</b><span>Browse your folders and pick what to bring in.</span></div>
+            <button class="btn btn-ghost btn-sm">Browse Drive</button>
+          </div>
+          <div class="srccard">
+            <span class="badge" style="background:var(--a-sand-bg);color:var(--a-sand)">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 0 6 3 3 0 0 0 3 3 3 3 0 0 0 6 0 3 3 0 0 0 3-3 3 3 0 0 0 0-6 3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/></svg></span>
+            <div class="t"><b>Brain dump</b><span>Paste notes, ideas or a transcript — Pikar files it for you.</span></div>
+            <button class="btn btn-ghost btn-sm">Start typing</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- search + grid -->
+      <div class="sec">
+        <div class="searchbar">
+          <div class="searchbox">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="Search my uploads…">
+          </div>
+          <span class="count">96 items</span>
+          <div class="viewtog">
+            <button aria-pressed="true" title="Grid"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+            <button aria-pressed="false" title="List"><svg class="ico" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- folder card -->
+          <div class="doc t-folder">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span>
+              <div style="min-width:0"><h4>Client contracts 2026</h4><div class="meta">Folder · 42 documents</div></div>
+            </div>
+            <div class="bar"><i style="width:74%"></i></div>
+            <div class="chips"><span class="chip c-proc">31 of 42 read</span></div>
+          </div>
+
+          <div class="doc t-folder">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span>
+              <div style="min-width:0"><h4>Drive — Financials</h4><div class="meta">Folder · 18 documents</div></div>
+            </div>
+            <div class="bar"><i style="width:100%"></i></div>
+            <div class="chips"><span class="chip c-ready">complete</span><span class="chip c-fail">2 unreadable</span></div>
+          </div>
+
+          <div class="doc">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg></span>
+              <div style="min-width:0"><h4>Master Services Agreement — Northfield</h4><div class="meta">PDF · 1.2 MB · 4 Aug</div></div>
+            </div>
+            <div class="chips"><span class="chip c-ready">ready</span><span class="chip c-type">Contract</span></div>
+          </div>
+
+          <div class="doc t-sheet">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
+              <div style="min-width:0"><h4>2026 revenue model v4.xlsx</h4><div class="meta">XLSX · 340 KB · 2 Aug</div></div>
+            </div>
+            <div class="chips"><span class="chip c-ready">ready</span><span class="chip c-type">Financials</span></div>
+          </div>
+
+          <div class="doc">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <div style="min-width:0"><h4>Q3 scope &amp; pricing one-pager</h4><div class="meta">HTML · 22 KB · 2 Aug</div></div>
+            </div>
+            <div class="chips"><span class="chip c-ready">ready</span><span class="chip c-agent">Agent</span><span class="chip c-type">Proposal</span></div>
+          </div>
+
+          <div class="doc t-image">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+              <div style="min-width:0"><h4>brand-mark-final.png</h4><div class="meta">PNG · 840 KB · 29 Jul</div></div>
+            </div>
+            <div class="chips"><span class="chip c-pend">storage only</span></div>
+          </div>
+
+          <div class="doc t-video">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+              <div style="min-width:0"><h4>Client kickoff recording.mp4</h4><div class="meta">MP4 · 84 MB · 28 Jul</div></div>
+            </div>
+            <div class="chips"><span class="chip c-extr">transcribing</span></div>
+          </div>
+
+          <div class="doc t-dump">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 0 6 3 3 0 0 0 3 3 3 3 0 0 0 6 0 3 3 0 0 0 3-3 3 3 0 0 0 0-6 3 3 0 0 0-3-3 3 3 0 0 0-3-3z"/></svg></span>
+              <div style="min-width:0"><h4>Positioning ideas — Sunday walk</h4><div class="meta">Brain dump · 3 KB · 27 Jul</div></div>
+            </div>
+            <div class="chips"><span class="chip c-ready">ready</span></div>
+          </div>
+
+          <div class="doc">
+            <div class="doc-top">
+              <span class="doc-glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <div style="min-width:0"><h4>Scanned insurance certificate</h4><div class="meta">PDF · 2.8 MB · 26 Jul</div></div>
+            </div>
+            <div class="chips"><span class="chip c-fail">unreadable</span></div>
+            <button class="btn btn-ghost btn-sm" style="justify-self:start">Retry extraction</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Nothing was removed.</b> Refresh, the 4 stat tiles, the 6 category tabs, drag-and-drop, folder upload, brain dump, Drive import, search, grid/list toggle, status chips, the AGENT chip, doc-type chips, retry-extraction and folder drill-in are all still here — same copy, same behaviour, same order down the page.
+      </div>
+    </div>
+
+    <!-- ══════════ INSIDE A FOLDER ══════════ -->
+    <div class="view" id="v-folder">
+      <div class="head">
+        <div><p class="caps">Grounding for every agent</p><h1>Knowledge Vault</h1></div>
+        <button class="btn btn-primary"><svg class="ico" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Refresh</button>
+      </div>
+
+      <div class="sec">
+        <div class="stats">
+          <div class="tile"><div><div class="lbl">Total files</div><div class="val">148</div><div class="sub">across 6 categories</div></div>
+            <span class="badge" style="background:var(--a-slate-bg);color:var(--a-slate)"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Processed</div><div class="val">141</div><div class="sub">embedded &amp; groundable</div></div>
+            <span class="badge" style="background:var(--a-green-bg);color:var(--a-green)"><svg class="ico" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Storage used</div><div class="val">312 MB</div><div class="sub">of your workspace</div></div>
+            <span class="badge" style="background:var(--a-blue-bg);color:var(--a-blue)"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h.01M10 12h6"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Categories</div><div class="val">6</div><div class="sub">1 still empty</div></div>
+            <span class="badge" style="background:var(--a-violet-bg);color:var(--a-violet)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span></div>
+        </div>
+      </div>
+
+      <!-- breadcrumb REPLACES the tabs — a folder is provenance, not a category -->
+      <div class="sec">
+        <div class="crumb">
+          <a>← All documents</a><span class="sep">/</span>
+          <b>Client contracts 2026</b>
+          <span class="chip c-proc" style="margin-left:.35rem">31 of 42 read</span>
+          <span style="flex:1"></span>
+          <span class="count">42 items</span>
+        </div>
+        <div class="note">A sealed folder takes no new members, so the upload zone is deliberately absent here — the same rule the page already follows today.</div>
+      </div>
+
+      <div class="sec">
+        <div class="searchbar">
+          <div class="searchbox">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="Search this folder…">
+          </div>
+          <span class="count">42 items</span>
+          <div class="viewtog">
+            <button aria-pressed="false" title="Grid"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+            <button aria-pressed="true" title="List"><svg class="ico" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+          </div>
+        </div>
+
+        <div class="card" style="display:grid;gap:var(--sp-2);padding:var(--sp-2) var(--sp-5)">
+          <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid #eef1f4">
+            <span class="doc-glyph" style="width:2rem;height:2rem;border-radius:.5rem"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+            <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.9rem">Northfield — MSA signed.pdf</b>
+              <div class="meta" style="font-size:.75rem;color:var(--ink-soft)">1.2 MB · 4 Aug</div></div>
+            <span class="chip c-ready">ready</span><span class="chip c-type">Contract</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid #eef1f4">
+            <span class="doc-glyph" style="width:2rem;height:2rem;border-radius:.5rem;background:var(--a-green-bg);color:var(--a-green)"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg></span>
+            <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.9rem">Rate card 2026.xlsx</b>
+              <div class="meta" style="font-size:.75rem;color:var(--ink-soft)">88 KB · 4 Aug</div></div>
+            <span class="chip c-ready">ready</span><span class="chip c-type">Financials</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid #eef1f4">
+            <span class="doc-glyph" style="width:2rem;height:2rem;border-radius:.5rem"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+            <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.9rem">Lumen — SOW addendum 2.pdf</b>
+              <div class="meta" style="font-size:.75rem;color:var(--ink-soft)">640 KB · 3 Aug</div></div>
+            <span class="chip c-extr">extracting</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0">
+            <span class="doc-glyph" style="width:2rem;height:2rem;border-radius:.5rem;background:var(--danger-bg);color:var(--danger-text)"><svg class="ico" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></span>
+            <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.9rem">Brightpath — scanned rider.pdf</b>
+              <div class="meta" style="font-size:.75rem;color:var(--ink-soft)">2.1 MB · 3 Aug · no text layer</div></div>
+            <span class="chip c-fail">unreadable</span>
+            <button class="btn btn-ghost btn-sm">Retry</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ PREVIEW OPEN ══════════ -->
+    <div class="view" id="v-preview">
+      <div class="head">
+        <div><p class="caps">Grounding for every agent</p><h1>Knowledge Vault</h1></div>
+        <button class="btn btn-primary">Refresh</button>
+      </div>
+      <div class="sec"><div class="stats">
+        <div class="tile"><div><div class="lbl">Total files</div><div class="val">148</div></div>
+          <span class="badge" style="background:var(--a-slate-bg);color:var(--a-slate)"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span></div>
+        <div class="tile"><div><div class="lbl">Processed</div><div class="val">141</div></div>
+          <span class="badge" style="background:var(--a-green-bg);color:var(--a-green)"><svg class="ico" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg></span></div>
+        <div class="tile"><div><div class="lbl">Storage used</div><div class="val">312 MB</div></div>
+          <span class="badge" style="background:var(--a-blue-bg);color:var(--a-blue)"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="2"/></svg></span></div>
+        <div class="tile"><div><div class="lbl">Categories</div><div class="val">6</div></div>
+          <span class="badge" style="background:var(--a-violet-bg);color:var(--a-violet)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span></div>
+      </div></div>
+
+      <div class="scrim">
+        <div class="modal">
+          <div class="modal-head">
+            <div style="min-width:0">
+              <div class="chips" style="margin-bottom:.45rem">
+                <span class="chip c-ready">ready</span><span class="chip c-type">Contract</span>
+              </div>
+              <h3 style="font-size:1.2rem;overflow-wrap:anywhere">Master Services Agreement — Northfield</h3>
+              <p style="margin:.3rem 0 0;font-size:.82rem;color:var(--ink-soft)">PDF · 1.2 MB · uploaded 4 Aug 2026</p>
+            </div>
+            <button class="xbtn">✕</button>
+          </div>
+          <div class="modal-grid">
+            <div class="modal-main">
+              <h5>Extracted text</h5>
+              <p style="margin:0">This Master Services Agreement is entered into between Northfield Holdings (Pty) Ltd and the Supplier, effective 1 September 2026. The Supplier shall provide advisory and implementation services as described in each executed Statement of Work…</p>
+              <p>2. <b style="color:var(--ink)">Fees.</b> The monthly retainer is fixed for the initial twelve-month term and thereafter subject to annual review with sixty days' written notice…</p>
+              <p>3. <b style="color:var(--ink)">Confidentiality.</b> Each party shall keep confidential all information disclosed by the other…</p>
+            </div>
+            <div class="modal-side">
+              <div class="kv"><b>Category</b><span>My Uploads</span></div>
+              <div class="kv"><b>Document type</b><span>Contract</span></div>
+              <div class="kv"><b>Folder</b><span>Client contracts 2026</span></div>
+              <div class="kv"><b>Entities found</b>
+                <div class="chips" style="margin-top:.3rem">
+                  <span class="chip c-type">Northfield Holdings</span><span class="chip c-type">1 Sept 2026</span><span class="chip c-type">12-month term</span>
+                </div></div>
+              <div class="kv"><b>Grounding</b><span style="color:#256d4e">Embedded — agents can cite this</span></div>
+              <div style="display:grid;gap:.5rem">
+                <button class="btn btn-primary btn-sm">Download original</button>
+                <button class="btn btn-ghost btn-sm">Remove from vault</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ EMPTY ══════════ -->
+    <div class="view" id="v-empty">
+      <div class="head">
+        <div><p class="caps">Grounding for every agent</p><h1>Knowledge Vault</h1></div>
+        <button class="btn btn-primary"><svg class="ico" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Refresh</button>
+      </div>
+
+      <div class="sec">
+        <div class="stats">
+          <div class="tile"><div><div class="lbl">Total files</div><div class="val">0</div></div>
+            <span class="badge" style="background:var(--a-slate-bg);color:var(--a-slate)"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Processed</div><div class="val">0</div></div>
+            <span class="badge" style="background:var(--a-green-bg);color:var(--a-green)"><svg class="ico" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Storage used</div><div class="val">0 MB</div></div>
+            <span class="badge" style="background:var(--a-blue-bg);color:var(--a-blue)"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="2"/></svg></span></div>
+          <div class="tile"><div><div class="lbl">Categories</div><div class="val">6</div></div>
+            <span class="badge" style="background:var(--a-violet-bg);color:var(--a-violet)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 20V6a2 2 0 0 1 2-2h3.5l2 2.5H18a2 2 0 0 1 2 2V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg></span></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="tabs" role="tablist">
+          <button class="ctab" role="tab" aria-selected="true">My Uploads <span class="n">0</span></button>
+          <button class="ctab" role="tab">Workspace Docs <span class="n">0</span></button>
+          <button class="ctab" role="tab">Images <span class="n">0</span></button>
+          <button class="ctab" role="tab">Videos <span class="n">0</span></button>
+          <button class="ctab" role="tab">Google Docs <span class="n">0</span></button>
+          <button class="ctab" role="tab">Brain Dumps <span class="n">0</span></button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="dz">
+          <span class="glyph"><svg class="ico" viewBox="0 0 24 24"><path d="M12 16V8m0 0-3.5 3.5M12 8l3.5 3.5"/><path d="M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.2"/></svg></span>
+          <p class="lead" style="margin:0"><b>Click to upload</b> or drag and drop</p>
+          <p class="fine" style="margin:0">Searchable: PDF, DOCX, XLSX, CSV, TXT, Markdown</p>
+          <p class="fine dim" style="margin:0">Storage-only: Images, Videos (not embedded)</p>
+          <div class="row">
+            <button class="btn btn-ghost btn-sm">Upload a folder</button>
+            <button class="btn btn-ghost btn-sm">Import from Drive</button>
+            <button class="btn btn-ghost btn-sm">Write a brain dump</button>
+          </div>
+        </div>
+        <p class="empty">Your vault is empty. Everything you add here becomes context every agent can cite.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const views = document.querySelectorAll('.view');
+const tabs  = document.querySelectorAll('.mockbar .tab');
+tabs.forEach(t => t.onclick = () => {
+  views.forEach(v => v.classList.toggle('is-on', v.id === 'v-' + t.dataset.v));
+  tabs.forEach(x => x.setAttribute('aria-selected', String(x === t)));
+  window.scrollTo({top:0});
+});
+document.getElementById('whybox').onchange = e =>
+  document.body.classList.toggle('show-why', e.target.checked);
+document.querySelectorAll('[role="tablist"]').forEach(tl =>
+  tl.querySelectorAll('.ctab').forEach(b => b.onclick = () => {
+    tl.querySelectorAll('.ctab').forEach(x => x.setAttribute('aria-selected','false'));
+    b.setAttribute('aria-selected','true');
+  }));
+document.querySelectorAll('.viewtog').forEach(vt =>
+  vt.querySelectorAll('button').forEach(b => b.onclick = () => {
+    vt.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+  }));
+</script>
+</body>
+</html>

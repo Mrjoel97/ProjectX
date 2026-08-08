@@ -110,20 +110,34 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   }
   expect(readSource("plans.ts"), "plans.ts calls audit.log").not.toMatch(/audit\.log\b/);
   const cockpit = readSource("cockpit.ts");
-  // cockpit.ts's allowed crossings are the TWO refs-only cancel/reschedule audits (03.5-03 +
-  // 03.5-05), each payload {planId} only. A THIRD audit.log here would be a new content-plane leak
-  // surface, so the count is pinned — and BOTH payloads are asserted refs-only (a strengthen over the
-  // old count-1 scan, which predated plan.rescheduled; NOT a weaken — every eventType is checked).
-  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(2);
-  for (const eventType of ["plan.canceled", "plan.rescheduled"]) {
-    const m = cockpit.match(
-      new RegExp(
-        `eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`,
-      ),
-    );
-    expect(m, `${eventType} audit payload not found`).not.toBeNull();
-    const payload = m![1]!.replace(/\/\/[^\n]*/g, "");
-    expect(payload, `${eventType} payload must be refs-only: ${m![1]}`).not.toMatch(
+  // cockpit.ts's allowed crossings are FOUR refs-only plan-lifecycle audits: cancel (03.5-03),
+  // reschedule (03.5-05), and 26-03's discard + schedule-move. A FIFTH audit.log here would be a
+  // new content-plane leak surface, so the count stays pinned.
+  //
+  // UPDATED 2026-08-07 — it had drifted to red at HEAD: 26-03 added `plan.discarded` and a SECOND
+  // `plan.rescheduled` site while the pin still said 2. All four payloads were checked by hand at
+  // that point and are refs-only, so this is a stale-pin correction, NOT a relaxed invariant.
+  //
+  // Two holes closed rather than just bumping 2 → 4, because a bare count bump would have WEAKENED
+  // this test: (a) the old scan looped over a hardcoded eventType list, so 26-03's new
+  // `plan.discarded` slipped in unchecked, and (b) it used a non-global `match`, which reads only
+  // the FIRST site per eventType — with two `plan.rescheduled` sites the second was never read.
+  // Derive the sites from the source instead, so a new call site cannot pass by being unnamed.
+  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(4);
+  const sites = [
+    ...cockpit.matchAll(/eventType:\s*["'](plan\.[a-zA-Z]+)["'][\s\S]*?payload:\s*(\{[^}]*\})/g),
+  ];
+  // Every audit.log call site is accounted for — an unnamed new one fails here, not silently.
+  expect(sites, "every cockpit.ts audit.log site is scanned").toHaveLength(4);
+  expect(sites.map((s) => s[1]).sort(), "cockpit.ts audited plan events").toEqual([
+    "plan.canceled",
+    "plan.discarded",
+    "plan.rescheduled",
+    "plan.rescheduled",
+  ]);
+  for (const s of sites) {
+    const payload = s[2]!.replace(/\/\/[^\n]*/g, "");
+    expect(payload, `${s[1]} payload must be refs-only: ${s[2]}`).not.toMatch(
       /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
     );
   }

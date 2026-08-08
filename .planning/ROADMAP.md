@@ -36,6 +36,32 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 26: Connected product pages
 
+> **AMENDED 2026-08-07 (owner decisions on the unbuilt mockups). Three surfaces changed shape.**
+>
+> **(1) Finance SPLITS into Cost and Cash.** The mockup was a cost console — AI spend, not business
+> money — and said so in its own copy. It becomes **Cost** (`/dashboard/cost`), and plans 26-06→26-10
+> are **unchanged in substance**: the append-only spend ledger, reasoning/ingest instrumentation,
+> media reserve/actual/refund/unlanded, tenant projections + owner-only controls, and the connected
+> route. Rename and retitle only. **Cash** — revenue, invoices, runway — is a NEW surface owned by
+> **Phase 28**, which currently has 29 plans and **not one that renders a page**; it needs a new
+> "connected Cash route" plan shaped like 26-10. Neither page fabricates the other's numbers.
+>
+> **(2) Content NARROWS to an artifact shelf** — documents, reels, memos. **Sent mail moves to
+> Reports** (which already owns sends-per-day and review outcomes; Approvals' "Cleared" covers the
+> recent window). **Research briefs move to the Knowledge Vault** — they are cited grounding
+> material that goes stale, which is what the Vault is for. The channel/funnel/metrics scope the
+> mockup had put on Content moves to the **Marketing milestone** (ADR-015). Affects 26-11→26-13.
+>
+> **(3) Pipeline: the backing data gets built first.** Phase 19 is pulled forward (below). Note that
+> **Phase 19 SC#8 already owns the Pipeline route** — 26-18 remains nav integration only.
+>
+> **CONTRADICTION TO RESOLVE BEFORE PHASE 19 IS PLANNED:** the mockup's Pipeline tiles include
+> **"Open opportunities"** and **"Pipeline value"**. Both PIPE-01 and Phase 19 SC#8 explicitly forbid
+> them — *"does not invent opportunities, deal stages or monetary pipeline values."* Two of the
+> mockup's four tiles are things the requirement bans. Either the tiles come off the mockup or
+> PIPE-01 is amended to admit a deal-stage CRM. **The schema follows from that answer**, so it is
+> decided before planning, not during.
+
 **Goal:** Replace every remaining `pending-pages.html` placeholder with a tenant-safe, bounded and fully connected product surface, enabling each navigation entry only after its read model, governed actions, failure states, audit boundary and production verification path are real.
 **Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, HOME-01
 **External gate**: Phase 19 owns ACTN-05 and PIPE-01; Phase 26 consumes its approved Pipeline route/contracts only at the Pipeline integration wave.
@@ -200,6 +226,103 @@ Plans:
 - [ ] 30-08-PLAN.md — Shared candidate publication, provenance and eval integration (Wave 4)
 - [ ] 30-09-PLAN.md — Authenticated UAT and evidence-based exposure of at most two packs (Wave 5)
 - [ ] 30-10-PLAN.md — Six-pack activation/rollback drills, Bio scan and final owner gate (Wave 6)
+
+---
+
+## EXTERNAL BLOCKER (non-code, unscheduled): the legal entity
+
+**Status as of 2026-08-07: NOT STARTED.** Recorded here as a first-class roadmap item because it is
+not a coding task and therefore has never had a phase, yet it gates more product surface than any
+single phase does. `.planning/design/growth-surfaces-canvas-funnels-connections.md` §5.8 calls it
+"the highest-leverage non-code task in the project."
+
+What it blocks, simultaneously:
+
+| Dependent | Where |
+|---|---|
+| Google OAuth verification (privacy policy must name a real data controller) | already-deferred; caps Gmail Testing mode at a **7-day refresh-token lifetime**, which is why `SEND_TIME_HORIZON_MS` is 7 days |
+| Custom domain registrant + TLS | Phase 25 SC#6 |
+| Meta Business Verification, LinkedIn Marketing Developer Platform | Marketing **tranche B** (Phase 32) |
+| CASA assessment | Phase 25 posture |
+| Billing | post-beta commercialization |
+
+**Nothing downstream of this row can be scheduled by deciding it is important.** A plan that dates
+tranche B before the entity exists is wrong on its face.
+
+---
+
+## Milestone: Marketing (Phases 31-32) — PULLED PRE-BETA 2026-08-07
+
+*Owner decision 2026-08-07, recorded as `docs/decisions/015-marketing-milestone-pulled-pre-beta.md`.
+The Content page's channel/funnel/metrics scope moves here; Content narrows to an artifact shelf.*
+
+**This milestone is an explicit override of `PROJECT.md:51-53`'s admission rule** (no idea → phase
+without an evidence-backed Validated line; `PROJECT.md:49` still records `Validated: (None yet)`).
+The rule is not repealed and continues to govern every other idea. ADR-015 is the override record.
+
+**It also supersedes the 2026-07-31 refusals** of the funnel phase and of social publishing
+(`FEATURES.md:179`). ADR-015 §2 is load-bearing and is NOT superseded by the same stroke: a social
+post stages into the existing plan gate exactly as an email does. **Approve-once-for-many and
+standing pre-authorized rules stay deferred** (ADR-004 §56-58) — "auto-publishing" remains refused;
+what is admitted is human-approved publishing.
+
+**Execution position:** runs before Phase 25, alongside Phase 19 (which it depends on) and the
+remaining Phase 26 work where file ownership does not overlap. **Phase 25 slips by the duration of
+tranche A** — taken knowingly.
+
+### Phase 31: Marketing surface and funnel v0 (TRANCHE A — buildable now)
+
+**Goal:** A Marketing surface where the user manages outbound channels with Executive Agent
+assistance, honest about every channel not yet connectable, plus the link-only funnel that produces
+the first real click evidence this milestone was admitted without.
+**Requirements**: MKTG-01, MKTG-02, MKTG-03
+**Depends on:** Phase 19 (the one person store — contacts, `origin`, consent, `unsubscribedAt`, and
+the SEND-path suppression guard). **No dependency on the legal entity.**
+**Success Criteria** (what must be TRUE):
+  1. The Marketing route renders every planned channel with an honest state — connected, connectable,
+     or **blocked-with-reason** (naming the legal entity for tranche B channels). An unconnectable
+     channel never renders as a zero; BRAND §5's no-fabricated-numbers rule governs this page.
+  2. Funnel v0 is link-only and lives on the Convex `httpAction` plane, never a Next route: one
+     unguessable token → increment three integer counters (visits / claims / downloads) → 302 to
+     `ctx.storage.getUrl(...)`, with `?s=` source attribution. **This is the product's first
+     unauthenticated read** and ships with the review weight that deserves; `apps/web/middleware.ts`
+     is NOT widened.
+  3. A captured lead writes into Phase 19's single person store with `origin`, `consentAt` and
+     `consentSource` — never a second CRM plane, never a `contacts` bypass.
+  4. Agent assistance on this surface proposes; it does not publish. Every outbound action stages
+     into the existing plan gate.
+  5. No `funnelEvents`-style event table ships in this phase — three integer columns only
+     (`growth-surfaces...md` §4 item 8, relaxed by ADR-015 §4 for tranche B metrics ONLY).
+**Plans**: TBD
+
+### Phase 32: Channel connection, publishing and metrics (TRANCHE B — GATED)
+
+**Goal:** Connect real social channels, publish to them through the plan gate, and report per-post
+engagement — the half of the owner's 2026-08-07 request that external providers gate.
+**Requirements**: MKTG-04, MKTG-05, MKTG-06
+**Depends on:** **THE LEGAL ENTITY (see the blocker section above) — hard, external, not started.**
+Also Phase 31. Meta Business Verification and LinkedIn's Marketing Developer Platform both require a
+verified legal business before issuing API access; this phase cannot start at any priority until
+that clears. Each provider additionally carries its own suitability gate in the Phase 28 pattern
+(endpoint/OAuth/security/data-processing/rate-limit/terms review) — none is assumed eligible.
+**Success Criteria** (what must be TRUE):
+  1. Each social channel passes an independent suitability review and exposes tenant-scoped,
+     encrypted, revocable credentials with honest re-auth and error states.
+  2. Publishing and scheduling stage into the **existing** plan gate; deferred posts reuse the
+     shipped Phase 3.5 deferred-send machinery (one approved plan, one future instant, cancellable).
+     No new unattended authority is minted.
+  3. Per-post engagement metrics store **provider ids, counts and timestamps ONLY** — never post
+     text, never recipient identity. The refs-and-counts contract (CLAUDE.md §4) governs this table
+     as it governs audit. The table arrives WITH a connected channel, never empty and ahead of one.
+  4. A tenant can disconnect any channel with revocation at the provider, not merely a local token
+     delete (GOVN-03's standard, applied to every new provider).
+**Plans**: TBD (do not plan before the blocker clears)
+
+**Known sequencing gap — lead-to-sale conversion.** The owner's request included conversion from
+lead to sale. That attribution needs a payment/CRM rail, and those live in **Phase 28**, which is
+post-beta and depends on Phase 27 → Phase 25. So pre-beta Marketing delivers funnels and leads;
+**conversion-to-sale arrives with Phase 28 unless a read-only Stripe slice is separately pulled
+forward.** Recorded rather than silently assumed — it is an open owner decision.
 
 ---
 
@@ -949,6 +1072,15 @@ Plans:
 - [ ] 18-09-PLAN.md — Playbooks, the two ROADMAP contradictions, and the NON-NEGOTIABLE live gate: 4 turns proving the surfaces no offline test can see (Wave 7, has a blocking checkpoint)
 
 ### Phase 19: Contacts, CRM & Follow-ups
+
+> **PULLED FORWARD 2026-08-07 (owner decision).** Asked how to handle a Pipeline page with no
+> backing data, the owner chose to build the substrate first. This is a genuine unblock rather than
+> a reorder: Phase 19 gates **26-18** (Pipeline nav), **Phase 28** twice (28-17 readiness gate,
+> 28-10 CRM projections), and now **Phase 31** (Marketing tranche A needs the one person store for
+> lead capture). It is **0/TBD — no plans exist yet**, so it needs `/gsd:plan-phase 19` before any
+> work. Resolve the PIPE-01 "opportunities / pipeline value" contradiction recorded under Phase 26
+> BEFORE planning — the schema follows from it.
+
 **Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
 **Depends on**: Phase 15 (dispatch + executor)
 **Requirements**: ACTN-05, PIPE-01
@@ -1122,6 +1254,17 @@ Plans:
 **Execution Order:**
 Base phases retain numeric dependency order, with Phase 25 remaining the final beta-opening phase. Phase 26 is an explicitly pulled-forward product-surface lane: it begins after completed Phase 15.4, may run alongside non-overlapping Phase 16–20 work, pauses at 26-18 until Phase 19's ACTN-05/PIPE-01 gate is approved, then finishes Command Center before Phase 25.
 
+**Amended 2026-08-07 (owner).** Two more lanes now run before Phase 25, and Phase 25 slips by their
+duration — taken knowingly:
+- **Phase 19 is pulled forward** (contacts/leads/consent/suppression). It unblocks 26-18, Phase 28
+  (twice) and Phase 31. Needs planning first — 0/TBD.
+- **Phases 31-32 (Marketing) are pulled pre-beta** via ADR-015, overriding `PROJECT.md:51-53`'s
+  admission rule. **Phase 31 (tranche A) is schedulable; Phase 32 (tranche B) is NOT** — it is gated
+  on the legal entity, which is not started. See the EXTERNAL BLOCKER section above.
+
+Numeric order is not execution order and has not been for some time (Phase 26 established the
+precedent). Phases 31-32 are numbered after 30 and execute before 25.
+
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
@@ -1157,11 +1300,15 @@ Base phases retain numeric dependency order, with Phase 25 remaining the final b
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
 | 18. Document & Content Creation | 7/10 | In Progress (waves 1-5 complete: 18-01 pure-core format parameterization + `renderHtmlDocument`, 18-02 schema/trace registration surfaces, 18-03 ungated `content-drafter` v1, 18-04 vault write plane, 18-05 the `skillName`/`format` threading that makes `content-drafter` reachable, 18-06 the `createDocument` tool + the `create=` SMOKE op, 18-07 the Output card + the vault AGENT chip + the authored-not-run SC#6 spec; wave 6 next at 18-08, which is GATED on Phase 16 closing the shared `cockpit-agent` candidate stream) | 2026-08-01 |
-| 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
+| 19. Contacts, CRM & Follow-ups | 0/TBD | **Not started — PULLED FORWARD 2026-08-07**; needs `/gsd:plan-phase 19`. Unblocks 26-18, Phase 28 (×2) and Phase 31. Resolve the PIPE-01 opportunities/pipeline-value contradiction first | - |
 | 20. Media Canvas | 12/19 | In Progress (Waves 1-7 complete: 20-01 pure media core + price table, 20-02 schema/trace freeze, 20-13 the assemble contract, 20-03 the `media-director` skill row, 20-04 the media budget rail + the transactional job reservation, 20-18 the D5 reconciliation readers, 20-19 the scheduled vendor-drift detector, 20-05 the fal submit adapter, 20-06 the HMAC webhook + landing plane, 20-07 the `externalAction` arm, 20-08 the dispatch surface, 20-14 the voiceover stage; next is Wave 8 — 20-15 the token-free renderer, which carries a BLOCKING owner checkpoint on the Vercel tier and max sandbox duration) | 2026-08-02 |
 | 21. User-Authored Skills & Routines | 0/TBD | Not started | - |
 | 22. Owner Authorization Primitive | 3/3 | UAT: server boundary PROVEN live; DOM half outstanding | - |
 | 22.1 Beta Admission Readiness (INSERTED) | 2/3 | In Progress (22.1-01 disconnect owner live-verified; 22.1-02 per-tenant budget keying complete + smoke 7/7 live-verified 2026-08-01; CI/typecheck gate open) | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
-| 25. Private Beta Productionization | 0/TBD | Not started | - |
+| 25. Private Beta Productionization | 0/TBD | Not started — **slips**; two lanes (19, 31) now run ahead of it | - |
+| 26. Connected Product Pages | 4/20 | In progress — amended 2026-08-07 (Finance→Cost+Cash, Content narrowed, Pipeline deferred to Phase 19) | - |
+| **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
+| 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
+| 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |

@@ -10,7 +10,20 @@ decision: All four owner-requested capabilities are absorbed into EXISTING roadm
 
 # Design — Growth Surfaces: canvases, funnels, connections
 
-**Status:** decided (2026-07-31). This document is the decision record for four capabilities
+> **PARTIALLY SUPERSEDED 2026-08-07 by `docs/decisions/015-marketing-milestone-pulled-pre-beta.md`.**
+> The owner overrode this document's funnel and social refusals and pulled a Marketing milestone
+> in pre-beta. **Superseded: §4 item 7 (the rejected funnel phase), §4 item 8 (the rejected
+> `funnelEvents` table — relaxed narrowly for channel metrics only), and the "Social posting" and
+> "Funnel form + lead capture" entries in §6.** ADR-015 also records the legal entity (§5.8) as a
+> tracked roadmap blocker and splits the milestone on it.
+>
+> **STILL BINDING — do not treat this whole file as dead:** §1 (status quo, all four findings),
+> §2 (the panel protocol), §3.1/§3.2/§3.4, §4's other nine refusals, and all of §5's cross-cutting
+> prerequisites. §5.1 (suppression in the SEND path) and §5.8 (the legal entity) are load-bearing
+> for the superseding milestone itself. Deferred capabilities #2 and #3 in §6 remain deferred and
+> ADR-015 §2 re-states why.
+
+**Status:** decided (2026-07-31), partially superseded (2026-08-07 — see banner above). This document is the decision record for four capabilities
 the owner asked about on 2026-07-31: (a) agent-built landing pages with a live workspace
 canvas, (b) a dynamic workflow/automation generator with a canvas, (c) funnels that
 capture → nurture → convert leads with per-stage metrics, (d) a Configurations/Integrations

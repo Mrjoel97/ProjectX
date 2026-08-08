@@ -8,11 +8,14 @@ import { expect, test } from "@playwright/test";
 
 test("connect-gmail resolves to a bounded state (no eternal spinner)", async ({ page }) => {
   await page.goto("/connect-gmail");
-  await expect(page.getByRole("heading", { name: "Connect Gmail" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect Google" })).toBeVisible();
 
-  // Status resolves: either the consent CTA (unconnected/reconnect) or the "Gmail connected" panel.
+  // Status resolves: the consent CTA, the connected panel, or a bounded configuration warning.
   await expect(
-    page.getByRole("link", { name: /connect gmail/i }).or(page.getByText("Gmail connected")),
+    page
+      .getByRole("link", { name: /connect google/i })
+      .or(page.getByText("Google connected"))
+      .or(page.getByRole("alert")),
   ).toBeVisible({ timeout: 15_000 });
 
   // The loading placeholders are gone — neither the status probe nor the connect-URL mint hangs.

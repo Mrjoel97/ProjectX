@@ -202,14 +202,30 @@ describe("spend rails: per-tenant window + keyless deployment ceiling", () => {
 //
 // Every test below names the mutation that turns it red, and every one of those mutations was
 // actually run — a guarantee whose mutation does not break its test is not being sampled.
+// One 1 KB text file estimates this many cents at the CURRENT `DEFAULT_MODEL` input rate. It was 1
+// under `gpt-4o-mini` ($0.15/MTok), and the 2026-08-07 Gemini repoint doubled the rate to $0.30, so
+// the same file now costs 2. Until then files and cents were interchangeable numbers, and several
+// tests treated them as such — which is why the repoint reddened five of them at once.
+//
+// PINNED AS A LITERAL, DELIBERATELY. Deriving it from `PRICING` would make every assertion below
+// agree with itself and stop testing the rail's arithmetic at all — the vacuous-test failure this
+// repo has already been bitten by twice (docs/playbooks/vault.md). A future rate change SHOULD
+// redden these tests and force this constant to be re-read. It did exactly that TWICE: 2 when
+// DEFAULT_MODEL was gemini-3.5-flash (2026-08-07), back to 1 when the pin returned to gpt-4o-mini
+// on 2026-08-08 — a 1 KB text file costs half as much on the cheaper rate.
+//
+// MODULE SCOPE, not per-describe: `drainBothRails` in the cross-rail block builds its own manifest
+// and needs the same number. Two copies of a rate constant is exactly how one gets updated and the
+// other does not.
+const CENTS_PER_FILE = 1;
+/** A manifest of `files` 1 KB text files. Its estimate is `files * CENTS_PER_FILE`. */
+const manifestOf = (files: number) =>
+  Array.from({ length: files }, () => ({ size: 1_000, mimeType: "text/plain" }));
+/** Fewest whole files whose estimate reaches `cents` (estimates land on multiples of the rate). */
+const filesCosting = (cents: number) => Math.ceil(cents / CENTS_PER_FILE);
+
 describe("folder-ingest rail: reserve, refund, and never starving the cockpit", () => {
   const T = "tenant_folder";
-
-  /** A manifest that estimates to EXACTLY `cents`. One plain-text document costs one cent —
-   *  `recordSpend` charges `Math.ceil(costUsd * 100)` per call and graph extraction is sub-cent —
-   *  so N text files is N cents. The tests assert that, so this helper cannot go silently wrong. */
-  const manifestOf = (cents: number) =>
-    Array.from({ length: cents }, () => ({ size: 1_000, mimeType: "text/plain" }));
 
   const remaining = (t: ReturnType<typeof budgetHarness>, tenantId = T) =>
     t.query(internal.guardrails.ingestRemainingCents, { tenantId });
@@ -245,7 +261,7 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
 
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: T,
-      files: manifestOf(900),
+      files: manifestOf(filesCosting(900)),
     });
     expect(res.ok).toBe(true);
     expect(res.estCents).toBe(900); // the helper really does estimate what it claims
@@ -264,20 +280,23 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   // REJECTS with `count 2501 exceeds 2500` instead of resolving.
   test("a folder over the cap RESOLVES to a governed refusal — it does not throw", async () => {
     const t = budgetHarness();
-    const over = INGEST_DAILY_BUDGET_CENTS + 1;
+    // The smallest folder that still exceeds the cap. Files and cents are no longer the same
+    // number (CENTS_PER_FILE = 2), so the overshoot is one FILE — two cents — not one cent.
+    const overFiles = filesCosting(INGEST_DAILY_BUDGET_CENTS + 1);
+    const overCents = overFiles * CENTS_PER_FILE;
 
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: T,
-      files: manifestOf(over),
+      files: manifestOf(overFiles),
     });
 
     expect(res).toMatchObject({
       ok: false,
       reason: "over_folder_cap",
-      estCents: over,
+      estCents: overCents,
       remainingCents: INGEST_DAILY_BUDGET_CENTS,
-      shortfallCents: 1,
-      fileCount: over,
+      shortfallCents: overCents - INGEST_DAILY_BUDGET_CENTS,
+      fileCount: overFiles,
     });
     // NOTHING was consumed — a refusal is intact by construction, not by cleanup.
     expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS);
@@ -305,7 +324,10 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   // line -> RED, the second call refunds another 400 and the window reads 2400.
   test("settling twice does not credit twice", async () => {
     const t = budgetHarness();
-    await t.mutation(internal.guardrails.reserveFolder, { tenantId: T, files: manifestOf(900) });
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
     const folderId = await seedFolder(t, 400);
 
     const first = await t.mutation(internal.guardrails.settleFolder, { folderId });
@@ -329,7 +351,7 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   test("two folders that cannot both fit: one is reserved, one is refused truthfully", async () => {
     const t = budgetHarness();
     const half = Math.floor(INGEST_DAILY_BUDGET_CENTS * 0.6); // 1500 — two of these do not fit
-    const files = manifestOf(half);
+    const files = manifestOf(filesCosting(half));
 
     const [a, b] = await Promise.all([
       t.mutation(internal.guardrails.reserveFolder, { tenantId: T, files }),
@@ -418,12 +440,13 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
    */
   async function drainBothRails(t: ReturnType<typeof ingestHarness>): Promise<void> {
     await drainCockpit(t);
+    // Drain the ingest window to EXACTLY 0. This used to be `length: INGEST_DAILY_BUDGET_CENTS`,
+    // which worked only while one file cost one cent; at CENTS_PER_FILE = 2 that manifest costs
+    // double the cap and the reserve is REFUSED, so the fixture stopped draining anything and both
+    // tests below went red for the wrong reason.
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: TENANT,
-      files: Array.from({ length: INGEST_DAILY_BUDGET_CENTS }, () => ({
-        size: 1_000,
-        mimeType: "text/plain",
-      })),
+      files: manifestOf(filesCosting(INGEST_DAILY_BUDGET_CENTS)),
     });
     expect(res.ok).toBe(true);
     expect(await t.query(internal.guardrails.ingestRemainingCents, { tenantId: TENANT })).toBe(0);

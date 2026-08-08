@@ -1,7 +1,11 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified locally: 2026-08-04 (`pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` all exit 0)
-> PREVIOUSLY: 2026-08-01 against cc05d21
+> Last verified: 2026-08-07 (turbo env surface — **`globalPassThroughEnv` now carries
+> `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS`.** DIFF-REVIEWED ONLY: the four gate commands were
+> NOT re-run in this pass, so 2026-08-04 remains the last date they were observed to exit 0. The
+> change does not touch `ci.yml`, the scripts CI calls, or the task graph.)
+> PREVIOUSLY (gate actually executed): 2026-08-04 (`pnpm typecheck`, `pnpm lint`, `pnpm test`, and
+> `pnpm build` all exit 0) · 2026-08-01 against cc05d21
 > Build history: `.planning/phases/22.1-beta-admission-readiness-legal-deployment-ci-typechecking-and-identity-boundary-hardening/` · Related ADRs: none
 
 ## Purpose
@@ -37,6 +41,16 @@ Couplings that are not visible in the graph:
 - **`NEXT_PUBLIC_CONVEX_URL`** (repository *variable*) — consumed by the deployed client when set and
   declared in `turbo.json`'s `globalEnv`. The current production build succeeds without it, so an
   unset variable does not prevent pull requests or forks from verifying the repository.
+- **`CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS`** — declared in `turbo.json`'s
+  `globalPassThroughEnv`. Turbo filters the environment it hands to a task, so an env var set in the
+  shell does NOT reach a turbo-run task unless it is declared. The repo's local sqlite backend is
+  ~464 MB and exceeds Convex's 30 s default startup timeout, which is why `=180` appears in the
+  local-dev instructions (`docs/superpowers/plans/2026-08-02-connections-tab.md`, `22-03-SUMMARY.md`,
+  `15.3-01-SUMMARY.md`); the declaration is what makes that documented workaround actually take
+  effect through `pnpm dev`. It is `globalPassThroughEnv`, **not `globalEnv`, on purpose**: a startup
+  timeout changes no task output, so it must not enter the cache fingerprint and invalidate every
+  cached task when a developer changes it. **It is not a CI concern** — nothing in `ci.yml` sets it
+  and the gate contacts no Convex backend; do not add it to the workflow to "make CI match".
 - **No live Convex deployment is contacted by this gate.** Deployment credentials and availability
   must not decide whether typecheck, lint, unit tests, or the web production build can run.
 

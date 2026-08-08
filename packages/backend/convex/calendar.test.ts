@@ -85,6 +85,35 @@ describe("one Google consent flow", () => {
     );
   });
 
+  test("the client query returns a bounded unavailable state when OAuth env is incomplete", async () => {
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "client-id");
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://example.test/gmail/callback");
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+
+    await expect(
+      t.withIdentity({ subject: `${userId}|session_a` }).query(api.gmailAuth.gmailConnectUrl, {}),
+    ).resolves.toEqual({ configured: false, url: null });
+  });
+
+  test("the client query returns a signed URL when every OAuth env value is present", async () => {
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "client-id");
+    vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://example.test/gmail/callback");
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+
+    const result = await t
+      .withIdentity({ subject: `${userId}|session_a` })
+      .query(api.gmailAuth.gmailConnectUrl, {});
+    expect(result.configured).toBe(true);
+    expect(result.url).not.toBeNull();
+    expect(new URL(result.url ?? "").searchParams.get("state")).toMatch(
+      new RegExp(`^${userId}\\.[a-f0-9]{64}$`),
+    );
+  });
+
   test("buildAuthorizeUrl is the only Google authorize-URL construction in convex", () => {
     const constructions = Object.entries(convexSources).flatMap(([path, source]) =>
       [...source.matchAll(/accounts\.google\.com\/o\/oauth2/g)].map(() => path),

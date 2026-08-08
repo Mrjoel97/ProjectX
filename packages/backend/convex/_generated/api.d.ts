@@ -10,6 +10,7 @@
 
 import type * as agentSteps from "../agentSteps.js";
 import type * as aggregates from "../aggregates.js";
+import type * as approvals from "../approvals.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as blueprint from "../blueprint.js";
@@ -90,6 +91,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   agentSteps: typeof agentSteps;
   aggregates: typeof aggregates;
+  approvals: typeof approvals;
   audit: typeof audit;
   auth: typeof auth;
   blueprint: typeof blueprint;
