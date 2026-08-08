@@ -508,3 +508,232 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
     expect(doc?.text).toBe("folder member text");
   }, 30000);
 });
+
+// ── 26-07: LEDGER PARITY ───────────────────────────────────────────────────────────────
+//
+// The limiter is ENFORCEMENT truth; `spendEvents` is REPORTING truth. These tests pin the one
+// property that makes the second plane worth having: **every limiter movement has exactly one
+// ledger movement, carrying the SAME cents.** They drive the real rate-limiter component, because
+// asserting against a stub would prove the stub.
+//
+// The correlation policy under test, and why it is split in two:
+//   - REPLAYABLE sites (prepare, reserve, settle) derive a DETERMINISTIC correlation from refs, so
+//     re-entering them writes no second row.
+//   - `recordSpend` is reached from ACTIONS, where a re-entry re-spends for real. It mints a
+//     per-execution nonce when no correlation is supplied, which CANNOT under-count. Under-count is
+//     the unrecoverable direction: a duplicate is findable by reconciling against the limiter, a
+//     missing movement is indistinguishable from money that was never spent.
+describe("ledger parity: reasoning and ingest movements", () => {
+  const T = "tenant_ledger";
+  const events = (t: ReturnType<typeof budgetHarness>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  test("prepare writes ONE estimated movement; re-preparing the same request writes no second", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+    const requestId = await t.run((ctx) => ctx.db.insert("requests", { ...REQ, tenantId: T }));
+
+    const first = await t.mutation(internal.guardrails.prepare, { requestId });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error("expected ok");
+    expect(first.estCents).toBeGreaterThan(0); // the amount assertion below is not vacuous
+
+    const after = await events(t);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      tenantId: T,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: first.estCents,
+      correlationId: `req:${requestId}:prepare`,
+      requestId,
+    });
+
+    // The pipeline re-enters prepare on a regenerate; the estimate is the SAME estimate.
+    await t.mutation(internal.guardrails.prepare, { requestId });
+    expect(await events(t)).toHaveLength(1);
+  });
+
+  test("a refused prepare writes no movement at all — a governed stop is not a spend", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: true, budgetUsdPerRequest: 0.05 });
+    const requestId = await t.run((ctx) => ctx.db.insert("requests", { ...REQ, tenantId: T }));
+
+    expect(await t.mutation(internal.guardrails.prepare, { requestId })).toMatchObject({
+      ok: false,
+    });
+    expect(await events(t)).toHaveLength(0);
+    // Coverage never opened either, so this tenant reports Unknown — not an honest-looking zero.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeNull();
+  });
+
+  test("recordSpend writes ONE actual movement carrying the cents the limiter consumed", async () => {
+    const t = budgetHarness();
+    // $0.0015 -> Math.ceil -> 1 cent. The ledger must write the cents the LIMITER took, never a
+    // re-derived rounding: Math.round(0.15) is 0, which the ledger then refuses outright.
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.0015 });
+
+    const rows = await events(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ rail: "reasoning", phase: "actual", amountCents: 1 });
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: T })).toBe(
+      DAILY_BUDGET_CENTS - 1,
+    );
+  });
+
+  test("a second identical charge is a SECOND movement — a real re-spend is never suppressed", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+
+    // THE nonce property. Two real charges moved the limiter twice; the ledger must agree.
+    const rows = await events(t);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.correlationId)).size).toBe(2);
+    expect(rows.reduce((sum, r) => sum + r.amountCents, 0)).toBe(100);
+  });
+
+  test("a caller-supplied correlation makes a replay a no-op", async () => {
+    const t = budgetHarness();
+    const correlationId = "req:abc123:llm:draft:0";
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.25,
+      correlationId,
+    });
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.25,
+      correlationId,
+    });
+
+    expect(await events(t)).toHaveLength(1);
+    // The LIMITER still moved twice — it has no replay suppression and must not grow one here.
+    // That divergence is what reconciliation is FOR; it is not a defect to paper over.
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: T })).toBe(
+      DAILY_BUDGET_CENTS - 50,
+    );
+  });
+
+  test("a zero-cost run moves neither plane", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0 });
+
+    expect(await events(t)).toHaveLength(0);
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeNull();
+  });
+
+  test("the ingest rail records ingest, not reasoning", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.4,
+      rail: "ingest",
+      kind: "ingest_fold",
+    });
+
+    expect((await events(t))[0]).toMatchObject({
+      rail: "ingest",
+      phase: "actual",
+      amountCents: 40,
+    });
+  });
+});
+
+describe("ledger parity: folder reservation, refund and the rolled window", () => {
+  const T = "tenant_folder_ledger";
+  const events = (t: ReturnType<typeof budgetHarness>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  const seedFolderRow = (
+    t: ReturnType<typeof budgetHarness>,
+    reservedCents: number,
+    reservedAt: number,
+  ): Promise<Id<"vaultFolders">> =>
+    t.run((ctx) =>
+      ctx.db.insert("vaultFolders", {
+        tenantId: T,
+        name: "folder",
+        source: "upload" as const,
+        status: "ingesting" as const,
+        memberCount: 0,
+        terminalCount: 0,
+        failedCount: 0,
+        reservedCents,
+        spentCents: 0,
+        reservedAt,
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("reserve writes ONE reserved movement stamped with the reservedAt it returned", async () => {
+    const t = budgetHarness();
+    const folderId = await seedFolderRow(t, 0, Date.now());
+
+    const res = await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+      folderId,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("expected ok");
+
+    const rows = await events(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      rail: "ingest",
+      phase: "reserved",
+      amountCents: 900,
+      folderId,
+      // THE stamp settle rebuilds its correlation from. If reserve stamps a different instant than
+      // the one it returns, settle can never match it and every refund writes an orphan row.
+      correlationId: `f:${folderId}:${res.reservedAt}`,
+    });
+  });
+
+  test("settle writes ONE refunded movement, and settling twice writes no second", async () => {
+    const t = budgetHarness();
+    const reservedAt = Date.now();
+    const folderId = await seedFolderRow(t, 400, reservedAt);
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
+
+    const first = await t.mutation(internal.guardrails.settleFolder, { folderId });
+    const second = await t.mutation(internal.guardrails.settleFolder, { folderId });
+
+    expect(first.refundedCents).toBe(400);
+    expect(second).toMatchObject({ reason: "already_settled" });
+    const refunds = (await events(t)).filter((r) => r.phase === "refunded");
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0]).toMatchObject({
+      rail: "ingest",
+      amountCents: 400,
+      folderId,
+      correlationId: `f:${folderId}:${reservedAt}`,
+    });
+  });
+
+  test("a rolled window refunds nothing, writes NO movement, and leaves the money unlanded", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
+    // A reservation stamped at the epoch is unambiguously before the current window start, which
+    // is exactly what refundableCents refuses to credit — the window it would refund into never
+    // took the money.
+    const folderId = await seedFolderRow(t, 400, 0);
+
+    const res = await t.mutation(internal.guardrails.settleFolder, { folderId });
+
+    expect(res.refundedCents).toBe(0);
+    // A zero-cent movement is REJECTED by validateSpendMovement, and that throw would run inside
+    // tryComplete's transaction — folder completion would fail for an accounting reason. So the
+    // ledger write lives strictly inside the existing `refundedCents > 0` branch.
+    expect((await events(t)).filter((r) => r.phase === "refunded")).toHaveLength(0);
+    // The truth is still tellable: reserved 900, refunded 0 -> aggregateSpend reports 900 unlanded.
+    expect(res.reason).toBe("settled_window_rolled");
+  });
+});

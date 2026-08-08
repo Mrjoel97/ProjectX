@@ -14,8 +14,8 @@
 // Arithmetic and trust-boundary validation live in `@pikar/core` (`spend.ts`) so they are
 // testable without Convex (CLAUDE.md §1). Only storage decisions live here.
 import { validateSpendMovement } from "@pikar/core";
-import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import { type ObjectType, v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 
 const railValidator = v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest"));
@@ -54,6 +54,23 @@ export const startCoverage = internalMutation({
   handler: (ctx, args) => ensureCoverage(ctx, args.tenantId, args.nowMs),
 });
 
+const movementArgs = {
+  tenantId: v.string(),
+  rail: railValidator,
+  phase: phaseValidator,
+  amountCents: v.number(),
+  correlationId: v.string(),
+  createdAt: v.number(),
+  planId: v.optional(v.id("plans")),
+  requestId: v.optional(v.id("requests")),
+  folderId: v.optional(v.id("vaultFolders")),
+  mediaJobId: v.optional(v.id("mediaJobs")),
+  model: v.optional(v.string()),
+  kind: v.optional(v.string()),
+};
+
+export type SpendMovementArgs = ObjectType<typeof movementArgs>;
+
 /**
  * Record one money movement, exactly once.
  *
@@ -64,46 +81,44 @@ export const startCoverage = internalMutation({
  *
  * A replay returns the id already stored and ignores the replayed amount: a retry reporting a
  * different number is a bug upstream, and letting it through would rewrite recorded money.
+ *
+ * This is the PLAIN-FUNCTION half, for a caller ALREADY INSIDE a mutation — which is every
+ * instrumented money movement, because the point is that the limiter movement and its ledger row
+ * commit or fail together. `guardrails.recordSpend` consumes this directly; a separate
+ * `ctx.runMutation` would be a second transaction and could leave the limiter moved with no row.
+ * (The `reserveFolderInner`/`reserveFolder` split in guardrails.ts, verbatim.)
  */
+export async function recordMovement(
+  ctx: MutationCtx,
+  args: SpendMovementArgs,
+): Promise<Id<"spendEvents">> {
+  // Validate BEFORE coverage is opened, so a rejected movement leaves nothing behind.
+  validateSpendMovement({
+    rail: args.rail,
+    phase: args.phase,
+    amountCents: args.amountCents,
+    correlationId: args.correlationId,
+    model: args.model,
+    kind: args.kind,
+  });
+
+  const existing = await ctx.db
+    .query("spendEvents")
+    .withIndex("by_correlation", (q) => q.eq("correlationId", args.correlationId))
+    .take(CORRELATION_SCAN_LIMIT);
+  // `by_correlation` is not tenant-scoped, so the tenant check is part of the identity here.
+  const already = existing.find(
+    (row) => row.tenantId === args.tenantId && row.phase === args.phase,
+  );
+  if (already) return already._id;
+
+  await ensureCoverage(ctx, args.tenantId, args.createdAt);
+  return await ctx.db.insert("spendEvents", args);
+}
+
 export const record = internalMutation({
-  args: {
-    tenantId: v.string(),
-    rail: railValidator,
-    phase: phaseValidator,
-    amountCents: v.number(),
-    correlationId: v.string(),
-    createdAt: v.number(),
-    planId: v.optional(v.id("plans")),
-    requestId: v.optional(v.id("requests")),
-    folderId: v.optional(v.id("vaultFolders")),
-    mediaJobId: v.optional(v.id("mediaJobs")),
-    model: v.optional(v.string()),
-    kind: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    // Validate BEFORE coverage is opened, so a rejected movement leaves nothing behind.
-    validateSpendMovement({
-      rail: args.rail,
-      phase: args.phase,
-      amountCents: args.amountCents,
-      correlationId: args.correlationId,
-      model: args.model,
-      kind: args.kind,
-    });
-
-    const existing = await ctx.db
-      .query("spendEvents")
-      .withIndex("by_correlation", (q) => q.eq("correlationId", args.correlationId))
-      .take(CORRELATION_SCAN_LIMIT);
-    // `by_correlation` is not tenant-scoped, so the tenant check is part of the identity here.
-    const already = existing.find(
-      (row) => row.tenantId === args.tenantId && row.phase === args.phase,
-    );
-    if (already) return already._id;
-
-    await ensureCoverage(ctx, args.tenantId, args.createdAt);
-    return await ctx.db.insert("spendEvents", args);
-  },
+  args: movementArgs,
+  handler: (ctx, args) => recordMovement(ctx, args),
 });
 
 /** The tenant's coverage start, or null when instrumentation never began (unknown, not zero). */
