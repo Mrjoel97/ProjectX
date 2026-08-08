@@ -1,5 +1,15 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
+> end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
+> (`STALE_RUN_MS`, with a reduced-motion fallback that swaps the breath for a static indicator),
+> recency dims in the same stepped fresh/recent/quiet bands `aggregatePulse` already computes, and
+> the readout line renders `composeReadout` verbatim rather than re-deriving it in the UI. Anatomy:
+> the Outcomes band now shows `runs30d`, last-run time and median duration instead of the "Not
+> measured yet" placeholder, and Process gains a Running-right-now / Last-ran line per specialist
+> segment. The interactive walkthrough (watching the dot breathe during a live dispatch) stays a
+> human verification step, not an automated one.
+>
 > Last verified: 2026-08-08 (blueprint-pulse task 3 — `packages/backend/convex/blueprint.ts`
 > `blueprintPulse` + the `agentSteps.by_tenant_tool_startedAt` index, TDD, 2/2 green.) The Convex
 > wiring task 2's header forward-referenced: a `tenantQuery` with one arg (`now`) that reads
