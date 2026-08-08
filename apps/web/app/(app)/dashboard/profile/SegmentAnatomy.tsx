@@ -1,11 +1,11 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BlueprintSegment, type BusinessBlueprint, FIELD_SPEC } from "@pikar/core";
+import { type BlueprintSegment, type BusinessBlueprint, FIELD_SPEC, SPECIALISTS } from "@pikar/core";
 import { useAction } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SEGMENT_COPY } from "./segmentCopy";
+import { SEGMENT_COPY, joinPhrases } from "./segmentCopy";
 import { label } from "./styles";
 
 const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" };
@@ -27,6 +27,52 @@ function Band({ title, children }: { title: string; children: React.ReactNode })
         {title}
       </span>
       {children}
+    </div>
+  );
+}
+
+/** User-facing names for the capability grant's tool ids. Only user-meaningful tools appear;
+ *  an id with no entry here (e.g. `declareUnsupported`, an internal refusal channel) renders
+ *  nothing rather than leaking an internal name. */
+const TOOL_LABELS: Record<string, string> = {
+  searchVault: "your vault documents",
+  webResearch: "live web research",
+};
+
+function ProcessBand({ segment }: { segment: BlueprintSegment }) {
+  if (segment.specialist === null) {
+    return (
+      <p style={soft}>
+        No agent owns this section — it's yours. Facts here come from your profile and your
+        documents.
+      </p>
+    );
+  }
+  const grant = SPECIALISTS[segment.specialist];
+  const tools = grant.tools
+    .map((t) => TOOL_LABELS[t])
+    .filter((t): t is string => t !== undefined);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.9rem",
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <strong style={{ display: "block", fontSize: "0.9rem", color: "var(--ink)" }}>
+          {segment.specialist}
+        </strong>
+        <span style={{ ...soft, fontSize: "0.83rem" }}>
+          {tools.length > 0
+            ? `Works from ${joinPhrases(tools)}; anything it sends stops at your approval.`
+            : "Anything it sends stops at your approval."}
+        </span>
+      </span>
+      <AskSpecialist segment={segment} />
     </div>
   );
 }
@@ -95,6 +141,10 @@ export function SegmentAnatomy({
             </div>
           );
         })}
+      </Band>
+
+      <Band title="Process">
+        <ProcessBand segment={segment} />
       </Band>
     </section>
   );
