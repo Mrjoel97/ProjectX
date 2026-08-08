@@ -216,6 +216,15 @@ export function SegmentAnatomy({
       <Band title="Tools">
         <ToolsBand segment={segment} />
       </Band>
+
+      <Band title="Outcomes">
+        {/* Slice 2 (pulse layer) replaces this with real aggregates: emails delivered, plans
+            completed, and how recently — spec §3.1. Honest deferral until then, never a fake count. */}
+        <p style={{ ...soft, fontSize: "0.83rem" }}>
+          Not measured yet. When outcome tracking lands, what this section actually shipped —
+          emails delivered, plans completed — appears here with how recent it is.
+        </p>
+      </Band>
     </section>
   );
 }
