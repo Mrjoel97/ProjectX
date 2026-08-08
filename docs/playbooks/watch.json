@@ -45,7 +45,9 @@
     "packages/core/src/blueprintPulse.test.ts",
     "packages/backend/convex/blueprintPulse.test.ts",
     "packages/core/src/goals.ts",
-    "packages/core/src/goals.test.ts"
+    "packages/core/src/goals.test.ts",
+    "packages/backend/convex/goals.ts",
+    "packages/backend/convex/goals.test.ts"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
