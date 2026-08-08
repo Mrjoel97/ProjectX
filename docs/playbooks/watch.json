@@ -42,7 +42,8 @@
     "packages/core/src/blueprintSegments.ts",
     "packages/core/src/blueprintSegments.test.ts",
     "packages/core/src/blueprintPulse.ts",
-    "packages/core/src/blueprintPulse.test.ts"
+    "packages/core/src/blueprintPulse.test.ts",
+    "packages/backend/convex/blueprintPulse.test.ts"
   ],
   "agent-runtime.md": [
     "packages/backend/convex/opsSignals.ts",
