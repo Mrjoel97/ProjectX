@@ -75,7 +75,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
   6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
   7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
-**Plans:** 7/20 plans executed
+**Plans:** 8/20 plans executed
 
 Plans:
 - [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
@@ -1308,7 +1308,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/TBD | Not started — **slips**; two lanes (19, 31) now run ahead of it | - |
-| 26. Connected Product Pages | 7/20 | In Progress|  |
+| 26. Connected Product Pages | 8/20 | In Progress|  |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
