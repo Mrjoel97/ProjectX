@@ -302,7 +302,13 @@ function BlueprintReport({
         />
       )}
 
-      {openSegment && <SegmentAnatomy segment={openSegment} blueprint={blueprint} />}
+      {openSegment && (
+        <SegmentAnatomy
+          segment={openSegment}
+          blueprint={blueprint}
+          pulse={pulse?.segments[openSegment.id]}
+        />
+      )}
 
       {rebuild !== null && (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>{rebuild}</div>

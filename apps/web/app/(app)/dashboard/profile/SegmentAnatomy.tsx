@@ -5,6 +5,7 @@ import {
   type BlueprintSegment,
   type BusinessBlueprint,
   FIELD_SPEC,
+  type SegmentPulse,
   SPECIALISTS,
 } from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
@@ -45,6 +46,13 @@ const TOOL_LABELS: Record<string, string> = {
   searchVault: "your vault documents",
   webResearch: "live web research",
 };
+
+/** "3 minutes" / "40 seconds" — durations are typical-run scale, so two units suffice. */
+const fmtDuration = (ms: number): string =>
+  ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${Math.max(1, Math.round(ms / 1000))} sec`;
+
+const fmtWhen = (at: number): string =>
+  new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(at));
 
 function ToolRow({ name, state, detail }: { name: string; state: string; detail?: string }) {
   // Name and state share one non-wrapping line; the detail sits below at full width. A single
@@ -111,7 +119,7 @@ function ToolsBand({ segment }: { segment: BlueprintSegment }) {
   );
 }
 
-function ProcessBand({ segment }: { segment: BlueprintSegment }) {
+function ProcessBand({ segment, pulse }: { segment: BlueprintSegment; pulse?: SegmentPulse }) {
   if (segment.specialist === null) {
     return (
       <p style={soft}>
@@ -141,6 +149,13 @@ function ProcessBand({ segment }: { segment: BlueprintSegment }) {
             ? `Works from ${joinPhrases(tools)}; anything it sends stops at your approval.`
             : "Anything it sends stops at your approval."}
         </span>
+        {pulse !== undefined && (pulse.inFlight > 0 || pulse.lastActivityAt !== null) && (
+          <span style={{ ...soft, fontSize: "0.78rem", display: "block" }}>
+            {pulse.inFlight > 0
+              ? "Running right now."
+              : `Last ran ${fmtWhen(pulse.lastActivityAt as number)}.`}
+          </span>
+        )}
       </span>
       <AskSpecialist segment={segment} />
     </div>
@@ -150,9 +165,11 @@ function ProcessBand({ segment }: { segment: BlueprintSegment }) {
 export function SegmentAnatomy({
   segment,
   blueprint,
+  pulse,
 }: {
   segment: BlueprintSegment;
   blueprint: BusinessBlueprint;
+  pulse?: SegmentPulse;
 }) {
   const populated = segment.fields.filter((f) => blueprint[f] !== null);
 
@@ -214,7 +231,7 @@ export function SegmentAnatomy({
       </Band>
 
       <Band title="Process">
-        <ProcessBand segment={segment} />
+        <ProcessBand segment={segment} pulse={pulse} />
       </Band>
 
       <Band title="Tools">
@@ -222,12 +239,24 @@ export function SegmentAnatomy({
       </Band>
 
       <Band title="Outcomes">
-        {/* Slice 2 (pulse layer) replaces this with real aggregates: emails delivered, plans
-            completed, and how recently — spec §3.1. Honest deferral until then, never a fake count. */}
-        <p style={{ ...soft, fontSize: "0.83rem" }}>
-          Not measured yet. When outcome tracking lands, what this section actually shipped — emails
-          delivered, plans completed — appears here with how recent it is.
-        </p>
+        {segment.specialist === null ? (
+          <p style={{ ...soft, fontSize: "0.83rem" }}>
+            Nothing runs here on its own — this section moves when you update your profile or your
+            documents.
+          </p>
+        ) : pulse === undefined ? (
+          <p style={{ ...soft, fontSize: "0.83rem" }}>Checking…</p>
+        ) : pulse.runs30d === 0 ? (
+          <p style={{ ...soft, fontSize: "0.83rem" }}>
+            No {segment.specialist} runs in the last 30 days.
+          </p>
+        ) : (
+          <p style={{ ...soft, fontSize: "0.83rem" }}>
+            {pulse.runs30d} run{pulse.runs30d === 1 ? "" : "s"} in the last 30 days
+            {pulse.lastActivityAt !== null ? ` · last ${fmtWhen(pulse.lastActivityAt)}` : ""}
+            {pulse.medianRunMs !== null ? ` · typical run ${fmtDuration(pulse.medianRunMs)}` : ""}.
+          </p>
+        )}
       </Band>
     </section>
   );
