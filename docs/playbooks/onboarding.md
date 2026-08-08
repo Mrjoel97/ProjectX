@@ -1,5 +1,23 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-08 (blueprint-pulse task 3 — `packages/backend/convex/blueprint.ts`
+> `blueprintPulse` + the `agentSteps.by_tenant_tool_startedAt` index, TDD, 2/2 green.) The Convex
+> wiring task 2's header forward-referenced: a `tenantQuery` with one arg (`now`) that reads
+> `agentSteps` per specialist segment through the NEW compound index
+> (`["tenantId", "tool", "startedAt"]` — one indexed range read per dispatch-owning segment,
+> never a tenant-wide scan), narrows each row into a `PulseStep` (tool/phase/startedAt/endedAt/
+> durationMs — counts and timestamps only, the D6 redaction-safe boundary enforced at the query's
+> own return type), and folds them through `@pikar/core`'s `aggregatePulse`. Globals
+> (`sent30d`/`plansDone30d`/`plansInFlight`) reuse the EXISTING `requests.by_tenant_status_createdAt`
+> and `plans.by_tenant_status_createdAt` indexes — no new index needed on either table.
+> `plansInFlight` sums three status buckets (`collecting`/`proposed`/`delivering`) rather than a
+> single indexed range, since "in flight" is not one status. Both tests assert cross-tenant
+> isolation (a sibling tenant's steps/requests/plans never bleed into the caller's counts) and the
+> window/status math (`inFlight` only counts a `running` step; `runs30d` and `plansDone30d` are
+> exact bounded counts, not `.collect().length` over an unbounded scan — every read here goes
+> through an index). UI consumption (the Outcomes band on `SegmentAnatomy.tsx`) is still NOT wired
+> — this task lands the Convex read only.
+>
 > Last verified: 2026-08-08 (blueprint-pulse task 2 — `packages/core/src/blueprintPulse.ts`, TDD,
 > 8/8 green.) The ACTIVITY layer the blueprint-anatomy note above forward-referenced ("Outcomes
 > stays an honest 'Not measured yet' placeholder until slice 2's pulse aggregates land"). Pure
