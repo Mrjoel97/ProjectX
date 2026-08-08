@@ -42,6 +42,7 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
+import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { sealedIn } from "./vaultFolders";
@@ -687,7 +688,14 @@ export const spineForTenant = internalQuery({
       if (live === null) return null;
       const blueprint = deserializeBlueprint(live.text);
       const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
-      return renderSpine(blueprint, { unincorporatedCount: count });
+      const goalRows = await ctx.db
+        .query("goals")
+        .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
+        .collect();
+      return renderSpine(blueprint, {
+        unincorporatedCount: count,
+        goals: goalRows.map(toGoal),
+      });
     } catch {
       return null;
     }
