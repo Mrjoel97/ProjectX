@@ -26,7 +26,7 @@ doesn't count.
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D1 | **Activity attributes to a segment by ONE rule**: `requests.route === segment.specialist` (and a plan's requests via `planId`). Segments with `specialist: null` (Foundation, Direction) show knowledge/goal activity only. | Keyword/heuristic matching of run content to segments — a ranking heuristic that drifts, and it would need content reads where counts suffice. |
+| D1 | **Amended 2026-08-08 (pre-implementation):** activity attributes to a segment via the dispatch trace — an `agentSteps` row whose `tool` equals `SPECIALISTS[segment.specialist].stepTool`. The original rule (`requests.route === segment.specialist`) is unimplementable: `requests.route` persists the Executive Router's `direct_llm \| sub_agent \| direct_tool` decision (`pipeline.ts`), never a specialist name. Segments with `specialist: null` show no run pulse — no signal exists, and inventing one would violate D2. | Keyword/heuristic matching of run content to segments — a ranking heuristic that drifts, and it would need content reads where counts suffice. |
 | D2 | **Pulse is real state only.** A node breathes iff a non-terminal run is in flight *now*; brightness follows last-activity recency; a wire animates when work actually flowed. No ambient/timer animation. | Decorative motion. The moment one pulse is fake, all pulses are (the `bp-wire-flow` precedent — motion that reports state). |
 | D3 | **Goals are a NEW table**, not new blueprint fields. The 11-field set stays closed (17.1 owner decision — diff and spine budgets depend on it). Goals reach agents via a separate spine section, not via `BLUEPRINT_FIELDS`. | Reopening the closed field set; stuffing dates into `primaryGoals` prose. |
 | D4 | **Drill-down is a fixed four-band anatomy** (Knowledge / Process / Tools / Outcomes) rendered in the existing detail area — every segment the same shape, populated only by what's real. | A free-form sub-diagram per section: unbounded design surface, and empty sections would need fake content. |
@@ -38,21 +38,27 @@ doesn't count.
 ### 3.1 Backend: `blueprint.blueprintPulse` (query)
 
 Thin adapter (CLAUDE.md §1) over existing tables; per-segment aggregation is a pure core helper
-(`packages/core/src/blueprintPulse.ts`) fed with already-narrowed rows. Returns, per segment id:
+(`packages/core/src/blueprintPulse.ts`) fed with already-narrowed rows. Returns:
 
 ```
 {
-  inFlight: number        // requests in a non-terminal status, attributed by D1
-  lastActivityAt: number | null  // newest createdAt across attributed requests/plans
-  sent30d: number         // requests with status "sent" in the last 30 days
-  plansDone30d: number    // plans reaching "done" in the last 30 days
+  segments: Record<segmentId, {
+    inFlight: number        // dispatch steps running right now (started < STALE_RUN_MS ago)
+    lastActivityAt: number | null  // newest startedAt/endedAt across the segment's dispatch steps
+    runs30d: number         // completed (done|error) dispatch steps in the window
+    medianRunMs: number | null     // median durationMs of done runs — "how long a workflow takes"
+  }>,
+  globals: {
+    sent30d: number         // requests reaching "sent", tenant-wide (not per segment — see D1)
+    plansDone30d: number    // plans reaching "done" in the last 30 days
+    plansInFlight: number   // plans in collecting|proposed|delivering right now
+  }
 }
 ```
 
-Non-terminal request statuses: `submitted | routing | scanning | drafting | awaiting_review |
-approved | delivering` (the pinned enum, `schema.ts:130`). In-flight plan statuses: `collecting |
-proposed | delivering`. The status sets live in core beside the aggregation so the test can assert
-they partition the pinned enums — a new pipeline status is a failing test, not a silent miss.
+**Amended 2026-08-08 (pre-implementation):** per-segment email counts were dropped with the D1
+amendment — a request does not carry a specialist attribution. Tenant-wide outcome counts feed the
+status readout instead.
 
 `now` is passed in from the client for the 30-day window (queries are deterministic; the
 `Date.now()`-in-query trap).
@@ -88,7 +94,7 @@ segment; a band with nothing real says so in words (honest zeros, BRAND §5).
 | Knowledge | today's field rows verbatim (label, values, origin line) | existing `BlueprintPanel` detail |
 | Process | the owning specialist, its last run's status + when, and **"Ask <specialist> →"** | `segment.specialist`, pulse aggregates; the button routes to the cockpit with the specialist preselected |
 | Tools | connections this section runs on: Gmail (connected state), and blocked rows **with their stored reason** | existing connections surface + `connections.ts` `BLOCKED` |
-| Outcomes | shipped artifacts as counts with recency: "4 emails delivered · last 2 days ago", "1 plan completed" | pulse aggregates (`sent30d`, `plansDone30d`, `lastActivityAt`) |
+| Outcomes | **Amended 2026-08-08:** the specialist's shipped runs: count in the last 30 days, recency, and typical (median) duration — measured from the dispatch trace. Tenant-wide delivery counts live in the status readout, not per segment (D1 amendment). | pulse aggregates (`runs30d`, `medianRunMs`, `lastActivityAt`, per segment) |
 
 `specialist: null` segments render Process as "No agent owns this section — it's yours," which is
 true and reads as a feature.
