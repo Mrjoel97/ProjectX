@@ -22,12 +22,30 @@ function compact(value: string): string {
   return value.replace(/\s+/g, " ");
 }
 
+/**
+ * Whitespace-FREE, for a declaration the formatter is free to wrap.
+ *
+ * `compact` collapses runs of whitespace to one space, so it still sees the difference between
+ * `v.optional( v.union(...), )` and `v.optional(v.union(...))` — which are the SAME schema, wrapped
+ * two ways. A one-line declaration that grows past the print width (or shrinks back under it when
+ * an unrelated field is renamed) then turns this suite red for a formatting change, which is what
+ * happened on 2026-08-08: `b74c7af` collapsed `cancelKind` onto one line and broke a Phase-26 gate
+ * without touching the schema's meaning. A source scan must pin the DECLARATION, not the print
+ * width — use this for any assertion whose expected string spans a possible line break.
+ */
+function dense(value: string): string {
+  // The trailing comma is part of the same problem: the formatter ADDS one when it wraps a call
+  // across lines and REMOVES it when the call fits on one, so `("adjustment"),)` and
+  // `("adjustment"))` are the identical declaration printed two ways.
+  return value.replace(/\s+/g, "").replace(/,\)/g, ")");
+}
+
 describe("Phase 26 additive dashboard schema", () => {
   test("pins cancellation, progress, and the tenant/status/time Approvals index", () => {
     const plans = compact(tableBlock("plans"));
 
-    expect(plans).toContain(
-      'cancelKind: v.optional( v.union(v.literal("scheduled_cancel"), v.literal("discarded")), )',
+    expect(dense(plans)).toContain(
+      dense('cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded")))'),
     );
     for (const field of [
       "canceledAt",
@@ -51,8 +69,12 @@ describe("Phase 26 additive dashboard schema", () => {
     expect(events).toContain(
       'rail: v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest"))',
     );
-    expect(events).toContain(
-      'phase: v.union( v.literal("estimated"), v.literal("reserved"), v.literal("actual"), v.literal("refunded"), v.literal("adjustment"), )',
+    // Same trap as `cancelKind` above: this union is long enough that the formatter wraps it, and
+    // a re-wrap is not a schema change. Pinned whitespace-free.
+    expect(dense(events)).toContain(
+      dense(
+        'phase: v.union(v.literal("estimated"), v.literal("reserved"), v.literal("actual"), v.literal("refunded"), v.literal("adjustment"))',
+      ),
     );
     for (const required of [
       "tenantId: v.string()",

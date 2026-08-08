@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-08 against 9c9555b (+ Plan 26-06 spend ledger core)
+> Last verified: 2026-08-08 (Plans 26-06 spend ledger core + 26-07 reasoning/ingest instrumentation)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -242,6 +242,16 @@ decides whether a spend may happen, and nothing here may be relaxed to make a re
 - **Rollback rule, non-negotiable.** Finance may hide its route and owner controls. It may **not**
   stop ledger instrumentation: an append-only history has no backfill, so a dark window is a
   permanent hole in the record.
+- **Who writes (26-07).** The reasoning and ingest rails are instrumented at their limiter, inside
+  the same transaction, via `spendLedger.recordMovement` — the plain-function half of `record`. The
+  writers, the correlation policy and what is deliberately NOT recorded live in
+  `docs/playbooks/guardrails.md` §"Phase 26"; Finance is a READER and must not re-derive any of it.
+  The media rail is 26-08 and is not instrumented yet, so a media window is still `unknown`.
+- **A schema source scan must pin the DECLARATION, not the print width.** `dashboardSchema.test.ts`
+  compares whitespace-free and normalizes the trailing comma before `)`, because the formatter adds
+  one when it wraps a call across lines and drops it when the call fits on one. Commit `b74c7af`
+  re-wrapped `cancelKind` onto a single line and turned this gate red without changing the schema's
+  meaning; `dense()` exists so that cannot happen again, and it still goes red on a real change.
 
 ## How to change safely
 
