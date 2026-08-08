@@ -1,5 +1,46 @@
 # Playbook: Email Chat Cockpit
 
+> **THE `agentSteps.tool` CLOSED UNION IS NOW GUARDED STRUCTURALLY (2026-08-08).** `schema.ts`
+> warned about this trap twice in PROSE — a tool whose name has no literal makes `agentSteps:record`
+> throw `ArgumentValidationError`, and the AI SDK SWALLOWS callback throws, so the step vanishes in
+> PROD while the whole suite stays green. It happened anyway, twice more: `recordScorecardAnswer`
+> (found in eval logs) and **`resetPlan`, which nobody knew about — the new guard test found it the
+> first time it ran.** Every "cancel and start over" turn had been losing its trace step silently.
+> `cockpitTools.test.ts` now scans every `<name>: tool(` key in `buildCockpitTools` and fails if any
+> lacks a literal, with non-vacuity floors on both lists so a restructure fails loudly instead of
+> passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
+> comment is not a guard; a test is.
+
+> Last verified: 2026-08-08 — **A MODEL-SUPPLIED ARGUMENT IS NOT CONTROL FLOW: `createDocument`'s
+> `replace`.** The live model sends `replace` on EVERY call, including the FIRST, when the
+> conversation holds no created documents at all. The tool obeyed it, routed a create down
+> `patchCreatedDoc`, and that mutation refused CORRECTLY ("there's no document #1") — so nothing was
+> ever created, the agent read the honest refusal as "try again", and looped: **thirteen tool calls
+> in a two-turn fixture, every one recorded `done`, zero documents.** Every component was behaving
+> perfectly in isolation; the whole defect was trusting one model-supplied integer. Fix:
+> `effectiveReplace = docIds.length === 0 ? undefined : replace` — with ZERO created documents
+> `replace` cannot denote anything, so it is NOISE, not a refusal case. **Do not widen this to every
+> out-of-range index:** once documents exist, an out-of-range `replace` keeps its honest refusal,
+> because there the user may genuinely mean a document numbered differently, and creating a second
+> document when a revision was asked for is the failure the paired tests exist to keep apart. Both
+> directions are pinned in `cockpitTools.test.ts` and mutation-verified RED.
+>
+> **This is the `confirmed`-flag principle, and it was already written down.** 18-08 gave
+> `createDocument` no `confirmed` argument precisely because "a model-supplied confirmation flag is
+> the model grading its own trigger" — but `replace` predated that reasoning and never inherited the
+> distrust. When a tool takes an optional argument that SELECTS A CODE PATH, assume the model will
+> populate it whether or not it means to; validate it against server-held state before branching.
+>
+> **The concealment is the lesson for debugging.** Two things hid this for a whole paid gate: a bare
+> `catch` (now logs its reason, per the rule `ErrorBoundary.tsx` already states), and a failure path
+> that RETURNS A PLAUSIBLE SENTENCE — so the tool "succeeded", `agentSteps` said `done`, and the
+> feature looked like it merely hadn't managed it. What settled it was the OFFLINE `SMOKE::agent::`
+> op proving the whole chain worked with no model involved, which relocated the fault from "the code
+> is broken" to "the arguments are wrong". Reach for that op FIRST next time. Also found and NOT
+> fixed here: `agentSteps:record` throws `ArgumentValidationError` on `recordScorecardAnswer` — that
+> name is missing from the `agentSteps.tool` union, so every scorecard tool call fails to record a
+> step; the SDK swallows callback throws, so it is invisible outside the logs.
+
 > Last verified: 2026-08-08 — **`listThreadMessages` guards AUTHORIZATION, so it must not then
 > assume EXISTENCE.** `plans.threadId` is a plain `v.string()` and is NOT guaranteed to name an
 > agent-component thread: `smoke:seedCockpitPlan` writes `smoke-attach-<uuid>`, and legacy rows can

@@ -2475,8 +2475,16 @@ export function buildCockpitTools(
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
         // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
-        if (!scan.ok)
+        if (!scan.ok) {
+          // scanText REDACTS PII; it only fails on non-string input. So this branch means the model
+          // supplied no/!string `topic` despite the schema's `required` — a routing fault, not a
+          // privacy stop, and the copy above misattributes it. Refs-only: types and lengths, never
+          // the topic itself (§4).
+          console.error(
+            `[createDocument] scan refused — topicType=${typeof topic} topicLen=${typeof topic === "string" ? topic.length : "n/a"} form=${String(form)} replace=${String(replace)} code=${scan.error.code}`,
+          );
           return "I couldn't write that — the topic couldn't be checked for personal data. Tell the user plainly and ask them to rephrase it.";
+        }
         const safeText = scan.value.safeText;
         // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
         // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
@@ -2498,7 +2506,18 @@ export function buildCockpitTools(
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
             storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
           }
-        } catch {
+        } catch (error) {
+          // LOG THE REASON. A bare `catch` here returns a plausible sentence, the tool step records
+          // `done`, and the agent politely retries — so a hard failure reads as a working feature
+          // that "just didn't manage it". That cost a whole eval fixture (35-create-document,
+          // createdDocCount 0 with FIVE successful-looking calls per thread) before anyone could see
+          // why. Same class as the 03.2.1 bare catch that masked NO_ACTIVE_SKILL as "Something went
+          // wrong", and the same rule ErrorBoundary.tsx already states: degrade, but never silently.
+          // The message is refs-only — a draft/render error carries no user content (§4).
+          console.error(
+            `[createDocument] draft/render failed (form=${form}, skill=${skillName}):`,
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          );
           return "I couldn't create that document — drafting or rendering it failed. Tell the user and offer to try again.";
         }
         const hash = await contentHash(draft.markdown);
@@ -2519,7 +2538,19 @@ export function buildCockpitTools(
         });
         let docIds = card?.docIds ?? [];
         let titles = card?.titles ?? [];
-        if (replace === undefined) {
+        // **`replace` IS MODEL-SUPPLIED AND MUST NOT BE TRUSTED AS CONTROL FLOW.** Observed live in
+        // eval fixture 35: EVERY call arrives with `replaceType=number`, including the FIRST, when
+        // the conversation holds no created documents at all. Obeying it sent a create down the
+        // patch branch, which refused correctly ("there's no document #N") — so nothing was ever
+        // created, the agent read the refusal as "try again", and looped: 13 tool calls, all
+        // recorded `done`, zero documents. This is the `confirmed`-flag principle from 18-08
+        // ("a model-supplied flag is the model grading its own decision") applied to the one
+        // model-supplied field that already existed. With ZERO created documents, `replace` cannot
+        // denote anything, so it is not a refusal case — it is noise, and creating is the only
+        // coherent reading. An out-of-range index WITH documents present keeps its honest refusal,
+        // because there the user may genuinely mean a document that is simply numbered differently.
+        const effectiveReplace = docIds.length === 0 ? undefined : replace;
+        if (effectiveReplace === undefined) {
           const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, docArgs);
           docIds = [...docIds, docId];
           titles = [...titles, draft.title];
@@ -2527,19 +2558,19 @@ export function buildCockpitTools(
           const res = await ctx.runMutation(internal.vault.patchCreatedDoc, {
             ...docArgs,
             threadId: plan.threadId,
-            index: replace,
+            index: effectiveReplace,
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
           // never throws, and neither does this.
           if (!res.ok)
-            return `There's no document #${replace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+            return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
             await ctx.storage.delete(res.oldStorageId);
-          titles = titles.map((t, j) => (j === replace - 1 ? draft.title : t));
+          titles = titles.map((t, j) => (j === effectiveReplace - 1 ? draft.title : t));
         }
-        const vaultDocId = docIds[replace === undefined ? docIds.length - 1 : replace - 1];
+        const vaultDocId = docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -2570,7 +2601,7 @@ export function buildCockpitTools(
         });
         // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
         // URL, never an _id.
-        const saved = replace === undefined ? "saved to your vault" : `rewritten as #${replace}`;
+        const saved = effectiveReplace === undefined ? "saved to your vault" : `rewritten as #${effectiveReplace}`;
         return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
       },
     }),

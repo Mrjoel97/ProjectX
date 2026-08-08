@@ -1493,6 +1493,11 @@ const VERB: Record<string, [running: string, done: string]> = {
   briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
   searchVault: ["Searching your knowledge vault…", "Grounded in the vault"],
   evaluateBusiness: ["Assessing your business…", "Assessed your business"],
+  // Both literals were MISSING from agentSteps.tool until 2026-08-08, so neither step could record
+  // at all — the trace never showed them and the parity test never saw them. Now that the union
+  // carries them, they need real verbs or they render the generic "Working…"/"Done" fallback.
+  recordScorecardAnswer: ["Noting that figure…", "Noted that figure"],
+  resetPlan: ["Clearing the draft…", "Cleared the draft"],
   dispatchOfferArchitect: ["Working with the offer architect…", "Offer architect finished"],
   dispatchMoneyModelDesigner: [
     "Working with the money-model designer…",

@@ -1515,11 +1515,75 @@ test("N createDocument calls share ONE Output card carrying ALL N docIds (#index
   expect(latest.form).toBe("short"); // the newest artifact's badge
 });
 
+// THE BUG EVAL FIXTURE 35 CAUGHT, and it cost a paid gate to find. `replace` is MODEL-SUPPLIED and
+// the live model sends it on EVERY call — including the first, when the conversation holds no
+// created documents at all. Obeying it routed a create down patchCreatedDoc, which refused
+// correctly ("there's no document #1"), so nothing was ever created, the agent read the refusal as
+// "try again", and looped: thirteen tool calls, all recorded `done`, zero documents. With ZERO
+// created documents `replace` cannot denote anything, so it is noise, not a refusal case.
+// This is the `confirmed`-flag principle (18-08: a model-supplied flag is the model grading its own
+// decision) applied to the one model-supplied field that already existed.
+test("a first createDocument CREATES even when the model supplies a bogus `replace`", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: CREATE_TOPIC,
+    form: "long",
+    replace: 1, // nothing exists to rewrite — the exact shape observed live
+  });
+
+  expect(reply).toContain(SMOKE_TITLE);
+  expect(reply).toMatch(/saved to your vault/i); // created, NOT "rewritten as #1"
+  expect(reply).not.toMatch(/there's no document/i);
+  expect(await vaultDocs(t)).toHaveLength(1);
+  const card = (await cardRows(t)).filter((r) => r.role === "created").at(-1)!;
+  expect(card.docIds).toHaveLength(1);
+});
+
+// The other half of the rule: once documents EXIST, an out-of-range index keeps its honest refusal,
+// because there the user may genuinely mean a document numbered differently. Widening the fallback
+// to every out-of-range `replace` would silently create a second document when a revision was asked
+// for — the failure this pair exists to keep apart.
+test("with documents present, an out-of-range `replace` still refuses and creates nothing", async () => {
+  const { t, planId } = await setup();
+
+  await call(t, planId, "createDocument", { topic: `${SMOKE} first`, form: "long" });
+  const refused = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} second`,
+    form: "long",
+    replace: 7,
+  });
+
+  expect(refused).toMatch(/no document #7/i);
+  expect(await vaultDocs(t)).toHaveLength(1); // the refusal wrote nothing
+});
+
 // ── Static scans over the tool body ───────────────────────────────────────────
 
 const convexSrcDir = dirname(fileURLToPath(import.meta.url));
 const readLlmSource = (): string =>
   readFileSync(join(convexSrcDir, "llm.ts"), "utf8").replace(/\r\n/g, "\n");
+
+// THE CLOSED-UNION TRAP, CLOSED STRUCTURALLY. `agentSteps.tool` is a closed union, and
+// `onToolExecutionStart` records EVERY tool the model calls. A tool whose name has no literal makes
+// `agentSteps:record` throw `ArgumentValidationError` — and the AI SDK SWALLOWS callback throws, so
+// the step vanishes in PROD while the entire suite stays green. schema.ts warns about this twice in
+// prose; it still happened a third time (`recordScorecardAnswer`, found 2026-08-08 in eval logs).
+// Prose is not a guard. This is: every `<name>: tool(` key in buildCockpitTools must have a literal.
+test("every cockpit tool name has an agentSteps.tool literal (the swallowed-step trap)", () => {
+  const toolNames = [...readLlmSource().matchAll(/\n {4}([A-Za-z_]\w*): tool\(/g)].map((m) => m[1]);
+  // Non-vacuity floor: if the record is ever restructured this scan must fail LOUDLY, not pass on
+  // an empty list — the exact way a static scan rots into decoration.
+  expect(toolNames.length, "found no `<name>: tool(` keys — did buildCockpitTools move?").toBeGreaterThan(20);
+
+  const schemaSrc = readFileSync(join(convexSrcDir, "schema.ts"), "utf8").replace(/\r\n/g, "\n");
+  const agentSteps = schemaSrc.slice(schemaSrc.indexOf("agentSteps: defineTable"));
+  const unionBlock = agentSteps.slice(0, agentSteps.indexOf(").index("));
+  const literals = new Set([...unionBlock.matchAll(/v\.literal\("([^"]+)"\)/g)].map((m) => m[1]));
+  expect(literals.size, "no literals parsed from the agentSteps.tool union").toBeGreaterThan(20);
+
+  expect([...new Set(toolNames)].filter((n) => !literals.has(n))).toEqual([]);
+});
 
 /** Slice the createDocument tool body: `createDocument: tool(` → the NEXT tool key in the record. */
 function createDocumentBlock(): string {

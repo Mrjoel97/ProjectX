@@ -636,6 +636,18 @@ export default defineSchema({
       // engine's "Assessing…" step insert throws and is silently swallowed in prod while tests
       // pass (Pitfall 2 — the same closed-union trap as searchVault above).
       v.literal("evaluateBusiness"),
+      // Phase-12 (BEVL-01) again: the "store" half of vault-first→ask→store. MISSING until
+      // 2026-08-08, and it cost exactly what the two comments above predict — every scorecard tool
+      // call threw `ArgumentValidationError` inside `agentSteps:record`, the SDK swallowed it, and
+      // the trace silently lost a step in prod while the whole suite stayed green. That is the
+      // THIRD time this closed union has been the trap, so the omission is now guarded
+      // STRUCTURALLY: cockpitTools.test.ts scans every `<name>: tool(` key in buildCockpitTools and
+      // fails if any lacks a literal here. Add the literal in the SAME commit as a new tool.
+      v.literal("recordScorecardAnswer"),
+      // `resetPlan` — the cancel-and-start-over tool. ALSO missing, and nobody knew: the guard test
+      // found it the first time it ran, which is the argument for the guard existing at all. Every
+      // "cancel and begin again" turn has been losing its trace step the same silent way.
+      v.literal("resetPlan"),
       // Phase-15 (DISP-01): the sub-agent dispatch steps. N literals, NOT a `specialist: v.string()`
       // field — §4 on this path is enforced by the ABSENCE of anywhere to put text ("a
       // `count: v.number()` literally cannot hold a subject line", :435-439). Adding a text field
