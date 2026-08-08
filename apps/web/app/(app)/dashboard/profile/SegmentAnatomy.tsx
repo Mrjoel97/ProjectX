@@ -1,13 +1,18 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { type BlueprintSegment, type BusinessBlueprint, FIELD_SPEC, SPECIALISTS } from "@pikar/core";
+import {
+  type BlueprintSegment,
+  type BusinessBlueprint,
+  FIELD_SPEC,
+  SPECIALISTS,
+} from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SEGMENT_BLOCKED, SEGMENT_COPY, joinPhrases } from "./segmentCopy";
-import { label } from "./styles";
 import { BLOCKED } from "./connections";
+import { joinPhrases, SEGMENT_BLOCKED, SEGMENT_COPY } from "./segmentCopy";
+import { label } from "./styles";
 
 const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" };
 
@@ -16,8 +21,9 @@ const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSiz
 function Band({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "grid", gap: "0.45rem" }}>
-      <span
+      <h4
         style={{
+          margin: 0,
           fontSize: "0.66rem",
           fontWeight: 700,
           letterSpacing: "0.1em",
@@ -26,7 +32,7 @@ function Band({ title, children }: { title: string; children: React.ReactNode })
         }}
       >
         {title}
-      </span>
+      </h4>
       {children}
     </div>
   );
@@ -80,12 +86,12 @@ function ToolsBand({ segment }: { segment: BlueprintSegment }) {
   // false-negative would invite reconnecting an already-connected account (ConnectionsPanel's
   // flash-of-wrong-state discipline).
   const gmail = useQuery(api.gmailAuth.gmailStatus);
-  const blocked = BLOCKED.filter((b) => (SEGMENT_BLOCKED[segment.id] ?? []).includes(b.id));
 
   if (segment.specialist === null) {
     return <ToolRow name="Your profile & vault documents" state="Built in" />;
   }
 
+  const blocked = BLOCKED.filter((b) => (SEGMENT_BLOCKED[segment.id] ?? []).includes(b.id));
   const grant = SPECIALISTS[segment.specialist];
   return (
     <div style={{ display: "grid", gap: "0.4rem" }}>
@@ -115,9 +121,7 @@ function ProcessBand({ segment }: { segment: BlueprintSegment }) {
     );
   }
   const grant = SPECIALISTS[segment.specialist];
-  const tools = grant.tools
-    .map((t) => TOOL_LABELS[t])
-    .filter((t): t is string => t !== undefined);
+  const tools = grant.tools.map((t) => TOOL_LABELS[t]).filter((t): t is string => t !== undefined);
   return (
     <div
       style={{
@@ -167,14 +171,14 @@ export function SegmentAnatomy({
       <Band title="Knowledge">
         {segment.fields.length === 0 ? (
           <p style={soft}>
-            Not tracked yet. This part of the business isn't wired into the blueprint, so
-            rebuilding won't change what's shown here.
+            Not tracked yet. This part of the business isn't wired into the blueprint, so rebuilding
+            won't change what's shown here.
           </p>
         ) : (
           populated.length === 0 && (
             <p style={soft}>
-              Nothing here yet. Add documents to your vault and rebuild, and anything they say
-              about this part of the business will land here.
+              Nothing here yet. Add documents to your vault and rebuild, and anything they say about
+              this part of the business will land here.
             </p>
           )
         )}
@@ -221,8 +225,8 @@ export function SegmentAnatomy({
         {/* Slice 2 (pulse layer) replaces this with real aggregates: emails delivered, plans
             completed, and how recently — spec §3.1. Honest deferral until then, never a fake count. */}
         <p style={{ ...soft, fontSize: "0.83rem" }}>
-          Not measured yet. When outcome tracking lands, what this section actually shipped —
-          emails delivered, plans completed — appears here with how recent it is.
+          Not measured yet. When outcome tracking lands, what this section actually shipped — emails
+          delivered, plans completed — appears here with how recent it is.
         </p>
       </Band>
     </section>
