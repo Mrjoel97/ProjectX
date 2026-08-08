@@ -32,6 +32,24 @@ key-files:
     - docs/playbooks/guardrails.md
     - docs/playbooks/vault.md
     - docs/playbooks/dashboard-pages.md
+    - packages/backend/convex/pipeline.ts (follow-up sweep)
+    - packages/backend/convex/pipeline.test.ts (follow-up sweep)
+    - packages/backend/convex/intake.ts (follow-up sweep)
+    - packages/backend/convex/llm.ts (follow-up sweep)
+    - packages/backend/convex/blueprint.ts (follow-up sweep)
+    - packages/backend/convex/vaultExtract.ts (follow-up sweep)
+    - packages/backend/convex/vaultExtract.test.ts (follow-up sweep)
+    - packages/backend/convex/vaultIngest.ts (follow-up sweep)
+    - packages/backend/convex/vaultDigest.ts (follow-up sweep)
+    - packages/backend/convex/vaultTranscribe.ts (follow-up sweep)
+    - packages/backend/convex/voice.ts (follow-up sweep)
+    - packages/backend/convex/voice.test.ts (follow-up sweep)
+    - packages/backend/convex/voiceDoc.ts (follow-up sweep)
+    - packages/backend/convex/runCockpitAgent.test.ts (follow-up sweep)
+    - docs/playbooks/cockpit.md (follow-up sweep)
+    - docs/playbooks/intake.md (follow-up sweep)
+    - docs/playbooks/voice.md (follow-up sweep)
+    - docs/playbooks/onboarding.md (follow-up sweep, lane note)
 
 key-decisions:
   - "The ledger write is a PLAIN FUNCTION CALL (spendLedger.recordMovement) inside the limiter's own transaction, never ctx.runMutation. A second transaction could leave the window moved with no record, and an append-only table has no backfill to repair that. It writes the SAME `cents` variable the limiter consumed, so the two planes are arithmetically incapable of disagreeing about the amount."
@@ -130,16 +148,58 @@ Presented to the owner, who chose plan scope with the nonce fallback (2026-08-08
 **Impact:** no enforcement behavior changed. The Rule-4 decision leaves replay suppression off at
 the sites outside this plan's file list; that gap is named below and cannot under-count.
 
+## Follow-up sweep (2026-08-09, commit `5a69982`) — the deferred design, implemented
+
+The owner directed the deferred 19-site design to be implemented after all. A second workflow (28
+agents: 7 parallel file-cluster instrumentations, then an adversarial attack on each landed
+correlation) threaded a stable correlation through **all twelve** `recordSpend` call sites. Zero
+survived-defect verdicts; independently re-verified here.
+
+`correlationId` stayed OPTIONAL — the owner's earlier decision was preserved, not reversed. What
+replaced the compiler enforcement a required arg would have given is a static scan in
+`guardrails.test.ts` that balances braces from each call's argument object and fails the build if a
+site ships without a correlation, with a non-vacuity floor of ten sites.
+
+**The full per-site table, with the discriminator each one needs, is in `docs/playbooks/guardrails.md`
+§"Phase 26".** The three that mattered most:
+
+- `vaultExtract` bills PER PAGE on the PDF fan-out, so `:p<i>` is what stops one page's cost being
+  recorded for a 50-page scan. The image branch omits the segment rather than faking `:p0`.
+- `voice.ts` meters REPEATEDLY within one session, so the cumulative token `offset` — not
+  `sessionId` — is the discriminator; without it only the first slice of the most expensive
+  sessions would land.
+- Every `try`/`catch` model pair in `llm.ts` is TWO fully-billed calls, so `:a0`/`:a1` is required;
+  a shared correlation returns the primary's row and the fallback's charge disappears.
+
+**Two hazards confirmed rather than assumed.** (1) `{ unstableArgs: true }` is present on the PUBLIC
+`RunOptions` type of `@convex-dev/workflow@0.4.4`, and both journaled sites carry it — without it a
+workflow parked mid-flight replays against a journal entry recorded with the old args and dies on
+`Journal entry mismatch`, killing work already paid for. (2) `pipeline.ts` does NOT interpolate the
+handler's `correlationId`: `smoke.seedPipeline` declares it as an unconstrained `v.string()`, so it
+could carry whitespace and throw the ledger's charset check AFTER the model call was billed.
+
+**My own guard shipped with the bug it exists to catch.** Its first draft balanced parens from the
+next `(` after the callee name — but the call is `ctx.runMutation(internal.guardrails.recordSpend,
+{...})`, so that paren opens BEFORE the name. It returned a garbage span that happened to contain
+`correlationId` further down `voice.ts` and reported an uninstrumented site as green. Fixed to
+balance BRACES from the argument object, and mutation-checked by stripping a real correlation.
+**Third instance in two days of a source scan passing for a reason unrelated to its subject** (the
+vault scan pinned a variable name, the schema scan pinned a line wrap). The defence is a
+non-vacuity assertion plus one run against known-bad input before trusting the green.
+
+**Shared-tree hazard, observed live:** the blueprint lane committed `fabc51d` while a sweep agent
+was editing `blueprint.ts`, discarding that agent's edit. Nothing was lost because the call-site
+guard reported the site red rather than letting it ship — but concurrent agents in a tree another
+lane is actively committing to need a guard that fails closed.
+
+**Gates after the sweep:** backend 1271/1271 (up 16 from the agents' new tests), typecheck clean,
+`check-playbooks` exit 0, and the call-site guard mutation-checked.
+
 ## Issues Encountered
 
-1. **The other ~15 `recordSpend` call sites have no replay suppression yet.** They rely on the
-   nonce, which cannot under-count but can duplicate under a replay-without-respend. The full
-   19-site design exists (per-turn, per-page and per-fallback discriminators) and is summarized in
-   `docs/playbooks/guardrails.md` §"Known gaps". **Two of those sites need `{ unstableArgs: true }`
-   on their `step.runMutation` when they change** — `pipeline.ts:190` and `vaultIngest.ts:194` are
-   journaled workflow steps, and adding an args field without it throws `Journal entry mismatch` on
-   every workflow parked at the seven-day review gate, killing in-flight requests whose money is
-   already spent. The option was verified to exist in the pinned `@convex-dev/workflow`.
+1. ~~The other ~15 `recordSpend` call sites have no replay suppression yet.~~ **CLOSED by the
+   follow-up sweep above (`5a69982`).** All twelve now pass a correlation, and both journaled sites
+   carry `{ unstableArgs: true }`.
 2. **Charges the pricer never sees are invisible to BOTH planes** — `draftUncached` runs
    `maxRetries: 1` then a whole CHEAP_MODEL fallback but returns only the surviving attempt's usage;
    an id missing from `PRICING` records nothing anywhere. Ledger and limiter still agree, so

@@ -10,9 +10,11 @@
 > without a correlation, so this cannot silently regress.
 >
 > ⚠ **The `BlueprintCanvas` / `BlueprintPanel` / `SegmentAnatomy` / `blueprintPulse` changes dated
-> today are the CONCURRENT BLUEPRINT LANE's, not this entry's** — that lane shares this working
-> tree and should replace this paragraph with its own account. Recorded here only because the
-> watcher flagged the shared path; do not read it as a review of that work.
+> today, and the new `goals.ts` / `goals.test.ts`, are the CONCURRENT BLUEPRINT LANE's, not this
+> entry's** — that lane shares this working tree and should replace this paragraph with its own
+> account. Recorded here only because the watcher flagged the shared path; do not read it as a
+> review of that work. **`goals.ts` is a NEW module and will need its own playbook coverage** —
+> either an entry here or its own file registered in `watch.json`, per CLAUDE.md §9.
 >
 > Previously verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
 > end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
