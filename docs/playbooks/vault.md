@@ -1,6 +1,20 @@
 # Playbook: Knowledge Vault & GraphRAG
 
-> Last verified: 2026-08-07 (embedding provider swap — **THE VAULT NO LONGER DEPENDS ON OPENAI**).
+> Last verified: 2026-08-08 (26-07 — **the folder rail's money is now double-entered.**
+> `vaultFolders.reserveFolder` passes its `folderId` down to `reserveFolderInner`, which writes a
+> `reserved` spend movement correlated `f:<folderId>:<reservedAt>`; `settleFolder` writes the
+> matching `refunded` movement by REBUILDING that same string from `folder.reservedAt`. The row's
+> `reservedAt` and the ledger's correlation are therefore the SAME instant by construction — stamp
+> them separately and every refund becomes an orphan row while the money stays perfectly correct,
+> which is a defect nothing else in this subsystem would notice. A rolled window refunds nothing and
+> writes NO movement (a zero-cent row is rejected, and that throw would run inside `tryComplete`'s
+> transaction, failing folder completion for an accounting reason); the reservation then reads as
+> `unlanded`, which is the literal truth. The mechanism, the correlation policy and the
+> non-negotiable rollback rule live in `docs/playbooks/guardrails.md` §"Phase 26 — the spend ledger
+> rides alongside the limiter"; this subsystem owns only the wiring and the `vaultFolders.test.ts`
+> parity test that proves the two stamps have not drifted apart.)
+>
+> Previously verified: 2026-08-07 (embedding provider swap — **THE VAULT NO LONGER DEPENDS ON OPENAI**).
 > `vaultRag.ts` moved from `text-embedding-3-small` to `gemini-embedding-001`, both at 1536 dims, so
 > the Convex vector index and `schema.ts` are UNCHANGED. WHY: the OpenAI balance is $0
 > (`credit_balance_exhausted` on chat AND embeddings, verified directly), and this file was the LAST

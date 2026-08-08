@@ -848,3 +848,57 @@ describe("folderEstimate is the number the reserve actually takes", () => {
     expect(await remaining(t)).toBe(drained);
   });
 });
+
+// ── 26-07: the ingest rail's ledger parity, through the REAL public path ────────────────────
+//
+// `guardrails.test.ts` proves the movements against `reserveFolder`/`settleFolder` directly. This
+// block proves the WIRING: that the public `vaultFolders.reserveFolder` actually hands its
+// `folderId` down, and that the stamp it writes to the row is the stamp the ledger correlated on.
+// Those are two different values in two different files, and nothing else notices if they drift —
+// the money would still be right, and every refund would silently become an orphan row.
+describe("ledger parity: the folder rail names its folder and refunds it exactly once", () => {
+  const events = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  // Mutation RUN: delete `folderId` from the `reserveFolderInner` call in `vaultFolders.ts` -> RED,
+  // the reserved row disappears entirely. Mutation RUN: stamp `reservedAt: Date.now()` in the
+  // `ctx.db.patch` instead of `result.reservedAt` -> RED, the refund's correlation stops matching.
+  test("reserve names the folder, and cancelling writes exactly one matching refund", async () => {
+    const t = budgetHarness();
+    const folderId = await newFolder(t);
+    // Real members, or `tryComplete` fires at 0 === 0 and settles inside the reserve itself.
+    for (const hash of ["l-a", "l-b", "l-c"]) await upload(t, { folderId, hash });
+
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(3),
+    });
+    expect(reserved).toMatchObject({ ok: true, estCents: costOf(3) });
+
+    const stamp = await t.run(async (ctx) => (await ctx.db.get(folderId))?.reservedAt);
+    const correlationId = `f:${folderId}:${stamp}`;
+
+    const afterReserve = await events(t);
+    expect(afterReserve).toHaveLength(1);
+    expect(afterReserve[0]).toMatchObject({
+      tenantId: TENANT,
+      rail: "ingest",
+      phase: "reserved",
+      amountCents: costOf(3),
+      folderId,
+      correlationId,
+    });
+
+    // Cancel settles BEFORE deleting the row — the one terminal that can prove the refund lands
+    // while its folder still exists.
+    expect(await asTenant(t).mutation(api.vaultFolders.cancelFolder, { folderId })).toEqual({
+      ok: true,
+    });
+
+    const refunds = (await events(t)).filter((r) => r.phase === "refunded");
+    expect(refunds).toHaveLength(1);
+    // THE JOIN: the refund carries the reservation's own correlation, so the two movements are one
+    // reconcilable pair rather than two unrelated rows that happen to share a folder.
+    expect(refunds[0]).toMatchObject({ correlationId, folderId, amountCents: costOf(3) });
+  });
+});

@@ -1,6 +1,9 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
+> Last verified: 2026-08-08 (26-07 — the spend ledger now rides alongside every reasoning and
+> ingest limiter movement; see the Phase 26 section below.)
+>
+> Previously verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
 > started watching that table.** `packages/cost/src/cost.ts` was watched by NO playbook until now —
 > a gap worth naming, because that file is where a model becomes billable: `PRICING` is keyed on the
 > full model id, an id missing from it makes `priceUsage` return `unknown_model`, `recordModelSpend`
@@ -276,8 +279,104 @@ npx convex run guardrails:ingestRemainingCents '{"tenantId":"<id>"}'   # after
 The number after the roll must be **at most `INGEST_DAILY_BUDGET_CENTS` (2500)**. Anything above it
 means the clamp or the rollover skip regressed, and the tenant is minting budget.
 
+## Phase 26 — the spend ledger rides alongside the limiter (FIN-01)
+
+> Last verified: 2026-08-08 (26-07 — **every reasoning and ingest limiter movement now writes a
+> matching `spendEvents` row, in the SAME transaction.**)
+
+**TWO PLANES, AND THE ORDER OF AUTHORITY IS FIXED.** The limiter stays ENFORCEMENT truth: it decides
+whether a spend may happen, and nothing in this section may be relaxed to make a report easier.
+`spendEvents` is REPORTING/RECONCILIATION truth: it remembers what happened. A limiter is a gauge of
+the present and structurally cannot answer "what did this tenant spend last Tuesday on the media
+rail" — that is the whole reason for the second plane.
+
+**The ledger write is a PLAIN FUNCTION CALL (`spendLedger.recordMovement`), never
+`ctx.runMutation`.** The limiter movement and its row must commit or fail together; a second
+transaction could leave the window moved with no record, and an append-only table has no backfill to
+repair that. It writes the SAME `cents` variable the limiter consumed — a re-derived `Math.round`
+would drift below the limiter on every sub-cent call and, at zero, be refused outright.
+
+### Where each movement is written
+
+| site | phase | rail | correlation | note |
+|---|---|---|---|---|
+| `prepare`, OK path only | `estimated` | reasoning | `req:<requestId>:prepare` | a governed stop is NOT a spend and writes nothing |
+| `recordSpend` | `actual` | selector | caller's, else a per-execution nonce | see below |
+| `reserveFolderInner`, success path | `reserved` | ingest | `f:<folderId>:<reservedAt>` | only when a `folderId` is supplied |
+| `settleFolder`, inside `refundedCents > 0` | `refunded` | ingest | `f:<folderId>:<reservedAt>` | rebuilt from `folder.reservedAt` |
+
+### The correlation policy, and why it is split in two
+
+**A correlation that is too COARSE is worse than none.** It collapses a genuine second charge into
+one row, so the ledger sits BELOW the limiter — and a missing movement is indistinguishable from
+money that was never spent. A duplicate, by contrast, is findable by reconciling the two planes.
+Under-count is therefore the unrecoverable direction, and every choice here breaks that way.
+
+- **Replayable sites derive.** `prepare`, `reserveFolderInner` and `settleFolder` can each be
+  re-entered without new money changing hands (the pipeline's regenerate loop; a re-entered workflow
+  `onComplete`). They build a deterministic correlation from refs, so a second entry finds the
+  stored row. **`settleFolder`'s CAS protects the MONEY; the correlation protects the RECORD** —
+  they are two guards on two different things, and neither substitutes for the other.
+- **`recordSpend` mints a nonce.** Its ~15 callers are all ACTIONS, where re-entry re-runs the model
+  call, so the second charge is real money that MUST get its own row. A ref-derived correlation
+  there would swallow a retry, a fallback model or a per-page OCR fan-out. A caller that genuinely
+  IS replayable — a journaled workflow step, a webhook landing — passes its own stable
+  `correlationId` and gets replay suppression.
+
+**`reservedAt` is stamped ONCE** and used for both the returned value and the correlation. A second
+`Date.now()` in `reserveFolderInner` would silently orphan every refund: settle rebuilds the string
+from `folder.reservedAt` and would never match.
+
+### What is deliberately NOT recorded
+
+- **The deployment-window refund.** `spendEvents` is a per-tenant statement and the two clamps
+  return DIFFERENT amounts, so a second tenant-scoped row would claim ~800¢ returned on a 400¢
+  credit and drive `unlanded` to a false zero. The reserve side already carries this asymmetry:
+  both windows debited, one row written. The deployment figure keeps `settleFolder`'s return value
+  and `ingestRemainingCents`.
+- **A zero refund.** `validateSpendMovement` rejects `amountCents <= 0`, and that throw would run
+  inside `tryComplete`'s transaction — folder completion would fail for an accounting reason. The
+  write lives strictly inside the existing `refundedCents > 0` branch. Recording nothing is also
+  the honest answer, and the arithmetic already ships: reserved 900, actual 500, refunded 0 →
+  `aggregateSpend` reports **400 unlanded**, which is the literal truth. `settleFolder` returns
+  `settled_window_rolled` rather than `settled` so the reason is distinguishable from a clamp that
+  happened to land on zero.
+
+### How to verify
+
+```text
+pnpm --filter @pikar/backend test -- guardrails vaultFolders spendLedger
+pnpm --filter @pikar/backend typecheck
+```
+
+Mutation checks actually run for this section: (1) write `Math.round(costUsd * 100)` into the ledger
+instead of the limiter's `cents`; (2) correlate settle on `Date.now()` instead of
+`folder.reservedAt`; (3) replace the nonce with a per-tenant constant; (4) drop `folderId` from the
+`reserveFolderInner` call in `vaultFolders.ts`. Each turns a DIFFERENT test red.
+
+### Rollback
+
+Non-negotiable, and it is the same rule `dashboard-pages.md` states from the Finance side: the
+Finance UI may be disabled; **these writers may not be.** An append-only history has no backfill, so
+a dark window is a permanent hole in the record.
+
 ## Known gaps & deferred work
 
+- **The other ~15 `recordSpend` call sites pass no correlation yet, so they have no replay
+  suppression** — they rely on the nonce, which cannot under-count but can duplicate under a
+  replay-without-respend. A 19-site correlation design (per-turn, per-page, per-fallback
+  discriminators for `llm.ts`, `pipeline.ts`, `intake.ts`, `blueprint.ts`, `vaultExtract.ts`,
+  `vaultIngest.ts`, `vaultTranscribe.ts`, `vaultDigest.ts`) was produced and adversarially reviewed
+  during 26-07 and is recorded in that plan's SUMMARY. It was scoped OUT because it edits ~10 files
+  and ~6 playbooks this plan does not own. **Two of those sites need `{ unstableArgs: true }` on
+  their `step.runMutation` when they change** (`pipeline.ts` and `vaultIngest.ts`) or in-flight
+  journaled workflows die on deploy.
+- **Charges the pricer never sees are invisible to BOTH planes.** `draftUncached` runs
+  `maxRetries: 1` and then a whole CHEAP_MODEL fallback but returns only the surviving attempt's
+  usage; `!priced.ok` (an id missing from `PRICING`) records nothing anywhere. Ledger and limiter
+  still AGREE, so reconciliation cannot see the hole — only an invoice can.
+- **`folder.spentCents` is permanently 0.** Nothing increments it, and a zero money field sitting
+  beside a real ledger is how someone reads 0 and believes it. Feed it or delete it.
 - **No media equivalent of `recordSpend`.** The media rail reserves and never reconciles: if 3 of 6
   blocks fail, the reserved cents stay consumed. Over-reservation is the deliberate fail-closed
   bias; refunding would turn a rate-limiter window into a ledger. The upgrade path, if drift ever
