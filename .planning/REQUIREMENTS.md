@@ -142,7 +142,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [x] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
 - [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
 - [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
-- [ ] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
+- [x] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
 - [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments)
 - [ ] **ACTN-05**: The agent can track contacts / CRM state and follow-ups scoped to the user
 
@@ -335,7 +335,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
 | ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
 | DISP-02 | Phase 16 | Pending |
-| ACTN-03 | Phase 16 | Pending |
+| ACTN-03 | Phase 16 | Complete |
 | ACTN-02 | Phase 17 | Pending |
 | ACTN-04 | Phase 18 | Pending |
 | ACTN-05 | Phase 19 | Pending |
