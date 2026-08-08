@@ -6,7 +6,10 @@ import {
   BLUEPRINT_SEGMENTS,
   type BlueprintSegment,
   type BusinessBlueprint,
+  composeReadout,
   firstGap,
+  type PulseGlobals,
+  type SegmentPulse,
   segmentFill,
   segmentHeadline,
 } from "@pikar/core";
@@ -47,6 +50,11 @@ export function BlueprintPanel() {
   const buildDraft = useAction(api.blueprint.buildBlueprintDraft);
   const [building, setBuilding] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
+
+  // One clock per mount: a changing arg would resubscribe the query every render, and the
+  // 30-day window does not need sub-session precision.
+  const [now] = useState(() => Date.now());
+  const pulse = useQuery(api.blueprint.blueprintPulse, { now });
 
   async function onBuild() {
     setBuilding(true);
@@ -121,6 +129,7 @@ export function BlueprintPanel() {
           rebuild={null}
           built={false}
           action={buildButton("Build blueprint", true)}
+          pulse={pulse}
         />
       ) : (
         <BlueprintReport
@@ -131,6 +140,7 @@ export function BlueprintPanel() {
           }
           rebuild={buildButton("Rebuild", blueprintState.state === "live_stale")}
           built={true}
+          pulse={pulse}
         />
       )}
 
@@ -165,6 +175,7 @@ function BlueprintReport({
   rebuild,
   built,
   action,
+  pulse,
 }: {
   blueprint: BusinessBlueprint;
   confirmedAt: number | null;
@@ -175,6 +186,7 @@ function BlueprintReport({
   built: boolean;
   /** The primary call to action for this state, rendered under the lede. */
   action?: React.ReactNode;
+  pulse?: { segments: Record<string, SegmentPulse>; globals: PulseGlobals };
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
@@ -253,12 +265,31 @@ function BlueprintReport({
 
       {action !== undefined && <div>{action}</div>}
 
+      {pulse !== undefined &&
+        (() => {
+          const readout = composeReadout(pulse.segments, pulse.globals, Date.now());
+          return readout === null ? null : (
+            <p
+              role="status"
+              style={{
+                margin: 0,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "var(--teal-900)",
+              }}
+            >
+              {readout}
+            </p>
+          );
+        })()}
+
       <BlueprintCanvas
         blueprint={blueprint}
         built={built}
         gapId={gap?.id ?? null}
         selectedId={open}
         onSelect={(id) => setOpen(open === id ? null : id)}
+        pulse={pulse?.segments}
       />
 
       {built && gap !== null && <NeedsYou segment={gap} />}
