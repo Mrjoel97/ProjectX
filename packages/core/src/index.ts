@@ -1,5 +1,6 @@
 export * from "./actionType";
 export * from "./blueprint";
+export * from "./blueprintPulse";
 export * from "./blueprintSegments";
 export * from "./briefing";
 export * from "./buildTelemetry";
