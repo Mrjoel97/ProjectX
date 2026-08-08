@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1786130673.7500706,
-    "ast_hash": "f7d9d8ce80164261acce3a5d8178b7ea",
+    "mtime": 1786193166.6531336,
+    "ast_hash": "38bc19aeef2876f2513310ed3ac8cb84",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -250,13 +250,13 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1786052724.827879,
-    "ast_hash": "41e9e027aeeaf7b34b3e176ab5dc93c3",
+    "mtime": 1786192042.7921839,
+    "ast_hash": "12eeceef7753971b7f805a3ab4601034",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1786052690.8795779,
-    "ast_hash": "0820ef2ff6da26f50118600507f7c75e",
+    "mtime": 1786192053.9664948,
+    "ast_hash": "b8e62e71e518bffa0f0253a4fa59c221",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
@@ -1025,8 +1025,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/llm.ts": {
-    "mtime": 1786144126.5160854,
-    "ast_hash": "e98802a07e851b5902d3f219fe3159c1",
+    "mtime": 1786189518.260839,
+    "ast_hash": "7dea883d15047ea9c5f3951a23dd8c96",
     "semantic_hash": ""
   },
   "packages/contracts/src/drafting.ts": {
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/cards.tsx": {
-    "mtime": 1786131051.7177744,
-    "ast_hash": "43d67eeb03598f5e231023d89ec84711",
+    "mtime": 1786194055.1235,
+    "ast_hash": "98ddf675c0d011b6b8921db6d7f6fbb6",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-08-SUMMARY.md": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1786155471.833109,
-    "ast_hash": "b19cf6c03c8f0776d5f573e790d8fa41",
+    "mtime": 1786193805.0581112,
+    "ast_hash": "5a15c2666911ec99f2d39b9ee26c358e",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -1765,8 +1765,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitTools.test.ts": {
-    "mtime": 1786142068.0446212,
-    "ast_hash": "cebba1b7eccb396e1c9482b8d71d2173",
+    "mtime": 1786193065.36018,
+    "ast_hash": "7cf87df757db951ce78fe3b84c0e967c",
     "semantic_hash": ""
   },
   "packages/backend/convex/documentDraft.test.ts": {
@@ -2420,8 +2420,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/vaultSmoke.ts": {
-    "mtime": 1785861917.454273,
-    "ast_hash": "256569b6bd10ed0a77bdfc776319ab23",
+    "mtime": 1786194102.2584877,
+    "ast_hash": "ce1a93a5cd3875c35d45002a3e47ea51",
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-smoke-vault.mjs": {
@@ -2585,8 +2585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vault.md": {
-    "mtime": 1786149951.9217038,
-    "ast_hash": "ea8190d8852048e1e459b7f5cfbe8560",
+    "mtime": 1786193790.2985287,
+    "ast_hash": "0dbcc9df8479709183fc70a64ed657ed",
     "semantic_hash": ""
   },
   "packages/contracts/skills/graph-extractor.md": {
