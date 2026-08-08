@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/index.ts": {
-    "mtime": 1785883537.412302,
-    "ast_hash": "ff0545f63ebd57d83f023580fdcb97c1",
+    "mtime": 1786198476.4307249,
+    "ast_hash": "4ba803534ad7664fcba975cf68f26f3f",
     "semantic_hash": ""
   },
   "packages/core/src/logger.ts": {
@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1786196542.7579215,
-    "ast_hash": "178a284efb41ec23ac381b57b3adc6bf",
+    "mtime": 1786199820.5836513,
+    "ast_hash": "a23a90f635cc1ac8fc0240dd0d2c1687",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1786181792.310812,
-    "ast_hash": "0acf488d18226172862c071d4fa7e4ea",
+    "mtime": 1786199875.9233677,
+    "ast_hash": "d16f35210f4080bae5a8fb0d1103caea",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1786118621.625675,
-    "ast_hash": "b415711b43edb1037e29bc199a0b5752",
+    "mtime": 1786198645.0671854,
+    "ast_hash": "a3e3394cc139b1cc72766865ed8efdc5",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -2585,8 +2585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vault.md": {
-    "mtime": 1786196475.9581382,
-    "ast_hash": "8a9233ca02115b249b00f7b837b51fe4",
+    "mtime": 1786199508.2091124,
+    "ast_hash": "b88c8c5ff7ff68f7a313d1337f96d623",
     "semantic_hash": ""
   },
   "packages/contracts/skills/graph-extractor.md": {
@@ -4085,8 +4085,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/onboarding.md": {
-    "mtime": 1785805190.0703535,
-    "ast_hash": "b358f54f33f4fd3be1680636a57d262d",
+    "mtime": 1786199865.0397189,
+    "ast_hash": "71dd2c2f513c1eb1d0b8784ece71514d",
     "semantic_hash": ""
   },
   "packages/core/src/businessProfile.test.ts": {
@@ -5800,8 +5800,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/BlueprintPanel.tsx": {
-    "mtime": 1785861906.8885732,
-    "ast_hash": "2c4a1a46a3a87629c2619f4a8596dfc9",
+    "mtime": 1786199673.1884296,
+    "ast_hash": "71453040a66ff213479bcbbc8c89eba9",
     "semantic_hash": ""
   },
   "packages/backend/convex/calendar.test.ts": {
@@ -6745,8 +6745,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/vaultSurface.test.ts": {
-    "mtime": 1785861909.5412562,
-    "ast_hash": "af8f34973585200b46d144a1c3c635ec",
+    "mtime": 1786199248.1955817,
+    "ast_hash": "16798672ff0937af31a8c3055b4a2cc6",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-09-SUMMARY.md": {
@@ -6845,7 +6845,7 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/vault/FolderBreadcrumb.tsx": {
-    "mtime": 1785867516.0492423,
+    "mtime": 1786199338.9467678,
     "ast_hash": "9a6680622f37870291b607017212fbad",
     "semantic_hash": ""
   },
@@ -7000,8 +7000,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.d.ts": {
-    "mtime": 1785885382.6037867,
-    "ast_hash": "8d0e1faabe7c7cb9515ea861d616f8b8",
+    "mtime": 1786198342.0864947,
+    "ast_hash": "35e27657da30576e653b74dd23d86692",
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.js": {
@@ -7255,8 +7255,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1786181586.0477834,
-    "ast_hash": "b5f7b28f3a19133709e1d831df551016",
+    "mtime": 1786198637.6871328,
+    "ast_hash": "499a2fe1c0e74aaa29f658e93d2d7010",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7712,6 +7712,61 @@
   ".planning/phases/18-document-content-creation/18-08-SUMMARY.md": {
     "mtime": 1786196522.0853868,
     "ast_hash": "a74035562956957f962e5b9a6dcf2a51",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/spendLedger.test.ts": {
+    "mtime": 1786198476.4619927,
+    "ast_hash": "661d1ef4ae19ea554c4b402559d1e574",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/spendLedger.ts": {
+    "mtime": 1786198476.4937165,
+    "ast_hash": "0fcc5da2e0c48e7efba13af6168d711b",
+    "semantic_hash": ""
+  },
+  "packages/core/src/spend.test.ts": {
+    "mtime": 1786198476.5249724,
+    "ast_hash": "35f419fdd18f90d0b9198b380e3194f6",
+    "semantic_hash": ""
+  },
+  "packages/core/src/spend.ts": {
+    "mtime": 1786198476.4619927,
+    "ast_hash": "6fb8486fe14f0206d9b1322659da19ab",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-08-08-blueprint-living-map-design.md": {
+    "mtime": 1786198417.2690399,
+    "ast_hash": "dfcf6f9a07d5040651369be9d5d575c9",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-08-08-blueprint-anatomy.md": {
+    "mtime": 1786198844.6610312,
+    "ast_hash": "9ed72e6cd514f2843334ecdd3240d841",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/profile/SegmentAnatomy.tsx": {
+    "mtime": 1786199596.0201273,
+    "ast_hash": "bcb506df0c2a3457a889f7ed3df155ee",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/profile/segmentCopy.ts": {
+    "mtime": 1786199576.0626945,
+    "ast_hash": "4bd12145b0932176fb928ab58a8f51ba",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-08-08-blueprint-anatomy/progress.md": {
+    "mtime": 1786199495.8341916,
+    "ast_hash": "8db555937b56723657d163d4b8a0fded",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-08-08-blueprint-anatomy/task-1-brief.md": {
+    "mtime": 1786199497.6157079,
+    "ast_hash": "c4ef78cfda6da183e645e309f3984e19",
+    "semantic_hash": ""
+  },
+  ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-06-SUMMARY.md": {
+    "mtime": 1786199807.832089,
+    "ast_hash": "e52dbcb5184082a200f424463ad4bf8b",
     "semantic_hash": ""
   }
 }
