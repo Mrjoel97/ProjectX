@@ -31,6 +31,22 @@
 > **Prose that NAMES the thing is documentation, not evidence.** Same idiom and same reason as
 > `readExecutableCode` in `dispatchGuard.test.ts`, whose header says exactly this.
 
+> **blueprint-anatomy tasks 2-4 (same day, on top of task 1's extraction).** A segment's detail is
+> now the four-band anatomy `SegmentAnatomy.tsx` renders for every segment, in the same fixed
+> order — Knowledge / Process / Tools / Outcomes — never a per-segment layout: Knowledge lists the
+> segment's populated `BLUEPRINT_FIELD`s with their origin ("Your own words" vs. "From <source>");
+> Process names the owning specialist and hosts `AskSpecialist`, which now renders for every
+> specialist-owned segment (Foundation and Direction have no specialist, so they render "No agent
+> owns this section — it's yours." instead); Tools mirrors the code-owned capability grant —
+> `SPECIALISTS[route].tools` from `@pikar/core` — through a `TOOL_LABELS` allowlist, so a grant
+> change shows up here with no UI edit, and an internal tool id with no user-facing label (e.g.
+> `declareUnsupported`) renders nothing rather than leaking an internal name; the same band adds
+> the live Gmail/Calendar/Drive row (`gmailAuth.gmailStatus`, "Checking…" while loading — never a
+> false "Not connected" flash on a connected account) and, for segments `SEGMENT_BLOCKED` names,
+> the still-blocked connections (Leads' social accounts row shows the legal-entity blocker text)
+> from `connections.ts`; Outcomes stays an honest "Not measured yet" placeholder until slice 2's
+> pulse aggregates land. No blueprint field, specialist grant or Convex function changed.
+
 > Last verified: 2026-08-03 (15.3-05 — **incidental for this subsystem; nothing in the onboarding
 > or profile flow changed.** `blueprint.ts`'s private `unincorporatedFor` helper gained one filter
 > term so that vault-folder members SEALED mid-ingest (VALT-07) do not move the drift count.
