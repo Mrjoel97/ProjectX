@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-05 against 48c622b
+> Last verified: 2026-08-08 against 48c622b (+ Approvals type-scale alignment, owner-reported)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -139,12 +139,37 @@ Cockpit, Vault, Media, Guardrails, Audit/WORM and Phase 19. Runtime couplings th
 `/review`, `/requests`, and `/ops`. Keep the compound index, cancellation provenance, delivery
 counters and read adapter deployed; rollback never rewrites a legacy row or fabricates cost/progress.
 
-### Approvals owner-preview gate (Plan 26-05, pre-owner UAT)
+### Approvals type scale — inline styles must quote the mockup, not invent
 
-- `/dashboard/approvals` is directly reachable behind the authenticated shell and its serialized
-  rail entry links to the route. The owner explicitly rejected the disabled `Soon` entry on
-  2026-08-05 because it made the page inaccessible for UAT. This preview link does not close the
-  blocking owner checkpoint or prove an external-provider result.
+`ApprovalsView.tsx` styles inline rather than through `globals.css` classes, so nothing stops a
+value from drifting off-brand; the owner reported the first build as oversized on every axis at UAT.
+The authority is `docs/design/mockups/pending-pages.html`, and the shipped sibling page
+(`.vault-header h1`) already matches it. Pinned: the display headline is
+`clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)` — the SAME clamp as the Vault, never a steeper `vw` term or
+a larger cap; `.btn` is a `999px` pill at `0.86rem` (an inline `font: inherit` silently lands at the
+1rem body size and MUST be followed by an explicit `fontSize`); card headings use the `cardTitle`
+constant at `1.05rem`, because a bare `<h3>` falls back to the browser's `1.17em` — `globals.css`
+has no heading reset; a TEXT stat takes `.stat-value.is-text` (`1.05rem`), not the `2rem` numeral
+size; `caps` is `0.7rem`/`0.14em`. Touch targets stay at `2.5rem` `minHeight` (BRAND §6) — reducing
+type must never reduce the hit area. When adding a surface here, copy the mockup's value or reuse a
+`globals.css` class; do not eyeball a new one.
+
+### Approvals — owner-APPROVED (Plan 26-05, Task 2 closed 2026-08-08)
+
+- **The owner ran the UAT against seeded plan rows and approved it on 2026-08-08**, which is what
+  unblocked Task 3's rail badge. Scope of that evidence, stated so it is not over-read later:
+  it covers the UI states and the guarded terminals ONLY. **No Gmail send, Calendar insert or media
+  generation was executed**, so nothing here is evidence of an external-provider result; that still
+  needs a separately executed live run. Two defects were found and fixed during the UAT: the page's
+  type scale (see above) and a cockpit crash on `?thread=` (see `cockpit.md` — the bug was in
+  `listThreadMessages`, not on this page).
+- `ApprovalsBadge` in `apps/web/app/(app)/layout.tsx` subscribes to **the same `approvals.summary`**
+  the page does, which is the plan's one-shared-subscription key link: the rail count cannot
+  disagree with the page it links to. It is shaped on the existing `DeadLetterBadge` — `undefined`
+  (loading) and `0` both render nothing, so the rail never flashes a zero or a stale count — and it
+  renders `N+` when `awaitingCountCapped`, never the capped number presented as exact.
+- **Rollback is still one line:** delete the `NAV` entry. The route becomes undiscoverable while
+  plan state, cancellation provenance, delivery counters and the read model all stay deployed.
 - The page composes `approvals.summary`, bounded Awaiting/Scheduled/In-flight/Cleared lanes,
   decisions and the sanitized Ops aggregate. Detail content is fetched through the existing
   tenant-owned `plans.byThread`; attachment capabilities are requested only after the user opens

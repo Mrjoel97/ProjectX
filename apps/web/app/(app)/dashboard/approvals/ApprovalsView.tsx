@@ -45,14 +45,18 @@ const row: CSSProperties = {
   gap: "0.65rem",
 };
 const button: CSSProperties = {
+  // `font: inherit` alone lands at the 1rem body size; the mockup's .btn is a .86rem PILL.
+  // minHeight stays at the 2.5rem touch target (BRAND §6) — shrinking type must not shrink the hit
+  // area.
   minHeight: "2.5rem",
-  borderRadius: "0.65rem",
-  padding: "0.55rem 0.85rem",
+  borderRadius: "999px",
+  padding: "0.5rem 1.1rem",
   border: "1px solid var(--rule)",
   background: "var(--card)",
   color: "var(--ink)",
   font: "inherit",
-  fontWeight: 650,
+  fontSize: "0.86rem",
+  fontWeight: 600,
   cursor: "pointer",
 };
 const primary: CSSProperties = {
@@ -69,11 +73,19 @@ const destructive: CSSProperties = {
 const muted: CSSProperties = { color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 };
 const caps: CSSProperties = {
   color: "var(--ink-soft)",
-  fontSize: "0.72rem",
-  fontWeight: 750,
-  letterSpacing: "0.11em",
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  letterSpacing: "0.14em",
   textTransform: "uppercase",
   margin: 0,
+};
+/** The mockup's .gate-title — card headings, so a bare <h3> does not fall back to browser 1.17em. */
+const cardTitle: CSSProperties = {
+  margin: 0,
+  fontSize: "1.05rem",
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+  color: "var(--ink)",
 };
 
 export function formatAbsoluteInstant(epochMs: number, requestedZone?: string): string {
@@ -135,7 +147,7 @@ export function ApprovalKindBadge({ kind }: { kind: PlanKind }) {
         background: "var(--canvas)",
         border: "1px solid var(--rule)",
         color: "var(--ink)",
-        fontSize: "0.76rem",
+        fontSize: "0.68rem",
         fontWeight: 700,
       }}
     >
@@ -370,7 +382,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
             <span style={{ ...caps, color: "var(--held-text)" }}>Held · awaiting release</span>
             <ApprovalKindBadge kind={item.kind} />
           </div>
-          <h3 style={{ margin: 0, color: "var(--ink)", overflowWrap: "anywhere" }}>{titleFor(plan)}</h3>
+          <h3 style={{ ...cardTitle, overflowWrap: "anywhere" }}>{titleFor(plan)}</h3>
           <PlanMeta item={item} />
         </div>
         <Link href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`} style={{ ...button, textDecoration: "none" }}>
@@ -487,7 +499,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
     <article style={{ ...card, ...stack }} data-plan-id={item.planId}>
       <div style={row}>
         <div>
-          <h3 style={{ margin: 0 }}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
+          <h3 style={cardTitle}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
           <PlanMeta item={item} />
         </div>
         <ApprovalKindBadge kind={item.kind} />
@@ -526,7 +538,7 @@ function InFlightRow({ item }: { item: InFlightItem }) {
     <article style={{ ...card, ...stack }}>
       <div style={row}>
         <div>
-          <h3 style={{ margin: 0 }}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
+          <h3 style={cardTitle}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
           <PlanMeta item={item} />
         </div>
         <ApprovalKindBadge kind={item.kind} />
@@ -574,7 +586,7 @@ function DecisionCard({ item }: { item: DecisionItem }) {
   return (
     <article style={{ ...card, ...stack }}>
       <p style={caps}>Diagnostic question</p>
-      <h3 style={{ margin: 0 }}>{item.prompt}</h3>
+      <h3 style={cardTitle}>{item.prompt}</h3>
       {item.valueType === "boolean" ? (
         <select aria-label={item.label} value={value} onChange={(event) => setValue(event.target.value)} style={button}>
           <option value="">Choose…</option>
@@ -661,7 +673,7 @@ function DecisionsAndBlocked() {
         {blocked === undefined ? <ApprovalsStateNotice state="loading" /> : blocked.count === 0 ? <ApprovalsStateNotice state="empty">No blocked operations need review.</ApprovalsStateNotice> : (
           <article style={{ ...card, ...stack }}>
             <p style={{ ...caps, color: "var(--danger-text)" }}>Blocked</p>
-            <h3 style={{ margin: 0 }}>{blocked.count}{blocked.countCapped ? "+" : ""} stopped operation{blocked.count === 1 ? "" : "s"}</h3>
+            <h3 style={cardTitle}>{blocked.count}{blocked.countCapped ? "+" : ""} stopped operation{blocked.count === 1 ? "" : "s"}</h3>
             <p style={muted}>Sensitive details stay in Compliance. This page receives counts and timestamps only.</p>
             <Link href={blocked.href} style={{ ...button, textDecoration: "none", justifySelf: "start" }}>Review in Compliance ↗</Link>
           </article>
@@ -724,12 +736,29 @@ function ConnectedApprovals() {
       <header style={{ ...row, alignItems: "stretch" }}>
         <div style={{ ...stack, alignContent: "center", maxWidth: "48rem" }}>
           <p style={caps}>Governance gate · {dateLabel}</p>
-          <h1 style={{ margin: 0, color: "var(--ink)", fontSize: "clamp(2rem, 5vw, 3.6rem)", lineHeight: 1 }}>Clear the gate</h1>
-          <p style={{ ...muted, fontSize: "1rem" }}>Everything Pikar staged and cannot do without you. Approve once; guarded execution, audit and honest outcome states follow.</p>
+          {/* The ONE display headline, at the SAME clamp as `.vault-header h1` and the mockup's
+              .display. The prior `clamp(2rem, 5vw, 3.6rem)` grew nearly twice as fast per viewport
+              width and topped out 1rem larger than every other dashboard page. */}
+          <h1
+            style={{
+              margin: 0,
+              color: "var(--ink)",
+              fontFamily: "var(--font-display), system-ui, sans-serif",
+              fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)",
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.05,
+            }}
+          >
+            Clear the gate
+          </h1>
+          <p style={{ ...muted, fontSize: "0.94rem" }}>Everything Pikar staged and cannot do without you. Approve once; guarded execution, audit and honest outcome states follow.</p>
         </div>
         <aside style={{ ...card, minWidth: "14rem" }} aria-label="Oldest waiting">
           <p style={caps}>Oldest waiting</p>
-          <p style={{ margin: "0.45rem 0", fontSize: "1.65rem", fontWeight: 800 }}>{summary === undefined ? "—" : summary.oldestWaitingAt === null ? "None" : ageLabel(summary.oldestWaitingAt)}</p>
+          {/* A TEXT stat ("3 days"), so it takes the mockup's .stat-value.is-text 1.05rem, not the
+              2rem numeral size — 1.65rem was reading as a second headline beside the h1. */}
+          <p style={{ margin: "0.45rem 0", fontSize: "1.05rem", fontWeight: 700, letterSpacing: "-0.01em" }}>{summary === undefined ? "—" : summary.oldestWaitingAt === null ? "None" : ageLabel(summary.oldestWaitingAt)}</p>
           <p style={{ ...muted, fontSize: "0.82rem" }}>Plans do not expire, but their context can become stale.</p>
         </aside>
       </header>

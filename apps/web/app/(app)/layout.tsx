@@ -31,8 +31,9 @@ import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
 // pages don't exist yet render disabled with a "Soon" tag — honest, no dead links.
-// Approvals is live for owner preview while its explicit UAT checkpoint remains pending; route
-// accessibility and owner acceptance are separate facts.
+// Approvals is FULLY live: the owner approved its UAT on 2026-08-08 (26-05 Task 2), which is what
+// unblocked its `ApprovalsBadge` count. Rollback is still one link: delete the NAV entry and the
+// route goes undiscoverable without touching plan state, provenance or the read model.
 // Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
@@ -63,6 +64,26 @@ function DeadLetterBadge() {
   return (
     <span className="rail-badge" title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}>
       {count}
+    </span>
+  );
+}
+
+// 26-05 Task 3 (post owner-UAT approval). The rail count and the Approvals page read the SAME
+// `approvals.summary` subscription, so the badge cannot disagree with the page it links to — the
+// plan's "one shared subscription" key link. Shaped on DeadLetterBadge deliberately: `undefined`
+// (still loading) and 0 both render nothing, so the rail never flashes a zero or a stale number.
+// `awaitingCountCapped` is surfaced as "N+" rather than silently reporting the capped figure as
+// exact — the same honesty rule the page's partial notice follows.
+function ApprovalsBadge() {
+  const summary = useQuery(api.approvals.summary);
+  if (!summary?.awaitingCount) return null;
+  const label = `${summary.awaitingCount}${summary.awaitingCountCapped ? "+" : ""}`;
+  return (
+    <span
+      className="rail-badge"
+      title={`${label} plan${summary.awaitingCount === 1 && !summary.awaitingCountCapped ? "" : "s"} awaiting your approval`}
+    >
+      {label}
     </span>
   );
 }
@@ -137,6 +158,7 @@ function Shell({ children }: { children: ReactNode }) {
                 {item.icon}
                 <span className="rail-label">{item.label}</span>
                 {item.href === "/ops" && <DeadLetterBadge />}
+                {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
               </Link>
             ) : (
               <span key={item.label} className="rail-item is-soon" aria-disabled="true">
