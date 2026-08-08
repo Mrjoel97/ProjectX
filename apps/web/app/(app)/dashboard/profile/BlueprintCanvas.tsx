@@ -370,6 +370,7 @@ export function BlueprintCanvas({
             const segPulse = pulse?.[segment.id];
             const breathing = (segPulse?.inFlight ?? 0) > 0;
             const recency = recencyLevel(segPulse?.lastActivityAt ?? null, Date.now());
+            const flight = breathing ? " · run in flight" : "";
 
             return (
               <button
@@ -487,10 +488,10 @@ export function BlueprintCanvas({
                           .filter(Boolean)
                           .join(" · ")
                       : total === 0
-                        ? "not tracked yet"
+                        ? `not tracked yet${flight}`
                         : !built
-                          ? "not built yet"
-                          : `${filled} of ${total}${isGap ? " · needs you" : ""}${breathing ? " · run in flight" : ""}`}
+                          ? `not built yet${flight}`
+                          : `${filled} of ${total}${isGap ? " · needs you" : ""}${flight}`}
                   </span>
 
                   {/* A contradicted node splits: your side and the document's side, with the ticked
