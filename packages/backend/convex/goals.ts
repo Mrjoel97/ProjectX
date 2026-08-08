@@ -58,6 +58,16 @@ export const addGoal = tenantMutation({
     if (text.length === 0 || text.length > TEXT_MAX) {
       throw new ConvexError({ code: "INVALID_TEXT" });
     }
+    // Convex float64 permits NaN/Infinity, and any finite value with |ms| > 8.64e15 is an
+    // Invalid Date. Core's `isoDay` calls `new Date(ms).toISOString()`, which THROWS on all of
+    // those — and that throw lands in `spineForTenant`'s catch-all, blanking the WHOLE blueprint
+    // spine (every field, not just goals) for every cockpit turn and vault-grounding call.
+    if (
+      args.targetDate !== undefined &&
+      !(Number.isFinite(args.targetDate) && Math.abs(args.targetDate) <= 8.64e15)
+    ) {
+      throw new ConvexError({ code: "INVALID_TARGET_DATE" });
+    }
     let nested = false;
     if (args.parentId !== undefined) {
       const parent = await ctx.db.get(args.parentId);

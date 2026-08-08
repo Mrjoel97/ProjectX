@@ -327,6 +327,7 @@ function AddGoalForm({ segmentId }: { segmentId: string }) {
         />
         <input
           type="date"
+          aria-label="Target date"
           value={targetDate}
           onChange={(e) => setTargetDate(e.target.value)}
           disabled={busy}

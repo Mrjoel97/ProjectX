@@ -104,4 +104,21 @@ describe("goals", () => {
       ConvexError,
     );
   });
+
+  it("cannot nest a goal under another tenant's goal", async () => {
+    const t = makeTest();
+    const asB = t.withIdentity({ subject: "tenantB|s", issuer: "test" });
+    const { id: parentId } = await asB.mutation(api.goals.addGoal, {
+      segmentId: "offer",
+      text: "tenantB's goal",
+    });
+    const asA = t.withIdentity({ subject: "tenantA|s", issuer: "test" });
+    await expect(
+      asA.mutation(api.goals.addGoal, {
+        segmentId: "offer",
+        text: "tenantA's child goal",
+        parentId,
+      }),
+    ).rejects.toThrow(ConvexError);
+  });
 });

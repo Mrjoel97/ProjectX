@@ -65,7 +65,12 @@ export function nearestActive(goals: readonly Goal[], limit: number): Goal[] {
 export function renderGoalLines(goals: readonly Goal[]): string[] {
   return goals.map((g) => {
     const due = g.targetDate === undefined ? "" : ` [due ${isoDay(g.targetDate)}]`;
-    return `- ${clip(g.text, GOAL_LINE_CAP - 2 - due.length)}${due}`;
+    // One goal must render as exactly one spine line. `addGoal` only trims, so raw text
+    // containing `\n` would otherwise emit multiple physical lines inside the
+    // `<business_blueprint>` fence — letting keyboard input forge spine structure. Collapse at
+    // RENDER time (not only write time) so rows already stored before this fix are covered too.
+    const text = g.text.replace(/\s+/g, " ");
+    return `- ${clip(text, GOAL_LINE_CAP - 2 - due.length)}${due}`;
   });
 }
 
