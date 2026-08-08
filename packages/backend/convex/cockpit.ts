@@ -341,6 +341,28 @@ export const resolveRecipients = tenantAction({
  * phase ships (agentSteps) is the tool-step half of progress; assistant-token streaming is the
  * blocked half.
  */
+/**
+ * Is this the agent component rejecting a threadId that is not one of ITS `v.id("threads")`?
+ *
+ * TWO wordings, and BOTH must match or the fix is a no-op where it counts. `convex-test` raises
+ * `Validator error: Expected ID for table "threads", got \`…\``; the LIVE deployment raises
+ * `ArgumentValidationError: Value does not match validator. Path: .threadId … Validator:
+ * v.id("threads")`. Matching only the harness's wording is how the first attempt at this fix
+ * shipped GREEN and still crashed the real cockpit — the test proved the harness, not production.
+ * Any change here must keep `cockpitThreadDegrade.test.ts`'s verbatim-message assertions passing.
+ *
+ * ponytail: matched on the message because the host cannot normalize a COMPONENT's table id
+ * (`ctx.db.normalizeId` only sees app tables) and every agent-side lookup takes the same
+ * `v.id("threads")` that is doing the rejecting. Upgrade path: if @convex-dev/agent ever exposes a
+ * non-throwing thread lookup, call it instead of catching.
+ */
+export function isNonAgentThreadIdError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message;
+  if (/Expected ID for table "threads"/.test(message)) return true;
+  return /ArgumentValidationError/.test(message) && /Validator:\s*v\.id\("threads"\)/.test(message);
+}
+
 export const listThreadMessages = tenantQuery({
   args: { threadId: v.string(), paginationOpts: paginationOptsValidator },
   handler: async (ctx, { threadId, paginationOpts }) => {
@@ -349,7 +371,21 @@ export const listThreadMessages = tenantQuery({
       .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
       .unique();
     if (!owns) return { page: [], isDone: true, continueCursor: "" };
-    return await listMessages(ctx, components.agent, { threadId, paginationOpts });
+    // The guard above answers AUTHORIZATION; it does not answer EXISTENCE. `plans.threadId` is a
+    // plain string and is NOT guaranteed to name an agent-component thread: `smoke:seedCockpitPlan`
+    // writes `smoke-attach-<uuid>`, and legacy rows predate the thread they point at. The component
+    // validates `v.id("threads")` and THROWS on anything else — uncaught in the browser, that takes
+    // the ENTIRE cockpit page down, and it is reachable from the `?thread=` URL parameter (found in
+    // the 26-05 UAT). Owning a plan whose thread was never minted means exactly what owning no
+    // thread means: there are no messages to show. Both must degrade to the SAME empty page.
+    try {
+      return await listMessages(ctx, components.agent, { threadId, paginationOpts });
+    } catch (error) {
+      // Deliberately NARROW: only the id-shape rejection degrades. Every other failure still
+      // throws, so a real component fault is never masked by this catch.
+      if (isNonAgentThreadIdError(error)) return { page: [], isDone: true, continueCursor: "" };
+      throw error;
+    }
   },
 });
 
