@@ -47,36 +47,36 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 function ToolRow({ name, state, detail }: { name: string; state: string; detail?: string }) {
+  // Name and state share one non-wrapping line; the detail sits below at full width. A single
+  // wrapping flex row pushed the state label under a wide detail (seen live on the Leads social
+  // row), where it read as a stray heading rather than the row's status.
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "0.75rem",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-      }}
-    >
-      <span style={{ minWidth: 0 }}>
-        <span style={{ fontSize: "0.88rem", color: "var(--ink)", fontWeight: 600 }}>{name}</span>
-        {detail !== undefined && (
-          <span style={{ display: "block", fontSize: "0.78rem", color: "var(--ink-soft)" }}>
-            {detail}
-          </span>
-        )}
-      </span>
+    <div style={{ display: "grid", gap: "0.1rem" }}>
       <span
         style={{
-          fontSize: "0.68rem",
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          color: "var(--ink-soft)",
-          whiteSpace: "nowrap",
+          display: "flex",
+          gap: "0.75rem",
+          alignItems: "baseline",
+          justifyContent: "space-between",
         }}
       >
-        {state}
+        <span style={{ fontSize: "0.88rem", color: "var(--ink)", fontWeight: 600 }}>{name}</span>
+        <span
+          style={{
+            fontSize: "0.68rem",
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--ink-soft)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {state}
+        </span>
       </span>
+      {detail !== undefined && (
+        <span style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>{detail}</span>
+      )}
     </div>
   );
 }
