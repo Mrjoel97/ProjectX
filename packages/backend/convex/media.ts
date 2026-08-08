@@ -49,6 +49,9 @@ import { hmacHex } from "./gmailAuth";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+// The plain-function half of the ledger writer: the limiter movement and its row must commit
+// or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
+import { recordMovement } from "./spendLedger";
 
 /** Every way a job can be refused BEFORE a cent moves. Distinct codes because they send the user
  *  to distinct levers: rewrite a line, cut blocks, wait for tomorrow, or call the operator. */
@@ -119,6 +122,31 @@ async function reserveProviderLinesInner(
     reserve: true,
   });
   await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
+
+  // FIN-01: ONE `reserved` movement for the WHOLE job, in this same transaction. Per-line rows
+  // would not sum back to this number — `chooseMediaBatch` floors the TOTAL exactly once (D12a),
+  // so the batch estimate is not the sum of the line estimates.
+  //
+  // DERIVED from `batchId`, not minted: `batchId` is server-minted per reservation and the approve
+  // arm reserves inside the plan's proposed→approved CAS, so approve-once IS reserve-once. A
+  // genuine second reservation gets a new batch and therefore its own row.
+  // Guarded for the same reason the landing is: a batch that prices under a cent (a lone short
+  // voice line) floors to 0, and a zero-cent movement is rejected — it would abort the reservation.
+  if (estCents > 0) {
+    await recordMovement(ctx, {
+      tenantId,
+      rail: "media",
+      phase: "reserved",
+      amountCents: estCents,
+      correlationId: `mediabatch:${batchId}`,
+      createdAt: Date.now(),
+      // Every line of one batch belongs to one plan, so the first line names it. Read off the rows
+      // rather than added as a parameter: a standalone image reaches this same function, and giving
+      // it a planId argument it does not otherwise need would be a wider signature for no gain.
+      planId: lines[0]?.row.planId,
+      kind: "media_reserve",
+    });
+  }
 
   // Only now do rows exist. Every refusal above returned with zero inserts.
   for (const line of lines) await ctx.db.insert("mediaJobs", line.row);

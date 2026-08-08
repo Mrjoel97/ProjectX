@@ -1,6 +1,9 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-08-04 (ADR-014 — **standalone images are now reachable without creating a
+> Last verified: 2026-08-09 (26-08 — **the media rail is now double-entered, and it is the ONE rail
+> whose two planes deliberately do NOT agree cent for cent.** See "The spend ledger (26-08)" below.)
+>
+> Previously verified: 2026-08-04 (ADR-014 — **standalone images are now reachable without creating a
 > second media stack.** `proposeImage` stages a free `mediaMode:"image"` plan; the canvas shows the
 > pinned Flux Schnell 1080×1920 estimate and shared remaining budget before enabling **Generate
 > image**; `generateImage` reserves one image row through the same serializable money helper as the
@@ -329,6 +332,60 @@ no `watch.json` entry, so `check-playbooks` cannot demand a playbook bump when t
 change. **20-04 deliberately did not fix it** — `guardrails.ts` is shared by the LLM rail and the
 media rail, so assigning it to `media.md` alone would be wrong, and assigning it needs an owner
 decision about which playbook holds the guard subsystem.
+
+## The spend ledger (26-08)
+
+The limiter stays **enforcement** truth; `spendEvents` is **reporting/reconciliation** truth. Both
+media movements now write a row in the SAME transaction as the limiter movement, via
+`spendLedger.recordMovement` (a plain function call — a separate `ctx.runMutation` would be a second
+transaction and could leave the window moved with no record).
+
+| where | phase | amount | correlation |
+|---|---|---|---|
+| `reserveProviderLinesInner`, after both `limit()` calls | `reserved` | `estCents` — the WHOLE job | `mediabatch:<batchId>` |
+| `mediaComplete.landResult`, success path | `actual` | that line's `actualCents` | `mediabatch:<batchId>:<jobId>` |
+
+**ONE reserved row per batch, not per line.** `chooseMediaBatch` floors the TOTAL exactly once
+(D12a), so per-line reserved rows would not sum back to the reserved figure.
+
+**THE PLANES DIVERGE HERE ON PURPOSE, AND THIS IS THE ONLY RAIL WHERE THEY DO.** At a landing the
+limiter consumes only the positive `delta`, because it already took the whole estimate up front and
+this rail never refunds. The ledger records `actualCents` — the full cost of the line — because it
+answers a different question. Recording the delta instead would report an ordinary $0.50 clip that
+came in at or under estimate as costing **nothing**, which is every normal landing.
+
+The remainder is not lost. `reserved − actual` is exactly the never-returned over-reservation, and
+`aggregateSpend` reports it as **`unlanded`**. That is the honest shape of a rail with no refund
+path, and it is why a failed line writes NO movement at all: it never landed, so its share stays
+unlanded rather than being recorded as zero spend. **A `refunded` movement must never appear on this
+rail** — a test asserts that, and if one ever does, either the rail grew a credit path (a real
+design change to be argued, not slipped in) or something is minting money the limiter never returned.
+
+**Both sites DERIVE their correlation; neither mints a nonce.** The reasoning rail mints because an
+action re-entry re-spends — that rule is wrong here. A reservation happens inside the plan's
+`proposed → approved` CAS, so approve-once is reserve-once; a re-delivered fal webhook is a replay,
+not a second charge. **The `<jobId>` segment on the landing is load-bearing:** every line of a batch
+shares one `batchId`, so a batch-scoped correlation would let the first landing suppress all twelve
+siblings of a 13-line reel. The `TERMINAL` guard protects the money; the correlation protects the
+record.
+
+**Both writes are guarded on `> 0`, and the zero case is REAL here rather than defensive padding.**
+A voice take can price under half a cent, so `Math.round` yields 0 — and a zero-cent movement is
+rejected outright, which inside `landResult` would abort the whole landing transaction and fail a
+sub-cent take's own webhook. Rounding up to 1¢ would be worse: it invents money the limiter never
+took. Skipping is the honest option and the line's share simply stays inside `unlanded`. **This is
+the sub-cent fidelity limit already recorded in `guardrails.md` "Known gaps", and media hits it
+hardest** because tts lines are routinely fractions of a cent while clips are not. Five tests
+caught this the moment the ledger went in; do not "fix" it by padding.
+
+**Rollback:** the Finance UI may be disabled; these two writers may not be. An append-only history
+has no backfill, so a dark window is a permanent hole. Same rule as `dashboard-pages.md` and
+`guardrails.md` state from their own sides.
+
+**Verify:** `pnpm --filter @pikar/backend test -- media spendLedger`. Mutation checks that were
+actually run: record the limiter's `delta` instead of `actualCents`; drop `<jobId>` from the landing
+correlation; record one line's estimate instead of the batch total. Each turns a different test red —
+and the second one initially survived, which is how the sibling-lines test came to exist.
 
 ## The submit adapter (20-05)
 

@@ -3788,3 +3788,174 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
     }
   });
 });
+
+// ── 26-08: LEDGER PARITY FOR THE MEDIA RAIL ────────────────────────────────────────────
+//
+// The third and last rail. Media differs from reasoning and ingest in one structural way that
+// shapes every assertion below: **this rail has no refund at all, by design.** `reserveJobInner`
+// consumes the whole job's estimate up front and `landResult` consumes only a POSITIVE delta;
+// nothing ever credits the window back (plan 20-04's `ponytail:` no-refunds rule — media's
+// over-reservation is bounded cents, not the ingest rail's unknowable dollars).
+//
+// So the ledger's job here is NOT to mirror the limiter cent for cent. It records what each line
+// actually COST, while the limiter records what it still needed to CONSUME. The difference is
+// exactly the never-returned over-reservation, and `aggregateSpend` already has the vocabulary for
+// it: `unlanded`. That is the honest answer, and it is why "an unlanded line is never counted as
+// zero actual spend" is a requirement rather than a nicety.
+//
+// Both sites are REPLAYABLE (an approve CAS, a re-delivered fal webhook), so both DERIVE their
+// correlation from refs. Neither mints a nonce — that is the reasoning-rail rule and it is wrong
+// here (see docs/playbooks/guardrails.md §"Phase 26").
+describe("ledger parity: the media rail reserves whole and lands per line", () => {
+  const events = (t: T) => t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  test("reserving a job writes ONE reserved movement for the WHOLE job, on the batch", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: JOB_41(),
+      clipSeconds: 10,
+      withCaptions: true,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("expected ok");
+
+    const rowsOut = await events(t);
+    expect(rowsOut).toHaveLength(1);
+    expect(rowsOut[0]).toMatchObject({
+      tenantId: A,
+      rail: "media",
+      phase: "reserved",
+      // THE WHOLE JOB, once — not one row per line. The batch floor was applied across all 13
+      // lines exactly once (D12a), so per-line reserved rows would not sum back to this number.
+      amountCents: JOB_41_CENTS,
+      correlationId: `mediabatch:${res.batchId}`,
+      planId,
+    });
+    expect(res.lineCount).toBe(JOB_41_LINES); // non-vacuity: this really is a many-line job
+  });
+
+  test("a refused reservation writes no movement at all", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    const job = {
+      tenantId: A,
+      planId,
+      blocks: JOB_41(),
+      clipSeconds: 10,
+      withCaptions: true,
+    } as const;
+
+    // Drain the tenant's media window through the REAL rail rather than a test-only door, then ask
+    // for one more. 305c a job against a 1000c window, so the fourth is the one that cannot fit.
+    let refused: Awaited<ReturnType<typeof reserve>> | null = null;
+    for (let i = 0; i < 4 && refused === null; i += 1) {
+      const res = await reserve(t, { ...job, blocks: JOB_41() });
+      if (!res.ok) refused = res;
+    }
+    expect(
+      refused,
+      "the window never refused — the drain loop is not exercising the cap",
+    ).not.toBeNull();
+    expect(refused?.ok).toBe(false);
+
+    // Exactly the successful reservations are recorded, and the refusal added nothing.
+    const reserved = (await events(t)).filter((r) => r.phase === "reserved");
+    expect(reserved).toHaveLength(3);
+    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(JOB_41_CENTS * 3);
+  });
+
+  test("each landed line writes ONE actual movement carrying that line's own cents", async () => {
+    const t = harness();
+    const { jobIds } = await seedInFlight(t, { blocks: 2 });
+
+    await land(t, jobIds[0]!);
+
+    const actuals = (await events(t)).filter((r) => r.phase === "actual");
+    expect(actuals).toHaveLength(1);
+    const landed = await t.run((ctx) => ctx.db.get(jobIds[0]!));
+    expect(actuals[0]).toMatchObject({
+      rail: "media",
+      phase: "actual",
+      // The LINE's reconciled cost, which is what the row now carries — not the batch estimate
+      // and not the delta the limiter consumed.
+      amountCents: landed?.actualCents,
+      mediaJobId: jobIds[0],
+    });
+    expect(landed?.actualCents).toBeGreaterThan(0); // the assertion above is not vacuous
+  });
+
+  test("every line of ONE batch lands its own movement — they must not share a correlation", async () => {
+    const t = harness();
+    const { jobIds } = await seedInFlight(t, { blocks: 2 });
+    expect(jobIds.length).toBeGreaterThan(1); // non-vacuity: there really are sibling lines
+
+    for (const jobId of jobIds) await land(t, jobId);
+
+    // THE UNDER-COUNT THIS RAIL IS MOST EXPOSED TO. Every line of a batch shares one `batchId`, so
+    // a batch-scoped correlation would make the FIRST landing suppress every sibling as a replay —
+    // a 13-line reel would record one clip and lose the other twelve. Replay identity is
+    // (tenant, correlation, phase), and `reserved` vs `actual` differ, so the collision with the
+    // reservation row is NOT what saves us here: the job id in the string is.
+    const actuals = (await events(t)).filter((r) => r.phase === "actual");
+    expect(actuals).toHaveLength(jobIds.length);
+    expect(new Set(actuals.map((r) => r.correlationId)).size).toBe(jobIds.length);
+  });
+
+  test("a re-delivered webhook writes no second actual movement", async () => {
+    const t = harness();
+    const { jobIds } = await seedInFlight(t, { blocks: 2 });
+
+    await land(t, jobIds[0]!);
+    await land(t, jobIds[0]!); // fal retries; the row is already terminal
+
+    expect((await events(t)).filter((r) => r.phase === "actual")).toHaveLength(1);
+  });
+
+  test("a FAILED line writes NO actual movement — it stays unlanded, not zero", async () => {
+    const t = harness();
+    const { jobIds } = await seedInFlight(t, { blocks: 2 });
+
+    await land(t, jobIds[0]!, false); // provider error
+    await land(t, jobIds[1]!, true); // and a sibling that really landed
+
+    // Nothing landed for the failed line, so nothing is recorded as landed. A zero-cent row is
+    // rejected outright by validateSpendMovement anyway, and writing one would claim the line cost
+    // nothing when in truth its share of the reservation was consumed and never returned.
+    //
+    // The sibling is what makes this non-vacuous: the assertion is "ONE actual, from the line that
+    // succeeded", not "no actuals at all", which would pass on a rail that records nothing.
+    const actuals = (await events(t)).filter((r) => r.phase === "actual");
+    expect(actuals).toHaveLength(1);
+    expect(actuals[0]?.mediaJobId).toBe(jobIds[1]);
+    expect((await t.run((ctx) => ctx.db.get(jobIds[0]!)))?.status).toBe("failed");
+  });
+
+  test("the never-refunded over-reservation reads as unlanded, not as returned money", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: JOB_41(),
+      clipSeconds: 10,
+      withCaptions: true,
+    });
+    if (!res.ok) throw new Error("expected ok");
+
+    const movements = await events(t);
+    const reserved = movements
+      .filter((r) => r.phase === "reserved")
+      .reduce((sum, r) => sum + r.amountCents, 0);
+    const refunded = movements.filter((r) => r.phase === "refunded");
+
+    expect(reserved).toBe(JOB_41_CENTS);
+    // THE MEDIA RAIL NEVER REFUNDS. If a refund movement ever appears here, either the rail grew
+    // a credit path (a real design change that must be argued, not slipped in) or something is
+    // minting money into the ledger that the limiter never returned.
+    expect(refunded).toHaveLength(0);
+  });
+});

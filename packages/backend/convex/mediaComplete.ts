@@ -25,6 +25,9 @@ import type { MutationCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
 import { rateLimiter } from "./guardrails";
+// The plain-function half of the ledger writer: the limiter movement and its row must commit
+// or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
+import { recordMovement } from "./spendLedger";
 
 /** A row past this point is finished. Re-delivery of its webhook must change NOTHING — fal's retry
  *  policy is undocumented, so at-least-once is the only safe assumption. */
@@ -430,6 +433,44 @@ export const landResult = internalMutation({
         reserve: true,
       });
       await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: delta, reserve: true });
+    }
+
+    // FIN-01: this line's `actual`, and note it is NOT the `delta` the limiter just consumed.
+    //
+    // THE TWO PLANES DIVERGE HERE, DELIBERATELY, AND THIS RAIL IS THE ONLY ONE WHERE THEY DO. The
+    // limiter already took the whole batch estimate up front and never refunds (20-04), so at a
+    // landing it only needs the OVERRUN. The ledger is answering a different question — what did
+    // this line cost — and `actualCents` is that answer. Recording the delta instead would report
+    // a $0.50 clip as costing nothing whenever it came in at or under its estimate, which is every
+    // ordinary landing.
+    //
+    // The remainder is not lost: `reserved − actual` is exactly the never-returned
+    // over-reservation, and `aggregateSpend` already reports it as `unlanded`. That is the honest
+    // shape of a rail with no refund path.
+    //
+    // DERIVED from the job id, not minted — a re-delivered fal webhook is a REPLAY, not a second
+    // charge. The TERMINAL guard above already returns early on one, so this is the second lock on
+    // the same door: the guard protects the money, the correlation protects the record.
+    //
+    // GUARDED ON `> 0`, and the zero case is REAL rather than defensive padding: a voice take can
+    // price under half a cent, so `Math.round` gives 0. The ledger's unit is the cent and a
+    // zero-cent movement is rejected outright, so writing one would abort the whole landing
+    // transaction — a sub-cent take would fail its own webhook. Rounding it UP to 1c would be
+    // worse: that invents money the limiter never took. Skipping is the honest option, and the
+    // line's share simply stays inside `unlanded`. Sub-cent fidelity is a known, documented limit
+    // of this ledger (guardrails.md, "Known gaps"), not something to paper over here.
+    if (actualCents > 0) {
+      await recordMovement(ctx, {
+        tenantId: row.tenantId,
+        rail: "media",
+        phase: "actual",
+        amountCents: actualCents,
+        correlationId: `mediabatch:${row.batchId}:${jobId}`,
+        createdAt: updatedAt,
+        planId: row.planId,
+        mediaJobId: jobId,
+        kind: `media.${row.kind}`, // code-owned token, refs only (§4)
+      });
     }
 
     // Hoisted rather than inlined so that NO value inside an audit-payload literal in this module
