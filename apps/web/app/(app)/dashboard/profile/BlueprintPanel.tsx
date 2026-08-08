@@ -14,7 +14,7 @@ import {
   segmentHeadline,
 } from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BlueprintCanvas } from "./BlueprintCanvas";
 import { BlueprintDiff } from "./BlueprintDiff";
 import { AskSpecialist, SegmentAnatomy } from "./SegmentAnatomy";
@@ -51,9 +51,14 @@ export function BlueprintPanel() {
   const [building, setBuilding] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
 
-  // One clock per mount: a changing arg would resubscribe the query every render, and the
-  // 30-day window does not need sub-session precision.
-  const [now] = useState(() => Date.now());
+  // One clock per TICK, not per render: a per-render arg would resubscribe the query constantly,
+  // but a mount-frozen clock is worse — the STALE_RUN_MS guard compares against it, so an orphaned
+  // `running` step (the swallowed end-patch case the guard exists for) would breathe forever.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 5 * 60_000);
+    return () => clearInterval(t);
+  }, []);
   const pulse = useQuery(api.blueprint.blueprintPulse, { now });
 
   async function onBuild() {

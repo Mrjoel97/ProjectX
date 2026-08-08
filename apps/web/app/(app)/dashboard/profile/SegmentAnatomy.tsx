@@ -248,7 +248,7 @@ export function SegmentAnatomy({
           <p style={{ ...soft, fontSize: "0.83rem" }}>Checking…</p>
         ) : pulse.runs30d === 0 ? (
           <p style={{ ...soft, fontSize: "0.83rem" }}>
-            No {segment.specialist} runs in the last 30 days.
+            No completed {segment.specialist} runs in the last 30 days.
           </p>
         ) : (
           <p style={{ ...soft, fontSize: "0.83rem" }}>
