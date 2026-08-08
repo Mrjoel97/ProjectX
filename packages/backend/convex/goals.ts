@@ -13,7 +13,9 @@ const KNOWN_SEGMENT_IDS = new Set<string>(BLUEPRINT_SEGMENTS.map((s) => s.id));
 const STATUSES = ["active", "achieved", "dropped"] as const;
 const TEXT_MAX = 500;
 
-function toGoal(row: Doc<"goals">): Goal {
+// Exported for `blueprint.ts`'s `spineForTenant` (Task 4b) — the one row→core-`Goal` mapper,
+// shared rather than duplicated.
+export function toGoal(row: Doc<"goals">): Goal {
   return {
     id: row._id,
     segmentId: row.segmentId,
