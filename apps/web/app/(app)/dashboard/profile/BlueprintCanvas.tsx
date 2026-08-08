@@ -99,6 +99,7 @@ export function BlueprintCanvas({
   draftRows,
   acceptedContradictions,
   pulse,
+  goals,
 }: {
   blueprint: BusinessBlueprint;
   built: boolean;
