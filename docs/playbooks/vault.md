@@ -81,6 +81,20 @@
 > `fix(vault): delete smoke-ingested documents safely` commit together. No schema, index, migration,
 > backfill, stored production row, Drive scope or dependency rollback is required.
 
+> **AN AGENT-AUTHORED DOCUMENT'S RETRY IS A RE-INGEST, NOT A RE-EXTRACTION (2026-08-08).**
+> `evaluation`/`agent`/`voice` rows carry their text DIRECTLY and have **no `storageId`** — nothing
+> was ever stored, so there is nothing to extract. When such a row fails at INGEST (chunk + embed) it
+> ends up with text but **no `ragEntryId`**, i.e. present in the vault and NOT groundable — and
+> `retryExtraction`'s old `!doc.storageId` refusal made that state PERMANENT: the user pressed Retry
+> and nothing observable happened, for ever. Found live on two `ingest_failed` memos whose ingest
+> workflow died during a machine-level disk/RAM exhaustion. **This is the same objection the function
+> had already accepted for unrecognized mime types** (":98-101 — the user PRESSED A BUTTON and
+> nothing observable happened"), so it gets the same answer: do the work the doc actually needs —
+> `startIngest`, status → `processing`. A row with NO bytes and NO text is still refused, because
+> that genuinely is nothing to redo. Read the failure by SHAPE, never by source: text + no
+> `ragEntryId` ⇒ re-ingest; bytes ⇒ re-extract. `vaultSweep.test.ts` pins both arms and registers the
+> `workflow`/`workflow/workpool` components, because reaching `startIngest` needs them.
+>
 > **THE EVAL VAULT CORPUS MUST CARRY GROUND FOR EVERY SPECIALIST THAT SEARCHES IT (2026-08-08).**
 > `vaultSmoke:seedCorpus` seeded exactly two briefs — a LAUNCH note and a STAFFING plan — while
 > fixtures 29/30/31 assert `citesVaultDoc`: the needle must reach a specialist's memo, which it can

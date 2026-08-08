@@ -25,6 +25,7 @@ import { internalMutation } from "./_generated/server";
 import { tenantMutation } from "./lib/functions";
 import { migrations } from "./migrations";
 import { scheduleExtraction } from "./vault";
+import { startIngest } from "./vaultIngest";
 import { unbumpFolder } from "./vaultFolders";
 
 /** Sweep every eligible pending_extraction row onto its extraction rail (EXTR-G). */
@@ -94,7 +95,26 @@ export const retryExtraction = tenantMutation({
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return { ok: false }; // owner guard, fail-closed
     if (doc.status !== "failed" && doc.status !== "pending_extraction") return { ok: false };
-    if (!doc.storageId) return { ok: false }; // nothing stored to extract from
+    // AN AGENT-AUTHORED DOC HAS NO BYTES, AND ITS RETRY IS A RE-INGEST, NOT A RE-EXTRACTION.
+    // `evaluation`/`agent`/`voice` documents carry their text DIRECTLY — nothing was ever stored, so
+    // there is nothing to extract. When such a doc fails at INGEST (chunk + embed), it has text but
+    // no `ragEntryId`, i.e. it is un-groundable, and the old `!storageId` refusal made that
+    // PERMANENT: the user pressed Retry and nothing observable happened, for ever. Found live on two
+    // `ingest_failed` memos whose ingest workflow died during a machine-level disk/RAM exhaustion.
+    // This is the SAME objection this function already accepted for unrecognized mime types
+    // (:98-101) — "the user PRESSED A BUTTON and nothing observable happened" — so it gets the same
+    // answer: do the work the doc actually needs. Only a doc with text qualifies; no bytes AND no
+    // text really is nothing to retry.
+    if (!doc.storageId) {
+      if (!doc.text) return { ok: false }; // no bytes and no text — genuinely nothing to redo
+      await ctx.db.patch(vaultDocId, { status: "processing", failureReason: undefined });
+      await startIngest(ctx, {
+        vaultDocId,
+        tenantId: ctx.tenantId,
+        correlationId: `retry-ingest-${vaultDocId}`,
+      });
+      return { ok: true };
+    }
     // NOTE: there is deliberately no "unrecognized mime → { ok: false }" refusal any more. It was
     // the worst of the three skips: the user PRESSED A BUTTON and nothing observable happened.
     // The three refusals above are real (cross-tenant, wrong status, no stored bytes); an unknown
