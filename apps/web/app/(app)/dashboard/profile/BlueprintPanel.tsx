@@ -310,6 +310,7 @@ function BlueprintReport({
         selectedId={open}
         onSelect={(id) => setOpen(open === id ? null : id)}
         pulse={pulse?.segments}
+        goals={goals}
       />
 
       {built && gap !== null && <NeedsYou segment={gap} />}

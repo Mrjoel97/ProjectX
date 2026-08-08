@@ -7,6 +7,10 @@ import {
   type BlueprintField,
   type BlueprintSegment,
   type BusinessBlueprint,
+  countdown,
+  type Goal,
+  goalsForSegment,
+  nearestActive,
   recencyLevel,
   SEGMENT_FLOW,
   type SegmentPulse,
@@ -54,12 +58,21 @@ const HOME: Record<string, { x: number; y: number }> = {
 // uncited document rather than a silent hole.
 const DOC_ROW = 15; // one document line inside a node
 const DOC_MAX = 3; // more than this collapses to "+N more"
+const FLAG_ROW = 14; // the milestone-flag line, when the segment has a nearest dated active goal
 
-/** A node is as tall as its content: base, plus a row per document it carries, plus the "+N" row.
- *  Deterministic from the model, so edge endpoints stay pure arithmetic and never need measuring. */
-function nodeHeight(docCount: number): number {
-  if (docCount === 0) return NODE_H;
-  return NODE_H + 12 + Math.min(docCount, DOC_MAX) * DOC_ROW + (docCount > DOC_MAX ? DOC_ROW : 0);
+/** A node is as tall as its content: base, plus a row per document it carries, plus the "+N" row,
+ *  plus the milestone flag row when this segment has a nearest dated active goal. Deterministic
+ *  from the model, so edge endpoints stay pure arithmetic and never need measuring. */
+function nodeHeight(docCount: number, hasFlag: boolean): number {
+  const flagRow = hasFlag ? FLAG_ROW : 0;
+  if (docCount === 0) return NODE_H + flagRow;
+  return (
+    NODE_H +
+    12 +
+    Math.min(docCount, DOC_MAX) * DOC_ROW +
+    (docCount > DOC_MAX ? DOC_ROW : 0) +
+    flagRow
+  );
 }
 
 type Point = { x: number; y: number };
@@ -101,6 +114,9 @@ export function BlueprintCanvas({
   draftRows?: readonly BlueprintDiffRow[];
   acceptedContradictions?: ReadonlySet<BlueprintField>;
   pulse?: Record<string, SegmentPulse>;
+  /** All goals, unfiltered — the canvas slices per node with the same `goalsForSegment` rule the
+   *  anatomy panel uses, so a node's flag and its detail can never disagree. */
+  goals?: readonly Goal[];
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Layout>(() =>
@@ -139,6 +155,16 @@ export function BlueprintCanvas({
   const uncited = (vaultDocs ?? [])
     .map((d) => d.title)
     .filter((title) => !sourceToSegments.has(title));
+
+  // Segment -> its nearest dated active goal, if any. Computed once so the flag's presence — and
+  // therefore nodeHeight's extra row — is identical between the SVG edge math below and the node
+  // render further down; two independent evaluations of the same predicate is how wires drift.
+  const segmentIds = BLUEPRINT_SEGMENTS.map((s) => s.id);
+  const nextDueForSegment = new Map<string, Goal>();
+  for (const segment of BLUEPRINT_SEGMENTS) {
+    const nearest = nearestActive(goalsForSegment(goals ?? [], segment.id, segmentIds), 1)[0];
+    if (nearest !== undefined) nextDueForSegment.set(segment.id, nearest);
+  }
 
   // Saved arrangement loads after mount — localStorage does not exist during SSR.
   useEffect(() => {
@@ -329,9 +355,21 @@ export function BlueprintCanvas({
               if (!a || !b) return null;
               const source = BLUEPRINT_SEGMENTS.find((s) => s.id === edge.from);
               const sx = a.x + NODE_W;
-              const sy = a.y + nodeHeight((docsForSegment.get(edge.from) ?? []).length) / 2;
+              const sy =
+                a.y +
+                nodeHeight(
+                  (docsForSegment.get(edge.from) ?? []).length,
+                  nextDueForSegment.has(edge.from),
+                ) /
+                  2;
               const tx = b.x;
-              const ty = b.y + nodeHeight((docsForSegment.get(edge.to) ?? []).length) / 2;
+              const ty =
+                b.y +
+                nodeHeight(
+                  (docsForSegment.get(edge.to) ?? []).length,
+                  nextDueForSegment.has(edge.to),
+                ) /
+                  2;
               const bend = Math.max(40, Math.abs(tx - sx) * 0.55);
               // A wire only "flows" when its source is fully captured, so the animation stops
               // exactly where the facts run out. Motion that reports state, not decoration.
@@ -362,6 +400,7 @@ export function BlueprintCanvas({
             const { filled, total } = segmentFill(blueprint, segment);
             const done = isDone(segment);
             const segDocs = docsForSegment.get(segment.id) ?? [];
+            const nextDue = nextDueForSegment.get(segment.id) ?? null;
             const draft = draftFor(segment);
             const contradicted = draft !== null && draft.contradictions.length > 0;
             const isGap = built && segment.id === gapId;
@@ -397,7 +436,7 @@ export function BlueprintCanvas({
                   left: at.x,
                   top: at.y,
                   width: NODE_W,
-                  height: nodeHeight(segDocs.length),
+                  height: nodeHeight(segDocs.length, nextDue !== null),
                   display: "grid",
                   gridTemplateRows: "auto 1fr",
                   textAlign: "left",
@@ -493,6 +532,12 @@ export function BlueprintCanvas({
                           ? `not built yet${flight}`
                           : `${filled} of ${total}${isGap ? " · needs you" : ""}${flight}`}
                   </span>
+
+                  {nextDue !== null && (
+                    <span style={{ fontSize: "0.6rem", opacity: selected ? 0.75 : 0.7 }}>
+                      ◆ next milestone {countdown(nextDue.targetDate as number, Date.now())}
+                    </span>
+                  )}
 
                   {/* A contradicted node splits: your side and the document's side, with the ticked
                       one lit. The tick itself lives in the review below — this reports the choice,
