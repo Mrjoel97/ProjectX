@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 26
-current_plan: 5
+current_plan: 6
 status: in_progress
-stopped_at: Phase 26 Plan 26-05 owner-preview link active — blocked at authenticated E2E and owner UAT checkpoint
-last_updated: "2026-08-05T00:37:01Z"
+stopped_at: "Phase 26 Plan 26-05 COMPLETE — the owner APPROVED the Approvals UAT on 2026-08-08 and Task 3 wired the rail badge to the SAME approvals.summary the page reads. **READ THE EVIDENCE BOUNDARY BEFORE CITING THIS.** The UAT ran against SEEDED plan rows (smoke:seedCockpitPlan, suffix `uat-msjopxz0`, STILL PRESENT in tenant kn73kmcdzqxem7mkq4n5b9x2b18abrnq) — it proves UI STATES and GUARDED TERMINALS ONLY. NO Gmail send, NO Calendar insert and NO media generation was executed, so NOTHING here is external-provider evidence. **THE AUTHENTICATED PLAYWRIGHT SPEC HAS STILL NEVER RUN:** auth.setup.ts drives only the password form and needs E2E_USER_EMAIL/E2E_USER_PASSWORD, the owner account is Google-ONLY, and the spec origin 127.0.0.1:3111 differs from the OAuth origin localhost:3000 where the per-origin Convex Auth JWT lives — owner UAT is HUMAN evidence, not the browser evidence the plan also asks for. **TWO DEFECTS WERE FOUND BY THE UAT AND FIXED.** (1) ApprovalsView's type scale had drifted off its OWN mockup on every axis (headline clamp topping at 3.6rem vs the Vault's 2.6rem; buttons inheriting the 1rem body size through an inline `font: inherit`; FIVE bare h3 at the browser's 1.17em because globals.css has no heading reset) — the values are now pinned in dashboard-pages.md, and touch targets stayed at 2.5rem minHeight per BRAND §6. (2) listThreadMessages guarded AUTHORIZATION and then ASSUMED EXISTENCE, handing a non-agent threadId to a component validating v.id(threads) — an OWNED thread THREW where an unowned one degraded, uncaught in the browser, killing the ENTIRE cockpit page from a ?thread= URL parameter. **THE FIRST FIX FOR (2) SHIPPED GREEN AND DID NOT WORK:** it matched only convex-test's wording of the rejection while the LIVE runtime words it differently, so the real error hit the rethrow — both messages are now pinned VERBATIM in cockpitThreadDegrade.test.ts with negative cases. RULE, now in cockpit.md: when behaviour keys off an error MESSAGE crossing a component boundary, pin the REAL message from a LIVE capture; a harness-generated string proves the harness, not the product. **ALSO THIS SESSION, OUTSIDE PHASE 26:** the vault media-preview regression from 15.4-03 is FIXED and OWNER-VERIFIED LIVE — derivePreviewState decided on `text` BEFORE mimeType, and since the hosted vision rail describes EVERY image and vaultTranscribe transcribes EVERY video, a ready media doc ALWAYS has text, so ready-binary was UNREACHABLE and the picture was silently replaced by a paragraph about the picture; media now wins and the description renders beneath it. **ENVIRONMENT:** C: hit ZERO bytes free mid-session (one backend test run died ENOSPC and was re-run clean); packages/backend/.convex is 9.5GB and was deliberately NOT touched."
+last_updated: "2026-08-08T12:35:00Z"
 progress:
   total_phases: 45
   completed_phases: 30
   total_plans: 272
-  completed_plans: 244
+  completed_plans: 245
 ---
 
 ---
