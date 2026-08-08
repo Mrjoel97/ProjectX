@@ -10,6 +10,7 @@ export * from "./docType";
 export * from "./documentGen";
 export * from "./emailIntent";
 export * from "./fallback";
+export * from "./goals";
 export * from "./logger";
 export * from "./notificationTemplates";
 export * from "./optimizerBreach";
