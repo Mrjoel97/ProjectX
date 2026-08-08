@@ -111,14 +111,39 @@ hardest because tts lines are routinely fractions of a cent while clips are not.
    end-to-end exercise of `reserveJob`, and `$0` has been spent on this rail.
 2. **Sub-cent lines record nothing**, by the reasoning above. A tts-heavy job's ledger will
    under-report against its invoice by up to 1¢ per line while still agreeing with the limiter.
-3. **`startCoverage` has still not been called anywhere.** All three rails now write, so 26-09 is
-   the first plan that may legitimately open coverage — until it does, every tenant correctly
-   reports `unknown` rather than an honest-looking zero.
+3. ~~`startCoverage` has still not been called anywhere.~~ **FIXED in `b34115e` — see below.**
+
+## Follow-up (commit `b34115e`) — the two "26-09 must honour" notes, fixed instead
+
+Both items this summary originally deferred to 26-09 turned out to be defects in this phase's own
+contracts rather than instructions for the next one, so they were fixed here.
+
+**1. Coverage opened only as a side effect of the first recorded movement**, which inverts the very
+lie the field exists to prevent: instead of a fake zero it reported fake IGNORANCE. A tenant gated
+all week who simply had not spent read as `unknown` when the truth was a confident nothing — and a
+tenant paused by a kill switch read as `unknown` for the whole pause, the period we know most about.
+`ensureCoverage` is now called at the top of every spend gate (`prepare`, `preCall`,
+`reserveFolderInner`, `reserveJobInner`), **above every refusal**, because a refused gate is
+positive knowledge that no money moved. Placement is load-bearing and a test caught it wrong first
+time: `reserveJobInner`'s kill-switch check returns ABOVE `reserveProviderLinesInner`, so a gate
+placed in the inner function missed exactly the refusal it most needed to cover. `recordSpend`
+deliberately does not open coverage — it runs after a gate, so a zero-cost call stays a full no-op.
+
+**2. `unlanded` was blended across rails into one number with no single meaning.** `aggregateSpend`
+now derives it PER RAIL, returns `byRail` beside the blended totals, and computes the blended figure
+as the SUM of the per-rail ones. Re-deriving it from blended sums lets one rail's refund cancel
+another rail's reservation — money that can never come back being "returned" by money from an
+unrelated rail. `UNLANDED_RESOLVES` states in code which rails can still resolve (media: `false`),
+so a Finance surface cannot describe media's permanent over-reservation as "pending" without
+ignoring an explicit fact.
+
+Mutation-checked: removing either coverage gate, and re-deriving the blended `unlanded`, each turn a
+different test red. Core 663/663, backend 1287/1287, typecheck clean, `check-playbooks` exit 0.
 
 ## Next Phase Readiness
 
-All three rails are instrumented. **26-09** can now build the Finance reads: `finance.ts` exposes
-tenant summaries/series/ledger plus owner-only global rails, over `spendLedger.listEvents` and
-`aggregateSpend`. Two things it must honour: open coverage explicitly (nothing has), and treat a
-media window's `unlanded` as a first-class value rather than a rounding artifact — on that rail it is
-the permanent, by-design over-reservation, not a transient in-flight balance.
+All three rails are instrumented and both contract defects above are closed. **26-09** can now build
+the Finance reads: `finance.ts` exposes tenant summaries/series/ledger plus owner-only global rails,
+over `spendLedger.listEvents` and `aggregateSpend`. It should read `byRail` with `UNLANDED_RESOLVES`
+rather than the blended `unlanded` wherever the figure reaches a person, and it no longer needs to
+open coverage — the gates do.
