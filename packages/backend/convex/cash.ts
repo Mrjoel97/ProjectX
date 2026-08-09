@@ -10,9 +10,21 @@
 // NOTHING HERE IS LOGGED. A tenant's cash on hand, CAC and MRR are precisely what CLAUDE.md §4
 // keeps out of the audit table. If you ever add an audit event to this module, log the field NAME
 // and a boolean, never the value.
-import { activityFromSends, createDashboardBound } from "@pikar/core";
+import {
+  activityFromSends,
+  CASH_INPUTS,
+  type CashInputField,
+  type CashInputState,
+  cashInputSpec,
+  createDashboardBound,
+  isStale,
+  validateCashInput,
+} from "@pikar/core";
+import type { Scorecard } from "@pikar/core/growth/index";
+import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
-import { tenantQuery } from "./lib/functions";
+import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 
 /** 31 days, matching the Cost console's reported window so the two tabs speak the same period. */
 const MAX_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
@@ -58,5 +70,119 @@ export const activity = tenantQuery({
         ...(partial ? { partialReason: "row-cap" as const } : {}),
       }),
     };
+  },
+});
+
+/** The closed field union, mirroring `CashInputField`. A widening is a deliberate edit here. */
+const vCashField = v.union(
+  v.literal("cashOnHand"),
+  v.literal("monthlyOperatingCost"),
+  v.literal("mrr"),
+  v.literal("receivables"),
+  v.literal("payables"),
+  v.literal("cac"),
+  v.literal("thirtyDayCashPerCustomer"),
+  v.literal("grossProfitPerPurchase"),
+  v.literal("purchasesPerLifetime"),
+  v.literal("customerCount"),
+  v.literal("referralPct"),
+);
+// Compile-time bind, both directions: a field added to `@pikar/core` but not to the validator (or
+// the reverse) is a COMPILE error here rather than a silently unsaveable form row.
+const _fieldToDoc: readonly (typeof vCashField.type)[] = CASH_INPUTS.map((s) => s.field);
+const _docToField: readonly CashInputField[] = [] as (typeof vCashField.type)[];
+
+/** A dot-path read over the Scorecard. Mirrors `evaluations.ts`'s `getPath` on the write side. */
+function scorecardValue(scorecard: Scorecard, path: string): number | null {
+  const value = path
+    .split(".")
+    .reduce<unknown>((node, key) => (node as Record<string, unknown> | null)?.[key], scorecard);
+  return typeof value === "number" ? value : null;
+}
+
+export const inputs = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<{ inputs: CashInputState[] }> => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("financeInputs")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .collect();
+    const byField = new Map(rows.map((row) => [row.field, row]));
+    const evaluation = await latestScorecardRow(ctx.db, ctx.tenantId);
+    const scorecard = (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard;
+
+    return {
+      inputs: CASH_INPUTS.map((spec): CashInputState => {
+        if (spec.store === "financeInputs") {
+          const row = byField.get(spec.field as (typeof rows)[number]["field"]);
+          const statedAt = row?.statedAt ?? null;
+          return {
+            field: spec.field,
+            value: row?.valueUsd ?? null,
+            statedAt,
+            stale: isStale(statedAt, now),
+          };
+        }
+        const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
+        // ponytail: the scorecard has no per-field statedAt, so the evaluation row's createdAt
+        // stands in. It is a FLOOR on the true stated-time (a later patch does not move it), so the
+        // 90-day prompt can fire early but never late — the safe direction. Upgrade path: a
+        // per-field statedAt map on the Scorecard, written by applyScorecardAnswer.
+        const statedAt = value === null ? null : (evaluation?.createdAt ?? null);
+        return { field: spec.field, value, statedAt, stale: isStale(statedAt, now) };
+      }),
+    };
+  },
+});
+
+/**
+ * ONE writer, routing by field to the store that owns the value.
+ *
+ * The Hormozi inputs go to the SCORECARD through `applyScorecardAnswer` — the same function
+ * `recordScorecardAnswer` and the cockpit tool use, so a number entered in the panel and a number
+ * given in conversation land in the same place and carry forward the same way. The finance-ops
+ * inputs go to `financeInputs`. Nothing is written twice.
+ *
+ * The value is validated HERE and not only in the form: a form is a convenience, and this mutation
+ * is the trust boundary. Nothing about it is logged (CLAUDE.md §4) — the value IS the sensitive part.
+ */
+export const saveInput = tenantMutation({
+  args: { field: vCashField, value: v.number() },
+  handler: async (ctx, { field, value }): Promise<{ saved: true }> => {
+    const check = validateCashInput(field, value);
+    if (!check.ok) throw new Error(`INVALID_INPUT: ${check.reason}`);
+    const spec = cashInputSpec(field);
+
+    if (spec.store === "scorecard") {
+      if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
+      const existing = await latestScorecardRow(ctx.db, ctx.tenantId);
+      // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
+      // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
+      await applyScorecardAnswer(
+        ctx.db,
+        ctx.tenantId,
+        existing?.threadId ?? "finance-panel",
+        spec.path,
+        value,
+      );
+      return { saved: true };
+    }
+
+    const row = await ctx.db
+      .query("financeInputs")
+      .withIndex("by_tenant_field", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("field", field as "cashOnHand"),
+      )
+      .unique();
+    const write = { valueUsd: value, statedAt: Date.now() };
+    if (row) await ctx.db.patch(row._id, write);
+    else
+      await ctx.db.insert("financeInputs", {
+        tenantId: ctx.tenantId,
+        field: field as "cashOnHand",
+        ...write,
+      });
+    return { saved: true };
   },
 });

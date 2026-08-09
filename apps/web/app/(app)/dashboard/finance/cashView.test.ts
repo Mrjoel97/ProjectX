@@ -7,7 +7,7 @@
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ActivitySection } from "./CashView";
+import { ActivitySection, NumbersPanel } from "./CashView";
 
 const render = (component: unknown, props: Record<string, unknown>): string =>
   renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
@@ -59,5 +59,63 @@ describe("activity section", () => {
   test("a capped window says the count is a floor", () => {
     const html = render(ActivitySection, { activity: activity(), partial: true });
     expect(html).toMatch(/floor/i);
+  });
+});
+
+const input = (over: Record<string, unknown> = {}) => ({
+  field: "cashOnHand",
+  value: null,
+  statedAt: null,
+  stale: false,
+  ...over,
+});
+
+describe("your numbers panel", () => {
+  const noop = () => {};
+
+  test("an unanswered input shows what it unlocks, not a zero", () => {
+    const html = render(NumbersPanel, {
+      inputs: [input()],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).toContain("runway");
+    expect(html).not.toContain("$0");
+  });
+
+  test("a stale input asks for a confirm-or-update", () => {
+    const html = render(NumbersPanel, {
+      inputs: [input({ value: 5000, statedAt: Date.now() - 100 * 24 * 60 * 60 * 1000, stale: true })],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).toMatch(/still right|confirm/i);
+  });
+
+  test("a solopreneur is not asked for MRR, receivables or payables", () => {
+    const html = render(NumbersPanel, {
+      inputs: [input(), input({ field: "mrr" })],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).not.toMatch(/recurring revenue/i);
+  });
+
+  test("an SME is asked for receivables and payables", () => {
+    const html = render(NumbersPanel, {
+      inputs: [input({ field: "receivables" }), input({ field: "payables" })],
+      tier: "sme",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).toMatch(/receivables/i);
+    expect(html).toMatch(/payables/i);
   });
 });

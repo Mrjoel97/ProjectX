@@ -73,3 +73,91 @@ describe("cash.activity", () => {
     expect(result.activity.todayCount).toBe(0);
   });
 });
+
+describe("cash.saveInput", () => {
+  test("an unauthenticated caller cannot write a number", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.mutation(api.cash.saveInput, { field: "cashOnHand", value: 1000 }),
+    ).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+
+  test("a finance-ops field lands in financeInputs with its own statedAt", async () => {
+    const t = convexTest(schema, modules);
+    await asTenant(t, "tenant-a").mutation(api.cash.saveInput, {
+      field: "cashOnHand",
+      value: 12_000,
+    });
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe("tenant-a");
+    expect(rows[0]?.valueUsd).toBe(12_000);
+    expect(rows[0]?.statedAt).toBeGreaterThan(0);
+  });
+
+  test("saving the same field twice updates the row rather than adding a second", async () => {
+    const t = convexTest(schema, modules);
+    const as = asTenant(t, "tenant-a");
+    await as.mutation(api.cash.saveInput, { field: "cashOnHand", value: 100 });
+    await as.mutation(api.cash.saveInput, { field: "cashOnHand", value: 200 });
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.valueUsd).toBe(200);
+  });
+
+  test("a Hormozi field lands on the SCORECARD — CAC is never duplicated into a second table", async () => {
+    const t = convexTest(schema, modules);
+    await asTenant(t, "tenant-a").mutation(api.cash.saveInput, { field: "cac", value: 1400 });
+    const financeRows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(financeRows).toHaveLength(0);
+    const evaluation = await t.run((ctx) => ctx.db.query("evaluations").first());
+    expect(evaluation?.scorecard.financials.cac).toBe(1400);
+    expect(evaluation?.userProvided).toContain("financials.cac");
+  });
+
+  test("an invalid value is refused at the boundary and writes nothing", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      asTenant(t, "tenant-a").mutation(api.cash.saveInput, {
+        field: "purchasesPerLifetime",
+        value: 0.5,
+      }),
+    ).rejects.toThrow(/INVALID_INPUT/);
+    const evaluations = await t.run((ctx) => ctx.db.query("evaluations").collect());
+    expect(evaluations).toHaveLength(0);
+  });
+});
+
+describe("cash.inputs", () => {
+  test("one tenant cannot read another tenant's numbers", async () => {
+    const t = convexTest(schema, modules);
+    await asTenant(t, "tenant-a").mutation(api.cash.saveInput, {
+      field: "cashOnHand",
+      value: 99_000,
+    });
+    const result = await asTenant(t, "tenant-b").query(api.cash.inputs, {});
+    const cash = result.inputs.find((i) => i.field === "cashOnHand");
+    expect(cash?.value).toBeNull();
+  });
+
+  test("an input stated more than 90 days ago is stale", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("financeInputs", {
+        tenantId: "tenant-a",
+        field: "cashOnHand",
+        valueUsd: 5_000,
+        statedAt: Date.now() - 91 * 24 * 60 * 60 * 1000,
+      });
+    });
+    const result = await asTenant(t, "tenant-a").query(api.cash.inputs, {});
+    expect(result.inputs.find((i) => i.field === "cashOnHand")?.stale).toBe(true);
+  });
+
+  test("a fresh input is not stale", async () => {
+    const t = convexTest(schema, modules);
+    await asTenant(t, "tenant-a").mutation(api.cash.saveInput, { field: "cashOnHand", value: 1 });
+    const result = await asTenant(t, "tenant-a").query(api.cash.inputs, {});
+    expect(result.inputs.find((i) => i.field === "cashOnHand")?.stale).toBe(false);
+  });
+});

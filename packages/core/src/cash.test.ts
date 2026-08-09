@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { activityFromSends } from "./cash";
+import { activityFromSends, CASH_INPUTS, validateCashInput } from "./cash";
 
 const DAY = 24 * 60 * 60 * 1000;
 // A fixed UTC instant, so the test never depends on the machine's clock or zone.
@@ -84,5 +84,42 @@ describe("activityFromSends", () => {
     });
     expect(result.perDay).toHaveLength(3);
     expect(result.last7Count).toBe(3);
+  });
+});
+
+describe("input validation at the trust boundary", () => {
+  test("purchases per lifetime below 1 is REJECTED, not silently multiplied", () => {
+    // Multiplying gross profit by 0.5 purchases produces a plausible-looking LTGP that is wrong.
+    expect(validateCashInput("purchasesPerLifetime", 0.5)).toEqual({
+      ok: false,
+      reason: expect.stringMatching(/at least 1/i),
+    });
+    expect(validateCashInput("purchasesPerLifetime", 1)).toEqual({ ok: true });
+  });
+
+  test("money cannot be negative, infinite or NaN", () => {
+    expect(validateCashInput("cashOnHand", -1).ok).toBe(false);
+    expect(validateCashInput("cashOnHand", Number.POSITIVE_INFINITY).ok).toBe(false);
+    expect(validateCashInput("cashOnHand", Number.NaN).ok).toBe(false);
+    expect(validateCashInput("cashOnHand", 0)).toEqual({ ok: true });
+  });
+
+  test("a percentage is bounded to 0-100", () => {
+    expect(validateCashInput("referralPct", 101).ok).toBe(false);
+    expect(validateCashInput("referralPct", 25)).toEqual({ ok: true });
+  });
+
+  test("a customer count is a whole number", () => {
+    expect(validateCashInput("customerCount", 4.5).ok).toBe(false);
+    expect(validateCashInput("customerCount", 4)).toEqual({ ok: true });
+  });
+
+  test("every input names what it unlocks — a field with no payoff should not be asked for", () => {
+    for (const spec of CASH_INPUTS) expect(spec.unlocks.length).toBeGreaterThan(0);
+  });
+
+  test("no input is stored in two places", () => {
+    const fields = CASH_INPUTS.map((spec) => spec.field);
+    expect(new Set(fields).size).toBe(fields.length);
   });
 });

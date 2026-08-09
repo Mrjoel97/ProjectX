@@ -30,7 +30,7 @@ import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { DatabaseWriter, MutationCtx } from "./_generated/server";
+import type { DatabaseReader, DatabaseWriter, MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -559,7 +559,7 @@ function coerceScorecardValue(
  * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
  * identity-free cockpit tool loop, plan 04) route through ONE implementation — no drift.
  */
-async function applyScorecardAnswer(
+export async function applyScorecardAnswer(
   db: DatabaseWriter,
   tenantId: string,
   threadId: string,
@@ -597,6 +597,26 @@ async function applyScorecardAnswer(
     createdAt: Date.now(),
   });
   return { recorded: true };
+}
+
+/**
+ * The tenant's latest evaluation row across ALL threads — the row whose Scorecard is the tenant's
+ * current financial truth.
+ *
+ * `byThread` and `answerDecision` are thread-scoped because they answer a question asked inside one
+ * conversation. The Finance page belongs to no thread, so it needs this. Exported as a plain
+ * function rather than a query: `cash.ts` calls it with its own `ctx.db` inside an already
+ * tenant-scoped handler, which adds no public API surface.
+ */
+export async function latestScorecardRow(
+  db: DatabaseReader,
+  tenantId: string,
+): Promise<Doc<"evaluations"> | null> {
+  return await db
+    .query("evaluations")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .order("desc")
+    .first();
 }
 
 export const recordScorecardAnswer = tenantMutation({

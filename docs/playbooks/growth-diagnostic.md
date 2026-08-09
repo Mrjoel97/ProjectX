@@ -1,6 +1,26 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-08-03 (20-11 tasks 1-3 — **the diagnostic is untouched, and the reason it
+> Last verified: 2026-08-09 (cash-business-finance Task 3 — **four new nullable Scorecard leaves,
+> the diagnostic itself untouched.**) `scorecard.ts` gained
+> `financials.grossProfitPerPurchase`, `financials.purchasesPerLifetime`, `financials.customerCount`
+> and `leadCard.referralPct`, mirrored into `emptyScorecard`. These are the Business tab's
+> six-input panel (`packages/core/src/cash.ts` `CASH_INPUTS`) and the Approvals decision catalogue
+> (`convex/approvals.ts` `QUESTION_CATALOG`) writing onto the SAME Scorecard the diagnostic reads —
+> `diagnose.ts` and `financialSpine.ts` are byte-identical, and no gate, route or threshold moved.
+> **`ltgp` now has two possible producers and exactly one stored value.** The panel writes
+> `grossProfitPerPurchase` and `purchasesPerLifetime` as two separate components and never writes
+> `ltgp` directly; the cockpit/Approvals "answer `financials.ltgp`" path (`answerDecision`,
+> `recordScorecardAnswer`) still writes `ltgp` directly, for a tenant who states it as one number.
+> Both are stored on the row — `ltgp` is not overwritten by the components arriving. The
+> derived-from-components-wins-when-present precedence is resolved at READ time in Task 5's
+> `cash.ts` reader, never by a second write here; this playbook records the leaves and the rule,
+> Task 5 records the read-time resolution. `financials.cac` is NOT duplicated onto a second table —
+> the finance-ops `financeInputs` table (`docs/playbooks/dashboard-pages.md`) holds cash-on-hand/
+> operating-cost/MRR/receivables/payables ONLY, and every Hormozi input (CAC included) stays here,
+> on the scorecard, with `applyScorecardAnswer` (exported from `convex/evaluations.ts`) as the one
+> writer every surface — panel, Approvals, cockpit — routes through.
+>
+> Prior: 2026-08-03 (20-11 tasks 1-3 — **the diagnostic is untouched, and the reason it
 > is untouched is now an ADR.** [ADR-012](../decisions/012-media-route-and-the-reel.md) records
 > `media` as the SECOND instance of ADR-010's pattern — dispatchable, never emitted by
 > `diagnose()` — which is what keeps it a decided pattern rather than a one-off exception minted
@@ -197,6 +217,13 @@ Pure package (`packages/core/src/growth/`):
 - `scorecard.ts` — the `Scorecard` type (an all-nullable mirror of
   `Skills/growth-os/assets/business-scorecard.template.json`) + `emptyScorecard` (the all-null default).
   Every leaf is `T | null`; a null means "not enough data", never a fabricated value.
+  **cash-business-finance Task 3** added four leaves the diagnostic never reads directly:
+  `financials.grossProfitPerPurchase`, `financials.purchasesPerLifetime`, `financials.customerCount`
+  (the two LTGP components plus the sample size every ratio must carry beside it) and
+  `leadCard.referralPct` (the 25% referral gate's own number). They exist so the Business tab's
+  panel and Approvals' decision catalogue have somewhere code-owned to write a figure that already
+  has a place in the Growth OS template; `diagnose.ts`/`financialSpine.ts` are unchanged by their
+  addition. See the entry at the top of this file for the `ltgp` two-producer precedence rule.
 - `financialSpine.ts` — `ltgpCac()` (LTGP:CAC ratio + `business_model | advertising` master switch) and
   `cfa()` (30-day self-funding test). `FLOOR_RATIO = 3.0`, `INDUSTRY_MULTIPLE = 3.0`. Every divisor is
   guarded → a bad input returns `null`/`false`, never `NaN`.

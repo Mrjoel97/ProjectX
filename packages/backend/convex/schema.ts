@@ -1468,4 +1468,29 @@ export default defineSchema({
     // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
     // suppressed address and still sends to the other four.
     .index("by_tenant_address", ["tenantId", "address"]),
+
+  // The FINANCE-OPS inputs, and only those (design §5). The Hormozi inputs stay on the scorecard —
+  // duplicating CAC into a second table is what produced two separate selector bugs on 2026-08-09.
+  //
+  // One row per (tenant, field), read with `.unique()` so a duplicate is LOUD rather than silently
+  // shadowed (the tenantProfiles precedent). `statedAt` is per FIELD, not per row-set: cash on hand
+  // goes stale far faster than payables, and one shared timestamp would make the 90-day
+  // confirm-or-update prompt fire on the wrong number.
+  //
+  // Values are USD DOLLARS as a plain number, matching `scorecard.financials.cac`. The Pikar-spend
+  // plane's integer cents never appear here.
+  financeInputs: defineTable({
+    tenantId: v.string(),
+    field: v.union(
+      v.literal("cashOnHand"),
+      v.literal("monthlyOperatingCost"),
+      v.literal("mrr"),
+      v.literal("receivables"),
+      v.literal("payables"),
+    ),
+    valueUsd: v.number(),
+    statedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_field", ["tenantId", "field"]),
 });

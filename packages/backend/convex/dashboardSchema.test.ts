@@ -160,4 +160,20 @@ describe("Phase 26 additive dashboard schema", () => {
     expect(vaultDoc).not.toHaveProperty("sourceThreadId");
     expect(vaultDoc).not.toHaveProperty("sourcePlanId");
   });
+
+  test("financeInputs holds only the five finance-ops fields, with a per-field statedAt", () => {
+    const financeInputs = compact(tableBlock("financeInputs"));
+    // The closed union, pinned whitespace-free — CAC and the other Hormozi inputs must never widen
+    // this table (design §5, the storage-split rule).
+    expect(dense(financeInputs)).toContain(
+      dense(
+        'field: v.union(v.literal("cashOnHand"), v.literal("monthlyOperatingCost"), v.literal("mrr"), v.literal("receivables"), v.literal("payables"))',
+      ),
+    );
+    expect(financeInputs).toContain("tenantId: v.string()");
+    expect(financeInputs).toContain("valueUsd: v.number()");
+    expect(financeInputs).toContain("statedAt: v.number()");
+    expect(financeInputs).toContain('.index("by_tenant", ["tenantId"])');
+    expect(financeInputs).toContain('.index("by_tenant_field", ["tenantId", "field"])');
+  });
 });

@@ -1,15 +1,19 @@
 // Bounded Approvals page adapter. Content stays on the existing plan/evaluation planes; this
 // module returns only refs, enums, timestamps and counts suitable for a tenant dashboard.
 import {
+  CASH_INPUTS,
+  type CashInputField,
   compareDashboardOrder,
   createDashboardBound,
   type DashboardBound,
+  validateCashInput,
 } from "@pikar/core";
 import type { Scorecard } from "@pikar/core/growth/index";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { applyScorecardAnswer } from "./evaluations";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
 const PAGE_LIMIT = 50;
@@ -221,17 +225,50 @@ const QUESTION_CATALOG = [
     label: "30-day acquisition payback",
     prompt: "Is acquisition cost recovered within 30 days?",
   },
+  {
+    field: "financials.grossProfitPerPurchase",
+    valueType: "number",
+    label: "Gross profit per purchase",
+    prompt: "What is your gross profit on one sale, after the cost of delivering it?",
+  },
+  {
+    field: "financials.purchasesPerLifetime",
+    valueType: "number",
+    label: "Purchases per customer lifetime",
+    prompt: "How many times does an average customer buy from you in total?",
+  },
+  {
+    field: "financials.customerCount",
+    valueType: "number",
+    label: "Customers so far",
+    prompt: "How many customers are these figures based on?",
+  },
+  // `leadCard.referralPct` is deliberately NOT here: this catalogue is gated on a `financials`
+  // section entry (`hasFinancialQuestion`), and a lead metric surfacing behind a financial gate
+  // would be a category error. It stays a panel-and-cockpit input (`cash.ts`).
 ] as const;
 
 type QuestionField = (typeof QUESTION_CATALOG)[number]["field"];
 
+/** A dot-path read over the Scorecard. Mirrors `cash.ts`'s `scorecardValue` on the read side. */
 function fieldValue(scorecard: unknown, field: QuestionField): unknown {
-  const value = scorecard as Partial<Scorecard>;
-  if (field === "modelCard.thirtyDayPayback") return value.modelCard?.thirtyDayPayback;
-  if (field === "financials.cac") return value.financials?.cac;
-  if (field === "financials.ltgp") return value.financials?.ltgp;
-  return value.financials?.thirtyDayCashPerCustomer;
+  return field
+    .split(".")
+    .reduce<unknown>(
+      (node, key) => (node as Record<string, unknown> | null)?.[key],
+      scorecard as Partial<Scorecard>,
+    );
 }
+
+/** `QUESTION_CATALOG` field → the `CashInputField` that carries its bounds, for the numeric fields
+ *  the two collection surfaces share. `financials.ltgp` and `modelCard.thirtyDayPayback` are
+ *  deliberately absent — `ltgp` is never written from a cash input (it is derived from components,
+ *  Task 5), and the boolean question has no numeric bound to route. */
+const CASH_FIELD_BY_QUESTION = new Map<string, CashInputField>(
+  CASH_INPUTS.filter((spec) => spec.store === "scorecard" && spec.path !== undefined).map(
+    (spec) => [spec.path as string, spec.field],
+  ),
+);
 
 function hasFinancialQuestion(row: Doc<"evaluations">): boolean {
   return row.notEnoughData.some((question) => question.section === "financials");
@@ -293,6 +330,9 @@ const numericField = v.union(
   v.literal("financials.cac"),
   v.literal("financials.ltgp"),
   v.literal("financials.thirtyDayCashPerCustomer"),
+  v.literal("financials.grossProfitPerPurchase"),
+  v.literal("financials.purchasesPerLifetime"),
+  v.literal("financials.customerCount"),
 );
 
 export const answerDecision = tenantMutation({
@@ -315,26 +355,25 @@ export const answerDecision = tenantMutation({
     if (!hasFinancialQuestion(row) || fieldValue(row.scorecard, answer.field) != null) {
       throw new Error("DECISION_NOT_OPEN");
     }
-    if (typeof answer.value === "number" && (!Number.isFinite(answer.value) || answer.value < 0)) {
-      throw new Error("INVALID_VALUE");
+    if (typeof answer.value === "number") {
+      // Route through the SAME validator the panel uses (`validateCashInput`) for every field the
+      // two collection surfaces share — `purchasesPerLifetime: 0.5` is refused here for the same
+      // reason and in the same words as in `cash.ts`'s NumbersPanel, one validator either way.
+      // `financials.ltgp` carries no CashInputField (it is never a cash input, Task 5) and keeps the
+      // original finite/non-negative check.
+      const cashField = CASH_FIELD_BY_QUESTION.get(answer.field);
+      if (cashField) {
+        const check = validateCashInput(cashField, answer.value);
+        if (!check.ok) throw new Error(`INVALID_VALUE: ${check.reason}`);
+      } else if (!Number.isFinite(answer.value) || answer.value < 0) {
+        throw new Error("INVALID_VALUE");
+      }
     }
 
-    const scorecard = structuredClone(row.scorecard as Scorecard);
-    if (answer.field === "modelCard.thirtyDayPayback") {
-      scorecard.modelCard.thirtyDayPayback = answer.value;
-    } else if (answer.field === "financials.cac") {
-      scorecard.financials.cac = answer.value;
-    } else if (answer.field === "financials.ltgp") {
-      scorecard.financials.ltgp = answer.value;
-    } else {
-      scorecard.financials.thirtyDayCashPerCustomer = answer.value;
-    }
-    await ctx.db.patch(row._id, {
-      scorecard,
-      userProvided: row.userProvided.includes(answer.field)
-        ? row.userProvided
-        : [...row.userProvided, answer.field],
-    });
+    // ONE writer: the same `applyScorecardAnswer` the panel (`cash.ts`) and the cockpit tool
+    // (`recordScorecardAnswer`) use, so an answer given here, in conversation, or in the panel land
+    // in the same place and carry forward the same way (design §5's anti-drift rule).
+    await applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, answer.field, answer.value);
     return { recorded: true as const };
   },
 });

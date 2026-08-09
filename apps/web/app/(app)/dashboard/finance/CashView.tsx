@@ -6,9 +6,11 @@
 // Every figure on this tab is a `CashFigure` from `@pikar/core` — this file renders, it never
 // derives. A derived figure is suppressed whenever any input is unknown, and names the missing one.
 import { api } from "@pikar/backend/api";
-import type { CashActivity } from "@pikar/core";
-import { useQuery } from "convex/react";
-import { type CSSProperties, useMemo } from "react";
+import type { CashActivity, CashInputField, CashInputSpec, CashInputState, Tier } from "@pikar/core";
+import { cashInputsForTier, validateCashInput } from "@pikar/core";
+import { useMutation, useQuery } from "convex/react";
+import { type CSSProperties, useMemo, useState } from "react";
+import { formatUtcDay } from "./FinanceView";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW_DAYS = 30;
@@ -21,6 +23,42 @@ const cardTitle: CSSProperties = {
   fontWeight: 700,
   letterSpacing: "-0.02em",
   color: "var(--ink)",
+};
+const caps: CSSProperties = {
+  color: "var(--ink-soft)",
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  margin: 0,
+};
+const numbersRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.65rem",
+  flexWrap: "wrap",
+  padding: "0.75rem 0",
+  borderBottom: "1px solid var(--rule)",
+};
+const numbersInput: CSSProperties = {
+  width: "9rem",
+  minHeight: "2.5rem",
+  padding: "0.45rem 0.7rem",
+  border: "1px solid var(--rule)",
+  borderRadius: "0.5rem",
+  font: "inherit",
+};
+const saveButton: CSSProperties = {
+  minHeight: "2.5rem",
+  borderRadius: "999px",
+  padding: "0.5rem 1.1rem",
+  border: "1px solid var(--teal-600)",
+  background: "var(--teal-600)",
+  color: "var(--card)",
+  font: "inherit",
+  fontSize: "0.86rem",
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 export function CashStateNotice({
@@ -111,6 +149,150 @@ export function ActivitySection({
   );
 }
 
+/**
+ * One row: a real `<label>`, a number input seeded from the stored value, a Save button and a
+ * provenance line — `Unlocks <what>` when never answered, `Last confirmed <date>` otherwise, with a
+ * confirm-or-update prompt appended once the input goes stale (CLAUDE.md §10: `--ink-soft` and an
+ * explicit word, never the approval-gate amber).
+ *
+ * Validated on change with the SAME `validateCashInput` the mutation enforces — this is convenience,
+ * not the trust boundary, which is why Save disables on an invalid draft rather than merely warning.
+ */
+function InputRow({
+  spec,
+  state,
+  busy,
+  onSave,
+}: {
+  spec: CashInputSpec;
+  state: CashInputState;
+  busy: boolean;
+  onSave: (field: CashInputField, value: number) => void;
+}) {
+  const [draft, setDraft] = useState(state.value === null ? "" : String(state.value));
+  const hasDraft = draft.trim() !== "";
+  const parsed = Number(draft);
+  const check = hasDraft ? validateCashInput(spec.field, parsed) : null;
+  const inputId = `cash-input-${spec.field}`;
+
+  return (
+    <div style={numbersRow} data-cash-field={spec.field}>
+      <label htmlFor={inputId} style={{ ...caps, flex: "1 1 12rem" }}>
+        {spec.label}
+      </label>
+      <input
+        id={inputId}
+        type="number"
+        inputMode="decimal"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        style={numbersInput}
+      />
+      <button
+        type="button"
+        aria-label={`Save ${spec.label}`}
+        style={saveButton}
+        disabled={busy || check?.ok !== true}
+        onClick={() => onSave(spec.field, parsed)}
+      >
+        {busy ? "Saving…" : "Save"}
+      </button>
+      <p style={{ ...muted, fontSize: "0.8rem", width: "100%", margin: 0 }}>
+        {state.value === null
+          ? `Unlocks ${spec.unlocks}.`
+          : state.stale
+            ? `Last confirmed ${formatUtcDay(state.statedAt as number)}. Still right? Confirm or update it.`
+            : `Last confirmed ${formatUtcDay(state.statedAt as number)}.`}
+      </p>
+      {check && !check.ok ? (
+        <p role="alert" style={{ ...muted, fontSize: "0.8rem", width: "100%", margin: 0 }}>
+          {check.reason}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The collection surface. Rows are `cashInputsForTier(tier)` INTERSECTED with `inputs` — the tier
+ * decides which fields are asked at all, and a field with no matching entry in `inputs` is skipped
+ * rather than invented. No arithmetic here beyond formatting (CLAUDE.md §1).
+ */
+export function NumbersPanel({
+  inputs,
+  tier,
+  busy,
+  error,
+  onSave,
+}: {
+  inputs: CashInputState[];
+  tier: Tier;
+  busy: boolean;
+  error: string | null;
+  onSave: (field: CashInputField, value: number) => void;
+}) {
+  const byField = new Map(inputs.map((state) => [state.field, state]));
+  const specs = cashInputsForTier(tier).filter((spec) => byField.has(spec.field));
+  return (
+    <section style={stack} aria-labelledby="cash-numbers-heading">
+      <h2 id="cash-numbers-heading" style={cardTitle}>
+        Your numbers
+      </h2>
+      <p style={muted}>What you tell us. Confirmed inputs unlock the ratios above.</p>
+      {error ? (
+        <p role="alert" style={{ ...muted, color: "var(--ink)" }}>
+          {error}
+        </p>
+      ) : null}
+      <div>
+        {specs.map((spec) => {
+          const state = byField.get(spec.field);
+          return state ? (
+            <InputRow key={spec.field} spec={spec} state={state} busy={busy} onSave={onSave} />
+          ) : null;
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ConnectedNumbers() {
+  const inputsResult = useQuery(api.cash.inputs, {});
+  const tierRow = useQuery(api.tenantProfile.get);
+  const saveInput = useMutation(api.cash.saveInput);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (inputsResult === undefined) {
+    return <CashStateNotice state="loading">Loading your numbers…</CashStateNotice>;
+  }
+  const tier: Tier = tierRow?.tier ?? "solopreneur";
+
+  const save = async (field: CashInputField, value: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await saveInput({ field, value });
+    } catch {
+      // A refusal is an expected answer, not a crash — the mutation is the trust boundary and this
+      // is only the busy/refusal presentation (the OperatorTab `run` precedent).
+      setError("That number could not be saved. Nothing changed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <NumbersPanel
+      inputs={inputsResult.inputs}
+      tier={tier}
+      busy={busy}
+      error={error}
+      onSave={(field, value) => void save(field, value)}
+    />
+  );
+}
+
 function ConnectedActivity() {
   // Frozen once per mount: a sliding window would make every render a new subscription.
   const window = useMemo(() => {
@@ -127,6 +309,7 @@ export function CashTab() {
   return (
     <div style={{ display: "grid", gap: "1.75rem" }}>
       <ConnectedActivity />
+      <ConnectedNumbers />
     </div>
   );
 }

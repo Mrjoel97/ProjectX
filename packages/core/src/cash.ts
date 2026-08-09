@@ -24,7 +24,13 @@
  * no caller for it yet, and an unused import fails lint. Task 5 imports it where it is first used.
  */
 
+import type { Tier } from "./businessProfile";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A `stated` input this old asks for a confirm-or-update. Outputs are only readable when their
+ *  inputs are consistent, and a stale number silently poisoning a ratio is that failure. */
+export const STALE_AFTER_MS = 90 * DAY_MS;
 
 /** What a number MEANS, so a renderer never has to guess a suffix. */
 export type CashUnit = "usd" | "ratio" | "months" | "percent" | "count" | "perDay";
@@ -85,6 +91,196 @@ export const knownFigure = (
     "from" | "sampleSize" | "statedAt" | "stale"
   > = {},
 ): CashFigure => ({ state: "known", origin, value, unit, ...extra });
+
+// ── Collection: the six-input panel (and the three extra Hormozi asks it forces) ───────────
+
+export type CashInputField =
+  | "cashOnHand"
+  | "monthlyOperatingCost"
+  | "mrr"
+  | "receivables"
+  | "payables"
+  | "cac"
+  | "thirtyDayCashPerCustomer"
+  | "grossProfitPerPurchase"
+  | "purchasesPerLifetime"
+  | "customerCount"
+  | "referralPct";
+
+export type CashInputSpec = {
+  field: CashInputField;
+  /** Which store owns the VALUE. The scorecard keeps the Hormozi inputs; nothing is duplicated. */
+  store: "financeInputs" | "scorecard";
+  /** Dot-path into the Scorecard, for `store: "scorecard"` only. */
+  path?: string;
+  unit: CashUnit;
+  label: string;
+  help: string;
+  /** What answering this buys the user. An input with no payoff should not be asked for. */
+  unlocks: string;
+  /** Tiers this input is asked of. Absent = every tier. */
+  tiers?: readonly Tier[];
+};
+
+/**
+ * The whole collection surface, in panel order. NINE for an SME, SIX for most, and that is the
+ * difference between a dashboard and a tax return.
+ *
+ * `customerCount` and `referralPct` are the two additions the design's own rules force: a ratio
+ * must carry its sample size, and the referral gate must have a referral number. Both are Hormozi
+ * inputs, so both live on the scorecard rather than in the finance-ops table.
+ */
+export const CASH_INPUTS: readonly CashInputSpec[] = [
+  {
+    field: "cashOnHand",
+    store: "financeInputs",
+    unit: "usd",
+    label: "Cash on hand",
+    help: "Everything the business could spend today.",
+    unlocks: "runway",
+  },
+  {
+    field: "monthlyOperatingCost",
+    store: "financeInputs",
+    unit: "usd",
+    label: "Monthly operating cost",
+    help: "What it costs to run the business for a month.",
+    unlocks: "net burn, runway",
+  },
+  {
+    field: "cac",
+    store: "scorecard",
+    path: "financials.cac",
+    unit: "usd",
+    label: "Customer acquisition cost",
+    help: "What you spend, on average, to win one customer.",
+    unlocks: "CFA, LTGP:CAC, payback",
+  },
+  {
+    field: "thirtyDayCashPerCustomer",
+    store: "scorecard",
+    path: "financials.thirtyDayCashPerCustomer",
+    unit: "usd",
+    label: "30-day cash per customer",
+    help: "Cash collected from one customer in their first 30 days.",
+    unlocks: "CFA",
+  },
+  {
+    field: "grossProfitPerPurchase",
+    store: "scorecard",
+    path: "financials.grossProfitPerPurchase",
+    unit: "usd",
+    label: "Gross profit per purchase",
+    help: "Profit on one sale after the cost of delivering it. Not revenue.",
+    unlocks: "LTGP",
+  },
+  {
+    field: "purchasesPerLifetime",
+    store: "scorecard",
+    path: "financials.purchasesPerLifetime",
+    unit: "count",
+    label: "Purchases per customer lifetime",
+    help: "How many times an average customer buys, in total.",
+    unlocks: "LTGP, LTGP:CAC",
+  },
+  {
+    field: "customerCount",
+    store: "scorecard",
+    path: "financials.customerCount",
+    unit: "count",
+    label: "Customers so far",
+    help: "How many customers these figures are based on.",
+    unlocks: "the sample size beside every ratio",
+  },
+  {
+    field: "referralPct",
+    store: "scorecard",
+    path: "leadCard.referralPct",
+    unit: "percent",
+    label: "Referral share",
+    help: "Share of new customers who arrived by referral.",
+    unlocks: "the 25% referral gate",
+    tiers: ["startup", "sme", "enterprise"],
+  },
+  {
+    field: "mrr",
+    store: "financeInputs",
+    unit: "usd",
+    label: "Monthly recurring revenue",
+    help: "Subscription revenue that recurs every month.",
+    unlocks: "MRR, ARR",
+    tiers: ["startup", "sme", "enterprise"],
+  },
+  {
+    field: "receivables",
+    store: "financeInputs",
+    unit: "usd",
+    label: "Receivables",
+    help: "Money owed to you and not yet collected.",
+    unlocks: "working capital",
+    tiers: ["sme", "enterprise"],
+  },
+  {
+    field: "payables",
+    store: "financeInputs",
+    unit: "usd",
+    label: "Payables",
+    help: "Money you owe and have not yet paid.",
+    unlocks: "working capital",
+    tiers: ["sme", "enterprise"],
+  },
+];
+
+const SPEC_BY_FIELD = new Map<CashInputField, CashInputSpec>(
+  CASH_INPUTS.map((spec) => [spec.field, spec]),
+);
+
+export const cashInputSpec = (field: CashInputField): CashInputSpec => {
+  const spec = SPEC_BY_FIELD.get(field);
+  if (!spec) throw new Error(`unknown cash input: ${String(field)}`);
+  return spec;
+};
+
+/** Which inputs this tier is asked for, in panel order. */
+export const cashInputsForTier = (tier: Tier): CashInputSpec[] =>
+  CASH_INPUTS.filter((spec) => spec.tiers === undefined || spec.tiers.includes(tier));
+
+/**
+ * Validate one input at the trust boundary. Throws nothing — the caller decides whether a bad value
+ * is a form error or a rejected mutation, and both need the reason in words.
+ *
+ * `purchasesPerLifetime < 1` is REJECTED rather than accepted: half a purchase multiplied into an
+ * LTGP produces a plausible-looking number that is wrong, which is worse than a refusal.
+ */
+export function validateCashInput(
+  field: CashInputField,
+  value: number,
+): { ok: true } | { ok: false; reason: string } {
+  if (!Number.isFinite(value)) return { ok: false, reason: "Enter a number." };
+  const spec = cashInputSpec(field);
+  if (value < 0) return { ok: false, reason: "This cannot be negative." };
+  if (spec.unit === "percent" && value > 100) return { ok: false, reason: "Enter 0 to 100." };
+  // Checked BEFORE the generic count-is-a-whole-number rule below: 0.5 is both non-integer and
+  // below 1, and the "at least 1" reason is the one worth surfacing — "enter a whole number" would
+  // leave someone who typed 0.5 unsure whether 1 or 2 is the fix.
+  if (field === "purchasesPerLifetime" && value < 1) {
+    return { ok: false, reason: "A customer buys at least 1 time. Enter at least 1." };
+  }
+  if (spec.unit === "count" && !Number.isInteger(value)) {
+    return { ok: false, reason: "Enter a whole number." };
+  }
+  return { ok: true };
+}
+
+export type CashInputState = {
+  field: CashInputField;
+  value: number | null;
+  statedAt: number | null;
+  stale: boolean;
+};
+
+export const isStale = (statedAt: number | null, nowMs: number): boolean =>
+  statedAt !== null && nowMs - statedAt > STALE_AFTER_MS;
 
 // ── Activity: the row that costs nothing ────────────────────────────────────────────────
 //

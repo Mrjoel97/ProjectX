@@ -1,6 +1,7 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 2 fix — `last7Count` moved into `activityFromSends`, out of the view)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 3 — the six-input collection panel,
+> `financeInputs`, and one writer per number)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -62,6 +63,70 @@ both halves of the page:
   reach-out count — the row needs no data entry and is the first thing rendered on the Business tab.
   "Posts per day" has no data source yet (Pikar delivers email, not social posts) and renders an
   explicit "not tracked yet", never a fabricated `0`.
+
+### Cash — the collection surface and `financeInputs` (Task 3)
+
+**The storage split, and why it is not a duplication.** Two stores hold the Business tab's numbers,
+split by WHICH kind of figure they are, never by which screen wrote them:
+
+- **The scorecard (`evaluations.scorecard`, `packages/core/src/growth/scorecard.ts`) stays the
+  source of truth for every Hormozi input** — `financials.cac`, `financials.ltgp`,
+  `financials.thirtyDayCashPerCustomer`, `financials.grossMarginPct`, `financials.churnByCadence`,
+  and the four leaves Task 3 added (`financials.grossProfitPerPurchase`,
+  `financials.purchasesPerLifetime`, `financials.customerCount`, `leadCard.referralPct` — see
+  `docs/playbooks/growth-diagnostic.md`).
+- **The new `financeInputs` table (`packages/backend/convex/schema.ts`) holds the five finance-ops
+  inputs ONLY**: `cashOnHand`, `monthlyOperatingCost`, `mrr`, `receivables`, `payables`. One row per
+  `(tenantId, field)`, read through `by_tenant`/`by_tenant_field`. **CAC is never copied into this
+  table.** Duplicating it into a second store is what produced two separate selector bugs on
+  2026-08-09 — the whole reason this split is a rule and not a convenience.
+- **`packages/core/src/cash.ts`'s `CASH_INPUTS: readonly CashInputSpec[]`** is the single catalogue
+  both stores are read through: eleven entries, each naming its `field`, which `store` owns its
+  VALUE (`"financeInputs" | "scorecard"`), the Scorecard dot-`path` for the scorecard ones, its
+  `unit`, and `unlocks` — what answering it buys the user, asserted non-empty so a field with no
+  payoff can never be asked for. `cashInputsForTier(tier)` filters it to what a tier is actually
+  asked; `validateCashInput(field, value)` is the trust-boundary check (money ≥ 0/finite, a percent
+  ≤ 100, a count a whole number, and `purchasesPerLifetime < 1` REJECTED rather than silently
+  multiplied into a plausible-looking wrong LTGP). `STALE_AFTER_MS` (90 days) + `isStale` are the
+  confirm-or-update threshold; `financeInputs.statedAt` and the scorecard's carried `createdAt` are
+  both fed through the same function so the two stores share one staleness rule.
+- **One mutation, `convex/cash.ts`'s `saveInput`, routes by field to the store that owns it — there
+  is exactly one writer per number.** A finance-ops field patches/inserts its `financeInputs` row. A
+  scorecard field calls `applyScorecardAnswer` (`convex/evaluations.ts`, exported in this task) —
+  the SAME function `recordScorecardAnswer` (the cockpit path) and `approvals.answerDecision` (the
+  Approvals path) call, so a number entered in the panel, spoken to the cockpit, or answered in
+  Approvals lands in the same place and carries forward the same way. No evaluation row yet → seeded
+  under the stable thread id `"finance-panel"` so the answer survives into the tenant's first real
+  evaluation. `cash.ts`'s `inputs` query reads both stores back through the one `CASH_INPUTS`
+  catalogue and returns `CashInputState[]` (`field`, `value`, `statedAt`, `stale`) — nothing is
+  logged (CLAUDE.md §4); if an audit event is ever added here it carries the field NAME and a
+  boolean, never the value.
+- **Approvals' `QUESTION_CATALOG` gained the same three new numeric entries** (`financials.
+  grossProfitPerPurchase`, `financials.purchasesPerLifetime`, `financials.customerCount`) so a
+  tenant who answers in Approvals and a tenant who answers in the panel fill the same set — a
+  catalogue entry that only one surface could see is how a field ships unwritable. Its numeric
+  bounds check now routes through `validateCashInput` for every field the two surfaces share (via a
+  path→`CashInputField` lookup built off `CASH_INPUTS` itself), so `purchasesPerLifetime: 0.5` is
+  refused in Approvals with the SAME reason and the same words as in the panel. `financials.ltgp`
+  keeps its own finite/non-negative check — it is never a cash input (see the growth-diagnostic
+  playbook's precedence note) and carries no `CashInputField`. `leadCard.referralPct` is
+  deliberately NOT in the catalogue: `hasFinancialQuestion` gates it on a `financials`-section
+  `notEnoughData` entry, and a lead metric behind a financial gate would be a category error — it
+  stays a panel-and-cockpit-only input.
+- **`CashView.tsx`'s `NumbersPanel`** renders `cashInputsForTier(tier)` INTERSECTED with the
+  `inputs` prop — the tier decides which fields are asked at all, and a field with no matching entry
+  in `inputs` is skipped rather than invented. Each row is a real `<label htmlFor>` + `<input id>`
+  pair, a Save button with an explicit `aria-label`, and a provenance line: `Unlocks <what>` when
+  never answered (never a fabricated `$0`), `Last confirmed <date>` otherwise, with a
+  confirm-or-update prompt appended once stale. **The stale prompt uses `--ink-soft` and the
+  explicit word "confirm"** — BRAND §2/CLAUDE.md §10 reserve amber (`--held`) for the approval gate
+  only. Validated on change with the same `validateCashInput` the mutation enforces (Save disables
+  on an invalid draft, the reason renders in a `role="alert"`) — this is convenience, not the trust
+  boundary, which stays server-side. `ConnectedNumbers` reads `api.cash.inputs` + `api.tenantProfile
+  .get` (for `tier`, defaulting to `"solopreneur"` while loading/absent) and wires `api.cash.
+  saveInput` through the same busy/refusal `run`-style pattern as `OperatorTab` in `FinanceView.tsx`.
+  No arithmetic lives in this component beyond formatting (CLAUDE.md §1) — a `.reduce()` in a
+  component already failed review once on this plan.
 
 ### Frontend and connected browser evidence
 
