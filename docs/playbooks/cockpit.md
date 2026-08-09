@@ -11,7 +11,11 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
-> Last verified: 2026-08-09 (Plan 19-06 — **`ACTION_TYPES` has a FIFTH member, `crm_write`, and it
+> Last verified: 2026-08-09 (Plan 19-07 — WATCH-GATE BUMP ONLY, no cockpit behaviour changed.
+> This playbook watches `apps/web/e2e/`, and 19-07 authored `e2e/pipeline.spec.ts` — two tests,
+> discoverable, **never executed**. Nothing in `cockpit.ts`, the tool set or the arm table moved.)
+>
+> Previously verified: 2026-08-09 (Plan 19-06 — **`ACTION_TYPES` has a FIFTH member, `crm_write`, and it
 > is the `inline` arm's SECOND occupant.** `actionType.ts`, `cockpit.ts`, `schema.ts`, `plans.ts`,
 > `approvals.ts`, `llm.ts`, `cards.tsx` and `ApprovalsView.tsx` changed, in ONE commit.)
 >

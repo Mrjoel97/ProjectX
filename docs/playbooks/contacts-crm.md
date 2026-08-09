@@ -1,6 +1,12 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-06 — **the agent WRITE path exists: `crm_write` is the fifth
+> Last verified: 2026-08-09 (Plan 19-07 — **the Pipeline page is CONNECTED, and this module has
+> public READS for the first time.** `pipelineTiles`, `listContacts` and `listUnassignedFollowUps`
+> land here rather than in a second store, which is PIPE-01 satisfied by construction. Invariant 3
+> stopped being a promise and became a component test; invariant 14 below is new and records the
+> "last touch" ceiling. The nav item is deliberately STILL `soon: true` — 26-18 flips it.)
+>
+> Previously verified: 2026-08-09 (Plan 19-06 — **the agent WRITE path exists: `crm_write` is the fifth
 > `ACTION_TYPES` member, on the `inline` arm.** Invariant 11's ACTOR rule stopped being prose and
 > became enforced code, and invariant 13 below is new. `contacts.ts` was refactored so the write
 > rule has exactly ONE implementation.)
@@ -50,7 +56,12 @@ about them — and there was nowhere to record that someone had asked to stop be
   `suppressFromUnsubscribe`. Plus (19-06) the three SHARED write helpers `upsertContactRow` /
   `createFollowUpRow` / `setFollowUpStatusRow` and the `applyCrmOperations` terminal that
   `cockpit.ts`'s `inline` arm calls — invariant 13. There are deliberately NO public reads here yet
-  — the Pipeline page's reads land with the page. (No line numbers: they rot.)
+  — CORRECTED in 19-07: the reads landed WITH THE PAGE, in this same module. Three public
+  `tenantQuery` reads now sit at the bottom of the file — `pipelineTiles` (the four counts),
+  `listContacts` (newest-first rows carrying `nextStep`, `consent`, `lastTouchAt` and the
+  suppression mirror) and `listUnassignedFollowUps` — every one bounded by the 26-01
+  `createDashboardBound` / `dashboardCursorFor` contract from `@pikar/core`, never a hand-rolled
+  limit/offset pair. (No line numbers: they rot.)
 - `packages/backend/convex/contacts.test.ts` — the BETA-05 isolation block over every public
   function by name, the runtime audit key-set assertion, and the no-opportunities structural scan.
   Its last two tests pin the EXPORT SETS, so a seventh public write added without an isolation
@@ -61,7 +72,11 @@ about them — and there was nowhere to record that someone had asked to stop be
 
 **Frontend**
 - `apps/web/app/(app)/dashboard/pipeline/` — the Pipeline page: four tiles, the contact table, the
-  contactless-follow-ups section beneath it.
+  contactless-follow-ups section beneath it. `page.tsx` is five lines returning `<PipelineView />`;
+  `PipelineView.tsx` is `"use client"` and holds the whole page, one `useQuery` PER SECTION so a
+  single failing read cannot erase the rest; `pipelineView.test.ts` (**`.test.ts`, never `.test.tsx`
+  — `apps/web/vitest.config.mts` includes `app/**/*.test.ts` ONLY and a `.tsx` is silently skipped**)
+  is the executable half of invariants 3 and 6.
 - `apps/web/e2e/pipeline.spec.ts` — **owned by `dashboard-pages.md`**, not by this playbook.
   It is registered there and additionally covered by `cockpit.md`'s `apps/web/e2e/` prefix;
   registering it a third time here would make three playbooks claim one file.
@@ -141,7 +156,12 @@ Contacts and follow-ups have NO coverage-start concept — the substrate is crea
 `Unknown`. `Unknown` must not exist as a state on this page. This is carried over from the 26-10
 UAT defect (commit `1a63992`) from the other side: there the fix was to stop printing a number the
 system did not know; here the fix is to stop *hedging* a number it does know.
-*Enforcement:* `apps/web/app/(app)/dashboard/pipeline/pipelineView.test.ts` (19-VALIDATION row 19).
+*Enforcement (19-07 — this stopped being a promise):*
+`apps/web/app/(app)/dashboard/pipeline/pipelineView.test.ts` renders the tiles with all four counts
+at zero and asserts `">0<"` appears EXACTLY four times **and** that neither `—` nor `Unknown`
+appears anywhere in the tile markup (19-VALIDATION row 19). The absence is asserted explicitly
+because a tile that hedges still renders and still looks fine. The backend half is
+`contacts.test.ts` — an EMPTY tenant returns `{0,0,0,0}` as real numbers, never null, never absent.
 
 **4. Identity is `normalizeAddress`, and there is exactly one of it.**
 Contacts, suppressions and the per-address send guard all key on the same function's output, which
@@ -255,6 +275,30 @@ user already agreed to.
 *Enforcement:* `contacts.test.ts`'s existing isolation block still runs over every public write
 (they delegate, so it still covers them), plus `cockpit.test.ts` "executePlan crm_write arm" —
 including the cross-tenant approve and the foreign-`followUpRef` refusal.
+
+**14. "Last touch" is DERIVED at read time, and that is a deliberate ceiling (19-07).**
+`listContacts` folds ONE bounded `requests` read (status `sent`, through
+`by_tenant_status_createdAt`) in memory against the page's addresses, and takes the max of that
+and the newest `completedAt` on the contact's own follow-ups. A `canceled` follow-up is NOT a
+touch, and re-opening a `done` one clears `completedAt`, so an undone completion cannot count.
+There is deliberately **no denormalized `contacts.lastTouchAt` field**: that would be a write-path
+obligation this phase does not otherwise have, and the write path is the expensive place to be
+wrong. *ponytail ceiling:* the scan caps at 1 000 rows per call and the page then reports
+`partial` / `"row-cap"`. *Upgrade path, when the read hurts:* denormalize `contacts.lastTouchAt`,
+written by `recordDeliveryTerminal` and `setFollowUpStatus` — both of them, or the field lies.
+A contact with neither a send nor a completion returns `null`, which the page renders as an
+explicit "No contact yet" — NOT `0`, which would read as a measured zero (invariant 3 cuts both
+ways: hedge a number you know, and you lie; print `0` for a fact you do not have, and you lie
+harder).
+*Enforcement:* `contacts.test.ts` "lastTouchAt is the NEWER of the newest delivered send and the
+newest completed follow-up", which also pins the `null` case.
+
+**15. The Pipeline nav item stays `soon: true` in Phase 19 (19-07).**
+`apps/web/app/(app)/layout.tsx` keys the rail off `href`, not `soon`, so **adding the href IS the
+activation** and 26-18 owns that decision. Phase 19 ships the route reachable BY URL only, exactly
+as 26-10 Task 1 shipped Finance. *Enforcement:* the plan's verify step greps `layout.tsx` for
+`/dashboard/pipeline` and expects NO hit, and `e2e/pipeline.spec.ts` asserts the rail carries no
+such link so activation cannot happen by accident.
 
 ## How to change safely
 

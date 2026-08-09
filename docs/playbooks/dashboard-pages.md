@@ -1,6 +1,13 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 19-06 — the Approvals page learned a FIFTH plan kind, `crm_write`.)
+> Last verified: 2026-08-09 (Plan 19-07 — the Phase-19 **Pipeline route exists and is connected**.)
+> SCOPE: a new `apps/web/app/(app)/dashboard/pipeline/` route only; no existing page, query,
+> pagination or empty state changed. It is URL-reachable with the nav item still `soon: true`
+> (26-18 owns the href — see `contacts-crm.md` invariant 15), its browser spec
+> `e2e/pipeline.spec.ts` is **AUTHORED AND NOT YET RUN**, and it adds no opportunity, stage or
+> monetary value — the blast-radius line below about Phase 19 is now describing shipped code.
+>
+> Previously verified: 2026-08-09 (Plan 19-06 — the Approvals page learned a FIFTH plan kind, `crm_write`.)
 > SCOPE: `approvals.ts` `planKind` + `ApprovalsView.tsx`'s badge/title/action-label trio; no page,
 > query, pagination or empty state changed. **This surface is dragged in by a COMPILE error and that
 > is deliberate:** `planKind`'s return union is the Approvals page's own enum (`media` splits into
@@ -495,6 +502,41 @@ pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
 The nav item stays `Soon` until that run and the blocking owner UAT both pass; the route is reachable
 directly at `/dashboard/finance` in the meantime, and the spec asserts the absence of the nav link so
 activation cannot happen by accident.
+
+### The connected Pipeline route (19-07)
+
+`apps/web/app/(app)/dashboard/pipeline/` — the same three-file shape as Cost: `page.tsx` returns
+`<PipelineView />`, `PipelineView.tsx` is `"use client"` and holds the page, `pipelineView.test.ts`
+is the DOM-free contract. Its backend is `convex/contacts.ts`'s three read models; it has **no
+adapter module of its own**, because PIPE-01's whole worry is a second CRM data plane.
+
+- **The route is URL-reachable and the nav is NOT flipped.** `Sales Pipeline` stays `soon: true`.
+  The rail branch keys off `href`, so adding the href IS activation; 26-18 owns it. Rollback here
+  is deleting the directory — no writer, no instrumentation and no schema is involved, which is
+  why the Pipeline row of the rollback table says "hide the route" and nothing more.
+- **Four tiles, and every one of them is ALWAYS-KNOWN.** Unlike Finance, this page has no coverage
+  start: the substrate is created by the user, so "we weren't watching" cannot apply. A real zero
+  is `0` — never `—`, never `Unknown`. This is invariant 6 ("failure is not emptiness") read from
+  the other end, and it is the exact inverse of the 26-10 defect: there a number the system did
+  not know was printed as `$0`; here a number it DOES know must not be hedged.
+- **`.ledger` is the DARK marketing audit block from the landing page and must never dress a data
+  table.** It IS defined in `globals.css`, which is what makes copying it out of
+  `docs/design/mockups/pending-pages.html` so easy and so wrong — the Pipeline mockup uses
+  `<table class="ledger">` and would have rendered this table on a navy panel. Only `stat-grid`,
+  `stat-tile`, `stat-head`, `stat-badge`, `stat-value` and `caps-label` are real shared classes;
+  everything else here is inline `CSSProperties` over the tokens.
+- **Chips carry teal in the FILL and `--ink` on the label** (BRAND §6 bans `--teal-600` as small
+  text at ~2.9:1), and there is **zero `--held` amber** on the page — that is the approval gate's
+  alone (BRAND §2).
+- **Un-suppressing is an in-component arm/commit, never `window.confirm`** — the same rule as the
+  Finance owner controls, and for the same reason: a browser modal blocks the page and cannot be
+  driven by the spec that has to prove the boundary.
+- **Evidence status, 2026-08-09 — the browser gate is NOT green.** `pipelineView.test.ts` passes
+  17/17, web typecheck and the production build are green and `/dashboard/pipeline` appears in the
+  route table. `e2e/pipeline.spec.ts` is authored and `--list`-discoverable with two tests, and has
+  **never executed** — a `--list` is not a run, and a blank result means NOT RUN. The spec's own
+  header carries the runtime prerequisites and the verbatim resume command; the owner runs it at
+  19-10.
 
 ## How to change safely
 
