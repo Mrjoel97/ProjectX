@@ -1301,9 +1301,15 @@ const IMAGE_REFUSAL_REPLY: Record<
 // 19-08 (ACTN-05). Every one of these is RETURNED, never thrown: `execute` always hands the model
 // a sentence it can say to the user (18-06's rule). None of them stages anything.
 const CRM_REFUSAL_REPLY: Record<
-  "draft_in_progress" | "add_only" | "no_clock" | "malformed",
+  "draft_in_progress" | "add_only" | "no_clock" | "malformed" | "contact_carries_followup",
   string
 > = {
+  // 19-11: names the op the model must use. Saying only "that was wrong" would leave the cheapest
+  // recovery as dropping the date, which is the defect this refusal exists to stop.
+  contact_carries_followup:
+    "That change was sent as an addContact but carries a date or a task, so NOTHING was staged. " +
+    "A dated reminder is a separate addFollowUp operation. Send it again as addFollowUp with " +
+    "the person's email address, what needs doing, and the user's OWN WORDS for when it is due.",
   draft_in_progress:
     "There is an email draft on this conversation's plan card, and staging record changes would " +
     "replace it. Nothing was staged. Tell the user plainly, and offer to update their records " +
@@ -2318,6 +2324,10 @@ export function buildCockpitTools(
         "This saves nothing yet and emails nobody. " +
         "Every follow-up must name the contact's email address. " +
         "Pass the user's own words for when a follow-up is due; the app supplies the current date.",
+      // The TS type stays FLAT and permissive on purpose: it models what can ARRIVE, not what we
+      // ask for. `jsonSchema()` carries no `validate`, so the SDK never checks the payload — the
+      // schema below is a signal to the provider and `execute` is the enforcement. A narrow TS
+      // union here would hide `o.due` on a contact, which is precisely the case we must inspect.
       inputSchema: jsonSchema<{
         operations: Array<{
           op: "addContact" | "addFollowUp";
@@ -2331,17 +2341,46 @@ export function buildCockpitTools(
         properties: {
           operations: {
             type: "array",
+            // 19-11 (ACTN-05): a DISCRIMINATED union, follow-up arm FIRST. This used to be one
+            // permissive object with `enum: ["addContact","addFollowUp"]` and
+            // `required: ["op","email"]`, which made `{op:"addContact", email}` both the union's
+            // leading arm AND the whole schema's minimum valid emission — so a contact was
+            // reachable without the model having actively chosen it, and `note`/`due` were
+            // optional on BOTH ops. A follow-up's date is now structurally required, and a
+            // contact structurally cannot carry one.
             items: {
-              type: "object",
-              properties: {
-                op: { type: "string", enum: ["addContact", "addFollowUp"] },
-                email: { type: "string", description: "The contact's email address. Required." },
-                name: { type: "string", description: "The contact's name, if known." },
-                note: { type: "string", description: "addFollowUp: what needs doing." },
-                due: { type: "string", description: "addFollowUp: the user's words for when." },
-              },
-              required: ["op", "email"],
-              additionalProperties: false,
+              anyOf: [
+                {
+                  type: "object",
+                  properties: {
+                    op: { type: "string", enum: ["addFollowUp"] },
+                    email: {
+                      type: "string",
+                      description: "The contact's email address. Required.",
+                    },
+                    note: { type: "string", description: "What needs doing." },
+                    due: {
+                      type: "string",
+                      description: "The user's OWN WORDS for when it is due, e.g. 'Thursday'.",
+                    },
+                  },
+                  required: ["op", "email", "note", "due"],
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  properties: {
+                    op: { type: "string", enum: ["addContact"] },
+                    email: {
+                      type: "string",
+                      description: "The contact's email address. Required.",
+                    },
+                    name: { type: "string", description: "The contact's name, if known." },
+                  },
+                  required: ["op", "email"],
+                  additionalProperties: false,
+                },
+              ],
             },
           },
         },
@@ -2372,6 +2411,15 @@ export function buildCockpitTools(
         const staged: unknown[] = [];
         for (const o of operations) {
           if (o.op === "addContact") {
+            // 19-11 (ACTN-05, the defect 19-10 measured). `due`/`note` on a CONTACT used to be
+            // SILENTLY DROPPED by the push below, and the tool then reported "1 change(s) …
+            // staged" — so a model that supplied the whole dated follow-up got a bare contact
+            // written and was told it had succeeded. The date was destroyed with no signal to
+            // anyone. A silent drop at a trust boundary cannot be answered; a returned refusal
+            // must be, and the governed loop lets the model re-send the right op immediately.
+            if ((o.due ?? "").trim() || (o.note ?? "").trim()) {
+              return CRM_REFUSAL_REPLY.contact_carries_followup;
+            }
             // `origin` is the provenance of the DATA and is NOT a model input: an agent-staged
             // contact came out of a mailbox resolution or the user's own words in this thread,
             // and letting the model label provenance would make the field unreliable. The same
