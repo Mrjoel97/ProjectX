@@ -19,7 +19,17 @@
 //
 // There is no opportunity concept, no pipeline-value field and no monetary type in this module,
 // and `contacts.test.ts` scans this file to keep it that way (PIPE-01, SC#8).
-import { normalizeAddress, parseCrmOperations, renderFooter } from "@pikar/core";
+import {
+  compareDashboardOrder,
+  createDashboardBound,
+  dashboardCursorFor,
+  followUpIsDue,
+  needsAttention,
+  normalizeAddress,
+  parseCrmOperations,
+  parseDashboardCursor,
+  renderFooter,
+} from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -30,7 +40,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
-import { tenantMutation } from "./lib/functions";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
 // ── Shared readers ────────────────────────────────────────────────────────────
@@ -540,6 +550,289 @@ export const footerFor = internalQuery({
 
     return {
       text: renderFooter({ postalAddress, unsubscribeUrl: `${siteUrl}/unsubscribe/${token}` }),
+    };
+  },
+});
+
+// ── The Pipeline read models (19-07, PIPE-01 / SC#8) ──────────────────────────
+// Three tenant-scoped reads behind `/dashboard/pipeline`. They add NO backing store: every number
+// is derived from `contacts`, `followUps`, `suppressions` and the delivery spine's `requests`
+// rows. There is no opportunity, no deal state and no monetary field here, deliberately, and the
+// structural scan at the top of this file's test covers these lines too.
+//
+// Bounded by the 26-01 contracts (`@pikar/core` `dashboard.ts`), consumed and never re-implemented:
+// `createDashboardBound` enforces `nextCursor ⇒ partial` and `partial ⇔ partialReason`, and
+// `dashboardCursorFor`/`parseDashboardCursor` own the validated "v1:" cursor. `DashboardMoney` is
+// deliberately NOT imported — importing it on this page would be a signal in the wrong direction.
+
+const PAGE_LIMIT_DEFAULT = 25;
+const PAGE_LIMIT_MAX = 50;
+/** Row caps for the per-call scans. A read model behind a dashboard route must never be an
+ *  unbounded table scan — that is the whole reason the 26-01 bound contract exists. */
+const SCAN_LIMIT = 1_000;
+/** One contact's whole follow-up history, read through `by_tenant_contact` for the page's rows. */
+const PER_CONTACT_FOLLOWUP_LIMIT = 200;
+
+function clampLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return PAGE_LIMIT_DEFAULT;
+  return Math.min(Math.max(Math.floor(limit), 1), PAGE_LIMIT_MAX);
+}
+
+/**
+ * Page an already-fetched, bounded row set into a `createDashboardBound`-shaped result.
+ *
+ * ponytail: a bounded scan sorted in memory, beta scale. The ceiling is `SCAN_LIMIT` rows per call
+ * — past that the page reports `partial`/`"row-cap"` and the tail is unreachable. Upgrade path when
+ * a tenant outgrows it: drive the cursor off the index range itself
+ * (`by_tenant_createdAt` + `lte(createdAt)`) so the fetch is limit-sized rather than scan-sized.
+ * Don't take it until the scan hurts; the in-memory sort is what makes the createdAt TIE handling
+ * (id-descending, `compareDashboardOrder`) exact rather than approximate.
+ */
+function pageBounded<T extends { createdAt: number; id: string }>(
+  rows: T[],
+  scanCapped: boolean,
+  cursor: string | undefined,
+  limit: number,
+): { page: T[]; bound: ReturnType<typeof createDashboardBound> } {
+  const sorted = [...rows].sort(compareDashboardOrder);
+  // `parseDashboardCursor` throws on a forged/oversized cursor — a trust boundary, not a fallback.
+  const start =
+    cursor === undefined
+      ? 0
+      : sorted.findIndex((row) => compareDashboardOrder(row, parseDashboardCursor(cursor)) > 0);
+  const page = start < 0 ? [] : sorted.slice(start, start + limit);
+  const last = page.at(-1);
+  const nextCursor =
+    last !== undefined && start >= 0 && start + limit < sorted.length
+      ? dashboardCursorFor(last)
+      : null;
+  const partial = nextCursor !== null || scanCapped;
+  return {
+    page,
+    bound: createDashboardBound({
+      returned: page.length,
+      limit,
+      nextCursor,
+      partial,
+      ...(partial ? { partialReason: "row-cap" as const } : {}),
+    }),
+  };
+}
+
+/**
+ * "Last touch", half one — the newest DELIVERED send per address (Open Question 4, resolved here).
+ *
+ * ONE bounded read of `requests` per page, folded in memory against the recipient string (which in
+ * group mode is comma-joined, hence `recipientMembers`). There is deliberately NO denormalized
+ * `contacts.lastTouchAt` field: that would be a write-path obligation this phase does not otherwise
+ * have.
+ *
+ * ponytail: one bounded requests scan folded in memory, beta scale. Upgrade path when the scan
+ * stops being cheap: a denormalized `contacts.lastTouchAt` written by `recordDeliveryTerminal` and
+ * `setFollowUpStatus` — a write-path obligation, so don't take it until the read hurts.
+ */
+async function newestSendByAddress(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<{ newest: Map<string, number>; capped: boolean }> {
+  const rows = await ctx.db
+    .query("requests")
+    .withIndex("by_tenant_status_createdAt", (q) => q.eq("tenantId", tenantId).eq("status", "sent"))
+    .order("desc")
+    .take(SCAN_LIMIT + 1);
+  const capped = rows.length > SCAN_LIMIT;
+  const newest = new Map<string, number>();
+  for (const row of rows.slice(0, SCAN_LIMIT)) {
+    for (const address of recipientMembers(row.recipient)) {
+      const seen = newest.get(address);
+      if (seen === undefined || row.createdAt > seen) newest.set(address, row.createdAt);
+    }
+  }
+  return { newest, capped };
+}
+
+/**
+ * The four Pipeline tiles. ALWAYS-KNOWN counts: contacts and follow-ups have no coverage-start
+ * concept — the substrate is created by the user, so "we weren't watching then" cannot apply and
+ * `Unknown` is never the truth. A real zero is `0` (playbook invariant 3).
+ *
+ * `needingAttention` is deliberately COMPLEMENTARY to `followUpsDue` rather than a restatement of
+ * it: it counts contacts with NO open follow-up, so a contact whose only follow-up is `done` or
+ * `canceled` is back in the tile. Both derivations are `@pikar/core`'s, not re-implemented here.
+ */
+export const pipelineTiles = tenantQuery({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    needingAttention: number;
+    followUpsDue: number;
+    consentOnRecord: number;
+    suppressed: number;
+  }> => {
+    const now = Date.now();
+    const contacts = await ctx.db
+      .query("contacts")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(SCAN_LIMIT);
+    const open = await ctx.db
+      .query("followUps")
+      .withIndex("by_tenant_status_dueAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("status", "open"),
+      )
+      .take(SCAN_LIMIT);
+    const suppressions = await ctx.db
+      .query("suppressions")
+      .withIndex("by_tenant_address", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(SCAN_LIMIT);
+
+    const openContactIds = new Set(
+      open.flatMap((row) => (row.contactId ? [String(row.contactId)] : [])),
+    );
+    return {
+      needingAttention: contacts.filter((c) => needsAttention(String(c._id), openContactIds))
+        .length,
+      // Contactless follow-ups are counted too — one honest total, no asterisk.
+      followUpsDue: open.filter((row) => followUpIsDue(row.dueAt, now)).length,
+      consentOnRecord: contacts.filter((c) => c.consentAt !== undefined).length,
+      suppressed: suppressions.length,
+    };
+  },
+});
+
+/** One Pipeline table row. TYPED FACTS only — the display prose is code-owned on the component
+ *  side (`DASHBOARD_STATE_COPY`), so a backend change can never rewrite what the page says. */
+export type PipelineContactRow = {
+  contactId: Id<"contacts">;
+  email: string;
+  /** `null`, never `""` — the component falls back to the address rather than rendering a blank. */
+  name: string | null;
+  origin: ContactOrigin;
+  /** `null` means NO contact has ever happened, which is not the same fact as `0`. */
+  lastTouchAt: number | null;
+  nextStep: { followUpId: Id<"followUps">; note: string; dueAt: number } | null;
+  /** `null` = none on record. Nothing is ever defaulted to consented (invariant 6). */
+  consent: { at: number; source: "asserted-by-user" | "inbound-form" } | null;
+  /** The DISPLAY MIRROR (`contacts.unsubscribedAt`), never the send-path guard — that reads
+   *  `suppressions` and only `suppressions` (invariant 2). It decides which row action to offer. */
+  suppressed: boolean;
+};
+
+/**
+ * The contact table: newest-first, bounded, one page at a time.
+ *
+ * Each row carries its own next step and last touch so the table needs no second round trip. The
+ * per-contact follow-up read is indexed (`by_tenant_contact`) and runs once per PAGE row, not once
+ * per contact in the tenant.
+ */
+export const listContacts = tenantQuery({
+  args: { cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    contacts: PipelineContactRow[];
+    bound: ReturnType<typeof createDashboardBound>;
+  }> => {
+    const limit = clampLimit(args.limit);
+    const scanned = await ctx.db
+      .query("contacts")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .take(SCAN_LIMIT + 1);
+    const { page, bound } = pageBounded(
+      scanned.slice(0, SCAN_LIMIT).map((doc) => ({ doc, createdAt: doc.createdAt, id: doc._id })),
+      scanned.length > SCAN_LIMIT,
+      args.cursor,
+      limit,
+    );
+
+    const { newest } = await newestSendByAddress(ctx, ctx.tenantId);
+    const contacts: PipelineContactRow[] = [];
+    for (const { doc } of page) {
+      const followUps = await ctx.db
+        .query("followUps")
+        .withIndex("by_tenant_contact", (q) =>
+          q.eq("tenantId", ctx.tenantId).eq("contactId", doc._id),
+        )
+        .take(PER_CONTACT_FOLLOWUP_LIMIT);
+
+      let nextStep: PipelineContactRow["nextStep"] = null;
+      let lastCompletedAt: number | null = null;
+      for (const row of followUps) {
+        if (row.status === "open" && (nextStep === null || row.dueAt < nextStep.dueAt)) {
+          nextStep = { followUpId: row._id, note: row.note, dueAt: row.dueAt };
+        }
+        // Only `done` stamps `completedAt`; a cancel is not a touch, and re-opening clears it.
+        if (
+          row.completedAt !== undefined &&
+          row.status === "done" &&
+          (lastCompletedAt === null || row.completedAt > lastCompletedAt)
+        ) {
+          lastCompletedAt = row.completedAt;
+        }
+      }
+
+      const lastSentAt = newest.get(doc.email) ?? null;
+      const touches = [lastSentAt, lastCompletedAt].filter((t): t is number => t !== null);
+      contacts.push({
+        contactId: doc._id,
+        email: doc.email,
+        name: doc.name ?? null,
+        origin: doc.origin,
+        lastTouchAt: touches.length === 0 ? null : Math.max(...touches),
+        nextStep,
+        consent:
+          doc.consentAt === undefined
+            ? null
+            : { at: doc.consentAt, source: doc.consentSource ?? "asserted-by-user" },
+        suppressed: doc.unsubscribedAt !== undefined,
+      });
+    }
+    return { contacts, bound };
+  },
+});
+
+/**
+ * The contactless follow-ups, which get their OWN section BENEATH the table rather than em-dash
+ * rows inside it: the table is one row per PERSON, and a row with no person is a different fact.
+ * Contactless follow-ups are a USER-only capability (invariant 11) — the agent must always name a
+ * contact — so this section is also the visible proof of that asymmetry.
+ */
+export const listUnassignedFollowUps = tenantQuery({
+  args: { cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    followUps: Array<{ followUpId: Id<"followUps">; note: string; dueAt: number }>;
+    bound: ReturnType<typeof createDashboardBound>;
+  }> => {
+    const limit = clampLimit(args.limit);
+    const scanned = await ctx.db
+      .query("followUps")
+      .withIndex("by_tenant_status_dueAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("status", "open"),
+      )
+      .take(SCAN_LIMIT + 1);
+    const { page, bound } = pageBounded(
+      scanned
+        .slice(0, SCAN_LIMIT)
+        .filter((row) => row.contactId === undefined)
+        .map((row) => ({
+          followUpId: row._id,
+          note: row.note,
+          dueAt: row.dueAt,
+          createdAt: row.createdAt,
+          id: row._id as string,
+        })),
+      scanned.length > SCAN_LIMIT,
+      args.cursor,
+      limit,
+    );
+    return {
+      followUps: page.map(({ followUpId, note, dueAt }) => ({ followUpId, note, dueAt })),
+      bound,
     };
   },
 });

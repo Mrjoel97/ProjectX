@@ -219,7 +219,10 @@ describe("contacts: tenant isolation across every public function (BETA-05 / SC#
 
   test("listUnassignedFollowUps — B's page contains no follow-up of A's", async () => {
     const h = await harness();
-    await h.asA.mutation(api.contacts.createFollowUp, { note: "supplier quote", dueAt: Date.now() });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      note: "supplier quote",
+      dueAt: Date.now(),
+    });
     expect((await h.asB.query(api.contacts.listUnassignedFollowUps, {})).followUps).toEqual([]);
     expect((await h.asA.query(api.contacts.listUnassignedFollowUps, {})).followUps).toHaveLength(1);
   });
@@ -870,6 +873,9 @@ describe("contacts: listContacts is bounded by the 26-01 contract (VALIDATION ro
       dueAt: now - 900_000,
     });
     await h.asA.mutation(api.contacts.setFollowUpStatus, { followUpId: oldTouch, status: "done" });
+    // `setFollowUpStatus` stamps `completedAt` at NOW, so an "old completion" has to be aged by
+    // hand — otherwise every completion is newer than every seeded send and the max is untested.
+    await h.t.run((ctx) => ctx.db.patch(oldTouch, { completedAt: now - 900_000 }));
     const newTouch = await h.asA.mutation(api.contacts.createFollowUp, {
       contactId: doneWins,
       note: "new",
@@ -943,7 +949,10 @@ describe("contacts: listUnassignedFollowUps is the contactless section's own rea
       note: "assigned",
       dueAt: Date.now(),
     });
-    await h.asA.mutation(api.contacts.createFollowUp, { note: "supplier quote", dueAt: Date.now() });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      note: "supplier quote",
+      dueAt: Date.now(),
+    });
     const closed = await h.asA.mutation(api.contacts.createFollowUp, {
       note: "already handled",
       dueAt: Date.now(),
