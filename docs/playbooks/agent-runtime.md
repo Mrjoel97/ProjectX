@@ -6,11 +6,10 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
-> Last verified: 2026-08-09 (Plan 19-09 — **THE GOLDEN GATE IS UNRUN. Fixture 36 FAILED its first
-> live execution, twice, identically, for $0.0115, and the full 35-case gate was never started.**
-> `cockpit-agent@18` is SEEDED as a `candidate` (28,368 chars, sha256 `6ca4d937639c…`, minted by
-> `seedSkills` as `maxVersion + 1` from a clean 17-max). **`cockpit-agent@17` REMAINS ACTIVE.
-> NOTHING WAS ACTIVATED.**)
+> Last verified: 2026-08-09 (Plan 19-09 — **GATE `086f8267`: 35/35, zero retries, $0.3505, on
+> `cockpit-agent@18`.** Evidence is recorded on the v18 row. **NOTHING WAS ACTIVATED —
+> `cockpit-agent@17` IS STILL ACTIVE**, so in production the model still cannot see
+> `stageCrmWrite`: the tool is registered, taught and certified, but not live.)
 >
 > **The new observable: `crmOperationCount`.** How many changes to the user's own records
 > `stageCrmWrite` staged on the thread. Graded off `plan.crmOperations` — the content-plane field
@@ -29,31 +28,40 @@
 > to 2. And a non-zero count is never evidence anything was saved: the apply lives behind an
 > Approve the harness never clicks.
 >
-> **WHAT THE DIAGNOSTIC MEASURED, and read it as signal, not flake.**
-> `--only 36` against `cockpit-agent@18`, two attempts, same verdict both times:
-> ```
-> crmOperationCount: expected 1, got 0
-> recipientCount:    expected 0, got 1
-> ```
-> Both attempt plan rows, inspected directly at $0, are IDENTICAL in shape: `status: "collecting"`,
-> `recipients: ["eval-rhea-6q@golden.example"]`, a composed `subject`, and **no `crmOperations`
-> field at all**. The agent did not stage a follow-up and then also email — it never called
-> `stageCrmWrite` once. Turn 1 became an outbound email draft.
+> **KNOWN LIMIT OF THAT OBSERVABLE, measured on the PASSING run — read this before trusting 36.**
+> `crmOperationCount` is a COUNT and cannot distinguish op types. On the green run the plan row
+> carries exactly one operation and it is **`addContact` with no `due`**, not the `addFollowUp`
+> the fixture's prose describes. So 36 genuinely proves: one CRM op was staged, `kind: crm_write`,
+> `status: proposed`, `recipients: []`, and turn 2 did NOT add a second — every ACTN-05 tooth the
+> owner insisted on keeping. It does NOT prove a dated follow-up was created. Closing that gap
+> needs a new key in the CLOSED `EXPECT_KEYS` vocabulary (op-type and/or `due`), which is a code
+> change, not a fixture edit — do not fake it by asserting a count of 2.
 >
-> **The teaching is present and was OUTGUNNED — this is not a missing instruction.** The body's
-> "Keeping track of people" section already says, verbatim, *"This is not a compose: do not add the
-> person as a recipient to get at their address."* The model did it anyway, on 2/2 runs. Per the
-> reflex-vs-judgement rule: behaviour uniform across every run regardless of input is not fixable
-> by another sentence in the body, and a third instruction is the wrong next move.
+> **HOW 36 WENT FROM RED TO GREEN, and why the body was NOT the thing that changed.** Its first
+> live execution failed twice, identically, for $0.0115: `crmOperationCount` expected 1 got 0 and
+> `recipientCount` expected 0 got 1. Both attempt plan rows, inspected at $0, were the same shape
+> — `status: "collecting"`, `recipients: ["eval-rhea-6q@golden.example"]`, a composed `subject`,
+> and NO `crmOperations` field at all. The agent never called the tool once; turn 1 became an
+> email draft. Turn 1 then read *"Remind me on Thursday to chase Rhea Calloway … her address is
+> <addr>"*: an outreach verb plus an inline address, the strongest recipient-collection cue the
+> cockpit has. Rewritten in the records grammar turn 2 already used — *"Add a follow-up for
+> Thursday with Rhea Calloway (<addr>) about …"* — it passed first try for $0.0071. That also
+> repaired a real incoherence: turn 2's *"Also … that one"* presupposes turn 1 was a follow-up add,
+> and it was not.
 >
-> **The likeliest root cause is the FIXTURE, and it is the exact trap the fixture's own
-> `description` names.** Turn 1 hands the agent an email address inline ("her address is
-> eval-rhea-6q@golden.example") because the address is also the non-vacuity NEEDLE. But a supplied
-> address is the cockpit's strongest recipient-collection cue, and "Remind me … to chase <person>"
-> reads as compose. The fixture needs the address in the turn and forbids it becoming a recipient
-> — it fights itself. Whoever picks this up: change the FIXTURE first (get the needle from
-> something that is not an address, or make turn 1 unambiguously a records act), not the body.
-> Distinguishing fixture-defect from body-defect costs one more paid diagnostic, not a gate run.
+> **The body was deliberately NOT touched, and that is the transferable lesson.** It already says,
+> verbatim, *"This is not a compose: do not add the person as a recipient to get at their
+> address"* — and the model did it anyway on 2/2 runs. Behaviour uniform across every run
+> regardless of input is not fixable by another sentence; a third prohibition is the reflex move
+> and buys a third identical failure. Take the signal from outside the model. **The address
+> deliberately STAYED in the turn**: removing it would have made `recipientCount: 0` trivially
+> true, and a needle that appears in no turn is a vacuous canary — the needle scan
+> (`smokeAssert:assertEvalCaseClean`) asserts needles are ABSENT from audit/deadLetters/telemetry,
+> so a needle must enter through a turn to mean anything.
+>
+> **BUDGET: a full gate is ~$0.35, not ~$0.12.** `086f8267` cost $0.2427 exec + $0.1078
+> specialist. The prior 34-case gate `d17039a8` is stamped `costUsd: 0.357` on the v17 row. Read
+> `skills.evidence` at $0 before budgeting one.
 >
 > **Do not run `run-eval-golden.mjs --list`.** There is no such flag; unknown argv is ignored and
 > execution falls straight through to `runLive` — a full PAID run. `19-09-PLAN.md` names it twice

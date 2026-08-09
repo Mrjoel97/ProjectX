@@ -1,29 +1,49 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. v18 IS SEEDED. THE
-> GATE IS UNRUN — fixture 36 FAILED its $0.0115 diagnostic, so the 35-case gate was never started.**)
+> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. GATE `086f8267` PASSED
+> 35/35 on `cockpit-agent@18`, zero retries, $0.3505. EVIDENCE IS RECORDED ON v18. NOTHING WAS
+> ACTIVATED — `cockpit-agent@17` IS STILL ACTIVE and activation was withheld by the owner.**)
+>
+> **THE GATE COSTS ~$0.35, NOT ~$0.12. Read v17's own evidence row before budgeting one.** The
+> previous gate (`d17039a8`, 34/34) is stamped `costUsd: 0.357` on the v17 skill row, and this one
+> came in at `0.3505` for 35. Any plan or checkpoint quoting $0.12–0.15 for a full gate is STALE by
+> roughly 3x — the three research fixtures (32/33/34) alone are ~$0.11 of specialist spend. The
+> figure is free to check at $0: read `skills.evidence` on the active row.
+>
+> **A ONE-LINE FIXTURE REPAIR, NOT A BODY EDIT, IS WHAT TURNED 36 GREEN.** Its first live execution
+> failed twice, identically, for $0.0115: the agent composed an EMAIL instead of ever calling
+> `stageCrmWrite`. Turn 1 read *"Remind me on Thursday to chase Rhea Calloway … her address is
+> \<addr\>"* — an outreach verb plus an inline address, which is the cockpit's strongest
+> recipient-collection cue. Rewriting turn 1 in the records grammar turn 2 already used (*"Add a
+> follow-up for Thursday with …"*) passed first try for $0.0071. **The body was deliberately NOT
+> touched** — it already forbids the behaviour verbatim, so the instruction was outgunned, not
+> missing, and a third prohibition would have been the reflex move that produces a third identical
+> failure. **The address deliberately STAYED in the turn**: it is the temptation that gives
+> `recipientCount: 0` its teeth, and a needle absent from every turn is a vacuous canary.
+>
+> **OPEN, AND THE ONE THING TO FIX BEFORE TRUSTING 36:** on the passing run the staged operation is
+> `addContact` with no `due`, **not the `addFollowUp` the fixture's prose describes**.
+> `crmOperationCount` is a COUNT and cannot tell the two apart, so 36 currently proves *"exactly one
+> CRM op was staged, it never became an outbound plan, and turn 2 did not add a second"* — all real
+> ACTN-05 teeth — but NOT that a dated follow-up was created. Closing that needs a new key in the
+> closed EXPECT vocabulary (an op-type/`due` assertion), which is a code change, not a fixture edit.
+>
 > Phase 19 (ACTN-05) edited the `cockpit-agent` body to teach `stageCrmWrite` and contacts-first
 > resolution, and discharged 18-08's binding *"teach a tool, owe a fixture"* override condition with
 > `eval-cases/36-crm-follow-up.json` and the 34 → 35 fixture-floor bump. **`cockpit-agent@18` was
-> SEEDED as a candidate, and fixture 36 was then run as a `--only 36` DIAGNOSTIC where it FAILED
-> for $0.0115. The unfiltered gate was never started, no evidence row was written, and
-> `cockpit-agent@17` is still ACTIVE.** Record this as UNRUN, never as passed.
+> SEEDED, GATED and left as a CANDIDATE. Gate `086f8267` passed **35/35**, zero retries, $0.3505,
+> and `recordEvalEvidence` stamped that run onto the v18 row — so v18 now SATISFIES `EVAL_GATE`
+> and is one `activateCandidate` click from live. **It was deliberately not clicked:
+> `cockpit-agent@17` is still ACTIVE.** Evidence recorded is NOT activation; do not conflate them.
 >
-> **Why the unfiltered gate was NOT run after the diagnostic failed, and why that was the point.**
-> The diagnostic exists so a dead fixture costs one case, not thirty-five. With 36 red the gate can
-> score 34/35 at best, cannot certify anything, and would have to be paid for AGAIN after any fix —
-> so running it would spend ~$0.12 to learn nothing about the decision at hand. It remains worth
-> running for ONE narrower reason: to prove the body edit (27 313 → 28 368 chars) did not regress
-> the other 34. That is a separate question and a separate owner call:
-> `pnpm eval:golden --skill cockpit-agent@18`.
+> **The gate was reached in two steps, and the order is the reusable part.** `--only 36` first
+> ($0.0115, FAILED — see the repair above), then the one-line fixture repair, then `--only 36`
+> again ($0.0071, PASS), and only then the unfiltered run. A brand-new fixture costs one case to
+> falsify and thirty-five to certify — never let a new fixture execute for the first time inside
+> the gate.
 >
-> **What failed, in one line:** the agent never called `stageCrmWrite` at all — it composed an
-> email to the contact instead (`recipients: ["eval-rhea-6q@golden.example"]`, a `subject`, no
-> `crmOperations` field), identically on both attempts. The body already forbids exactly this in
-> words; see `agent-runtime.md`'s 19-09 entry for the plan-row evidence and why the FIXTURE, not
-> the body, is the thing to change first.
->
-> The state a resumer needs, read off the live deployment (`local:`) on 2026-08-09 at $0: ACTIVE
+> The pre-seed reading that made the FORWARD arrow safe to trust, kept because the PROCEDURE is the
+> point — read off the live deployment (`local:`) on 2026-08-09 at $0 BEFORE seeding: ACTIVE
 > `cockpit-agent` is **v17** (body 27 313 chars, sha256 `b5c8b6a50aed` — byte-identical,
 > LF-normalized, to the pre-19-09 canonical `.md`), and **v18/v19/v20 are ABSENT**, so no optimizer
 > dry-run candidate is squatting above the active row and `seedSkills` will mint **v18**: a FORWARD
