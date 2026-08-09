@@ -42,3 +42,19 @@ it costs a cent could not itself be run.
 OFFLINE verification. **There is no `--list` flag.** Unknown argv entries are ignored, so the entry
 block falls straight through to `runLive(...)` — a full paid run of every fixture. The offline
 command is `--self-check`. Recorded here because the next plan author will copy the phrasing.
+
+## 3. STATE.md’s `stopped_at` scalar contains UNESCAPED double quotes — likely why gsd-tools keeps clobbering it
+
+Found by 19-09 while hand-editing STATE.md. The frontmatter `stopped_at:` value is a YAML
+DOUBLE-QUOTED scalar, and it currently holds **4 unescaped `"` characters** — all pre-existing
+19-08 prose (`TS2322: Type '"stageCrmWrite"'` and `Record<AgentSmokeOp["kind"], StepTool>`).
+An unescaped `"` TERMINATES the scalar early, so a real YAML parser sees a truncated `stopped_at`
+followed by garbage — which is a plausible root cause for the complaint recorded repeatedly in
+STATE.md itself: *"gsd-tools state advance-plan CLOBBERED the frontmatter block AGAIN"*,
+hand-restored at least twice in this phase alone.
+
+NOT fixed here: the text belongs to 19-08, no YAML parser is installed in the workspace so the
+impact could not be demonstrated, and 19-09 had no mandate to rewrite another plan’s record.
+**Two ways out, both cheap:** escape the four quotes (`\"`), or switch `stopped_at` to a YAML
+block scalar (`stopped_at: |-`), which needs no escaping at all and is far friendlier to an
+18 000-character value. Whoever fixes it should add one assertion that the frontmatter parses.
