@@ -361,4 +361,67 @@ describe("unit economics", () => {
     });
     expect(result.cacVsIndustry).toMatchObject({ state: "known", origin: "derived" });
   });
+
+  // referralPct is a real CashInputField (CASH_INPUTS) with its own CashInputState, unlike
+  // grossMargin/cohortChurn below — it must go through the SAME staleness rule every other stated
+  // cash input does, not read the scorecard directly and skip the check.
+  test("referralPct older than STALE_AFTER_MS needs confirmation", () => {
+    const result = unitEconomics({
+      inputs: toCashInputs([
+        { field: "referralPct", value: 25, statedAt: NOW - 91 * DAY, stale: true },
+      ] as never),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.referralPct).toMatchObject({ state: "known", origin: "stated", stale: true });
+  });
+
+  test("referralPct with a present value and unknown age needs confirmation, no fabricated date", () => {
+    const result = unitEconomics({
+      inputs: toCashInputs([
+        { field: "referralPct", value: 25, statedAt: null, stale: true },
+      ] as never),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.referralPct).toMatchObject({ state: "known", origin: "stated", stale: true });
+    expect(result.referralPct).not.toHaveProperty("statedAt");
+  });
+
+  test("referralPct absent is unknown, not stale", () => {
+    const result = unitEconomics({
+      inputs: withInputs({}),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.referralPct).toEqual({
+      state: "unknown",
+      needs: expect.stringContaining("Referral share"),
+    });
+  });
+
+  // grossMargin/cohortChurn are not CashInputFields — no staleness signal exists to attach (see the
+  // ponytail comment in cash.ts). Minimal known/null coverage only, closing the gap the review found.
+  test("grossMargin and cohortChurn: known when the scorecard has them", () => {
+    const result = unitEconomics({
+      inputs: withInputs({}),
+      scorecard: scorecardWith({
+        grossMarginPct: 40,
+        churnByCadence: { monthly: 5, quarterly: null, annual: null },
+      }),
+      nowMs: NOW,
+    });
+    expect(result.grossMargin).toMatchObject({ state: "known", origin: "stated", value: 40 });
+    expect(result.cohortChurn).toMatchObject({ state: "known", origin: "stated", value: 5 });
+  });
+
+  test("grossMargin and cohortChurn: unknown when the scorecard lacks them", () => {
+    const result = unitEconomics({
+      inputs: withInputs({}),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.grossMargin).toMatchObject({ state: "unknown" });
+    expect(result.cohortChurn).toMatchObject({ state: "unknown" });
+  });
 });

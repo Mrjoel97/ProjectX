@@ -8,7 +8,7 @@
 export const FLOOR_RATIO = 3.0;
 export const INDUSTRY_MULTIPLE = 3.0;
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
+export const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * LTGP:CAC health ratio + the master switch (business model vs advertising ceiling).

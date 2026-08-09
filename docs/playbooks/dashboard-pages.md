@@ -1,9 +1,17 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 5 — `unitEconomics()` composes CFA,
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 5 REVIEW FIX — `referralPct` now
+> routes through `statedFigure`/`needsConfirmation` like every other stated cash input, instead of
+> reading the scorecard directly with no staleness check. `nowMs` was destructured out of
+> `unitEconomics`'s args and never read — the tell that a "staleness-aware" figure was not stale-
+> checked at all. This is the third instance of the same failure class in this plan (Task 3: version
+> reset via carry-forward; Task 4: `isStale` returning `false` for unknown age; Task 5: the check
+> skipped entirely) — each fails OPEN, with no visible symptom, which is why each needed a test that
+> constructs the stale case, not just a fix. See the "Cash — unit economics" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 5 — `unitEconomics()` composes CFA,
 > LTGP:CAC with its sample size, CAC payback and the industry-CAC switch from Task 4's suppression
-> rule and `growth/financialSpine.ts`'s guarded arithmetic — no arithmetic reimplemented. See the
-> "Cash — unit economics" section below.)
+> rule and `growth/financialSpine.ts`'s guarded arithmetic — no arithmetic reimplemented.)
 >
 > Prior: 2026-08-09 (Plan cash-business-finance Task 4 REVIEW FIX — staleness collapsed to
 > ONE predicate, `needsConfirmation(value, statedAt, nowMs)`; the two-argument `isStale` is deleted.
@@ -231,21 +239,44 @@ is in, what it was derived from, and how many customers it rests on.
   the missing input, never a default "within range" — a business that has never measured its
   market average is not "healthy" by omission. Once supplied, the comparison is against
   `INDUSTRY_MULTIPLE` (financialSpine's `3.0`, the ceiling the source books tell you to stop
-  optimising CAC inside).
+  optimising CAC inside). The ratio itself reuses `financialSpine.ts`'s now-`export`ed `round2`
+  rather than a second `Math.round(x * 100) / 100` — one rounding definition, not two.
 - **CAC payback (months) derives lifetime-months from monthly churn** (`100 / monthlyChurnPct`)
   to spread lifetime gross profit across it — a judgement call the source material's scripts do
   not make explicit (marked `ponytail:` in `cash.ts`, naming the call). Absent or non-positive
   churn is `unknown`, never a guessed lifetime — the honest fallback the whole module is built
   around.
+- **`referralPct` carries the same staleness signal every other stated cash input does (REVIEW
+  FIX).** `referralPct` IS a `CashInputField` in `CASH_INPUTS` (`store: "scorecard"`, `path:
+  "leadCard.referralPct"`) with a real `CashInputState`, so it goes through `statedFigure(inputs.
+  referralPct, cashInputSpec("referralPct"), nowMs)` — the exact function every other stated
+  figure in this module uses, not a hand-rolled `scorecard.leadCard.referralPct === null ? ... :
+  knownFigure(...)` branch. **The first version had exactly that hand-rolled branch, read the
+  scorecard directly, and never called `needsConfirmation` or even referenced `nowMs`** — a
+  referral share entered a year ago rendered as freshly confirmed, with the function's own
+  destructured-but-unused `nowMs` argument as the tell that nothing was checking the clock. This is
+  the THIRD instance of the same failure class in this plan: Task 3 (version reset via evaluation
+  carry-forward), Task 4 (`isStale` returning `false` for unknown age), Task 5 (the check skipped
+  entirely) — each one fails OPEN, with nothing visibly wrong on screen, which is why each needed a
+  test that constructs the exact stale case rather than a fix trusted on inspection alone.
+  **`grossMargin` and `cohortChurn` deliberately keep reading the scorecard directly** (marked
+  `ponytail:` in `cash.ts`) — neither is a `CashInputField`, so neither has a `CashInputState`
+  carrying a per-field `statedAt`; routing them through `statedFigure` would require fabricating a
+  timestamp, which is worse than no staleness signal. The asymmetry is intentional, not an
+  oversight — if staleness on those two is ever wanted, the fix is adding them to `CASH_INPUTS`
+  (both already have Scorecard dot-paths), not inventing a date here.
 - **No word "ROAS" anywhere** in this function, its comments, or its rendered strings (CLAUDE.md
   ambient rule for this plan) — absent from all three source books, and the framework's own
   guidance is to stop optimising CAC once inside 3× the industry average, which ROAS as a lever
   contradicts.
-- Test evidence: `cash.test.ts`'s `describe("unit economics", ...)` (10 tests) pins every
+- Test evidence: `cash.test.ts`'s `describe("unit economics", ...)` (15 tests) pins every
   degenerate case above — zero-CAC not-computable-never-Infinity, LTGP's two-producer precedence
-  both directions, sample size present-as-`null`, the industry switch OFF-with-reason and ON, and
-  the CFA/payback derivations' `from` provenance strings. `pnpm --filter @pikar/core test cash` —
-  36/36 (26 pre-existing + 10 new). `pnpm typecheck` — 10/10 packages green.
+  both directions, sample size present-as-`null`, the industry switch OFF-with-reason and ON, the
+  CFA/payback derivations' `from` provenance strings, `referralPct` stale-past-90-days,
+  `referralPct` present-with-unknown-age (no fabricated `statedAt`), `referralPct` absent-is-
+  unknown-not-stale, and a minimal known/null pair each for `grossMargin`/`cohortChurn`.
+  `pnpm --filter @pikar/core test cash` — 41/41 (26 pre-existing + 10 from the original Task 5 pass
+  + 5 from the review fix). `pnpm typecheck` — 10/10 packages green.
 
 ### Frontend and connected browser evidence
 

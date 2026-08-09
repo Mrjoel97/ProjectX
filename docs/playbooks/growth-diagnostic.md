@@ -1,6 +1,13 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
-> Last verified: 2026-08-09 (cash-business-finance Task 3 — **four new nullable Scorecard leaves,
+> Last verified: 2026-08-09 (cash-business-finance Task 5 REVIEW FIX — **`financialSpine.ts`'s
+> `round2` is now `export`ed, no other change.** `cash.ts`'s industry-CAC comparison
+> (`cacVsIndustry`) was rounding with its own `Math.round(x * 100) / 100`, a second definition of
+> the same rounding rule `ltgpCac`/`cfa` already use internally; exporting `round2` and reusing it
+> removed the duplicate. `ltgpCac`, `cfa`, `diagnose.ts` and every threshold/gate are byte-identical
+> otherwise — this is a visibility change on one already-existing pure function, not a math change.
+>
+> Prior: 2026-08-09 (cash-business-finance Task 3 — **four new nullable Scorecard leaves,
 > the diagnostic itself untouched.**) `scorecard.ts` gained
 > `financials.grossProfitPerPurchase`, `financials.purchasesPerLifetime`, `financials.customerCount`
 > and `leadCard.referralPct`, mirrored into `emptyScorecard`. These are the Business tab's

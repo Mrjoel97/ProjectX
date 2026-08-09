@@ -22,7 +22,7 @@
  */
 
 import type { Tier } from "./businessProfile";
-import { cfa, INDUSTRY_MULTIPLE, ltgpCac } from "./growth/financialSpine";
+import { cfa, INDUSTRY_MULTIPLE, ltgpCac, round2 } from "./growth/financialSpine";
 import type { Scorecard } from "./growth/scorecard";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -471,7 +471,7 @@ export function unitEconomics(args: {
   scorecard: Scorecard;
   nowMs: number;
 }): CashUnitEconomics {
-  const { inputs, scorecard } = args;
+  const { inputs, scorecard, nowMs } = args;
   const sampleSize = inputs.customerCount?.value ?? null;
   const cacValue = inputs.cac?.value ?? null;
   const zeroCac = cacValue === 0;
@@ -592,7 +592,7 @@ export function unitEconomics(args: {
     if (missing) return missing;
     const cac = valueOf(inputs, "cac");
     return derived({
-      value: Math.round((cac / average) * 100) / 100,
+      value: round2(cac / average),
       unit: "ratio",
       from: `${usd(cac)} against a ${usd(average)} industry average — the threshold is ${INDUSTRY_MULTIPLE}×`,
       sampleSize,
@@ -605,6 +605,11 @@ export function unitEconomics(args: {
     ltgpCac: ratioFigure,
     cacPayback: paybackFigure,
     cacVsIndustry: industryFigure,
+    // ponytail: grossMargin/cohortChurn read the scorecard directly rather than through
+    // `statedFigure`, unlike referralPct below — neither is a `CashInputField` in `CASH_INPUTS`,
+    // so there is no `CashInputState` carrying a per-field `statedAt` for either. Routing them
+    // through `statedFigure` would need a fabricated timestamp; upgrade path is adding both to
+    // `CASH_INPUTS` (they already have Scorecard dot-paths) if staleness on them is ever wanted.
     grossMargin:
       scorecard.financials.grossMarginPct === null
         ? unknownFigure("needs your gross margin")
@@ -613,9 +618,8 @@ export function unitEconomics(args: {
       scorecard.financials.churnByCadence.monthly === null
         ? unknownFigure("needs your monthly churn")
         : knownFigure("stated", scorecard.financials.churnByCadence.monthly, "percent"),
-    referralPct:
-      scorecard.leadCard.referralPct === null
-        ? unknownFigure("needs your referral share")
-        : knownFigure("stated", scorecard.leadCard.referralPct, "percent"),
+    // referralPct IS a CashInputField (CASH_INPUTS) with a real CashInputState — it gets the same
+    // staleness treatment every other stated cash input gets, through the one shared function.
+    referralPct: statedFigure(inputs.referralPct, cashInputSpec("referralPct"), nowMs),
   };
 }
