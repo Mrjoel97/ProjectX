@@ -241,6 +241,14 @@
 > Only 200 and 404 leave the route; a stale-but-well-formed token and a malformed one are
 > indistinguishable from outside.
 
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 10 — the watched
+> `apps/web/e2e/finance.spec.ts` gained the three-tab/Business-figure/owner-Operator-tab tests and a
+> `test.describe.configure({ mode: "serial" })` to keep the non-owner-first/owner-last order real
+> under `playwright.config.ts`'s `fullyParallel: true`; no cockpit behaviour, tool, gate or stored row
+> changed. Attempted `pnpm --filter @pikar/web test:e2e` again — still NOT EXECUTED, no
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and no local `convex dev`/Next stack running in this worktree.
+> See `docs/playbooks/dashboard-pages.md`'s Task 10 entry for the full account.)
+>
 > Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
 > `finance.spec.ts`, and the Finance rail item went LIVE on owner direction; no cockpit behaviour,
 > tool, gate or stored row changed.**) The Cost Console route is `/dashboard/finance` and its nav

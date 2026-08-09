@@ -10,9 +10,25 @@
 // NOTHING HERE IS LOGGED. A tenant's cash on hand, CAC and MRR are precisely what CLAUDE.md §4
 // keeps out of the audit table. If you ever add an audit event to this module, log the field NAME
 // and a boolean, never the value.
-import { activityFromSends, createDashboardBound } from "@pikar/core";
+import {
+  activityFromSends,
+  CASH_INPUTS,
+  type CashInputField,
+  type CashInputState,
+  cashInputSpec,
+  solvency as coreSolvency,
+  unitEconomics as coreUnitEconomics,
+  createDashboardBound,
+  needsConfirmation,
+  toCashInputs,
+  validateCashInput,
+} from "@pikar/core";
+import type { Scorecard } from "@pikar/core/growth/index";
+import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
-import { tenantQuery } from "./lib/functions";
+import type { QueryCtx } from "./_generated/server";
+import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
+import { tenantMutation, tenantQuery } from "./lib/functions";
 
 /** 31 days, matching the Cost console's reported window so the two tabs speak the same period. */
 const MAX_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
@@ -58,5 +74,208 @@ export const activity = tenantQuery({
         ...(partial ? { partialReason: "row-cap" as const } : {}),
       }),
     };
+  },
+});
+
+/** The closed field union, mirroring `CashInputField`. A widening is a deliberate edit here. */
+const vCashField = v.union(
+  v.literal("cashOnHand"),
+  v.literal("monthlyOperatingCost"),
+  v.literal("mrr"),
+  v.literal("receivables"),
+  v.literal("payables"),
+  v.literal("cac"),
+  v.literal("thirtyDayCashPerCustomer"),
+  v.literal("grossProfitPerPurchase"),
+  v.literal("purchasesPerLifetime"),
+  v.literal("customerCount"),
+  v.literal("referralPct"),
+);
+// Compile-time bind, both directions: a field added to `@pikar/core` but not to the validator (or
+// the reverse) is a COMPILE error here rather than a silently unsaveable form row.
+const _fieldToDoc: readonly (typeof vCashField.type)[] = CASH_INPUTS.map((s) => s.field);
+const _docToField: readonly CashInputField[] = [] as (typeof vCashField.type)[];
+
+/** A dot-path read over the Scorecard. Mirrors `evaluations.ts`'s `getPath` on the write side. */
+function scorecardValue(scorecard: Scorecard, path: string): number | null {
+  const value = path
+    .split(".")
+    .reduce<unknown>((node, key) => (node as Record<string, unknown> | null)?.[key], scorecard);
+  return typeof value === "number" ? value : null;
+}
+
+/**
+ * The ONE read path over a tenant's cash inputs — `financeInputs` rows plus the scorecard's
+ * Hormozi fields, merged into `CashInputState[]`. Both the `inputs` query (the panel) and the
+ * `unitEconomics` query (the metrics) call this, so the two can never disagree about what the
+ * tenant has entered.
+ */
+async function inputStatesFor(
+  ctx: { db: QueryCtx["db"] },
+  tenantId: string,
+  nowMs: number,
+): Promise<{ inputs: CashInputState[] }> {
+  const rows = await ctx.db
+    .query("financeInputs")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const byField = new Map(rows.map((row) => [row.field, row]));
+  const evaluation = await latestScorecardRow(ctx.db, tenantId);
+  const scorecard = (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard;
+
+  return {
+    inputs: CASH_INPUTS.map((spec): CashInputState => {
+      if (spec.store === "financeInputs") {
+        const row = byField.get(spec.field as (typeof rows)[number]["field"]);
+        const value = row?.valueUsd ?? null;
+        const statedAt = row?.statedAt ?? null;
+        return {
+          field: spec.field,
+          value,
+          statedAt,
+          stale: needsConfirmation(value, statedAt, nowMs),
+        };
+      }
+      const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
+      // `userProvidedAt` is a dot-path → epoch-ms map, stamped by `applyScorecardAnswer` and
+      // carried forward UNCHANGED across every re-evaluation (`runEvaluation`) — unlike the
+      // evaluation ROW's own `createdAt`, which is fresh on every carry-forward and is never a
+      // field's stated time. A legacy row can hold a real value with no recorded stated time
+      // (this field predates `userProvidedAt`, or a carried row's writer never stamped it);
+      // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
+      // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
+      // never as fresh, and never fabricates a date.
+      const statedAt =
+        value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      return {
+        field: spec.field,
+        value,
+        statedAt,
+        stale: needsConfirmation(value, statedAt, nowMs),
+      };
+    }),
+  };
+}
+
+export const inputs = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<{ inputs: CashInputState[] }> =>
+    inputStatesFor(ctx, ctx.tenantId, Date.now()),
+});
+
+/**
+ * The Hormozi spine (CLAUDE.md §1: `@pikar/core`'s `unitEconomics` does every derivation; this
+ * only reads the same inputs `inputs` reads, plus the tenant's own scorecard, and hands them over).
+ * A foreign tenant's scorecard is never read — `latestScorecardRow` is tenant-scoped, same as
+ * `inputStatesFor`'s call to it above.
+ */
+export const unitEconomics = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
+    const evaluation = await latestScorecardRow(ctx.db, ctx.tenantId);
+    return coreUnitEconomics({
+      inputs: toCashInputs(states),
+      scorecard: (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard,
+      nowMs: now,
+    });
+  },
+});
+
+/**
+ * The tenant's business SHAPE, read-only. The tier is derived from facts by
+ * `tenantProfile.saveFacts` and is never settable here — this page consumes it and nothing more.
+ * A tenant with no row gets nulls rather than a guessed "solopreneur": guessing is what the
+ * markdown-fallback defect did, and a wrong guess here selects the wrong metric set.
+ */
+export const shape = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    // `revenueStage` is deliberately NOT returned. The spec says not-applicable is decided by
+    // "the tier and the revenue-stage answer", but no branch anywhere can correctly consult it:
+    // making a pre-revenue business's MRR `not-applicable` would infer a permanent structural
+    // answer from a stage field, which is the "never inferred from absent data" rule this type
+    // exists to enforce. A pre-revenue startup that has not answered is `unknown` — never asked.
+    // Owner ruling 2026-08-09 after Task 7's review. Do not re-add it "to match the spec".
+    return {
+      tier: row?.tier ?? null,
+      funding: row?.funding ?? null,
+    };
+  },
+});
+
+export const solvency = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
+    return coreSolvency({
+      inputs: toCashInputs(states),
+      // No profile row: treat as solopreneur for not-applicable resolution, which is the most
+      // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
+      // the complete-your-shape invitation, so this is never the whole story a user sees.
+      tier: row?.tier ?? "solopreneur",
+      nowMs: now,
+    });
+  },
+});
+
+/**
+ * ONE writer, routing by field to the store that owns the value.
+ *
+ * The Hormozi inputs go to the SCORECARD through `applyScorecardAnswer` — the same function
+ * `recordScorecardAnswer` and the cockpit tool use, so a number entered in the panel and a number
+ * given in conversation land in the same place and carry forward the same way. The finance-ops
+ * inputs go to `financeInputs`. Nothing is written twice.
+ *
+ * The value is validated HERE and not only in the form: a form is a convenience, and this mutation
+ * is the trust boundary. Nothing about it is logged (CLAUDE.md §4) — the value IS the sensitive part.
+ */
+export const saveInput = tenantMutation({
+  args: { field: vCashField, value: v.number() },
+  handler: async (ctx, { field, value }): Promise<{ saved: true }> => {
+    const check = validateCashInput(field, value);
+    if (!check.ok) throw new Error(`INVALID_INPUT: ${check.reason}`);
+    const spec = cashInputSpec(field);
+
+    if (spec.store === "scorecard") {
+      if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
+      const existing = await latestScorecardRow(ctx.db, ctx.tenantId);
+      // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
+      // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
+      await applyScorecardAnswer(
+        ctx.db,
+        ctx.tenantId,
+        existing?.threadId ?? "finance-panel",
+        spec.path,
+        value,
+      );
+      return { saved: true };
+    }
+
+    const row = await ctx.db
+      .query("financeInputs")
+      .withIndex("by_tenant_field", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("field", field as "cashOnHand"),
+      )
+      .unique();
+    const write = { valueUsd: value, statedAt: Date.now() };
+    if (row) await ctx.db.patch(row._id, write);
+    else
+      await ctx.db.insert("financeInputs", {
+        tenantId: ctx.tenantId,
+        field: field as "cashOnHand",
+        ...write,
+      });
+    return { saved: true };
   },
 });

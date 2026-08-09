@@ -164,6 +164,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
@@ -432,6 +433,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_thread", ["tenantId", "threadId"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
@@ -587,6 +589,16 @@ export default defineSchema({
     notEnoughData: v.array(v.object({ section: v.string(), needs: v.string() })),
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
+    // Dot-path → epoch-ms the user stated/confirmed it (cash-business-finance Task 3 fix).
+    // `applyScorecardAnswer` is the ONE writer, stamping `Date.now()` on every answer, and
+    // `runEvaluation`'s carry-forward copies this map UNCHANGED into every new row — the whole
+    // point is that it survives the weekly re-evaluation that stamps a fresh `createdAt` on the
+    // ROW. Without this, `createdAt` was read as a stand-in stated-time and a re-evaluation that
+    // merely carries a field forward silently reported it "confirmed today", which suppresses the
+    // 90-day confirm-or-update prompt for a number that may be months stale — the unsafe direction.
+    // Optional ⇒ no migration; a legacy row with a value but no entry here has UNKNOWN age, which
+    // `cash.ts` reads as needing confirmation, never as fresh.
+    userProvidedAt: v.optional(v.record(v.string(), v.number())),
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
     // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
     // an on-demand row has none and the card simply hides the line. Optional → no migration.
@@ -1492,4 +1504,29 @@ export default defineSchema({
     // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
     // suppressed address and still sends to the other four.
     .index("by_tenant_address", ["tenantId", "address"]),
+
+  // The FINANCE-OPS inputs, and only those (design §5). The Hormozi inputs stay on the scorecard —
+  // duplicating CAC into a second table is what produced two separate selector bugs on 2026-08-09.
+  //
+  // One row per (tenant, field), read with `.unique()` so a duplicate is LOUD rather than silently
+  // shadowed (the tenantProfiles precedent). `statedAt` is per FIELD, not per row-set: cash on hand
+  // goes stale far faster than payables, and one shared timestamp would make the 90-day
+  // confirm-or-update prompt fire on the wrong number.
+  //
+  // Values are USD DOLLARS as a plain number, matching `scorecard.financials.cac`. The Pikar-spend
+  // plane's integer cents never appear here.
+  financeInputs: defineTable({
+    tenantId: v.string(),
+    field: v.union(
+      v.literal("cashOnHand"),
+      v.literal("monthlyOperatingCost"),
+      v.literal("mrr"),
+      v.literal("receivables"),
+      v.literal("payables"),
+    ),
+    valueUsd: v.number(),
+    statedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_field", ["tenantId", "field"]),
 });

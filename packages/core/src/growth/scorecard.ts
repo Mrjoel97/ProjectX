@@ -41,6 +41,16 @@ export type Scorecard = {
     grossMarginPct: number | null;
     refundPct: number | null;
     churnByCadence: { monthly: number | null; quarterly: number | null; annual: number | null };
+    /** Gross profit on ONE purchase. With `purchasesPerLifetime` this DERIVES ltgp. */
+    grossProfitPerPurchase: number | null;
+    /** How many times an average customer buys. Below 1 is rejected at input, never multiplied. */
+    purchasesPerLifetime: number | null;
+    /**
+     * How many customers the ratios above rest on. The books are explicit that rates at small
+     * samples are unreadable, so a ratio is never rendered without this beside it — and when it is
+     * null the page says "sample size not recorded" rather than showing a bare, confident number.
+     */
+    customerCount: number | null;
   };
   position: {
     roadmapLevel: number | null;
@@ -84,6 +94,8 @@ export type Scorecard = {
       affiliates: boolean;
     };
     primaryConstraintStep: string | null;
+    /** Share of new customers arriving by referral, 0-100. The 25% gate is the books' threshold. */
+    referralPct: number | null;
   };
   history: unknown[];
 };
@@ -113,6 +125,9 @@ export const emptyScorecard: Scorecard = {
     grossMarginPct: null,
     refundPct: null,
     churnByCadence: { monthly: null, quarterly: null, annual: null },
+    grossProfitPerPurchase: null,
+    purchasesPerLifetime: null,
+    customerCount: null,
   },
   position: { roadmapLevel: null, currentConstraint: null, funnel: [] },
   offerCard: {
@@ -131,6 +146,7 @@ export const emptyScorecard: Scorecard = {
     ruleOf100Active: false,
     leadGettersActive: { customers: false, employees: false, agencies: false, affiliates: false },
     primaryConstraintStep: null,
+    referralPct: null,
   },
   history: [],
 };

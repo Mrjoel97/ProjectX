@@ -14,6 +14,7 @@ import {
   serializeBlueprint,
   serializeProfile,
 } from "@pikar/core";
+import { emptyScorecard } from "@pikar/core/growth/index";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
@@ -27,6 +28,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -396,6 +398,59 @@ describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
     // … and any finding on it is honestly labeled user-provided (never fabricated as a vault fact).
     const cacFinding = row?.findings.find((f) => f.label.startsWith("CAC:"));
     expect(cacFinding?.source).toBe("user-provided");
+  });
+
+  // Bug found in Task 3 review: a re-evaluation writes a NEW row stamped `createdAt: Date.now()`,
+  // and `userProvided`/`scorecard` carry forward verbatim. `userProvidedAt` must carry forward the
+  // SAME way — a field's stated time is a fact about the FIELD, not about which row it currently
+  // lives on. Backdating the stored map (rather than faking the wall clock) keeps this test cheap
+  // and safe while still exercising the real carry-forward line in `runEvaluation`.
+  test("a field's stated time survives a re-evaluation UNCHANGED, even though the row's createdAt is fresh", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const docId = await seedDoc(t, TENANT, profileDocText(false));
+    const answeredAt = Date.now() - 91 * DAY_MS;
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    // Backdate the stated time directly, simulating an answer given 91 days ago — the re-evaluation
+    // below still stamps a REAL, current `createdAt` on its new row.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) => q.eq("tenantId", TENANT).eq("threadId", THREAD))
+        .order("desc")
+        .first();
+      if (!row) throw new Error("expected a row after recordScorecardAnswer");
+      await ctx.db.patch(row._id, { userProvidedAt: { "financials.cac": answeredAt } });
+    });
+
+    // The re-evaluation — this is the exact operation the weekly cron runs.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    // The ROW is fresh — this re-evaluation just ran …
+    expect(row?.createdAt).toBeGreaterThan(answeredAt + 90 * DAY_MS);
+    // … but the FIELD's stated time is still the original answer, not bumped to match. Reading
+    // `row.createdAt` as a stand-in for this (the pre-fix bug) would report a 91-day-old CAC as
+    // confirmed today the moment a re-evaluation merely carried it forward.
+    expect(row?.userProvidedAt?.["financials.cac"]).toBe(answeredAt);
+    expect(row?.userProvidedAt?.["financials.cac"]).not.toBe(row?.createdAt);
   });
 });
 
@@ -947,5 +1002,119 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
     // TENANT carries no `|sessionId` suffix, so the injected tenantId is the constant
     // itself — the old stableTenant() wrapping here was a no-op.
     for (const r of lineage) expect(r.tenantId).toBe(TENANT);
+  });
+});
+
+// ── Whole-branch review B1 — `latestScorecardRow` can select a row with no usable Scorecard ──────
+//
+// Two reachable producers write an `evaluations` row this function must NOT hand back as "the
+// tenant's financial truth": `voiceDoc.ts` inserts a `framework: "document-review"` row with
+// `scorecard: {}` LITERALLY, and the cockpit's `assessBusiness` tool runs `runEvaluation` on a brand
+// new conversation thread, which has no prior row to carry forward. `cash.ts`'s
+// `scorecard.financials.*` reads crashed on either shape (`Cannot read properties of undefined
+// (reading 'ltgp')`), and `CashTab` is always mounted, so the crash took the whole Finance page down
+// via the one shared error boundary, regardless of which tab a viewer had open.
+describe("latestScorecardRow skips a row with no usable Scorecard (B1)", () => {
+  test("skips a document-review row and a blank-scorecard row in favour of a real one", async () => {
+    const t = newTest();
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      // Oldest: a real, usable Growth-OS row.
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-real",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 500 } },
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: now - 2000,
+      });
+      // Newer: a document-review row with a LITERAL empty scorecard — `voiceDoc.ts`'s exact shape.
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-docreview",
+        framework: "document-review",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: now - 1000,
+      });
+      // Newest of all: a fresh conversation thread's carrier with no `financials` object — what a
+      // first `assessBusiness` run on a brand-new thread can look like before it fills one in.
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-blank",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: now,
+      });
+    });
+
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+    expect(row?.threadId).toBe("thread-real");
+    expect(row?.scorecard.financials.cac).toBe(500);
+  });
+
+  test("no usable row anywhere returns null, not the newest unusable one", async () => {
+    const t = newTest();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-docreview",
+        framework: "document-review",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: Date.now(),
+      });
+    });
+    expect(await t.run((ctx) => latestScorecardRow(ctx.db, TENANT))).toBeNull();
+  });
+});
+
+describe("applyScorecardAnswer / setPath does not throw on a malformed carrier (B1 layer 3)", () => {
+  test("answering a field succeeds even when the thread's own latest row has scorecard: {}", async () => {
+    const t = newTest();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        framework: "document-review",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: Date.now(),
+      });
+    });
+
+    // Before the fix, `setPath({}, "financials.cac", 150)` threw: `cur = clone["financials"]` was
+    // `undefined`, and the final assignment onto `undefined` is a TypeError.
+    await t.run((ctx) => applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150));
+
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) => q.eq("tenantId", TENANT).eq("threadId", THREAD))
+        .order("desc")
+        .first(),
+    );
+    expect(row?.scorecard.financials.cac).toBe(150);
   });
 });

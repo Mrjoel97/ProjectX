@@ -195,14 +195,26 @@ describe("Approvals decisions and blocked summary", () => {
 
     const asTenant = t.withIdentity({ subject: TENANT });
     const decisions = await asTenant.query(api.approvals.listDecisions, { limit: 10 });
+    // `financials.cac` is already set on the seeded scorecard, so it is excluded — the catalogue
+    // widened by three entries (Task 3), all still null on this fixture.
     expect(decisions.items.map((item) => item.field)).toEqual([
       "financials.ltgp",
       "financials.thirtyDayCashPerCustomer",
       "modelCard.thirtyDayPayback",
+      "financials.grossProfitPerPurchase",
+      "financials.purchasesPerLifetime",
+      "financials.customerCount",
     ]);
     expect(JSON.stringify(decisions)).not.toContain("attacker-controlled prompt");
     expect(JSON.stringify(decisions)).not.toContain("secret other tenant prompt");
-    expect(decisions.items.map((item) => item.valueType)).toEqual(["number", "number", "boolean"]);
+    expect(decisions.items.map((item) => item.valueType)).toEqual([
+      "number",
+      "number",
+      "boolean",
+      "number",
+      "number",
+      "number",
+    ]);
 
     await asTenant.mutation(api.approvals.answerDecision, {
       threadId: "thread-a",
@@ -234,7 +246,108 @@ describe("Approvals decisions and blocked summary", () => {
         .order("desc")
         .first(),
     );
-    expect((stored?.scorecard as typeof emptyScorecard).financials.ltgp).toBe(900);
+    const storedScorecard = stored?.scorecard as typeof emptyScorecard;
+    expect(storedScorecard.financials.ltgp).toBe(900);
+  });
+
+  test("the new financial questions are askable and writable", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-new-fields",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [{ section: "financials", needs: "need more financial detail" }],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: 1_000,
+      });
+    });
+
+    const asTenant = t.withIdentity({ subject: TENANT });
+    const decisions = await asTenant.query(api.approvals.listDecisions, { limit: 20 });
+    expect(decisions.items.map((item) => item.field)).toEqual(
+      expect.arrayContaining([
+        "financials.grossProfitPerPurchase",
+        "financials.purchasesPerLifetime",
+        "financials.customerCount",
+      ]),
+    );
+
+    await asTenant.mutation(api.approvals.answerDecision, {
+      threadId: "thread-new-fields",
+      answer: { field: "financials.grossProfitPerPurchase", value: 40 },
+    });
+    await asTenant.mutation(api.approvals.answerDecision, {
+      threadId: "thread-new-fields",
+      answer: { field: "financials.purchasesPerLifetime", value: 3 },
+    });
+    await asTenant.mutation(api.approvals.answerDecision, {
+      threadId: "thread-new-fields",
+      answer: { field: "financials.customerCount", value: 12 },
+    });
+
+    const stored = await t.run(async (ctx) =>
+      ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) =>
+          q.eq("tenantId", TENANT).eq("threadId", "thread-new-fields"),
+        )
+        .order("desc")
+        .first(),
+    );
+    const scorecard = stored?.scorecard as typeof emptyScorecard;
+    expect(scorecard.financials.grossProfitPerPurchase).toBe(40);
+    expect(scorecard.financials.purchasesPerLifetime).toBe(3);
+    expect(scorecard.financials.customerCount).toBe(12);
+    expect(stored?.userProvided).toEqual(
+      expect.arrayContaining([
+        "financials.grossProfitPerPurchase",
+        "financials.purchasesPerLifetime",
+        "financials.customerCount",
+      ]),
+    );
+  });
+
+  test("purchases per lifetime below 1 is refused in Approvals too", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: "thread-ppl",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [{ section: "financials", needs: "need more financial detail" }],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: 1_000,
+      });
+    });
+
+    const asTenant = t.withIdentity({ subject: TENANT });
+    // Same reason, same words as the panel (`validateCashInput`) — one validator, not two.
+    await expect(
+      asTenant.mutation(api.approvals.answerDecision, {
+        threadId: "thread-ppl",
+        answer: { field: "financials.purchasesPerLifetime", value: 0.5 },
+      }),
+    ).rejects.toThrow(/at least 1/i);
+
+    const stored = await t.run(async (ctx) =>
+      ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) => q.eq("tenantId", TENANT).eq("threadId", "thread-ppl"))
+        .order("desc")
+        .first(),
+    );
+    const storedScorecard = stored?.scorecard as typeof emptyScorecard;
+    expect(storedScorecard.financials.purchasesPerLifetime).toBeNull();
+    expect(stored?.userProvided).toEqual([]);
   });
 
   test("blocked summary is capped, tenant-isolated, links to Ops and reveals no DLQ content", async () => {

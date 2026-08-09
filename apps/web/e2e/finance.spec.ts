@@ -80,6 +80,62 @@ type Movement = {
 const record = (tenantId: string, movement: Movement) =>
   convexRun<string>("spendLedger:record", { tenantId, ...movement });
 
+// `playwright.config.ts` sets `fullyParallel: true`, which otherwise gives NO guarantee that tests
+// in this file run in declaration order or in the same worker. Every test below shares one signed-in
+// identity (the same `storageState` file), and `owner:bootstrapOwner` has no inverse — so without
+// forcing serial order, a non-owner assertion could race an owner-promoting test and observe a
+// boundary that has already been crossed. This is what actually enforces "non-owner first, owner
+// last," not the file order alone.
+test.describe.configure({ mode: "serial" });
+
+/**
+ * Fresh local users sit behind the onboarding gate — the SAME seam the connected test below (the
+ * one that calls `owner:bootstrapOwner`) already clears before its own assertions, via the same
+ * `convexRun("onboarding:__seedOnboardedTenant", ...)` call. Every test that runs BEFORE that one
+ * needs this too: an un-onboarded user redirected off `/dashboard/finance` would make a
+ * `toHaveCount(0)`/`not.toBeVisible()` assertion pass VACUOUSLY — absent because the page never
+ * rendered at all, not because the boundary the test means to check actually holds.
+ */
+async function seedOnboarded(page: Page): Promise<void> {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  const token = await tokenFor(page);
+  const tenantId = tenantIdFrom(token);
+  convexRun("onboarding:__seedOnboardedTenant", { tenantId });
+  await page.reload();
+}
+
+test("the Finance page opens on Business, and a non-owner is offered no Operator tab", async ({
+  page,
+}) => {
+  await seedOnboarded(page);
+  const tablist = page.getByRole("tablist", { name: "Finance sections" });
+  await expect(tablist.getByRole("tab", { name: "Business" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(tablist.getByRole("tab", { name: "Pikar spend" })).toBeVisible();
+  await expect(tablist.getByRole("tab", { name: "Operator" })).toHaveCount(0);
+});
+
+test("the Cost console is intact behind the Pikar spend tab", async ({ page }) => {
+  await seedOnboarded(page);
+  await page.getByRole("tab", { name: "Pikar spend" }).click();
+  await expect(page.getByRole("heading", { name: /budget rails/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /where it went/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /media job ledger/i })).toBeVisible();
+});
+
+test("a number entered in the panel appears as a business figure", async ({ page }) => {
+  await seedOnboarded(page);
+  // Seeds through the real mutation, so this proves the panel → mutation → derivation → render
+  // path end to end. It proves nothing about any external system.
+  await page.getByLabel("Cash on hand").fill("60000");
+  await page.getByRole("button", { name: /save cash on hand/i }).click();
+  await page.getByLabel("Monthly operating cost").fill("10000");
+  await page.getByRole("button", { name: /save monthly operating cost/i }).click();
+  await expect(page.getByText(/6 months/i)).toBeVisible();
+});
+
 test("connected cost console: coverage, rails, unlanded meaning and the owner boundary", async ({
   page,
 }) => {
@@ -108,21 +164,32 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const now = Date.now();
 
-  // ── 1. The route is reachable directly while its nav item is still "Soon" ────────────
-  await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible({
-    timeout: 20_000,
-  });
-  // Task 1 ships the route with navigation still disabled — activation is Task 3, after UAT.
-  await expect(page.getByRole("link", { name: "Finance" })).toHaveCount(0);
+  // ── 1. The route is reachable directly while its nav item is now LIVE ────────────────
+  // Task 1 shipped the shell with the heading "Know what it costs" and navigation disabled;
+  // Task 3 (26-10, on owner direction) renamed the heading to "Your money, and what Pikar costs"
+  // (FinanceTabs.tsx) and activated the nav link (apps/web/app/(app)/layout.tsx). Both are page-
+  // chrome, unaffected by which tab is active.
+  await expect(page.getByRole("heading", { name: "Your money, and what Pikar costs" })).toBeVisible(
+    { timeout: 20_000 },
+  );
+  await expect(page.getByRole("link", { name: "Finance" })).toBeVisible();
+
+  // The page opens on Business by default (a separate test above already covers that). Everything
+  // below through section 6 is Pikar-spend content, which `FinanceTabs.tsx` mounts but keeps
+  // `hidden` while another tab is active — click through to it ONCE; `selectTab` persists the
+  // choice as `?tab=spend` via `history.replaceState`, so it survives every `page.reload()` below
+  // without re-clicking (whole-branch review B5 — the pre-existing spec never clicked any tab and
+  // asserted Pikar-spend visibility while the page opened on the now-default Business tab).
+  await page.getByRole("tab", { name: "Pikar spend" }).click();
 
   // ── 2. NON-OWNER FIRST — the boundary is unobservable once this account is promoted ──
-  const deployment = page
-    .getByRole("region", { name: "Deployment controls" })
-    .or(
-      page.locator("section", { has: page.getByRole("heading", { name: "Deployment controls" }) }),
-    );
-  await expect(page.getByText("managed by the operator")).toBeVisible();
-  await expect(deployment.getByRole("button")).toHaveCount(0);
+  // The Operator tab — and everything inside it, including `DeploymentSection` — is not merely
+  // hidden for a non-owner, it is not MOUNTED at all (`FinanceTabs.tsx`:
+  // `{isOwner ? (<div>...<OperatorTab /></div>) : null}`), so "managed by the operator" and a
+  // `region`/`section` locator for "Deployment controls" can never resolve here regardless of which
+  // tab is active — that markup simply is not on the page. The earlier "no Operator tab" test
+  // already covers the tab button; this proves no ceiling number leaks in via the raw HTML either.
+  await expect(page.getByRole("tab", { name: "Operator" })).toHaveCount(0);
   // Not a single deployment ceiling may be in the DOM of a caller who is not the owner.
   const nonOwnerHtml = await page.content();
   for (const ceiling of ["$50.00", "$100.00", "$250.00"]) {
@@ -199,10 +266,12 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     kind: "video",
   });
 
+  // `?tab=spend` rides the URL from the click in section 1, so this reload lands back on Pikar
+  // spend without re-clicking — see that section's comment.
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible({
-    timeout: 20_000,
-  });
+  await expect(page.getByRole("heading", { name: "Your money, and what Pikar costs" })).toBeVisible(
+    { timeout: 20_000 },
+  );
 
   // Each movement appears exactly ONCE in its rail/phase — the replay above added no second row.
   await expect(page.getByRole("row", { name: /Media generation/ })).toHaveCount(1);
@@ -226,7 +295,11 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   // ── 7. OWNER LAST — promote, then prove the controls return effective state ─────────
   const granted = convexRun<{ changed: boolean }>("owner:bootstrapOwner", { userId: tenantId });
   expect(typeof granted.changed).toBe("boolean");
+  // `?tab=spend` still rides the URL (it does not un-set itself), so the reload lands back on
+  // Pikar spend even though this account is an owner now — the Operator tab exists in the DOM for
+  // the first time this run, but is not the ACTIVE one until clicked.
   await page.reload();
+  await page.getByRole("tab", { name: "Operator" }).click();
 
   await expect(page.getByText("there is no single combined limit")).toBeVisible({
     timeout: 20_000,
@@ -259,11 +332,33 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
-    await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Your money, and what Pikar costs" }),
+    ).toBeVisible();
     // A wide table must scroll inside its own container, never make the page scroll sideways.
     const overflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     );
     expect(overflows, `page scrolls horizontally at ${viewport.width}px`).toBe(false);
   }
+});
+
+// Runs AFTER the test above, which is what promotes this browser's user to owner via
+// `owner:bootstrapOwner`. That grant has no inverse, so an owner-tab assertion placed before it
+// would observe nothing and one placed in an earlier file/worker could poison the non-owner
+// assertions above — hence one file, one ordering, owner last. Deliberately does NOT call
+// `seedOnboarded` again: the connected test above already cleared the onboarding gate for this
+// same signed-in tenant, and that state does not un-set itself.
+test("an owner gets the Operator tab, and the deployment controls live there", async ({ page }) => {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  await page.getByRole("tab", { name: "Operator" }).click();
+  await expect(page.getByRole("heading", { name: /deployment controls/i })).toBeVisible();
+  // And they are NOT VISIBLE on the tenant's own tabs any more — the original complaint. NOT
+  // `toHaveCount(0)`: `FinanceTabs.tsx` mounts Operator only for an owner but then toggles it with
+  // `hidden`, same as Business/Pikar-spend — the panel stays in the DOM while another tab is
+  // active (that is what lets a half-typed number survive a tab switch), so a count-based
+  // assertion here would find the hidden node and fail. `not.toBeVisible()` is what "not on this
+  // tab" actually means for a panel that is designed to stay mounted.
+  await page.getByRole("tab", { name: "Business" }).click();
+  await expect(page.getByText(/master kill switch/i)).not.toBeVisible();
 });
