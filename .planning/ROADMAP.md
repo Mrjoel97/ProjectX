@@ -55,12 +55,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 > **(3) Pipeline: the backing data gets built first.** Phase 19 is pulled forward (below). Note that
 > **Phase 19 SC#8 already owns the Pipeline route** — 26-18 remains nav integration only.
 >
-> **CONTRADICTION TO RESOLVE BEFORE PHASE 19 IS PLANNED:** the mockup's Pipeline tiles include
-> **"Open opportunities"** and **"Pipeline value"**. Both PIPE-01 and Phase 19 SC#8 explicitly forbid
-> them — *"does not invent opportunities, deal stages or monetary pipeline values."* Two of the
-> mockup's four tiles are things the requirement bans. Either the tiles come off the mockup or
-> PIPE-01 is amended to admit a deal-stage CRM. **The schema follows from that answer**, so it is
-> decided before planning, not during.
+> **RESOLVED 2026-08-09 (owner decision).** The mockup's Pipeline tiles included **"Open
+> opportunities"** and **"Pipeline value"**, which both PIPE-01 and Phase 19 SC#8 forbid —
+> *"does not invent opportunities, deal stages or monetary pipeline values."* **The tiles come off
+> the mockup; PIPE-01 stands as written and is NOT amended.** Pipeline reads contacts needing
+> attention, follow-ups due, consented and suppressed — every tile derived from the one person
+> store. **No `opportunities` table, no stage enum, no `amountCents` anywhere in Phase 19.** Real
+> money arrives with Phase 28's connector-backed Cash surface, from observed provider data rather
+> than typed guesses. The schema that follows is two new tables: `contacts` and `followUps`.
 
 **Goal:** Replace every remaining `pending-pages.html` placeholder with a tenant-safe, bounded and fully connected product surface, enabling each navigation entry only after its read model, governed actions, failure states, audit boundary and production verification path are real.
 **Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, HOME-01
@@ -1078,8 +1080,9 @@ Plans:
 > a reorder: Phase 19 gates **26-18** (Pipeline nav), **Phase 28** twice (28-17 readiness gate,
 > 28-10 CRM projections), and now **Phase 31** (Marketing tranche A needs the one person store for
 > lead capture). It is **0/TBD — no plans exist yet**, so it needs `/gsd:plan-phase 19` before any
-> work. Resolve the PIPE-01 "opportunities / pipeline value" contradiction recorded under Phase 26
-> BEFORE planning — the schema follows from it.
+> work. **The PIPE-01 "opportunities / pipeline value" contradiction was RESOLVED 2026-08-09** in
+> favour of the requirement as written (see Phase 26 above): the two tiles come off the mockup, no
+> `opportunities` table and no monetary column ship in this phase.
 
 **Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
 **Depends on**: Phase 15 (dispatch + executor)
