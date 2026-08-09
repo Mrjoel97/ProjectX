@@ -1,6 +1,11 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Whole-branch review fix wave, AFTER Task 10 — the 10-task plan's own
+> Last verified: 2026-08-10 (post-merge doc pass — recorded the `.take(200)` read cost `latestScorecardRow`
+> incurred as B1's fix, ~800 document reads per Business-tab load, with the 4x call multiplier named
+> as the cheapest thing to remove and a warning not to just lower the bound. See "Known gaps & deferred
+> work". No code changed.)
+>
+> Prior: 2026-08-09 (Whole-branch review fix wave, AFTER Task 10 — the 10-task plan's own
 > per-task reviews all passed, but a whole-branch review found FOUR blocking defects a task-scoped
 > review structurally could not see, plus a statically-RED pre-existing e2e spec. Fixed all five:
 > **B1** — `evaluations.latestScorecardRow` (`by_tenant`, `.first()`) could select the tenant's newest
@@ -1353,3 +1358,24 @@ node scripts/check-playbooks.mjs
   no field on `CashUnitEconomics`/`CashSolvency`, no tile. A deeper gap than B4's, never raised by any
   review on this plan and out of scope for this wave. Flagged here rather than silently left for a
   future reviewer to re-discover.
+- **`latestScorecardRow` reads up to 200 `evaluations` documents per call, and the Business tab calls
+  it four times per load — the one PERFORMANCE regression this feature introduced.** Before B1 it was
+  a single `.first()`; the fix needed to skip rows that carry no usable Scorecard (a `document-review`
+  row, or one whose `scorecard.financials` is absent), and a filtered scan cannot be expressed as one
+  indexed read, so it became `.take(200)` + `.find(hasUsableScorecard)`.
+
+  The multiplier is the part to watch. `cash.unitEconomics` calls it twice on its own — once inside
+  `inputStatesFor` and once directly for the raw `Scorecard` — and `cash.inputs`, `cash.solvency` and
+  `cash.saveInput` each call it again. One Business-tab load therefore issues roughly **800 document
+  reads**, and `evaluations` rows are not small: each carries `findings[]` with citation excerpts plus
+  a full `scorecard` snapshot. For a tenant with a long evaluation history this will measurably slow
+  the page and, in the worst case, approach Convex's per-query byte limit — which surfaces as a thrown
+  query, and a throw on this page is what B1 proved takes the whole Finance route down.
+
+  It has NOT been measured against a real tenant; the concern is analytic, from reading the call graph.
+  **Measure before optimising.** The cheapest real fix is to stop calling it more than once per request
+  — thread one resolved row through `inputStatesFor` and its caller instead of re-querying — which
+  removes the 4× multiplier without touching the scan. Narrowing the scan itself (a `by_tenant_framework`
+  index, or storing a pointer to the tenant's current Growth-OS row) is the deeper fix and needs a
+  schema change. Do not simply lower the `200`: that silently reintroduces B1 for any tenant whose
+  usable row sits further back than the new bound, and B1's failure mode was a page-wide crash.
