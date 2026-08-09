@@ -1098,7 +1098,7 @@ Plans:
 **Plans**: **10 plans across 9 waves.** Waves are longer than the dependency graph alone requires because exactly ONE plan per wave may bump a given playbook, and `convex/contacts.ts`, `cockpit.ts`, `gmail.ts`, `schema.ts` and `cards.tsx` are each touched by several plans. **26-18 still owns the nav flip** — Phase 19 ships `/dashboard/pipeline` URL-reachable with `soon: true` intact.
 
 Plans:
-- [ ] 19-01-PLAN.md — Pure contacts core (normalizeAddress + the three predicates + renderFooter), the THREE new tables, `tenantProfiles.postalAddress`, and the new `contacts-crm.md` playbook with its `watch.json` registration (Wave 1)
+- [x] 19-01-PLAN.md — Pure contacts core (normalizeAddress + the three predicates + renderFooter), the THREE new tables, `tenantProfiles.postalAddress`, and the new `contacts-crm.md` playbook with its `watch.json` registration (Wave 1)
 - [ ] 19-02-PLAN.md — The person store: the tenant-scoped write surface, the suppression/footer/unsubscribe-token internals, the BETA-05 asA/asB isolation assertion and the no-opportunities structural scan (Wave 2)
 - [ ] 19-03-PLAN.md — The CAN-SPAM postal address: write-boundary validation on `tenantProfile.saveFacts` and the `/dashboard/profile` field, deliberately NOT an onboarding slot (Wave 2)
 - [ ] 19-04-PLAN.md — The public unsubscribe route on `convex/http.ts`: an inert signed GET landing page and a confirm-only idempotent POST (Wave 3)
@@ -1315,7 +1315,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
 | 18. Document & Content Creation | 8/10 | In Progress (waves 1-6 complete through 18-08, whose `cockpit-agent` teaching is CERTIFIED LIVE at v17 by gate `14feb4b7` 34/34 on 2026-08-08; 18-09 and 18-10 remain) | 2026-08-08 |
-| 19. Contacts, CRM & Follow-ups | 0/TBD | **Not started — PULLED FORWARD 2026-08-07**; needs `/gsd:plan-phase 19`. Unblocks 26-18, Phase 28 (×2) and Phase 31. Resolve the PIPE-01 opportunities/pipeline-value contradiction first | - |
+| 19. Contacts, CRM & Follow-ups | 1/10 | In Progress (19-01 complete — pure contacts core, the THREE tables, `tenantProfiles.postalAddress`, and `contacts-crm.md` registered in `watch.json`; next is Wave 2). PIPE-01 contradiction resolved 2026-08-09 in favour of the requirement: no opportunities, no stage, no money. Unblocks 26-18, Phase 28 (×2) and Phase 31 | 2026-08-09 |
 | 20. Media Canvas | 12/19 | In Progress (Waves 1-7 complete: 20-01 pure media core + price table, 20-02 schema/trace freeze, 20-13 the assemble contract, 20-03 the `media-director` skill row, 20-04 the media budget rail + the transactional job reservation, 20-18 the D5 reconciliation readers, 20-19 the scheduled vendor-drift detector, 20-05 the fal submit adapter, 20-06 the HMAC webhook + landing plane, 20-07 the `externalAction` arm, 20-08 the dispatch surface, 20-14 the voiceover stage; next is Wave 8 — 20-15 the token-free renderer, which carries a BLOCKING owner checkpoint on the Vercel tier and max sandbox duration) | 2026-08-02 |
 | 21. User-Authored Skills & Routines | 0/TBD | Not started | - |
 | 22. Owner Authorization Primitive | 3/3 | UAT: server boundary PROVEN live; DOM half outstanding | - |
