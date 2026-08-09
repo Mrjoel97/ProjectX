@@ -16,6 +16,7 @@ import {
   type CashInputField,
   type CashInputState,
   cashInputSpec,
+  solvency as coreSolvency,
   unitEconomics as coreUnitEconomics,
   createDashboardBound,
   needsConfirmation,
@@ -177,6 +178,52 @@ export const unitEconomics = tenantQuery({
     return coreUnitEconomics({
       inputs: toCashInputs(states),
       scorecard: (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard,
+      nowMs: now,
+    });
+  },
+});
+
+/**
+ * The tenant's business SHAPE, read-only. The tier is derived from facts by
+ * `tenantProfile.saveFacts` and is never settable here — this page consumes it and nothing more.
+ * A tenant with no row gets nulls rather than a guessed "solopreneur": guessing is what the
+ * markdown-fallback defect did, and a wrong guess here selects the wrong metric set.
+ */
+export const shape = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    // `revenueStage` is deliberately NOT returned. The spec says not-applicable is decided by
+    // "the tier and the revenue-stage answer", but no branch anywhere can correctly consult it:
+    // making a pre-revenue business's MRR `not-applicable` would infer a permanent structural
+    // answer from a stage field, which is the "never inferred from absent data" rule this type
+    // exists to enforce. A pre-revenue startup that has not answered is `unknown` — never asked.
+    // Owner ruling 2026-08-09 after Task 7's review. Do not re-add it "to match the spec".
+    return {
+      tier: row?.tier ?? null,
+      funding: row?.funding ?? null,
+    };
+  },
+});
+
+export const solvency = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const row = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
+    return coreSolvency({
+      inputs: toCashInputs(states),
+      // No profile row: treat as solopreneur for not-applicable resolution, which is the most
+      // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
+      // the complete-your-shape invitation, so this is never the whole story a user sees.
+      tier: row?.tier ?? "solopreneur",
       nowMs: now,
     });
   },

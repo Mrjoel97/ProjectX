@@ -7150,8 +7150,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1786284922.1090531,
-    "ast_hash": "7fb457880b5fb711a0b6837b659c208f",
+    "mtime": 1786295056.2808576,
+    "ast_hash": "123c2f935362bfe64e9a3d256b136a25",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7750,13 +7750,13 @@
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-08-09-cash-business-finance.md": {
-    "mtime": 1786277005.8781857,
-    "ast_hash": "473c8b2bb99ef916edabafecfab77b7f",
+    "mtime": 1786291545.9981444,
+    "ast_hash": "477952d7c355f3cea0c3a57c936077be",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/CashView.tsx": {
-    "mtime": 1786284066.6796765,
-    "ast_hash": "ca8dac2450b8ad619686269c83d1b6f5",
+    "mtime": 1786295648.5731952,
+    "ast_hash": "1033b042551c999c0c5d47a94a91d262",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx": {
@@ -7775,28 +7775,28 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/cashView.test.ts": {
-    "mtime": 1786283953.9242153,
-    "ast_hash": "fd593d58783098b0f0379c9112735e02",
+    "mtime": 1786295648.536584,
+    "ast_hash": "d9df96216cf1cc9b48fb2e3b4cb4baf4",
     "semantic_hash": ""
   },
   "packages/backend/convex/cash.test.ts": {
-    "mtime": 1786284187.598205,
-    "ast_hash": "0fc5ea7c8411c1ba79694dc4489b5bd5",
+    "mtime": 1786295539.146292,
+    "ast_hash": "ba19c93fe4b12c0b47dbb2cca3786309",
     "semantic_hash": ""
   },
   "packages/backend/convex/cash.ts": {
-    "mtime": 1786284501.2306,
-    "ast_hash": "c7bcc0229f5befd9d6d380939625e1cc",
+    "mtime": 1786294478.8082547,
+    "ast_hash": "db34318620de0c7d11e834be27f7da3e",
     "semantic_hash": ""
   },
   "packages/core/src/cash.test.ts": {
-    "mtime": 1786282795.4543514,
-    "ast_hash": "37fe1fd34960eaf30367a3cc71a85551",
+    "mtime": 1786293789.9616086,
+    "ast_hash": "5eef92eaa53135cb8af3fef811ad57d6",
     "semantic_hash": ""
   },
   "packages/core/src/cash.ts": {
-    "mtime": 1786282826.9060042,
-    "ast_hash": "f8ea600c98757c1f40d7fcde276b56b5",
+    "mtime": 1786293635.3500886,
+    "ast_hash": "8f8ca2b2b1f8a63dc5f86c1eec82d837",
     "semantic_hash": ""
   },
   ".planning/phases/19-contacts-crm-follow-ups/19-01-PLAN.md": {

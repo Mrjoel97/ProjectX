@@ -1,6 +1,12 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 8 REVIEW FIX — the headline-selection
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 — the Business tab is ASSEMBLED.
+> `cash.shape`/`cash.solvency` adapters land, and `CashView.tsx` composes `HeadlineCard` →
+> `UnitEconomicsSection` → `SolvencySection` → `ActivitySection` → `NumbersPanel`, with
+> `ShapeMissingNotice` above the headline for a tenant with no `tenantProfiles` row. See the "Cash —
+> the Business tab, assembled" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 8 REVIEW FIX — the headline-selection
 > rule's prose overstated itself as "one rule, no exceptions" when the code has TWO clauses: posture
 > decides whether a survival or unit-economics metric leads, and a SECOND, tier-driven clause then
 > overrides a bootstrapped `sme`/`enterprise`'s `cfa` answer with `workingCapital`. Code was already
@@ -492,6 +498,66 @@ raising watches the date the money ends exactly like a funded one does.
   foreign tenant's scorecard staying unread, and a `cac`+`thirtyDayCashPerCustomer` happy path
   landing `cfa.state === "known"`/`origin === "derived"`) — 16/16 in the file. `pnpm typecheck` — 10/10
   packages green.
+
+### Cash — the Business tab, assembled (Task 9)
+
+- **`cash.shape`** is a read-only `tenantQuery` over the tenant's `tenantProfiles` row, returning
+  `{ tier: Tier | null; funding: Funding | null }`. A tenant with no row gets `null`, not a guessed
+  `"solopreneur"` — guessing is what the markdown-fallback defect did, and a wrong guess here selects
+  the wrong metric set. **`revenueStage` is deliberately NOT returned**, per Task 7's ruling recorded
+  above: no branch anywhere can correctly consult it, and deriving `not-applicable` from a stage field
+  is exactly the "inferred from absent data" move `CashFigure`'s four states forbid. Do not re-add it.
+- **`cash.solvency`** is a `tenantQuery` reading `inputStatesFor` (the same one read path `inputs`/
+  `unitEconomics` already use) and calling `@pikar/core`'s `solvency({ inputs, tier, nowMs })`. **No
+  profile row defaults `tier` to `"solopreneur"` here, and ONLY here, for not-applicable resolution —
+  the conservative choice, because it hides MRR/ARR rather than inventing them.** This is a narrower
+  contract than `cash.shape`'s honest `null`: the page separately shows `ShapeMissingNotice`, so a
+  tenant is never shown a fabricated tier as fact, only used as the SET-NARROWING default while they
+  have not answered.
+- **`CashView.tsx`'s `CashTab` composes, top to bottom: `ShapeMissingNotice` (conditional) →
+  `HeadlineCard` → `UnitEconomicsSection` → `SolvencySection` → `ActivitySection` → `NumbersPanel`** —
+  the design's fixed order. Every section keeps its OWN `Connected*` wrapper and its own `useQuery`
+  call; `ConnectedHeadline` reads `cash.shape` + `cash.unitEconomics` + `cash.solvency` (it needs
+  whichever underlies its metric), `ConnectedUnitEconomics` reads `cash.shape` + `cash.unitEconomics`,
+  `ConnectedSolvency` reads `cash.shape` + `cash.solvency`, `ConnectedActivity`/`ConnectedNumbers` are
+  unchanged from Task 2/3. Several `Connected*` components independently subscribing to `cash.shape`
+  (or to `cash.unitEconomics`/`cash.solvency`) is the SAME pattern `FinanceView.tsx`'s `RailsSection`/
+  `TrackedSection` already use for `finance.summary` — one client-side subscription per unique
+  query+args, not a duplicated network read. A failing `cash.unitEconomics` read (the scorecard) is
+  isolated to `UnitEconomicsSection` and (because it shares the read) the headline; `SolvencySection`,
+  `ActivitySection`, `NumbersPanel` and the whole Pikar-spend tab stay standing — the isolation the
+  spec asks for.
+- **`metricSetFor(tier, funding)` is computed once per `Connected*` wrapper** (not hoisted into a
+  shared context/provider — nothing here asked for one) from `cash.shape`'s tier, falling back to
+  `"solopreneur"` via the same `fallbackTier` helper wherever `tier` is `null` — matching
+  `cash.solvency`'s own conservative default so the frontend and backend never disagree about which
+  set a shape-less tenant is shown. `UnitEconomicsSection`/`SolvencySection` receive the resulting
+  key list; the `ponytail:`-marked `Object.keys(economics)` placeholder from Task 6 is gone.
+- **`SolvencySection({ solvency, set })` is `UnitEconomicsSection` COPIED, not generalised** —
+  CLAUDE.md §8: two similar presentational components kept separate is the compliant shape, a shared
+  configurable renderer would be the unrequested abstraction. It carries a one-line frame — "Not part
+  of the growth framework. These are the figures investors and accountants ask for." — marking the
+  finance-ops layer as OUTSIDE the Hormozi framework wherever it renders, per Task 7's own module
+  comment. A `set` with zero keys renders nothing, matching `UnitEconomicsSection`'s existing contract.
+- **`HeadlineCard({ metric, figure, tier, funding })`** looks its label up in the SAME two label maps
+  the two rows already use (`UNIT_ECONOMICS_LABELS`, `SOLVENCY_LABELS`) rather than inventing a third
+  copy — CFA's label is already phrased as a question ("Does a customer pay for itself in 30 days?"),
+  which is what frames the headline as the question it answers. `tier`/`funding` drive one line of
+  posture context text; they never re-decide WHICH metric leads (`metricSetFor` already decided that
+  in the caller) — this component only explains the choice, it does not make it.
+- **`ShapeMissingNotice()` is a non-blocking invitation, never a gate** — the profile page's
+  legacy-tenant precedent. It links to `/dashboard/profile?tab=shape` and its copy avoids "required"/
+  "must"; `ConnectedShapeNotice` renders it only once `cash.shape` has resolved and `tier === null`,
+  and renders nothing otherwise (loading or a tier present) — the rest of the tab renders exactly the
+  same regardless of whether it is on screen.
+- Test evidence: `cash.test.ts` gained `describe("cash.shape", ...)` (3 tests: null-tier for no row,
+  tier/funding read back verbatim, tenant isolation) and `describe("tier change", ...)` (1 test: a
+  solopreneur's saved inputs persist untouched and a newly-visible field like `mrr` reads `null`, never
+  back-filled, once a `tenantProfiles` row appears) — `pnpm --filter @pikar/backend test cash` — 20/20.
+  `cashView.test.ts` gained `describe("the headline", ...)` (3 tests: a bootstrapped tenant's CFA
+  headline is framed as its 30-day question, a funded tenant's runway headline renders its month
+  figure, and `ShapeMissingNotice` invites without gating) — `pnpm --filter @pikar/web test cashView`
+  — 18/18. `pnpm typecheck` — 10/10 packages green.
 
 ### Frontend and connected browser evidence
 

@@ -252,3 +252,66 @@ describe("cash.unitEconomics", () => {
     expect(result.cfa.state === "known" && result.cfa.origin).toBe("derived");
   });
 });
+
+describe("cash.shape", () => {
+  test("a tenant with no profile row gets a null tier, not a guessed solopreneur", async () => {
+    const t = convexTest(schema, modules);
+    const result = await asTenant(t, "tenant-a").query(api.cash.shape, {});
+    expect(result.tier).toBeNull();
+    expect(result.funding).toBeNull();
+  });
+
+  test("the tier and posture come from tenantProfiles, read-only", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantProfiles", {
+        tenantId: "tenant-a",
+        tier: "startup",
+        tierSource: "derived",
+        derivedAt: Date.now(),
+        funding: "funded",
+        revenueStage: "early-revenue",
+      });
+    });
+    const result = await asTenant(t, "tenant-a").query(api.cash.shape, {});
+    expect(result).toMatchObject({ tier: "startup", funding: "funded" });
+  });
+
+  test("one tenant's shape is not another's", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantProfiles", {
+        tenantId: "tenant-a",
+        tier: "sme",
+        tierSource: "derived",
+        derivedAt: Date.now(),
+      });
+    });
+    expect((await asTenant(t, "tenant-b").query(api.cash.shape, {})).tier).toBeNull();
+  });
+});
+
+describe("tier change", () => {
+  test("inputs persist untouched when a solopreneur hires — they are facts about the business", async () => {
+    const t = convexTest(schema, modules);
+    const as = asTenant(t, "tenant-a");
+    await as.mutation(api.cash.saveInput, { field: "cashOnHand", value: 20_000 });
+    await as.mutation(api.cash.saveInput, { field: "cac", value: 300 });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantProfiles", {
+        tenantId: "tenant-a",
+        tier: "startup",
+        tierSource: "derived",
+        derivedAt: Date.now(),
+        funding: "bootstrapped",
+      });
+    });
+
+    const inputs = await as.query(api.cash.inputs, {});
+    expect(inputs.inputs.find((i) => i.field === "cashOnHand")?.value).toBe(20_000);
+    expect(inputs.inputs.find((i) => i.field === "cac")?.value).toBe(300);
+    // A newly visible metric shows unknown with its prompt, never back-filled.
+    expect(inputs.inputs.find((i) => i.field === "mrr")?.value).toBeNull();
+  });
+});

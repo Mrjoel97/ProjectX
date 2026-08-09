@@ -7,7 +7,13 @@
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ActivitySection, FigureTile, NumbersPanel } from "./CashView";
+import {
+  ActivitySection,
+  FigureTile,
+  HeadlineCard,
+  NumbersPanel,
+  ShapeMissingNotice,
+} from "./CashView";
 
 const render = (component: unknown, props: Record<string, unknown>): string =>
   renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
@@ -102,7 +108,9 @@ describe("your numbers panel", () => {
 
   test("a stale input asks for a confirm-or-update", () => {
     const html = render(NumbersPanel, {
-      inputs: [input({ value: 5000, statedAt: Date.now() - 100 * 24 * 60 * 60 * 1000, stale: true })],
+      inputs: [
+        input({ value: 5000, statedAt: Date.now() - 100 * 24 * 60 * 60 * 1000, stale: true }),
+      ],
       tier: "solopreneur",
       busy: false,
       error: null,
@@ -149,7 +157,10 @@ describe("figure rendering — the four truths, on screen", () => {
   test("not-applicable says the metric does not exist here, and is NOT the word Unknown", () => {
     const html = render(FigureTile, {
       label: "MRR",
-      figure: { state: "not-applicable", because: "Project revenue has no monthly recurring figure." },
+      figure: {
+        state: "not-applicable",
+        because: "Project revenue has no monthly recurring figure.",
+      },
     });
     expect(html).toContain("no monthly recurring figure");
     expect(html).not.toMatch(/unknown/i);
@@ -159,7 +170,10 @@ describe("figure rendering — the four truths, on screen", () => {
   test("not-computable states the reason and never renders infinity", () => {
     const html = render(FigureTile, {
       label: "CFA",
-      figure: { state: "not-computable", because: "No acquisition cost recorded, so there is nothing to pay back." },
+      figure: {
+        state: "not-computable",
+        because: "No acquisition cost recorded, so there is nothing to pay back.",
+      },
     });
     expect(html).toContain("No acquisition cost recorded");
     expect(html).not.toContain("Infinity");
@@ -219,5 +233,41 @@ describe("figure rendering — the four truths, on screen", () => {
       },
     });
     expect(html).toMatch(/still right|confirm/i);
+  });
+});
+
+describe("the headline", () => {
+  test("a bootstrapped tenant is led by CFA, framed as the question it answers", () => {
+    const html = render(HeadlineCard, {
+      metric: "cfa",
+      figure: {
+        state: "known",
+        origin: "derived",
+        value: 2.5,
+        unit: "ratio",
+        from: "x",
+        sampleSize: 4,
+      },
+      tier: "solopreneur",
+      funding: "bootstrapped",
+    });
+    expect(html).toMatch(/30 days/i);
+  });
+
+  test("a funded tenant is led by runway", () => {
+    const html = render(HeadlineCard, {
+      metric: "runway",
+      figure: { state: "known", origin: "derived", value: 6, unit: "months", from: "x" },
+      tier: "startup",
+      funding: "funded",
+    });
+    expect(html).toMatch(/6/);
+    expect(html).toMatch(/months/i);
+  });
+
+  test("a tenant with no business shape is invited to complete it, never gated", () => {
+    const html = render(ShapeMissingNotice, {});
+    expect(html).toMatch(/business profile|business shape/i);
+    expect(html).not.toMatch(/required|must/i);
   });
 });

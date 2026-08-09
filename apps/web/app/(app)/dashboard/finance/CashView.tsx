@@ -12,10 +12,13 @@ import type {
   CashInputField,
   CashInputSpec,
   CashInputState,
+  CashMetricKey,
+  Funding,
   Tier,
 } from "@pikar/core";
-import { cashInputsForTier, validateCashInput } from "@pikar/core";
+import { cashInputsForTier, metricSetFor, validateCashInput } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { type CSSProperties, useMemo, useState } from "react";
 import { formatUtcDay } from "./FinanceView";
 
@@ -211,12 +214,114 @@ export function UnitEconomicsSection({
         {keys.map((key) => {
           const figure = economics[key];
           if (!figure) return null;
-          return (
-            <FigureTile key={key} label={UNIT_ECONOMICS_LABELS[key] ?? key} figure={figure} />
-          );
+          return <FigureTile key={key} label={UNIT_ECONOMICS_LABELS[key] ?? key} figure={figure} />;
         })}
       </section>
     </section>
+  );
+}
+
+const SOLVENCY_LABELS: Record<string, string> = {
+  runway: "How many months until the cash runs out?",
+  netBurn: "Net burn",
+  mrr: "Monthly recurring revenue",
+  arr: "Annual recurring revenue",
+  workingCapital: "Working capital",
+};
+
+/**
+ * The finance-ops layer. COPIED from `UnitEconomicsSection` rather than generalised into a shared
+ * renderer (CLAUDE.md §8) — two similar presentational components kept separate is compliance
+ * here, not duplication.
+ *
+ * Carries its own one-line frame because none of runway/burn/MRR/ARR/working capital appears in the
+ * three Hormozi source books (`@pikar/core`'s `cash.ts` header) — the spec requires this section to
+ * be marked as OUTSIDE that framework wherever it renders, never presented as part of the spine.
+ */
+export function SolvencySection({
+  solvency,
+  set,
+}: {
+  solvency: Record<string, CashFigure>;
+  set: readonly string[];
+}) {
+  if (set.length === 0) return null;
+  return (
+    <section style={stack} aria-labelledby="cash-solvency-heading">
+      <h2 id="cash-solvency-heading" style={cardTitle}>
+        Can the business survive?
+      </h2>
+      <p style={{ ...muted, fontSize: "0.8rem" }}>
+        Not part of the growth framework. These are the figures investors and accountants ask for.
+      </p>
+      <section className="stat-grid" aria-label="Solvency">
+        {set.map((key) => {
+          const figure = solvency[key];
+          if (!figure) return null;
+          return <FigureTile key={key} label={SOLVENCY_LABELS[key] ?? key} figure={figure} />;
+        })}
+      </section>
+    </section>
+  );
+}
+
+/**
+ * The one number the capital-posture switch (`metricSetFor`'s `headline`) puts first. Its label is
+ * looked up in the SAME vocabulary the row it belongs to already uses (`UNIT_ECONOMICS_LABELS` or
+ * `SOLVENCY_LABELS`) — one label per metric, not a third copy invented here — which is what frames
+ * it as the question it answers rather than a bare stat.
+ */
+function headlineReason(tier: Tier | null, funding: Funding | null): string {
+  if (tier === null || funding === null) {
+    return "Based on what we know about your business so far.";
+  }
+  return funding === "bootstrapped"
+    ? "Bootstrapped: whether each customer pays for itself matters most right now."
+    : "Outside money changes the constraint — the date it runs out matters most right now.";
+}
+
+export function HeadlineCard({
+  metric,
+  figure,
+  tier,
+  funding,
+}: {
+  metric: CashMetricKey;
+  figure: CashFigure;
+  tier: Tier | null;
+  funding: Funding | null;
+}) {
+  const label = UNIT_ECONOMICS_LABELS[metric] ?? SOLVENCY_LABELS[metric] ?? metric;
+  return (
+    <section style={stack} aria-labelledby="cash-headline-heading">
+      <p style={caps}>Your headline number</p>
+      <h2 id="cash-headline-heading" style={{ ...cardTitle, fontSize: "1.3rem" }}>
+        {label}
+      </h2>
+      <FigureTile label={label} figure={figure} />
+      <p style={{ ...muted, fontSize: "0.8rem" }}>{headlineReason(tier, funding)}</p>
+    </section>
+  );
+}
+
+/**
+ * A non-blocking invitation, never a gate — the profile page's legacy-tenant precedent. A tenant
+ * with no `tenantProfiles` row keeps seeing the whole page; this only explains why the metric sets
+ * below cannot be narrowed to their business shape yet.
+ */
+export function ShapeMissingNotice() {
+  return (
+    <CashStateNotice state="shape-missing">
+      We don't know your business shape yet, so the numbers below aren't narrowed to a business like
+      yours.{" "}
+      <Link
+        href="/dashboard/profile?tab=shape"
+        style={{ color: "var(--teal-600)", fontWeight: 600 }}
+      >
+        Complete your business profile
+      </Link>{" "}
+      to see the metrics built for it.
+    </CashStateNotice>
   );
 }
 
@@ -468,20 +573,72 @@ function ConnectedActivity() {
   return <ActivitySection activity={result.activity} partial={result.bound.partial} />;
 }
 
+/**
+ * No profile row: computed with the SAME conservative default `cash.solvency` uses server-side —
+ * `solopreneur` is the narrowest metric set, so a shape-less tenant is never shown a metric that
+ * turns out not to apply. `ShapeMissingNotice` (rendered separately by `ConnectedShapeNotice`) is
+ * what tells them why, never a guess presented as fact.
+ */
+const fallbackTier = (tier: Tier | null): Tier => tier ?? "solopreneur";
+
 function ConnectedUnitEconomics() {
+  const shapeResult = useQuery(api.cash.shape, {});
   const economics = useQuery(api.cash.unitEconomics, {});
-  if (economics === undefined)
+  if (shapeResult === undefined || economics === undefined)
     return <CashStateNotice state="loading">Loading unit economics…</CashStateNotice>;
-  // ponytail: Task 8 supplies the per-tier metric set; until then every figure the query returns
-  // is shown. `Object.keys` is safe here — `CashUnitEconomics` is a plain, fully-populated record.
-  return <UnitEconomicsSection economics={economics} keys={Object.keys(economics)} />;
+  const keys = metricSetFor(fallbackTier(shapeResult.tier), shapeResult.funding).unitEconomics;
+  return <UnitEconomicsSection economics={economics} keys={keys} />;
+}
+
+function ConnectedSolvency() {
+  const shapeResult = useQuery(api.cash.shape, {});
+  const solvencyResult = useQuery(api.cash.solvency, {});
+  if (shapeResult === undefined || solvencyResult === undefined)
+    return <CashStateNotice state="loading">Loading solvency…</CashStateNotice>;
+  const keys = metricSetFor(fallbackTier(shapeResult.tier), shapeResult.funding).solvency;
+  return <SolvencySection solvency={solvencyResult} set={keys} />;
+}
+
+/**
+ * The headline needs whichever of `cash.unitEconomics`/`cash.solvency` its metric lives on — both
+ * are already independently subscribed by `ConnectedUnitEconomics`/`ConnectedSolvency` above, so
+ * this is a second reference to an existing subscription (the `RailsSection`/`TrackedSection`
+ * precedent in FinanceView.tsx), not a second network read.
+ */
+function ConnectedHeadline() {
+  const shapeResult = useQuery(api.cash.shape, {});
+  const economics = useQuery(api.cash.unitEconomics, {});
+  const solvencyResult = useQuery(api.cash.solvency, {});
+  if (shapeResult === undefined || economics === undefined || solvencyResult === undefined)
+    return <CashStateNotice state="loading">Loading your headline number…</CashStateNotice>;
+  const set = metricSetFor(fallbackTier(shapeResult.tier), shapeResult.funding);
+  const figures = { ...economics, ...solvencyResult } as Record<CashMetricKey, CashFigure>;
+  const figure = figures[set.headline];
+  if (!figure) return null;
+  return (
+    <HeadlineCard
+      metric={set.headline}
+      figure={figure}
+      tier={shapeResult.tier}
+      funding={shapeResult.funding}
+    />
+  );
+}
+
+function ConnectedShapeNotice() {
+  const shapeResult = useQuery(api.cash.shape, {});
+  if (shapeResult === undefined || shapeResult.tier !== null) return null;
+  return <ShapeMissingNotice />;
 }
 
 export function CashTab() {
   return (
     <div style={{ display: "grid", gap: "1.75rem" }}>
-      <ConnectedActivity />
+      <ConnectedShapeNotice />
+      <ConnectedHeadline />
       <ConnectedUnitEconomics />
+      <ConnectedSolvency />
+      <ConnectedActivity />
       <ConnectedNumbers />
     </div>
   );
