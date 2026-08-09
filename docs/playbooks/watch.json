@@ -227,6 +227,13 @@
     "packages/backend/scripts/check-fal-catalog.mjs",
     "apps/web/scripts/bake-sandbox-snapshot.mjs"
   ],
+  "contacts-crm.md": [
+    "packages/core/src/contacts.ts",
+    "packages/core/src/contacts.test.ts",
+    "packages/backend/convex/contacts.ts",
+    "packages/backend/convex/contacts.test.ts",
+    "apps/web/app/(app)/dashboard/pipeline/"
+  ],
   "guardrails.md": [
     "packages/backend/convex/guardrails.ts",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
