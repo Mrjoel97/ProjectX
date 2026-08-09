@@ -11,7 +11,26 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
-> Last verified: 2026-08-09 (Plan 19-08 — **the cockpit now READS the person store in-loop and
+> Last verified: 2026-08-09 (Plan 19-10 — **`cockpit-agent@18` IS NOW THE ACTIVE BODY** (activated
+> on owner authorization after gate `086f8267`, 35/35), so `stageCrmWrite` and contacts-first
+> resolution are reachable in production. Any note below describing v18 as a candidate or ACTN-05
+> as "certified but not live" is STALE.
+> **BUT THE CAPABILITY DOES NOT ACTUALLY WORK, and this is the important half.** Asked in plain
+> language to add a dated follow-up for a named person, the live v18 body stages an `addContact`
+> and no follow-up at all — measured at `--only 36`, run `309b1c3d`, $0.0142, with the plan row read
+> back at $0 holding exactly one `addContact` and no `dueAt`; on the run's other attempt it staged
+> nothing and the plan stayed `collecting`. The 35/35 was green over this because 19-09's
+> `crmOperationCount` is a COUNT and cannot tell op types apart. 19-10 added `datedFollowUpCount`
+> to the closed expect vocabulary, so **fixture 36 is now RED and a full gate is 34/35** until the
+> body reaches the tool. **Do not fix this by adding another prohibition to the body** — 19-09
+> already proved that road: the body forbids the adjacent failure VERBATIM and the model did it
+> anyway on 2/2 runs. The candidate fix is the TOOL'S SHAPE or an explicit refusal when a follow-up
+> request yields a contact-only operation list. See `contacts-crm.md` → Known gaps.
+> SCOPE of this entry: the activation fact, the defect, and `apps/web/e2e/` (whose Pipeline spec ran
+> for the first time — `dashboard-pages.md` carries that detail). No cockpit turn, tool, gate or
+> row changed here.)
+>
+> Previously verified: 2026-08-09 (Plan 19-08 — **the cockpit now READS the person store in-loop and
 > STAGES its writes through the plan gate.** `llm.ts`, `schema.ts` and `cards.tsx` changed, in ONE
 > commit, plus a new `internal.contacts.savedForName`.)
 >

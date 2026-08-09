@@ -2,27 +2,41 @@ import { expect, type Page, test } from "@playwright/test";
 
 // PIPE-01 / SC#8 browser evidence for the connected Pipeline route.
 //
-// ── THIS SPEC HAS NEVER EXECUTED. IT IS **NOT RUN**. ─────────────────────────────────────────────
-// It was AUTHORED in plan 19-07 and is RUN by the owner at 19-10 — the 18-07 → 18-09 precedent.
-// Nothing below is evidence of anything until someone runs it and reads the result.
+// ── EXECUTED FOR THE FIRST TIME 2026-08-09 (plan 19-10): 2/2 PASSED in 12.3s. ────────────────────
+// Authored in 19-07, run here. Against a live local `convex dev` on :3210 and a PRODUCTION build of
+// this app on :3111, signed in as a FRESH password user — which is also how the empty-tenant
+// precondition below was satisfied without a reset seam: a brand-new signup owns a brand-new tenant.
+//
+// 19-07 recorded that "an executor cannot mint" `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`. That turned
+// out to be false for a LOCAL deployment: `convex/auth.ts` runs the Convex Auth `Password` provider
+// and `/signup` is a real form, so a throwaway user is one scripted signup away. It stays true for
+// any deployment where you cannot create accounts at will.
+//
+// TWO THINGS THIS FIRST RUN FOUND, both fixed here, neither a product defect:
+//   • the opener race documented at the `locator.or()` below — the spec hung 30s on a locator that
+//     structurally could not exist on the empty tenant it had just asserted.
+//   • `pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts` — the "verbatim resume command"
+//     this header used to carry — does NOT filter. The `--` is swallowed and the whole e2e suite
+//     runs (25 failed / 4 passed / 7.9 minutes, almost all of them tenant-precondition failures
+//     that have nothing to do with this file). Run it as written below instead.
 //
 // **A `--list` is NOT a run.** `playwright test --list` only proves the file parses and that the
 // two tests are discoverable. **A blank/empty result means NOT RUN — never that it passed.** Both
 // 26-05 and 26-10 stopped inside the canonical `auth.setup.ts` for want of credentials and produced
 // exactly that shape of output; do not read it as green.
 //
-// WHAT A REAL RUN NEEDS, and why an executor cannot produce one:
+// WHAT A REAL RUN NEEDS:
 //   • `playwright.config.ts` pins `baseURL` to `http://127.0.0.1:3111` and has **no `webServer`
 //     block** — specs run against an ALREADY-RUNNING stack. Start it yourself.
 //   • a live `convex dev` (NOT `--once`) for the local deployment the app talks to.
 //   • Next serving on `:3111` (`pnpm --filter @pikar/web dev`, or a production build; the dev
 //     server has OOM'd on heavy dashboard pages before).
 //   • `E2E_USER_EMAIL` / `E2E_USER_PASSWORD` in the environment. `auth.setup.ts` signs in once and
-//     saves `e2e/.auth/user.json`; without those two variables it stops there and every test below
-//     is skipped rather than failed. An executor cannot mint them.
+//     saves `e2e/.auth/user.json`; without those two variables it THROWS there and every test below
+//     is skipped rather than failed.
 //
-// Resume command, verbatim:
-//   pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts
+// Resume command, verbatim — from `apps/web`, and NOT through the pnpm `--` passthrough:
+//   E2E_USER_EMAIL=… E2E_USER_PASSWORD=… npx playwright test e2e/pipeline.spec.ts
 //
 // ── PRECONDITION FOR TEST 1 ─────────────────────────────────────────────────────────────────────
 // The first test pins the EMPTY-tenant state, which is what makes the second one non-vacuous: a
@@ -31,6 +45,8 @@ import { expect, type Page, test } from "@playwright/test";
 // `serial` so it observes that state before test 2 creates one. **On a re-run against the same
 // tenant, test 1 fails because the tenant is no longer empty — that is a precondition failure, not
 // a product defect.** Use a fresh `E2E_USER_EMAIL`, or read the failure for what it is.
+// This is now OBSERVED rather than predicted: the 2026-08-09 run's tenant has held a contact since
+// test 2 created one, so re-running against that same user WILL fail test 1. Sign up another.
 //
 // ponytail: no reset seam. The upgrade path, if this becomes annoying at 19-10, is a `__`-prefixed
 // `internalMutation` in `convex/contacts.ts` that clears the tenant's contacts/followUps/
@@ -83,8 +99,13 @@ test("a contact can be added, suppressed, and un-suppressed in two deliberate cl
 
   // Create through the real UI — the only way a contact row may come into existence (invariant 1:
   // nothing accretes from reading the mailbox).
-  const firstAction = page.getByTestId("add-first-contact");
-  const opener = (await firstAction.count()) > 0 ? firstAction : page.getByTestId("add-contact");
+  // 19-10, on this spec's FIRST real execution: the original picked the opener with
+  // `(await firstAction.count()) > 0 ? … : …`, and `count()` does NOT auto-wait. Straight after a
+  // `goto`, the `useQuery` has not resolved, so the empty-state button counts 0 and the ternary
+  // committed to `add-contact` — which only renders when `contacts.length > 0` and therefore never
+  // appears on the empty tenant this file's own precondition requires. The test hung 30s on a
+  // locator that could not exist. `locator.or()` auto-waits for whichever affordance is real.
+  const opener = page.getByTestId("add-first-contact").or(page.getByTestId("add-contact"));
   await opener.click();
   await page.getByTestId("add-contact-form").getByLabel("Email address").fill(CONTACT_EMAIL);
   await page.getByTestId("add-contact-form").getByLabel("Name (optional)").fill("Pipeline E2E");

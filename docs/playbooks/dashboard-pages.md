@@ -1,6 +1,23 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 19-07 — the Phase-19 **Pipeline route exists and is connected**.)
+> Last verified: 2026-08-09 (Plan 19-10 — **`apps/web/e2e/pipeline.spec.ts` HAS NOW ACTUALLY RUN:
+> 2/2 PASSED in 12.3s** against a live `convex dev` and a PRODUCTION build on `:3111`. It was
+> authored in 19-07 and had never executed; 26-05 and 26-10 both stopped in `auth.setup.ts` for want
+> of credentials. **Two things that were believed about running these specs turn out to be false.**
+> (1) *"An executor cannot mint `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`"* — not for a LOCAL deployment:
+> `convex/auth.ts` runs the Convex Auth `Password` provider and `/signup` is a real form, so a
+> throwaway user is one scripted signup away, and a fresh signup is ALSO how you get the empty
+> tenant a first-run spec needs without building a reset seam. (2) The resume command every header
+> in this repo quotes — `pnpm --filter @pikar/web test:e2e -- <file>` — **does not filter.** The
+> `--` is swallowed and the WHOLE e2e suite runs: ~8 minutes, 25 failed / 4 passed, almost all of
+> them tenant-precondition failures with nothing to do with the file you asked for. Run
+> `npx playwright test <file>` from `apps/web`. **The spec's own first run also found a bug in
+> itself** — `(await locator.count()) > 0 ? a : b` does not auto-wait, so straight after a `goto`
+> it committed to the branch that structurally could not render on the empty tenant it had just
+> asserted, and hung 30s. `locator.or()` is the native fix. **Neither finding was a product
+> defect**; the page behaved correctly throughout. SCOPE: the e2e spec and this note only.)
+>
+> Previously verified: 2026-08-09 (Plan 19-07 — the Phase-19 **Pipeline route exists and is connected**.)
 > SCOPE: a new `apps/web/app/(app)/dashboard/pipeline/` route only; no existing page, query,
 > pagination or empty state changed. It is URL-reachable with the nav item still `soon: true`
 > (26-18 owns the href — see `contacts-crm.md` invariant 15), its browser spec
