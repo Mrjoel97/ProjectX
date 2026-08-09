@@ -1,6 +1,6 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-09 (blueprint-goals slice — goals are now a standing part of the spine.)
+> Last verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
 > Goals are a SEPARATE `goals` table, never a twelfth blueprint field — the eleven-field set stays
 > closed (D3), so a goal is a claim about the future rather than a fact about the business. All
 > selection, countdown and cycle-time arithmetic is pure `@pikar/core/goals.ts` (`nearestActive`,
@@ -968,6 +968,15 @@ cannot see:
 - **First-run gate lives in the client `AppShell`, never `middleware.ts`** — the redirect into
   `/dashboard/onboarding` is client-side `<Authenticated>` + `useQuery` routing. Adding it to
   `middleware.ts` would run it on the edge without the tenant/profile query and break resumability.
+- **A goal's `targetDate` must be a RENDERABLE instant, rejected at `addGoal`** — Convex `v.number()`
+  is float64, so `NaN`/`Infinity` and any finite `|ms| > 8.64e15` pass the validator and then make
+  `isoDay`'s `new Date(ms).toISOString()` THROW. That throw lands in `spineForTenant`'s catch-all and
+  blanks the **whole** blueprint spine — every field, not just goals — for every cockpit turn and
+  vault-grounding call. `addGoal` therefore rejects with `INVALID_TARGET_DATE` before the row exists.
+- **One goal renders as exactly ONE spine line** — `renderGoalLines` collapses whitespace runs at
+  RENDER time, not only at write time, so rows stored before the fix are covered too. `addGoal` only
+  trims, so raw `\n` in goal text would otherwise emit multiple physical lines inside the
+  `<business_blueprint>` fence and let keyboard input forge spine structure.
 
 ## How to change safely
 
