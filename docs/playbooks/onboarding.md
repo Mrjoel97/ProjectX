@@ -1,6 +1,9 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-09 (`BlueprintPanel.tsx` — selecting a segment, from the canvas or the
+> Last verified: 2026-08-09 (**`paidStaff` now EXCLUDES the founder** — the solo signal depended on
+> it, and a solopreneur on their own payroll was deriving as `startup`/`sme`.)
+>
+> Previously verified: 2026-08-09 (`BlueprintPanel.tsx` — selecting a segment, from the canvas or the
 > ledger, now scrolls its detail into view, honouring `prefers-reduced-motion`.)
 >
 > Previously verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
@@ -265,6 +268,18 @@ TS in `businessProfile.ts`, unit-tested in `businessProfile.test.ts`:
   Thresholds are the design doc's defaults and are a **product call** — retune by editing
   `TIER_BOUNDARY_TABLE` in the test plus the two comparisons, **never** by adding a config row (a
   DB-tunable threshold makes the tier DB-writable by proxy, which D2 forbids).
+- **`paidStaff` EXCLUDES the founder, and the whole solo signal depends on it.** The question read
+  "how many of THEM are paid staff" until 2026-08-09, counting the founder — so a solopreneur who
+  put themselves on payroll answered `1`, failed `paidStaff === 0`, and derived as `startup`, or as
+  **`sme` with steady revenue, making a one-person business an "established business with paid
+  staff"**. Putting yourself on salary is an ordinary thing to do. The rule was never wrong; the
+  input meant the wrong thing, so the fix is the wording in `SLOT_LABEL` (both the onboarding page
+  and `ShapePanel`) plus the `LabeledField` on the profile form. If you reword these, keep "besides
+  yourself" or the solo signal silently breaks again.
+  **Known gap:** nothing validates `paidStaff <= headcount - 1`, so an inconsistent pair typed by
+  hand (e.g. `headcount 1, paidStaff 1`) still derives a one-person `sme`. Unreachable for a truthful
+  answer, and left open deliberately — closing it changes `deriveTier`, which is governance-critical
+  (D2), so it is a product call rather than a drive-by fix.
 - **`yearsOperating` is captured but unused by the rule** — design §4.1 names it a tier fact and the
   conversation asks it; a test pins the current contract so nobody "fixes" the omission by accident.
 - **`TIER_REASON`** — the read-only reason the profile page renders next to the tier (design §9). A

@@ -66,7 +66,8 @@ const PRESET_COPY = {
 export const SLOT_LABEL = {
   oneLineDescription: "what your business does",
   headcount: "how many people work on this",
-  paidStaff: "how many are paid staff",
+  // "besides you" is load-bearing — see TierFacts.paidStaff.
+  paidStaff: "how many paid staff you have besides yourself",
   revenueStage: "where you are on revenue",
   funding: "how it's funded",
   yearsOperating: "how long it's been running",
@@ -218,7 +219,7 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
             onChange={(e) => setHeadcount(digits(e.target.value))}
           />
         </LabeledField>
-        <LabeledField label="How many of them are paid staff?">
+        <LabeledField label="How many paid staff do you have besides yourself?">
           <input
             style={field}
             type="number"
