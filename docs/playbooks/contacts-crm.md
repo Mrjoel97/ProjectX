@@ -1,6 +1,16 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 @ `12bde78` (Plan 19-10 — **phase close-out. The offline surface is
+> Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS. The cause was
+> never the model: `runAgentLoop` dropped the trusted clock on the way to `buildCockpitTools`, so
+> `stageCrmWrite` refused every dated follow-up with `no_clock`.** Fixture 36 GREEN at `--only 36`,
+> run `266ef8f4`, $0.0056, first attempt, skill body byte-unchanged (no re-gate owed). See
+> "RESOLVED — ACTN-05" under Known gaps for the full account, the two shape defects fixed with it,
+> and invariant 17. **The owner browser UAT still has not run**, and a NEW open defect was found
+> while verifying: a follow-up can name a fabricated address (`"no-email"`) because
+> `parseCrmOperations` does no address-shape check — read that entry before trusting the CRM with
+> a contactless request. Nothing here is owner-verified yet.)
+>
+> Previously verified: 2026-08-09 @ `12bde78` (Plan 19-10 — **phase close-out. The offline surface is
 > verified; the OWNER BROWSER UAT IS STILL PENDING and this line will be re-bumped to the sha it is
 > driven against when it passes.** What IS newly verified here, in a browser, for the first time:
 > `apps/web/e2e/pipeline.spec.ts` **RAN and PASSED 2/2** against a live deployment — invariant 3's
@@ -425,7 +435,75 @@ responsive behaviour at phone width. These are the owner UAT, and a blank row is
 
 ## Known gaps & deferred work
 
-### OPEN DEFECT — ACTN-05's headline capability does not work on the live body (19-10, 2026-08-09)
+### RESOLVED — ACTN-05's follow-up capability (19-11, 2026-08-10). Cause: a dropped clock.
+
+**Fixture 36 is GREEN against the live `cockpit-agent@18`** — `--only 36`, run `266ef8f4`,
+**$0.0056, PASS on the first attempt**, `datedFollowUpCount` intact and un-weakened, and the skill
+body BYTE-UNCHANGED (so gate `086f8267`'s 35/35 still stands and no re-gate is owed).
+
+**The model was never the problem.** `runAgentLoop` builds its own tool set and passed `undefined`
+for `buildCockpitTools`' `clientContext`, so `stageCrmWrite` returned its `no_clock` refusal for
+every dated follow-up on every live turn. Eval run `7e375c3c` logged seven refusals, every one
+`{"reason":"no_clock","ops":["addFollowUp"],"dueProvided":[true],"noteProvided":[true]}` — the
+agent had been supplying the whole follow-up, correctly, the entire time. The 19-10 entry below
+read the symptom (`addContact` staged, no `dueAt`) as a model reflex; it was a plumbing failure
+wearing a model's clothes. See `agent-runtime.md` for the invariant that prevents the next one.
+
+**Two shape defects fixed alongside it, both real and both mutation-proven:**
+
+- **A contact carrying `due`/`note` was SILENTLY STRIPPED** and the tool then answered
+  `"1 change(s) … staged"`. A model that supplied the whole dated follow-up got a bare contact
+  written and was told it succeeded. Now refused by a returned sentence naming `addFollowUp`.
+  A silent drop at a trust boundary cannot be answered; a refusal must be.
+- **The DEGRADE GRADIENT.** Refusal is all-or-nothing over the operations list, so the model's
+  cheapest retry is a SIMPLER list — and the simplest list that succeeds is a bare `addContact`.
+  The tool boundary itself sloped downhill to the wrong answer. Once a follow-up has been refused
+  in a turn, a contact-only retry is now refused too, so simplification stops being an exit.
+
+**INVARIANT 17: `addContact` must never be reachable as the by-product of a failed follow-up.**
+Both guards above exist to enforce it, and the ops item schema is now a discriminated `anyOf` with
+the `addFollowUp` arm FIRST and `note`+`due` structurally required — `addContact` used to be the
+enum's leading member AND the schema's minimum valid emission (`required: ["op","email"]`), i.e.
+reachable without the model having actively chosen it. All four of 19-08's narrowings are
+PRESERVED: add-only, `due` as the user's words through `parseSendTime`, server-hardcoded `origin`,
+and the draft-in-progress refusal. `CrmOperation`'s required `email` on `addFollowUp` was not
+relaxed.
+
+### OPEN DEFECT — a follow-up can name a FAKE address, and the CRM accepts it (found 19-11, NOT fixed)
+
+**`parseCrmOperations` accepts any non-empty string as an email.** `normalizeAddress` is
+`s.trim().toLowerCase()` and the only check is `email === ""`, so there is no address-shape
+validation at either CRM boundary.
+
+**Observed, not hypothesised.** On the run that turned fixture 36 green (`266ef8f4`), turn 2 asks
+for a follow-up that "isn't tied to anyone" — which the body forbids the agent from creating. The
+agent satisfied the required-`email` brake by **inventing `email: "no-email"`**, and the plan row
+was staged:
+
+```json
+{"op":"addFollowUp","email":"no-email","note":"to review our pricing page","dueAt":1786698000000}
+```
+
+Two consequences, both real:
+
+1. **The structural brake in 19-08 is bypassable.** The required `email` on `addFollowUp` is what
+   stops the CRM becoming a general task generator. A pseudo-address defeats it, and on Approve
+   `applyCrmOperations` would upsert a contact row keyed `no-email`.
+2. **Fixture 36's green is currently green for a slightly wrong reason.** `patchPlan` REPLACES
+   `crmOperations` wholesale, so turn 2's contactless follow-up overwrote turn 1's Rhea follow-up.
+   The count assertions (`crmOperationCount: 1`, `datedFollowUpCount: 1`) are satisfied by
+   replacement just as well as by turn 2 correctly declining. **The ACTN-05 fix above is real and
+   independently proven by the offline tests; this is a separate pre-existing hole that the fix
+   made visible.**
+
+**Deliberately not fixed in 19-11:** pre-existing (shipped 19-06), outside the executor scope
+boundary, and the paid-verification allowance was exhausted. The fix is an address-shape check in
+`parseCrmOperations` — reuse whatever `addRecipients` already bounces invalid addresses with rather
+than writing a second rule. Expect it to make turn 2 refuse and the model ASK, which is what the
+body already tells it to do, and to leave turn 1's Rhea follow-up standing. Budget one `--only 36`
+re-verify (~$0.006) after the change.
+
+### SUPERSEDED (19-10, 2026-08-09) — the original defect report, kept for the reasoning trail
 
 **Asked in plain language to add a dated follow-up for a named person, `cockpit-agent@18` — the
 ACTIVE body — stages an `addContact` and NO follow-up at all.** Measured, not inferred: eval run

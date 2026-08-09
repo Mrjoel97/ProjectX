@@ -134,3 +134,38 @@ exactly like "gsd-tools clobbered the frontmatter" without anything having clobb
 
 **Standing rule for anyone appending to `stopped_at`: escape every `"` as `\"`, or prefer backticks
 and avoid raw double quotes entirely.** 19-10 verified the block parses after its own append.
+
+
+---
+
+## 19-11 — a follow-up can name a FABRICATED address (`no-email`). OPEN, pre-existing.
+
+`parseCrmOperations` (`packages/core/src/contacts.ts`) accepts **any non-empty string** as an
+email. `normalizeAddress` is `s.trim().toLowerCase()` and the only check is `email === ""`, so
+there is no address-shape validation at either CRM boundary.
+
+Observed on eval run `266ef8f4` (the run that turned fixture 36 green). Turn 2 asks for a follow-up
+that "isn't tied to anyone" — which the cockpit body forbids the agent from creating. The agent
+satisfied the required-`email` brake by inventing one, and the plan row was staged:
+
+```json
+{"op":"addFollowUp","email":"no-email","note":"to review our pricing page","dueAt":1786698000000}
+```
+
+Why it matters: the required `email` on `addFollowUp` is 19-08's structural brake against the CRM
+becoming a general task generator, and a pseudo-address defeats it. On Approve,
+`applyCrmOperations` would upsert a contact row keyed `no-email`.
+
+It also means fixture 36's green is currently green for a slightly wrong reason: `patchPlan`
+REPLACES `crmOperations` wholesale, so turn 2's op overwrote turn 1's Rhea follow-up, and the count
+assertions are satisfied by replacement as readily as by turn 2 correctly declining. The ACTN-05
+clock fix is independently proven by the offline tests in `runCockpitAgent.test.ts`; this is a
+separate hole that fix made visible.
+
+**NOT fixed in 19-11 deliberately:** pre-existing (shipped 19-06), outside the executor scope
+boundary (not caused by this plan's changes), and the paid-verification allowance was spent.
+
+**The fix:** an address-shape check in `parseCrmOperations`. Reuse whatever `addRecipients` already
+bounces invalid addresses with rather than authoring a second rule. Expect turn 2 to be refused and
+the model to ASK — which the body already tells it to do — leaving turn 1's follow-up standing.
+Budget one `--only 36` re-verify at roughly $0.006.

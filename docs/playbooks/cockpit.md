@@ -11,7 +11,42 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
-> Last verified: 2026-08-09 (Plan 19-10 — **`cockpit-agent@18` IS NOW THE ACTIVE BODY** (activated
+> Last verified: 2026-08-10 (Plan 19-11 — **THE ACTN-05 DEFECT IS FIXED, AND THE CAUSE WAS NOT THE
+> MODEL.** Fixture 36 is GREEN against the live `cockpit-agent@18`: `--only 36`, run `266ef8f4`,
+> $0.0056, PASS on the first attempt with `datedFollowUpCount` intact and the body BYTE-UNCHANGED.
+> **The root cause: `runAgentLoop` builds its OWN tool set and passed `undefined` for
+> `buildCockpitTools`' 4th argument — the trusted clock.** So `stageCrmWrite`'s dated follow-up took
+> its `no_clock` refusal on EVERY live cockpit turn, and so did `setSendTime`, `checkAvailability`
+> and `proposeCalendarEvent`. The model had been supplying the whole follow-up all along: seven
+> refusals were logged on eval run `7e375c3c`, every one
+> `{"reason":"no_clock","ops":["addFollowUp"],"dueProvided":[true],"noteProvided":[true]}`.
+> **Why nobody could see it.** The clock plane was only ever exercised through
+> `__invokeCockpitTool` (which bypasses the loop and passes a clock directly) or the SMOKE path
+> (which pins its own), so every offline test passed against tools built the way production never
+> builds them. `runCockpitAgent` DOES build a clocked tool set — but only the SMOKE branch uses it.
+> **THE INVARIANT: every input `buildCockpitTools` takes must ride `runAgentLoop`'s args.**
+> `skillVersions` and `omitRecipientEdits` were both threaded when someone hit this; the clock never
+> was. A new `buildCockpitTools` parameter that is not also a `runAgentLoop` parameter is silently
+> dead in production. `runCockpitAgent.test.ts` now pins the clock end-to-end through the loop
+> (mutation-proven: restoring `undefined` gives `expected undefined to be 'crm_write'`).
+> Two further shape fixes landed with it, both mutation-proven and neither a body edit:
+> a contact carrying `due`/`note` is now REFUSED rather than silently stripped and reported as
+> "1 change(s) … staged"; and the DEGRADE GRADIENT is closed — all-or-nothing refusal made a
+> simpler list the model's cheapest retry, and the simplest list that succeeds is a bare
+> `addContact`, so once a follow-up is refused in a turn a contact-only retry is refused too.
+> **NO registration surface was added** — no new tool, no `agentSteps.tool` literal, no VERB entry,
+> so the 14-site checklist below is unchanged and needs no walk. The fix is entirely inside
+> `stageCrmWrite`'s schema/boundary plus one `runAgentLoop` argument.
+> **A full gate was NOT run and is NOT owed for this change**: the skill body is byte-identical, so
+> gate `086f8267`'s 35/35 evidence still stands and only fixture 36 needed re-proving.
+> Every `stageCrmWrite` refusal now emits one enum-only structured log
+> (`{"event":"stageCrmWrite.refused","reason",...}` — op TYPES and booleans, no addresses, no notes,
+> no due strings: §4-clean by construction). It is what turned this from guesswork into a
+> measurement, and it is the first place to look if a CRM turn misbehaves again.
+> SCOPE of this entry: `llm.ts` (`stageCrmWrite` + the `runAgentLoop` clock arg),
+> `cockpitTools.test.ts`, `runCockpitAgent.test.ts`. No UI, no schema, no new tool.)
+>
+> Previously verified: 2026-08-09 (Plan 19-10 — **`cockpit-agent@18` IS NOW THE ACTIVE BODY** (activated
 > on owner authorization after gate `086f8267`, 35/35), so `stageCrmWrite` and contacts-first
 > resolution are reachable in production. Any note below describing v18 as a candidate or ACTN-05
 > as "certified but not live" is STALE.
@@ -21,7 +56,8 @@
 > back at $0 holding exactly one `addContact` and no `dueAt`; on the run's other attempt it staged
 > nothing and the plan stayed `collecting`. The 35/35 was green over this because 19-09's
 > `crmOperationCount` is a COUNT and cannot tell op types apart. 19-10 added `datedFollowUpCount`
-> to the closed expect vocabulary, so **fixture 36 is now RED and a full gate is 34/35** until the
+> to the closed expect vocabulary, so fixture 36 went RED (**FIXED in 19-11 above — it is
+> now GREEN and the cause was a dropped clock, not the body**) until the
 > body reaches the tool. **Do not fix this by adding another prohibition to the body** — 19-09
 > already proved that road: the body forbids the adjacent failure VERBATIM and the model did it
 > anyway on 2/2 runs. The candidate fix is the TOOL'S SHAPE or an explicit refusal when a follow-up

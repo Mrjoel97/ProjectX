@@ -6,7 +6,31 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
-> Last verified: 2026-08-09 (Plan 19-10 — **THE OFFLINE GATE CAN RUN AGAIN, AND IT IMMEDIATELY
+> Last verified: 2026-08-10 (Plan 19-11 — **THE CLOCK NEVER REACHED THE LOOP'S TOOLS, AND THAT WAS
+> ACTN-05's ROOT CAUSE.** `runAgentLoop` builds its OWN tool set and passed `undefined` as
+> `buildCockpitTools`' 4th (`clientContext`) argument, so every clock-dependent tool —
+> `setSendTime`, `checkAvailability`, `proposeCalendarEvent`, and `stageCrmWrite`'s dated
+> follow-up — returned its no-clock refusal on every live turn. `clientContext` now rides
+> `runAgentLoop`'s args like `skillVersions` and `omitRecipientEdits` already did.
+> **THE RULE FOR THIS RUNTIME: a new `buildCockpitTools` parameter that is not ALSO a
+> `runAgentLoop` parameter is dead in production.** The loop does not receive tools, it builds
+> them; anything the caller knows and does not forward is lost silently, and the loss looks like a
+> model failure rather than a plumbing failure.
+> **AND THE REASON IT SURVIVED FOUR PHASES: `__invokeCockpitTool` IS NOT THE LOOP.** It builds tools
+> directly and passes a clock, so every offline test of the §2-D plane exercised a tool set
+> production never builds. The SMOKE path pins its own clock and hid it from the other direction.
+> `__runCockpitAgentWithScript` now accepts `clientContext` so the plumbing is assertable at $0 —
+> that shim is the ONLY offline surface that can see this class of bug, and new loop-level inputs
+> should get a test there, not in `cockpitTools.test.ts`.
+> **Diagnosing paid runs cheaply:** `stageCrmWrite` emits one enum-only line per refusal
+> (`{"event":"stageCrmWrite.refused","reason","ops","dueProvided","noteProvided"}` — op TYPES and
+> booleans only, §4-clean). Capture `npx convex logs` to a file BEFORE launching an eval and the
+> failure explains itself; run `7e375c3c` produced seven identical `no_clock` lines that turned a
+> two-phase guessing game into a one-line diagnosis. Fixture 36 then passed at `--only 36`, run
+> `266ef8f4`, **$0.0056, first attempt, body byte-unchanged** — so no re-gate is owed.
+> SCOPE: `llm.ts` only. No fixture, no runner, no gate changed.)
+>
+> Previously verified: 2026-08-09 (Plan 19-10 — **THE OFFLINE GATE CAN RUN AGAIN, AND IT IMMEDIATELY
 > CAUGHT A REAL DEFECT.** Three things landed in `run-eval-golden.mjs`.
 > **(1) `--self-check` is GREEN for the first time since Phase 20.** It had been red because `media`
 > is a dispatchable route whose skill `media-director` is not in `GATED_SKILLS` — but `skill.ts`
