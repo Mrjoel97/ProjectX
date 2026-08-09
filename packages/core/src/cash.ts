@@ -21,7 +21,7 @@
  * metrics this tenant should see at all.
  */
 
-import type { RevenueStage, Tier } from "./businessProfile";
+import type { Tier } from "./businessProfile";
 import { cfa, INDUSTRY_MULTIPLE, ltgpCac, round2 } from "./growth/financialSpine";
 import type { Scorecard } from "./growth/scorecard";
 
@@ -646,20 +646,23 @@ export type CashSolvency = {
  * not a gap in their answers, and "MRR $0" would describe a failing subscription business that does
  * not exist.
  *
- * `revenueStage` is accepted (it is the natural pairing with `tier` on this page, and a future cut
- * of this layer may need it) but not read by any branch below — `not-applicable` is a TIER decision
- * only, per the design note above. ponytail: unused for now; drop from the signature if a later task
- * proves no branch will ever need it.
+ * Deliberately NOT tier-and-revenue-stage: `revenueStage` was considered and rejected. A pre-revenue
+ * startup that has not answered the MRR question is `unknown` — "never asked" — by this module's own
+ * definition; making it `not-applicable` from the stage alone would be exactly the "inferred from
+ * absent data" move `CashFigure`'s four states exist to forbid. Tier is a structural fact about the
+ * business (does a monthly-recurring or a working-capital concept even apply to it); revenue stage
+ * is a fact about the answer to a question that still needs asking. Do not thread it back in.
  */
-export function solvency(args: {
-  inputs: CashInputs;
-  tier: Tier;
-  revenueStage: RevenueStage | null;
-  nowMs: number;
-}): CashSolvency {
+export function solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number }): CashSolvency {
   const { inputs, tier, nowMs } = args;
-  const recurringApplies = tier !== "solopreneur";
-  const workingCapitalApplies = tier === "sme" || tier === "enterprise";
+  // Derived from the ONE catalogue (`CASH_INPUTS`) rather than restated as tier-comparison booleans:
+  // the panel's own `tiers` list on the `mrr`/`receivables`/`payables` specs is already the single
+  // source of "which tiers see this field." Two independent tier checks agreeing today is exactly
+  // the drift risk CLAUDE.md §1 exists to prevent — edit `CASH_INPUTS.tiers` and a hand-rolled
+  // `tier === "sme" || tier === "enterprise"` here would silently keep the old answer.
+  const tierFields = new Set(cashInputsForTier(tier).map((spec) => spec.field));
+  const recurringApplies = tierFields.has("mrr");
+  const workingCapitalApplies = tierFields.has("receivables") && tierFields.has("payables");
 
   // mrr is surfaced DIRECTLY as a figure (unlike cashOnHand/monthlyOperatingCost/receivables/
   // payables below, which are only ever CONSUMED through requireInputs+valueOf on the way to a

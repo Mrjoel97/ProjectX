@@ -3,6 +3,7 @@ import {
   activityFromSends,
   CASH_INPUTS,
   cashInputSpec,
+  cashInputsForTier,
   needsConfirmation,
   requireInputs,
   solvency,
@@ -11,6 +12,7 @@ import {
   unitEconomics,
   validateCashInput,
 } from "./cash";
+import { TIERS } from "./businessProfile";
 import { emptyScorecard } from "./growth/scorecard";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -428,7 +430,7 @@ describe("unit economics", () => {
 });
 
 const sol = (values: Record<string, number>, tier = "startup" as const) =>
-  solvency({ inputs: withInputs(values), tier, revenueStage: "early-revenue", nowMs: NOW });
+  solvency({ inputs: withInputs(values), tier, nowMs: NOW });
 
 describe("solvency — the finance-ops layer", () => {
   test("runway is cash over monthly burn, in months", () => {
@@ -469,7 +471,6 @@ describe("solvency — the finance-ops layer", () => {
     const result = solvency({
       inputs: withInputs({ mrr: 5_000 }),
       tier: "solopreneur",
-      revenueStage: "early-revenue",
       nowMs: NOW,
     });
     expect(result.mrr).toMatchObject({ state: "not-applicable" });
@@ -492,7 +493,6 @@ describe("solvency — the finance-ops layer", () => {
     const result = solvency({
       inputs: withInputs({ receivables: 30_000, payables: 45_000 }),
       tier: "sme",
-      revenueStage: "steady-revenue",
       nowMs: NOW,
     });
     expect(result.workingCapital).toMatchObject({ state: "known", value: -15_000 });
@@ -516,9 +516,29 @@ describe("solvency — the finance-ops layer", () => {
         { field: "mrr", value: 5_000, statedAt: NOW - 91 * DAY, stale: true },
       ] as never),
       tier: "startup",
-      revenueStage: "early-revenue",
       nowMs: NOW,
     });
     expect(result.mrr).toMatchObject({ state: "known", origin: "stated", stale: true });
+  });
+
+  // recurringApplies/workingCapitalApplies are DERIVED from CASH_INPUTS's own `tiers` lists, not
+  // restated as hand-rolled tier comparisons — this pins the agreement BOTH directions, so an edit
+  // to the panel's `tiers` (the stated single source of "which tiers see this field") cannot
+  // silently leave these two booleans on the old answer while the collection panel asks (or stops
+  // asking) the tier for the number.
+  test("not-applicable agrees with the catalogue's own tiers list, for every tier", () => {
+    for (const tier of TIERS) {
+      const result = solvency({
+        inputs: withInputs({ mrr: 1, receivables: 1, payables: 1 }),
+        tier,
+        nowMs: NOW,
+      });
+      const offersMrr = cashInputsForTier(tier).some((spec) => spec.field === "mrr");
+      expect(result.mrr.state === "not-applicable").toBe(!offersMrr);
+      const offersWorkingCapital = cashInputsForTier(tier).some(
+        (spec) => spec.field === "receivables",
+      );
+      expect(result.workingCapital.state === "not-applicable").toBe(!offersWorkingCapital);
+    }
   });
 });

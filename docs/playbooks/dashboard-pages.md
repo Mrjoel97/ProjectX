@@ -1,10 +1,21 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 7 — `solvency()` adds the finance-ops
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 7 REVIEW FIX — `revenueStage` deleted
+> from `solvency()`'s signature. It was threaded through as `Tier`'s natural pairing but never
+> consulted by a single conditional; the reviewer traced it forward and found wiring it would have
+> been WRONG anyway — inferring a pre-revenue startup's MRR as `not-applicable` from its stage is
+> exactly the "inferred from absent data" move `CashFigure`'s four states forbid. An unanswered MRR
+> question is `unknown` regardless of stage; only TIER is a structural fact about whether the concept
+> applies at all. Also: `recurringApplies`/`workingCapitalApplies` no longer restate `CASH_INPUTS`'s
+> own `tiers` lists as hand-rolled tier comparisons (`tier !== "solopreneur"`, `tier === "sme" ||
+> "enterprise"`) — both now derive from `cashInputsForTier(tier)`, the one function already reading
+> that catalogue, so an edit to a spec's `tiers` list cannot silently leave these two booleans on the
+> old answer. See the "Cash — solvency" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 7 — `solvency()` adds the finance-ops
 > layer: `runway`, `netBurn`, `mrr`, `arr`, `workingCapital`, DELIBERATELY OUTSIDE the Hormozi
 > framework and marked as such in the module comment — none of those five words appears anywhere in
-> the three source books. `not-applicable` is decided by TIER alone (`recurringApplies = tier !==
-> "solopreneur"`, `workingCapitalApplies = tier === "sme" || "enterprise"`), never inferred from an
+> the three source books. `not-applicable` is decided by TIER alone, never inferred from an
 > absent value — a solopreneur's stated MRR (if any legacy row somehow has one) never leaks through
 > as a real figure. See the "Cash — solvency" section below.)
 >
@@ -296,23 +307,42 @@ is in, what it was derived from, and how many customers it rests on.
 
 ### Cash — solvency (Task 7)
 
-`solvency(args: { inputs: CashInputs; tier: Tier; revenueStage: RevenueStage | null; nowMs: number })`
-adds `runway`, `netBurn`, `mrr`, `arr`, `workingCapital` as `CashFigure`s. **This layer is
-deliberately OUTSIDE the Hormozi framework** — none of those five words appears anywhere in the
-three source books — and the module comment says so plainly rather than presenting it as part of
-the spine. It earns its place as the survival metric for exactly the population the books exclude:
-businesses running on outside money, for whom the constraint is the date the money ends.
+`solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number })` adds `runway`, `netBurn`, `mrr`,
+`arr`, `workingCapital` as `CashFigure`s. **This layer is deliberately OUTSIDE the Hormozi
+framework** — none of those five words appears anywhere in the three source books — and the module
+comment says so plainly rather than presenting it as part of the spine. It earns its place as the
+survival metric for exactly the population the books exclude: businesses running on outside money,
+for whom the constraint is the date the money ends.
 
-- **`not-applicable` is decided by TIER, never inferred from absent data.** `recurringApplies =
-  tier !== "solopreneur"` gates `mrr`/`arr`; `workingCapitalApplies = tier === "sme" ||
-  tier === "enterprise"` gates `workingCapital`. A solopreneur's `mrr` figure is
-  `not-applicable` BEFORE `statedFigure` ever runs — a solopreneur with project revenue has no
-  meaningful monthly recurring figure, which is a fact about their business, not a gap in their
-  answers. "MRR $0" would describe a failing subscription business that does not exist. The three
-  states stay distinct end to end: a startup with `mrr` unanswered is `unknown`; a startup whose
-  subscriptions billed nothing is a real measured `known`/`value: 0`; a solopreneur is
-  `not-applicable` with no `value` field at all (pinned by a test that greps the serialized figure
-  for `"value":0`).
+- **`not-applicable` is decided by TIER, never inferred from absent data — and NEVER by
+  `revenueStage` (REVIEW FIX).** The first version's signature also took `revenueStage: RevenueStage
+  | null`, "the natural pairing with `tier`," but no branch ever read it. The reviewer traced it
+  forward through the whole plan (it was also threaded into the not-yet-built Task 9 convex query
+  and `cash.shape`) and found no conditional anywhere consulted it — and that wiring one would have
+  been WRONG, not just unused: making a pre-revenue startup's `mrr` `not-applicable` from its stage
+  infers a permanent structural answer from a field that only describes where the business is on the
+  revenue curve, exactly the "inferred from absent data" move `CashFigure`'s four states exist to
+  forbid. A pre-revenue startup that has not answered the MRR question is `unknown` — "never asked"
+  — by this module's own definition, regardless of stage. `revenueStage` is deleted from the
+  signature; do not thread it back in on the strength of the design spec's "tier and revenue stage"
+  line — that line was never actually implemented and re-adding the parameter without a correct use
+  for it is worse than not having it.
+  **`recurringApplies`/`workingCapitalApplies` are DERIVED from `CASH_INPUTS` (REVIEW FIX), not
+  restated as hand-rolled tier comparisons.** The first version had `tier !== "solopreneur"` and
+  `tier === "sme" || tier === "enterprise"` inline — a second, independent copy of exactly what
+  `mrr.tiers`/`receivables.tiers`/`payables.tiers` on the catalogue already say, agreeing today only
+  by coincidence. Both booleans now come from `cashInputsForTier(tier)` (already exported, already
+  the panel's own tier filter), so an edit to a spec's `tiers` list cannot silently leave these two
+  booleans on the old answer while the collection panel starts asking (or stops asking) that tier for
+  the number. A solopreneur's `mrr` figure is `not-applicable` BEFORE `statedFigure` ever runs — a
+  solopreneur with project revenue has no meaningful monthly recurring figure, which is a fact about
+  their business, not a gap in their answers. "MRR $0" would describe a failing subscription business
+  that does not exist. The three states stay distinct end to end: a startup with `mrr` unanswered is
+  `unknown`; a startup whose subscriptions billed nothing is a real measured `known`/`value: 0`; a
+  solopreneur is `not-applicable` with no `value` field at all (pinned by a test that greps the
+  serialized figure for `"value":0`) — and a dedicated test loops every `Tier` and asserts
+  `not-applicable` agrees with `cashInputsForTier` in both directions, for both `mrr` and
+  `workingCapital`.
 - **Every degenerate case has its own guard, not a shared "looks fine" fallback:**
   - **Monthly cost = 0 → `not-computable`, never infinite runway.** Checked BEFORE the division, so
     `Infinity` can never enter the return value (pinned by a test that stringifies the whole result
@@ -343,18 +373,13 @@ businesses running on outside money, for whom the constraint is the date the mon
   shipped a safeguard that failed OPEN with no visible symptom); a dedicated test constructs a stale
   `mrr` (`statedAt: NOW - 91 * DAY`) and asserts `stale: true` comes through unchanged, rather than
   trusting that routing through `statedFigure` is enough by inspection alone.
-- **`revenueStage` is accepted but not read by any branch** — `not-applicable` is a TIER decision
-  only, per the design note above, and no test differentiates on it. Left in the signature (marked
-  `ponytail:` in `cash.ts`) because it is the natural pairing with `tier` this page always has
-  available and a future cut of this layer may need it; the honest alternative would be dropping it
-  from the signature, which is a call for whoever owns that future cut, not this task.
 - **No new arithmetic beyond the four guarded formulas above** — `arr` and `workingCapital` are
   spreadsheet-simple, and `runway`/`netBurn` reuse the same `Math.max(0, …)` clamp-and-round-to-one-
   decimal shape `unitEconomics`'s `cacPayback` already established, not a second rounding
   convention.
-- Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (11 tests: the
-  brief's original 10 plus one added staleness pin) — `pnpm --filter @pikar/core test cash` — 52/52
-  (41 pre-existing + 11 new). `pnpm typecheck` — 10/10 packages green.
+- Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (13 tests: the
+  brief's original 10, the staleness pin, and the REVIEW FIX's catalogue-agreement test looping every
+  `Tier`) — `pnpm --filter @pikar/core test cash` — 53/53. `pnpm typecheck` — 10/10 packages green.
 
 ### Cash — FigureTile and the connected page (Task 6)
 
