@@ -16,7 +16,12 @@
 import { validateSpendMovement } from "@pikar/core";
 import { type ObjectType, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 
 const railValidator = v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest"));
 const phaseValidator = v.union(
@@ -132,16 +137,24 @@ export const record = internalMutation({
   handler: (ctx, args) => recordMovement(ctx, args),
 });
 
-/** The tenant's coverage start, or null when instrumentation never began (unknown, not zero). */
+/**
+ * The tenant's coverage start, or null when instrumentation never began (unknown, not zero).
+ *
+ * The plain-function half exists because `finance.ts` reads this from a `tenantQuery`, and a Convex
+ * query cannot `runQuery`. Same split, same reason, as `reserveFolderInner`/`reserveFolder`: the
+ * cap and the index live HERE, once, so a reader cannot re-derive its own bounded read.
+ */
+export async function coverageFor(ctx: QueryCtx, tenantId: string): Promise<number | null> {
+  const row = await ctx.db
+    .query("spendCoverage")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .unique();
+  return row?.coverageStartedAt ?? null;
+}
+
 export const coverage = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("spendCoverage")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
-      .unique();
-    return row?.coverageStartedAt ?? null;
-  },
+  handler: (ctx, args) => coverageFor(ctx, args.tenantId),
 });
 
 /**
@@ -149,6 +162,47 @@ export const coverage = internalQuery({
  * Every caller gets a cap whether or not it asked for one — a Finance page must not be able to
  * ask a long-lived tenant for its whole history in one query.
  */
+export interface ListEventsArgs {
+  tenantId: string;
+  sinceMs: number;
+  untilMs: number;
+  rail?: "reasoning" | "media" | "ingest";
+  limit?: number;
+}
+
+/** The cap every caller gets, asked for or not. Exported so a reader can say WHY it is partial. */
+export const SPEND_EVENT_PAGE_LIMIT = EVENT_PAGE_LIMIT;
+
+/** The plain-function half of `listEvents`, for a `tenantQuery` — see `coverageFor`. */
+export async function listEventsFor(
+  ctx: QueryCtx,
+  args: ListEventsArgs,
+): Promise<Doc<"spendEvents">[]> {
+  const limit = Math.max(1, Math.min(EVENT_PAGE_LIMIT, Math.floor(args.limit ?? EVENT_PAGE_LIMIT)));
+  const rail = args.rail;
+  if (rail === undefined) {
+    return await ctx.db
+      .query("spendEvents")
+      .withIndex("by_tenant_createdAt", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .gte("createdAt", args.sinceMs)
+          .lt("createdAt", args.untilMs),
+      )
+      .take(limit);
+  }
+  return await ctx.db
+    .query("spendEvents")
+    .withIndex("by_tenant_rail_createdAt", (q) =>
+      q
+        .eq("tenantId", args.tenantId)
+        .eq("rail", rail)
+        .gte("createdAt", args.sinceMs)
+        .lt("createdAt", args.untilMs),
+    )
+    .take(limit);
+}
+
 export const listEvents = internalQuery({
   args: {
     tenantId: v.string(),
@@ -157,32 +211,5 @@ export const listEvents = internalQuery({
     rail: v.optional(railValidator),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args): Promise<Doc<"spendEvents">[]> => {
-    const limit = Math.max(
-      1,
-      Math.min(EVENT_PAGE_LIMIT, Math.floor(args.limit ?? EVENT_PAGE_LIMIT)),
-    );
-    const rail = args.rail;
-    if (rail === undefined) {
-      return await ctx.db
-        .query("spendEvents")
-        .withIndex("by_tenant_createdAt", (q) =>
-          q
-            .eq("tenantId", args.tenantId)
-            .gte("createdAt", args.sinceMs)
-            .lt("createdAt", args.untilMs),
-        )
-        .take(limit);
-    }
-    return await ctx.db
-      .query("spendEvents")
-      .withIndex("by_tenant_rail_createdAt", (q) =>
-        q
-          .eq("tenantId", args.tenantId)
-          .eq("rail", rail)
-          .gte("createdAt", args.sinceMs)
-          .lt("createdAt", args.untilMs),
-      )
-      .take(limit);
-  },
+  handler: (ctx, args): Promise<Doc<"spendEvents">[]> => listEventsFor(ctx, args),
 });

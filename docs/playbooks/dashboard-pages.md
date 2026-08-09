@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-08 (Plans 26-06 spend ledger core + 26-07 reasoning/ingest instrumentation)
+> Last verified: 2026-08-09 (Plan 26-09 tenant/owner Cost Console projections and controls)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -254,12 +254,74 @@ decides whether a spend may happen, and nothing here may be relaxed to make a re
   the same transaction, via `spendLedger.recordMovement` — the plain-function half of `record`. The
   writers, the correlation policy and what is deliberately NOT recorded live in
   `docs/playbooks/guardrails.md` §"Phase 26"; Finance is a READER and must not re-derive any of it.
-  The media rail is 26-08 and is not instrumented yet, so a media window is still `unknown`.
+- **Who writes (26-08).** The media rail is instrumented too, so all three rails are covered. It is
+  the one rail whose two planes diverge on AMOUNT by design (`docs/playbooks/media.md`): the limiter
+  takes the whole batch estimate up front and never refunds, so `reserved − actual` is a PERMANENT
+  over-reservation rather than money in flight. `UNLANDED_RESOLVES.media` is `false` and says so in
+  code; a surface that calls it "pending" is ignoring an explicit fact.
 - **A schema source scan must pin the DECLARATION, not the print width.** `dashboardSchema.test.ts`
   compares whitespace-free and normalizes the trailing comma before `)`, because the formatter adds
   one when it wraps a call across lines and drops it when the call fits on one. Commit `b74c7af`
   re-wrapped `cancelKind` onto a single line and turned this gate red without changing the schema's
   meaning; `dense()` exists so that cannot happen again, and it still goes red on a real change.
+
+### Finance projections and owner controls (26-09)
+
+`packages/backend/convex/finance.ts` is the READ side. It returns the two planes side by side and
+never derives one from the other: `rails` is what the limiter will enforce on the next call,
+`tracked` is what the ledger observed. `tracked` can be `coverage: "unknown"` while `rails` is
+perfectly known — that is not an inconsistency, it is the difference between a gauge and a record.
+
+- **The tenant surface must expose no deployment-global state.** `guardrails.remainingDailyCents`
+  and its media/ingest siblings return `min(tenant, deployment)` — correct for sizing a sub-agent
+  envelope, WRONG here, because that minimum leaks the keyless ceiling's utilization to every tenant
+  that can read it. `finance.summary` reads the PERSONAL window only; the three deployment ceilings
+  are `finance.globalRails`, an `ownerQuery`. A test drains all three deployment windows and asserts
+  no deployment constant appears anywhere in the tenant payload.
+- **`getValue` returns STORED state, not a roll-forward**, so a rail must be rolled to `now` before
+  a person sees it — with the component's own exported `calculateRateLimit`, never a
+  reimplementation. `guardrails.refundableCents` learned this by refunding 2900 against a capacity of
+  2500; the Finance tile is where it bites the other way, telling a tenant with a full allowance that
+  they are out of budget because the window rolled overnight with nothing written since.
+- **`resetsAtMs` is not midnight anywhere.** A fixed window with no `start` is anchored to the rail's
+  FIRST spend, so each rail resets on its own offset. It is returned as an epoch instant labelled
+  `resetTimeZone: "UTC"` — the ENFORCEMENT clock, deliberately separate from `window.timeZone`, which
+  is the browser-derived DISPLAY timezone and never reaches a query or a filter.
+- **The reported window is passed to `aggregateSpend` UNCLAMPED.** Clamping it up to
+  `coverageStartedAt` would turn an unknown stretch into a silently shorter window with a confident,
+  wrong total. Each `spendSeries` bucket is aggregated on its own for the same reason, so a bucket
+  before coverage reports `unknown` instead of inheriting the window's verdict.
+- **A window that fills the 500-row cap is `partial` + `"row-cap"`**, and its totals are
+  under-reported. Never render a capped window's total as the period's spend.
+- **`mediaLedger` uses Convex's own cursor pagination**, because a batch's lines all share one
+  `createdAt`; the index cursor carries the document id, so a page boundary inside a timestamp tie
+  neither repeats nor drops a row. A hand-rolled `createdAt` cursor cannot do that.
+- **Reads go through `spendLedger`'s plain-function halves** (`coverageFor`, `listEventsFor`), added
+  in 26-09 for the same reason as `reserveFolderInner`/`reserveFolder`: a Convex query cannot
+  `runQuery`, and the cap and index must live in ONE place or the reader grows a second definition of
+  the bounded read.
+
+**Operator blast radius — the owner controls are deployment-wide, not per tenant.**
+
+| Control | Effect | Blast radius | Rollback |
+|---|---|---|---|
+| `finance.setMasterKillSwitch` | `guardrailConfig.killSwitch` | ALL tenants, ALL model calls, incl. the email cockpit and every ingest path | flip it back; nothing is lost, refused calls were never charged |
+| `finance.setMediaKillSwitch` | `guardrailConfig.mediaKillSwitch` | ALL tenants' paid generation only; the cockpit keeps running | flip it back |
+| `finance.setPerRequestBudget` | `guardrailConfig.budgetUsdPerRequest` | ALL tenants' `chooseModel` ceiling; too low refuses every request as `over_budget` | set the previous value, which the audit row records as `from` |
+
+- **The wrappers are the boundary, not the UI.** All six owner functions are `ownerQuery`/
+  `ownerMutation`, so a non-owner is rejected before the handler reads or writes. Hiding a control in
+  the console is cosmetic. `requiresConfirmation` is code-owned on every control so the console
+  cannot ship a one-click deployment-wide pause by forgetting a prop.
+- **One upsert writes every field.** `patchControls` merges over the effective `getGuardrailConfig`,
+  so the insert branch can never create a row with one field set and the others missing — which is
+  what makes the default-on-read contract survive the first write.
+- **One audit row per ACCEPTED transition, none for a no-op** (the `owner.bootstrapOwner`
+  precedent): an event for a change that did not happen makes the log lie about when the deployment
+  moved. The payload key set is exactly `control,from,to` — booleans, numbers and a code-owned
+  control name, nothing identifying (§4).
+- **Every mutation returns the re-read effective state**, not the argument it was given, so a write
+  a concurrent transaction overwrote cannot be reported as success.
 
 ## How to change safely
 
@@ -349,7 +411,7 @@ node scripts/check-playbooks.mjs
 | Page | Safe rollback | Must remain active/retained |
 |------|---------------|-----------------------------|
 | Approvals | Disable nav/route and use workspace, `/review`, `/requests` | plan state, discard/cancel provenance and delivery progress |
-| Finance | Disable the route and owner controls | spend-event instrumentation, coverage start and enforcement limiters |
+| Finance | Disable the route and owner controls | spend-event instrumentation, coverage start, enforcement limiters, and the operator paths `guardrails:setKillSwitch` / `setMediaKillSwitch` (`npx convex run`), which stay the fallback when the console is off |
 | Content | Disable route/promotion control | provenance and already-promoted/ingesting rows; never silently demote |
 | Reports | Disable route and pack generation | immutable generated artifacts/snapshots and safe audit metadata |
 | Pipeline | Hide the Phase-19 route | suppression, consent, send-terminal guards and postal footer |
