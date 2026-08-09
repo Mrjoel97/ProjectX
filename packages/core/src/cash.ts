@@ -21,7 +21,7 @@
  * metrics this tenant should see at all.
  */
 
-import type { Tier } from "./businessProfile";
+import type { RevenueStage, Tier } from "./businessProfile";
 import { cfa, INDUSTRY_MULTIPLE, ltgpCac, round2 } from "./growth/financialSpine";
 import type { Scorecard } from "./growth/scorecard";
 
@@ -621,5 +621,126 @@ export function unitEconomics(args: {
     // referralPct IS a CashInputField (CASH_INPUTS) with a real CashInputState — it gets the same
     // staleness treatment every other stated cash input gets, through the one shared function.
     referralPct: statedFigure(inputs.referralPct, cashInputSpec("referralPct"), nowMs),
+  };
+}
+
+// ── Solvency: the finance-ops layer, deliberately OUTSIDE the Hormozi framework ───────────────
+
+export type CashSolvency = {
+  runway: CashFigure;
+  netBurn: CashFigure;
+  mrr: CashFigure;
+  arr: CashFigure;
+  workingCapital: CashFigure;
+};
+
+/**
+ * The finance-ops layer. DELIBERATELY OUTSIDE the Hormozi framework — none of `runway`, `burn`,
+ * `MRR`, `ARR` or `working capital` appears anywhere in the three source books, and the page marks
+ * this section as such rather than presenting it as part of the spine. It earns its place because
+ * it is the survival metric for exactly the population the books exclude: businesses running on
+ * outside money, for whom the constraint is the date the money ends.
+ *
+ * `not-applicable` here is decided by the TIER, never inferred from absent data. A solopreneur with
+ * project revenue has no meaningful monthly recurring figure — that is a fact about their business,
+ * not a gap in their answers, and "MRR $0" would describe a failing subscription business that does
+ * not exist.
+ *
+ * `revenueStage` is accepted (it is the natural pairing with `tier` on this page, and a future cut
+ * of this layer may need it) but not read by any branch below — `not-applicable` is a TIER decision
+ * only, per the design note above. ponytail: unused for now; drop from the signature if a later task
+ * proves no branch will ever need it.
+ */
+export function solvency(args: {
+  inputs: CashInputs;
+  tier: Tier;
+  revenueStage: RevenueStage | null;
+  nowMs: number;
+}): CashSolvency {
+  const { inputs, tier, nowMs } = args;
+  const recurringApplies = tier !== "solopreneur";
+  const workingCapitalApplies = tier === "sme" || tier === "enterprise";
+
+  // mrr is surfaced DIRECTLY as a figure (unlike cashOnHand/monthlyOperatingCost/receivables/
+  // payables below, which are only ever CONSUMED through requireInputs+valueOf on the way to a
+  // derived figure) — so it is the one field here that must route through `statedFigure`, the same
+  // way `referralPct` does in `unitEconomics` above. Not-applicable is checked FIRST and short-
+  // circuits `statedFigure` entirely: a solopreneur's stated MRR value (if any legacy row has one)
+  // must never leak through as a real figure.
+  const mrrFigure: CashFigure = !recurringApplies
+    ? notApplicable(
+        "Project revenue has no monthly recurring figure. This is not zero — it does not apply.",
+      )
+    : statedFigure(inputs.mrr, cashInputSpec("mrr"), nowMs);
+
+  const arrFigure: CashFigure =
+    mrrFigure.state !== "known"
+      ? mrrFigure
+      : derived({
+          value: mrrFigure.value * 12,
+          unit: "usd",
+          from: `${usd(mrrFigure.value)} a month × 12`,
+        });
+
+  // Net burn: what leaves, minus what recurs. Clamped at zero — a profitable month is "not
+  // burning", and a negative burn rendered as a number reads as a deeper hole than reality.
+  const netBurnFigure: CashFigure = (() => {
+    const missing = requireInputs(inputs, ["monthlyOperatingCost"]);
+    if (missing) return missing;
+    const cost = valueOf(inputs, "monthlyOperatingCost");
+    const recurring = mrrFigure.state === "known" ? mrrFigure.value : 0;
+    const burn = Math.max(0, cost - recurring);
+    return derived({
+      value: burn,
+      unit: "usd",
+      from:
+        recurring > 0
+          ? `${usd(cost)} out against ${usd(recurring)} recurring in`
+          : `${usd(cost)} a month out`,
+    });
+  })();
+
+  const runwayFigure: CashFigure = (() => {
+    const missing = requireInputs(inputs, ["cashOnHand", "monthlyOperatingCost"]);
+    if (missing) return missing;
+    if (valueOf(inputs, "monthlyOperatingCost") === 0) {
+      return notComputable("No operating cost recorded, so there is no runway to count down.");
+    }
+    if (netBurnFigure.state !== "known") return netBurnFigure;
+    if (netBurnFigure.value <= 0) {
+      return notApplicable("Not burning — recurring revenue covers the monthly cost.");
+    }
+    const cash = valueOf(inputs, "cashOnHand");
+    // Never negative: cash cannot go below zero on this page, and a negative month count is not a
+    // figure to put in front of a person.
+    const months = Math.max(0, Math.round((cash / netBurnFigure.value) * 10) / 10);
+    return derived({
+      value: months,
+      unit: "months",
+      from: `${usd(cash)} on hand against ${usd(netBurnFigure.value)} a month of net burn`,
+    });
+  })();
+
+  const workingCapitalFigure: CashFigure = (() => {
+    if (!workingCapitalApplies) {
+      return notApplicable("Working capital is an established-business measure.");
+    }
+    const missing = requireInputs(inputs, ["receivables", "payables"]);
+    if (missing) return missing;
+    const receivables = valueOf(inputs, "receivables");
+    const payables = valueOf(inputs, "payables");
+    return derived({
+      value: receivables - payables,
+      unit: "usd",
+      from: `${usd(receivables)} owed to you against ${usd(payables)} you owe`,
+    });
+  })();
+
+  return {
+    runway: runwayFigure,
+    netBurn: netBurnFigure,
+    mrr: mrrFigure,
+    arr: arrFigure,
+    workingCapital: workingCapitalFigure,
   };
 }

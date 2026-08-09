@@ -5,6 +5,7 @@ import {
   cashInputSpec,
   needsConfirmation,
   requireInputs,
+  solvency,
   statedFigure,
   toCashInputs,
   unitEconomics,
@@ -423,5 +424,101 @@ describe("unit economics", () => {
     });
     expect(result.grossMargin).toMatchObject({ state: "unknown" });
     expect(result.cohortChurn).toMatchObject({ state: "unknown" });
+  });
+});
+
+const sol = (values: Record<string, number>, tier = "startup" as const) =>
+  solvency({ inputs: withInputs(values), tier, revenueStage: "early-revenue", nowMs: NOW });
+
+describe("solvency — the finance-ops layer", () => {
+  test("runway is cash over monthly burn, in months", () => {
+    const result = sol({ cashOnHand: 60_000, monthlyOperatingCost: 10_000 });
+    expect(result.runway).toMatchObject({ state: "known", value: 6, unit: "months" });
+  });
+
+  test("a monthly cost of zero is NOT infinite runway", () => {
+    const result = sol({ cashOnHand: 60_000, monthlyOperatingCost: 0 });
+    expect(result.runway).toEqual({
+      state: "not-computable",
+      because: expect.stringMatching(/no operating cost recorded/i),
+    });
+    expect(JSON.stringify(result)).not.toContain("Infinity");
+  });
+
+  test("zero cash with a real burn is 0 months, never negative", () => {
+    const result = sol({ cashOnHand: 0, monthlyOperatingCost: 5_000 });
+    expect(result.runway).toMatchObject({ state: "known", value: 0 });
+  });
+
+  test("a profitable business is NOT BURNING — not a month count", () => {
+    const result = sol({ cashOnHand: 60_000, monthlyOperatingCost: 10_000, mrr: 15_000 });
+    expect(result.netBurn).toMatchObject({ state: "known", value: 0 });
+    expect(result.runway).toEqual({
+      state: "not-applicable",
+      because: expect.stringMatching(/not burning/i),
+    });
+  });
+
+  test("ARR is derived from MRR and says so", () => {
+    const result = sol({ mrr: 5_000 });
+    expect(result.arr).toMatchObject({ state: "known", origin: "derived", value: 60_000 });
+    expect((result.arr as { from: string }).from).toMatch(/5,000/);
+  });
+
+  test("MRR is NOT-APPLICABLE for a solopreneur — lumpy project revenue has no monthly figure", () => {
+    const result = solvency({
+      inputs: withInputs({ mrr: 5_000 }),
+      tier: "solopreneur",
+      revenueStage: "early-revenue",
+      nowMs: NOW,
+    });
+    expect(result.mrr).toMatchObject({ state: "not-applicable" });
+    expect(result.arr).toMatchObject({ state: "not-applicable" });
+    // The collapse this test exists to prevent: "MRR $0" to a project-based consultant implies a
+    // failing subscription business that does not exist.
+    expect(result.mrr).not.toMatchObject({ state: "unknown" });
+    expect(JSON.stringify(result.mrr)).not.toContain('"value":0');
+  });
+
+  test("a startup with no MRR entered is UNKNOWN, not not-applicable", () => {
+    expect(sol({ cashOnHand: 1 }).mrr).toMatchObject({ state: "unknown" });
+  });
+
+  test("a startup billing nothing this month is a real measured ZERO", () => {
+    expect(sol({ mrr: 0 }).mrr).toMatchObject({ state: "known", value: 0 });
+  });
+
+  test("working capital is receivables minus payables, and can be negative", () => {
+    const result = solvency({
+      inputs: withInputs({ receivables: 30_000, payables: 45_000 }),
+      tier: "sme",
+      revenueStage: "steady-revenue",
+      nowMs: NOW,
+    });
+    expect(result.workingCapital).toMatchObject({ state: "known", value: -15_000 });
+  });
+
+  test("working capital is not-applicable below SME", () => {
+    expect(sol({ receivables: 1, payables: 1 }).workingCapital).toMatchObject({
+      state: "not-applicable",
+    });
+  });
+
+  // mrr is the one field solvency() surfaces directly as a stated figure (runway/netBurn/
+  // workingCapital only ever CONSUME cashOnHand/monthlyOperatingCost/receivables/payables through
+  // requireInputs+valueOf, same as unitEconomics does for cac/thirtyDayCashPerCustomer/etc. above —
+  // it is mrr that must route through statedFigure/needsConfirmation like every other stated cash
+  // input, not a hand-rolled check). This plan has shipped a staleness safeguard that failed open
+  // three times already (Tasks 3, 4, 5); this pins the fourth call site.
+  test("mrr surfaces staleness like every other stated cash input, not a hand-rolled check", () => {
+    const result = solvency({
+      inputs: toCashInputs([
+        { field: "mrr", value: 5_000, statedAt: NOW - 91 * DAY, stale: true },
+      ] as never),
+      tier: "startup",
+      revenueStage: "early-revenue",
+      nowMs: NOW,
+    });
+    expect(result.mrr).toMatchObject({ state: "known", origin: "stated", stale: true });
   });
 });

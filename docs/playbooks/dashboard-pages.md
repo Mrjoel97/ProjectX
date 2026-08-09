@@ -1,6 +1,14 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 6 — `unitEconomics` wired to the
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 7 — `solvency()` adds the finance-ops
+> layer: `runway`, `netBurn`, `mrr`, `arr`, `workingCapital`, DELIBERATELY OUTSIDE the Hormozi
+> framework and marked as such in the module comment — none of those five words appears anywhere in
+> the three source books. `not-applicable` is decided by TIER alone (`recurringApplies = tier !==
+> "solopreneur"`, `workingCapitalApplies = tier === "sme" || "enterprise"`), never inferred from an
+> absent value — a solopreneur's stated MRR (if any legacy row somehow has one) never leaks through
+> as a real figure. See the "Cash — solvency" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 6 — `unitEconomics` wired to the
 > Business tab. `convex/cash.ts`'s `inputs` query body was extracted into one shared
 > `inputStatesFor(ctx, tenantId, nowMs)`; the new `unitEconomics` tenantQuery calls the SAME
 > function rather than re-reading `financeInputs`/the scorecard a second way, so the panel and the
@@ -285,6 +293,68 @@ is in, what it was derived from, and how many customers it rests on.
   unknown-not-stale, and a minimal known/null pair each for `grossMargin`/`cohortChurn`.
   `pnpm --filter @pikar/core test cash` — 41/41 (26 pre-existing + 10 from the original Task 5 pass
   + 5 from the review fix). `pnpm typecheck` — 10/10 packages green.
+
+### Cash — solvency (Task 7)
+
+`solvency(args: { inputs: CashInputs; tier: Tier; revenueStage: RevenueStage | null; nowMs: number })`
+adds `runway`, `netBurn`, `mrr`, `arr`, `workingCapital` as `CashFigure`s. **This layer is
+deliberately OUTSIDE the Hormozi framework** — none of those five words appears anywhere in the
+three source books — and the module comment says so plainly rather than presenting it as part of
+the spine. It earns its place as the survival metric for exactly the population the books exclude:
+businesses running on outside money, for whom the constraint is the date the money ends.
+
+- **`not-applicable` is decided by TIER, never inferred from absent data.** `recurringApplies =
+  tier !== "solopreneur"` gates `mrr`/`arr`; `workingCapitalApplies = tier === "sme" ||
+  tier === "enterprise"` gates `workingCapital`. A solopreneur's `mrr` figure is
+  `not-applicable` BEFORE `statedFigure` ever runs — a solopreneur with project revenue has no
+  meaningful monthly recurring figure, which is a fact about their business, not a gap in their
+  answers. "MRR $0" would describe a failing subscription business that does not exist. The three
+  states stay distinct end to end: a startup with `mrr` unanswered is `unknown`; a startup whose
+  subscriptions billed nothing is a real measured `known`/`value: 0`; a solopreneur is
+  `not-applicable` with no `value` field at all (pinned by a test that greps the serialized figure
+  for `"value":0`).
+- **Every degenerate case has its own guard, not a shared "looks fine" fallback:**
+  - **Monthly cost = 0 → `not-computable`, never infinite runway.** Checked BEFORE the division, so
+    `Infinity` can never enter the return value (pinned by a test that stringifies the whole result
+    and asserts the literal string `"Infinity"` is absent).
+  - **Net burn ≤ 0 (recurring revenue covers cost) → `runway` is `not-applicable`, "not burning" —
+    never a month count.** `netBurn` itself is clamped at zero (`Math.max(0, cost - recurring)`): a
+    profitable month renders as "not burning," and a raw negative burn number would read as a
+    deeper hole than reality, the opposite of what happened.
+  - **Cash = 0 with a real burn → `known`, `value: 0`, never negative.** The month count is clamped
+    with the same `Math.max(0, …)` pattern `unitEconomics`'s payback figure already uses.
+  - **Working capital (`receivables − payables`) is allowed to be negative** — payables exceeding
+    receivables is a real, common state, and `knownFigure`/`derived` carry no non-negative guard
+    (confirmed by reading both functions: neither clamps or rejects a negative `value`). A test
+    pins `receivables: 30_000, payables: 45_000` landing at `value: -15_000`.
+- **mrr is the ONE field this function surfaces directly as a figure**, and it is the one field
+  that routes through `statedFigure(inputs.mrr, cashInputSpec("mrr"), nowMs)` — the same shared
+  staleness function `referralPct` uses in `unitEconomics` above, not a hand-rolled branch.
+  `cashOnHand`, `monthlyOperatingCost`, `receivables` and `payables` are never surfaced as their own
+  figures in `CashSolvency` — they are only ever CONSUMED through `requireInputs`+`valueOf` on the
+  way to a derived figure (`runway`, `netBurn`, `workingCapital`), the identical pattern
+  `unitEconomics` already uses for `cac`/`thirtyDayCashPerCustomer`/`grossProfitPerPurchase`/
+  `purchasesPerLifetime`; a derived figure's own staleness is a design question `unitEconomics`
+  already settled (it does not carry one), not a new one this task reopens. `arr` is `derived` from
+  `mrr` (`mrr.value * 12`) and inherits `mrr`'s truth state via `mrrFigure.state !== "known" ?
+  mrrFigure : derived(...)` — an `unknown`/`not-applicable`/`not-computable` `mrr` propagates to
+  `arr` verbatim rather than `arr` re-deriving its own not-applicable check.
+  **This is the fourth call site on this plan for the staleness rule** (Tasks 3, 4 and 5 each
+  shipped a safeguard that failed OPEN with no visible symptom); a dedicated test constructs a stale
+  `mrr` (`statedAt: NOW - 91 * DAY`) and asserts `stale: true` comes through unchanged, rather than
+  trusting that routing through `statedFigure` is enough by inspection alone.
+- **`revenueStage` is accepted but not read by any branch** — `not-applicable` is a TIER decision
+  only, per the design note above, and no test differentiates on it. Left in the signature (marked
+  `ponytail:` in `cash.ts`) because it is the natural pairing with `tier` this page always has
+  available and a future cut of this layer may need it; the honest alternative would be dropping it
+  from the signature, which is a call for whoever owns that future cut, not this task.
+- **No new arithmetic beyond the four guarded formulas above** — `arr` and `workingCapital` are
+  spreadsheet-simple, and `runway`/`netBurn` reuse the same `Math.max(0, …)` clamp-and-round-to-one-
+  decimal shape `unitEconomics`'s `cacPayback` already established, not a second rounding
+  convention.
+- Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (11 tests: the
+  brief's original 10 plus one added staleness pin) — `pnpm --filter @pikar/core test cash` — 52/52
+  (41 pre-existing + 11 new). `pnpm typecheck` — 10/10 packages green.
 
 ### Cash — FigureTile and the connected page (Task 6)
 
