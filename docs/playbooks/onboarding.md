@@ -17,7 +17,12 @@
 > arithmetic must be redone or the next cockpit turn or grounding call throws. `spineForTenant`
 > reads active goals inside its existing try/catch, so a goals read failure degrades the spine to
 > `null` rather than breaking the caller. Parentage (one level, enforced at write time) is UI-only —
-> deliberately dropped from the spine, there is no room for it in a 64-char goal line.
+> deliberately dropped from the spine, there is no room for it in a 64-char goal line. Canvas nodes
+> (`BlueprintCanvas.tsx`) now carry a descriptor line (`SEGMENT_COPY[id].known`) plus up to three
+> single-line fact bullets per segment instead of meta-information alone; document filenames
+> collapsed to a per-segment count (provenance detail stays on the anatomy panel's Knowledge band);
+> and every conditional node row (bullets, milestone flag, footer, draft summary + YOURS/DOC split)
+> must stay mirrored in `nodeHeight`'s row list or the wires drift under zoom.
 >
 > Previously verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
 > end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
