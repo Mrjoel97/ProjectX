@@ -40,7 +40,11 @@ import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
   { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
   { label: "Approvals", href: "/dashboard/approvals", icon: <BellIcon /> },
-  { label: "Finance", icon: <WalletIcon />, soon: true },
+  // Activated 26-10 Task 3 on owner direction, 2026-08-09. The branch below keys off `href`, not
+  // `soon`, so adding the href IS the activation. Rollback is deleting the href — the ledger
+  // writers, coverage start and enforcement limiters keep running regardless (the non-negotiable
+  // rule in docs/playbooks/dashboard-pages.md: a dark window is a permanent hole in the record).
+  { label: "Finance", href: "/dashboard/finance", icon: <WalletIcon /> },
   { label: "Content", icon: <FileIcon />, soon: true },
   { label: "Sales Pipeline", icon: <TrendIcon />, soon: true },
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },

@@ -374,6 +374,27 @@ boundary, per-section `useQuery` so a ledger failure cannot erase the live rails
   `esbuild: { jsx: "automatic" }` to match Next; before that, esbuild's classic runtime made every
   `.tsx` reached from a test need a dead default `React` import or die with `React is not defined`.
 
+**Rollout state, 2026-08-09 — Finance navigation is ACTIVE, on owner direction.** The owner reviewed
+the connected page as owner and directed activation; Task 3 replaced the disabled item with
+`href: "/dashboard/finance"`. Recorded honestly, because the checkpoint's own wording is "owner types
+approved or reports exact defects" and this was a direction to activate rather than a completed
+checklist.
+
+*Verified live in the browser before activation:* the three rails and their three DIFFERENT UTC reset
+instants; `Unknown` rather than `$0` for a pre-coverage window; both unlanded sentences on one page;
+blended unlanded `$6.90` where a blended re-derivation would read `$6.44` (26-08's per-rail decision,
+visible on screen); the two-step arm/confirm; the write and its effective-state readback; the master
+switch staying independent of the media switch; the revert; and exactly two audit rows with keys
+`control,from,to` and actor `owner`.
+
+*NOT observed live, and not claimed:* (1) the non-owner view — `bootstrapOwner` has no inverse, so
+once the reviewing account became owner the "managed by the operator" state was unreachable from it;
+it stays covered by the backend `OWNER_REQUIRED` tests and the non-owner DOM component test.
+(2) Responsive breakpoints — the browser extension's window resize would not move the rendered
+viewport, so that check belongs to the Playwright spec's `setViewportSize`. (3) `finance.spec.ts`
+itself. Evidence rows seeded for this review are permanent and carry the correlation prefix
+`uat-26-10:`.
+
 **Evidence status, 2026-08-09 — the browser gate is NOT green.** Currently passing:
 `pnpm --filter @pikar/web test` (88/88, of which 29 are Cost Console), web typecheck, and the
 production build, in which `/dashboard/finance` appears in the route table. `e2e/finance.spec.ts` is

@@ -12,9 +12,11 @@
 > comment is not a guard; a test is.
 
 > Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
-> `finance.spec.ts`; no cockpit behaviour, tool, gate or stored row changed.**) The Cost Console
-> route ships at `/dashboard/finance` with its rail item still `Soon`, so nothing in the cockpit's
-> navigation moves until that plan's blocking owner UAT passes. Two things in the new spec are worth
+> `finance.spec.ts`, and the Finance rail item went LIVE on owner direction; no cockpit behaviour,
+> tool, gate or stored row changed.**) The Cost Console route is `/dashboard/finance` and its nav
+> item now carries an `href`. The rail branch keys off `href`, not `soon`, so rollback is deleting
+> that one property — and it does NOT stop ledger instrumentation, which must keep running whatever
+> the UI does. Two things in the new spec are worth
 > copying rather than rediscovering: it asserts the NON-OWNER boundary **before** calling
 > `owner:bootstrapOwner`, because that grant has no inverse and the boundary becomes unobservable
 > from the account once it is the owner; and it seeds through the real `spendLedger:record` writer,
