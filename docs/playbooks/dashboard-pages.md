@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 26-10 Task 1 — the connected Cost route, nav still `Soon`, owner UAT pending)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 1 — Finance became a three-tab shell: Business/Pikar spend/Operator, Operator owner-only)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -373,6 +373,38 @@ boundary, per-section `useQuery` so a ledger failure cannot erase the live rails
   are importable, which is why the connected pieces stay module-private. The same config now sets
   `esbuild: { jsx: "automatic" }` to match Next; before that, esbuild's classic runtime made every
   `.tsx` reached from a test need a dead default `React` import or die with `React is not defined`.
+
+### Finance becomes a three-tab shell (cash-business-finance Task 1)
+
+The route is now a three-tab shell, structural move only — no cost behaviour changed.
+`apps/web/app/(app)/dashboard/finance/page.tsx` renders `FinanceTabs.tsx`, which owns the tablist
+and the header; `FinanceView.tsx` no longer renders a page on its own, it exports the tab bodies.
+
+- **Business leads.** `FINANCE_TABS` order is `["business", "spend", "operator"]` and `?tab=`
+  defaults to `business` on an unrecognized or missing value — the tenant's own money outranks the
+  tool's bill. `CashView.tsx`'s `CashTab` is a placeholder in this task; Tasks 2, 3, 6 and 9 build it.
+- **Pikar spend is the shipped Cost console, moved intact, not reopened.** `ConnectedFinance` was
+  renamed to the exported `PikarSpendTab` with its own `<header>` deleted — the shell now owns the
+  one page header — and every other export (`RailsSection`, `TrackedSection`, `LedgerSection`,
+  `RailTile`, `TrackedTotals`, etc.) and their behaviour are untouched.
+- **Operator is owner-only, and hiding it is presentation, not the boundary.** `ConnectedDeployment`
+  was renamed to the exported `OperatorTab`; its body — including the `isOwner ? {} : "skip"` guards
+  on `finance.controls`/`finance.globalRails` — is unchanged. `visibleTabs(isOwner)` filters the tab
+  out of the tablist and `FinanceTabs` mounts the Operator panel only when `isOwner` is true (a
+  hidden-but-mounted panel would still fire the owner queries for a non-owner and throw
+  `OWNER_REQUIRED` into the error boundary). The actual trust boundary remains the `ownerQuery`/
+  `ownerMutation` wrappers on `finance.ts`, exactly as recorded above — moving the tab does not
+  change who Convex lets call them.
+- **Tab mechanics are copied from `dashboard/profile/page.tsx`, not invented**: roving tabindex that
+  moves real DOM focus on arrow-key navigation, `?tab=` read once from `window.location.search`
+  (never `useSearchParams`, which needs a Suspense boundary typecheck cannot see is missing), and
+  `history.replaceState` on switch so a tab change is not a navigation that re-runs every query.
+  Business and Pikar-spend stay mounted and toggle with `hidden`, so a half-typed figure on one tab
+  survives a trip to another.
+- **Test evidence:** `financeView.test.ts` gained a `describe("finance tabs", ...)` block (5 tests)
+  asserting tab order, `visibleTabs` owner-gating, and that every tab carries a sub-heading; every
+  pre-existing assertion in that file stayed green because the pure/exported components it imports
+  were not restructured. `pnpm --filter @pikar/web test` and `pnpm typecheck` both pass.
 
 **Rollout state, 2026-08-09 — Finance navigation is ACTIVE, on owner direction.** The owner reviewed
 the connected page as owner and directed activation; Task 3 replaced the disabled item with

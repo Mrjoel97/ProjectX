@@ -1,5 +1,5 @@
-import { FinanceView } from "./FinanceView";
+import { FinanceTabs } from "./FinanceTabs";
 
 export default function FinancePage() {
-  return <FinanceView />;
+  return <FinanceTabs />;
 }

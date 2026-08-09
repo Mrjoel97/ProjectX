@@ -403,3 +403,30 @@ describe("a deployment-wide change takes two deliberate steps", () => {
     expect(html).toContain('type="number"');
   });
 });
+
+import { FINANCE_TABS, visibleTabs } from "./FinanceTabs";
+
+describe("finance tabs", () => {
+  test("Business leads, because the business's money outranks the tool's bill", () => {
+    expect(FINANCE_TABS[0]?.id).toBe("business");
+    expect(FINANCE_TABS.map((t) => t.id)).toEqual(["business", "spend", "operator"]);
+  });
+
+  test("a non-owner is offered no Operator tab at all", () => {
+    const ids = visibleTabs(false).map((t) => t.id);
+    expect(ids).toEqual(["business", "spend"]);
+    expect(ids).not.toContain("operator");
+  });
+
+  test("an owner is offered all three", () => {
+    expect(visibleTabs(true).map((t) => t.id)).toEqual(["business", "spend", "operator"]);
+  });
+
+  test("exactly one tab is owner-only — hiding more would hide tenant data from a tenant", () => {
+    expect(FINANCE_TABS.filter((t) => t.ownerOnly).map((t) => t.id)).toEqual(["operator"]);
+  });
+
+  test("every tab carries its own sub-heading, so the page frame covers both planes", () => {
+    for (const tab of FINANCE_TABS) expect(tab.subheading.length).toBeGreaterThan(10);
+  });
+});

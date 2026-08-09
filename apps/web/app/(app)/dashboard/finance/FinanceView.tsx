@@ -1,9 +1,11 @@
 "use client";
 
-// FIN-01 Cost Console. THIS PAGE READS WHAT PIKAR SPENDS — it is not a business-money surface.
+// FIN-01 Cost Console, now the Pikar-spend tab plus the owner tab of the three-tab Finance shell
+// (`FinanceTabs.tsx`). THIS MODULE READS WHAT PIKAR SPENDS — it is not a business-money surface.
 // There is no revenue, invoice or cash-position data anywhere in the system, so a "Revenue" tile
 // would be a fabricated number (BRAND §5, owner rename decision 2026-08-07: Finance → Cost; Cash is
-// Phase 28's separate surface). Currency is USD everywhere.
+// the tenant's own money, rendered by the sibling Business tab — `CashView.tsx`). Currency is USD
+// everywhere.
 //
 // THE THREE THINGS THIS PAGE MUST NOT DO, all of them ways of turning a truthful backend into a
 // dishonest screen (docs/playbooks/dashboard-pages.md §"Finance projections and owner controls"):
@@ -942,7 +944,8 @@ function LedgerSection({ report }: { report: ReportWindow }) {
   );
 }
 
-function ConnectedDeployment() {
+/** The deployment-global controls, MOVED INTACT onto the owner-only Operator tab. */
+export function OperatorTab() {
   const viewer = useQuery(api.owner.viewer, {});
   const isOwner = viewer?.isOwner === true;
   // `"skip"` matters here: an owner query fired by a non-owner throws OWNER_REQUIRED and would put
@@ -987,32 +990,14 @@ function ConnectedDeployment() {
   );
 }
 
-function ConnectedFinance() {
+/** The shipped Cost console, MOVED INTACT into a tab. Nothing here is reopened. */
+export function PikarSpendTab() {
   const report = useReportWindow();
   return (
-    <div style={{ display: "grid", gap: "1.75rem", padding: "1.5rem 0" }}>
-      <header style={stack}>
-        <p style={caps}>Spend control · USD</p>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-display)",
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)",
-          }}
-        >
-          Know what it costs
-        </h1>
-        <p style={muted}>
-          Everything Pikar can spend runs through three hard budget rails. This page reads cost only
-          — it has no revenue, invoice or cash data, and it never estimates any.
-        </p>
-      </header>
+    <div style={{ display: "grid", gap: "1.75rem" }}>
       <RailsSection report={report} />
       <TrackedSection report={report} />
       <LedgerSection report={report} />
-      <ConnectedDeployment />
     </div>
   );
 }
@@ -1046,10 +1031,6 @@ class FinanceErrorBoundary extends Component<{ children: ReactNode }, { failed: 
   }
 }
 
-export function FinanceView() {
-  return (
-    <FinanceErrorBoundary>
-      <ConnectedFinance />
-    </FinanceErrorBoundary>
-  );
+export function FinanceView({ children }: { children: ReactNode }) {
+  return <FinanceErrorBoundary>{children}</FinanceErrorBoundary>;
 }

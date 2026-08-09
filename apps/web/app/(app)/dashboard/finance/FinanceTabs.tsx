@@ -1,0 +1,199 @@
+"use client";
+
+// The Finance page shell. THREE TABS, and the split is the point:
+//   • Business  — the tenant's own money. Leads, because the business's money outranks the tool's bill.
+//   • Pikar spend — the shipped Cost console, moved intact.
+//   • Operator  — deployment-global ceilings and kill switches. OWNER ONLY.
+//
+// Moving the deployment controls to an owner-only tab resolves the complaint that global operator
+// state sat on a tenant page. Hiding the tab is PRESENTATION; `finance.globalRails`/`finance.controls`
+// are `ownerQuery` and remain the trust boundary (lib/functions.ts).
+//
+// The tab mechanics are copied from dashboard/profile/page.tsx, deliberately: roving tabindex that
+// moves real DOM focus, `?tab=` read once from window.location.search (useSearchParams needs a
+// Suspense boundary typecheck cannot see is missing), and replaceState so a tab switch is not a
+// navigation that re-runs every query.
+import { api } from "@pikar/backend/api";
+import { useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import { CashTab } from "./CashView";
+import { FinanceView, OperatorTab, PikarSpendTab } from "./FinanceView";
+
+export type FinanceTabId = "business" | "spend" | "operator";
+
+export const FINANCE_TABS = [
+  {
+    id: "business",
+    label: "Business",
+    ownerOnly: false,
+    subheading: "Can you survive, and does each customer pay for itself?",
+  },
+  {
+    id: "spend",
+    label: "Pikar spend",
+    ownerOnly: false,
+    subheading: "What the tool is costing you, and what is left today.",
+  },
+  {
+    id: "operator",
+    label: "Operator",
+    ownerOnly: true,
+    subheading: "Deployment ceilings, kill switches and the per-request budget. Every tenant.",
+  },
+] as const satisfies readonly {
+  id: FinanceTabId;
+  label: string;
+  ownerOnly: boolean;
+  subheading: string;
+}[];
+
+/** The tabs this viewer may see. A non-owner is offered no Operator tab at all. */
+export function visibleTabs(isOwner: boolean) {
+  return FINANCE_TABS.filter((tab) => !tab.ownerOnly || isOwner);
+}
+
+const isTabId = (value: string | null): value is FinanceTabId =>
+  FINANCE_TABS.some((tab) => tab.id === value);
+
+export function FinanceTabs() {
+  const viewer = useQuery(api.owner.viewer, {});
+  const isOwner = viewer?.isOwner === true;
+  const tabs = visibleTabs(isOwner);
+
+  const [tab, setTab] = useState<FinanceTabId | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    setTab(isTabId(requested) ? requested : "business");
+  }, []);
+
+  // A non-owner who lands on ?tab=operator gets the default tab, not an empty panel.
+  const active: FinanceTabId =
+    tab !== null && tabs.some((t) => t.id === tab) ? tab : "business";
+
+  const tabRefs = useRef<Partial<Record<FinanceTabId, HTMLButtonElement>>>({});
+
+  function selectTab(next: FinanceTabId) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  }
+
+  const current = FINANCE_TABS.find((t) => t.id === active);
+
+  return (
+    <FinanceView>
+      <div style={{ display: "grid", gap: "1.5rem", padding: "1.5rem 0" }}>
+        <header style={{ display: "grid", gap: "0.65rem" }}>
+          <p
+            style={{
+              color: "var(--ink-soft)",
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              margin: 0,
+            }}
+          >
+            Finance · USD
+          </p>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
+              fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)",
+            }}
+          >
+            Your money, and what Pikar costs
+          </h1>
+          <p style={{ color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 }}>
+            {current?.subheading}
+          </p>
+        </header>
+
+        <div
+          role="tablist"
+          aria-label="Finance sections"
+          style={{ display: "flex", gap: "0.35rem", borderBottom: "1px solid var(--rule)" }}
+          onKeyDown={(event) => {
+            const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+            if (delta === 0) return;
+            event.preventDefault();
+            const index = tabs.findIndex((t) => t.id === active);
+            const next = tabs[(index + delta + tabs.length) % tabs.length];
+            if (!next) return;
+            selectTab(next.id);
+            tabRefs.current[next.id]?.focus();
+          }}
+        >
+          {tabs.map((t) => {
+            const selected = t.id === active;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => {
+                  if (el) tabRefs.current[t.id] = el;
+                }}
+                type="button"
+                role="tab"
+                id={`finance-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls={`finance-panel-${t.id}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => selectTab(t.id)}
+                style={{
+                  appearance: "none",
+                  border: "none",
+                  background: "none",
+                  font: "inherit",
+                  cursor: "pointer",
+                  padding: "0.55rem 0.9rem",
+                  marginBottom: "-1px",
+                  fontWeight: 600,
+                  fontSize: "0.92rem",
+                  color: selected ? "var(--ink)" : "var(--ink-soft)",
+                  borderBottom: `2px solid ${selected ? "var(--teal-600)" : "transparent"}`,
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Business and Pikar spend stay MOUNTED and toggle with `hidden`, so a half-typed number
+            in the your-numbers panel survives a trip to the spend tab (the profile-page idiom).
+            Operator is mounted ONLY for an owner — a hidden-but-mounted owner panel would fire the
+            owner queries for a non-owner and put OWNER_REQUIRED into the error boundary. */}
+        <div
+          role="tabpanel"
+          id="finance-panel-business"
+          aria-labelledby="finance-tab-business"
+          hidden={active !== "business"}
+        >
+          <CashTab />
+        </div>
+        <div
+          role="tabpanel"
+          id="finance-panel-spend"
+          aria-labelledby="finance-tab-spend"
+          hidden={active !== "spend"}
+        >
+          <PikarSpendTab />
+        </div>
+        {isOwner ? (
+          <div
+            role="tabpanel"
+            id="finance-panel-operator"
+            aria-labelledby="finance-tab-operator"
+            hidden={active !== "operator"}
+          >
+            <OperatorTab />
+          </div>
+        ) : null}
+      </div>
+    </FinanceView>
+  );
+}
