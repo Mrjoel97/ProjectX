@@ -1,6 +1,11 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-09 (**`paidStaff` now EXCLUDES the founder** — the solo signal depended on
+> Last verified: 2026-08-09 (`tenantProfile.saveFacts` gained `postalAddress` — a 500-char-capped,
+> trim-validated write-boundary field for the CAN-SPAM footer (Phase 19 contacts/CRM), recorded from
+> another lane. It is deliberately absent from `missingSlots`/`canComplete`: enrichment, not an
+> onboarding slot, so onboarding completeness is unaffected.)
+>
+> Previously verified: 2026-08-09 (**`paidStaff` now EXCLUDES the founder** — the solo signal depended on
 > it, and a solopreneur on their own payroll was deriving as `startup`/`sme`.)
 >
 > Previously verified: 2026-08-09 (`BlueprintPanel.tsx` — selecting a segment, from the canvas or the

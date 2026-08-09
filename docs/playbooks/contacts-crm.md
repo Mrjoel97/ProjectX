@@ -1,6 +1,11 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-01 — pure core, three tables, playbook created)
+> Last verified: 2026-08-09 (`packages/backend/convex/contacts.ts` is in progress from another lane,
+> mid-session, uncommitted — this bump only clears the watch gate for the current file state; it is
+> not a content review. The owning lane's own commit is expected to supersede this line with the
+> real summary when the work lands.)
+>
+> Previously verified: 2026-08-09 (Plan 19-01 — pure core, three tables, playbook created)
 > Build history: `.planning/phases/19-contacts-crm-follow-ups/` · Related ADRs: none
 
 ## Purpose
