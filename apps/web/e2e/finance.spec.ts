@@ -88,10 +88,26 @@ const record = (tenantId: string, movement: Movement) =>
 // last," not the file order alone.
 test.describe.configure({ mode: "serial" });
 
+/**
+ * Fresh local users sit behind the onboarding gate — the SAME seam the connected test below (the
+ * one that calls `owner:bootstrapOwner`) already clears before its own assertions, via the same
+ * `convexRun("onboarding:__seedOnboardedTenant", ...)` call. Every test that runs BEFORE that one
+ * needs this too: an un-onboarded user redirected off `/dashboard/finance` would make a
+ * `toHaveCount(0)`/`not.toBeVisible()` assertion pass VACUOUSLY — absent because the page never
+ * rendered at all, not because the boundary the test means to check actually holds.
+ */
+async function seedOnboarded(page: Page): Promise<void> {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  const token = await tokenFor(page);
+  const tenantId = tenantIdFrom(token);
+  convexRun("onboarding:__seedOnboardedTenant", { tenantId });
+  await page.reload();
+}
+
 test("the Finance page opens on Business, and a non-owner is offered no Operator tab", async ({
   page,
 }) => {
-  await page.goto(`${appOrigin}${ROUTE}`);
+  await seedOnboarded(page);
   const tablist = page.getByRole("tablist", { name: "Finance sections" });
   await expect(tablist.getByRole("tab", { name: "Business" })).toHaveAttribute(
     "aria-selected",
@@ -102,7 +118,7 @@ test("the Finance page opens on Business, and a non-owner is offered no Operator
 });
 
 test("the Cost console is intact behind the Pikar spend tab", async ({ page }) => {
-  await page.goto(`${appOrigin}${ROUTE}`);
+  await seedOnboarded(page);
   await page.getByRole("tab", { name: "Pikar spend" }).click();
   await expect(page.getByRole("heading", { name: /budget rails/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /where it went/i })).toBeVisible();
@@ -110,7 +126,7 @@ test("the Cost console is intact behind the Pikar spend tab", async ({ page }) =
 });
 
 test("a number entered in the panel appears as a business figure", async ({ page }) => {
-  await page.goto(`${appOrigin}${ROUTE}`);
+  await seedOnboarded(page);
   // Seeds through the real mutation, so this proves the panel → mutation → derivation → render
   // path end to end. It proves nothing about any external system.
   await page.getByLabel("Cash on hand").fill("60000");
@@ -311,12 +327,19 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
 // Runs AFTER the test above, which is what promotes this browser's user to owner via
 // `owner:bootstrapOwner`. That grant has no inverse, so an owner-tab assertion placed before it
 // would observe nothing and one placed in an earlier file/worker could poison the non-owner
-// assertions above — hence one file, one ordering, owner last.
+// assertions above — hence one file, one ordering, owner last. Deliberately does NOT call
+// `seedOnboarded` again: the connected test above already cleared the onboarding gate for this
+// same signed-in tenant, and that state does not un-set itself.
 test("an owner gets the Operator tab, and the deployment controls live there", async ({ page }) => {
   await page.goto(`${appOrigin}${ROUTE}`);
   await page.getByRole("tab", { name: "Operator" }).click();
   await expect(page.getByRole("heading", { name: /deployment controls/i })).toBeVisible();
-  // And they are NOT on the tenant's own tabs any more — the original complaint.
+  // And they are NOT VISIBLE on the tenant's own tabs any more — the original complaint. NOT
+  // `toHaveCount(0)`: `FinanceTabs.tsx` mounts Operator only for an owner but then toggles it with
+  // `hidden`, same as Business/Pikar-spend — the panel stays in the DOM while another tab is
+  // active (that is what lets a half-typed number survive a tab switch), so a count-based
+  // assertion here would find the hidden node and fail. `not.toBeVisible()` is what "not on this
+  // tab" actually means for a panel that is designed to stay mounted.
   await page.getByRole("tab", { name: "Business" }).click();
-  await expect(page.getByText(/master kill switch/i)).toHaveCount(0);
+  await expect(page.getByText(/master kill switch/i)).not.toBeVisible();
 });

@@ -7735,8 +7735,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/finance.spec.ts": {
-    "mtime": 1786299193.3684764,
-    "ast_hash": "eff6dbd5f9065c1f0f5813b68e1a2514",
+    "mtime": 1786300784.333202,
+    "ast_hash": "0afb4f664a2b509b6e5815f050325cef",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-09-cash-business-finance-design.md": {
@@ -7870,13 +7870,8 @@
     "semantic_hash": ""
   },
   "apps/web/test-results/.last-run.json": {
-    "mtime": 1786299232.177482,
-    "ast_hash": "b0ebf1a1688789159fdbe2ac1fadab93",
-    "semantic_hash": ""
-  },
-  "apps/web/test-results/auth.setup.ts-authenticate-setup/error-context.md": {
-    "mtime": 1786299231.8867085,
-    "ast_hash": "858409b034b83979c1592c76e2e714a9",
+    "mtime": 1786300149.9224627,
+    "ast_hash": "f196824657d8858bc7fa44eecbba38b1",
     "semantic_hash": ""
   }
 }
