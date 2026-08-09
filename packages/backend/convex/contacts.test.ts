@@ -26,9 +26,19 @@ const WORDING = "They ticked the newsletter box at the trade show stand";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 
-async function harness() {
+/**
+ * Two tenants over real `users` rows.
+ *
+ * `audit: true` registers the auditCounts component, which the ONE path that reaches
+ * `internal.audit.log` (a successful `unsuppress`) needs or it throws `Component "auditCounts" is
+ * not registered`. It is OFF by default deliberately: registering it loads the whole aggregate
+ * component tree into each in-memory backend, and doing that 40 times pushed the shared vitest
+ * fork over its memory budget — `vaultDigest.test.ts` died mid-file under full-suite parallel
+ * load while passing in isolation. Four tests need it; the other thirty-six must not pay for it.
+ */
+async function harness(opts: { audit?: boolean } = {}) {
   const t = convexTest(schema, modules);
-  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  if (opts.audit) t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   const userA = await t.run((ctx) => ctx.db.insert("users", {}));
   const userB = await t.run((ctx) => ctx.db.insert("users", {}));
   return {
@@ -321,7 +331,7 @@ describe("contacts: the write surface", () => {
   });
 
   test("unsuppress with the deliberate confirm deletes the row and clears the mirror", async () => {
-    const h = await harness();
+    const h = await harness({ audit: true });
     await h.asA.mutation(api.contacts.upsertContact, {
       email: "stop@x.com",
       origin: "user-entered",
@@ -383,7 +393,7 @@ describe("contacts: the write surface", () => {
 
 describe("contacts: the ONE audit row this module writes carries an id and a hash only", () => {
   test("unsuppress emits exactly {contactId, addressHash} — key-set EQUALITY, not a substring", async () => {
-    const h = await harness();
+    const h = await harness({ audit: true });
     const contactId = await h.asA.mutation(api.contacts.upsertContact, {
       email: "stop@x.com",
       origin: "user-entered",
@@ -404,7 +414,7 @@ describe("contacts: the ONE audit row this module writes carries an id and a has
   });
 
   test("no audit row from this module carries the address or the consent wording, anywhere", async () => {
-    const h = await harness();
+    const h = await harness({ audit: true });
     const contactId = await h.asA.mutation(api.contacts.upsertContact, {
       email: "stop@x.com",
       name: "Stoppy McStopface",
@@ -426,7 +436,7 @@ describe("contacts: the ONE audit row this module writes carries an id and a has
   });
 
   test("the unsuppress payload key set does NOT depend on whether a contact row exists", async () => {
-    const h = await harness();
+    const h = await harness({ audit: true });
     await h.asA.mutation(api.contacts.markSuppressed, { address: "orphan@x.com" });
     await h.asA.mutation(api.contacts.unsuppress, { address: "orphan@x.com", acknowledged: true });
 
