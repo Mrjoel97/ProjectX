@@ -122,11 +122,25 @@ export function refusalMessage(reason: string): string {
     send_time_too_far: "That time is outside the safe scheduling window. Nothing was sent.",
     review_escalated: "This plan cannot be approved until its review issue is resolved.",
     no_deck: "This media plan has no generation-ready deck. Nothing was generated or spent.",
+    // 19-05. This page is the SECOND approve surface (the cockpit plan card is the other), so the
+    // two CAN-SPAM refusals need an entry here too — the fallback below would print the raw enum.
+    no_postal_address:
+      "Add your postal address on your profile before sending — the law requires it in every email's footer. Nothing was sent.",
+    all_recipients_suppressed:
+      "Nobody on this list can be emailed: every recipient has unsubscribed. Nothing was sent.",
     daily_budget_exhausted: "This tenant’s daily budget is exhausted. Nothing was generated.",
     deployment_budget_exhausted: "The deployment budget is paused. Nothing was generated.",
     media_budget_exhausted: "The media budget is exhausted. Nothing was generated.",
   };
   return messages[reason] ?? `The governed action refused (${reason}). Nothing was sent.`;
+}
+
+/** 19-05 SC#5: a partial send comes back `ok: true` and must STILL name who was dropped and why.
+ *  Appended to whichever success sentence the caller already shows — a suppressed recipient is not
+ *  a second outcome, it is a footnote on the one that happened. */
+export function withheldSuffix(withheld?: string[]): string {
+  if (!withheld || withheld.length === 0) return "";
+  return ` Withheld ${withheld.length} who unsubscribed: ${withheld.join(", ")}.`;
 }
 
 export function ApprovalKindBadge({ kind }: { kind: PlanKind }) {
@@ -223,7 +237,9 @@ function actionLabel(kind: PlanKind): string {
 
 function PlanMeta({ item }: { item: AwaitingItem | ScheduledItem | InFlightItem }) {
   return (
-    <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", ...muted, fontSize: "0.82rem" }}>
+    <div
+      style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", ...muted, fontSize: "0.82rem" }}
+    >
       <span>Staged {ageLabel(item.createdAt)} ago</span>
       <span>
         {item.recipientCount} recipient{item.recipientCount === 1 ? "" : "s"}
@@ -268,7 +284,14 @@ function ScheduleComposer({
   };
 
   return (
-    <div style={{ ...stack, padding: "0.75rem", border: "1px solid var(--rule)", borderRadius: "0.75rem" }}>
+    <div
+      style={{
+        ...stack,
+        padding: "0.75rem",
+        border: "1px solid var(--rule)",
+        borderRadius: "0.75rem",
+      }}
+    >
       <label style={{ fontWeight: 700 }}>
         Local date and time
         <input
@@ -285,7 +308,11 @@ function ScheduleComposer({
         />
       </label>
       <p style={{ ...muted, fontSize: "0.82rem" }}>Browser timezone: {zone}</p>
-      {error && <p role="alert" style={{ color: "var(--danger-text)", margin: 0 }}>{error}</p>}
+      {error && (
+        <p role="alert" style={{ color: "var(--danger-text)", margin: 0 }}>
+          {error}
+        </p>
+      )}
       {reviewed === null ? (
         <button type="button" style={button} onClick={review} disabled={busy}>
           Review absolute time
@@ -293,9 +320,15 @@ function ScheduleComposer({
       ) : (
         <div role="group" aria-label="Confirm absolute schedule" style={stack}>
           <p style={{ margin: 0 }}>
-            Confirm <strong>{formatAbsoluteInstant(reviewed, zone)}</strong>. Nothing runs before this instant.
+            Confirm <strong>{formatAbsoluteInstant(reviewed, zone)}</strong>. Nothing runs before
+            this instant.
           </p>
-          <button type="button" style={primary} disabled={busy} onClick={() => void onConfirm(reviewed)}>
+          <button
+            type="button"
+            style={primary}
+            disabled={busy}
+            onClick={() => void onConfirm(reviewed)}
+          >
             {busy ? "Working…" : label}
           </button>
         </div>
@@ -319,8 +352,14 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
     attachmentsOpen ? { planId: item.planId } : "skip",
   );
 
-  if (plan === undefined) return <ApprovalsStateNotice state="loading">Loading plan details…</ApprovalsStateNotice>;
-  if (plan === null) return <ApprovalsStateNotice state="error">This plan is stale or no longer available.</ApprovalsStateNotice>;
+  if (plan === undefined)
+    return <ApprovalsStateNotice state="loading">Loading plan details…</ApprovalsStateNotice>;
+  if (plan === null)
+    return (
+      <ApprovalsStateNotice state="error">
+        This plan is stale or no longer available.
+      </ApprovalsStateNotice>
+    );
 
   async function approve() {
     if (busy) return;
@@ -329,9 +368,16 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
     try {
       const response = await execute({ planId: item.planId });
       if (!response.ok) setResult(refusalMessage(response.reason));
-      else if (response.alreadyStarted) setResult("This plan already started. No duplicate action was created.");
-      else if (response.scheduled) setResult("The absolute schedule is armed. Nothing runs before it fires.");
-      else setResult("Approval accepted. The governed action is now in flight.");
+      else if (response.alreadyStarted)
+        setResult("This plan already started. No duplicate action was created.");
+      else if (response.scheduled)
+        setResult(
+          `The absolute schedule is armed. Nothing runs before it fires.${withheldSuffix(response.withheld)}`,
+        );
+      else
+        setResult(
+          `Approval accepted. The governed action is now in flight.${withheldSuffix(response.withheld)}`,
+        );
     } catch (error) {
       setResult(error instanceof Error ? error.message : "Approval failed. Nothing was sent.");
     } finally {
@@ -347,8 +393,12 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
       await setSendTime({ planId: item.planId, sendAt: epochMs });
       const response = await execute({ planId: item.planId });
       if (!response.ok) setResult(refusalMessage(response.reason));
-      else if (response.alreadyStarted) setResult("This plan already moved. No duplicate schedule was created.");
-      else setResult(`Scheduled for ${formatAbsoluteInstant(epochMs, browserTimeZone())}.`);
+      else if (response.alreadyStarted)
+        setResult("This plan already moved. No duplicate schedule was created.");
+      else
+        setResult(
+          `Scheduled for ${formatAbsoluteInstant(epochMs, browserTimeZone())}.${withheldSuffix(response.withheld)}`,
+        );
     } catch (error) {
       setResult(error instanceof Error ? error.message : "Scheduling failed. Nothing was sent.");
     } finally {
@@ -375,7 +425,10 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
   }
 
   return (
-    <article style={{ ...card, borderLeft: "0.3rem solid var(--held-text)", ...stack }} data-plan-id={item.planId}>
+    <article
+      style={{ ...card, borderLeft: "0.3rem solid var(--held-text)", ...stack }}
+      data-plan-id={item.planId}
+    >
       <div style={row}>
         <div style={{ ...stack, gap: "0.35rem", minWidth: 0 }}>
           <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
@@ -385,15 +438,25 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           <h3 style={{ ...cardTitle, overflowWrap: "anywhere" }}>{titleFor(plan)}</h3>
           <PlanMeta item={item} />
         </div>
-        <Link href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`} style={{ ...button, textDecoration: "none" }}>
+        <Link
+          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
+          style={{ ...button, textDecoration: "none" }}
+        >
           Open in cockpit ↗
         </Link>
       </div>
 
-      {plan.body && <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{plan.body.slice(0, 320)}{plan.body.length > 320 ? "…" : ""}</p>}
+      {plan.body && (
+        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>
+          {plan.body.slice(0, 320)}
+          {plan.body.length > 320 ? "…" : ""}
+        </p>
+      )}
       {plan.kind === "calendar_event" && (
         <p style={muted}>
-          {plan.eventStartMs ? formatAbsoluteInstant(plan.eventStartMs, plan.eventTz || browserTimeZone()) : "Event time is incomplete."}
+          {plan.eventStartMs
+            ? formatAbsoluteInstant(plan.eventStartMs, plan.eventTz || browserTimeZone())
+            : "Event time is incomplete."}
           {plan.eventDurationMs ? ` · ${Math.round(plan.eventDurationMs / 60_000)} minutes` : ""}
         </p>
       )}
@@ -401,14 +464,22 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
       {item.attachmentCount > 0 && (
         <div style={stack}>
           <button type="button" style={button} onClick={() => setAttachmentsOpen((open) => !open)}>
-            {attachmentsOpen ? "Hide attachments" : `Open ${item.attachmentCount} attachment${item.attachmentCount === 1 ? "" : "s"}`}
+            {attachmentsOpen
+              ? "Hide attachments"
+              : `Open ${item.attachmentCount} attachment${item.attachmentCount === 1 ? "" : "s"}`}
           </button>
-          {attachmentsOpen && attachments === undefined && <ApprovalsStateNotice state="loading">Signing attachment links…</ApprovalsStateNotice>}
+          {attachmentsOpen && attachments === undefined && (
+            <ApprovalsStateNotice state="loading">Signing attachment links…</ApprovalsStateNotice>
+          )}
           {attachmentsOpen && attachments && (
             <ul style={{ margin: 0 }}>
               {attachments.map((attachment) => (
                 <li key={`${attachment.filename}:${attachment.url ?? "missing"}`}>
-                  {attachment.url ? <a href={attachment.url}>{attachment.filename}</a> : `${attachment.filename} — unavailable`}
+                  {attachment.url ? (
+                    <a href={attachment.url}>{attachment.filename}</a>
+                  ) : (
+                    `${attachment.filename} — unavailable`
+                  )}
                 </li>
               ))}
             </ul>
@@ -421,30 +492,74 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           {busy ? "Working…" : actionLabel(item.kind)}
         </button>
         {item.kind === "email" && (
-          <button type="button" style={button} disabled={busy} onClick={() => setScheduleOpen((open) => !open)}>
+          <button
+            type="button"
+            style={button}
+            disabled={busy}
+            onClick={() => setScheduleOpen((open) => !open)}
+          >
             Schedule…
           </button>
         )}
-        <Link href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`} style={{ ...button, textDecoration: "none" }}>
-          {item.kind === "calendar_event" ? "Change time in cockpit" : item.kind === "email" ? "Revise in cockpit" : "Edit in cockpit"}
+        <Link
+          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
+          style={{ ...button, textDecoration: "none" }}
+        >
+          {item.kind === "calendar_event"
+            ? "Change time in cockpit"
+            : item.kind === "email"
+              ? "Revise in cockpit"
+              : "Edit in cockpit"}
         </Link>
-        <button type="button" style={destructive} disabled={busy} onClick={() => setConfirmDiscard(true)}>
+        <button
+          type="button"
+          style={destructive}
+          disabled={busy}
+          onClick={() => setConfirmDiscard(true)}
+        >
           Discard
         </button>
       </div>
 
       {scheduleOpen && <ScheduleComposer busy={busy} onConfirm={schedule} />}
       {confirmDiscard && (
-        <div role="group" aria-label="Confirm discard" style={{ ...stack, padding: "0.75rem", border: "1px solid var(--rule)", borderRadius: "0.75rem" }}>
+        <div
+          role="group"
+          aria-label="Confirm discard"
+          style={{
+            ...stack,
+            padding: "0.75rem",
+            border: "1px solid var(--rule)",
+            borderRadius: "0.75rem",
+          }}
+        >
           <strong>Discard this plan permanently?</strong>
           <p style={muted}>It will not be eligible for rescheduling.</p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button type="button" style={destructive} disabled={busy} onClick={() => void doDiscard()}>Yes, discard it</button>
-            <button type="button" style={button} disabled={busy} onClick={() => setConfirmDiscard(false)}>Keep plan</button>
+            <button
+              type="button"
+              style={destructive}
+              disabled={busy}
+              onClick={() => void doDiscard()}
+            >
+              Yes, discard it
+            </button>
+            <button
+              type="button"
+              style={button}
+              disabled={busy}
+              onClick={() => setConfirmDiscard(false)}
+            >
+              Keep plan
+            </button>
           </div>
         </div>
       )}
-      {result && <ApprovalsStateNotice state={result.includes("Nothing") ? "refusal" : "partial"}>{result}</ApprovalsStateNotice>}
+      {result && (
+        <ApprovalsStateNotice state={result.includes("Nothing") ? "refusal" : "partial"}>
+          {result}
+        </ApprovalsStateNotice>
+      )}
     </article>
   );
 }
@@ -499,7 +614,9 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
     <article style={{ ...card, ...stack }} data-plan-id={item.planId}>
       <div style={row}>
         <div>
-          <h3 style={cardTitle}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
+          <h3 style={cardTitle}>
+            {plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}
+          </h3>
           <PlanMeta item={item} />
         </div>
         <ApprovalKindBadge kind={item.kind} />
@@ -510,18 +627,50 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
           : "Scheduled time is unknown on this legacy row."}
       </p>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button type="button" style={button} onClick={() => setMode("move")} disabled={busy}>Reschedule</button>
-        <button type="button" style={destructive} onClick={() => setMode("cancel")} disabled={busy}>Cancel</button>
-        <Link href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`} style={{ ...button, textDecoration: "none" }}>Open thread</Link>
+        <button type="button" style={button} onClick={() => setMode("move")} disabled={busy}>
+          Reschedule
+        </button>
+        <button type="button" style={destructive} onClick={() => setMode("cancel")} disabled={busy}>
+          Cancel
+        </button>
+        <Link
+          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
+          style={{ ...button, textDecoration: "none" }}
+        >
+          Open thread
+        </Link>
       </div>
-      {mode === "move" && <ScheduleComposer busy={busy} label="Confirm new schedule" onConfirm={doMove} />}
+      {mode === "move" && (
+        <ScheduleComposer busy={busy} label="Confirm new schedule" onConfirm={doMove} />
+      )}
       {mode === "cancel" && (
-        <div role="group" aria-label="Confirm scheduled cancel" style={{ ...stack, padding: "0.75rem", border: "1px solid var(--rule)", borderRadius: "0.75rem" }}>
+        <div
+          role="group"
+          aria-label="Confirm scheduled cancel"
+          style={{
+            ...stack,
+            padding: "0.75rem",
+            border: "1px solid var(--rule)",
+            borderRadius: "0.75rem",
+          }}
+        >
           <strong>Cancel before this schedule fires?</strong>
-          <p style={muted}>If the scheduler already won the race, the result will say In flight instead of canceled.</p>
+          <p style={muted}>
+            If the scheduler already won the race, the result will say In flight instead of
+            canceled.
+          </p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button type="button" style={destructive} disabled={busy} onClick={() => void doCancel()}>Yes, cancel it</button>
-            <button type="button" style={button} disabled={busy} onClick={() => setMode("idle")}>Keep schedule</button>
+            <button
+              type="button"
+              style={destructive}
+              disabled={busy}
+              onClick={() => void doCancel()}
+            >
+              Yes, cancel it
+            </button>
+            <button type="button" style={button} disabled={busy} onClick={() => setMode("idle")}>
+              Keep schedule
+            </button>
           </div>
         </div>
       )}
@@ -538,19 +687,32 @@ function InFlightRow({ item }: { item: InFlightItem }) {
     <article style={{ ...card, ...stack }}>
       <div style={row}>
         <div>
-          <h3 style={cardTitle}>{plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}</h3>
+          <h3 style={cardTitle}>
+            {plan === undefined ? "Loading plan…" : plan ? titleFor(plan) : "Unavailable plan"}
+          </h3>
           <PlanMeta item={item} />
         </div>
         <ApprovalKindBadge kind={item.kind} />
       </div>
       {progress.state === "exact" ? (
         <>
-          <p style={{ margin: 0, fontWeight: 700 }}>Delivering · {completed} of {progress.total}</p>
-          <progress value={completed ?? 0} max={progress.total} aria-label="Delivery progress" style={{ width: "100%" }} />
-          <p style={muted}>{progress.sent} sent · {progress.failed} failed · {progress.queued} queued</p>
+          <p style={{ margin: 0, fontWeight: 700 }}>
+            Delivering · {completed} of {progress.total}
+          </p>
+          <progress
+            value={completed ?? 0}
+            max={progress.total}
+            aria-label="Delivery progress"
+            style={{ width: "100%" }}
+          />
+          <p style={muted}>
+            {progress.sent} sent · {progress.failed} failed · {progress.queued} queued
+          </p>
         </>
       ) : (
-        <ApprovalsStateNotice state="partial">Delivery is in flight. Exact counters are unavailable for this legacy plan.</ApprovalsStateNotice>
+        <ApprovalsStateNotice state="partial">
+          Delivery is in flight. Exact counters are unavailable for this legacy plan.
+        </ApprovalsStateNotice>
       )}
     </article>
   );
@@ -565,15 +727,26 @@ function DecisionCard({ item }: { item: DecisionItem }) {
   async function save() {
     if (busy) return;
     const typed = item.valueType === "boolean" ? value === "yes" : Number(value);
-    if (item.valueType === "boolean" ? !["yes", "no"].includes(value) : !Number.isFinite(typed) || Number(typed) < 0) {
+    if (
+      item.valueType === "boolean"
+        ? !["yes", "no"].includes(value)
+        : !Number.isFinite(typed) || Number(typed) < 0
+    ) {
       setResult("Enter a valid non-negative answer.");
       return;
     }
     setBusy(true);
     try {
-      const payload = item.valueType === "boolean"
-        ? { field: "modelCard.thirtyDayPayback" as const, value: typed as boolean }
-        : { field: item.field as "financials.cac" | "financials.ltgp" | "financials.thirtyDayCashPerCustomer", value: typed as number };
+      const payload =
+        item.valueType === "boolean"
+          ? { field: "modelCard.thirtyDayPayback" as const, value: typed as boolean }
+          : {
+              field: item.field as
+                | "financials.cac"
+                | "financials.ltgp"
+                | "financials.thirtyDayCashPerCustomer",
+              value: typed as number,
+            };
       await answer({ threadId: item.threadId, answer: payload });
       setResult("Decision saved to the current scorecard.");
     } catch (error) {
@@ -588,77 +761,192 @@ function DecisionCard({ item }: { item: DecisionItem }) {
       <p style={caps}>Diagnostic question</p>
       <h3 style={cardTitle}>{item.prompt}</h3>
       {item.valueType === "boolean" ? (
-        <select aria-label={item.label} value={value} onChange={(event) => setValue(event.target.value)} style={button}>
+        <select
+          aria-label={item.label}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          style={button}
+        >
           <option value="">Choose…</option>
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
       ) : (
-        <input aria-label={item.label} type="number" min="0" step="any" value={value} onChange={(event) => setValue(event.target.value)} style={button} />
+        <input
+          aria-label={item.label}
+          type="number"
+          min="0"
+          step="any"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          style={button}
+        />
       )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button type="button" style={primary} disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save"}</button>
-        <Link href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`} style={{ ...button, textDecoration: "none" }}>Open source thread</Link>
+        <button type="button" style={primary} disabled={busy} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <Link
+          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
+          style={{ ...button, textDecoration: "none" }}
+        >
+          Open source thread
+        </Link>
       </div>
       {result && <ApprovalsStateNotice state="partial">{result}</ApprovalsStateNotice>}
     </article>
   );
 }
 
-function Section({ label, count, children }: { label: string; count?: number; children: ReactNode }) {
+function Section({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count?: number;
+  children: ReactNode;
+}) {
   return (
-    <section aria-labelledby={`approvals-${label.replace(/\W+/g, "-").toLowerCase()}`} style={stack}>
+    <section
+      aria-labelledby={`approvals-${label.replace(/\W+/g, "-").toLowerCase()}`}
+      style={stack}
+    >
       <div style={row}>
-        <h2 id={`approvals-${label.replace(/\W+/g, "-").toLowerCase()}`} style={{ ...caps, color: "var(--ink)" }}>{label}</h2>
-        {count !== undefined && <span aria-label={`${count} items`} style={{ ...caps, border: "1px solid var(--rule)", borderRadius: "999px", padding: "0.2rem 0.5rem" }}>{count}</span>}
+        <h2
+          id={`approvals-${label.replace(/\W+/g, "-").toLowerCase()}`}
+          style={{ ...caps, color: "var(--ink)" }}
+        >
+          {label}
+        </h2>
+        {count !== undefined && (
+          <span
+            aria-label={`${count} items`}
+            style={{
+              ...caps,
+              border: "1px solid var(--rule)",
+              borderRadius: "999px",
+              padding: "0.2rem 0.5rem",
+            }}
+          >
+            {count}
+          </span>
+        )}
       </div>
       {children}
     </section>
   );
 }
 
-function Pager({ nextCursor, cursor, onNext, onFirst }: { nextCursor: string | null; cursor: string | null; onNext: () => void; onFirst: () => void }) {
+function Pager({
+  nextCursor,
+  cursor,
+  onNext,
+  onFirst,
+}: {
+  nextCursor: string | null;
+  cursor: string | null;
+  onNext: () => void;
+  onFirst: () => void;
+}) {
   if (!nextCursor && !cursor) return null;
   return (
     <nav aria-label="Lane pages" style={{ display: "flex", gap: "0.5rem" }}>
-      {cursor && <button type="button" style={button} onClick={onFirst}>First page</button>}
-      {nextCursor && <button type="button" style={button} onClick={onNext}>Next page</button>}
+      {cursor && (
+        <button type="button" style={button} onClick={onFirst}>
+          First page
+        </button>
+      )}
+      {nextCursor && (
+        <button type="button" style={button} onClick={onNext}>
+          Next page
+        </button>
+      )}
     </nav>
   );
 }
 
 function AwaitingSection({ total }: { total: number }) {
   const [cursor, setCursor] = useState<string | null>(null);
-  const page = useQuery(api.approvals.listAwaiting, { paginationOpts: { numItems: PAGE_SIZE, cursor } });
+  const page = useQuery(api.approvals.listAwaiting, {
+    paginationOpts: { numItems: PAGE_SIZE, cursor },
+  });
   return (
     <Section label="Awaiting you" count={total}>
-      {page === undefined ? <ApprovalsStateNotice state="loading" /> : page.items.length === 0 ? <ApprovalsStateNotice state="empty" /> : page.items.map((item) => <AwaitingCard key={item.planId} item={item} />)}
+      {page === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : page.items.length === 0 ? (
+        <ApprovalsStateNotice state="empty" />
+      ) : (
+        page.items.map((item) => <AwaitingCard key={item.planId} item={item} />)
+      )}
       {page?.bound.partial && <ApprovalsStateNotice state="partial" />}
-      {page && <Pager cursor={cursor} nextCursor={page.nextCursor} onFirst={() => setCursor(null)} onNext={() => setCursor(page.nextCursor)} />}
+      {page && (
+        <Pager
+          cursor={cursor}
+          nextCursor={page.nextCursor}
+          onFirst={() => setCursor(null)}
+          onNext={() => setCursor(page.nextCursor)}
+        />
+      )}
     </Section>
   );
 }
 
 function ScheduledSection() {
   const [cursor, setCursor] = useState<string | null>(null);
-  const page = useQuery(api.approvals.listScheduled, { paginationOpts: { numItems: PAGE_SIZE, cursor } });
+  const page = useQuery(api.approvals.listScheduled, {
+    paginationOpts: { numItems: PAGE_SIZE, cursor },
+  });
   return (
     <Section label="Scheduled — approved, not yet fired" count={page?.items.length}>
-      {page === undefined ? <ApprovalsStateNotice state="loading" /> : page.items.length === 0 ? <ApprovalsStateNotice state="empty">No approved schedules are waiting to fire.</ApprovalsStateNotice> : page.items.map((item) => <ScheduledRow key={item.planId} item={item} />)}
+      {page === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : page.items.length === 0 ? (
+        <ApprovalsStateNotice state="empty">
+          No approved schedules are waiting to fire.
+        </ApprovalsStateNotice>
+      ) : (
+        page.items.map((item) => <ScheduledRow key={item.planId} item={item} />)
+      )}
       {page?.bound.partial && <ApprovalsStateNotice state="partial" />}
-      {page && <Pager cursor={cursor} nextCursor={page.nextCursor} onFirst={() => setCursor(null)} onNext={() => setCursor(page.nextCursor)} />}
+      {page && (
+        <Pager
+          cursor={cursor}
+          nextCursor={page.nextCursor}
+          onFirst={() => setCursor(null)}
+          onNext={() => setCursor(page.nextCursor)}
+        />
+      )}
     </Section>
   );
 }
 
 function InFlightSection() {
   const [cursor, setCursor] = useState<string | null>(null);
-  const page = useQuery(api.approvals.listInFlight, { paginationOpts: { numItems: PAGE_SIZE, cursor } });
+  const page = useQuery(api.approvals.listInFlight, {
+    paginationOpts: { numItems: PAGE_SIZE, cursor },
+  });
   return (
     <Section label="In flight" count={page?.items.length}>
-      {page === undefined ? <ApprovalsStateNotice state="loading" /> : page.items.length === 0 ? <ApprovalsStateNotice state="empty">No governed actions are in flight.</ApprovalsStateNotice> : page.items.map((item) => <InFlightRow key={item.planId} item={item} />)}
+      {page === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : page.items.length === 0 ? (
+        <ApprovalsStateNotice state="empty">
+          No governed actions are in flight.
+        </ApprovalsStateNotice>
+      ) : (
+        page.items.map((item) => <InFlightRow key={item.planId} item={item} />)
+      )}
       {page?.bound.partial && <ApprovalsStateNotice state="partial" />}
-      {page && <Pager cursor={cursor} nextCursor={page.nextCursor} onFirst={() => setCursor(null)} onNext={() => setCursor(page.nextCursor)} />}
+      {page && (
+        <Pager
+          cursor={cursor}
+          nextCursor={page.nextCursor}
+          onFirst={() => setCursor(null)}
+          onNext={() => setCursor(page.nextCursor)}
+        />
+      )}
     </Section>
   );
 }
@@ -668,18 +956,54 @@ function DecisionsAndBlocked() {
   const blocked = useQuery(api.approvals.blockedSummary);
   return (
     <Section label="Other decisions waiting on you">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))", gap: "0.75rem" }}>
-        {decisions === undefined ? <ApprovalsStateNotice state="loading" /> : decisions.items.length === 0 ? <ApprovalsStateNotice state="empty">No diagnostic decisions are waiting.</ApprovalsStateNotice> : decisions.items.map((item) => <DecisionCard key={`${item.evaluationId}:${item.field}`} item={item} />)}
-        {blocked === undefined ? <ApprovalsStateNotice state="loading" /> : blocked.count === 0 ? <ApprovalsStateNotice state="empty">No blocked operations need review.</ApprovalsStateNotice> : (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))",
+          gap: "0.75rem",
+        }}
+      >
+        {decisions === undefined ? (
+          <ApprovalsStateNotice state="loading" />
+        ) : decisions.items.length === 0 ? (
+          <ApprovalsStateNotice state="empty">
+            No diagnostic decisions are waiting.
+          </ApprovalsStateNotice>
+        ) : (
+          decisions.items.map((item) => (
+            <DecisionCard key={`${item.evaluationId}:${item.field}`} item={item} />
+          ))
+        )}
+        {blocked === undefined ? (
+          <ApprovalsStateNotice state="loading" />
+        ) : blocked.count === 0 ? (
+          <ApprovalsStateNotice state="empty">
+            No blocked operations need review.
+          </ApprovalsStateNotice>
+        ) : (
           <article style={{ ...card, ...stack }}>
             <p style={{ ...caps, color: "var(--danger-text)" }}>Blocked</p>
-            <h3 style={cardTitle}>{blocked.count}{blocked.countCapped ? "+" : ""} stopped operation{blocked.count === 1 ? "" : "s"}</h3>
-            <p style={muted}>Sensitive details stay in Compliance. This page receives counts and timestamps only.</p>
-            <Link href={blocked.href} style={{ ...button, textDecoration: "none", justifySelf: "start" }}>Review in Compliance ↗</Link>
+            <h3 style={cardTitle}>
+              {blocked.count}
+              {blocked.countCapped ? "+" : ""} stopped operation{blocked.count === 1 ? "" : "s"}
+            </h3>
+            <p style={muted}>
+              Sensitive details stay in Compliance. This page receives counts and timestamps only.
+            </p>
+            <Link
+              href={blocked.href}
+              style={{ ...button, textDecoration: "none", justifySelf: "start" }}
+            >
+              Review in Compliance ↗
+            </Link>
           </article>
         )}
       </div>
-      {decisions?.bound.partial && <ApprovalsStateNotice state="partial">More diagnostic questions exist beyond this bounded result.</ApprovalsStateNotice>}
+      {decisions?.bound.partial && (
+        <ApprovalsStateNotice state="partial">
+          More diagnostic questions exist beyond this bounded result.
+        </ApprovalsStateNotice>
+      )}
     </Section>
   );
 }
@@ -689,13 +1013,27 @@ function ClearedSection() {
   const page = useQuery(api.approvals.listCleared, { sinceMs, limit: 50 });
   return (
     <Section label="Cleared — recent window" count={page?.items.length}>
-      {page === undefined ? <ApprovalsStateNotice state="loading" /> : page.items.length === 0 ? <ApprovalsStateNotice state="empty">No completed or canceled plans in this window.</ApprovalsStateNotice> : (
+      {page === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : page.items.length === 0 ? (
+        <ApprovalsStateNotice state="empty">
+          No completed or canceled plans in this window.
+        </ApprovalsStateNotice>
+      ) : (
         <div style={stack}>
           {page.items.map((item) => (
             <article key={item.planId} style={{ ...card, ...row }}>
               <div>
                 <ApprovalKindBadge kind={item.kind} />
-                <p style={{ margin: "0.45rem 0 0", fontWeight: 700 }}>{item.status === "done" ? "Completed" : item.cancellation?.state === "known" && item.cancellation.kind === "discarded" ? "Discarded" : item.cancellation?.state === "known" ? "Canceled before fire" : "Canceled · legacy reason unknown"}</p>
+                <p style={{ margin: "0.45rem 0 0", fontWeight: 700 }}>
+                  {item.status === "done"
+                    ? "Completed"
+                    : item.cancellation?.state === "known" && item.cancellation.kind === "discarded"
+                      ? "Discarded"
+                      : item.cancellation?.state === "known"
+                        ? "Canceled before fire"
+                        : "Canceled · legacy reason unknown"}
+                </p>
               </div>
               <div style={{ textAlign: "right" }}>
                 <p style={muted}>{formatAbsoluteInstant(item.createdAt, browserTimeZone())}</p>
@@ -705,23 +1043,34 @@ function ClearedSection() {
           ))}
         </div>
       )}
-      {page?.bound.partial && <ApprovalsStateNotice state="partial">Recent results hit the 50-row cap.</ApprovalsStateNotice>}
+      {page?.bound.partial && (
+        <ApprovalsStateNotice state="partial">
+          Recent results hit the 50-row cap.
+        </ApprovalsStateNotice>
+      )}
     </Section>
   );
 }
 
 class ApprovalsErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
-  static getDerivedStateFromError(error: Error) { return { error }; }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Approvals route failed", { name: error.name, componentStack: info.componentStack });
+    console.error("Approvals route failed", {
+      name: error.name,
+      componentStack: info.componentStack,
+    });
   }
   render() {
     if (!this.state.error) return this.props.children;
     return (
       <div style={{ ...card, ...stack }}>
         <ApprovalsStateNotice state="error" />
-        <button type="button" style={primary} onClick={() => window.location.reload()}>Retry</button>
+        <button type="button" style={primary} onClick={() => window.location.reload()}>
+          Retry
+        </button>
         <Link href="/dashboard/workspace">Return to workspace</Link>
       </div>
     );
@@ -730,9 +1079,21 @@ class ApprovalsErrorBoundary extends Component<{ children: ReactNode }, { error:
 
 function ConnectedApprovals() {
   const summary = useQuery(api.approvals.summary);
-  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const dateLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
   return (
-    <div style={{ display: "grid", gap: "2rem", maxWidth: "76rem", margin: "0 auto", paddingBottom: "3rem" }}>
+    <div
+      style={{
+        display: "grid",
+        gap: "2rem",
+        maxWidth: "76rem",
+        margin: "0 auto",
+        paddingBottom: "3rem",
+      }}
+    >
       <header style={{ ...row, alignItems: "stretch" }}>
         <div style={{ ...stack, alignContent: "center", maxWidth: "48rem" }}>
           <p style={caps}>Governance gate · {dateLabel}</p>
@@ -752,20 +1113,44 @@ function ConnectedApprovals() {
           >
             Clear the gate
           </h1>
-          <p style={{ ...muted, fontSize: "0.94rem" }}>Everything Pikar staged and cannot do without you. Approve once; guarded execution, audit and honest outcome states follow.</p>
+          <p style={{ ...muted, fontSize: "0.94rem" }}>
+            Everything Pikar staged and cannot do without you. Approve once; guarded execution,
+            audit and honest outcome states follow.
+          </p>
         </div>
         <aside style={{ ...card, minWidth: "14rem" }} aria-label="Oldest waiting">
           <p style={caps}>Oldest waiting</p>
           {/* A TEXT stat ("3 days"), so it takes the mockup's .stat-value.is-text 1.05rem, not the
               2rem numeral size — 1.65rem was reading as a second headline beside the h1. */}
-          <p style={{ margin: "0.45rem 0", fontSize: "1.05rem", fontWeight: 700, letterSpacing: "-0.01em" }}>{summary === undefined ? "—" : summary.oldestWaitingAt === null ? "None" : ageLabel(summary.oldestWaitingAt)}</p>
-          <p style={{ ...muted, fontSize: "0.82rem" }}>Plans do not expire, but their context can become stale.</p>
+          <p
+            style={{
+              margin: "0.45rem 0",
+              fontSize: "1.05rem",
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {summary === undefined
+              ? "—"
+              : summary.oldestWaitingAt === null
+                ? "None"
+                : ageLabel(summary.oldestWaitingAt)}
+          </p>
+          <p style={{ ...muted, fontSize: "0.82rem" }}>
+            Plans do not expire, but their context can become stale.
+          </p>
         </aside>
       </header>
 
-      {summary === undefined ? <ApprovalsStateNotice state="loading" /> : (
+      {summary === undefined ? (
+        <ApprovalsStateNotice state="loading" />
+      ) : (
         <>
-          {summary.awaitingCountCapped && <ApprovalsStateNotice state="partial">Awaiting count is capped at {summary.awaitingCount}+.</ApprovalsStateNotice>}
+          {summary.awaitingCountCapped && (
+            <ApprovalsStateNotice state="partial">
+              Awaiting count is capped at {summary.awaitingCount}+.
+            </ApprovalsStateNotice>
+          )}
           <AwaitingSection total={summary.awaitingCount} />
         </>
       )}
@@ -778,5 +1163,9 @@ function ConnectedApprovals() {
 }
 
 export function ApprovalsView() {
-  return <ApprovalsErrorBoundary><ConnectedApprovals /></ApprovalsErrorBoundary>;
+  return (
+    <ApprovalsErrorBoundary>
+      <ConnectedApprovals />
+    </ApprovalsErrorBoundary>
+  );
 }

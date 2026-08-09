@@ -294,7 +294,12 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  // ONE note affordance, two tones. A governed refusal is an error; the withheld report (19-05) is
+  // a NON-error — a partial send really happened — so it renders in the neutral note style. Amber
+  // is deliberately not used for either: BRAND §2 reserves `--held` for the approval gate alone.
+  const [note, setNote] = useState<{ text: string; tone: "error" | "info"; href?: string } | null>(
+    null,
+  );
   const recipients = plan.recipients ?? [];
   const mode = plan.mode ?? "individual";
   const body = plan.body ?? "";
@@ -308,8 +313,30 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     setNote(null);
     try {
       const res = await execute({ planId: plan._id });
-      if (!res.ok && res.reason === "gmail_not_connected")
-        setNote("Connect Gmail before approving.");
+      if (!res.ok) {
+        // Every governed stop names the lever the user can pull. A reason with no entry here is a
+        // media/scheduling refusal the canvas or the picker already surfaces.
+        const refusals: Record<string, { text: string; href?: string }> = {
+          gmail_not_connected: { text: "Connect Gmail before approving." },
+          no_postal_address: {
+            text: "Add your postal address before sending — the law requires it in every email's footer.",
+            href: "/dashboard/profile",
+          },
+          all_recipients_suppressed: {
+            text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
+          },
+        };
+        const refusal = refusals[res.reason];
+        if (refusal) setNote({ ...refusal, tone: "error" });
+      } else if (res.withheld && res.withheld.length > 0) {
+        // SC#5: a partial send must TELL the user which addresses were withheld and why. Not a
+        // refusal — the rest went out.
+        const sent = Math.max(0, recipients.length - res.withheld.length);
+        setNote({
+          tone: "info",
+          text: `Sent to ${sent}. Withheld ${res.withheld.length} who unsubscribed: ${res.withheld.join(", ")}.`,
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -486,8 +513,25 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
       {note && (
-        <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
-          {note}
+        // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
+        // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
+        // teal-600 as small text on white (~2.9:1).
+        <p
+          role={note.tone === "error" ? "alert" : "status"}
+          style={{
+            color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
+            margin: "0.5rem 0 0",
+          }}
+        >
+          {note.text}
+          {note.href && (
+            <>
+              {" "}
+              <Link href={note.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+                Open your profile
+              </Link>
+            </>
+          )}
         </p>
       )}
     </div>

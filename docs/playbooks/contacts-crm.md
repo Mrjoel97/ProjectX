@@ -1,6 +1,9 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route)
+> Last verified: 2026-08-09 (Plan 19-05 — the send path consumes this module: invariant 12 below,
+> and the "Touching the send path" note is now describing shipped code rather than a plan)
+>
+> Previously verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route)
 >
 > Previously verified: 2026-08-09 (Plan 19-02 — the person store, isolation assertion, audit key-set pin)
 >
@@ -197,6 +200,23 @@ operation. Adding one would rate-limit only the people legitimately pressing the
 *Enforcement:* `contacts.test.ts` — "POSTing the SAME segment twice is 200 twice and leaves exactly
 ONE row", which also pins `suppressedAt` as unchanged across the replay (invariant 2's fact of
 record).
+
+**12. Two guards, two different jobs — deleting either leaves a real hole (19-05).**
+`executePlan` calls `suppressedAmong` and drops addresses PER ADDRESS *before* the group join and
+*before* the CAS patch; `gmail.send` calls `isSuppressed` per send, *before* a credential is even
+minted. The first is the only one that can drop one of five recipients and still send to the other
+four (a `requests` row in group mode is ONE comma-joined string — `isSuppressed` can only refuse the
+whole row, which is the `ponytail:` ceiling written on it). The second is the only one that can see
+a suppression created AFTER approve: `startScheduledDelivery` re-fires a `requestIds` list frozen at
+approve time. `footerFor` is consumed at `gmail.send`'s `buildMime` CALL SITE and a null return is a
+hard THROW — a tenant with no postal address cannot send, and neither can a deployment missing
+`UNSUBSCRIBE_SECRET` or `CONVEX_SITE_URL`. A suppression discovered at send time terminates the row
+as `blocked` (`recordDeliveryTerminal`'s `"suppressed"` outcome, which also decrements
+`recipientTotal` so the plan counters balance) rather than holding it like `awaiting_reauth`.
+*Enforcement:* `cockpit.test.ts` "executePlan suppression + postal-address gates" (rows 11-13, 16a),
+`gmail.test.ts` "gmail.send — the suppression backstop + the CAN-SPAM footer" (rows 14-17) and
+`plans.test.ts`'s balance/idempotency pair. **`gmail.send` has TWO production callers** —
+`deliverApprovedPlan.ts` and `pipeline.ts` — so re-grep before claiming convergence at one.
 
 **11. The ACTOR decides gating, not the operation.**
 Agent-proposed writes — create, complete or cancel — ALWAYS stage through the plan gate. Direct

@@ -7,6 +7,7 @@ import {
   formatAbsoluteInstant,
   parseScheduleInput,
   refusalMessage,
+  withheldSuffix,
 } from "./ApprovalsView";
 
 describe("Approvals connected state contracts", () => {
@@ -45,9 +46,7 @@ describe("Approvals connected state contracts", () => {
 
   test("absolute-time confirmation always names an IANA zone or the UTC fallback", () => {
     const epoch = Date.parse("2030-01-01T10:00:00.000Z");
-    expect(formatAbsoluteInstant(epoch, "Africa/Dar_es_Salaam")).toContain(
-      "Africa/Dar_es_Salaam",
-    );
+    expect(formatAbsoluteInstant(epoch, "Africa/Dar_es_Salaam")).toContain("Africa/Dar_es_Salaam");
     expect(formatAbsoluteInstant(epoch, "")).toContain("UTC");
   });
 
@@ -55,5 +54,22 @@ describe("Approvals connected state contracts", () => {
     expect(refusalMessage("gmail_not_connected")).toContain("Nothing was sent");
     expect(refusalMessage("review_escalated")).toContain("cannot be approved");
     expect(refusalMessage("daily_budget_exhausted")).toContain("budget");
+    // 19-05: these two must have real copy here, not the raw-enum fallback — this page is the
+    // SECOND approve surface and a user who lands here deserves the same lever the cockpit names.
+    expect(refusalMessage("no_postal_address")).toContain("postal address");
+    expect(refusalMessage("no_postal_address")).not.toContain("no_postal_address");
+    expect(refusalMessage("all_recipients_suppressed")).toContain("unsubscribed");
+    expect(refusalMessage("all_recipients_suppressed")).not.toContain("all_recipients_suppressed");
+  });
+
+  // 19-05 SC#5: a partial send is a SUCCESS that still has to name who was left out and why.
+  test("the withheld report names the count, the reason and every address — and is silent otherwise", () => {
+    expect(withheldSuffix()).toBe("");
+    expect(withheldSuffix([])).toBe("");
+    const suffix = withheldSuffix(["bob@x.com", "eve@y.com"]);
+    expect(suffix).toContain("Withheld 2");
+    expect(suffix).toContain("unsubscribed");
+    expect(suffix).toContain("bob@x.com");
+    expect(suffix).toContain("eve@y.com");
   });
 });

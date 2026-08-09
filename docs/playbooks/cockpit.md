@@ -11,6 +11,47 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-09 (Plan 19-05 — **the send path is now GUARDED AT TWO POINTS and every
+> product email carries a CAN-SPAM footer.** `executePlan`, `gmail.send`, `plans.recordDeliveryTerminal`,
+> `deliverApprovedPlan`, `pipeline.ts` and the cockpit plan card changed.)
+>
+> **1. The send path converges TWICE, and both points are guarded. Neither is redundant.**
+> `executePlan` drops suppressed addresses PER ADDRESS; `gmail.send` refuses a suppressed recipient
+> per send. The approve-time filter is the one that can drop ONE address out of five and still send
+> to the other four — `gmail.send` sees group mode as ONE comma-joined string and can only refuse
+> the whole row. The send-time backstop is the one that catches a suppression created AFTER approve:
+> `startScheduledDelivery` re-fires a `requestIds` list frozen at approve time, so a filter alone
+> cannot see it. Deleting either leaves a real hole. *Enforcement:* `cockpit.test.ts` "executePlan
+> suppression + postal-address gates" and `gmail.test.ts` "a suppression created AFTER approve is
+> refused at send", which asserts ZERO fetches — the refusal lands before a credential is minted.
+>
+> **2. EVERY refusal in `executePlan` runs BEFORE the CAS patch.** A refusal after
+> `patch(planId, { status: "approved" })` leaves the plan `approved` with zero `requests` rows and
+> no workflow — a half-approved state nothing can resume (the 20-07 lesson). The two new refusals,
+> `no_postal_address` and `all_recipients_suppressed`, sit above it beside `gmail_not_connected`.
+> The per-address partition must ALSO stay above it for a second reason: `mode === "group"`
+> collapses recipients into one comma-joined string right below, after which a per-address drop is
+> impossible. *Enforcement:* every test in that block asserts `status === "proposed"`; moving the
+> filter below the CAS was mutation-verified RED and reverted.
+>
+> **3. The footer lives at the `buildMime` CALL SITE and must never move inside `buildMime`.**
+> Two reasons, both load-bearing: `notifyExternal.ts` is a SECOND `buildMime` caller sending a
+> static service notice to the user's OWN mailbox (no recipient to unsubscribe, so a footer there
+> would be a lie), and `gmail.test.ts`'s V4 tests pin `buildMime`'s zero-attachment bytes. It cannot
+> move EARLIER either — the model's output flows `plans.body → plans.recipientBodies →
+> requests.draft` and `getForDelivery` reads `editedBody ?? draft`, so every earlier stage is a
+> bypass. `footerFor` returning null is a hard THROW (the missing-attachment-blob precedent), and
+> the message names the tenant's postal address AND `UNSUBSCRIBE_SECRET`/`CONVEX_SITE_URL` because
+> the query collapses all three causes into one null.
+>
+> **4. A post-approve suppression terminates as `blocked`.** `recordDeliveryTerminal` gained a
+> `"suppressed"` outcome that patches `requests.status = "blocked"` (an EXISTING member — no new
+> state) and DECREMENTS `recipientTotal`, so the counters balance and `queuedCount` reaches 0. A
+> bare `continue` (correct for the RESUMABLE `awaiting_reauth`) would strand the row at `delivering`
+> forever. **Correction to plan 19-05's premise: `gmail.send` has TWO production callers, not one** —
+> `deliverApprovedPlan.ts` and `pipeline.ts`. The pipeline lane carries no `planId`, so it patches
+> `blocked` directly instead of calling `recordDeliveryTerminal`. Re-grep before assuming one.
+
 > Last verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route — **`http.ts` gained a SIXTH
 > and SEVENTH route, and they are the first PUBLIC UNAUTHENTICATED ones in this file.**)
 > SCOPE: this entry covers `http.ts` alone, as changed by plan 19-04. No cockpit turn, tool, gate or

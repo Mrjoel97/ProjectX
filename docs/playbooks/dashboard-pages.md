@@ -1,6 +1,16 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 2 fix — `last7Count` moved into `activityFromSends`, out of the view)
+> Last verified: 2026-08-09 (Plan 19-05 — the Approvals refusal map gained the two CAN-SPAM stops.)
+> SCOPE: `ApprovalsView.tsx` only; no page, query, pagination or empty state changed.
+> `refusalMessage` now has real copy for `no_postal_address` and `all_recipients_suppressed` — this
+> page is the SECOND approve surface (the cockpit plan card is the other), and without an entry the
+> fallback prints the raw enum at the user. A new `withheldSuffix` appends the partial-send report
+> to whichever success sentence already shows, because a suppressed recipient is a footnote on an
+> outcome that happened, not a second outcome. Both are pinned in `approvalsView.test.ts`, including
+> the negative assertion that the raw enum never reaches the screen. **When a new `executePlan`
+> refusal reason lands, this map needs an entry in the same commit.**
+>
+> Previously verified: 2026-08-09 (Plan cash-business-finance Task 2 fix — `last7Count` moved into `activityFromSends`, out of the view)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
