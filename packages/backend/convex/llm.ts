@@ -1352,6 +1352,20 @@ const CRM_PARSE_REFUSAL: Record<string, string> = {
   CRM_CONTACT_EMAIL_REQUIRED:
     "A contact needs an email address, and that one had none. Nothing was staged. Ask the user " +
     "for the address.",
+  // 19-11. The wording matters more than the check does. The model reached `no-email` BECAUSE it
+  // was told an address is required, so a refusal that only says "invalid, try again" leaves
+  // inventing a better-formed fake as the cheapest next move. This names the placeholder as the
+  // error, forbids substituting one, and spells out the correct exit — a follow-up about nobody in
+  // particular is a thing this CRM cannot hold, and saying so IS the right answer.
+  CRM_FOLLOWUP_CONTACT_INVALID:
+    "That follow-up's email address is not a real address, so nothing was staged. NEVER invent or " +
+    "substitute an address — no placeholder like 'no-email', 'none' or 'unknown' is acceptable. " +
+    "If the user named a person, ask for their email address. If the follow-up is not about a " +
+    "specific person, tell the user plainly that you can only attach follow-ups to a contact, and " +
+    "that they can add a standalone reminder themselves on the Pipeline page.",
+  CRM_CONTACT_EMAIL_INVALID:
+    "That contact's email address is not a real address, so nothing was staged. Do not invent or " +
+    "guess one — ask the user for the person's actual email address.",
 };
 /** The three non-resolved `parseSendTime` outcomes, worded for a follow-up date. */
 const CRM_DUE_REFUSAL: Record<"ambiguous" | "past" | "tooFar" | "none", string> = {

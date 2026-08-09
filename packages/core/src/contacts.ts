@@ -15,6 +15,12 @@
 // ponytail: trim+lowercase only. Plus-addressing and dot-folding are person-level merging
 // (deferred, 19-CONTEXT Deferred Ideas); upgrade path is a second canonicalise() beside this,
 // never a change to this one — the suppressions key must stay byte-stable.
+// `isValidEmail` is the repo's ONE email regex (03.1-03 promoted it out of `validateSubmit` for
+// exactly this reason). The send path bounces a bad recipient with it via `applyRecipientEdit`, so
+// importing it here is what makes "the CRM cannot accept an address the send path would refuse"
+// true by construction rather than by two regexes agreeing today. Do NOT add a second one.
+import { isValidEmail } from "./validateSubmit";
+
 export function normalizeAddress(s: string): string {
   return s.trim().toLowerCase();
 }
@@ -76,7 +82,9 @@ export type CrmContactOrigin = "mailbox-resolved" | "user-entered" | "inbound";
  * ONE governed CRM operation. `addFollowUp` carries an `email` and NOT an optional contact ref:
  * the AGENT must always name a contact. Contactless follow-ups exist (`createFollowUp` takes an
  * optional `contactId`) but are a USER-only capability, and that asymmetry is the structural brake
- * against this CRM quietly becoming a general task generator.
+ * against this CRM quietly becoming a general task generator. The address must also be STRUCTURALLY
+ * REAL (`isValidEmail`, 19-11) — "required" alone was satisfiable with a placeholder, and a live
+ * run duly satisfied it with `no-email`.
  *
  * The follow-up's text field is `note`, matching `followUps.note` in the schema — 19-01 shipped
  * `note` and the plan text that says `title` pre-dates it (19-02 recorded the same correction).
@@ -107,6 +115,8 @@ function text(value: unknown, error: string, max = CRM_TEXT_MAX): string {
  *   - `addFollowUp` with no due date — "Follow-ups due" is a headline tile and an undated
  *     follow-up could never appear in it (`createFollowUp`'s rule, enforced one layer earlier).
  *   - `addFollowUp` naming no contact — see the `CrmOperation` doc comment.
+ *   - either op naming a FABRICATED address (19-11). `isValidEmail` is the send path's own rule,
+ *     imported, so the CRM cannot accept an address a later send would bounce.
  */
 export function parseCrmOperations(raw: unknown): CrmOperation[] {
   if (!Array.isArray(raw)) throw new Error("CRM_OPERATIONS_NOT_A_LIST");
@@ -120,6 +130,9 @@ export function parseCrmOperations(raw: unknown): CrmOperation[] {
       case "addContact": {
         const email = normalizeAddress(text(o.email, "CRM_CONTACT_EMAIL_REQUIRED"));
         if (email === "") throw new Error("CRM_CONTACT_EMAIL_REQUIRED");
+        // A contact row is keyed on this address and `applyCrmOperations` UPSERTS it, so a
+        // fabricated one mints a permanent row nothing can ever email.
+        if (!isValidEmail(email)) throw new Error("CRM_CONTACT_EMAIL_INVALID");
         if (typeof o.origin !== "string" || !ORIGINS.includes(o.origin)) {
           throw new Error("CRM_CONTACT_ORIGIN_INVALID");
         }
@@ -136,6 +149,11 @@ export function parseCrmOperations(raw: unknown): CrmOperation[] {
         if (typeof o.email !== "string") throw new Error("CRM_FOLLOWUP_CONTACT_REQUIRED");
         const email = normalizeAddress(o.email);
         if (email === "") throw new Error("CRM_FOLLOWUP_CONTACT_REQUIRED");
+        // 19-11: the brake, actually engaged. "Required" was satisfiable with ANY non-empty
+        // string, so a model told it must name a contact could invent `no-email` and keep going —
+        // which is what a live run did. A brake the caller can satisfy with a placeholder is not a
+        // brake; this is the check that makes "the agent must name a REAL person" enforceable.
+        if (!isValidEmail(email)) throw new Error("CRM_FOLLOWUP_CONTACT_INVALID");
         // `typeof NaN === "number"` and `Infinity` is finite-typed too — either produces a
         // follow-up the `by_tenant_status_dueAt` range read can never find.
         if (typeof o.dueAt !== "number" || !Number.isFinite(o.dueAt)) {

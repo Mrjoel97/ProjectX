@@ -3,6 +3,7 @@ import {
   CRM_OPERATION_MAX,
   CRM_TEXT_MAX,
   followUpIsDue,
+  isValidEmail,
   needsAttention,
   normalizeAddress,
   parseCrmOperations,
@@ -162,6 +163,31 @@ describe("parseCrmOperations", () => {
       expect(() => parseCrmOperations([{ ...ADD_FOLLOWUP, email }])).toThrow(
         /CRM_FOLLOWUP_CONTACT_REQUIRED/,
       );
+    }
+  });
+
+  // 19-11 (the defect eval run 266ef8f4 exposed). The required `email` on `addFollowUp` is the
+  // structural brake against a general task generator — and a brake the model can satisfy with ANY
+  // non-empty string is not a brake. The live agent, asked for a follow-up "not tied to anyone",
+  // wrote `{"op":"addFollowUp","email":"no-email",…}` and sailed straight through.
+  it("REFUSES a FABRICATED address — `no-email` is not an address", () => {
+    for (const email of ["no-email", "none", "n/a", "unknown", "@x.com", "a@b", "a b@x.com"]) {
+      expect(() => parseCrmOperations([{ ...ADD_FOLLOWUP, email }])).toThrow(
+        /CRM_FOLLOWUP_CONTACT_INVALID/,
+      );
+      expect(() => parseCrmOperations([{ ...ADD_CONTACT, email }])).toThrow(
+        /CRM_CONTACT_EMAIL_INVALID/,
+      );
+    }
+  });
+
+  // Non-vacuity: the check must still ADMIT the addresses this CRM exists to hold, including the
+  // subdomain/plus/apostrophe shapes `normalizeAddress`'s own table already carries.
+  it("ACCEPTS real addresses, and the check is the send path's own `isValidEmail`", () => {
+    for (const email of ["bob@x.com", "Ann.O'Neil+tag@Sub.Example.Co.UK", "a@b.co"]) {
+      expect(isValidEmail(normalizeAddress(email))).toBe(true);
+      expect(parseCrmOperations([{ ...ADD_FOLLOWUP, email }])).toHaveLength(1);
+      expect(parseCrmOperations([{ ...ADD_CONTACT, email }])).toHaveLength(1);
     }
   });
 

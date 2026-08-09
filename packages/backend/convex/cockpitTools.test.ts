@@ -1927,6 +1927,48 @@ test("stageCrmWrite REFUSES a contact carrying a date — the follow-up half is 
   expect((await readPlan(t, planId))?.kind).toBeUndefined();
 });
 
+// ── 19-11 (ACTN-05 defect, half two): a REFUSAL must not destroy the previous turn's staging ──
+// Measured on eval run `266ef8f4`. Turn 2 asked for a follow-up "not tied to anyone"; the agent
+// satisfied the required-`email` brake by INVENTING `no-email`, the op was accepted, and because
+// `patchPlan` replaces `crmOperations` wholesale it overwrote turn 1's legitimate Rhea follow-up.
+// Fixture 36's counts were then satisfied by REPLACEMENT rather than by turn 2 declining.
+//
+// The replace is left alone deliberately: a plan row is the CURRENT STAGED STATE, not a log, and an
+// appending patch would make a model correcting its own list double it instead. What must hold is
+// that a REFUSED operation never reaches `patchPlan` at all — every refusal is an early `return`
+// above the mutation, so turn 1 survives. This asserts on the STORED ops, not the reply text.
+test("a REFUSED turn-2 op leaves turn-1's staged follow-up intact — a refusal never reaches patchPlan", async () => {
+  const { t, planId } = await setup();
+
+  await callClock(t, planId, "stageCrmWrite", {
+    operations: [
+      { op: "addFollowUp", email: "rhea@example.com", note: "chase the renewal", due: "tomorrow" },
+    ],
+  });
+  const afterTurn1 = await readPlan(t, planId);
+  expect(afterTurn1?.crmOperations).toHaveLength(1);
+
+  // The verbatim op the live model emitted.
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [
+      { op: "addFollowUp", email: "no-email", note: "to review our pricing page", due: "tomorrow" },
+    ],
+  });
+  // Pins the SPECIFIC refusal, not the generic `malformed` fallback — which also says "nothing was
+  // staged", so that phrase alone would pass with the new CRM_PARSE_REFUSAL entry deleted.
+  expect(reply).toMatch(/nothing was staged/i);
+  expect(reply).toMatch(/never invent/i);
+
+  const afterTurn2 = await readPlan(t, planId);
+  expect(afterTurn2?.crmOperations).toEqual(afterTurn1?.crmOperations);
+  expect((afterTurn2?.crmOperations?.[0] as { email: string }).email).toBe("rhea@example.com");
+  expect(afterTurn2?.kind).toBe("crm_write");
+  expect(afterTurn2?.status).toBe("proposed");
+  // And nothing was applied by either turn — the Approve gate is still the only write path.
+  expect(await contactRows(t)).toHaveLength(0);
+  expect(await followUpRows(t)).toHaveLength(0);
+});
+
 // The union arm the model must actively choose. `addContact` used to be the enum's FIRST member
 // and the schema's minimum valid emission (`required: ["op","email"]`), so it was reachable
 // without the model having chosen it at all. A follow-up's date is now structurally required.
