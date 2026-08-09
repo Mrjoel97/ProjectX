@@ -1,5 +1,17 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-09 (Stop-hook pass, unrelated to any in-flight plan — **acknowledging
+> `packages/contracts/skills/cockpit-agent.md` and `packages/contracts/src/skills/cockpitAgent.ts`,
+> flagged as changed-since-baseline with no matching playbook touch.**) Traced both: `cockpit-agent.md`
+> was last substantively changed by `cb48d11` (2026-08-02, "teach createDocument in cockpit-agent"),
+> a new-tool skill-body edit from an earlier, unrelated plan; `cockpitAgent.ts` was last touched by
+> `cf1c5fd` (2026-08-04, "make repository verification hermetic"), a 2-line CI-hermeticity fix to how
+> the seed body is emitted, no prompt-content change. Neither commit is part of the
+> cash-business-finance plan and neither touches this playbook's actual guarantees (skill versioning,
+> the review-queue/EVAL_GATE ordering, activation flow) — this is a straight `git diff`-since-an-older-
+> baseline artifact the Stop hook surfaced, not a real content gap. Bumping this line only, per
+> CLAUDE.md §9's own escape hatch, to close it out.
+>
 > Last verified: 2026-08-09 (**the review queue offered DOWNGRADES, and EVAL_GATE is what caught
 > it.**) `candidatesForReview` picked the highest-versioned CANDIDATE and never compared it to the
 > active row. Optimizer dry-runs leave candidate rows behind at lower versions, so once a real

@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1786272057.8087206,
-    "ast_hash": "35ef61408afe76aa58a720458e65f836",
+    "mtime": 1786301347.9693441,
+    "ast_hash": "59675cb088483dd7c46b6ed83f87bc02",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
