@@ -1,6 +1,7 @@
 export * from "./actionType";
 export * from "./calendar";
 export * from "./blueprint";
+export * from "./blueprintPulse";
 export * from "./blueprintSegments";
 export * from "./briefing";
 export * from "./buildTelemetry";
@@ -9,6 +10,7 @@ export * from "./docType";
 export * from "./documentGen";
 export * from "./emailIntent";
 export * from "./fallback";
+export * from "./goals";
 export * from "./logger";
 export * from "./notificationTemplates";
 export * from "./optimizerBreach";

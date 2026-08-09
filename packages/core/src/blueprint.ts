@@ -19,6 +19,7 @@
 //     `- <Label>: ` shape for that reason — see `serializeBlueprint`.
 
 import type { BusinessProfile, Tier } from "./businessProfile";
+import { GOALS_SPINE_MAX, type Goal, nearestActive, renderGoalLines } from "./goals";
 
 /**
  * The CLOSED field set (17.1-CONTEXT, "The field set is CLOSED"). Fixed and closed, or the diff
@@ -587,10 +588,13 @@ function spineLine(field: BlueprintField, entry: BlueprintEntry): string {
  * A labelled fence (the `<vault_context>` idiom already used in `llm.ts`) so the model reads it as
  * CONTEXT rather than as an instruction. Never `- **<Label>:** `: the spine is fed into
  * `evaluations.ts`, whose business-profile detector is the exact literal `- **Persona:**`.
+ *
+ * Also carries the goals block (spec §5.3 as amended): the `GOALS_SPINE_MAX` nearest deadlines,
+ * budgeted to `GOALS_BLOCK_CAP` — the headroom the field caps leave under `SPINE_CHAR_CAP`.
  */
 export function renderSpine(
   blueprint: BusinessBlueprint,
-  opts: { unincorporatedCount: number }
+  opts: { unincorporatedCount: number; goals?: readonly Goal[] },
 ): string {
   const lines: string[] = [];
   for (const field of BLUEPRINT_FIELDS) {
@@ -599,11 +603,18 @@ export function renderSpine(
     if (entry !== null && surviving(entry.values).length > 0) lines.push(spineLine(field, entry));
   }
 
+  // The deadline block (spec §5.3 as amended). Budgeted, not hoped: `renderGoalLines` caps each
+  // line and `nearestActive` caps the count, so the worst case is GOALS_BLOCK_CAP — which fits the
+  // headroom the field caps leave under SPINE_CHAR_CAP. Absent goals render NOTHING, keeping the
+  // no-goals spine byte-identical to before this block existed.
+  const goalLines = renderGoalLines(nearestActive(opts.goals ?? [], GOALS_SPINE_MAX));
+
   const out = [
     SPINE_OPEN,
     SPINE_INTRO,
     "",
     ...(lines.length > 0 ? lines : [SPINE_EMPTY]),
+    ...(goalLines.length > 0 ? ["", "Goals:", ...goalLines] : []),
     // Emitted iff something is unincorporated. Worded so the agent can SAY it is missing something
     // instead of asserting into the gap.
     ...(opts.unincorporatedCount > 0

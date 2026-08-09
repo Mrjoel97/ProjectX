@@ -164,6 +164,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
     .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"])
@@ -404,6 +406,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_thread", ["tenantId", "threadId"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
@@ -688,7 +692,11 @@ export default defineSchema({
     // NOT generalize to a partial prefix. There is no by_thread index because nothing reads by
     // thread: the UI subscribes to latestTurn (no threadId — the first-turn window) and filters
     // client-side on the returned threadId.
-    .index("by_tenant", ["tenantId"]),
+    .index("by_tenant", ["tenantId"])
+    // Pulse layer (living-map §3): per-specialist range read — 4 indexed queries (segments with a
+    // specialist; media has a dispatch tool but no segment) instead of a
+    // tenant-wide scan that grows with every cockpit turn.
+    .index("by_tenant_tool_startedAt", ["tenantId", "tool", "startedAt"]),
 
   // The test seam that lets a briefing run with NO Gmail token: gmail.listInbox /
   // fetchInboxBodies check this table BEFORE freshAccessToken and serve these messages when a
@@ -1211,6 +1219,23 @@ export default defineSchema({
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
   }).index("by_tenant", ["tenantId"]),
+
+  // Living-map slice 3 (§5.1). The intention plane: what the business is driving toward and by
+  // when. Deliberately NOT blueprint fields — the 11-field set is closed (D3), and a goal is a
+  // claim with a lifecycle, not a fact about the business.
+  goals: defineTable({
+    tenantId: v.string(),
+    segmentId: v.string(), // a BLUEPRINT_SEGMENTS id, validated at write
+    text: v.string(), // user content — content plane ONLY, never audited (CLAUDE.md §4)
+    targetDate: v.optional(v.number()),
+    // One level only, enforced at write: a parent may not itself have a parent.
+    parentId: v.optional(v.id("goals")),
+    status: v.union(v.literal("active"), v.literal("achieved"), v.literal("dropped")),
+    createdAt: v.number(),
+    // Stamped on every transition. `statusChangedAt - createdAt` on an achieved goal IS the cycle
+    // time — no history table until something needs more than the last transition.
+    statusChangedAt: v.number(),
+  }).index("by_tenant_status", ["tenantId", "status"]),
 
   // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second

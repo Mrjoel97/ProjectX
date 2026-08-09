@@ -8,13 +8,20 @@ import { openai } from "@ai-sdk/openai";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
+  aggregatePulse,
   BLUEPRINT_FIELDS,
+  BLUEPRINT_SEGMENTS,
   deserializeBlueprint,
   deserializeProfile,
+  dispatchToolFor,
   FIELD_SPEC,
   mergeBlueprint,
+  PULSE_WINDOW_MS,
+  type PulseGlobals,
+  type PulseStep,
   probesFor,
   renderSpine,
+  type SegmentPulse,
   serializeBlueprint,
   statedFromProfile,
   validateCandidates,
@@ -35,6 +42,7 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
+import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { sealedIn } from "./vaultFolders";
@@ -546,6 +554,79 @@ export const buildBlueprintDraft = tenantAction({
   },
 });
 
+type BlueprintPulseResult = {
+  segments: Record<string, SegmentPulse>;
+  globals: PulseGlobals;
+};
+
+/**
+ * The pulse layer's ONE read (living-map §3.1). Counts and timestamps only cross the wire (D6):
+ * the narrowing into `PulseStep` below is the enforcement point — nothing content-shaped leaves.
+ * `now` is a client arg: queries must be deterministic, and the 30-day window is the client's
+ * clock's business.
+ */
+export const blueprintPulse = tenantQuery({
+  args: { now: v.number() },
+  handler: async (ctx, { now }): Promise<BlueprintPulseResult> => {
+    const since = now - PULSE_WINDOW_MS;
+    const steps: PulseStep[] = [];
+    for (const segment of BLUEPRINT_SEGMENTS) {
+      const tool = dispatchToolFor(segment);
+      if (tool === null) continue;
+      const rows = await ctx.db
+        .query("agentSteps")
+        .withIndex("by_tenant_tool_startedAt", (q) =>
+          q
+            .eq("tenantId", ctx.tenantId)
+            // Safe: dispatchToolFor returns SPECIALISTS[*].stepTool, each a member of the closed
+            // agentSteps.tool union (core's totality test asserts distinctness+shape).
+            .eq("tool", tool as never)
+            .gt("startedAt", since),
+        )
+        .collect();
+      for (const r of rows)
+        steps.push({
+          tool: r.tool,
+          phase: r.phase,
+          startedAt: r.startedAt,
+          endedAt: r.endedAt,
+          durationMs: r.durationMs,
+        });
+    }
+
+    // Windowed on createdAt (the existing index), not on reaching the status — a send/plan created
+    // >30d ago that completes today is missed. Day-granular readout; the approximation is acceptable
+    // and named.
+    const sent = await ctx.db
+      .query("requests")
+      .withIndex("by_tenant_status_createdAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("status", "sent").gt("createdAt", since),
+      )
+      .collect();
+    const done = await ctx.db
+      .query("plans")
+      .withIndex("by_tenant_status_createdAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("status", "done").gt("createdAt", since),
+      )
+      .collect();
+    let plansInFlight = 0;
+    for (const status of ["collecting", "proposed", "delivering"] as const) {
+      const rows = await ctx.db
+        .query("plans")
+        .withIndex("by_tenant_status_createdAt", (q) =>
+          q.eq("tenantId", ctx.tenantId).eq("status", status),
+        )
+        .collect();
+      plansInFlight += rows.length;
+    }
+
+    return {
+      segments: aggregatePulse(steps, now),
+      globals: { sent30d: sent.length, plansDone30d: done.length, plansInFlight },
+    };
+  },
+});
+
 /** Stage-1 drift: a pure set difference, no detector, no cron (CONTEXT: "there is no separate
  *  drift detector"). `ready` docs whose id is not in the LIVE blueprint's source set.
  *  ponytail: a PLAIN async helper, not a registered internalQuery — every caller
@@ -595,7 +676,14 @@ export const spineForTenant = internalQuery({
       if (live === null) return null;
       const blueprint = deserializeBlueprint(live.text);
       const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
-      return renderSpine(blueprint, { unincorporatedCount: count });
+      const goalRows = await ctx.db
+        .query("goals")
+        .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
+        .collect();
+      return renderSpine(blueprint, {
+        unincorporatedCount: count,
+        goals: goalRows.map(toGoal),
+      });
     } catch {
       return null;
     }
