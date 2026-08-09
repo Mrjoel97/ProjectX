@@ -18,31 +18,34 @@ import {
 } from "@pikar/core";
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SEGMENT_COPY } from "./segmentCopy";
 
 // The blueprint drawn as a blueprint: segments are nodes on a pannable, zoomable sheet and the
 // wiring between them is the growth engine's own flow (`SEGMENT_FLOW` in core).
 //
-// Geometry is model-space, never DOM-measured. Every node is exactly NODE_W x NODE_H, so an edge's
-// endpoints are pure arithmetic on {x,y} — which is what lets the wires stay correct under a CSS
-// transform. Measuring `getBoundingClientRect` inside a scaled container is the classic way this
-// kind of canvas ends up with wires that drift as you zoom.
+// Geometry is model-space, never DOM-measured. Every node is exactly NODE_W wide and `nodeHeight()`
+// tall — pure arithmetic over which rows a segment's state renders — so an edge's endpoints are
+// pure arithmetic on {x,y} too, which is what lets the wires stay correct under a CSS transform.
+// Measuring `getBoundingClientRect` inside a scaled container is the classic way this kind of
+// canvas ends up with wires that drift as you zoom.
 //
 // Positions persist per browser (the AbnormalBriefBanner localStorage idiom). Arrangement is the
 // user's; the CONNECTIONS are not — dragging never rewires anything, because the wiring is a claim
 // about the business, not a preference.
 
-const NODE_W = 208;
-const NODE_H = 86;
+const NODE_W = 250;
 const LAYOUT_KEY = "pikar:blueprintLayout";
 
-/** Home positions in model space. Left-to-right reads as the engine's order. */
+/** Home positions in model space. Left-to-right reads as the engine's order. Spacing leaves a
+ *  40px gutter at NODE_W (250) between columns, and enough vertical room between money-model/
+ *  leads and foundation/evidence for the tallest node (3 fact bullets + flag + footer, ~150px). */
 const HOME: Record<string, { x: number; y: number }> = {
   foundation: { x: 40, y: 150 },
-  offer: { x: 270, y: 150 },
-  "money-model": { x: 500, y: 55 },
-  leads: { x: 500, y: 245 },
-  direction: { x: 730, y: 150 },
-  evidence: { x: 40, y: 320 },
+  offer: { x: 330, y: 150 },
+  "money-model": { x: 620, y: 50 },
+  leads: { x: 620, y: 250 },
+  direction: { x: 910, y: 150 },
+  evidence: { x: 40, y: 350 },
 };
 
 // ── document provenance ─────────────────────────────────────────────────────────────────────────
@@ -56,23 +59,56 @@ const HOME: Record<string, { x: number; y: number }> = {
 // keeps `source: source.title`, never a docId). Consequence, and it is deliberate to surface it: a
 // renamed or deleted document leaves a fact whose source matches nothing, which renders as an
 // uncited document rather than a silent hole.
-const DOC_ROW = 15; // one document line inside a node
-const DOC_MAX = 3; // more than this collapses to "+N more"
-const FLAG_ROW = 14; // the milestone-flag line, when the segment has a nearest dated active goal
+// Documents are cited by count in the footer now (provenance detail lives in the Knowledge band
+// on the anatomy panel, as "From <doc>"), so DOC_MAX no longer bounds a rendered row — only
+// BULLET_MAX does.
+const BULLET_MAX = 3; // fact bullets shown per node, most-identifying field first
 
-/** A node is as tall as its content: base, plus a row per document it carries, plus the "+N" row,
- *  plus the milestone flag row when this segment has a nearest dated active goal. Deterministic
- *  from the model, so edge endpoints stay pure arithmetic and never need measuring. */
-function nodeHeight(docCount: number, hasFlag: boolean): number {
-  const flagRow = hasFlag ? FLAG_ROW : 0;
-  if (docCount === 0) return NODE_H + flagRow;
-  return (
-    NODE_H +
-    12 +
-    Math.min(docCount, DOC_MAX) * DOC_ROW +
-    (docCount > DOC_MAX ? DOC_ROW : 0) +
-    flagRow
-  );
+const HEADER_H = 24; // status dot + label row
+const CONTENT_PAD = 12; // content grid's total vertical padding (top + bottom)
+const ROW_GAP = 4; // gap between content-grid rows
+const ROW_H = 14; // one single-line content row: descriptor, bullet, edge line, flag, footer text
+const DRAFT_ROW_H = 16; // draft-mode summary line (unchanged larger font)
+const YOURS_DOC_H = 18; // draft-mode YOURS/DOC split row (unchanged)
+const METER_H = 3; // meter bar
+
+/** Which fields of a segment have a value, capped to the bullets a node actually renders. Single
+ *  source of truth for "how many bullet rows" — used by both `nodeHeight` and the node body, so
+ *  they can never disagree about a node's row count. */
+function populatedBulletFields(
+  blueprint: BusinessBlueprint,
+  segment: BlueprintSegment,
+): BlueprintField[] {
+  return segment.fields.filter((f) => blueprint[f] !== null).slice(0, BULLET_MAX);
+}
+
+/** A node is as tall as its content: header, plus a descriptor row every segment always has, plus
+ *  whichever body the segment is in (draft summary + optional YOURS/DOC split, an edge-state
+ *  line, or fact bullets + footer), plus the milestone flag row when present. Every branch here
+ *  mirrors a condition in the node render below exactly — deterministic from the model, so edge
+ *  endpoints stay pure arithmetic and never need DOM measuring. */
+function nodeHeight(state: {
+  total: number;
+  built: boolean;
+  bulletCount: number;
+  hasFlag: boolean;
+  hasDraftSummary: boolean;
+  hasContradictions: boolean;
+}): number {
+  const isEdgeState =
+    !state.hasDraftSummary && (state.total === 0 || !state.built || state.bulletCount === 0);
+  const isNormal = !state.hasDraftSummary && !isEdgeState;
+
+  const rows: number[] = [ROW_H]; // descriptor — every segment always has this row
+  if (state.hasDraftSummary) rows.push(DRAFT_ROW_H);
+  if (isEdgeState) rows.push(ROW_H);
+  if (isNormal) for (let i = 0; i < state.bulletCount; i++) rows.push(ROW_H);
+  if (state.hasFlag) rows.push(ROW_H);
+  if (state.hasDraftSummary && state.hasContradictions) rows.push(YOURS_DOC_H);
+  if (isNormal) rows.push(ROW_H, METER_H); // footer text row + meter bar
+
+  const contentH = rows.reduce((a, b) => a + b, 0) + ROW_GAP * (rows.length - 1);
+  return HEADER_H + CONTENT_PAD + contentH;
 }
 
 type Point = { x: number; y: number };
@@ -125,7 +161,6 @@ export function BlueprintCanvas({
   );
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [dragId, setDragId] = useState<string | null>(null);
-  const [hoverDoc, setHoverDoc] = useState<string | null>(null);
 
   // Cheap metadata read — the same query the vault page and the brief banner already use, so
   // Convex dedupes the subscription rather than opening a second one.
@@ -314,6 +349,33 @@ export function BlueprintCanvas({
     return built && total > 0 && filled === total;
   };
 
+  // Every value `nodeHeight` needs, computed once per segment — used identically by the SVG edge
+  // math below and the node render further down, so the two can never disagree about a node's
+  // height. `nodeHeightState` (not just the height) is precomputed so the render branch that
+  // decides WHICH rows to draw reuses the exact same booleans nodeHeight summed.
+  const nodeHeightState = new Map<string, Parameters<typeof nodeHeight>[0]>();
+  for (const segment of BLUEPRINT_SEGMENTS) {
+    const { total } = segmentFill(blueprint, segment);
+    const draft = draftFor(segment);
+    nodeHeightState.set(segment.id, {
+      total,
+      built,
+      bulletCount: populatedBulletFields(blueprint, segment).length,
+      hasFlag: nextDueForSegment.has(segment.id),
+      hasDraftSummary: draft !== null && (draft.contradictions.length > 0 || draft.additions > 0),
+      hasContradictions: draft !== null && draft.contradictions.length > 0,
+    });
+  }
+  const stateFor = (id: string): Parameters<typeof nodeHeight>[0] =>
+    nodeHeightState.get(id) ?? {
+      total: 0,
+      built: false,
+      bulletCount: 0,
+      hasFlag: false,
+      hasDraftSummary: false,
+      hasContradictions: false,
+    };
+
   return (
     <div style={{ display: "grid", gap: "0.5rem" }}>
       <div
@@ -356,21 +418,9 @@ export function BlueprintCanvas({
               if (!a || !b) return null;
               const source = BLUEPRINT_SEGMENTS.find((s) => s.id === edge.from);
               const sx = a.x + NODE_W;
-              const sy =
-                a.y +
-                nodeHeight(
-                  (docsForSegment.get(edge.from) ?? []).length,
-                  nextDueForSegment.has(edge.from),
-                ) /
-                  2;
+              const sy = a.y + nodeHeight(stateFor(edge.from)) / 2;
               const tx = b.x;
-              const ty =
-                b.y +
-                nodeHeight(
-                  (docsForSegment.get(edge.to) ?? []).length,
-                  nextDueForSegment.has(edge.to),
-                ) /
-                  2;
+              const ty = b.y + nodeHeight(stateFor(edge.to)) / 2;
               const bend = Math.max(40, Math.abs(tx - sx) * 0.55);
               // A wire only "flows" when its source is fully captured, so the animation stops
               // exactly where the facts run out. Motion that reports state, not decoration.
@@ -412,6 +462,36 @@ export function BlueprintCanvas({
             const recency = recencyLevel(segPulse?.lastActivityAt ?? null, Date.now());
             const flight = breathing ? " · run in flight" : "";
 
+            // The three body shapes a node can be in — mirrors `nodeHeight`'s branches exactly.
+            const hasDraftSummary =
+              draft !== null && (draft.contradictions.length > 0 || draft.additions > 0);
+            const bulletFields = populatedBulletFields(blueprint, segment);
+            const isEdgeState =
+              !hasDraftSummary && (total === 0 || !built || bulletFields.length === 0);
+            const isNormal = !hasDraftSummary && !isEdgeState;
+            const edgeText =
+              total === 0
+                ? "nothing recorded yet"
+                : !built
+                  ? "not built yet"
+                  : "nothing recorded yet";
+            const draftSummaryText = hasDraftSummary
+              ? [
+                  draft && draft.contradictions.length > 0
+                    ? `${draft.contradictions.length} disagreement${draft.contradictions.length === 1 ? "" : "s"}`
+                    : null,
+                  draft && draft.additions > 0 ? `${draft.additions} new` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "";
+            const nowrap = {
+              whiteSpace: "nowrap" as const,
+              overflow: "hidden" as const,
+              textOverflow: "ellipsis" as const,
+              minWidth: 0,
+            };
+
             return (
               <button
                 key={segment.id}
@@ -437,7 +517,8 @@ export function BlueprintCanvas({
                   left: at.x,
                   top: at.y,
                   width: NODE_W,
-                  height: nodeHeight(segDocs.length, nextDue !== null),
+                  height: nodeHeight(stateFor(segment.id)),
+                  overflow: "hidden",
                   display: "grid",
                   gridTemplateRows: "auto 1fr",
                   textAlign: "left",
@@ -459,16 +540,13 @@ export function BlueprintCanvas({
                             : "rgb(64 202 208 / 34%)"
                   }`,
                   opacity:
-                    hoverDoc !== null &&
-                    !(sourceToSegments.get(hoverDoc) ?? new Set()).has(segment.id)
-                      ? 0.3
-                      : total === 0 && !selected
-                        ? 0.62
-                        : recency === "quiet"
-                          ? 0.7
-                          : recency === "recent"
-                            ? 0.85
-                            : 1,
+                    total === 0 && !selected
+                      ? 0.62
+                      : recency === "quiet"
+                        ? 0.7
+                        : recency === "recent"
+                          ? 0.85
+                          : 1,
                   boxShadow:
                     dragId === segment.id
                       ? "0 22px 40px -18px rgb(0 0 0 / 85%)"
@@ -511,31 +589,79 @@ export function BlueprintCanvas({
                 </span>
                 <span
                   style={{
-                    padding: "0.4rem 0.5rem",
+                    padding: "6px 8px",
                     display: "grid",
                     alignContent: "start",
-                    gap: "0.2rem",
+                    gap: `${ROW_GAP}px`,
+                    minWidth: 0,
                   }}
                 >
-                  <span style={{ fontSize: "0.78rem", opacity: selected ? 0.75 : 0.62 }}>
-                    {draft !== null && (draft.contradictions.length > 0 || draft.additions > 0)
-                      ? [
-                          draft.contradictions.length > 0
-                            ? `${draft.contradictions.length} disagreement${draft.contradictions.length === 1 ? "" : "s"}`
-                            : null,
-                          draft.additions > 0 ? `${draft.additions} new` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") + flight
-                      : total === 0
-                        ? `not tracked yet${flight}`
-                        : !built
-                          ? `not built yet${flight}`
-                          : `${filled} of ${total}${isGap ? " · needs you" : ""}${flight}`}
+                  {/* What this section IS — every segment always has this row. */}
+                  <span
+                    style={{
+                      ...nowrap,
+                      fontSize: "0.62rem",
+                      lineHeight: `${ROW_H}px`,
+                      opacity: selected ? 0.7 : 0.6,
+                    }}
+                  >
+                    {SEGMENT_COPY[segment.id]?.known ?? segment.label.toLowerCase()}
                   </span>
 
+                  {hasDraftSummary && (
+                    <span
+                      style={{
+                        ...nowrap,
+                        fontSize: "0.78rem",
+                        lineHeight: `${DRAFT_ROW_H}px`,
+                        opacity: selected ? 0.75 : 0.62,
+                      }}
+                    >
+                      {draftSummaryText}
+                      {flight}
+                    </span>
+                  )}
+
+                  {isEdgeState && (
+                    <span
+                      style={{
+                        ...nowrap,
+                        fontSize: "0.7rem",
+                        lineHeight: `${ROW_H}px`,
+                        opacity: selected ? 0.7 : 0.55,
+                      }}
+                    >
+                      {edgeText}
+                      {flight}
+                    </span>
+                  )}
+
+                  {/* The section's real content — what's actually recorded, not meta-information
+                      about how complete the record is. */}
+                  {isNormal &&
+                    bulletFields.map((field) => (
+                      <span
+                        key={field}
+                        style={{
+                          ...nowrap,
+                          fontSize: "0.64rem",
+                          lineHeight: `${ROW_H}px`,
+                          color: selected ? "var(--teal-900)" : "rgb(255 255 255 / 88%)",
+                        }}
+                      >
+                        • {blueprint[field]?.values.join(" · ")}
+                      </span>
+                    ))}
+
                   {nextDue !== null && (
-                    <span style={{ fontSize: "0.6rem", opacity: selected ? 0.75 : 0.7 }}>
+                    <span
+                      style={{
+                        ...nowrap,
+                        fontSize: "0.6rem",
+                        lineHeight: `${ROW_H}px`,
+                        opacity: selected ? 0.75 : 0.7,
+                      }}
+                    >
                       ◆ next milestone {countdown(nextDue.targetDate as number, Date.now())}
                     </span>
                   )}
@@ -543,13 +669,12 @@ export function BlueprintCanvas({
                   {/* A contradicted node splits: your side and the document's side, with the ticked
                       one lit. The tick itself lives in the review below — this reports the choice,
                       it does not make it. */}
-                  {draft !== null && draft.contradictions.length > 0 && (
+                  {hasDraftSummary && draft !== null && draft.contradictions.length > 0 && (
                     <span
                       style={{
                         display: "grid",
                         gridTemplateColumns: "1fr 1fr",
                         gap: 2,
-                        marginTop: "0.1rem",
                         fontSize: "0.56rem",
                         fontWeight: 700,
                         letterSpacing: "0.06em",
@@ -597,76 +722,40 @@ export function BlueprintCanvas({
                       </span>
                     </span>
                   )}
-                  {/* The documents that produced this segment's facts, IN the node. Provenance is
-                      local — a document only means something next to the fact it produced. Before a
-                      build there is nothing to attach, so the node says so rather than lying. */}
-                  {built && segDocs.length > 0 && (
+
+                  {/* Footer: fill ratio + document count (provenance detail lives in the Knowledge
+                      band on the anatomy panel, as "From <doc>" — a filename here is a count, not
+                      a list), plus the completion meter. */}
+                  {isNormal && (
                     <span
                       style={{
-                        display: "grid",
-                        gap: 2,
-                        marginTop: "0.3rem",
-                        paddingTop: "0.3rem",
-                        borderTop: `1px solid ${selected ? "rgb(11 79 74 / 12%)" : "rgb(64 202 208 / 20%)"}`,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "0.4rem",
+                        fontSize: "0.64rem",
+                        lineHeight: `${ROW_H}px`,
+                        opacity: selected ? 0.75 : 0.62,
+                        minWidth: 0,
                       }}
                     >
-                      {segDocs.slice(0, DOC_MAX).map((title) => (
-                        <span
-                          key={title}
-                          onPointerEnter={() => setHoverDoc(title)}
-                          onPointerLeave={() => setHoverDoc((h) => (h === title ? null : h))}
-                          title={title}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.3rem",
-                            fontSize: "0.6rem",
-                            lineHeight: `${DOC_ROW - 3}px`,
-                            color: selected ? "var(--teal-900)" : "rgb(255 255 255 / 78%)",
-                            opacity: hoverDoc === null || hoverDoc === title ? 1 : 0.45,
-                          }}
-                        >
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              width: 4,
-                              height: 4,
-                              flex: "none",
-                              borderRadius: 1,
-                              background: selected ? "var(--teal-600)" : "var(--teal-400)",
-                            }}
-                          />
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {title}
-                          </span>
-                        </span>
-                      ))}
-                      {segDocs.length > DOC_MAX && (
-                        <span
-                          style={{
-                            fontSize: "0.58rem",
-                            lineHeight: `${DOC_ROW - 3}px`,
-                            opacity: 0.6,
-                            paddingLeft: "0.55rem",
-                          }}
-                        >
-                          +{segDocs.length - DOC_MAX} more
+                      <span style={nowrap}>
+                        {filled} of {total}
+                        {isGap ? " · needs you" : ""}
+                        {flight}
+                      </span>
+                      {segDocs.length > 0 && (
+                        <span style={{ flex: "none" }}>
+                          {segDocs.length} doc{segDocs.length === 1 ? "" : "s"}
                         </span>
                       )}
                     </span>
                   )}
 
-                  {total > 0 && (
+                  {isNormal && (
                     <span
                       aria-hidden="true"
                       style={{
-                        height: 3,
+                        height: METER_H,
                         borderRadius: 2,
                         background: selected ? "rgb(11 79 74 / 15%)" : "rgb(255 255 255 / 15%)",
                         overflow: "hidden",

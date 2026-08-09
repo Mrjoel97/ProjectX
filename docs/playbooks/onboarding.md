@@ -1,6 +1,30 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
+> Last verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
+> Goals are a SEPARATE `goals` table, never a twelfth blueprint field — the eleven-field set stays
+> closed (D3), so a goal is a claim about the future rather than a fact about the business. All
+> selection, countdown and cycle-time arithmetic is pure `@pikar/core/goals.ts` (`nearestActive`,
+> `renderGoalLines`, `countdown`, `cycleTimeDays`, `goalsForSegment`); the Convex adapter
+> (`convex/goals.ts`: `listGoals`/`addGoal`/`setGoalStatus`) only scopes, validates (unknown segment
+> and 1-500-char text both throw, never a silent no-op) and audits — goal `text` is content-plane and
+> never enters an audit payload, which carries only ids/enums/counts (§4). `renderSpine` gained an
+> optional trailing `Goals:` block for the `GOALS_SPINE_MAX` (3) nearest active deadlines, and its
+> size is ARITHMETIC, not hopeful: `GOALS_BLOCK_CAP` (header + `GOALS_SPINE_MAX × GOAL_LINE_CAP`,
+> 203 chars) has to fit the headroom the eleven `FIELD_SPEC` caps leave under `SPINE_CHAR_CAP`
+> (2500), and `renderSpine` THROWS above that cap — `blueprint.test.ts`'s `HUGE` fixture (every
+> field maxed, max staleness, an oversized goals list) measures the true worst case at 2495/2500,
+> a five-character margin. Widen a `FIELD_SPEC` cap, `GOAL_LINE_CAP` or `GOALS_SPINE_MAX` and that
+> arithmetic must be redone or the next cockpit turn or grounding call throws. `spineForTenant`
+> reads active goals inside its existing try/catch, so a goals read failure degrades the spine to
+> `null` rather than breaking the caller. Parentage (one level, enforced at write time) is UI-only —
+> deliberately dropped from the spine, there is no room for it in a 64-char goal line. Canvas nodes
+> (`BlueprintCanvas.tsx`) now carry a descriptor line (`SEGMENT_COPY[id].known`) plus up to three
+> single-line fact bullets per segment instead of meta-information alone; document filenames
+> collapsed to a per-segment count (provenance detail stays on the anatomy panel's Knowledge band);
+> and every conditional node row (bullets, milestone flag, footer, draft summary + YOURS/DOC split)
+> must stay mirrored in `nodeHeight`'s row list or the wires drift under zoom.
+>
+> Previously verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
 > end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
 > (`STALE_RUN_MS`, with a reduced-motion fallback that swaps the breath for a static indicator),
 > recency dims in the same stepped fresh/recent/quiet bands `aggregatePulse` already computes, and
