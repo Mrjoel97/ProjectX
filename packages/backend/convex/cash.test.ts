@@ -127,6 +127,42 @@ describe("cash.saveInput", () => {
     const evaluations = await t.run((ctx) => ctx.db.query("evaluations").collect());
     expect(evaluations).toHaveLength(0);
   });
+
+  // Whole-branch review B1: the tenant's newest `evaluations` row can be a `document-review` row
+  // with a LITERAL `scorecard: {}` (`voiceDoc.ts`). Before the fix, `saveInput` for a scorecard-store
+  // field crashed reaching for that row through `latestScorecardRow`, and the UI reported "That
+  // number could not be saved." `latestScorecardRow` now skips it, so `saveInput` seeds a fresh,
+  // well-formed carrier instead of touching the malformed one.
+  test("saveInput succeeds when the tenant's newest evaluations row has no usable scorecard", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: "tenant-a",
+        threadId: "docreview-thread",
+        framework: "document-review",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "insufficient",
+        createdAt: Date.now(),
+      });
+    });
+
+    await asTenant(t, "tenant-a").mutation(api.cash.saveInput, { field: "cac", value: 1400 });
+
+    const rows = await t.run((ctx) =>
+      ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "tenant-a"))
+        .collect(),
+    );
+    const withCac = rows.find((row) => row.scorecard?.financials?.cac === 1400);
+    expect(withCac).toBeDefined();
+    // The malformed row is untouched, not patched in place.
+    expect(rows.find((row) => row.threadId === "docreview-thread")?.scorecard).toEqual({});
+  });
 });
 
 describe("cash.inputs", () => {

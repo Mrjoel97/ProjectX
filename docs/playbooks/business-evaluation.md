@@ -1,5 +1,30 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-09 (cash-business-finance whole-branch review B1 — **`latestScorecardRow`
+> can select a row with no usable Scorecard, and `setPath` used to throw on one.** Two reachable
+> producers write a row this Finance-page reader must not hand back as "the tenant's financial
+> truth": `voiceDoc.ts` inserts a `framework: "document-review"` row with `scorecard: {}` LITERALLY
+> (never routed through this engine — see the "document-review" entry below), and this engine's own
+> `runEvaluation`, run by the cockpit's `assessBusiness` tool on a BRAND-NEW conversation thread, has
+> no prior row to carry forward and seeds from `emptyScorecard` before it fills anything in. Either
+> shape made `packages/core/src/cash.ts`'s `scorecard.financials.*` reads crash. Fixed in THIS file
+> (`evaluations.ts`), two layers: (1) `latestScorecardRow` (exported plain function, `by_tenant`,
+> newest-200 bounded) now skips `framework === "document-review"` rows and any row whose `scorecard.
+> financials` is absent, via a new `hasUsableScorecard` predicate — a Scorecard whose LEAVES are
+> merely `null` (the normal not-yet-answered state) still counts as usable, only a missing
+> `financials` object does not. (2) `setPath` (the dot-path writer `applyScorecardAnswer` and
+> `runEvaluation`'s `fillVault` both use) now CREATES intermediate objects instead of assuming they
+> already exist — `cur["financials"] === undefined` used to make the final assignment throw; it is
+> now created as `{}` and the walk continues. Chosen over making `cash.ts`'s `saveInput` guarantee a
+> well-formed carrier before calling `applyScorecardAnswer`, because `setPath` has OTHER callers that
+> would each need the same guard repeated — fixing the shared function once is the root-cause fix
+> (CLAUDE.md §8). See `docs/playbooks/dashboard-pages.md`'s "Cash — the Business tab, assembled" and
+> "Cash — unit economics" sections for the Finance-page-side layers of the same fix (the crash site
+> and the caller). Zero behavior change for the engine's own grounding/diagnosis/carry-forward path —
+> `evaluations.test.ts` gained 4 tests (`latestScorecardRow` skip behaviour ×2, `setPath`
+> non-throwing on a malformed carrier ×1 — folded into the count with the pre-existing suite) and is
+> 29/29.)
+>
 > Last verified: 2026-08-09 (cash-business-finance Task 3 review fix — **`userProvidedAt` closes
 > the "a carried-forward answer reads as freshly confirmed" bug.** `runEvaluation`'s carry-forward
 > stamps every new row with a fresh `createdAt` while copying `scorecard`/`userProvided` verbatim —
