@@ -5,7 +5,7 @@
     "semantic_hash": ""
   },
   ".planning/config.json": {
-    "mtime": 1785883274.1799922,
+    "mtime": 1786269710.1918502,
     "ast_hash": "4939b09ba2f535b0113f95732e993256",
     "semantic_hash": ""
   },
@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1786223006.9914825,
-    "ast_hash": "7f4c9f1b5bd220e390a0d30e79db3a58",
+    "mtime": 1786270249.3403225,
+    "ast_hash": "aa855f014362a76af6637f8c4953a399",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/index.ts": {
-    "mtime": 1786254094.0581124,
-    "ast_hash": "44bcad21ed22a7ac1fb1e7f29bfab492",
+    "mtime": 1786269875.6278896,
+    "ast_hash": "186eb9c8492839d24817f4925018ff51",
     "semantic_hash": ""
   },
   "packages/core/src/logger.ts": {
@@ -255,8 +255,8 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1786247824.0165098,
-    "ast_hash": "ba05017b669e7fc0e3cd7999b1e24c1c",
+    "mtime": 1786255297.473321,
+    "ast_hash": "894c5667adff78ad54da1f4f10b2524a",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1786254700.333606,
-    "ast_hash": "388c97aac269e2510f83f7ad2d92f044",
+    "mtime": 1786270453.492963,
+    "ast_hash": "e695354dff479b6e7a58e85bd237c35d",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -7255,8 +7255,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1786254728.8014214,
-    "ast_hash": "ee8328edae88eb6b126c7511794081e3",
+    "mtime": 1786270142.1514807,
+    "ast_hash": "61800dec65bff01ba3d748ef973cab08",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7930,8 +7930,8 @@
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-08-09-cash-business-finance/progress.md": {
-    "mtime": 1786253863.4469564,
-    "ast_hash": "204b642649b5e577d8980e40e40c3f8f",
+    "mtime": 1786269955.7850156,
+    "ast_hash": "5287b6e96540b9c77264991b873f45ca",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-08-09-cash-business-finance/task-1-brief.md": {
@@ -7940,13 +7940,13 @@
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-08-09-cash-business-finance.md": {
-    "mtime": 1786252286.5257132,
-    "ast_hash": "dfc1afb167f480f7a38853a9828f2988",
+    "mtime": 1786269873.2092109,
+    "ast_hash": "3f5bcd339fba98c044ce1b52f1e9e985",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/CashView.tsx": {
-    "mtime": 1786254661.991614,
-    "ast_hash": "3b28897507ef70c3bfdd0acb6bf761fe",
+    "mtime": 1786269928.4216993,
+    "ast_hash": "77ec32a680013bb148dc895350d14620",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx": {
@@ -7975,8 +7975,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/cashView.test.ts": {
-    "mtime": 1786254661.9776864,
-    "ast_hash": "30f0bd7b2c9bc71022f7740644aa09fb",
+    "mtime": 1786269940.7160757,
+    "ast_hash": "4c69fbd39891a9a5d1d07179c1e86af9",
     "semantic_hash": ""
   },
   "packages/backend/convex/cash.test.ts": {
@@ -7990,13 +7990,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/cash.test.ts": {
-    "mtime": 1786254049.6625466,
-    "ast_hash": "44c7201d96a5f463bf043951c1e12685",
+    "mtime": 1786269860.7242827,
+    "ast_hash": "0da40cb872c630acc28eb145eea9f349",
     "semantic_hash": ""
   },
   "packages/core/src/cash.ts": {
-    "mtime": 1786254088.693652,
-    "ast_hash": "abb0b9efa0f0ba518c4c3aaa75891cf6",
+    "mtime": 1786269900.8815534,
+    "ast_hash": "5aa75ddf9e3fdafbe346cffe4fe99645",
     "semantic_hash": ""
   },
   ".planning/phases/19-contacts-crm-follow-ups/19-01-PLAN.md": {
@@ -8022,6 +8022,56 @@
   ".planning/phases/19-contacts-crm-follow-ups/19-05-PLAN.md": {
     "mtime": 1786254751.2238345,
     "ast_hash": "18b0c3e8b3825c71dc7a1e09e08772be",
+    "semantic_hash": ""
+  },
+  ".planning/phases/19-contacts-crm-follow-ups/19-06-PLAN.md": {
+    "mtime": 1786254846.3530684,
+    "ast_hash": "006d7f6350ae012116fc7d4eab3fcac5",
+    "semantic_hash": ""
+  },
+  ".planning/phases/19-contacts-crm-follow-ups/19-07-PLAN.md": {
+    "mtime": 1786254945.5962682,
+    "ast_hash": "f893ba6d04ed60e09fff28448709cd36",
+    "semantic_hash": ""
+  },
+  ".planning/phases/19-contacts-crm-follow-ups/19-08-PLAN.md": {
+    "mtime": 1786255024.8560586,
+    "ast_hash": "530cabaa4dc2906ad7885f981cfdf443",
+    "semantic_hash": ""
+  },
+  ".planning/phases/19-contacts-crm-follow-ups/19-09-PLAN.md": {
+    "mtime": 1786255230.6688364,
+    "ast_hash": "5522bd56dcb9f973e44d957116c87675",
+    "semantic_hash": ""
+  },
+  ".planning/phases/19-contacts-crm-follow-ups/19-10-PLAN.md": {
+    "mtime": 1786255835.4636478,
+    "ast_hash": "2a09fe868928ae061cbe388d33191b66",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-08-09-cash-business-finance/task-2-report.md": {
+    "mtime": 1786254991.0761979,
+    "ast_hash": "45179a15f727a15665eb7b0d1553b3ae",
+    "semantic_hash": ""
+  },
+  "packages/core/src/contacts.test.ts": {
+    "mtime": 1786269815.0896323,
+    "ast_hash": "21cdfa0731b6a0850988a2db6a068d07",
+    "semantic_hash": ""
+  },
+  "packages/core/src/contacts.ts": {
+    "mtime": 1786270150.3818614,
+    "ast_hash": "fabf21986eef0df54bfba4dc572d2da4",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-08-09-cash-business-finance/task-3-brief.md": {
+    "mtime": 1786270081.9522808,
+    "ast_hash": "19911df99da5daa9ec23420bd00ba915",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/contacts-crm.md": {
+    "mtime": 1786270447.8852699,
+    "ast_hash": "8bd7895862e4a85bcbcfa2fc232ba02b",
     "semantic_hash": ""
   }
 }
