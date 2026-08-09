@@ -1,6 +1,9 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
+> Last verified: 2026-08-09 (`BlueprintPanel.tsx` — selecting a segment, from the canvas or the
+> ledger, now scrolls its detail into view, honouring `prefers-reduced-motion`.)
+>
+> Previously verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
 > Goals are a SEPARATE `goals` table, never a twelfth blueprint field — the eleven-field set stays
 > closed (D3), so a goal is a claim about the future rather than a fact about the business. All
 > selection, countdown and cycle-time arithmetic is pure `@pikar/core/goals.ts` (`nearestActive`,

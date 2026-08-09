@@ -204,6 +204,18 @@ function BlueprintReport({
   const [open, setOpen] = useState<string | null>(null);
   const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
 
+  // A click that visibly selects a node but renders its detail off-screen (below the canvas AND
+  // the ledger) reads as a broken control on a tall page. Runs after the anatomy's own render
+  // (this effect is keyed on `open`, which only changes once SegmentAnatomy is already in the
+  // tree), so the section is guaranteed to exist by the time we look it up.
+  useEffect(() => {
+    if (open === null) return;
+    const el = document.getElementById(`segment-detail-${open}`);
+    if (el === null) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+  }, [open]);
+
   const known = BLUEPRINT_SEGMENTS.filter((s) => {
     const { filled, total } = segmentFill(blueprint, s);
     return total > 0 && filled === total;
