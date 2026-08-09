@@ -19,6 +19,7 @@ import type * as calendar from "../calendar.js";
 import type * as calendarComplete from "../calendarComplete.js";
 import type * as cash from "../cash.js";
 import type * as cockpit from "../cockpit.js";
+import type * as contacts from "../contacts.js";
 import type * as crons from "../crons.js";
 import type * as deadLetter from "../deadLetter.js";
 import type * as deadLetters from "../deadLetters.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   calendarComplete: typeof calendarComplete;
   cash: typeof cash;
   cockpit: typeof cockpit;
+  contacts: typeof contacts;
   crons: typeof crons;
   deadLetter: typeof deadLetter;
   deadLetters: typeof deadLetters;
