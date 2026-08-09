@@ -11,7 +11,74 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
-> Last verified: 2026-08-09 (Plan 19-07 — WATCH-GATE BUMP ONLY, no cockpit behaviour changed.
+> Last verified: 2026-08-09 (Plan 19-08 — **the cockpit now READS the person store in-loop and
+> STAGES its writes through the plan gate.** `llm.ts`, `schema.ts` and `cards.tsx` changed, in ONE
+> commit, plus a new `internal.contacts.savedForName`.)
+>
+> **1. CONTACTS FIRST, mailbox second, inside the EXISTING `resolveContacts`.** A saved contact is a
+> DELIBERATE HUMAN STATEMENT about who someone is; a Gmail-header match is an INFERENCE drawn from
+> who happened to share a thread. So `resolveContacts` looks the name up against `contacts` first and
+> only falls through to `internal.gmail.search` on a miss. There is deliberately NO second resolution
+> tool — that would be a second registration surface for one job. Both planes rank with the SAME
+> `rankCandidates` (@pikar/core), fed saved rows shaped as header records, so the two can never
+> disagree about who Sarah is. On a hit the match's OPEN follow-ups ride back in the same return, so
+> "what do I owe them?" costs no second tool call; each note goes through `scanText` first, because a
+> note is prose that could hold an address and this tool's contract is that no address reaches the
+> model (§2-D).
+>
+> **2. `resolveContacts` NEVER WRITES A CONTACT ROW, and that absence is the SC#7 enforcement point.**
+> "No contacts cache at rest" (contacts-crm.md invariant 1) means a row exists only because a human
+> deliberately acted, and resolving a name is not that act. `savedForName` is an `internalQuery` with
+> no write in it and the header plane writes nothing either. **Proven by ROW COUNT, not by reading
+> code**: `cockpitTools.test.ts` counts `contacts` before and after a resolution that matched nothing,
+> one and several. The contacts-first ORDERING is proven the same way — `gmail.search` always writes
+> exactly one refs-only `mailbox.searched` audit row, so zero rows means the header search never ran.
+> A reply-string check would pass on a header search that returned the same labels.
+> MUTATION-VERIFIED: adding an unconditional `gmail.search` call above the saved branch turns that
+> assertion RED (`expected [ { …(8) } ] to have a length of +0 but got 1`).
+>
+> **3. `stageCrmWrite` is ONE tool carrying a LIST, and it applies NOTHING.** A `saveContact` tool and
+> a `logFollowUp` tool would be two registration surfaces, two literals, two VERB entries and two
+> fixtures for one governed act — and 19-CONTEXT locks "one plan carries a list of operations, applied
+> atomically", which two tools cannot express. It patches `kind: "crm_write"`, `status: "proposed"`
+> and `crmOperations`, and `executePlan`'s `inline` arm (19-06) is the only thing that ever writes a
+> row. Four properties are load-bearing:
+> - **`parseCrmOperations` runs at the WRITE boundary too**, not only at the apply-boundary re-parse.
+>   It is idempotent over its own output, so the double parse is safe by construction, and the plan
+>   row therefore stores NORMALIZED addresses the applier never re-derives.
+> - **The AGENT may only ADD.** `completeFollowUp`/`cancelFollowUp` are refused at this boundary even
+>   though `CrmOperation` carries them: closing someone's follow-up is a judgement about work being
+>   finished and the Pipeline page is where a human makes it. Same asymmetry as invariant 11.
+> - **§2-D on the due date.** The model passes the user's WORDS (`due`), never an instant; the tool
+>   resolves them with `parseSendTime` against the TRUSTED `clientContext` clock and refuses without
+>   one. A model-supplied epoch would be a fabricated date rendered on an approvable card.
+> - **`origin` is not a model input.** It is hardcoded `mailbox-resolved`, the same literal
+>   `applyCrmOperations` uses when a follow-up upserts its contact. Letting the model label
+>   provenance would make the field unreliable for everyone downstream.
+>
+> **4. It REFUSES over a half-composed email rather than hijacking the plan row.** A thread has ONE
+> plan row, so patching `kind`/`status` onto a row holding recipients/subject/body/attachments would
+> turn a live email draft into a CRM card and strand the work. The `stageResearchPlan` /
+> `stageMediaPlan` refusal, applied to the same hazard. Every refusal — draft in progress, add-only,
+> no clock, an unparseable list, an undated or contactless follow-up — is a RETURNED SENTENCE, never a
+> throw out of the governed loop (18-06's rule).
+>
+> **5. THREE registration surfaces, and the plan's count was right this time.** `llm.ts`'s tool key,
+> `schema.ts`'s `agentSteps.tool` literal and `cards.tsx`'s VERB entry, all in one commit. BOTH guards
+> were mutation-proven: dropping the schema literal turns `cockpitTools.test.ts`'s key-scan RED
+> (`expected [ 'stageCrmWrite' ] to deeply equal []`) **and** `traceParity.test.ts` red on the orphan
+> side; dropping the VERB entry turns `traceParity.test.ts` RED on the missing-verb side
+> (`agentSteps.tool literals with no VERB entry …: stageCrmWrite`). NEW this plan: because
+> `SMOKE_OP_TOOL` is `Record<AgentSmokeOp["kind"], StepTool>` and `StepTool` derives from the schema
+> union, a SMOKE-registered tool ALSO breaks `tsc` when its literal is dropped. That is a stronger
+> guard than the 14-site checklist below has for any other surface — but it only exists for tools
+> with a SMOKE op, so do not generalise it.
+>
+> **6. The tool key is NOT yet visible to the model.** Registering a tool does not put it in the
+> model's context; the active `cockpit-agent` skill body must teach it (the 18-06 → 18-08 lesson).
+> Until then only the `SMOKE::agent::crm=` op reaches it. 19-09 owns the body edit and the eval.
+>
+> Previously verified: 2026-08-09 (Plan 19-07 — WATCH-GATE BUMP ONLY, no cockpit behaviour changed.
 > This playbook watches `apps/web/e2e/`, and 19-07 authored `e2e/pipeline.spec.ts` — two tests,
 > discoverable, **never executed**. Nothing in `cockpit.ts`, the tool set or the arm table moved.)
 >

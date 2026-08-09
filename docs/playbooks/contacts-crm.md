@@ -1,6 +1,12 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-07 — **the Pipeline page is CONNECTED, and this module has
+> Last verified: 2026-08-09 (Plan 19-08 — **the agent now READS this store in-loop.**
+> `internal.contacts.savedForName` is the module's first COCKPIT read: a name lookup against
+> `contacts` plus each match's open follow-ups, with NO write anywhere in it. Invariant 16 below is
+> new and records that the write-absence is now mutation-proven rather than argued. The staging tool
+> that produces `crm_write` plans lives in `llm.ts` — see cockpit.md.)
+>
+> Previously verified: 2026-08-09 (Plan 19-07 — **the Pipeline page is CONNECTED, and this module has
 > public READS for the first time.** `pipelineTiles`, `listContacts` and `listUnassignedFollowUps`
 > land here rather than in a second store, which is PIPE-01 satisfied by construction. Invariant 3
 > stopped being a promise and became a component test; invariant 14 below is new and records the
@@ -106,8 +112,12 @@ graph cannot see:
    **human act → `tenantMutation` (tenantId injected, never passed) → `normalizeAddress` →
    `by_tenant_email` upsert.** One address is one row; a blank address is refused at that boundary
    rather than collapsing every nameless save onto a `""` key.
-2. **Resolve.** A cockpit turn naming a person checks `contacts` FIRST; only on a miss does it fall
-   back to `resolveContacts` (`llm.ts`) and the existing Gmail candidates/resolution card.
+2. **Resolve (SHIPPED 19-08).** A cockpit turn naming a person calls `resolveContacts` (`llm.ts`),
+   which queries `internal.contacts.savedForName` FIRST and only falls through to
+   `internal.gmail.search` on a miss. Both planes rank with the SAME `rankCandidates`, so the saved
+   record and the header inference cannot disagree about who a name means. A saved hit returns that
+   contact's OPEN follow-ups in the same call. **Neither plane writes a contact row** — see
+   invariant 16.
 3. **Follow up.** A `followUps` row carries a REQUIRED `dueAt`. `followUpIsDue(dueAt, now)` decides
    the tile; `needsAttention(contactId, openIds)` decides the complementary one.
 4. **Send.** The drafter's body gets `renderFooter({ postalAddress, unsubscribeUrl })` appended —
@@ -292,6 +302,18 @@ ways: hedge a number you know, and you lie; print `0` for a fact you do not have
 harder).
 *Enforcement:* `contacts.test.ts` "lastTouchAt is the NEWER of the newest delivered send and the
 newest completed follow-up", which also pins the `null` case.
+
+**16. Resolution NEVER writes a contact row, and it is proven by COUNTING (19-08).**
+Invariant 1 says a row exists only because a human deliberately acted. Resolving a name is not that
+act, so `savedForName` is an `internalQuery` with no write in it and the Gmail-header fallback mints
+nothing either. That is now mechanical: `cockpitTools.test.ts` counts `contacts` rows before and
+after a resolution that matched NOTHING, ONE and SEVERAL. The contacts-FIRST ordering is counted the
+same way — `gmail.search` always writes exactly one refs-only `mailbox.searched` audit row, so zero
+rows means the mailbox was never touched. *Enforcement:* MUTATION-VERIFIED — inserting an
+unconditional `gmail.search` above the saved branch turns that count RED. Reading the reply string
+would not have caught it, because a header search returning the same labels reads identically.
+**Do not "warm the cache" by upserting what resolution found.** That single line would re-open
+invariant 1, and the count is what would stop you.
 
 **15. The Pipeline nav item stays `soon: true` in Phase 19 (19-07).**
 `apps/web/app/(app)/layout.tsx` keys the rail off `href`, not `soon`, so **adding the href IS the

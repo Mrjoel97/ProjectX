@@ -6,6 +6,44 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
+> Last verified: 2026-08-09 (Plan 19-08 — **a FIFTEENTH `SMOKE::agent::` op, `crm=`, drives the new
+> `stageCrmWrite` tool offline at $0.** No `smoke.ts` change was needed: unlike `brief=`, this op
+> seeds no fixture, and unlike `create=` it makes NO model call, so nothing in the turn can reach a
+> gateway.)
+>
+> **THE VERBATIM STRINGS — 19-09's eval fixture and 19-10's UAT both need these exactly.**
+> ```
+> SMOKE::agent::crm=new@example.com
+> SMOKE::agent::crm=new@example.com:send the quote
+> ```
+> The first stages ONE `addContact`; the second stages that contact PLUS an `addFollowUp` carrying
+> the note, due `tomorrow` — which resolves deterministically to 2020-01-02 09:00 UTC because the
+> SMOKE path pins `clientContext` to `{ tz: "UTC", nowMs: SMOKE_NOW_MS }`. A missing address
+> (`crm=`) parses to `null` and drives nothing. The op leaves the plan row at
+> `kind: "crm_write", status: "proposed"` and writes ZERO `contacts`/`followUps` rows: the Approve
+> gate is still the only application path.
+>
+> **This op needs NO nested `SMOKE::route=direct_llm::` prefix, and that is a DIFFERENCE, not an
+> omission.** `create=` requires `SMOKE::agent::create=long:SMOKE::route=direct_llm:: <topic>`
+> because `create=` only picks the TOOL — `createDocument` then calls `draftDocument`, which without
+> the nested prefix fires `generateObject` for real and throws with no key (the 18-06/18-07 lesson).
+> `stageCrmWrite` calls no model at all, so the turn is already offline the moment `parseAgentSmoke`
+> matches. **Do not copy the `create=` string shape here and do not "add the missing prefix"** — it
+> would land inside the email address and the op would refuse.
+>
+> **FIVE registration sites, not four** (all in `llm.ts`, all in one commit): the grammar comment,
+> the `AgentSmokeOp` union arm, the `parseAgentSmoke` case, the `SMOKE_OP_TOOL` record, and the
+> `runAgentSmokeOp` case. The union and both switches are compile-forced; the comment is not.
+> One BONUS guard, new here: `SMOKE_OP_TOOL` is `Record<AgentSmokeOp["kind"], StepTool>` and
+> `StepTool` derives from the `agentSteps.tool` schema union, so a SMOKE-registered tool whose
+> schema literal goes missing breaks `tsc` as well as the two runtime guards. Tools WITHOUT a SMOKE
+> op get no such warning — do not generalise it.
+>
+> **The eval fixture owed by the 18-08 override condition lands in 19-09**, together with the
+> `cockpit-agent` body edit that makes `stageCrmWrite` visible to the model at all. Registering the
+> tool did NOT teach it: until that body ships, the ONLY thing that reaches this tool is the smoke
+> string above.
+
 > Last verified: 2026-08-08 (**OPEN DEFECT — `citesVaultDoc` on fixtures 29/30/31. READ THIS BEFORE
 > FORMING A FIFTH THEORY.**) Four hypotheses were proposed and each was killed by measurement, so
 > the value here is the ELIMINATION, not a fix. The fixture asserts that the seeded vault needle
