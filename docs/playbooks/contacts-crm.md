@@ -1,10 +1,9 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (`packages/backend/convex/contacts.ts` is in progress from another lane,
-> mid-session, uncommitted — this bump only clears the watch gate for the current file state; it is
-> not a content review. The owning lane's own commit is expected to supersede this line with the
-> real summary when the work lands.)
+> Last verified: 2026-08-09 (Plan 19-02 — the person store, isolation assertion, audit key-set pin)
 >
+> Previously verified: 2026-08-09 (a foreign lane's watch-gate bump over this file's in-progress
+> state — not a content review; superseded by the line above)
 > Previously verified: 2026-08-09 (Plan 19-01 — pure core, three tables, playbook created)
 > Build history: `.planning/phases/19-contacts-crm-follow-ups/` · Related ADRs: none
 
@@ -31,8 +30,17 @@ about them — and there was nowhere to record that someone had asked to stop be
 **Backend**
 - `packages/backend/convex/schema.ts` — the `contacts`, `followUps` and `suppressions` tables and
   `tenantProfiles.postalAddress`. The comments there are the contract, not decoration.
-- `packages/backend/convex/contacts.ts` / `contacts.test.ts` — the thin Convex adapter (tenant
-  wrappers only, CLAUDE.md §2) and the unsubscribe HTTP route. Landing in later 19-* plans.
+- `packages/backend/convex/contacts.ts` — the thin Convex adapter (tenant wrappers only,
+  CLAUDE.md §2). Six public writes: `upsertContact`, `assertConsent`, `markSuppressed`,
+  `unsuppress`, `createFollowUp`, `setFollowUpStatus`. Five internals the rest of the phase
+  consumes: `isSuppressed`, `suppressedAmong`, `footerFor`, `resolveUnsubToken`,
+  `suppressFromUnsubscribe`. There are deliberately NO public reads here yet — the Pipeline page's
+  reads land with the page. (No line numbers: they rot.)
+- `packages/backend/convex/contacts.test.ts` — the BETA-05 isolation block over every public
+  function by name, the runtime audit key-set assertion, and the no-opportunities structural scan.
+  Its last two tests pin the EXPORT SETS, so a seventh public write added without an isolation
+  test fails there rather than shipping unasserted.
+- `packages/backend/convex/http.ts` — the unsubscribe HTTP route. Landing in 19-04.
 
 **Frontend**
 - `apps/web/app/(app)/dashboard/pipeline/` — the Pipeline page: four tiles, the contact table, the
@@ -53,15 +61,19 @@ graph cannot see:
 - **`tenantProfiles.postalAddress`** gates sending entirely. A tenant with no postal address cannot
   send — `renderFooter` throws. `/dashboard/profile` is the enrichment surface (Phase 11 precedent:
   it must never become a required onboarding field).
-- **A deployment secret** signs the unsubscribe token (the `convex/http.ts` HMAC path-segment
+- **`UNSUBSCRIBE_SECRET`** signs the unsubscribe token (the `convex/http.ts` HMAC path-segment
   pattern proven by the Phase 20-06 fal webhook). Unset ⇒ the route fails closed.
+- **`CONVEX_SITE_URL`** is the origin the unsubscribe URL is built from — the same origin `http.ts`
+  serves. NOT `SITE_URL`: that is the Next app, which cannot serve this route.
 - **`packages/core/src/actionType.ts`** — the `crm_write` action type and its `inline` arm.
 
 ## Data flow
 
 1. **Create.** A human types a contact on the Pipeline page (ungated), or the agent proposes one
-   and the user approves a `crm_write` plan. Either way `normalizeAddress` runs at the write
-   boundary and the row is keyed on its output.
+   and the user approves a `crm_write` plan. Either way the path is the same:
+   **human act → `tenantMutation` (tenantId injected, never passed) → `normalizeAddress` →
+   `by_tenant_email` upsert.** One address is one row; a blank address is refused at that boundary
+   rather than collapsing every nameless save onto a `""` key.
 2. **Resolve.** A cockpit turn naming a person checks `contacts` FIRST; only on a miss does it fall
    back to `resolveContacts` (`llm.ts`) and the existing Gmail candidates/resolution card.
 3. **Follow up.** A `followUps` row carries a REQUIRED `dueAt`. `followUpIsDue(dueAt, now)` decides
@@ -71,6 +83,13 @@ graph cannot see:
    tell the user which were withheld.
 5. **Unsubscribe.** The emailed link opens a landing page; an explicit POST (never the GET) writes
    a `suppressions` row and mirrors `contacts.unsubscribedAt` for display.
+
+**The suppression path, end to end.** `markSuppressed` (user act) and `suppressFromUnsubscribe`
+(the confirm POST) both route through ONE private `suppress()` helper → a `suppressions` row →
+read back by `isSuppressed` / `suppressedAmong` and by NOTHING else. Two entry points, one
+definition of what a suppression is, so the two can never disagree. Both are upserts: a replayed
+unsubscribe link produces no second row and does not rewrite `suppressedAt` — the fact of record
+is WHEN they asked to stop.
 
 ## Invariants — what must never break
 
@@ -92,10 +111,12 @@ The send-path guard reads `suppressions` ONLY and never `contacts`. `contacts.un
 DISPLAY MIRROR. Consequences that are the whole point: a contacts bug cannot un-suppress anyone,
 and deleting a contact is a non-event for the guard — suppression OUTLIVES the contact, because
 deleting a contact must never restore the ability to email someone who asked you to stop.
-Un-suppressing is possible but deliberate: an explicit confirm stating that re-subscribing without
-fresh consent is the user's responsibility, plus a refs-only audit row. Never a plain toggle.
-*Enforcement:* `packages/backend/convex/contacts.test.ts` and the `gmail`/`cockpitTools` guard
-tests (19-VALIDATION rows 11-14).
+Un-suppressing is possible but deliberate: `unsuppress` refuses unless `acknowledged === true`
+(exact `true`, checked BEFORE any read, so a truthy non-boolean un-suppresses nobody). That flag is
+the UI's explicit confirm that re-subscribing without fresh consent is the user's responsibility.
+Never a plain toggle. It also writes the module's one refs-only audit row.
+*Enforcement:* `contacts.test.ts` — "unsuppress WITHOUT acknowledged:true throws and leaves the
+suppression intact" — plus the `gmail`/`cockpitTools` guard tests (19-VALIDATION rows 11-14).
 
 **3. The four tiles are ALWAYS-KNOWN counts.**
 Contacts and follow-ups have NO coverage-start concept — the substrate is created by the user, so
@@ -109,7 +130,11 @@ system did not know; here the fix is to stop *hedging* a number it does know.
 Contacts, suppressions and the per-address send guard all key on the same function's output, which
 is what makes "the guard and the contact row agree by construction" true rather than hoped for. It
 is `trim().toLowerCase()` and nothing more — no plus-address stripping, no dot-folding, no
-validation. *Enforcement:* the idempotence table in `packages/core/src/contacts.test.ts`.
+validation. Every write boundary in `contacts.ts` calls it; a local `.toLowerCase()` at a call site
+is forbidden, because a second copy is a second chance for the guard and the contact row to
+disagree about who someone is. *Enforcement:* the idempotence table in
+`packages/core/src/contacts.test.ts`, and the one-row-per-address case in
+`packages/backend/convex/contacts.test.ts` (`"Bob@X.com"` then `"  bob@x.com "` ⇒ ONE row).
 
 **5. No stage, no opportunity, no money.**
 No `opportunities` table, no stage enum, no `amountCents` — PIPE-01 and Phase 19 SC#8. Real money
@@ -120,10 +145,34 @@ typed guesses. *Enforcement:* the structural scan in `packages/backend/convex/co
 **6. Consent is never defaulted.**
 `consentAt`/`consentSource` stay EMPTY when no consent event occurred, and the Pipeline cell reads
 "none on record" — the truth. `consentWording` and `consentContext` are content plane: CLAUDE.md §4
-means they MUST NEVER reach `audit.payload`, which carries refs/ids/counts only.
-*Enforcement:* the exact key-set equality assertion in `llmRedaction.test.ts` (19-VALIDATION row 10).
+means they MUST NEVER reach `audit.payload`, which carries refs/ids/counts only. `assertConsent`
+also refuses blank wording: a consent record with no wording is a defaulted consent wearing a
+timestamp. *Enforcement:* `contacts.test.ts` ("consent is never defaulted", "assertConsent refuses
+blank wording").
 
-**7. The ACTOR decides gating, not the operation.**
+**7. The ONE audit row this module writes has the key set `{contactId, addressHash}` — exactly.**
+`unsuppress` is the only audit site in `contacts.ts`. `contactId` is `null` (never absent) when no
+contact row exists, so the key set does not vary with the data; `correlationId` is the same hash,
+never the address. Asserted by **key-set EQUALITY**, never a substring check — a substring check
+passes on a payload that added a new leaky key.
+*Enforcement:* the runtime assertion in `contacts.test.ts` (real audit row, `Object.keys().sort()`)
+and the structural half in `llmRedaction.test.ts` — exactly one `internal.audit.log` site in the
+module, its payload keys parsed depth-aware (`addressHash` ships as shorthand), and no
+`address`/`email`/`wording`/`note` identifier anywhere in the call (19-VALIDATION row 10).
+
+**8. `UNSUBSCRIBE_SECRET` fails closed, and is checked in exactly ONE place.**
+The unsubscribe token is `base64url(tenantId|recipient).hmacHex(...)`, signed with its OWN
+deployment secret — NOT `GOOGLE_OAUTH_CLIENT_SECRET`. A link that lives forever in a recipient's
+inbox must not share the OAuth signing key. `verifyUnsubToken` holds the single
+`if (!secret) return null` on the verify path; both `resolveUnsubToken` (the GET) and
+`suppressFromUnsubscribe` (the confirm POST) go through it, so the POST can never trust a decode
+its caller supplied. **Adding a second env guard at the HTTP route would make this one vacuous** —
+do not. (The mint side in `footerFor` has its own refusal because minting and verifying are
+different paths: `hmacHex(raw, "")` still yields a digest anyone can compute.)
+*Enforcement:* `contacts.test.ts` — "an UNSET UNSUBSCRIBE_SECRET returns null", which also asserts
+`suppressFromUnsubscribe` writes nothing.
+
+**9. The ACTOR decides gating, not the operation.**
 Agent-proposed writes — create, complete or cancel — ALWAYS stage through the plan gate. Direct
 user edits on the Pipeline page are ungated: a human marking their own follow-up done is not an
 agent act. Relatedly, the AGENT must always name a contact on a follow-up; contactless follow-ups
@@ -167,8 +216,17 @@ the un-suppress confirm flow. No assertion encodes a human judgement about how a
 
 ## Operational notes
 
+- **`UNSUBSCRIBE_SECRET` must be set on the DEPLOYMENT** — `npx convex env set UNSUBSCRIBE_SECRET
+  <value>` from `packages/backend`, not in `.env.local`. That is the Phase-2 lesson: a Convex
+  function reads the deployment's env, and a value sitting only in `.env.local` is invisible to it.
+  An unset secret makes every unsubscribe link resolve to `null` and 404, which is the CORRECT
+  fail-closed behaviour and is completely invisible without checking — the footer still renders
+  nothing at all (`footerFor` returns `null`, so the send is refused), so the symptom surfaces as
+  "sending stopped working" rather than "the secret is missing". Check the env first.
 - The unsubscribe route is **the phase's only public unauthenticated route.** It needs its own
-  abuse/rate consideration; an unset signing secret must fail closed rather than open.
+  abuse/rate consideration; an unset signing secret must fail closed rather than open. Replay is
+  handled by construction: `suppressFromUnsubscribe` is an upsert and returns `{ ok: true }` on a
+  replay because the recipient's request WAS honoured.
 - A bare GET must write NOTHING. Corporate mail scanners and link prefetchers fire GETs, and a
   GET-suppresses design silently unsubscribes people who never clicked. The confirm button is what
   stops the feature firing itself.
