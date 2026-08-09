@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { FUNDING_STATES, TIERS } from "./businessProfile";
 import {
@@ -619,6 +622,39 @@ describe("which metrics a tenant sees", () => {
         const all = [...set.unitEconomics, ...set.solvency, ...set.activity];
         expect(all).toContain(set.headline);
       }
+    }
+  });
+});
+
+// ── The two source-scan guards (Task 10) ────────────────────────────────────────────────────
+//
+// The idiom `businessProfile.test.ts` and `vaultSurface.test.ts` already use: read the SURFACE as
+// source text, because a prohibition on a WORD cannot be asserted any other way. `metricSetFor`'s
+// "ROAS is not a metric key anywhere" test above checks the DATA a tier set produces; this checks
+// the SOURCE nobody has yet written a line into — the only place a regression could actually land.
+const here = dirname(fileURLToPath(import.meta.url));
+const SURFACES = [
+  resolve(here, "cash.ts"),
+  resolve(here, "../../../apps/web/app/(app)/dashboard/finance/CashView.tsx"),
+  resolve(here, "../../../apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx"),
+  resolve(here, "../../backend/convex/cash.ts"),
+];
+
+describe("what this surface must never say", () => {
+  test("ROAS appears nowhere", () => {
+    // Absent from all three books, and the source says to STOP optimising CAC once inside 3x the
+    // industry average. Adding ROAS pushes users toward the lever the framework says to put down.
+    for (const file of SURFACES) {
+      expect(readFileSync(file, "utf8")).not.toMatch(/\broas\b/i);
+    }
+  });
+
+  test("no price is displayed", () => {
+    // Tier pricing is a separate sub-project. This work only CONSUMES the tier.
+    for (const file of SURFACES) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(/\$(99|297|597)\b/);
+      expect(source).not.toMatch(/per month|\/mo\b|upgrade to/i);
     }
   });
 });

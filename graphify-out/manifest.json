@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1786272057.7145605,
-    "ast_hash": "44dace13055e91f05534be9dff5339ec",
+    "mtime": 1786299370.3052444,
+    "ast_hash": "38a1649272b8255a3e90e5a449951e70",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -7150,8 +7150,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1786296509.3755999,
-    "ast_hash": "b05a5618bb26d19bd4f05be689f9a475",
+    "mtime": 1786299342.902397,
+    "ast_hash": "c86b0b979e00705424c534a0e7e688bd",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7735,8 +7735,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/finance.spec.ts": {
-    "mtime": 1786272057.257059,
-    "ast_hash": "2084a57eceed8cbf99ad9093671bbbd8",
+    "mtime": 1786299193.3684764,
+    "ast_hash": "eff6dbd5f9065c1f0f5813b68e1a2514",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-09-cash-business-finance-design.md": {
@@ -7755,8 +7755,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/CashView.tsx": {
-    "mtime": 1786296320.4021866,
-    "ast_hash": "127ebf27468bf1d254147ebadb1783e0",
+    "mtime": 1786297898.7073069,
+    "ast_hash": "6d4dd3bd84d06b973565e82ae00fee9e",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx": {
@@ -7775,28 +7775,28 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/cashView.test.ts": {
-    "mtime": 1786295648.536584,
-    "ast_hash": "d9df96216cf1cc9b48fb2e3b4cb4baf4",
+    "mtime": 1786297783.6426063,
+    "ast_hash": "fab30a126030a3a658a4bd9970a3fdef",
     "semantic_hash": ""
   },
   "packages/backend/convex/cash.test.ts": {
-    "mtime": 1786295539.146292,
-    "ast_hash": "ba19c93fe4b12c0b47dbb2cca3786309",
+    "mtime": 1786297814.9801178,
+    "ast_hash": "80a09571500ca7240e70ea4085cdaa89",
     "semantic_hash": ""
   },
   "packages/backend/convex/cash.ts": {
-    "mtime": 1786294478.8082547,
+    "mtime": 1786298014.8519797,
     "ast_hash": "db34318620de0c7d11e834be27f7da3e",
     "semantic_hash": ""
   },
   "packages/core/src/cash.test.ts": {
-    "mtime": 1786293789.9616086,
-    "ast_hash": "5eef92eaa53135cb8af3fef811ad57d6",
+    "mtime": 1786299073.397419,
+    "ast_hash": "8fbf699eea8a4fb47540327d54d2f0e1",
     "semantic_hash": ""
   },
   "packages/core/src/cash.ts": {
-    "mtime": 1786293635.3500886,
-    "ast_hash": "8f8ca2b2b1f8a63dc5f86c1eec82d837",
+    "mtime": 1786299105.1102777,
+    "ast_hash": "3efc09791de71b57435b95e25ee4d0a3",
     "semantic_hash": ""
   },
   ".planning/phases/19-contacts-crm-follow-ups/19-01-PLAN.md": {
@@ -7867,6 +7867,16 @@
   ".planning/phases/19-contacts-crm-follow-ups/19-01-SUMMARY.md": {
     "mtime": 1786272055.039224,
     "ast_hash": "835a2fd6de15791010ca1c8b01c4efcf",
+    "semantic_hash": ""
+  },
+  "apps/web/test-results/.last-run.json": {
+    "mtime": 1786299232.177482,
+    "ast_hash": "b0ebf1a1688789159fdbe2ac1fadab93",
+    "semantic_hash": ""
+  },
+  "apps/web/test-results/auth.setup.ts-authenticate-setup/error-context.md": {
+    "mtime": 1786299231.8867085,
+    "ast_hash": "858409b034b83979c1592c76e2e714a9",
     "semantic_hash": ""
   }
 }

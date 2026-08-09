@@ -80,6 +80,46 @@ type Movement = {
 const record = (tenantId: string, movement: Movement) =>
   convexRun<string>("spendLedger:record", { tenantId, ...movement });
 
+// `playwright.config.ts` sets `fullyParallel: true`, which otherwise gives NO guarantee that tests
+// in this file run in declaration order or in the same worker. Every test below shares one signed-in
+// identity (the same `storageState` file), and `owner:bootstrapOwner` has no inverse — so without
+// forcing serial order, a non-owner assertion could race an owner-promoting test and observe a
+// boundary that has already been crossed. This is what actually enforces "non-owner first, owner
+// last," not the file order alone.
+test.describe.configure({ mode: "serial" });
+
+test("the Finance page opens on Business, and a non-owner is offered no Operator tab", async ({
+  page,
+}) => {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  const tablist = page.getByRole("tablist", { name: "Finance sections" });
+  await expect(tablist.getByRole("tab", { name: "Business" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(tablist.getByRole("tab", { name: "Pikar spend" })).toBeVisible();
+  await expect(tablist.getByRole("tab", { name: "Operator" })).toHaveCount(0);
+});
+
+test("the Cost console is intact behind the Pikar spend tab", async ({ page }) => {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  await page.getByRole("tab", { name: "Pikar spend" }).click();
+  await expect(page.getByRole("heading", { name: /budget rails/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /where it went/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /media job ledger/i })).toBeVisible();
+});
+
+test("a number entered in the panel appears as a business figure", async ({ page }) => {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  // Seeds through the real mutation, so this proves the panel → mutation → derivation → render
+  // path end to end. It proves nothing about any external system.
+  await page.getByLabel("Cash on hand").fill("60000");
+  await page.getByRole("button", { name: /save cash on hand/i }).click();
+  await page.getByLabel("Monthly operating cost").fill("10000");
+  await page.getByRole("button", { name: /save monthly operating cost/i }).click();
+  await expect(page.getByText(/6 months/i)).toBeVisible();
+});
+
 test("connected cost console: coverage, rails, unlanded meaning and the owner boundary", async ({
   page,
 }) => {
@@ -266,4 +306,17 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     );
     expect(overflows, `page scrolls horizontally at ${viewport.width}px`).toBe(false);
   }
+});
+
+// Runs AFTER the test above, which is what promotes this browser's user to owner via
+// `owner:bootstrapOwner`. That grant has no inverse, so an owner-tab assertion placed before it
+// would observe nothing and one placed in an earlier file/worker could poison the non-owner
+// assertions above — hence one file, one ordering, owner last.
+test("an owner gets the Operator tab, and the deployment controls live there", async ({ page }) => {
+  await page.goto(`${appOrigin}${ROUTE}`);
+  await page.getByRole("tab", { name: "Operator" }).click();
+  await expect(page.getByRole("heading", { name: /deployment controls/i })).toBeVisible();
+  // And they are NOT on the tenant's own tabs any more — the original complaint.
+  await page.getByRole("tab", { name: "Business" }).click();
+  await expect(page.getByText(/master kill switch/i)).toHaveCount(0);
 });

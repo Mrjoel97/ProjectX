@@ -1,6 +1,31 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 REVIEW FIX ROUND 2 — the
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 10 — FINAL task of the plan. Added
+> `finance.spec.ts` browser coverage for the three-tab shell (Business default-selected, no Operator
+> tab for a non-owner, the Cost console intact behind Pikar spend, a panel entry landing as a rendered
+> business figure, and — placed AFTER the existing `owner:bootstrapOwner` step, because that grant has
+> no inverse — an owner-only Operator tab whose deployment controls do not leak onto the tenant's own
+> tabs). `playwright.config.ts` sets `fullyParallel: true`, which gives NO ordering guarantee across
+> tests in one file by itself; `test.describe.configure({ mode: "serial" })` was added to
+> `finance.spec.ts` so the non-owner-first / owner-last order is actually enforced, not just written
+> in file order. Added the two source-scan guards to `cash.test.ts` — see the "Cash — the two
+> source-scan guards" section below. **`pnpm --filter @pikar/web test:e2e` was attempted and does NOT
+> run**: no `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and no running local `convex dev`/Next stack in this
+> worktree (verified: both `127.0.0.1:3111` and `127.0.0.1:3210` unreachable). `auth.setup.ts` throws
+> before a single feature test executes — 1 failed (setup), 31 did not run. This is recorded as
+> **NOT EXECUTED**, not as a passing or failing browser gate; see the "Evidence status" entry further
+> down, which this task does not change beyond the count of authored/unexecuted assertions. The six
+> guarantees this task's playbook pass was asked to re-confirm are already the CURRENT, checked-in
+> state and are cross-referenced rather than restated: the three-tab structure (the "Finance becomes a
+> three-tab shell" section below), the four-state `CashFigure` contract and why `not-computable` is
+> not `unknown` (the "Cash — business finance" section above), the storage split and the one-writer
+> rule (the "Cash — the collection surface and `financeInputs`" section above), the capital-posture
+> headline rule's TWO clauses (the "Cash — which metrics a tenant sees" section above), the 90-day
+> staleness rule resting on `evaluations.userProvidedAt` carried forward verbatim (the "Cash — the
+> suppression rule" section above), and the industry-CAC switch defaulting OFF (the "Cash — unit
+> economics" section above).)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 9 REVIEW FIX ROUND 2 — the
 > self-review follow-up below was itself corrected by a second reviewer pass. FOUR fixes: (1) the
 > "no orphan headline" guard in `metricSetFor` (`packages/core/src/cash.ts`) always prepended an
 > orphaned headline to `solvency` and claimed in comment that solvency is "the row every headline
@@ -619,6 +644,32 @@ raising watches the date the money ends exactly like a funded one does.
   layer: a degraded section renders independently of a healthy sibling in the same pass) —
   `pnpm --filter @pikar/web test cashView` — 23/23. `pnpm typecheck` — 10/10 packages green.
 
+### Cash — the two source-scan guards (Task 10)
+
+`packages/core/src/cash.test.ts` gained `describe("what this surface must never say", ...)`, the
+`businessProfile.test.ts`/`vaultSurface.test.ts` idiom: read the surface as source TEXT, because a
+prohibition on a word cannot be asserted any other way — `metricSetFor`'s existing "ROAS is not a
+metric key anywhere" test (Task 8 section above) checks the DATA a tier set produces, not the source
+nobody has yet typed a line into.
+
+- **`SURFACES` is four files, read with `node:fs`, resolved from `packages/core/src/`**: `cash.ts`
+  itself, `../../../apps/web/app/(app)/dashboard/finance/CashView.tsx`,
+  `../../../apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx`, and
+  `../../backend/convex/cash.ts`. All four paths were verified by running the test and reading the
+  failure before trusting them — the same discipline `vaultSurface.test.ts`'s own header names.
+- **"ROAS appears nowhere"** — `/\broas\b/i` on all four files. The framework's own guidance is to
+  stop optimising CAC once inside 3× the industry average; adding a ROAS metric points at the exact
+  lever the source says to put down.
+- **"no price is displayed"** — `/\$(99|297|597)\b/` and `/per month|\/mo\b|upgrade to/i` on all
+  four files. Tier pricing is a separate sub-project; this plane only CONSUMES the tier, never prices
+  it.
+- **Mutation-checked, not assumed.** A one-line `// ROAS test mutation` appended to `cash.ts` was run
+  through `pnpm --filter @pikar/core test cash`, confirmed RED on the ROAS guard specifically (the
+  other 64 tests stayed green), then reverted with `git checkout -- packages/core/src/cash.ts` and
+  the file confirmed byte-clean (`git diff` empty) before committing. If either guard ever goes red
+  for real, the fix is removing the word from the surface — never loosening the regex.
+- Test evidence: `pnpm --filter @pikar/core test cash` — 65/65 (63 pre-existing + 2 new).
+
 ### Frontend and connected browser evidence
 
 - `apps/web/app/(app)/dashboard/{approvals,finance,content,reports}/` — page routes and state views.
@@ -1014,11 +1065,17 @@ itself. Evidence rows seeded for this review are permanent and carry the correla
 
 **Evidence status, 2026-08-09 — the browser gate is NOT green.** Currently passing:
 `pnpm --filter @pikar/web test` (88/88, of which 29 are Cost Console), web typecheck, and the
-production build, in which `/dashboard/finance` appears in the route table. `e2e/finance.spec.ts` is
-authored and was **executed**; it stopped in the canonical `auth.setup.ts` because this shell has no
-`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, so 27 assertions did not run. Do not cite the browser gate as
-passed. With local `convex dev` (not `--once`) plus Next on `:3111` and both credentials exported,
-resume exactly:
+production build, in which `/dashboard/finance` appears in the route table. `e2e/finance.spec.ts` now
+carries 5 tests (3 non-owner tab/panel tests, the existing connected cost-console/owner-boundary
+test, and Task 10's owner-Operator-tab test, in that declared and `describe.serial`-enforced order).
+It is authored and was **attempted again under Task 10**: `pnpm --filter @pikar/web test:e2e`, run
+from this worktree with no local `convex dev`/Next stack up (`127.0.0.1:3111`/`127.0.0.1:3210` both
+unreachable) — it stopped in the canonical `auth.setup.ts` because this shell has no
+`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, exactly as before: 1 failed (setup), 31 did not run across the
+whole `e2e/` suite. Do not cite the browser gate as passed. A green run here would still only be
+accounting evidence about seeded state and the projection — it proves nothing about a provider or an
+external charge. With local `convex dev` (not `--once`) plus Next on `:3111` and both credentials
+exported, resume exactly:
 
 ```text
 pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
