@@ -5,13 +5,13 @@ milestone_name: - Platform -> Private Beta
 current_phase: 19
 current_plan: 3 (done)
 status: in_progress
-stopped_at: "MULTI-LANE — per-lane position lives in '## Lane Status'; this block is the single tool-readable summary. Phase 19 is 2/10: 19-01 landed the contacts substrate (0abc73b, 38ac3d2, a78a169); 19-03 landed the CAN-SPAM postal address END TO END — 5a72ac4 (the tenantProfile write boundary: trimmed, 500-char ceiling, blank-after-trim REFUSED, 7 tests incl. the byte-identical-completeness proof it is NOT an onboarding slot) and bcf825e (the Postal address textarea on /dashboard/profile + the onboarding.md invariant). 19-02 (contacts adapter / footerFor) was executing CONCURRENTLY in the same working tree; its files are untracked/foreign to this lane. PIPE-01 stays Pending — nothing ticked until the phase closes. Backend typecheck baseline is 0. Next is 19-04. NOTE: gsd-tools state advance-plan AND record-metric BOTH CLOBBER this block (drop current_phase, revert current_plan to a stale 7 (done), flip status to verifying); roadmap update-plan-progress 19 ALSO wrote '2/10 plans executed' over PHASE 20.1's plan list and gutted the phase-19 table row — both hand-restored. Verify this block AND ROADMAP.md diff after ANY gsd-tools call. Do NOT re-add a second frontmatter block on merge."
-last_updated: "2026-08-09T11:02:27.921Z"
+stopped_at: "MULTI-LANE — per-lane position lives in '## Lane Status'; this block is the single tool-readable summary. Phase 19 is 3/10: 19-01 landed the contacts substrate (0abc73b, 38ac3d2, a78a169); 19-03 landed the CAN-SPAM postal address end to end (5a72ac4, bcf825e); 19-02 landed THE PERSON STORE — 5939f08 (convex/contacts.ts: 6 tenant-scoped writes + 5 internals + the UNSUBSCRIBE_SECRET-signed token, verified-and-committed from an interrupted session's untracked WIP, not rewritten), 55fd303 (contacts.test.ts 40 tests + the llmRedaction audit key-set pin), 62428db (playbook invariants 7 and 8), 7448205 (the auditCounts registration that was crashing the shared vitest fork). Backend suite 72 files / 1360 tests green; pnpm typecheck 10/10, backend delta 0. UNSUBSCRIBE_SECRET IS NOT SET ON ANY DEPLOYMENT — 19-04 needs `npx convex env set` from packages/backend or every unsubscribe link 404s AND every send is refused (footerFor returns null). 19-04 must NOT add a second env guard at the route; verifyUnsubToken holds the only one and a second makes it vacuous. PIPE-01 stays Pending — nothing ticked until the phase closes. Next is 19-04. NOTE: gsd-tools state advance-plan AND record-metric AND record-session ALL CLOBBER this block (drop current_phase, revert current_plan to a stale 7 (done), flip status to verifying); roadmap update-plan-progress 19 ALSO writes over PHASE 20.1's plan list and guts the phase-19 table row — both hand-restored, twice now. Verify this block AND ROADMAP.md diff after ANY gsd-tools call. Do NOT re-add a second frontmatter block on merge."
+last_updated: "2026-08-09T13:10:00.000Z"
 progress:
   total_phases: 51
   completed_phases: 30
   total_plans: 343
-  completed_plans: 252
+  completed_plans: 253
 ---
 
 ---
@@ -1731,6 +1731,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 15.4 P03 | 23 min | 3 tasks | 9 files |
 | Phase 19 P01 | 35m | 3 tasks | 6 files |
 | Phase 19 P03 | 20 min | 2 tasks | 4 files |
+| Phase 19 P02 | 55 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1928,6 +1929,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 19]: Backend typecheck baseline RE-MEASURED at 0 errors exit 0 - the 13 in 19-VALIDATION and the 150 in STATE are both stale
 - [Phase 19]: 19-03: postalAddress is CAN-SPAM enrichment on the tenantProfile write boundary, deliberately absent from missingSlots/canComplete — enforcement of its presence lives in the SEND path (19-05), pinned by a byte-identical-completeness test
 - [Phase 19]: 19-03: blank-after-trim postal address is REFUSED, not stored (an empty footer looks compliant and is not); the UI SENDS a blanked address so the refusal is visible, and there is no delete-my-address path
+- [Phase 19]: 19-02: the runtime audit key-set equality test lives in contacts.test.ts, not llmRedaction.test.ts — that file is @vitest-environment node and convex-test needs edge-runtime; llmRedaction got the structural half (one audit site, depth-aware key parse)
+- [Phase 19]: 19-02: contacts.ts ships NO public tenantQuery — writes and internals only; an export-set pin makes that provable rather than writing a vacuous foreign-tenant read test
 
 ### Pending Todos
 
@@ -1959,8 +1962,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-09T10:24:40.749Z
-Stopped at: Completed 19-01-PLAN.md
+Last session: 2026-08-09T11:46:24.828Z
+Stopped at: Completed 19-02-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
