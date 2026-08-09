@@ -11,15 +11,26 @@ import { fileURLToPath } from "node:url";
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ContactsEmptyState, ContactTable, PipelineTiles, UnassignedFollowUps } from "./PipelineView";
+import {
+  ContactsEmptyState,
+  ContactTable,
+  PipelineTiles,
+  UnassignedFollowUps,
+} from "./PipelineView";
 
 const render = (component: unknown, props: Record<string, unknown>): string =>
   renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
 
-const source = readFileSync(
+const rawSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "PipelineView.tsx"),
   "utf8",
 );
+
+/** Comments are stripped before every source scan below, the `contacts.test.ts` rule: the file
+ *  carries deliberate GRAVESTONE comments naming what is absent and WHY (no `window.confirm`, no
+ *  `--held`, no opportunity concept), and a scan that punished its own documentation would force
+ *  the absence to go unexplained. */
+const source = rawSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 7, 9, 12, 0, 0);
@@ -168,9 +179,11 @@ describe("un-suppressing is a two-step arm/commit", () => {
 
 describe("the page stays inside the Phase 19 substrate", () => {
   test("no opportunity, no deal state, no monetary value (PIPE-01 / SC#8)", () => {
+    // Non-vacuity floor: a bad read yields "" and every `not.toMatch` here would pass.
+    expect(source.length).toBeGreaterThan(4_000);
+    expect(/amountCents|opportunit|\bstage\b/i.test("amountCents")).toBe(true);
     expect(source).not.toMatch(/amountCents|opportunit|\bstage\b/i);
     expect(source).not.toContain("DashboardMoney");
-    expect(source.length).toBeGreaterThan(4_000);
   });
 
   test("page state prose comes from the code-owned DASHBOARD_STATE_COPY, not the backend", () => {
