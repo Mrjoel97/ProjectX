@@ -1948,9 +1948,9 @@ test("stageCrmWrite's schema puts the follow-up arm FIRST and requires its date"
   ).jsonSchema;
   const arms = schema.properties.operations.items.anyOf;
   expect(arms.map((a) => a.properties.op.enum[0])).toEqual(["addFollowUp", "addContact"]);
-  expect(arms[0].required).toEqual(["op", "email", "note", "due"]);
+  expect(arms[0]!.required).toEqual(["op", "email", "note", "due"]);
   // …and a contact structurally cannot carry the follow-up fields at all.
-  expect(Object.keys(arms[1].properties)).toEqual(["op", "email", "name"]);
+  expect(Object.keys(arms[1]!.properties)).toEqual(["op", "email", "name"]);
 });
 
 test("stageCrmWrite REFUSES an empty operation list — a sentence, never a throw", async () => {
