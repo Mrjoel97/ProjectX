@@ -721,3 +721,65 @@ test("every llm.ts spend correlation template is distinct and charset-legal", ()
     expect(sample, `illegal correlation charset: ${t}`).toMatch(/^[A-Za-z0-9._:@/-]{1,128}$/);
   }
 });
+
+// ── 19-11 (ACTN-05): the DEGRADE GRADIENT ────────────────────────────────────
+// `stageCrmWrite` refuses ALL-OR-NOTHING over its operations list, so whenever any element is
+// imperfect the model's cheapest retry is a SIMPLER list — and the simplest list that succeeds is
+// a bare `addContact`. That is how "remind me on Thursday to chase Rhea" was measured landing as
+// an undated contact (19-10, run 309b1c3d): not a model reflex, a downhill path the tool boundary
+// built. The flag is TURN-scoped, which is why this test lives here and not in cockpitTools.test.ts
+// — `__invokeCockpitTool` rebuilds the closure per call and structurally cannot see it.
+const crmStep = (id: string, operations: unknown[]) => ({
+  content: [
+    {
+      type: "tool-call",
+      toolCallId: id,
+      toolName: "stageCrmWrite",
+      input: JSON.stringify({ operations }),
+    },
+  ],
+  finishReason: { unified: "tool-calls", raw: "tool-calls" },
+  usage: provUsage(0, 0),
+  warnings: [],
+});
+
+test("19-11: dropping a refused follow-up is not an exit — the contact-only retry is refused too", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      // No clientContext on this shim, so §2-D refuses the dated follow-up outright (no_clock).
+      crmStep("c-1", [
+        { op: "addFollowUp", email: "rhea@example.com", note: "chase the renewal", due: "Thursday" },
+      ]),
+      // The downhill move. Before 19-11 this staged a bare contact and reported SUCCESS — the
+      // exact plan row 19-10 measured against the live body.
+      crmStep("c-2", [{ op: "addContact", email: "rhea@example.com", name: "Rhea Calloway" }]),
+      textStep("Told the user what is on the card."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.crmOperations).toBeUndefined();
+  expect(plan?.status).toBe("collecting");
+});
+
+test("19-11 anti-vacuity: a contact-only list with NO refused follow-up still stages normally", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      crmStep("c-1", [{ op: "addContact", email: "rhea@example.com", name: "Rhea Calloway" }]),
+      textStep("Told the user what is on the card."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  expect(plan?.crmOperations).toHaveLength(1);
+});

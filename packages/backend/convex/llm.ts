@@ -1301,9 +1301,21 @@ const IMAGE_REFUSAL_REPLY: Record<
 // 19-08 (ACTN-05). Every one of these is RETURNED, never thrown: `execute` always hands the model
 // a sentence it can say to the user (18-06's rule). None of them stages anything.
 const CRM_REFUSAL_REPLY: Record<
-  "draft_in_progress" | "add_only" | "no_clock" | "malformed" | "contact_carries_followup",
+  | "draft_in_progress"
+  | "add_only"
+  | "no_clock"
+  | "malformed"
+  | "contact_carries_followup"
+  | "followup_dropped",
   string
 > = {
+  // 19-11: the one that closes the degrade gradient. It must name the follow-up as the thing to
+  // FIX, because the model's alternative reading — "records changes are blocked, give up" — loses
+  // the user's request just as completely as staging the contact did.
+  followup_dropped:
+    "You already tried to add a follow-up this turn and it was rejected, so staging only the " +
+    "contact would silently drop what the user actually asked for. NOTHING was staged. Fix the " +
+    "follow-up and send it again as addFollowUp, or ask the user the one question you need.",
   // 19-11: names the op the model must use. Saying only "that was wrong" would leave the cheapest
   // recovery as dropping the date, which is the defect this refusal exists to stop.
   contact_carries_followup:
@@ -1400,6 +1412,18 @@ export function buildCockpitTools(
   },
 ) {
   const webResearchTool = buildWebResearchTool();
+
+  // 19-11 (ACTN-05). THE DEGRADE GRADIENT, and the actual root cause of the measured defect.
+  // `stageCrmWrite` refuses ALL-OR-NOTHING over its list, so whenever any element is imperfect the
+  // model's cheapest next move is to re-send a SIMPLER list — and the simplest list that succeeds
+  // is a bare `addContact`. That is how "remind me on Thursday to chase Rhea" ends as a contact
+  // with no date: not a model reflex, a downhill path the tool boundary built. 19-10's traces show
+  // the model calling this tool 2-4 times per turn and settling at the bottom of it.
+  //
+  // This closure is rebuilt for every turn, so the flag is TURN-scoped — which is exactly the
+  // window the degrade happens in. Once a follow-up has been refused this turn, dropping it is no
+  // longer an exit: the contact-only retry is refused too and the model must fix the follow-up.
+  let followUpRefusedThisTurn = false;
 
   // 22.1b: the specialist's ONE structured channel for a SEMANTIC judgement — "I searched, and what
   // I found does not SUPPORT the claim". THE SIGNAL IS THE CALL: `runAgentLoop` reads the SDK's own
@@ -2388,6 +2412,33 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ operations }): Promise<string> => {
+        // 19-11: every refusal below routes through `refuse`, which remembers that a follow-up was
+        // on the list that failed. That memory is what removes the downhill path — see the flag's
+        // declaration in buildCockpitTools. `reason` is an ENUM and the op list is TYPES only, so
+        // the structured log carries refs/counts/enums and no user content (§4).
+        const wantsFollowUp = operations.some((o) => o.op === "addFollowUp");
+        const refuse = (reason: string, sentence: string): string => {
+          if (wantsFollowUp) followUpRefusedThisTurn = true;
+          console.log(
+            JSON.stringify({
+              event: "stageCrmWrite.refused",
+              reason,
+              ops: operations.map((o) => o.op),
+              wantsFollowUp,
+              dueProvided: operations.map((o) => (o.due ?? "").trim().length > 0),
+              noteProvided: operations.map((o) => (o.note ?? "").trim().length > 0),
+            }),
+          );
+          return sentence;
+        };
+
+        // Dropping the follow-up is no longer an exit (19-11). Checked FIRST: the model has
+        // already been told what to fix, and letting a contact-only retry succeed here is exactly
+        // the measured defect.
+        if (followUpRefusedThisTurn && !wantsFollowUp) {
+          return refuse("followup_dropped", CRM_REFUSAL_REPLY.followup_dropped);
+        }
+
         // A CRM staging would overwrite `kind`/`status` on the ONE plan row this thread has, so a
         // half-composed email would silently become a CRM card and the draft would be stranded.
         // The `stageResearchPlan`/`stageMediaPlan` refusal, applied to the same hazard.
@@ -2397,13 +2448,13 @@ export function buildCockpitTools(
           Boolean(plan.subject) ||
           Boolean(plan.body) ||
           (plan.attachments?.length ?? 0) > 0;
-        if (hasDraft) return CRM_REFUSAL_REPLY.draft_in_progress;
+        if (hasDraft) return refuse("draft_in_progress", CRM_REFUSAL_REPLY.draft_in_progress);
 
         // The AGENT may only ADD. Closing someone's follow-up is a judgement about work being
         // finished, and the Pipeline page is where a human makes it — the same asymmetry that
         // keeps a contactless follow-up user-only (contacts-crm.md invariant 11).
         if (operations.some((o) => o.op !== "addContact" && o.op !== "addFollowUp")) {
-          return CRM_REFUSAL_REPLY.add_only;
+          return refuse("add_only", CRM_REFUSAL_REPLY.add_only);
         }
 
         // §2-D: the model supplies the user's WORDS, never an instant. Without a trusted clock a
@@ -2418,7 +2469,7 @@ export function buildCockpitTools(
             // anyone. A silent drop at a trust boundary cannot be answered; a returned refusal
             // must be, and the governed loop lets the model re-send the right op immediately.
             if ((o.due ?? "").trim() || (o.note ?? "").trim()) {
-              return CRM_REFUSAL_REPLY.contact_carries_followup;
+              return refuse("contact_carries_followup", CRM_REFUSAL_REPLY.contact_carries_followup);
             }
             // `origin` is the provenance of the DATA and is NOT a model input: an agent-staged
             // contact came out of a mailbox resolution or the user's own words in this thread,
@@ -2427,14 +2478,14 @@ export function buildCockpitTools(
             staged.push({ op: "addContact", email: o.email, name: o.name, origin: "mailbox-resolved" });
             continue;
           }
-          if (!clientContext) return CRM_REFUSAL_REPLY.no_clock;
+          if (!clientContext) return refuse("no_clock", CRM_REFUSAL_REPLY.no_clock);
           const parsed = parseSendTime(
             o.due ?? "",
             clientContext.nowMs,
             clientContext.tz,
             CALENDAR_HORIZON_MS,
           );
-          if (parsed.kind !== "resolved") return CRM_DUE_REFUSAL[parsed.kind];
+          if (parsed.kind !== "resolved") return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
           staged.push({ op: "addFollowUp", email: o.email, note: o.note, dueAt: parsed.epochMs });
         }
 
@@ -2443,7 +2494,10 @@ export function buildCockpitTools(
           validated = parseCrmOperations(staged);
         } catch (e) {
           // Every refusal is a RETURNED SENTENCE, never a throw out of the governed loop (18-06).
-          return CRM_PARSE_REFUSAL[(e as Error).message] ?? CRM_REFUSAL_REPLY.malformed;
+          return refuse(
+            (e as Error).message,
+            CRM_PARSE_REFUSAL[(e as Error).message] ?? CRM_REFUSAL_REPLY.malformed,
+          );
         }
 
         await ctx.runMutation(internal.plans.patchPlan, {
